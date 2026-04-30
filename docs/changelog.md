@@ -6,6 +6,11 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-04-30
+- **CLAUDE.md 加 i18n 错误码规范**：业务异常一律走 `BizException.of(ResultCode.XXX, "error.<scope>.<reason>", args...)`，旧 literal 构造器 `new BizException(code, message)` 仅 Guard 等工具类签名豁免；key 命名 `error.<scope>.<reason>` 全小写 snake_case；占位符 `{0}`/`{1}` 与 args 顺序一一对应；双语强制（`messages.properties` + `messages_zh_CN.properties` 1:1 对齐）；持久化层实体实现 `LocalizedErrorCarrier` 接口，11 表的 `error_key`/`error_args` 列由 `BizExceptionUtils.toLocalizedError` 自动填充，console 读路径过 `LocalizedErrorRenderer` 按 Locale 重渲染。配套：worker step plugin 73 处 failure 迁三元组（`c74a9644`），V78 八表的 errorKey/errorArgs 列在 step 失败路径上真正生效；business 路径 56 文件横扫迁 i18n key（`23137b2c`）。详见 `docs/design/i18n.md` §5.1 落地阶段历史 + §6 已知 gap。
+- **CLAUDE.md 加 Workflow 节点参数 DSL 规范**（ADR-009）：`workflow_node.node_params` JSONB value 支持受限 JSONPath 引用上游节点产出，由 `WorkflowParamResolver` 在派发前解析。语法白名单仅 `$.nodes.<nodeCode>.output.<key>`（嵌套 `.` 下钻）+ `$.workflowRun.<key>`，**不支持** 通配符 `*` / 过滤 `[?]` / 函数 / 表达式。Worker 暴露 output key 按业务领域固定（IMPORT: fileId/recordCount/...; EXPORT: fileId/objectName/...; PROCESS: processedCount/batchKey/...; DISPATCH: receiptCode/channelCode/...）。Fail-mode：未知 nodeCode / 路径语法非法 → `BizException(error.workflow.param_ref_invalid)` 拒绝节点启动；output 字段缺失 → null fallback。配套 schema：V72 `workflow_node_run.output JSONB` 列。详见 `docs/architecture/workflow-dependency-guide.md §10` + ADR-009。
+- **CLAUDE.md 配置开关规范加 `batch.trigger.async-launch.enabled`**（ADR-010）：默认 `false` 走原同步 HTTP 路径（`HttpOrchestratorTriggerAdapter`，已标 `@Deprecated forRemoval=true`）；切到 `true` 走 trigger_outbox + Kafka 异步路径（trigger fire 同事务写 `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 `batch.trigger.launch.v1` topic → orchestrator `TriggerLaunchConsumer` 消费触发 launch）。**两边开关必须一致**避免单边激活。配套：V80 `trigger_outbox_event` 表，trigger 加 `spring-kafka` 依赖。灰度切换 / 回滚 / 24h 对账步骤见 `docs/runbook/trigger-async-launch-rollout.md`。
+
 ### 2026-04-28
 - **模块边界新增 `batch-worker-process`**(CLAUDE.md "## 模块边界" 同步加)。配合 P2 PROCESS 一等公民化:`JobType`/`PipelineType` 各加 `PROCESS` 枚举值,新增独立 worker 模块,与 import/export/dispatch 完全对称。
 - **`job_type` 字典加 `PROCESS`**(CLAUDE.md "核心字典" 同步)。完整列表:`GENERAL / IMPORT / EXPORT / PROCESS / DISPATCH / WORKFLOW`。`PipelineType` 同步加 `PROCESS`。`BatchTopics.TASK_DISPATCH_PROCESS` 路由到 `batch.task.dispatch.process` topic。

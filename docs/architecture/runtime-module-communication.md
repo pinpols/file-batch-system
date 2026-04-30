@@ -25,7 +25,8 @@ flowchart LR
   WP["batch-worker-process"]
   M["MinIO bucket<br/>batch-dev"]
 
-  P["batch_platform<br/>trigger_request<br/>job_definition<br/>job_instance<br/>job_partition<br/>job_task<br/>workflow_run<br/>workflow_node_run<br/>worker_registry<br/>retry_schedule<br/>dead_letter_task<br/>outbox_event<br/>file_record<br/>file_channel_config<br/>file_dispatch_record<br/>file_audit_log<br/>..."]
+  P["batch_platform<br/>trigger_request<br/>trigger_outbox_event (V80, ADR-010)<br/>job_definition<br/>job_instance<br/>job_partition<br/>job_task<br/>workflow_run<br/>workflow_node_run (output JSONB, ADR-009)<br/>worker_registry<br/>retry_schedule<br/>dead_letter_task<br/>outbox_event<br/>file_record<br/>file_channel_config<br/>file_dispatch_record<br/>file_audit_log<br/>..."]
+  KT["Kafka topic<br/>batch.trigger.launch.v1<br/>(ADR-010 异步路径)"]
 
   B["batch_business<br/>biz.customer_account<br/>biz.settlement_batch<br/>biz.settlement_detail"]
 
@@ -35,9 +36,11 @@ flowchart LR
   C -->|"HTTP -> orchestrator<br/>dead-letter replay"| O
   C -->|"JDBC query -> batch_platform<br/>job_definition / job_instance / file_record / file_audit_log / worker_registry"| P
 
-  T -->|"JDBC -> batch_platform<br/>trigger_request"| P
+  T -->|"JDBC -> batch_platform<br/>trigger_request + trigger_outbox_event<br/>(同事务 INSERT)"| P
   T -->|"JDBC -> Quartz<br/>quartz.QRTZ_*"| Q
-  T -->|"HTTP -> orchestrator<br/>launch"| O
+  T -.->|"HTTP -> orchestrator<br/>launch (sync, default,<br/>async-launch.enabled=false)<br/>@Deprecated forRemoval"| O
+  T ==>|"Kafka publish ->batch.trigger.launch.v1<br/>(async, async-launch.enabled=true)<br/>TriggerOutboxRelay 周期发"| KT
+  KT ==>|"Kafka consume ->TriggerLaunchConsumer<br/>调 LaunchApplicationService.launch"| O
 
   O -->|"JDBC -> batch_platform<br/>launch / task-state / retry / replay / worker-lifecycle"| P
   O -->|"Kafka -> batch.task.dispatch.*<br/>dispatch publish"| K
@@ -93,6 +96,27 @@ flowchart LR
 - `POST /internal/tasks/{taskId}/report`：body 为 `TaskExecutionReportDto`
   - `traceId` 用于串起 worker→orchestrator 的状态推进与审计日志（controller 层接收 body traceId 并回写到 trace 相关 log 字段）
   - `success=false` 且缺失 `errorCode/errorMessage` 时，服务端会落库兜底可观测错误信息（`UNKNOWN`）
+  - **i18n 三元组**（V77/V78 后）：`errorKey` + `errorArgs`（JSON 数组）随 BizException.of 跨进程传递，落库 11 张表的 `error_key` + `error_args` JSONB 列；console 读路径过 `LocalizedErrorRenderer` 按当前 Locale 重渲染
+  - **节点产出**（ADR-009 Stage 1.2）：`outputs: Map<String, Object>` 字段，worker SUCCESS 时上报 fileId / recordCount / receiptCode 等关键字段，orchestrator 序列化写 `workflow_node_run.output` JSONB 列，供下游 workflow 节点 `$.nodes.<X>.output.<key>` DSL 引用
+
+### 内部 Trigger Kafka 协议要点（ADR-010 异步路径）
+仅当 `batch.trigger.async-launch.enabled=true` 时启用（trigger 端 + orchestrator 端两侧必须一致）：
+
+- **Topic**：`batch.trigger.launch.v1`（版本化，未来协议演进升 v2）
+- **Key**：`tenantId:requestId`（同 request 多分区幂等）
+- **Value**：`LaunchEnvelope` JSON：
+  ```json
+  {
+    "launchRequest": { "tenantId": "...", "jobCode": "...", "bizDate": "2026-04-30", "triggerType": "MANUAL", "requestId": "...", "traceId": "...", "params": {} },
+    "dedupKey": "tenant:dedup-hash",
+    "sourceFireTime": "2026-04-30T07:00:00Z",
+    "envelopeVersion": 1
+  }
+  ```
+- **Headers**：`X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`（便于 Kafka 端日志聚合）
+- **Producer**：`KafkaTriggerEventPublisher`（acks=all + idempotence；Stage 1 同事务写 `trigger_outbox_event` PENDING；Stage 2 `TriggerOutboxRelay` 每 200ms 扫描 + ShedLock 互斥 + FOR UPDATE SKIP LOCKED；失败指数退避 max 60s）
+- **Consumer**：`TriggerLaunchConsumer`（MANUAL_IMMEDIATE ack；409 dedup → ack 跳过；429 限流 → ack 跳过让 outbox 重发；runtime → 抛出 listener 重试）
+- **幂等保证**：consumer 重复消费同 requestId 由 `uk_job_instance_tenant_dedup` 兜底，不会真正双跑
 
 ## 读图要点
 
@@ -107,7 +131,8 @@ flowchart LR
 
 - worker 注册、心跳、状态更新：`batch-worker-core` 的 `HttpWorkerRegistryClient`
 - worker 任务认领、续租、回报：`batch-worker-core` 的 `HttpTaskExecutionClient`
-- trigger 调 orchestrator：`batch-trigger` 的 `HttpOrchestratorTriggerAdapter`
+- trigger 调 orchestrator（同步桥，默认）：`batch-trigger` 的 `HttpOrchestratorTriggerAdapter`（`@Deprecated forRemoval=true`，等灰度全量切稳定 1 minor 后物理删除）
+- trigger 异步调 orchestrator（ADR-010）：`batch-trigger` 的 `KafkaTriggerEventPublisher` + `TriggerOutboxRelay`；orchestrator 端 `TriggerLaunchConsumer`；详见 `docs/runbook/trigger-async-launch-rollout.md`
 - launch 初始化运行态：`batch-orchestrator` 的 `DefaultLaunchService`
 - task report / claim / renew：`batch-orchestrator` 的 `DefaultTaskExecutionService`
 - retry / dead-letter / replay：`batch-orchestrator` 的 `DefaultRetryGovernanceService`

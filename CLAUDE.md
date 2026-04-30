@@ -113,7 +113,37 @@ public enum XxxType implements DictEnum {
 - **默认**：IDE local=`true`（调试方便）、docker-compose=`false`（贴近生产）、prod profile 强制拒绝 `true`（@PostConstruct 守护）
 - **调用**：业务代码一律 `isBypassMode()`；旧键 `testing-open` / `isTestingOpen()` 已 deprecated，下一 minor 版本移除
 
-详见 `docs/coding-conventions.md §21`。
+**ADR-010 trigger 异步解耦总开关 `batch.trigger.async-launch.enabled`**（默认 `false`）：开启后 trigger fire → 同事务写 `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch；关闭走原同步 HTTP 路径(`HttpOrchestratorTriggerAdapter`，已标 `@Deprecated forRemoval=true`)。**两边开关必须一致**(trigger 不发但 orchestrator 起 listener 浪费连接;trigger 发了但 orchestrator 不接更危险)。灰度切换 / 回滚 / 24h 对账步骤见 `docs/runbook/trigger-async-launch-rollout.md`。
+
+详见 `docs/coding-conventions.md §21` + `docs/runbook/feature-switches.md`。
+
+## i18n 错误码规范
+
+**业务异常一律走 i18n key**：`throw BizException.of(ResultCode.XXX, "error.<scope>.<reason>", args...)`，不要再用旧 literal 构造器 `new BizException(code, message)`（仅 Guard 等工具类签名豁免）。
+
+- **key 命名**：`error.<scope>.<reason>`，全小写 + snake_case 分隔符 `_`，禁用驼峰/连字符。`<scope>` 单数业务域（`tenant`/`job`/`workflow`/`process`/`import`/`export`/`dispatch`/`worker` ...），`<reason>` 简短失败原因（`not_found`/`already_exists`/`invalid_format`/`state_conflict` ...）
+- **占位符**：`{0}` / `{1}` / `{2}` 与 `args` 顺序一一对应；MessageFormat 单引号 `'` 要双写 `''`
+- **双语强制**：每个 key 必须同时在 `messages.properties`（en）+ `messages_zh_CN.properties`（zh）落地，1:1 对齐（缺 key 触发 fallback）
+- **持久化层**：业务实体写错误时实现 `LocalizedErrorCarrier` 接口，11 张表的 `error_key` + `error_args` 列由 `BizExceptionUtils.toLocalizedError` 自动填充；console 读路径过 `LocalizedErrorRenderer` 按当前 Locale 重渲染历史失败记录
+
+详见 `docs/design/i18n.md`。
+
+## Workflow 节点参数 DSL 规范（ADR-009）
+
+`workflow_node.node_params` JSONB 中的 value 支持引用上游节点产出，由 `WorkflowParamResolver` 在派发前解析：
+
+- **支持语法**（受限 JSONPath 子集）：
+  - `$.nodes.<nodeCode>.output.<key>` — 引用同 workflow_run 内某节点 output 字段（嵌套用 `.` 下钻）
+  - `$.workflowRun.<key>` — 引用 workflow_run 级共享字段（`bizDate` / `traceId`）
+- **不支持**：通配符 `*`、过滤 `[?]`、函数 `length()`、表达式 `$ + 1`
+- **Worker 暴露的 output key**（按业务领域）：
+  - IMPORT: `fileId` / `recordCount` / `parsedCount` / `validatedCount` / `skippedCount` / `bizDate`
+  - EXPORT: `fileId` / `objectName` / `recordCount` / `fileSizeBytes` / `checksumValue` / `bizDate`
+  - PROCESS: `processedCount` / `stagedCount` / `publishedCount` / `batchKey` / `highWaterMarkOut`
+  - DISPATCH: `fileId` / `receiptCode` / `receiptStatus` / `externalRequestId` / `channelCode`
+- **Fail-mode**：未知 nodeCode / 路径语法非法 → `BizException(error.workflow.param_ref_invalid)` 拒绝节点启动；output 字段缺失 → null fallback 让业务侧兜底
+
+详见 `docs/architecture/workflow-dependency-guide.md §10` + ADR-009。
 
 ## 版本管理
 
