@@ -1,5 +1,6 @@
 package com.example.batch.common.i18n;
 
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
@@ -65,8 +66,7 @@ public final class BizExceptionUtils {
     if (resolver == null || key == null || key.isBlank()) {
       return fallback;
     }
-    BizException synthetic =
-        BizException.of(com.example.batch.common.enums.ResultCode.SYSTEM_ERROR, key, args);
+    BizException synthetic = BizException.of(ResultCode.SYSTEM_ERROR, key, args);
     String rendered = resolver.resolve(synthetic, locale);
     if (rendered == null || rendered.isBlank() || rendered.equals(key)) {
       return fallback;
