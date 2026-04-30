@@ -185,7 +185,7 @@ public class FileDispatchRepository {
             errorMessage));
   }
 
-  public List<Map<String, Object>> listPendingReceiptPolls(int limit) {
+  public List<Map<String, Object>> listPendingReceiptPolls(int limit, long maxAgeSeconds) {
     int safe = Math.max(1, Math.min(limit, MAX_DISPATCH_BATCH_SIZE));
     return fileDispatchMapper.listPendingReceiptPolls(
         params(
@@ -194,7 +194,9 @@ public class FileDispatchRepository {
             KEY_DISPATCH_STATUS,
             FileDispatchStatus.SENT.name(),
             KEY_RECEIPT_STATUS,
-            FileReceiptStatus.PENDING.name()));
+            FileReceiptStatus.PENDING.name(),
+            "maxAgeSeconds",
+            maxAgeSeconds));
   }
 
   private Map<String, Object> params(Object... pairs) {

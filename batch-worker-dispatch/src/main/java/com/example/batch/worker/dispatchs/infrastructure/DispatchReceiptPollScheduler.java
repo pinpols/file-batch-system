@@ -67,7 +67,8 @@ public class DispatchReceiptPollScheduler {
       return;
     }
     List<Map<String, Object>> rows =
-        fileDispatchRepository.listPendingReceiptPolls(properties.getBatchSize());
+        fileDispatchRepository.listPendingReceiptPolls(
+            properties.getBatchSize(), properties.getPendingMaxAgeSeconds());
     for (Map<String, Object> row : rows) {
       try {
         pollOne(row);

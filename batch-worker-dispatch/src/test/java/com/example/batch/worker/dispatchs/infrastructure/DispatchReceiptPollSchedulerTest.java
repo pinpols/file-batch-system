@@ -52,17 +52,17 @@ class DispatchReceiptPollSchedulerTest {
 
     scheduler.poll();
 
-    verify(fileDispatchRepository, never()).listPendingReceiptPolls(anyInt());
+    verify(fileDispatchRepository, never()).listPendingReceiptPolls(anyInt(), anyLong());
   }
 
   @Test
   void shouldDoNothingWhenNoPendingRows() {
     properties.setEnabled(true);
-    when(fileDispatchRepository.listPendingReceiptPolls(anyInt())).thenReturn(List.of());
+    when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong())).thenReturn(List.of());
 
     scheduler.poll();
 
-    verify(fileDispatchRepository).listPendingReceiptPolls(anyInt());
+    verify(fileDispatchRepository).listPendingReceiptPolls(anyInt(), anyLong());
     verify(fileDispatchRepository, never()).loadChannel(anyString(), anyString());
   }
 
@@ -76,7 +76,8 @@ class DispatchReceiptPollSchedulerTest {
             "external_request_id", "req-001"
             // file_id intentionally absent
             );
-    when(fileDispatchRepository.listPendingReceiptPolls(anyInt())).thenReturn(List.of(row));
+    when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
+        .thenReturn(List.of(row));
 
     scheduler.poll();
 
@@ -91,7 +92,8 @@ class DispatchReceiptPollSchedulerTest {
     row.put("file_id", 100L);
     row.put("channel_code", "");
     row.put("external_request_id", "req-001");
-    when(fileDispatchRepository.listPendingReceiptPolls(anyInt())).thenReturn(List.of(row));
+    when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
+        .thenReturn(List.of(row));
 
     scheduler.poll();
 
@@ -106,7 +108,8 @@ class DispatchReceiptPollSchedulerTest {
     row.put("file_id", 200L);
     row.put("channel_code", "CH1");
     row.put("external_request_id", null);
-    when(fileDispatchRepository.listPendingReceiptPolls(anyInt())).thenReturn(List.of(row));
+    when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
+        .thenReturn(List.of(row));
 
     scheduler.poll();
 
@@ -122,7 +125,8 @@ class DispatchReceiptPollSchedulerTest {
             "file_id", 300L,
             "channel_code", "NONEXISTENT",
             "external_request_id", "req-999");
-    when(fileDispatchRepository.listPendingReceiptPolls(anyInt())).thenReturn(List.of(row));
+    when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
+        .thenReturn(List.of(row));
     when(fileDispatchRepository.loadChannel("t1", "NONEXISTENT")).thenReturn(Map.of());
 
     scheduler.poll();
@@ -141,7 +145,8 @@ class DispatchReceiptPollSchedulerTest {
             "file_id", 400L,
             "channel_code", "CH1",
             "external_request_id", "req-123");
-    when(fileDispatchRepository.listPendingReceiptPolls(anyInt())).thenReturn(List.of(row));
+    when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
+        .thenReturn(List.of(row));
     // Channel config without receipt_poll_url
     when(fileDispatchRepository.loadChannel("t1", "CH1"))
         .thenReturn(
