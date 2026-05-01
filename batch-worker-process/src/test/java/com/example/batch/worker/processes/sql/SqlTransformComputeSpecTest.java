@@ -67,6 +67,8 @@ class SqlTransformComputeSpecTest {
                 List.of(
                     Map.of("source", "tenant_id", "target", "tenant_id"),
                     Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id"),
                 "validations",
                 List.of(
                     Map.of(
@@ -114,6 +116,8 @@ class SqlTransformComputeSpecTest {
                 List.of(
                     Map.of("source", "tenant_id", "target", "tenant_id"),
                     Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id"),
                 "params",
                 Map.of("tenantId", "evil-tenant")));
 
@@ -136,6 +140,8 @@ class SqlTransformComputeSpecTest {
                 List.of(
                     Map.of("source", "tenant_id", "target", "tenant_id"),
                     Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id"),
                 "params",
                 Map.of("bizDate", "1970-01-01")));
 
@@ -158,6 +164,8 @@ class SqlTransformComputeSpecTest {
                 List.of(
                     Map.of("source", "tenant_id", "target", "tenant_id"),
                     Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id"),
                 "params",
                 Map.of("metadata_customer", "X")));
 
@@ -180,6 +188,8 @@ class SqlTransformComputeSpecTest {
                 List.of(
                     Map.of("source", "tenant_id", "target", "tenant_id"),
                     Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id"),
                 "emptyResultPolicy",
                 "SUCCESS"));
 
@@ -202,7 +212,9 @@ class SqlTransformComputeSpecTest {
                 "columns",
                 List.of(
                     Map.of("source", "tenant_id", "target", "tenant_id"),
-                    Map.of("source", "amount", "target", "amount"))));
+                    Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id")));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
@@ -223,12 +235,38 @@ class SqlTransformComputeSpecTest {
                 List.of(
                     Map.of("source", "tenant_id", "target", "tenant_id"),
                     Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id"),
                 "maxStagedRows",
                 500));
 
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
     assertThat(spec.maxStagedRows()).isEqualTo(500);
+  }
+
+  @Test
+  void parse_rejectsMissingConflictColumnsForInsertMode() {
+    // PROCESS at-least-once 安全:即使 writeMode=INSERT 也必须提供 conflictColumns
+    // (否则重放双写)。验证空 conflictColumns 一律被拒,不再因 writeMode 网开一面。
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src",
+                "targetTable",
+                "daily_summary",
+                "writeMode",
+                "INSERT",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount"))));
+
+    assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("conflictColumns is required");
   }
 
   @Test
@@ -243,6 +281,8 @@ class SqlTransformComputeSpecTest {
                 "summary",
                 "columns",
                 List.of(Map.of("source", "tenant_id", "target", "tenant_id")),
+                "conflictColumns",
+                List.of("tenant_id"),
                 "maxStagedRows",
                 0));
 

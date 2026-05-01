@@ -73,14 +73,18 @@ public interface JobInstanceMapper {
       @Param("expectedVersion") Long expectedVersion);
 
   /**
-   * 取同一 (tenantId, jobDefinitionId) 下最近一次成功(SUCCESS / PARTIAL_FAILED)实例。 用于增量模式启动新实例时把上一次的 {@code
-   * high_water_mark_out} 当作本次 IN。没有历史成功实例(首次跑)返回 null, worker 在业务侧按"从头跑"处理。
+   * 取同一 (tenantId, jobDefinitionId) 下最近一次完整成功(仅 SUCCESS)实例。 用于增量模式启动新实例时把上一次的 {@code
+   * high_water_mark_out} 当作本次 IN。
+   *
+   * <p>不取 PARTIAL_FAILED:部分 partition 未覆盖时若把它的水位推给下次,会让下次跳过失败 partition 应处理的数据范围;由 publish 的 {@code
+   * ON CONFLICT} 兜住重复执行幂等。没有历史成功实例(首次跑)返回 null, worker 在业务侧按"从头跑"处理。
    */
   JobInstanceEntity selectLastSuccessByJobDefinition(
       @Param("tenantId") String tenantId, @Param("jobDefinitionId") Long jobDefinitionId);
 
   /**
-   * worker report 成功时把 OUT 水位回写。null 直接跳过(由调用方决策),非 null 才覆盖,避免把可能存在的旧水位清空。 不做版本检查:水位是单调推进的最终一致字段。
+   * worker report 成功时把 OUT 水位回写。numeric CAS 守护:仅当新值更大时才推进,防止多 partition 并发回报顺序乱时慢 partition 用低水位
+   * 覆写快 partition 已写的高水位。返回 0 行表示水位未推进(已被更高值占据 / 新值格式非法),调用方按 debug 记录不抛错。
    */
   int updateHighWaterMarkOut(
       @Param("tenantId") String tenantId,
