@@ -36,15 +36,17 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "tr-import",
-            Map.of()));
+    LaunchRequest importRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("tr-import")
+            .params(Map.of())
+            .build();
+    launchService.launch(importRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
         .isGreaterThanOrEqualTo(1L);
@@ -56,15 +58,17 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "EXPORT", "EXPORT", TriggerType.MANUAL);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.MANUAL,
-            seed.requestId(),
-            "tr-export",
-            Map.of()));
+    LaunchRequest exportRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.MANUAL)
+            .requestId(seed.requestId())
+            .traceId("tr-export")
+            .params(Map.of())
+            .build();
+    launchService.launch(exportRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "EXPORT"))
         .isGreaterThanOrEqualTo(1L);
@@ -76,15 +80,17 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", TriggerType.EVENT);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.EVENT,
-            seed.requestId(),
-            "tr-dispatch",
-            Map.of()));
+    LaunchRequest dispatchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.EVENT)
+            .requestId(seed.requestId())
+            .traceId("tr-dispatch")
+            .params(Map.of())
+            .build();
+    launchService.launch(dispatchRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "DISPATCH"))
         .isGreaterThanOrEqualTo(1L);

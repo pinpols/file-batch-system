@@ -323,20 +323,22 @@ class DefaultProcessStageExecutorTest {
             ProcessStage.COMMIT,
             ProcessStage.FEEDBACK)) {
       String implCode = stage == ProcessStage.COMPUTE ? computeImplCode : "PROCESS_" + stage.name();
-      steps.add(
-          new PipelineStepDefinition(
-              (long) order,
-              1L,
-              "PROCESS_" + stage.name(),
-              "Process " + stage.name(),
-              stage.name(),
-              order++,
-              implCode,
-              Map.of(),
-              0,
-              "NONE",
-              0,
-              true));
+      PipelineStepDefinition step =
+          PipelineStepDefinition.builder()
+              .id((long) order)
+              .pipelineDefinitionId(1L)
+              .stepCode("PROCESS_" + stage.name())
+              .stepName("Process " + stage.name())
+              .stageCode(stage.name())
+              .stepOrder(order++)
+              .implCode(implCode)
+              .stepParams(Map.of())
+              .timeoutSeconds(0)
+              .retryPolicy("NONE")
+              .retryMaxCount(0)
+              .enabled(true)
+              .build();
+      steps.add(step);
     }
     return steps;
   }

@@ -44,16 +44,17 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", triggerType);
 
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                seed.jobCode(),
-                LocalDate.of(2026, 1, 15),
-                triggerType,
-                seed.requestId(),
-                "trace-" + seed.requestId(),
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(triggerType)
+            .requestId(seed.requestId())
+            .traceId("trace-" + seed.requestId())
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();
 

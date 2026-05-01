@@ -112,22 +112,24 @@ class PositionalArgsConventionTest {
   private static final Pattern INLINE_BUILDER =
       Pattern.compile("[\\w.]+\\s*\\(\\s*([A-Z]\\w*)\\.builder\\s*\\(\\s*\\)");
 
-  /** 仅扫 main 路径（按方案 v3 §1 "消除 main 中两类反例"）。test 代码 fixture 化属独立排期项，本守护不强制。 */
-  private static final String SCAN_SCOPE = "main";
+  /** 扫 main + test 双路径（v4：test fixture 也走同一约束）。 */
+  private static final List<String> SCAN_SCOPES = List.of("main", "test");
 
   @Test
   void noRawLongCtorOfGuardedType() throws IOException {
     List<String> violations = new ArrayList<>();
     for (String module : SCAN_MODULES) {
-      Path root = REPO_ROOT.resolve(module).resolve("src").resolve(SCAN_SCOPE).resolve("java");
-      if (!Files.isDirectory(root)) {
-        continue;
-      }
-      try (Stream<Path> stream = Files.walk(root)) {
-        stream
-            .filter(p -> p.toString().endsWith(".java"))
-            .filter(p -> !p.getFileName().toString().equals("PositionalArgsConventionTest.java"))
-            .forEach(p -> collectRawCtorViolations(p, violations));
+      for (String scope : SCAN_SCOPES) {
+        Path root = REPO_ROOT.resolve(module).resolve("src").resolve(scope).resolve("java");
+        if (!Files.isDirectory(root)) {
+          continue;
+        }
+        try (Stream<Path> stream = Files.walk(root)) {
+          stream
+              .filter(p -> p.toString().endsWith(".java"))
+              .filter(p -> !p.getFileName().toString().equals("PositionalArgsConventionTest.java"))
+              .forEach(p -> collectRawCtorViolations(p, violations));
+        }
       }
     }
     assertThat(violations)
@@ -139,15 +141,17 @@ class PositionalArgsConventionTest {
   void noInlineBuilderOfGuardedType() throws IOException {
     List<String> violations = new ArrayList<>();
     for (String module : SCAN_MODULES) {
-      Path root = REPO_ROOT.resolve(module).resolve("src").resolve(SCAN_SCOPE).resolve("java");
-      if (!Files.isDirectory(root)) {
-        continue;
-      }
-      try (Stream<Path> stream = Files.walk(root)) {
-        stream
-            .filter(p -> p.toString().endsWith(".java"))
-            .filter(p -> !p.getFileName().toString().equals("PositionalArgsConventionTest.java"))
-            .forEach(p -> collectInlineBuilderViolations(p, violations));
+      for (String scope : SCAN_SCOPES) {
+        Path root = REPO_ROOT.resolve(module).resolve("src").resolve(scope).resolve("java");
+        if (!Files.isDirectory(root)) {
+          continue;
+        }
+        try (Stream<Path> stream = Files.walk(root)) {
+          stream
+              .filter(p -> p.toString().endsWith(".java"))
+              .filter(p -> !p.getFileName().toString().equals("PositionalArgsConventionTest.java"))
+              .forEach(p -> collectInlineBuilderViolations(p, violations));
+        }
       }
     }
     assertThat(violations)

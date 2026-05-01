@@ -46,10 +46,15 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
     auditService.record(command);
 
-    List<ConsoleAiAuditLogEntity> results =
-        auditLogMapper.selectByQuery(
-            new ConsoleAiAuditLogQuery(
-                "t1", "session-001", "op-001", "PLATFORM", "APPROVED", null, null, null));
+    ConsoleAiAuditLogQuery query =
+        ConsoleAiAuditLogQuery.builder()
+            .tenantId("t1")
+            .sessionId("session-001")
+            .operatorId("op-001")
+            .promptCategory("PLATFORM")
+            .promptDecision("APPROVED")
+            .build();
+    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).hasSize(1);
     ConsoleAiAuditLogEntity entry = results.get(0);
     assertThat(entry.getTenantId()).isEqualTo("t1");
@@ -80,10 +85,13 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
     auditService.record(command);
 
-    List<ConsoleAiAuditLogEntity> results =
-        auditLogMapper.selectByQuery(
-            new ConsoleAiAuditLogQuery(
-                "t1", "session-002", null, null, "REJECTED_SAFETY", null, null, null));
+    ConsoleAiAuditLogQuery query =
+        ConsoleAiAuditLogQuery.builder()
+            .tenantId("t1")
+            .sessionId("session-002")
+            .promptDecision("REJECTED_SAFETY")
+            .build();
+    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).hasSize(1);
     assertThat(results.get(0).getRefusalReason()).isEqualTo("blocked_keyword:password");
   }
@@ -111,25 +119,20 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
               Instant.now()));
     }
 
-    List<ConsoleAiAuditLogEntity> results =
-        auditLogMapper.selectByQuery(
-            new ConsoleAiAuditLogQuery("t1", sessionId, null, null, null, null, null, null));
+    ConsoleAiAuditLogQuery query =
+        ConsoleAiAuditLogQuery.builder().tenantId("t1").sessionId(sessionId).build();
+    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).hasSize(3);
   }
 
   @Test
   void shouldReturnEmptyWhenNoMatchingEntries() {
-    List<ConsoleAiAuditLogEntity> results =
-        auditLogMapper.selectByQuery(
-            new ConsoleAiAuditLogQuery(
-                "t1",
-                "no-such-session-" + System.currentTimeMillis(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+    ConsoleAiAuditLogQuery query =
+        ConsoleAiAuditLogQuery.builder()
+            .tenantId("t1")
+            .sessionId("no-such-session-" + System.currentTimeMillis())
+            .build();
+    List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).isEmpty();
   }
 }

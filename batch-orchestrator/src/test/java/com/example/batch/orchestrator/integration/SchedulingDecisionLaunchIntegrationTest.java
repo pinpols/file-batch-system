@@ -37,15 +37,17 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.SCHEDULED);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.SCHEDULED,
-            seed.requestId(),
-            "tr-sched",
-            Map.of()));
+    LaunchRequest schedRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.SCHEDULED)
+            .requestId(seed.requestId())
+            .traceId("tr-sched")
+            .params(Map.of())
+            .build();
+    launchService.launch(schedRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
         .isGreaterThanOrEqualTo(1L);
@@ -63,15 +65,17 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
             "NO_WORKER_GROUP_" + System.nanoTime(),
             TriggerType.API);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "tr-block",
-            Map.of()));
+    LaunchRequest blockRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("tr-block")
+            .params(Map.of())
+            .build();
+    launchService.launch(blockRequest);
 
     long outboxAfter =
         LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
