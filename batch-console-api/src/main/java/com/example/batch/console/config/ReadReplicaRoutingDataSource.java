@@ -40,6 +40,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
   private static final String METRIC_FAILOVER = "batch.console.replica.failover.count";
   private static final String METRIC_FAILURE = "batch.console.replica.connection.failure";
+  private static final String METRIC_RECOVERY = "batch.console.replica.recovery.count";
 
   private final DataSource primary;
   private final int failureThreshold;
@@ -49,6 +50,10 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
   // C-3.1：连续失败计数 + quarantine 截止时间。volatile 足够：单调写、读容忍滞后一次请求。
   private final AtomicInteger consecutiveFailures = new AtomicInteger();
   private volatile long quarantineUntilMillis = 0L;
+
+  // v6 hardening：标记"曾进入过 quarantine"，让首次恢复成功时能发 info 日志 / metric，
+  // 避免 quarantine 期满后静默恢复（运维看不到恢复信号）。
+  private volatile boolean quarantineEverEntered = false;
 
   public ReadReplicaRoutingDataSource(
       DataSource primary,
@@ -84,9 +89,15 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     }
     try {
       Connection conn = super.getConnection();
-      // 成功一次就重置连续失败计数
-      if (consecutiveFailures.get() > 0) {
-        consecutiveFailures.set(0);
+      // 成功一次就重置连续失败计数；若曾进入过 quarantine，此次成功即视为"replica 恢复"，
+      // 发 info 日志 + recovery counter 让运维明确感知到恢复信号（quarantineUntilMillis
+      // 是隐式时间过期，无显式 transition 事件，否则故障 → 恢复对运维静默）。
+      int prior = consecutiveFailures.getAndSet(0);
+      if (quarantineEverEntered) {
+        quarantineEverEntered = false;
+        quarantineUntilMillis = 0L;
+        log.info("replica recovered after quarantine: priorConsecutiveFailures={}", prior);
+        incrementCounter(METRIC_RECOVERY, "reason", "connection_restored");
       }
       return conn;
     } catch (SQLException ex) {
@@ -101,6 +112,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     int failures = consecutiveFailures.incrementAndGet();
     if (failures >= failureThreshold) {
       quarantineUntilMillis = System.currentTimeMillis() + quarantineMillis;
+      quarantineEverEntered = true;
       log.warn(
           "replica entered quarantine for {}ms after {} consecutive failures",
           quarantineMillis,

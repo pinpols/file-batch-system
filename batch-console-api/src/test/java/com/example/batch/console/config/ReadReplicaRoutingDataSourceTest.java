@@ -210,9 +210,34 @@ class ReadReplicaRoutingDataSourceTest {
     Thread.sleep(1300);
     assertThat(ds.isReplicaQuarantined()).isFalse();
 
-    // 下一次请求重新尝试 replica，成功
+    // 下一次请求重新尝试 replica，成功 → 触发 recovery 信号
     Connection actual = ds.getConnection();
     assertThat(actual).isSameAs(replicaConn);
+
+    // v6 hardening：曾 quarantine 过的恢复必须发 recovery counter，否则运维静默无感
+    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter()).isNotNull();
+    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter().count())
+        .isEqualTo(1.0);
+    // 第二次成功不应再 +1（已不再 quarantineEverEntered）
+    when(replica.getConnection()).thenReturn(replicaConn);
+    ds.getConnection();
+    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter().count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  void transientFailureDoesNotEmitRecoverySignal() throws SQLException {
+    // 单次失败未达阈值，不进 quarantine → 后续成功不应发 recovery（避免与"短抖动"混淆）
+    ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
+    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+    when(replica.getConnection())
+        .thenThrow(new SQLException("blip", "08001"))
+        .thenReturn(replicaConn);
+
+    ds.getConnection(); // 失败 1 次
+    ds.getConnection(); // 成功 → 重置计数但不发 recovery
+
+    assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter()).isNull();
   }
 
   private static MockingDetails mockingDetails(Object target) {

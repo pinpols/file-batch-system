@@ -7,6 +7,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -31,17 +32,32 @@ import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 @EnableConfigurationProperties(ReadReplicaProperties.class)
 public class ReadReplicaDataSourceConfiguration {
 
+  /** 单独暴露 primary HikariPool：让 {@link ReplicaLagMonitor} 等需要"显式走主库"的组件直接注入。 */
+  @Bean(name = "consolePrimaryDataSource")
+  public DataSource consolePrimaryDataSource(ReadReplicaProperties props) {
+    if (props.getPrimary().getUrl() == null) {
+      throw new IllegalStateException(
+          "batch.console.read-replica.enabled=true requires primary.url");
+    }
+    return buildPool(props.getPrimary(), "console-primary");
+  }
+
+  @Bean(name = "consoleReplicaDataSource")
+  public DataSource consoleReplicaDataSource(ReadReplicaProperties props) {
+    if (props.getReplica().getUrl() == null) {
+      throw new IllegalStateException(
+          "batch.console.read-replica.enabled=true requires replica.url");
+    }
+    return buildPool(props.getReplica(), "console-replica");
+  }
+
   @Bean
   @Primary
   public DataSource consoleRoutingDataSource(
-      ReadReplicaProperties props, ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    if (props.getPrimary().getUrl() == null || props.getReplica().getUrl() == null) {
-      throw new IllegalStateException(
-          "batch.console.read-replica.enabled=true requires both primary.url and replica.url");
-    }
-    DataSource primary = buildPool(props.getPrimary(), "console-primary");
-    DataSource replica = buildPool(props.getReplica(), "console-replica");
-
+      ReadReplicaProperties props,
+      @Qualifier("consolePrimaryDataSource") DataSource primary,
+      @Qualifier("consoleReplicaDataSource") DataSource replica,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     Map<Object, Object> routes = new HashMap<>();
     routes.put(ReadReplicaRoutingDataSource.Route.PRIMARY, primary);
     routes.put(ReadReplicaRoutingDataSource.Route.REPLICA, replica);
@@ -63,6 +79,13 @@ public class ReadReplicaDataSourceConfiguration {
         props.getFailureThreshold(),
         props.getQuarantineSeconds());
     return new LazyConnectionDataSourceProxy(routing);
+  }
+
+  @Bean
+  public ReplicaLagMonitor replicaLagMonitor(
+      @Qualifier("consolePrimaryDataSource") DataSource primary,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    return new ReplicaLagMonitor(primary, meterRegistryProvider);
   }
 
   /** 共用 buildPool（DRY 之前 Primary/Replica 两份重复方法）。 */
