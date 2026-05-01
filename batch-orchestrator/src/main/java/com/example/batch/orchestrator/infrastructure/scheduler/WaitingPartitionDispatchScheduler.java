@@ -8,6 +8,7 @@ import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.ratelimit.RateLimitAction;
 import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
@@ -239,7 +240,7 @@ public class WaitingPartitionDispatchScheduler {
         task,
         partition,
         jobInstance.getTraceId(),
-        task.getTenantId() + ":" + task.getId());
+        OutboxEventKeyGenerator.forDispatch(task.getTenantId(), task.getId()));
     if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
       int updated =
           jobMappers.jobInstanceMapper.markRunning(

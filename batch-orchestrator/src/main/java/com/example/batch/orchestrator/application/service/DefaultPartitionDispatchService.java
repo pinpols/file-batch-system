@@ -10,6 +10,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.application.plan.SchedulePlanBuilder;
@@ -208,7 +209,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             task,
             partition,
             context.execution().traceId(),
-            context.execution().request().tenantId() + ":" + task.getId());
+            OutboxEventKeyGenerator.forDispatch(
+                context.execution().request().tenantId(), task.getId()));
       }
     }
   }

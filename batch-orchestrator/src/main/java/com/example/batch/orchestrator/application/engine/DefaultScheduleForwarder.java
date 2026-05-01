@@ -5,6 +5,7 @@ import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
+import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
@@ -12,10 +13,14 @@ import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
 import com.example.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.QueryTimeoutException;
@@ -59,6 +64,20 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   private final EventOutboxRetryMapper eventOutboxRetryMapper;
   private final OutboxPublisher outboxPublisher;
   private final BatchOrchestratorGovernanceProperties governance;
+  private final MeterRegistry meterRegistry;
+
+  /** GIVE_UP 终态告警计数器 — 转入 GIVE_UP 即 +1,运维侧通过 Prometheus alert 拉起。 */
+  private Counter giveUpCounter;
+
+  @PostConstruct
+  void initMetrics() {
+    giveUpCounter =
+        Counter.builder("batch.outbox.events.giveup.total")
+            .description(
+                "Outbox events transitioned to GIVE_UP terminal state — should be 0 in steady"
+                    + " state; non-zero rate triggers ops alert.")
+            .register(meterRegistry);
+  }
 
   @Override
   @Timed(
@@ -126,15 +145,15 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
               event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
         } else {
           publishFailed++;
-          Instant nextRetryAt =
-              Instant.now().plusSeconds(governance.outbox().getRetryDelaySeconds());
           int publishAttemptNo =
               event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
           if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
             outboxEventMapper.markGiveUp(
                 event.getTenantId(), event.getId(), OutboxPublishStatus.GIVE_UP.code());
             recordRetry(event, publishAttemptNo, null, "retry attempts exhausted");
+            giveUpCounter.increment();
           } else {
+            Instant nextRetryAt = computeNextRetryAt(publishAttemptNo, governance.outbox());
             outboxEventMapper.markFailed(
                 event.getTenantId(), event.getId(), OutboxPublishStatus.FAILED.code(), nextRetryAt);
             recordRetry(event, publishAttemptNo, nextRetryAt, "publish failed");
@@ -146,6 +165,36 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       }
     }
     return ScheduleForwarderResult.of(attemptedEvents, publishSucceeded, publishFailed);
+  }
+
+  /**
+   * 计算下次重试时间(指数退避 + jitter,2026-05-01 加)。
+   *
+   * <p>公式:{@code delay = clamp(base × multiplier^(attempt-1), [base, max]) × (1 ± jitter)}
+   *
+   * <p>例(默认 base=60s, multiplier=2, max=600s, jitter=0.2):attempt 1 → 60s±12s; attempt 2 →
+   * 120s±24s; attempt 3 → 240s±48s; attempt 4 → 480s±96s; attempt 5(最后一次失败前) → 600s±120s。
+   *
+   * <p>visible-for-testing:暴露包私有给单测验证边界。
+   */
+  static Instant computeNextRetryAt(int attemptNo, OutboxProperties outbox) {
+    long base = Math.max(outbox.getRetryDelaySeconds(), 1L);
+    double multiplier = Math.max(outbox.getRetryBackoffMultiplier(), 1.0);
+    long max = Math.max(outbox.getRetryMaxDelaySeconds(), base);
+    int normalizedAttempt = Math.max(attemptNo, 1);
+    // attempt^(N-1) 用 double 防溢出,clamp 到 [base, max]
+    double raw = base * Math.pow(multiplier, normalizedAttempt - 1);
+    long bounded = Math.min(Math.max((long) raw, base), max);
+    double jitterRatio = Math.max(0.0, Math.min(outbox.getRetryJitterRatio(), 1.0));
+    long jittered;
+    if (jitterRatio == 0.0) {
+      jittered = bounded;
+    } else {
+      double jitterFactor =
+          1.0 + (ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * jitterRatio;
+      jittered = Math.max((long) (bounded * jitterFactor), 1L);
+    }
+    return Instant.now().plusSeconds(jittered);
   }
 
   /** 单独持久化 Outbox 发布重试记录，与业务重试计数器分开管理。 */

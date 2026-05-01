@@ -6,6 +6,7 @@ import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.application.plan.SchedulePlanBuilder;
@@ -187,13 +188,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             task,
             partition,
             traceId,
-            jobInstance.getTenantId()
-                + ":workflow:"
-                + workflowRun.getId()
-                + ":"
-                + node.nodeCode()
-                + ":"
-                + task.getId());
+            OutboxEventKeyGenerator.forWorkflowNodeDispatch(
+                jobInstance.getTenantId(), workflowRun.getId(), node.nodeCode(), task.getId()));
       }
     }
     int currentExpectedPartitionCount =

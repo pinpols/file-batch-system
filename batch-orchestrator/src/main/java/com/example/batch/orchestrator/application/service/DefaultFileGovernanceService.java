@@ -8,6 +8,7 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
@@ -212,7 +213,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         task,
         partition,
         command.traceId(),
-        command.tenantId() + ":manual-redispatch:" + task.getId(),
+        OutboxEventKeyGenerator.forFileRedispatch(command.tenantId(), task.getId()),
         RunMode.COMPENSATE);
     fileGovernanceRepository.appendAudit(
         new FileGovernanceRepository.FileAuditCommand(

@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.controller;
 
 import com.example.batch.common.utils.IdGenerator;
+import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.service.RetryGovernanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +26,7 @@ public class RecoveryController {
   public RecoveryResponse replayTask(
       @PathVariable Long taskId, @RequestBody TaskReplayRequest request) {
     String tenantId = request == null ? null : request.tenantId();
-    String eventKey = tenantId + ":task-retry:" + taskId;
+    String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "task", taskId);
     retryGovernanceService.retryTask(tenantId, taskId, eventKey);
     return new RecoveryResponse(IdGenerator.newBusinessNo("rpl"));
   }
@@ -39,7 +40,7 @@ public class RecoveryController {
   public RecoveryResponse replayPartition(
       @PathVariable Long partitionId, @RequestBody PartitionReplayRequest request) {
     String tenantId = request == null ? null : request.tenantId();
-    String eventKey = tenantId + ":partition-retry:" + partitionId;
+    String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "partition", partitionId);
     retryGovernanceService.retryPartition(tenantId, partitionId, eventKey);
     return new RecoveryResponse(IdGenerator.newBusinessNo("rpl"));
   }

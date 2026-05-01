@@ -56,8 +56,20 @@ import org.springframework.stereotype.Component;
 @Lazy(false)
 public class OutboxPollScheduler {
 
-  private static final Duration LOCK_AT_MOST = Duration.ofMinutes(1);
-  private static final Duration LOCK_AT_LEAST = Duration.ofSeconds(3);
+  /**
+   * ShedLock 兜底持锁上限。与 {@link OutboxProperties#getPublishingTimeoutSeconds()}(默认 120s)对齐 — 锁过期被另
+   * instance 抢占时,前一 instance 留下的 PUBLISHING 行已超过 stale 阈值,新 instance 跑 {@code resetStalePublishing}
+   * 即能恢复。设短于 publishingTimeoutSeconds 会留出"锁过期但 stale 未到"的盲窗。
+   */
+  private static final Duration LOCK_AT_MOST = Duration.ofSeconds(120);
+
+  /**
+   * ShedLock 最小持锁时长 — 200ms(从原 3s 降下来,2026-05-01 校准)。
+   *
+   * <p>目的:让闲置 instance 不长占锁;3s 太长造成多 instance 部署时另一个 instance 一旦抢到锁就要至少憋 3s 才放,即使本轮没事可做。200ms
+   * 仍能覆盖单轮 advance 平均耗时(~50ms)防止瞬抢/瞬释抖动。
+   */
+  private static final Duration LOCK_AT_LEAST = Duration.ofMillis(200);
 
   private final DefaultScheduleForwarder scheduleForwarder;
   private final OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
