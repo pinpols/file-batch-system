@@ -113,7 +113,8 @@
                metadata_json -&gt;&gt; 'triggerOnComplete' as trigger_on_complete
         from batch.file_record
         where jsonb_exists(metadata_json, 'fileGroupCode')
-          and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') not in ('TRIGGERED', 'TIMEOUT')
+          and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL')
+                not in ('TRIGGERED', 'TIMEOUT', 'WAITING_MANUAL_CONFIRM')
         order by coalesce((metadata_json -&gt;&gt; 'latestTolerableTime')::timestamptz, created_at) asc,
                  created_at asc
         limit #{limit}

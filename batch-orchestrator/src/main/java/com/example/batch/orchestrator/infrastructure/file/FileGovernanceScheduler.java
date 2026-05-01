@@ -358,6 +358,19 @@ public class FileGovernanceScheduler {
               new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
       return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
     }
+    // 配置不全守卫:有 fileGroupCode 但 requiredFileSet 为空 → 既不能判定"完成"也不能判定"等"。
+    // 此时若仍写 WAITING_ARRIVAL,scheduler 会在每个 30s tick 重复评估同一行,造成日志 +
+    // updated_at 抖动(2026-05-01 5207.fw 类噪声根因)。改为静默跳过,等业务方补全 metadata 或
+    // 数据治理手工置终态。
+    if (requiredFiles.isEmpty()) {
+      log.warn(
+          "skip arrival group with empty requiredFileSet: tenantId={}, fileGroupCode={},"
+              + " arrivedCount={} — metadata 不全,无法判定触发条件;请补 requiredFileSet 或置终态",
+          key.tenantId(),
+          key.fileGroupCode(),
+          arrivedFiles.size());
+      return new ArrivalGroupDecision(null);
+    }
     updateGroupState(
         new ArrivalGroupUpdateContext(
             key,
@@ -367,21 +380,37 @@ public class FileGovernanceScheduler {
   }
 
   private void updateGroupState(ArrivalGroupUpdateContext context) {
+    // 幂等跳过:group 内所有文件 arrivalState + arrivalReason 已与目标一致,跳过 update / audit / log
+    // (避免 schedule tick 在稳态下反复写 updated_at 和重复 INFO 日志,2026-05-01 噪声治理)。
+    String targetState = context.state().arrivalState();
+    String targetReason = context.state().reason();
+    boolean allInSync = true;
+    for (Map<String, Object> file : context.files().groupFiles()) {
+      String currentState = text(file.get("arrival_state"));
+      String currentReason = text(file.get("arrival_reason"));
+      if (!targetState.equals(currentState) || !Objects.equals(targetReason, currentReason)) {
+        allInSync = false;
+        break;
+      }
+    }
+    if (allInSync) {
+      return;
+    }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("fileGroupCode", context.key().fileGroupCode());
     metadata.put("waitFileGroupMode", context.key().waitFileGroupMode());
     metadata.put("requiredFileSet", context.key().requiredFileSet());
     metadata.put("arrivalTimeoutAction", context.key().arrivalTimeoutAction());
-    metadata.put("arrivalState", context.state().arrivalState());
-    metadata.put("arrivalReason", context.state().reason());
+    metadata.put("arrivalState", targetState);
+    metadata.put("arrivalReason", targetReason);
     metadata.put("arrivalCheckedAt", context.state().now().toString());
     metadata.put("groupArrivedCount", context.files().groupFiles().size());
     metadata.put("groupRequiredCount", context.files().requiredFiles().size());
     metadata.put("groupMissingFileSet", String.join(",", context.files().missingFiles()));
-    if (STATUS_TRIGGERED.equals(context.state().arrivalState())) {
+    if (STATUS_TRIGGERED.equals(targetState)) {
       metadata.put("arrivalTriggeredAt", context.state().now().toString());
     }
-    if (STATUS_TIMEOUT.equals(context.state().arrivalState())) {
+    if (STATUS_TIMEOUT.equals(targetState)) {
       metadata.put("arrivalTimedOutAt", context.state().now().toString());
     }
     for (Map<String, Object> file : context.files().groupFiles()) {
