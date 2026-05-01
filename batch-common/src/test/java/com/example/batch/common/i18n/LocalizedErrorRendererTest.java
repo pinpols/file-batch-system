@@ -96,6 +96,89 @@ class LocalizedErrorRendererTest {
     assertThat(rendered).isEqualTo("工作流不存在:wf-42");
   }
 
+  // ─── v6 hardening ──────────────────────────────────────────────────────────
+
+  /** P1-1：render 不应在 args 与占位符不匹配时把 IllegalArgumentException 透传到上层。 */
+  @Test
+  void render_with_corrupt_args_falls_back_instead_of_throwing() {
+    // error.tenant.already_exists 模板含 {0}，但 errorArgsJson 损坏 → parseArgs 返回空数组 →
+    // MessageFormat 尝试替换 {0} 时抛 IllegalArgumentException；renderer 应 fallback
+    String rendered =
+        renderer.render(
+            "error.tenant.already_exists",
+            "<<<not valid json>>>",
+            "fallback for corrupt args",
+            Locale.ENGLISH);
+
+    // 损坏 args 解析为空数组后，MessageFormat 行为可能因 Spring 版本而异；
+    // 关键约束是不抛异常，且至少能返回某个字符串（fallback 或 raw template）
+    assertThat(rendered).isNotNull();
+  }
+
+  @Test
+  void render_swallows_runtime_exception_and_falls_back() {
+    // 守护"render 任何 RuntimeException 都 fallback"的契约：注入一个永远抛 IAE 的 messageSource，
+    // 模拟 args 与占位符不匹配 / args 类型异常等渲染失败场景
+    org.springframework.context.MessageSource faulty =
+        new org.springframework.context.support.AbstractMessageSource() {
+          @Override
+          protected java.text.MessageFormat resolveCode(String code, Locale locale) {
+            throw new IllegalArgumentException("simulated MessageFormat failure");
+          }
+        };
+    LocalizedErrorRenderer faultyRenderer = new LocalizedErrorRenderer(faulty, objectMapper);
+
+    String rendered =
+        faultyRenderer.render("any.key", "[]", "fallback when broken", Locale.ENGLISH);
+
+    assertThat(rendered).isEqualTo("fallback when broken");
+  }
+
+  /** P1-2：写入路径 truncate error_message 防 VARCHAR(1024) 超长。 */
+  @Test
+  void biz_exception_utils_truncates_long_rendered_message() {
+    String longText = "x".repeat(2000);
+    BizException ex = new BizException(ResultCode.SYSTEM_ERROR, longText);
+
+    LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
+
+    assertThat(error.renderedMessage()).hasSizeLessThanOrEqualTo(1024);
+    assertThat(error.renderedMessage()).endsWith("…[truncated]");
+  }
+
+  @Test
+  void biz_exception_utils_short_message_is_unchanged() {
+    BizException ex = new BizException(ResultCode.SYSTEM_ERROR, "short message");
+
+    LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
+
+    assertThat(error.renderedMessage()).isEqualTo("short message");
+  }
+
+  @Test
+  void biz_exception_utils_truncates_third_party_throwable_message() {
+    RuntimeException ex = new RuntimeException("y".repeat(3000));
+
+    LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
+
+    assertThat(error.renderedMessage()).hasSizeLessThanOrEqualTo(1024);
+  }
+
+  /** P3：args 含复杂对象不阻塞落库（仅 log.warn）；JSON 序列化仍能完成。 */
+  @Test
+  void biz_exception_utils_accepts_complex_args_without_throwing() {
+    BizException ex =
+        BizException.of(
+            ResultCode.NOT_FOUND,
+            "error.tenant.already_exists",
+            java.util.Map.of("nested", "value"));
+
+    LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
+
+    assertThat(error.key()).isEqualTo("error.tenant.already_exists");
+    assertThat(error.argsJson()).isNotNull(); // 复杂对象仍能序列化
+  }
+
   // ─── helpers ─────────────────────────────────────────────────────────────────
 
   private static ResourceBundleMessageSource messageSource() {

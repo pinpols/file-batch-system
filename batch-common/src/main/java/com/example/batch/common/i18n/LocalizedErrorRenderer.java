@@ -2,6 +2,7 @@ package com.example.batch.common.i18n;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Locale;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -23,6 +24,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
  * <p>由 {@link BatchI18nAutoConfiguration} 装配为 bean, 与 {@link BizMessageResolver} 同款理由:
  * 不依赖业务模块 @ComponentScan 覆盖 com.example.batch.common.i18n。
  */
+@Slf4j
 public class LocalizedErrorRenderer {
 
   private final MessageSource messageSource;
@@ -47,6 +49,18 @@ public class LocalizedErrorRenderer {
       String rendered = messageSource.getMessage(errorKey, args, locale);
       return (rendered == null || rendered.isBlank()) ? fallback : rendered;
     } catch (NoSuchMessageException ignored) {
+      return fallback;
+    } catch (RuntimeException ex) {
+      // v6 hardening: 兜底 IllegalArgumentException 等渲染异常——
+      // 当 error_args JSONB 损坏导致 parseArgs 返回空数组、message 模板含 {N} 占位符时，
+      // Spring 内部 MessageFormat 会抛 IllegalArgumentException；旧版仅 catch NoSuchMessageException
+      // 让异常透传到 5xx，影响 console 列表查询。改为 fallback + warn 让历史脏数据不影响读路径。
+      log.warn(
+          "localized error render failed; falling back to raw message: errorKey={}, locale={},"
+              + " cause={}",
+          errorKey,
+          locale,
+          ex.getMessage());
       return fallback;
     }
   }
