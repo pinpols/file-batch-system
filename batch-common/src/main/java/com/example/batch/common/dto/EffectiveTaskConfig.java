@@ -50,4 +50,20 @@ public record EffectiveTaskConfig(
     /** 最大重试次数,实时反映管理员最新配置。 */
     Integer retryMaxCount,
     /** 超时秒数,实时反映管理员最新配置。 */
-    Integer timeoutSeconds) {}
+    Integer timeoutSeconds,
+    /**
+     * 当前 task 所属 partition 的 1-based 序号(读自 {@code job_partition.partition_no})。Worker step / plugin
+     * 据此 + {@link #partitionCount} 决定自己处理哪部分数据(行 mod / 字节 range / 业务键 hash 等),具体切分维度由 worker
+     * 端实现解释。{@code job_type=NONE} 时为 1;不分片场景与单 partition 等价。
+     */
+    Integer partitionNo,
+    /**
+     * 本次 job_instance 的 partition 总数(读自 {@code job_instance.expected_partition_count})。Worker 计算"我是
+     * N 中的第 K 个"用。
+     */
+    Integer partitionCount,
+    /**
+     * partition 业务标识(读自 {@code job_partition.partition_key},默认 {@code jobCode:bizDate:partitionNo}
+     * 由 orchestrator 生成,业务可在 plan-build 阶段覆盖为机构号 / hash 桶等)。Worker 端按业务字段切分时读它。
+     */
+    String partitionKey) {}

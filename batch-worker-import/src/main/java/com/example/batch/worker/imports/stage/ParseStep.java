@@ -20,11 +20,13 @@ import com.example.batch.worker.imports.stage.format.JsonFormatParser;
 import com.example.batch.worker.imports.stage.format.ParseSupport;
 import com.example.batch.worker.imports.stage.format.XmlFormatParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
@@ -110,11 +112,24 @@ public class ParseStep implements ImportStageStep {
               importPayload,
               context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG),
               stagingFile);
+      // 默认按行 mod 切片:partitionCount > 1 且未关闭时,流式过滤 staging 文件,只保留属于本 partition 的行。
+      // (lineNo 0-based;partitionNo 1-based;条件 lineNo % count == partitionNo - 1)
+      // totalCount = 文件原始行数(全部 partition 视角);parsedCount = 本 partition 实际处理的行数
+      long partitionedCount =
+          applyPartitionFilter(
+              context,
+              stagingFile,
+              totalCount,
+              context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
       context.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
-      context
-          .getAttributes()
-          .put(
-              KEY_PARSED_COUNT, support.numberValue(context.getAttributes().get(KEY_PARSED_COUNT)));
+      // 切片时 parsedCount 应反映本 partition 视角(下游 LoadStep 用它做 audit + step output);
+      // 不切片时维持原有 support.numberValue(...) 值兜底,保持与历史行为一致。
+      Object existingParsedCount = context.getAttributes().get(KEY_PARSED_COUNT);
+      long parsedCountValue =
+          partitionedCount != totalCount
+              ? partitionedCount
+              : support.numberValue(existingParsedCount);
+      context.getAttributes().put(KEY_PARSED_COUNT, parsedCountValue);
       context.getAttributes().put("totalCount", totalCount);
       if (totalCount == 0
           && support.numberValue(context.getAttributes().get("skippedCount")) == 0) {
@@ -349,6 +364,95 @@ public class ParseStep implements ImportStageStep {
       Files.deleteIfExists(path);
     } catch (Exception ex) {
       log.warn("Failed to delete temp file: {}", path, ex);
+    }
+  }
+
+  /**
+   * 按 PARTITION_NO / PARTITION_COUNT 流式过滤 staging 文件,只保留本 partition 应处理的行。
+   *
+   * <p>开关:{@code template_config.partition_aware_parse=false} 关闭(默认开)。partitionCount &le; 1 / 缺
+   * PARTITION_NO 等任意条件不满足时直通,与历史行为等价。
+   *
+   * @return 过滤后实际保留的行数;不需过滤时直接返回 {@code totalCount}
+   */
+  private long applyPartitionFilter(
+      ImportJobContext context, Path stagingFile, long totalCount, Object templateConfig)
+      throws Exception {
+    Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
+    Integer partitionCount =
+        intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    if (partitionNo == null || partitionCount == null || partitionCount <= 1) {
+      return totalCount;
+    }
+    if (templateConfig instanceof Map<?, ?> tc) {
+      Object switchVal = tc.get("partition_aware_parse");
+      if (switchVal == null) {
+        switchVal = tc.get("partitionAwareParse");
+      }
+      if (switchVal != null && "false".equalsIgnoreCase(String.valueOf(switchVal).trim())) {
+        return totalCount;
+      }
+    }
+    if (partitionNo < 1 || partitionNo > partitionCount) {
+      log.warn(
+          "skip partition filter: partitionNo={} outside [1,{}], tenantId={}, fileId={}",
+          partitionNo,
+          partitionCount,
+          context.getTenantId(),
+          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+      return totalCount;
+    }
+    Path filtered =
+        Files.createTempFile(
+            BatchFileConstants.importStagePrefix(
+                String.valueOf(context.getFileId()),
+                String.valueOf(context.getWorkerId()),
+                "parsed-p" + partitionNo),
+            ".tmp");
+    long lineNo = 0;
+    long kept = 0;
+    int targetMod = partitionNo - 1;
+    try (BufferedReader reader = Files.newBufferedReader(stagingFile, StandardCharsets.UTF_8);
+        BufferedWriter writer =
+            Files.newBufferedWriter(
+                filtered,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE)) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        if (lineNo % partitionCount == targetMod) {
+          writer.write(line);
+          writer.newLine();
+          kept++;
+        }
+        lineNo++;
+      }
+    }
+    Files.move(filtered, stagingFile, StandardCopyOption.REPLACE_EXISTING);
+    log.info(
+        "partition filter applied: tenantId={}, fileId={}, partition={}/{}, kept={}/{}",
+        context.getTenantId(),
+        context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+        partitionNo,
+        partitionCount,
+        kept,
+        totalCount);
+    return kept;
+  }
+
+  private static Integer intOrNull(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Number n) {
+      return n.intValue();
+    }
+    try {
+      return Integer.parseInt(String.valueOf(value).trim());
+    } catch (NumberFormatException ignored) {
+      return null;
     }
   }
 

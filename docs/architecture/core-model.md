@@ -113,7 +113,64 @@
 - [`JobStepInstanceEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/domain/entity/JobStepInstanceEntity.java)
 - [`WorkflowNodeRunEntity.java`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/domain/entity/WorkflowNodeRunEntity.java)
 
-### 3.6 Step / Stage 边界
+### 3.6 Partition 切分契约（orchestrator → worker）
+
+**机制 vs 策略分离**：orchestrator 决定"派多少 partition + 给每个 partition 一个号牌"，worker 决定"我拿到号牌后干哪部分"（按文件行 / 按字节 range / 按业务键 hash / 按机构号等）。平台不强加切分维度——这是有意识的"机制（数量决策 + lease + 重试 + 状态机）vs 策略（怎么读 / 怎么过滤）"分离，与 K8s scheduler / Spring Batch Partitioner 同构。
+
+#### 3.6.1 三个运行时字段的端到端流向
+
+```
+orchestrator                                                    worker
+─────────────────                                               ─────────
+job_partition.partition_no  ──┐
+job_partition.partition_key ──┼─claim()─→ EffectiveTaskConfig
+job_instance.expected_       ──┘                ↓
+       partition_count                     PulledTask
+                                                ↓
+                                       DefaultTaskExecutionWrapper
+                                                ↓
+                                      context.attributes:
+                                        PARTITION_NO     = K (1-based)
+                                        PARTITION_COUNT  = N
+                                        PARTITION_KEY    = "<jobCode>:<bizDate>:<K>"
+                                                ↓
+                                      worker step / plugin
+                                      (ParseStep / ProcessComputePlugin / ...)
+                                                ↓
+                                      自行决定切什么:
+                                       - lineNo % N == K-1   (默认 ParseStep)
+                                       - hash(branchCode) % N == K-1
+                                       - id BETWEEN ... AND ...
+                                       - 按 input_snapshot 字段过滤
+```
+
+**字段语义**（`PipelineRuntimeKeys`）：
+
+| Key | 类型 | 含义 |
+|---|---|---|
+| `PARTITION_NO` | Integer (1-based) | 当前 task 的分区序号；不分片场景为 `1` |
+| `PARTITION_COUNT` | Integer | 本次 job_instance 的分区总数；`<= 1` 视为不分片 |
+| `PARTITION_KEY` | String | 业务标识，默认 `jobCode:bizDate:partitionNo`，业务可在 plan-build 时覆盖为机构号 / hash 桶等 |
+
+#### 3.6.2 默认 ParseStep 行 mod 切分
+
+`batch-worker-import` 的 `ParseStep` 默认 partition-aware：format parser 写完 NDJSON staging 后，post-filter 按 `lineNo % PARTITION_COUNT == PARTITION_NO - 1` 流式重写，下游 VALIDATE/LOAD 只看本 partition 数据。
+
+- **开关**：`template_config.partition_aware_parse=false` 关闭（默认开）
+- **统计口径**：`totalCount` = 文件原始行数（不变，全 partition 视角）；`parsedCount` = 本 partition 实际处理行数（切分时变小）
+- **零侵入回退**：`PARTITION_COUNT <= 1` / 字段缺失 / 开关关闭 / `partitionNo` 越界 → 直通，与历史行为等价
+
+#### 3.6.3 业务自定义切分维度
+
+需要按机构号 / 业务键 / 数据范围切时：
+
+1. **plan-build 阶段**覆盖 `partition_key`：在 `DefaultSchedulePlanBuilder` 自定义 partition_key 生成（默认 `jobCode:bizDate:partitionNo`，可写成 `branchCode=BJ` / `range=[10000,19999]` 等）
+2. **partition 创建时**写 `input_snapshot JSONB`（`job_partition.input_snapshot`）：`{"branchCode":"BJ","dateRange":"2026-04"}`
+3. **worker step**自定义 plugin 读 `PARTITION_KEY` / `input_snapshot` 自行路由数据范围；关闭默认行 mod 切分（`partition_aware_parse=false`）
+
+**反例**：不要在 `PartitionCountResolver` 里塞业务切分逻辑——它只决定数量，不决定字段。详见 [`ADR-005-partition-count-resolver-chain.md`](./adr/ADR-005-partition-count-resolver-chain.md)。
+
+### 3.7 Step / Stage 边界
 
 `Step` 和 `Stage` 不是同义词，不能互换。
 

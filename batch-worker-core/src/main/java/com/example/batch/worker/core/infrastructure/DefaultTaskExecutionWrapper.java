@@ -68,6 +68,17 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       // INCREMENTAL pipeline 业务读 attributes 拼 SQL 水位条件;FULL/CDC/历史首跑为 null。
       executionContext.put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, task.getHighWaterMarkIn());
     }
+    // partition 信息透传:worker step / plugin 据此 + PARTITION_COUNT 决定切哪部分。null 时按"不分片"处理(下游
+    // ParseStep 等会兜底为 1/1)。
+    if (task.getPartitionNo() != null) {
+      executionContext.put(PipelineRuntimeKeys.PARTITION_NO, task.getPartitionNo());
+    }
+    if (task.getPartitionCount() != null) {
+      executionContext.put(PipelineRuntimeKeys.PARTITION_COUNT, task.getPartitionCount());
+    }
+    if (task.getPartitionKey() != null) {
+      executionContext.put(PipelineRuntimeKeys.PARTITION_KEY, task.getPartitionKey());
+    }
     StepExecutionRequest request =
         new StepExecutionRequest(
             task.getTenantId(),

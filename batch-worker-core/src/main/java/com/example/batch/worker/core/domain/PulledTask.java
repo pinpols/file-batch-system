@@ -28,4 +28,13 @@ public class PulledTask {
    * `WHERE update_time > :highWaterMarkIn`。
    */
   private String highWaterMarkIn;
+
+  /** 当前 task 所属 partition 的 1-based 序号(claim 拿,源头 job_partition.partition_no)。 */
+  private Integer partitionNo;
+
+  /** 本次 job_instance 的 partition 总数(claim 拿,源头 job_instance.expected_partition_count)。 */
+  private Integer partitionCount;
+
+  /** partition 业务标识(claim 拿,源头 job_partition.partition_key)。 */
+  private String partitionKey;
 }

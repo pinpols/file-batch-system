@@ -78,7 +78,10 @@ class TaskControllerTest {
             "wm-1",
             "EXPONENTIAL",
             5,
-            600);
+            600,
+            1,
+            1,
+            "JOB-X:2026-05-01:1");
     when(taskExecutionService.loadEffectiveConfig("t1", 10L)).thenReturn(config);
 
     mockMvc

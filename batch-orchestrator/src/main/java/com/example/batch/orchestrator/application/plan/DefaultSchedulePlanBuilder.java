@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Component;
  * <p>结果统一经 {@link #normalizePartitionCount} 夹到 {@code [min, max]} 区间，{@code maxPartitionCount} 硬上限为
  * 256 防止失控膨胀。
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
@@ -138,13 +140,33 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
    */
   private int resolveDynamicPartitionCount(
       JobDefinitionRecord jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+    Integer winnerCount = null;
+    String winnerName = null;
     for (PartitionCountResolver resolver : dynamicResolvers) {
       int count = resolver.resolve(jobDefinition, params, shardStrategy);
-      if (count > 0) {
-        return count;
+      if (count <= 0) {
+        continue;
+      }
+      if (winnerCount == null) {
+        winnerCount = count;
+        winnerName = resolver.getClass().getSimpleName();
+        if (!log.isInfoEnabled()) {
+          return count;
+        }
+      } else {
+        // 后续 resolver 仍算出值但被覆盖 — INFO 暴露,避免"我配了 targetItemsPerPartition 但不生效"的静默调试痛点
+        log.info(
+            "partition count resolver overridden: tenantId={}, jobCode={}, winner={}({}),"
+                + " shadowed={}({})",
+            jobDefinition == null ? null : jobDefinition.tenantId(),
+            jobDefinition == null ? null : jobDefinition.jobCode(),
+            winnerName,
+            winnerCount,
+            resolver.getClass().getSimpleName(),
+            count);
       }
     }
-    return 1;
+    return winnerCount == null ? 1 : winnerCount;
   }
 
   private int normalizePartitionCount(

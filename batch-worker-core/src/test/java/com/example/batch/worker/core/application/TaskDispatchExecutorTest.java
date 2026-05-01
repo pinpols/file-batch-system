@@ -68,7 +68,10 @@ class TaskDispatchExecutorTest {
             "fresh-watermark",
             "EXPONENTIAL",
             5,
-            600);
+            600,
+            1,
+            1,
+            "FRESH_JOB:2026-05-01:1");
     when(workerRuntimeFacade.claim(eq("t1"), eq(42L), eq("w1"))).thenReturn(Optional.of(fresh));
     when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
 

@@ -315,6 +315,23 @@ public record TaskDispatchMessage(
 
 兼容性（沿用 Stage 1 的滚动升级思路）：Stage 2 部署 orchestrator 时所有 worker 已是 P1-2.1+，以 effective config 为权威，message v2 缺字段不影响业务执行。Jackson 反序列化未知字段被忽略，旧 v1 消息（含已删字段）被新 worker 解析为 v2 时已删字段直接丢弃。
 
+**2026-05-01 Stage 3 hardening — 暴露 partition 信息给 worker**：
+
+```java
+// EffectiveTaskConfig 末尾追加 3 字段,nullable 兜底
+public record EffectiveTaskConfig(
+    ... 原 20 字段保持位置不变 ...,
+    Integer partitionNo,    // 1-based,读自 job_partition.partition_no
+    Integer partitionCount, // 读自 job_instance.expected_partition_count
+    String  partitionKey    // 读自 job_partition.partition_key
+) {}
+```
+
+- **orchestrator 端**：`DefaultTaskAssignmentService.loadEffectiveConfig` 已查 `JobPartitionEntity` + `JobInstanceEntity`，直接补上 3 字段
+- **worker 端**：`TaskDispatchExecutor` 写进 `PulledTask`，`DefaultTaskExecutionWrapper` 透传到 `executionContext.attributes`，key 见 `PipelineRuntimeKeys.PARTITION_NO/COUNT/KEY`
+- **解决问题**：worker step / plugin 想"按 partition 切文件 / 切机构号"无需自己回查 DB；`batch-worker-import` 的 `ParseStep` 默认 partition-aware（可关）
+- 详细契约见 [`docs/architecture/core-model.md §3.6`](../architecture/core-model.md)
+
 ### 4.5 P2：PROCESS worker 模块 ✅ 已落地 WAP+bookends 真五段版
 
 > **2026-04-28 状态(第二轮)**：把 PROCESS 从"5 stage 模板表面 + COMPUTE 一段干所有事"重做为真正的 **WAP+bookends**(Write-Audit-Publish + 前后置)—— 5 个 stage 各自承担明确职责,与 Netflix Atlas / Iceberg branch 等成熟数据平台的模式对齐。

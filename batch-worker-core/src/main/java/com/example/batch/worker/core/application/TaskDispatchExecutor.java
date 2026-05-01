@@ -51,6 +51,9 @@ public class TaskDispatchExecutor {
     task.setTaskSeq(effective.taskSeq());
     task.setPayload(effective.payload());
     task.setHighWaterMarkIn(effective.highWaterMarkIn());
+    task.setPartitionNo(effective.partitionNo());
+    task.setPartitionCount(effective.partitionCount());
+    task.setPartitionKey(effective.partitionKey());
     return workerRuntimeFacade.execute(task);
   }
 }
