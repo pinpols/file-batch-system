@@ -358,7 +358,7 @@ class DefaultProcessStageExecutorTest {
       case COMPUTE -> new ComputeStep();
       case VALIDATE -> new ValidateStep();
       case COMMIT -> new CommitStep();
-      case FEEDBACK -> new FeedbackStep();
+      case FEEDBACK -> new FeedbackStep(ProcessMetrics.noop());
     };
   }
 }

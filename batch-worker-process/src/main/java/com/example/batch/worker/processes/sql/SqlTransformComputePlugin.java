@@ -109,6 +109,33 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     // buildSqlParams 已经注入 batchKey / targetSchema / targetTable,这里不再重复 put。
     Map<String, Object> params = buildSqlParams(context, spec);
 
+    // Pre-DELETE:吃掉同 (batchKey, tenantId, targetSchema, targetTable) 上一轮 crash-mid-flow
+    // 留下的 staging 行。稳定 batchKey 重跑路径(ProcessStepExecutionAdapter:74-77 由 payload 显式
+    // 携带 batchKey)若不清,COMPUTE 重 INSERT 会与旧行累加,COMMIT publish 把两轮并集都搬到 target。
+    // 默认每次 task 生成新 batchKey 时 DELETE 0 行,代价可忽略。
+    Map<String, Object> preCleanParams = new LinkedHashMap<>();
+    preCleanParams.put("batchKey", batchKey);
+    preCleanParams.put("tenantId", context.getTenantId());
+    preCleanParams.put("targetSchema", spec.targetSchema());
+    preCleanParams.put("targetTable", spec.targetTable());
+    int leftover =
+        jdbc.update(
+            "DELETE FROM batch.process_staging WHERE batch_key = :batchKey"
+                + " AND tenant_id = :tenantId"
+                + " AND target_schema = :targetSchema"
+                + " AND target_table = :targetTable",
+            preCleanParams);
+    if (leftover > 0) {
+      log.warn(
+          "sqlTransformCompute pre-compute cleared leftover staging: tenantId={}, batchKey={},"
+              + " target={}.{}, leftover={} (likely prior attempt crashed mid-flow)",
+          context.getTenantId(),
+          batchKey,
+          spec.targetSchema(),
+          spec.targetTable(),
+          leftover);
+    }
+
     String stageSql = buildStagingInsertSql(spec);
     int stagedRows = jdbc.update(stageSql, params);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, stagedRows);
@@ -471,14 +498,15 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         ) staged
         """
             .formatted(target, columnList, selectColumns, target);
-    if (spec.writeMode() == SqlTransformComputeSpec.WriteMode.INSERT) {
-      return sql;
-    }
+    // PROCESS at-least-once 安全:所有 writeMode 都需要 ON CONFLICT 子句,SqlTransformComputeSpec
+    // 已在 parse 期保证 conflictColumns 非空。INSERT / INSERT_IGNORE 共用 DO NOTHING 语义,
+    // UPSERT 走 DO UPDATE SET。这样 commit-后-report-丢的重发不会双写 target。
     String conflictColumns =
         spec.conflictColumns().stream()
             .map(JdbcMappedSqlValidator::quotePg)
             .collect(Collectors.joining(", "));
-    if (spec.writeMode() == SqlTransformComputeSpec.WriteMode.INSERT_IGNORE) {
+    if (spec.writeMode() == SqlTransformComputeSpec.WriteMode.INSERT
+        || spec.writeMode() == SqlTransformComputeSpec.WriteMode.INSERT_IGNORE) {
       return sql + " ON CONFLICT (" + conflictColumns + ") DO NOTHING";
     }
     String update =

@@ -177,9 +177,15 @@ public record SqlTransformComputeSpec(
             "sqlTransformCompute.conflictColumns must appear in target columns: " + conflictColumn);
       }
     }
-    if (writeMode != WriteMode.INSERT && conflictColumns.isEmpty()) {
+    // PROCESS at-least-once delivery (commit-后-report-丢、reclaim 重发) 要求所有 writeMode
+    // 都必须可幂等重放;空 conflictColumns 配 raw INSERT 会在 publish 重放时双写 target 行。
+    // 因此对所有 writeMode 强制要求 conflictColumns。INSERT 路径在 buildPublishSql 中按 DO NOTHING
+    // 语义生成 ON CONFLICT 子句,语义 = at-least-once 安全的 append-only。
+    if (conflictColumns.isEmpty()) {
       throw new IllegalArgumentException(
-          "sqlTransformCompute.conflictColumns is required for " + writeMode);
+          "sqlTransformCompute.conflictColumns is required for "
+              + writeMode
+              + " (PROCESS retries are at-least-once; conflictColumns 不能为空,否则重放会双写 target)");
     }
     if (Texts.hasText(watermarkColumn)) {
       JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");

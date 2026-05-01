@@ -34,6 +34,7 @@ public class ProcessMetrics {
   static final String PUBLISHED_ROWS = "process_commit_published_rows";
   static final String VALIDATION_FAILED = "process_validation_failed_total";
   static final String STAGE_DURATION = "process_stage_duration_seconds";
+  static final String FEEDBACK_SWALLOWED = "process_feedback_swallowed_total";
 
   private static final String UNKNOWN_TAG = "unknown";
 
@@ -44,6 +45,8 @@ public class ProcessMetrics {
       new ConcurrentHashMap<>();
   private final ConcurrentMap<String, Counter> validationFailedByKey = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, Timer> stageTimerByKey = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Counter> feedbackSwallowedByTenant =
+      new ConcurrentHashMap<>();
 
   @Autowired
   public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
@@ -105,6 +108,26 @@ public class ProcessMetrics {
                 Counter.builder(VALIDATION_FAILED)
                     .description("PROCESS VALIDATE 阶段单条 rule 校验失败计数")
                     .tags(Tags.of("tenantId", tenantTag, "ruleName", ruleTag))
+                    .register(registry));
+    counter.increment();
+  }
+
+  /**
+   * FEEDBACK 阶段吞掉的异常计数。按设计,FEEDBACK 失败不应让整个 task 失败(target 已落 / staging 已清),但 完全静默会让 staging 残留 /
+   * 审计漏写不可见。本指标暴露 swallow 频率,告警 / 排障的入口。
+   */
+  public void incrementFeedbackSwallowed(String tenantId) {
+    if (registry == null) {
+      return;
+    }
+    String tenantTag = normalize(tenantId);
+    Counter counter =
+        feedbackSwallowedByTenant.computeIfAbsent(
+            tenantTag,
+            tag ->
+                Counter.builder(FEEDBACK_SWALLOWED)
+                    .description("PROCESS FEEDBACK 阶段吞掉的异常累计 (target 已落,但 cleanup/audit 失败)")
+                    .tags(Tags.of("tenantId", tag))
                     .register(registry));
     counter.increment();
   }

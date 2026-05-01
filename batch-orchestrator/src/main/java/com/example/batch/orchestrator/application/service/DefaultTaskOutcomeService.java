@@ -261,8 +261,17 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // ExecutionMode.INCREMENTAL:把 worker 上报的新水位回写到 job_instance。null/空跳过
       // (保留旧值,下次启动时同 IN 不变);仅成功路径推水位,失败/重试不应推进。
       if (command.highWaterMarkOut() != null && !command.highWaterMarkOut().isBlank()) {
-        jobMappers.jobInstanceMapper.updateHighWaterMarkOut(
-            command.tenantId(), task.getJobInstanceId(), command.highWaterMarkOut());
+        int wmUpdated =
+            jobMappers.jobInstanceMapper.updateHighWaterMarkOut(
+                command.tenantId(), task.getJobInstanceId(), command.highWaterMarkOut());
+        if (wmUpdated <= 0) {
+          // CAS 守护拦下:更高水位已就绪 (并发 partition 回报乱序) 或新值格式非法,debug 即可。
+          log.debug(
+              "high_water_mark_out CAS no-op for jobInstance {}: incoming={} (regression or"
+                  + " malformed)",
+              task.getJobInstanceId(),
+              command.highWaterMarkOut());
+        }
       }
     } else {
       applyFailureOutcome(command, partition, retryScheduled);

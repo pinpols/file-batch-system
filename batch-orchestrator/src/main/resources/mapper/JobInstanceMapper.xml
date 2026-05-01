@@ -307,8 +307,11 @@
           and version = #{expectedVersion}
     </update>
 
-    <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次成功(含 PARTIAL_FAILED)实例,
+    <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次"全成功"(SUCCESS only)实例,
          供新实例启动时把上一次的 high_water_mark_out 当成本次 IN。
+         不取 PARTIAL_FAILED:partial 完成意味着部分 partition 未覆盖,若把它的水位推给下次,
+         会让下次跳过失败 partition 应处理的数据范围;让下次重新从同一 IN 跑,由 publish 路径
+         的 ON CONFLICT 兜住重复(见 SqlTransformComputeSpec / buildPublishSql)。
          按 finished_at desc, id desc 排序:finished_at 是真实完成时间(优先);若并发场景下
          finished_at 出现 NULL/相同,id 兜底保证确定性。 -->
     <select id="selectLastSuccessByJobDefinition" resultMap="JobInstanceResultMap">
@@ -316,16 +319,27 @@
         from batch.job_instance
         where tenant_id = #{tenantId}
           and job_definition_id = #{jobDefinitionId}
-          and instance_status in ('SUCCESS', 'PARTIAL_FAILED')
+          and instance_status = 'SUCCESS'
         order by finished_at desc nulls last, id desc
         limit 1
     </select>
 
+    <!-- 多 partition 并发回报顺序乱时,慢 partition 拿到的低水位不应覆写快 partition 已写的高水位。
+         CAS WHERE:仅当当前列空 / 旧值非数字(legacy 容错) / 新值更大时才推进。high_water_mark_out
+         为 VARCHAR(64),业务上由 max((payload->>:col)::numeric) 产出,这里走 numeric 比较。
+         若新值本身格式非法,正则失败 → 不更新(返回 0 行,调用方按 regression 处理,不抛错)。 -->
     <update id="updateHighWaterMarkOut">
         update batch.job_instance
         set high_water_mark_out = #{highWaterMarkOut},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and #{highWaterMarkOut} ~ '^-?[0-9]+(\.[0-9]+)?$'
+          and (
+            high_water_mark_out is null
+            or high_water_mark_out = ''
+            or high_water_mark_out !~ '^-?[0-9]+(\.[0-9]+)?$'
+            or (high_water_mark_out)::numeric &lt; (#{highWaterMarkOut})::numeric
+          )
     </update>
 </mapper>

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
+import com.example.batch.worker.processes.metrics.ProcessMetrics;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ class DefaultProcessStepsTest {
             new ComputeStep(),
             new ValidateStep(),
             new CommitStep(),
-            new FeedbackStep());
+            new FeedbackStep(ProcessMetrics.noop()));
 
     assertThat(steps)
         .extracting(ProcessStageStep::stage)
@@ -39,6 +40,6 @@ class DefaultProcessStepsTest {
     assertThat(new PrepareStep().execute(context).success()).isTrue();
     assertThat(new ValidateStep().execute(context).success()).isTrue();
     assertThat(new CommitStep().execute(context).success()).isTrue();
-    assertThat(new FeedbackStep().execute(context).success()).isTrue();
+    assertThat(new FeedbackStep(ProcessMetrics.noop()).execute(context).success()).isTrue();
   }
 }
