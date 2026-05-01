@@ -384,7 +384,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
   private JobTaskEntity resolveDispatchTask(String tenantId, Long jobInstanceId) {
     List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(new JobTaskQuery(tenantId, jobInstanceId, null, null, null));
+        jobTaskMapper.selectByQuery(JobTaskQuery.ofJobInstance(tenantId, jobInstanceId));
     return tasks.stream()
         .filter(task -> "DISPATCH".equalsIgnoreCase(task.getTaskType()))
         .sorted(

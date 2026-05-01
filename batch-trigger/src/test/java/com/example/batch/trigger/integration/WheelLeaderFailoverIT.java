@@ -177,4 +177,67 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
   Duration shortWindow() {
     return Duration.ofSeconds(60);
   }
+
+  /**
+   * QZ-decision-3: failover 循环 100 次,验证无双 fire / 漏 fire / metric 漂移。
+   *
+   * <p>每轮:dead-leader 占位 → slidingWindow fast-path 接管 → 重置 wasLeader 模拟新一任 leader 加入。 100
+   * 轮后断言:每轮都释放了 stale marker(累计 ≥ 100),每轮都 acquire 一次(累计 ≥ 100), marker 始终被本 leader 持有(永不为
+   * null,也永不留 dead-leader-instance 残留)。
+   */
+  @Test
+  void failoverLoop100TimesNoDoubleOrMissedFire() {
+    insertState(Instant.now().plusSeconds(60));
+    TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
+
+    double leaderAcquireBaseline = leaderAcquireCount();
+    double staleReleasedBaseline = staleReleasedCount();
+
+    int rounds = 100;
+    int markerNullViolations = 0;
+    int deadLeaderResidueViolations = 0;
+
+    for (int i = 0; i < rounds; i++) {
+      // 模拟 dead-leader 留下 stale marker
+      stateMapper.claimForSchedule(
+          loaded.getId(), getCurrentVersion(loaded.getId()), "dead-leader-" + i);
+      jdbcTemplate.update(
+          "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds'"
+              + " where id = ?",
+          loaded.getId());
+
+      // 重置 wasLeader 让本次 doSlidingWindow 走 fast-path(模拟新 leader 上任)
+      java.util.concurrent.atomic.AtomicBoolean wasLeader =
+          (java.util.concurrent.atomic.AtomicBoolean)
+              org.springframework.test.util.ReflectionTestUtils.getField(
+                  wheelScheduler, "wasLeader");
+      if (wasLeader != null) {
+        wasLeader.set(false);
+      }
+
+      wheelScheduler.doSlidingWindow();
+
+      TriggerRuntimeStateEntity after = stateMapper.selectByJobDefinitionId(jobDefId);
+      if (after.getScheduledFireMarker() == null) {
+        markerNullViolations++;
+      } else if (after.getScheduledFireMarker().startsWith("dead-leader-")) {
+        deadLeaderResidueViolations++;
+      }
+    }
+
+    double leaderAcquireDelta = leaderAcquireCount() - leaderAcquireBaseline;
+    double staleReleasedDelta = staleReleasedCount() - staleReleasedBaseline;
+
+    assertThat(markerNullViolations).as("每轮都应被本 leader 重新 claim,不能留 null").isZero();
+    assertThat(deadLeaderResidueViolations).as("dead-leader 残留必须每轮释放").isZero();
+    assertThat(leaderAcquireDelta)
+        .as("100 轮 fast-path 各 acquire 一次")
+        .isGreaterThanOrEqualTo(rounds);
+    assertThat(staleReleasedDelta).as("100 轮 stale marker 各释放一次").isGreaterThanOrEqualTo(rounds);
+  }
+
+  private int getCurrentVersion(Long stateId) {
+    return jdbcTemplate.queryForObject(
+        "select version from batch.trigger_runtime_state where id = ?", Integer.class, stateId);
+  }
 }

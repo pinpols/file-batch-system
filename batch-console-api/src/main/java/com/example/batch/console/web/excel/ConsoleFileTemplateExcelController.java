@@ -1,40 +1,26 @@
 package com.example.batch.console.web.excel;
 
-import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleFileTemplateExcelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
-import com.example.batch.console.web.request.ExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleFileTemplateResponse;
-import com.example.batch.console.web.response.ExcelApplyResponse;
-import com.example.batch.console.web.response.ExcelPreviewResponse;
-import com.example.batch.console.web.response.ExcelUploadResponse;
 import jakarta.validation.Valid;
-import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 文件模板 Excel 导入导出 REST。
+ * 文件模板 Excel 导出 REST:仅保留 export / template。
  *
- * @deprecated upload / preview / previewWorkbook / apply 已废弃；文件模板由建租户时从 {@code default}
- *     模板自动初始化，后续调整请通过页面单条维护。export 仍可用。
+ * <p>历史 upload / preview / preview-workbook / apply 4 个端点已于 2026-05-01 物删 (文件模板由建租户时从 {@code
+ * default} 模板自动初始化,后续调整通过页面单条维护)。
  */
+@SuppressWarnings("unused")
 @RestController
 @Validated
 @RequestMapping("/api/console/config/file-templates/excel")
@@ -57,50 +43,5 @@ public class ConsoleFileTemplateExcelController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<InputStreamResource> template() {
     return applicationService.downloadTemplate();
-  }
-
-  /**
-   * @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。
-   */
-  @Deprecated
-  @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ExcelUploadResponse> upload(@RequestParam("file") MultipartFile file)
-      throws IOException {
-    return responseFactory.success(applicationService.upload(file));
-  }
-
-  /**
-   * @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。
-   */
-  @Deprecated
-  @GetMapping("/preview/{uploadToken}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ExcelPreviewResponse<ConsoleFileTemplateResponse>> preview(
-      @PathVariable String uploadToken) {
-    return responseFactory.success(applicationService.preview(uploadToken));
-  }
-
-  /**
-   * @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。
-   */
-  @Deprecated
-  @GetMapping("/preview/{uploadToken}/workbook")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public ResponseEntity<InputStreamResource> previewWorkbook(@PathVariable String uploadToken) {
-    return applicationService.downloadPreviewWorkbook(uploadToken);
-  }
-
-  /**
-   * @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。
-   */
-  @Deprecated
-  @PostMapping("/apply/{uploadToken}")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<ExcelApplyResponse> apply(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String uploadToken,
-      @Valid @RequestBody ExcelApplyRequest request) {
-    return responseFactory.success(applicationService.apply(uploadToken, request));
   }
 }

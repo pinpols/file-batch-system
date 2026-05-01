@@ -49,7 +49,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
     List<RetryScheduleEntity> waiting =
         retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery(tenantId, null, null, "WAITING", new PageRequest(1, 10)));
+            RetryScheduleQuery.ofRetryStatus(tenantId, "WAITING", new PageRequest(1, 10)));
 
     assertThat(waiting).hasSize(1);
     assertThat(waiting.get(0).getRetryStatus()).isEqualTo("WAITING");
@@ -63,7 +63,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
     List<RetryScheduleEntity> exponential =
         retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery(tenantId, null, "EXPONENTIAL", null, new PageRequest(1, 10)));
+            RetryScheduleQuery.ofRetryPolicy(tenantId, "EXPONENTIAL", new PageRequest(1, 10)));
 
     assertThat(exponential).hasSize(1);
     assertThat(exponential.get(0).getRetryPolicy()).isEqualTo("EXPONENTIAL");
@@ -77,7 +77,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
     List<RetryScheduleEntity> partitionRetries =
         retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery(tenantId, "JOB_PARTITION", null, null, new PageRequest(1, 10)));
+            RetryScheduleQuery.ofRelatedType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
     assertThat(partitionRetries).hasSize(2);
     assertThat(partitionRetries).allMatch(r -> "JOB_PARTITION".equals(r.getRelatedType()));

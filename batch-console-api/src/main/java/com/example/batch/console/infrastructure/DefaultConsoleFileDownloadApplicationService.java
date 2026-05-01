@@ -134,7 +134,7 @@ public class DefaultConsoleFileDownloadApplicationService
       String tenantId, Long fileId, String errorStage) {
     String effectiveTenant = tenantGuard.resolveTenant(tenantId);
     FileErrorRecordQuery query =
-        new FileErrorRecordQuery(effectiveTenant, fileId, errorStage, null, null, null);
+        FileErrorRecordQuery.ofFileAndStage(effectiveTenant, fileId, errorStage);
     List<FileErrorRecordEntity> errors = fileErrorRecordMapper.selectByQuery(query);
     StringBuilder csv = new StringBuilder();
     csv.append(

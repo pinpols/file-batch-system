@@ -193,7 +193,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   public List<JobExecutionLogEntity> listLogs(
       String tenantId, Long jobInstanceId, Long jobPartitionId) {
     return jobExecutionLogMapper.selectByQuery(
-        new JobExecutionLogQuery(tenantId, jobInstanceId, jobPartitionId, null, null));
+        JobExecutionLogQuery.ofPartition(tenantId, jobInstanceId, jobPartitionId));
   }
 
   @Override

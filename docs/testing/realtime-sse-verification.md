@@ -21,11 +21,11 @@
 先打开一个 SSE 订阅窗口：
 
 ```bash
+# 先 POST /api/console/auth/login 拿 JWT,把下面 $JWT 换成实际 token
+# (X-Console-Token 共享密钥兼容路径已于 2026-04-30 物删,仅 JWT + SSE ticket 两条认证链)
 curl -N --http1.1 -sS \
-  -H 'X-Console-Token: console-secret' \
+  -H "Authorization: Bearer $JWT" \
   -H 'X-Tenant-Id: default-tenant' \
-  -H 'X-Console-User: tester' \
-  -H 'X-Console-Roles: ROLE_ADMIN' \
   'http://localhost:18080/api/console/ops/summary/events?tenantId=default-tenant&initialSnapshot=false&heartbeatMillis=10000'
 ```
 

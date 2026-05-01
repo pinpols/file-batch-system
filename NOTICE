@@ -1,16 +1,127 @@
 File Batch System
-
 Copyright 2026 Dengchao
 
 This product includes software developed by third parties.
+The full classified inventory of third-party components, their license
+families, and the current compliance snapshot are maintained in:
 
-Third-party dependency details, license classifications, and the current
-compliance snapshot are maintained in:
+  - docs/compliance/THIRD-PARTY-LICENSES.md
+  - docs/compliance/sbom.json (CycloneDX 1.6)
+  - docs/compliance/license-risk-assessment.md (risk analysis)
 
-- docs/compliance/THIRD-PARTY-LICENSES.md
-- docs/compliance/sbom.json
+------------------------------------------------------------------------
+Aggregated upstream NOTICE attributions (Apache-2.0 §4(d) compliance)
+------------------------------------------------------------------------
 
-The repository also includes generated deployment, testing, and Excel template
-artifacts. Consult the relevant `docs/` subdirectories for usage and origin
-details.
+Spring Boot
+  Copyright (c) 2012-2026 Pivotal Software, Inc.
+  Copyright (c) 2012-2026 VMware, Inc.
+  Apache License, Version 2.0 — https://github.com/spring-projects/spring-boot
 
+Spring Framework
+  Copyright (c) 2002-2026 Pivotal Software, Inc.
+  Copyright (c) 2002-2026 VMware, Inc.
+  Apache License, Version 2.0 — https://github.com/spring-projects/spring-framework
+
+Spring Kafka / Spring Data JDBC / Spring Data Redis / Spring Security / Spring AI
+  Copyright (c) Pivotal Software, Inc. / VMware, Inc.
+  Apache License, Version 2.0 — https://spring.io/projects
+
+Apache POI (poi / poi-ooxml / poi-ooxml-lite)
+  Copyright (c) 2003-2026 The Apache Software Foundation
+  Apache License, Version 2.0 — https://poi.apache.org
+
+Apache Kafka Clients
+  Copyright (c) The Apache Software Foundation
+  Apache License, Version 2.0 — https://kafka.apache.org
+
+Flyway
+  Copyright (c) 2010-2026 Redgate Software Ltd.
+  Apache License, Version 2.0 — https://flywaydb.org
+
+MyBatis / mybatis-spring-boot-starter
+  Copyright (c) 2010-2026 The MyBatis Authors
+  Apache License, Version 2.0 — https://www.mybatis.org
+
+Hibernate Validator
+  Copyright (c) Red Hat, Inc. and Hibernate Authors
+  Apache License, Version 2.0 — https://hibernate.org/validator
+
+MinIO Java SDK
+  Copyright (c) 2015-2026 MinIO, Inc.
+  Apache License, Version 2.0 — https://github.com/minio/minio-java
+
+OkHttp
+  Copyright (c) 2019 Square, Inc.
+  Apache License, Version 2.0 — https://square.github.io/okhttp
+
+JSqlParser
+  Copyright (c) 2004-2026 JSqlParser
+  Dual-licensed under Apache-2.0 OR LGPL-2.1; this product uses the Apache-2.0 path.
+  https://github.com/JSQLParser/JSqlParser
+
+ShedLock
+  Copyright (c) 2018-2026 Lukas Krecan
+  Apache License, Version 2.0 — https://github.com/lukas-krecan/ShedLock
+
+Micrometer
+  Copyright (c) Pivotal Software, Inc. / VMware, Inc.
+  Apache License, Version 2.0 — https://micrometer.io
+
+OpenTelemetry Java
+  Copyright (c) The OpenTelemetry Authors
+  Apache License, Version 2.0 — https://opentelemetry.io
+
+Testcontainers / WireMock / GreenMail
+  Copyright (c) Testcontainers / Tom Akehurst / Marcel May
+  Apache License, Version 2.0
+
+PostgreSQL JDBC Driver (pgjdbc)
+  Copyright (c) 1997-2026, PostgreSQL Global Development Group
+  BSD 2-Clause License — https://jdbc.postgresql.org
+
+JSch (mwiede fork)
+  Copyright (c) 2002-2015 Atsuhiko Yamanaka, JCraft, Inc.
+  Copyright (c) 2018-2026 Matthias Wiedemann
+  BSD 3-Clause License — https://github.com/mwiede/jsch
+
+Logback
+  Copyright (c) QOS.ch
+  Dual-licensed under EPL-2.0 OR LGPL-2.1; this product uses Logback as an
+  unmodified library; users may replace the jar at runtime to satisfy the
+  LGPL "user-replaceability" requirement.
+  https://logback.qos.ch
+
+JUnit Jupiter / JUnit Platform / Jakarta EE APIs / Angus Mail
+  Eclipse Public License 2.0 (Jakarta APIs additionally GPL-2.0 with Classpath Exception)
+  https://junit.org / https://jakarta.ee
+
+SLF4J
+  Copyright (c) 2004-2026 QOS.ch
+  MIT License — https://www.slf4j.org
+
+Project Lombok
+  Copyright (c) 2009-2026 The Project Lombok Authors
+  MIT License — https://projectlombok.org
+
+Mockito
+  Copyright (c) 2007-2026 Mockito contributors
+  MIT License — https://site.mockito.org
+
+------------------------------------------------------------------------
+Notes
+------------------------------------------------------------------------
+
+1. The list above covers the major direct and transitive dependencies that
+   ship with their own NOTICE / attribution requirements. The exhaustive list
+   (266 transitive components as of 2026-04-26) lives in
+   docs/compliance/THIRD-PARTY-LICENSES.md.
+
+2. To regenerate the machine-readable inventory:
+
+      mvn -P compliance license:aggregate-add-third-party
+      mvn -P compliance cyclonedx:makeAggregateBom
+
+3. The repository also includes generated deployment, testing, and Excel
+   template artifacts. Consult the relevant `docs/` subdirectories for
+   usage and origin details.

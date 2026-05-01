@@ -10,6 +10,7 @@ import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.query.WorkflowNodeQuery;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
@@ -66,6 +67,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   private final WorkflowDefinitionMapper definitionMapper;
   private final WorkflowNodeMapper nodeMapper;
   private final WorkflowEdgeMapper edgeMapper;
+  private final JobDefinitionMapper jobDefinitionMapper;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
@@ -164,7 +166,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     List<WorkflowEdgeEntity> edges =
         edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null));
 
-    List<String> errors = validateDag(nodes, edges);
+    List<String> errors = validateDag(resolvedTenant, nodes, edges);
     return new DagValidationResult(errors.isEmpty(), errors);
   }
 
@@ -265,7 +267,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
         e.getUpdatedAt());
   }
 
-  private List<String> validateDag(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
+  private List<String> validateDag(
+      String tenantId, List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
     List<String> errors = new ArrayList<>();
     Set<String> nodeCodes = new HashSet<>();
     List<String> startNodes = new ArrayList<>();
@@ -282,11 +285,54 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     }
 
     validateNodeReferences(errors, nodeCodes, startNodes, endNodes, edges);
+    validateJobNodeReferences(errors, tenantId, nodes);
+    validateConditionEdges(errors, edges);
     DagAdjacency dag = buildAdjacency(nodeCodes, edges);
     detectCycles(errors, dag, nodeCodes);
     validateReachability(errors, nodes, nodeCodes, startNodes, endNodes, dag);
 
     return errors;
+  }
+
+  // WF-design-5: JOB 节点必须填 related_job_code 且对应 job_definition 必须存在且 enabled=true。
+  private void validateJobNodeReferences(
+      List<String> errors, String tenantId, List<WorkflowNodeEntity> nodes) {
+    for (WorkflowNodeEntity n : nodes) {
+      if (!"JOB".equalsIgnoreCase(n.getNodeType())) {
+        continue;
+      }
+      String jobCode = n.getRelatedJobCode();
+      if (jobCode == null || jobCode.isBlank()) {
+        errors.add("JOB node missing related_job_code: " + n.getNodeCode());
+        continue;
+      }
+      var jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+      if (jobDef == null) {
+        errors.add(
+            "JOB node " + n.getNodeCode() + " references non-existent job_definition: " + jobCode);
+        continue;
+      }
+      if (Boolean.FALSE.equals(jobDef.getEnabled())) {
+        errors.add(
+            "JOB node " + n.getNodeCode() + " references disabled job_definition: " + jobCode);
+      }
+    }
+  }
+
+  // WF-design-6: edge_type=CONDITION 必须填 condition_expr。
+  private void validateConditionEdges(List<String> errors, List<WorkflowEdgeEntity> edges) {
+    for (WorkflowEdgeEntity e : edges) {
+      if (!"CONDITION".equalsIgnoreCase(e.getEdgeType())) {
+        continue;
+      }
+      if (e.getConditionExpr() == null || e.getConditionExpr().isBlank()) {
+        errors.add(
+            "CONDITION edge missing condition_expr: "
+                + e.getFromNodeCode()
+                + " -> "
+                + e.getToNodeCode());
+      }
+    }
   }
 
   private void validateNodeReferences(

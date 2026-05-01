@@ -48,7 +48,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
     List<AlertEventEntity> highAlerts =
         alertEventMapper.selectByQuery(
-            new AlertEventQuery(tenantId, "CRITICAL", null, null, new PageRequest(1, 10)));
+            AlertEventQuery.ofSeverity(tenantId, "CRITICAL", new PageRequest(1, 10)));
 
     assertThat(highAlerts).hasSize(1);
     assertThat(highAlerts.get(0).getSeverity()).isEqualTo("CRITICAL");
@@ -63,7 +63,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
     List<AlertEventEntity> openAlerts =
         alertEventMapper.selectByQuery(
-            new AlertEventQuery(tenantId, null, "OPEN", null, new PageRequest(1, 10)));
+            AlertEventQuery.ofStatus(tenantId, "OPEN", new PageRequest(1, 10)));
 
     assertThat(openAlerts).hasSize(1);
     assertThat(openAlerts.get(0).getStatus()).isEqualTo("OPEN");
@@ -77,7 +77,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
     List<AlertEventEntity> slaAlerts =
         alertEventMapper.selectByQuery(
-            new AlertEventQuery(tenantId, null, null, "SLA_BREACH", new PageRequest(1, 10)));
+            AlertEventQuery.ofAlertType(tenantId, "SLA_BREACH", new PageRequest(1, 10)));
 
     assertThat(slaAlerts).hasSize(1);
     assertThat(slaAlerts.get(0).getAlertType()).isEqualTo("SLA_BREACH");
@@ -91,8 +91,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     }
 
     List<AlertEventEntity> results =
-        alertEventMapper.selectByQuery(
-            new AlertEventQuery(tenantId, null, null, null, new PageRequest(1, 3)));
+        alertEventMapper.selectByQuery(AlertEventQuery.ofTenant(tenantId, new PageRequest(1, 3)));
 
     assertThat(results).hasSize(3);
   }
