@@ -49,16 +49,17 @@ class DefaultConsoleJobApprovalService implements ConsoleJobApprovalService {
   public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
     if (!ops.hasText(request.getApprovalId())) {
-      String result =
-          ops.submitApproval(
-              new ApprovalSubmitContext(
-                  "CATCH_UP",
-                  "CATCH_UP",
-                  "CATCH_UP",
-                  request.getRequestId(),
-                  request,
-                  request.getReason(),
-                  idempotencyKey));
+      ApprovalSubmitContext approvalCtx =
+          ApprovalSubmitContext.builder()
+              .approvalType("CATCH_UP")
+              .actionType("CATCH_UP")
+              .targetType("CATCH_UP")
+              .targetId(request.getRequestId())
+              .payload(request)
+              .approvalReason(request.getReason())
+              .idempotencyKey(idempotencyKey)
+              .build();
+      String result = ops.submitApproval(approvalCtx);
       ops.publishRefresh(tenantId);
       return result;
     }

@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.domain.query;
 
 import com.example.batch.common.model.PageRequest;
+import lombok.Builder;
 
+@Builder
 public record OutboxEventQuery(
     String tenantId,
     String publishStatus,

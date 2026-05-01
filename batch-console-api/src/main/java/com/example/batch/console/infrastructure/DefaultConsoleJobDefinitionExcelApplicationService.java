@@ -128,18 +128,18 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   public ResponseEntity<InputStreamResource> exportJobDefinitions(
       JobDefinitionQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    List<JobDefinitionEntity> rows =
-        jobDefinitionMapper.selectByQuery(
-            new JobDefinitionQuery(
-                tenantId,
-                request.getJobCode(),
-                request.getJobName(),
-                request.getJobType(),
-                request.getWorkerGroup(),
-                request.getQueueCode(),
-                request.getScheduleType(),
-                request.getEnabled(),
-                null));
+    JobDefinitionQuery exportQuery =
+        JobDefinitionQuery.builder()
+            .tenantId(tenantId)
+            .jobCode(request.getJobCode())
+            .jobName(request.getJobName())
+            .jobType(request.getJobType())
+            .workerGroup(request.getWorkerGroup())
+            .queueCode(request.getQueueCode())
+            .scheduleType(request.getScheduleType())
+            .enabled(request.getEnabled())
+            .build();
+    List<JobDefinitionEntity> rows = jobDefinitionMapper.selectByQuery(exportQuery);
     byte[] workbookBytes = workbookWriter.writeMaintenanceWorkbook(rows);
     InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
     String fileName =
@@ -293,28 +293,30 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     List<JobDefinitionRow> rows = new ArrayList<>();
     for (SheetRow rowData : readSheetRows(sheet)) {
       Map<String, String> values = rowData.values();
-      rows.add(
-          new JobDefinitionRow(
-              rowData.rowNo(),
-              tenantOrDefault(values.get("tenant_id"), tenantId),
-              normalize(values.get("job_code")),
-              normalize(values.get("job_name")),
-              normalizeEnum(values.get(COL_JOB_TYPE)),
-              CodeNormalizer.toConfigFormOrNull(values.get("queue_code")),
-              CodeNormalizer.toUpperOrNull(values.get("worker_group")),
-              normalizeEnum(values.get(COL_SCHEDULE_TYPE)),
-              normalize(values.get("schedule_expr")),
-              CodeNormalizer.toConfigFormOrNull(values.get("calendar_code")),
-              CodeNormalizer.toConfigFormOrNull(values.get("window_code")),
-              normalizeEnum(values.get(COL_RETRY_POLICY)),
-              parseInteger(values.get("retry_max_count")),
-              parseInteger(values.get("timeout_seconds")),
-              normalizeEnum(values.get(COL_SHARD_STRATEGY)),
-              normalize(values.get(COL_EXECUTION_HANDLER)),
-              normalize(values.get(COL_PARAM_SCHEMA)),
-              normalize(values.get(COL_DEFAULT_PARAMS)),
-              parseBoolean(values.get(COL_ENABLED), true),
-              normalize(values.get(COL_DESCRIPTION))));
+      JobDefinitionRow row =
+          JobDefinitionRow.builder()
+              .rowNo(rowData.rowNo())
+              .tenantId(tenantOrDefault(values.get("tenant_id"), tenantId))
+              .jobCode(normalize(values.get("job_code")))
+              .jobName(normalize(values.get("job_name")))
+              .jobType(normalizeEnum(values.get(COL_JOB_TYPE)))
+              .queueCode(CodeNormalizer.toConfigFormOrNull(values.get("queue_code")))
+              .workerGroup(CodeNormalizer.toUpperOrNull(values.get("worker_group")))
+              .scheduleType(normalizeEnum(values.get(COL_SCHEDULE_TYPE)))
+              .scheduleExpr(normalize(values.get("schedule_expr")))
+              .calendarCode(CodeNormalizer.toConfigFormOrNull(values.get("calendar_code")))
+              .windowCode(CodeNormalizer.toConfigFormOrNull(values.get("window_code")))
+              .retryPolicy(normalizeEnum(values.get(COL_RETRY_POLICY)))
+              .retryMaxCount(parseInteger(values.get("retry_max_count")))
+              .timeoutSeconds(parseInteger(values.get("timeout_seconds")))
+              .shardStrategy(normalizeEnum(values.get(COL_SHARD_STRATEGY)))
+              .executionHandler(normalize(values.get(COL_EXECUTION_HANDLER)))
+              .paramSchema(normalize(values.get(COL_PARAM_SCHEMA)))
+              .defaultParams(normalize(values.get(COL_DEFAULT_PARAMS)))
+              .enabled(parseBoolean(values.get(COL_ENABLED), true))
+              .description(normalize(values.get(COL_DESCRIPTION)))
+              .build();
+      rows.add(row);
     }
     return rows;
   }

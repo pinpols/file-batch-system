@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -89,19 +90,23 @@ public class WorkerRegistryCache {
   private static List<Entry> toEntries(List<WorkerRegistryRecord> records) {
     List<Entry> entries = new ArrayList<>(records.size());
     for (WorkerRegistryRecord r : records) {
-      entries.add(
-          new Entry(
-              r.id(),
-              r.tenantId(),
-              r.workerCode(),
-              r.workerGroup(),
-              r.capabilityTags() == null ? null : r.capabilityTags().getValue(),
-              r.resourceTag(),
-              r.status(),
-              r.heartbeatAt() == null ? null : r.heartbeatAt().toEpochMilli(),
-              r.currentLoad(),
-              r.drainStartedAt() == null ? null : r.drainStartedAt().toEpochMilli(),
-              r.drainDeadlineAt() == null ? null : r.drainDeadlineAt().toEpochMilli()));
+      Entry entry =
+          Entry.builder()
+              .id(r.id())
+              .tenantId(r.tenantId())
+              .workerCode(r.workerCode())
+              .workerGroup(r.workerGroup())
+              .capabilityTagsJson(r.capabilityTags() == null ? null : r.capabilityTags().getValue())
+              .resourceTag(r.resourceTag())
+              .status(r.status())
+              .heartbeatMillis(r.heartbeatAt() == null ? null : r.heartbeatAt().toEpochMilli())
+              .currentLoad(r.currentLoad())
+              .drainStartedMillis(
+                  r.drainStartedAt() == null ? null : r.drainStartedAt().toEpochMilli())
+              .drainDeadlineMillis(
+                  r.drainDeadlineAt() == null ? null : r.drainDeadlineAt().toEpochMilli())
+              .build();
+      entries.add(entry);
     }
     return entries;
   }
@@ -127,6 +132,7 @@ public class WorkerRegistryCache {
   }
 
   /** Slim DTO for cache serialization；故意用 fields，避免 JsonbString 反序列化坑。 */
+  @Builder
   public record Entry(
       Long id,
       String tenantId,

@@ -57,16 +57,18 @@ public class FileGovernanceController {
   @PostMapping("/arrival-groups/{fileGroupCode}/actions")
   public FileOperationResponse operateArrivalGroup(
       @PathVariable String fileGroupCode, @RequestBody ArrivalGroupOperationRequest request) {
-    return new FileOperationResponse(
-        fileGovernanceService.operateArrivalGroup(
-            new ArrivalGroupGovernanceCommand(
-                request.tenantId(),
-                fileGroupCode,
-                request.action(),
-                request.operatorId(),
-                request.traceId(),
-                request.reason(),
-                request.extendWaitSeconds())));
+    ArrivalGroupGovernanceCommand command =
+        ArrivalGroupGovernanceCommand.builder()
+            .tenantId(request.tenantId())
+            .fileGroupCode(fileGroupCode)
+            .action(request.action())
+            .operatorId(request.operatorId())
+            .traceId(request.traceId())
+            .reason(request.reason())
+            .extendWaitSeconds(request.extendWaitSeconds())
+            .build();
+    String result = fileGovernanceService.operateArrivalGroup(command);
+    return new FileOperationResponse(result);
   }
 
   @GetMapping("/governance/latency-metrics")

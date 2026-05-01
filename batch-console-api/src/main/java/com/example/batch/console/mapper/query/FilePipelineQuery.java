@@ -2,7 +2,9 @@ package com.example.batch.console.mapper.query;
 
 import com.example.batch.common.model.PageRequest;
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder(toBuilder = true)
 public record FilePipelineQuery(
     String tenantId,
     Long fileId,
@@ -14,16 +16,16 @@ public record FilePipelineQuery(
     Instant toTime,
     PageRequest pageRequest) {
 
+  public static FilePipelineQuery ofPipeline(
+      String tenantId, Long pipelineInstanceId, PageRequest pageRequest) {
+    return builder()
+        .tenantId(tenantId)
+        .pipelineInstanceId(pipelineInstanceId)
+        .pageRequest(pageRequest)
+        .build();
+  }
+
   public FilePipelineQuery withoutPage() {
-    return new FilePipelineQuery(
-        tenantId,
-        fileId,
-        pipelineInstanceId,
-        pipelineType,
-        runStatus,
-        traceId,
-        fromTime,
-        toTime,
-        null);
+    return toBuilder().pageRequest(null).build();
   }
 }

@@ -146,17 +146,16 @@ public class WebhookDispatcher {
       WebhookDeliveryResult result = attemptDelivery(subscription, payload, payloadJson);
 
       if (result.success()) {
-        deliveryLogRepository.insert(
-            new WebhookDeliveryLogInsertParam(
-                payload.tenantId(),
-                subscription.getId(),
-                payload.eventType(),
-                payloadJson,
-                null,
-                null,
-                "SUCCESS",
-                attempt,
-                null));
+        WebhookDeliveryLogInsertParam successLog =
+            WebhookDeliveryLogInsertParam.builder()
+                .tenantId(payload.tenantId())
+                .subscriptionId(subscription.getId())
+                .eventType(payload.eventType())
+                .payloadJson(payloadJson)
+                .deliveryStatus("SUCCESS")
+                .attempt(attempt)
+                .build();
+        deliveryLogRepository.insert(successLog);
         return;
       }
 
@@ -166,17 +165,19 @@ public class WebhookDispatcher {
       // FAILED 行属本轮 burst 中间态,不需要 relay 介入。
       Instant nextRetryAt =
           exhausted ? Instant.now().plusSeconds(INITIAL_RELAY_DELAY_SECONDS) : null;
-      deliveryLogRepository.insert(
-          new WebhookDeliveryLogInsertParam(
-              payload.tenantId(),
-              subscription.getId(),
-              payload.eventType(),
-              payloadJson,
-              result.httpStatus(),
-              result.errorSummary(),
-              deliveryStatus,
-              attempt,
-              nextRetryAt));
+      WebhookDeliveryLogInsertParam failureLog =
+          WebhookDeliveryLogInsertParam.builder()
+              .tenantId(payload.tenantId())
+              .subscriptionId(subscription.getId())
+              .eventType(payload.eventType())
+              .payloadJson(payloadJson)
+              .httpStatus(result.httpStatus())
+              .responseBody(result.errorSummary())
+              .deliveryStatus(deliveryStatus)
+              .attempt(attempt)
+              .nextRetryAt(nextRetryAt)
+              .build();
+      deliveryLogRepository.insert(failureLog);
       if (attempt < MAX_ATTEMPTS) {
         sleep(backoffMillis);
         backoffMillis *= 2;

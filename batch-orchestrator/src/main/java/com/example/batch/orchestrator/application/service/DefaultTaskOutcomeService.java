@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
@@ -371,16 +372,18 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             : parseActiveNodes(workflowRun.getCurrentNodeCode());
 
     if (nodeProgress.allFinished() && workflowRun != null) {
-      advanceDagNodes(
-          new DagAdvanceContext(
-              command,
-              task,
-              jobInstance,
-              workflowRun,
-              currentNodeCode,
-              nodeProgress,
-              activeNodes,
-              finishedAt));
+      DagAdvanceContext advanceCtx =
+          DagAdvanceContext.builder()
+              .command(command)
+              .task(task)
+              .jobInstance(jobInstance)
+              .workflowRun(workflowRun)
+              .currentNodeCode(currentNodeCode)
+              .nodeProgress(nodeProgress)
+              .activeNodes(activeNodes)
+              .finishedAt(finishedAt)
+              .build();
+      advanceDagNodes(advanceCtx);
     }
 
     boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
@@ -439,25 +442,26 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   /** DAG 工作流节点推进：完成当前节点运行记录，解析并派发后继节点。 */
   private void advanceDagNodes(DagAdvanceContext ctx) {
     ctx.activeNodes().remove(ctx.currentNodeCode());
-    recordNodeRunFinish(
-        NodeRunFinishCommand.of(
-            new NodeRunKey(
-                ctx.workflowRun().getId(),
-                ctx.currentNodeCode(),
-                resolveCurrentNodeType(ctx.task())),
-            new NodeRunOutcome(
-                ctx.nodeProgress().failedCount() == 0,
-                ctx.command().errorCode(),
-                ctx.command().errorMessage(),
-                ctx.command().errorKey(),
-                ctx.command().errorArgs(),
+    NodeRunOutcome currentOutcome =
+        NodeRunOutcome.builder()
+            .success(ctx.nodeProgress().failedCount() == 0)
+            .errorCode(ctx.command().errorCode())
+            .errorMessage(ctx.command().errorMessage())
+            .errorKey(ctx.command().errorKey())
+            .errorArgs(ctx.command().errorArgs())
+            .startedAt(
                 resolveNodeStartedAt(
                     ctx.workflowRun().getId(),
                     ctx.currentNodeCode(),
                     ctx.workflowRun().getStartedAt(),
-                    ctx.finishedAt()),
-                ctx.finishedAt(),
-                TaskOutcomeSummaryBuilder.serializeOutputs(ctx.command().outputs()))));
+                    ctx.finishedAt()))
+            .finishedAt(ctx.finishedAt())
+            .outputJson(TaskOutcomeSummaryBuilder.serializeOutputs(ctx.command().outputs()))
+            .build();
+    NodeRunKey currentKey =
+        new NodeRunKey(
+            ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task()));
+    recordNodeRunFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodes(
             ctx.workflowRun().getWorkflowDefinitionId(),
@@ -479,20 +483,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
               nextNode.nodeCode(),
               nextNode.nodeType(),
               ctx.finishedAt());
-          recordNodeRunFinish(
-              NodeRunFinishCommand.of(
-                  new NodeRunKey(
-                      ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType()),
-                  new NodeRunOutcome(
-                      ctx.nodeProgress().failedCount() == 0,
-                      ctx.command().errorCode(),
-                      ctx.command().errorMessage(),
-                      ctx.command().errorKey(),
-                      ctx.command().errorArgs(),
-                      ctx.finishedAt(),
-                      ctx.finishedAt(),
-                      // END 节点没有 worker 上报,output 永远 null
-                      null)));
+          // END 节点没有 worker 上报，output 永远 null
+          NodeRunOutcome endOutcome =
+              NodeRunOutcome.builder()
+                  .success(ctx.nodeProgress().failedCount() == 0)
+                  .errorCode(ctx.command().errorCode())
+                  .errorMessage(ctx.command().errorMessage())
+                  .errorKey(ctx.command().errorKey())
+                  .errorArgs(ctx.command().errorArgs())
+                  .startedAt(ctx.finishedAt())
+                  .finishedAt(ctx.finishedAt())
+                  .build();
+          NodeRunKey endKey =
+              new NodeRunKey(ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType());
+          recordNodeRunFinish(NodeRunFinishCommand.of(endKey, endOutcome));
         }
         continue;
       }
@@ -557,22 +561,21 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       return;
     }
     boolean nodeSuccess = JobInstanceStatus.SUCCESS.code().equals(childInstanceStatus);
-    applyTaskOutcome(
-        new TaskOutcomeCommand(
-            childJobInstance.getTenantId(),
-            parentVirtualTaskId,
-            null,
-            nodeSuccess,
-            JsonUtils.toJson(Map.of("childInstanceStatus", childInstanceStatus)),
-            nodeSuccess ? null : childCommand.errorCode(),
-            nodeSuccess ? null : childCommand.errorMessage(),
-            nodeSuccess ? null : childCommand.errorKey(),
-            nodeSuccess ? null : childCommand.errorArgs(),
-            // 父虚拟任务不直接推父水位:子作业自己的 outcome 已经写过对应实例的
-            // high_water_mark_out;父侧不与子作业共享水位。
-            null,
-            // ADR-009: JOB 节点把子作业的 outputs 透传到父 workflow 节点(供下游 DSL 引用)
-            nodeSuccess ? childCommand.outputs() : null));
+    // 父虚拟任务不直接推父水位：子作业自己的 outcome 已经写过对应实例的 high_water_mark_out；
+    // 父侧不与子作业共享水位。ADR-009: JOB 节点把子作业的 outputs 透传到父 workflow 节点（供下游 DSL 引用）。
+    TaskOutcomeCommand parentCommand =
+        TaskOutcomeCommand.builder()
+            .tenantId(childJobInstance.getTenantId())
+            .taskId(parentVirtualTaskId)
+            .success(nodeSuccess)
+            .resultSummary(JsonUtils.toJson(Map.of("childInstanceStatus", childInstanceStatus)))
+            .errorCode(nodeSuccess ? null : childCommand.errorCode())
+            .errorMessage(nodeSuccess ? null : childCommand.errorMessage())
+            .errorKey(nodeSuccess ? null : childCommand.errorKey())
+            .errorArgs(nodeSuccess ? null : childCommand.errorArgs())
+            .outputs(nodeSuccess ? childCommand.outputs() : null)
+            .build();
+    applyTaskOutcome(parentCommand);
   }
 
   @SuppressWarnings("unchecked")
@@ -785,6 +788,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
   }
 
+  @Builder
   private record DagAdvanceContext(
       TaskOutcomeCommand command,
       JobTaskEntity task,

@@ -1,7 +1,9 @@
 package com.example.batch.console.repository;
 
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record WebhookDeliveryLogInsertParam(
     String tenantId,
     Long subscriptionId,

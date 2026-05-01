@@ -4,6 +4,7 @@ import com.example.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import com.example.batch.orchestrator.domain.query.RetryScheduleQuery;
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 import org.apache.ibatis.annotations.Param;
 
 public interface RetryScheduleMapper {
@@ -21,14 +22,17 @@ public interface RetryScheduleMapper {
 
   int markSuccess(@Param("id") Long id, @Param("successStatus") String successStatus);
 
-  int markFailed(
-      @Param("id") Long id,
-      @Param("retryStatus") String retryStatus,
-      @Param("lastErrorCode") String lastErrorCode,
-      @Param("lastErrorMessage") String lastErrorMessage,
-      @Param("lastErrorKey") String lastErrorKey,
-      @Param("lastErrorArgs") String lastErrorArgs,
-      @Param("nextRetryAt") Instant nextRetryAt);
+  int markFailed(@Param("p") MarkFailedParam p);
 
   int resetToWaiting(@Param("id") Long id, @Param("waitingStatus") String waitingStatus);
+
+  @Builder
+  record MarkFailedParam(
+      Long id,
+      String retryStatus,
+      String lastErrorCode,
+      String lastErrorMessage,
+      String lastErrorKey,
+      String lastErrorArgs,
+      Instant nextRetryAt) {}
 }

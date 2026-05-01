@@ -41,16 +41,17 @@ class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryService {
   public String compensation(CompensationCommandRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
     if (!ops.hasText(request.getApprovalId())) {
-      String result =
-          ops.submitApproval(
-              new ApprovalSubmitContext(
-                  JOB_TYPE_COMPENSATION,
-                  JOB_TYPE_COMPENSATION,
-                  "JOB",
-                  String.valueOf(request.getTargetId()),
-                  request,
-                  request.getReason(),
-                  idempotencyKey));
+      ApprovalSubmitContext approvalCtx =
+          ApprovalSubmitContext.builder()
+              .approvalType(JOB_TYPE_COMPENSATION)
+              .actionType(JOB_TYPE_COMPENSATION)
+              .targetType("JOB")
+              .targetId(String.valueOf(request.getTargetId()))
+              .payload(request)
+              .approvalReason(request.getReason())
+              .idempotencyKey(idempotencyKey)
+              .build();
+      String result = ops.submitApproval(approvalCtx);
       ops.publishRefresh(tenantId);
       return result;
     }
@@ -142,16 +143,17 @@ class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryService {
   public String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
     if (!ops.hasText(request.getApprovalId())) {
-      String result =
-          ops.submitApproval(
-              new ApprovalSubmitContext(
-                  "DLQ_REPLAY",
-                  "DLQ_REPLAY",
-                  "DLQ",
-                  String.valueOf(request.getDeadLetterId()),
-                  request,
-                  request.getReason(),
-                  idempotencyKey));
+      ApprovalSubmitContext approvalCtx =
+          ApprovalSubmitContext.builder()
+              .approvalType("DLQ_REPLAY")
+              .actionType("DLQ_REPLAY")
+              .targetType("DLQ")
+              .targetId(String.valueOf(request.getDeadLetterId()))
+              .payload(request)
+              .approvalReason(request.getReason())
+              .idempotencyKey(idempotencyKey)
+              .build();
+      String result = ops.submitApproval(approvalCtx);
       ops.publishRefresh(tenantId);
       return result;
     }
@@ -176,16 +178,17 @@ class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryService {
   public String replayTask(TaskReplayRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
     if (!ops.hasText(request.getApprovalId())) {
-      String result =
-          ops.submitApproval(
-              new ApprovalSubmitContext(
-                  JOB_TYPE_COMPENSATION,
-                  "RETRY",
-                  "JOB_TASK",
-                  String.valueOf(request.getTaskId()),
-                  request,
-                  request.getReason(),
-                  idempotencyKey));
+      ApprovalSubmitContext approvalCtx =
+          ApprovalSubmitContext.builder()
+              .approvalType(JOB_TYPE_COMPENSATION)
+              .actionType("RETRY")
+              .targetType("JOB_TASK")
+              .targetId(String.valueOf(request.getTaskId()))
+              .payload(request)
+              .approvalReason(request.getReason())
+              .idempotencyKey(idempotencyKey)
+              .build();
+      String result = ops.submitApproval(approvalCtx);
       ops.publishRefresh(tenantId);
       return result;
     }
@@ -204,16 +207,17 @@ class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryService {
   public String replayPartition(PartitionReplayRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
     if (!ops.hasText(request.getApprovalId())) {
-      String result =
-          ops.submitApproval(
-              new ApprovalSubmitContext(
-                  JOB_TYPE_COMPENSATION,
-                  "RETRY",
-                  "JOB_PARTITION",
-                  String.valueOf(request.getPartitionId()),
-                  request,
-                  request.getReason(),
-                  idempotencyKey));
+      ApprovalSubmitContext approvalCtx =
+          ApprovalSubmitContext.builder()
+              .approvalType(JOB_TYPE_COMPENSATION)
+              .actionType("RETRY")
+              .targetType("JOB_PARTITION")
+              .targetId(String.valueOf(request.getPartitionId()))
+              .payload(request)
+              .approvalReason(request.getReason())
+              .idempotencyKey(idempotencyKey)
+              .build();
+      String result = ops.submitApproval(approvalCtx);
       ops.publishRefresh(tenantId);
       return result;
     }

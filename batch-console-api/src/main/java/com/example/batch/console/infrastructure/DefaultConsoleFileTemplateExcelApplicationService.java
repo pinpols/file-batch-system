@@ -249,17 +249,17 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   @Override
   public ResponseEntity<InputStreamResource> exportFileTemplates(FileTemplateQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    List<Map<String, Object>> rows =
-        fileTemplateConfigMapper.selectByQuery(
-            new FileTemplateConfigQuery(
-                tenantId,
-                request.getKeyword(),
-                request.getTemplateCode(),
-                request.getTemplateName(),
-                request.getTemplateType(),
-                request.getBizType(),
-                request.getEnabled(),
-                null));
+    FileTemplateConfigQuery exportQuery =
+        FileTemplateConfigQuery.builder()
+            .tenantId(tenantId)
+            .keyword(request.getKeyword())
+            .templateCode(request.getTemplateCode())
+            .templateName(request.getTemplateName())
+            .templateType(request.getTemplateType())
+            .bizType(request.getBizType())
+            .enabled(request.getEnabled())
+            .build();
+    List<Map<String, Object>> rows = fileTemplateConfigMapper.selectByQuery(exportQuery);
     return doExport(tenantId, rows);
   }
 

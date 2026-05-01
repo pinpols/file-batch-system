@@ -13,6 +13,44 @@
 - 构造器（record、DTO、Response、data holder、Spring DI 注入）不受此约束
 - 封装类型优先选用 `private record`（私有方法）或独立 Command/Param 类（公共接口）
 
+### 调用方约束（方法实参里 inline `new` 长构造）
+
+封装为 Param/Command 类后，调用方禁止把臃肿"搬到 `new XxxParam(...)`"。具体规则按 Param 类构造参数数 `argc`：
+
+| 类构造参数数 `argc` | 调用方动作 |
+|---|---|
+| **`argc > 6`** | 该类**必须加 `@Builder`** + 调用方**先建引用变量再传**：`Type t = Type.builder()....build(); f(t);` —— null/false/0 字段不显式 set，靠 Lombok 默认值。**禁止** `f(Type.builder()....build())` 任何 inline build 在方法实参位置 |
+| **`argc ≤ 6`** | 不约束（业界无依据：Effective Java / Google Style / Oracle Conventions 都未禁止 `f(new Foo(a,b,c,d,e,f))`） |
+
+**允许 `Type.builder()....build()` 直接出现的位置**仅 2 个：
+1. `Type t = ....;` 赋值右侧
+2. `return ....;` 单一 return（不嵌套）
+
+**豁免**：
+- 声明式注册类（`*Registry` / `*SchemaRegistry` / Spring `@Configuration` 列表 / `List.of(new Foo(...))` 等）—— inline new 在声明式数据结构里是业界鼓励的可读写法，不算反例
+- **Spring Data JDBC / JPA `@Modifying @Query` 接口方法多 `@Param`** —— 框架契约（`:paramName` 命名参数解析依赖位置 `@Param`，bean property 引用未原生支持），保留多 `@Param` 形式即可。MyBatis mapper 可封装（原生支持 `#{p.field}`），但不强制
+
+### 加 `@Builder` 时空参构造的注解兜底
+
+`@Builder` 在普通 class 上会生成 `@AllArgsConstructor`，**消除隐式空参** → 反射路径（Jackson / MyBatis / Spring `@ModelAttribute`）会 break。**禁止降级**到"仅提取引用"，**用注解兜底**：
+
+| 类形态 | 注解组合 |
+|---|---|
+| record | `@Builder` 单注解（record 本无空参，无影响） |
+| class 已有 `@Data` / 显式 `public Foo() {}` | `@Builder` 单注解（已有空参不冲突） |
+| class 仅有隐式空参（无任何构造器） | `@Builder` + `@NoArgsConstructor` + `@AllArgsConstructor` 三连 |
+| class 已有自定义带参构造 | `@Builder` + `@Tolerate` 显式声明空参 |
+
+**铁律**：加 `@Builder` 不允许破坏 class 的反射构造路径。
+
+### 字段顺序与 entity 红线
+
+- 加 `@Builder` 时**禁止重排 record 字段**（保护 mybatis xml `#{q.xxx}`、保护 canonical constructor 调用方）
+- **Spring Data JDBC entity / `@Entity` / `@Table` 持久化类一律不加 `@Builder`**（侵入持久化路径）
+- **禁止重命名任何字段**
+
+详见 `docs/analysis/positional-args-cleanup-plan.md` v2 治理方案。
+
 ## Java 代码风格
 
 - **禁止在代码中使用全限定类名（FQN）**——必须通过 `import` 导入后使用短名。例如写 `TimeUnit.SECONDS` 而非 `java.util.concurrent.TimeUnit.SECONDS`

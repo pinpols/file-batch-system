@@ -1,7 +1,9 @@
 package com.example.batch.worker.core.domain;
 
 import java.util.Map;
+import lombok.Builder;
 
+@Builder
 public record PipelineStepTemplate(
     String stepCode,
     String stepName,

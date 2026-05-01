@@ -167,17 +167,19 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             nextFire = t.getNextFireTime().toInstant();
           }
         }
-        result.add(
-            new TriggerStatusInfo(
-                tid,
-                jc,
-                data.getString(QuartzLaunchJob.SCHEDULE_TYPE),
-                data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION),
-                data.getString(QuartzLaunchJob.TIMEZONE),
-                data.getString(QuartzLaunchJob.TRIGGER_MODE),
-                status,
-                prevFire,
-                nextFire));
+        TriggerStatusInfo statusInfo =
+            TriggerStatusInfo.builder()
+                .tenantId(tid)
+                .jobCode(jc)
+                .scheduleType(data.getString(QuartzLaunchJob.SCHEDULE_TYPE))
+                .scheduleExpression(data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION))
+                .timezone(data.getString(QuartzLaunchJob.TIMEZONE))
+                .triggerMode(data.getString(QuartzLaunchJob.TRIGGER_MODE))
+                .status(status)
+                .previousFireTime(prevFire)
+                .nextFireTime(nextFire)
+                .build();
+        result.add(statusInfo);
       }
       return result;
     } catch (SchedulerException e) {

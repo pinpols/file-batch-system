@@ -86,16 +86,17 @@ class ConsoleFileQueryService {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     FilePipelineQuery q =
-        new FilePipelineQuery(
-            tenantId,
-            request.getFileId(),
-            request.getPipelineInstanceId(),
-            request.getPipelineType(),
-            request.getRunStatus(),
-            request.getTraceId(),
-            parseInstant(request.getFromTime(), KEY_FROM_TIME),
-            parseInstant(request.getToTime(), KEY_TO_TIME),
-            pageRequest);
+        FilePipelineQuery.builder()
+            .tenantId(tenantId)
+            .fileId(request.getFileId())
+            .pipelineInstanceId(request.getPipelineInstanceId())
+            .pipelineType(request.getPipelineType())
+            .runStatus(request.getRunStatus())
+            .traceId(request.getTraceId())
+            .fromTime(parseInstant(request.getFromTime(), KEY_FROM_TIME))
+            .toTime(parseInstant(request.getToTime(), KEY_TO_TIME))
+            .pageRequest(pageRequest)
+            .build();
     List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(q);
     long total = fileMappers.filePipelineMapper.countByQuery(q.withoutPage());
     return page(pageRequest, total, rows, this::toFilePipelineResponse);
@@ -161,27 +162,18 @@ class ConsoleFileQueryService {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     FileTemplateConfigQuery q =
-        new FileTemplateConfigQuery(
-            tenantId,
-            request.getKeyword(),
-            request.getTemplateCode(),
-            request.getTemplateName(),
-            request.getTemplateType(),
-            request.getBizType(),
-            request.getEnabled(),
-            pageRequest);
+        FileTemplateConfigQuery.builder()
+            .tenantId(tenantId)
+            .keyword(request.getKeyword())
+            .templateCode(request.getTemplateCode())
+            .templateName(request.getTemplateName())
+            .templateType(request.getTemplateType())
+            .bizType(request.getBizType())
+            .enabled(request.getEnabled())
+            .pageRequest(pageRequest)
+            .build();
     List<Map<String, Object>> rows = fileMappers.fileTemplateConfigMapper.selectByQuery(q);
-    long total =
-        fileMappers.fileTemplateConfigMapper.countByQuery(
-            new FileTemplateConfigQuery(
-                tenantId,
-                request.getKeyword(),
-                request.getTemplateCode(),
-                request.getTemplateName(),
-                request.getTemplateType(),
-                request.getBizType(),
-                request.getEnabled(),
-                null));
+    long total = fileMappers.fileTemplateConfigMapper.countByQuery(q);
     return page(pageRequest, total, rows, this::toFileTemplateResponse);
   }
 
@@ -260,9 +252,8 @@ class ConsoleFileQueryService {
   ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {
     String resolved = resolveTenant(tenantGuard, tenantId);
     PageRequest pageSingle = new PageRequest(1, 1);
-    List<Map<String, Object>> rows =
-        fileMappers.filePipelineMapper.selectByQuery(
-            new FilePipelineQuery(resolved, null, id, null, null, null, null, null, pageSingle));
+    FilePipelineQuery detailQuery = FilePipelineQuery.ofPipeline(resolved, id, pageSingle);
+    List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(detailQuery);
     if (rows.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.pipeline.instance_not_found", id);
     }

@@ -1,7 +1,9 @@
 package com.example.batch.trigger.domain;
 
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record TriggerStatusInfo(
     String tenantId,
     String jobCode,

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -101,18 +102,19 @@ class ChildJobLaunchSupport {
         writeTriggerRequestForChildJob(jobInstance, refJobCode, idempotencyKey, traceId);
 
     // 子作业启动参数含回指字段，便于子作业完成后回写本虚拟 task
-    LaunchRequest childLaunchRequest =
-        buildChildLaunchRequest(
-            new ChildLaunchContext(
-                jobInstance,
-                workflowRun,
-                node,
-                refJobCode,
-                sourcePayload,
-                childRequestId,
-                traceId,
-                virtualTask,
-                workflowNode));
+    ChildLaunchContext launchCtx =
+        ChildLaunchContext.builder()
+            .jobInstance(jobInstance)
+            .workflowRun(workflowRun)
+            .node(node)
+            .refJobCode(refJobCode)
+            .sourcePayload(sourcePayload)
+            .childRequestId(childRequestId)
+            .traceId(traceId)
+            .virtualTask(virtualTask)
+            .workflowNode(workflowNode)
+            .build();
+    LaunchRequest childLaunchRequest = buildChildLaunchRequest(launchCtx);
     launchServiceProvider.getObject().launch(childLaunchRequest);
 
     return 1; // one virtual partition added to the parent job
@@ -262,6 +264,7 @@ class ChildJobLaunchSupport {
         : latestNodeRun.getRunSeq() + 1;
   }
 
+  @Builder
   private record ChildLaunchContext(
       JobInstanceEntity jobInstance,
       WorkflowRunEntity workflowRun,

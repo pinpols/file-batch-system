@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -87,8 +88,17 @@ public class ImportRecordGovernanceService {
       String errorCode,
       String errorMessage,
       Object rawRecord) {
-    recordBadRecord(
-        new BadRecordContext(context, stage, recordNo, errorCode, errorMessage, rawRecord, true));
+    BadRecordContext brc =
+        BadRecordContext.builder()
+            .context(context)
+            .stage(stage)
+            .recordNo(recordNo)
+            .errorCode(errorCode)
+            .errorMessage(errorMessage)
+            .rawRecord(rawRecord)
+            .skipped(true)
+            .build();
+    recordBadRecord(brc);
   }
 
   public void recordFailedRecord(
@@ -98,13 +108,28 @@ public class ImportRecordGovernanceService {
       String errorCode,
       String errorMessage,
       Object rawRecord) {
-    recordBadRecord(
-        new BadRecordContext(context, stage, recordNo, errorCode, errorMessage, rawRecord, false));
+    BadRecordContext brc =
+        BadRecordContext.builder()
+            .context(context)
+            .stage(stage)
+            .recordNo(recordNo)
+            .errorCode(errorCode)
+            .errorMessage(errorMessage)
+            .rawRecord(rawRecord)
+            .build();
+    recordBadRecord(brc);
   }
 
   public void recordThresholdViolation(
       ImportJobContext context, ImportStage stage, String errorCode, String message) {
-    recordBadRecord(new BadRecordContext(context, stage, null, errorCode, message, null, false));
+    BadRecordContext brc =
+        BadRecordContext.builder()
+            .context(context)
+            .stage(stage)
+            .errorCode(errorCode)
+            .errorMessage(message)
+            .build();
+    recordBadRecord(brc);
     context.getAttributes().put("skipThresholdExceeded", true);
   }
 
@@ -198,6 +223,7 @@ public class ImportRecordGovernanceService {
     };
   }
 
+  @Builder
   private record BadRecordContext(
       ImportJobContext context,
       ImportStage stage,

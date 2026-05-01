@@ -196,14 +196,15 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             retrySchedule.getId(),
             exception.getMessage(),
             exception);
-        retryScheduleMapper.markFailed(
-            retrySchedule.getId(),
-            RetryScheduleStatus.FAILED.code(),
-            "RETRY_DISPATCH_FAILED",
-            exception.getMessage(),
-            null,
-            null,
-            Instant.now());
+        RetryScheduleMapper.MarkFailedParam markFailedParam =
+            RetryScheduleMapper.MarkFailedParam.builder()
+                .id(retrySchedule.getId())
+                .retryStatus(RetryScheduleStatus.FAILED.code())
+                .lastErrorCode("RETRY_DISPATCH_FAILED")
+                .lastErrorMessage(exception.getMessage())
+                .nextRetryAt(Instant.now())
+                .build();
+        retryScheduleMapper.markFailed(markFailedParam);
       }
     }
   }

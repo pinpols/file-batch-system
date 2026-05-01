@@ -115,16 +115,18 @@ public class JobSlaScheduler {
             candidate.getId(),
             candidate.getInstanceNo(),
             buildExtra(candidate, now));
-        alertEventService.emit(
-            new AlertEmitRequest(
-                candidate.getTenantId(),
-                "batch-orchestrator",
-                "JOB_SLA_VIOLATION",
-                "WARN",
-                buildMessage(candidate, now),
-                JsonUtils.toJson(buildExtra(candidate, now)),
-                String.valueOf(candidate.getId()),
-                candidate.getTraceId()));
+        AlertEmitRequest emitRequest =
+            AlertEmitRequest.builder()
+                .tenantId(candidate.getTenantId())
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_SLA_VIOLATION")
+                .severity("WARN")
+                .title(buildMessage(candidate, now))
+                .detailJson(JsonUtils.toJson(buildExtra(candidate, now)))
+                .resourceKey(String.valueOf(candidate.getId()))
+                .traceId(candidate.getTraceId())
+                .build();
+        alertEventService.emit(emitRequest);
       } finally {
         BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
         BatchMdc.remove(StructuredLogField.TRACE_ID);

@@ -1,5 +1,8 @@
 package com.example.batch.orchestrator.domain.command;
 
+import lombok.Builder;
+
+@Builder
 public record FileGovernanceCommand(
     String tenantId,
     Long fileId,

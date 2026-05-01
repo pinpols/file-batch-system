@@ -126,15 +126,15 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     retryScheduleMapper.markRunning(
         entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
 
-    int updated =
-        retryScheduleMapper.markFailed(
-            entity.getId(),
-            RetryScheduleStatus.FAILED.code(),
-            "DISPATCH_FAILED",
-            "connection refused",
-            null,
-            null,
-            Instant.now().plusSeconds(120));
+    RetryScheduleMapper.MarkFailedParam markFailedParam =
+        RetryScheduleMapper.MarkFailedParam.builder()
+            .id(entity.getId())
+            .retryStatus(RetryScheduleStatus.FAILED.code())
+            .lastErrorCode("DISPATCH_FAILED")
+            .lastErrorMessage("connection refused")
+            .nextRetryAt(Instant.now().plusSeconds(120))
+            .build();
+    int updated = retryScheduleMapper.markFailed(markFailedParam);
 
     assertThat(updated).isEqualTo(1);
     RetryScheduleEntity loaded = retryScheduleMapper.selectById(entity.getId());

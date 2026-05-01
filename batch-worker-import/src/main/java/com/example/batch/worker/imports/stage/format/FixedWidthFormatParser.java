@@ -87,14 +87,17 @@ public class FixedWidthFormatParser implements FormatParser {
             row.put(field.target(), value);
           }
           support.collectSchemaFields(context, row);
-          support.writeParsedRecord(
-              context,
-              writer,
-              row,
-              preserveLogicalRow,
-              recordNo,
-              "IMPORT_PARSE_FIXED_INVALID",
-              row);
+          ParseSupport.ParsedRecordWriteParam writeParam =
+              ParseSupport.ParsedRecordWriteParam.builder()
+                  .context(context)
+                  .writer(writer)
+                  .row(row)
+                  .preserveLogicalRow(preserveLogicalRow)
+                  .recordNo(recordNo)
+                  .errorCode("IMPORT_PARSE_FIXED_INVALID")
+                  .rawRecord(row)
+                  .build();
+          support.writeParsedRecord(writeParam);
         } catch (Exception exception) {
           support.recordParseError(
               context, recordNo, "IMPORT_PARSE_FIXED_INVALID", exception.getMessage(), line);

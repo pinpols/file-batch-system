@@ -51,19 +51,21 @@ public class TaskControllerApplicationService {
         resolveFailureField(request.getErrorCode(), request.getCode(), request.isSuccess());
     String errorMessage =
         resolveFailureField(request.getErrorMessage(), request.getMessage(), request.isSuccess());
-    taskExecutionService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            request.getTenantId(),
-            taskId,
-            request.getWorkerId(),
-            request.isSuccess(),
-            request.getResultSummary(),
-            errorCode,
-            errorMessage,
-            request.getErrorKey(),
-            request.getErrorArgs(),
-            request.getHighWaterMarkOut(),
-            request.getOutputs()));
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder()
+            .tenantId(request.getTenantId())
+            .taskId(taskId)
+            .workerId(request.getWorkerId())
+            .success(request.isSuccess())
+            .resultSummary(request.getResultSummary())
+            .errorCode(errorCode)
+            .errorMessage(errorMessage)
+            .errorKey(request.getErrorKey())
+            .errorArgs(request.getErrorArgs())
+            .highWaterMarkOut(request.getHighWaterMarkOut())
+            .outputs(request.getOutputs())
+            .build();
+    taskExecutionService.applyTaskOutcome(command);
   }
 
   public void renew(Long taskId, TaskClaimRequest request) {
