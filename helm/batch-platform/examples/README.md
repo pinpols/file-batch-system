@@ -48,6 +48,6 @@ kubectl -n batch-prod wait --for=condition=Ready pods --all --timeout=5m
 1. 复制默认 `values.yaml` 为 `values-prod.yaml`
 2. 用 Secret / External Secrets Operator / Sealed Secrets 管理敏感字段
 3. `DB_URL` / `REDIS_HOST` / `KAFKA_BOOTSTRAP_SERVERS` 指向真实生产集群
-4. `security.testingOpen: "false"`（生产必须关）
+4. `security.bypassMode: "false"`（生产必须关；@PostConstruct 守护会在 prod profile 下拒绝 `true`)
 
 参考 [../../docs/runbook/base-services-deployment.md](../../docs/runbook/base-services-deployment.md)。

@@ -112,7 +112,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - JWT bearer auth is the preferred login/session mechanism.
 - `POST /api/console/auth/login` validates one of the seeded console accounts stored in the platform database and issues a JWT.
 - Single-account login is single-session by default. A fresh login invalidates older JWTs for the same username and tenant.
-- Legacy `X-Console-Token` header auth is retained for compatibility and migration.
+<!-- Legacy `X-Console-Token` header auth was physically removed on 2026-04-30 (commit ff20c36f, S5-d). Only JWT + SSE ticket remain. -->
 - `POST /api/console/auth/token` exchanges an authenticated console session for a JWT access token.
 - `GET /api/console/auth/me` returns the current authenticated principal, including `menus` — the role-filtered sidebar tree produced by `ConsoleMenuRegistry`. Frontends should render navigation from this field rather than hard-coding menu items.
 - `ROLE_ADMIN` can perform all write actions.
@@ -1237,7 +1237,7 @@ All console APIs support versioned paths via URL prefix:
 - `GET /api/console/files/{fileId}/download`
 - Query params: `tenantId` (required), `approvalId` (optional).
 - Response is **raw file bytes** (`Content-Disposition: attachment`, MIME from metadata or `application/octet-stream`), **not** the `CommonResponse` JSON envelope.
-- When the file’s template enforces download approval, `approvalId` must reference an **APPROVED** (or **EXECUTED**) approval; omit only when testing-open or policy does not require approval.
+- When the file’s template enforces download approval, `approvalId` must reference an **APPROVED** (or **EXECUTED**) approval; omit only when `batch.security.bypass-mode=true` or policy does not require approval.
 
 ## Error Code Baseline
 

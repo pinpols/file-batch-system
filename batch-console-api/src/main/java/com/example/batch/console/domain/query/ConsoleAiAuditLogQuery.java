@@ -2,7 +2,9 @@ package com.example.batch.console.domain.query;
 
 import com.example.batch.common.model.PageRequest;
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record ConsoleAiAuditLogQuery(
     String tenantId,
     String sessionId,
@@ -11,4 +13,9 @@ public record ConsoleAiAuditLogQuery(
     String promptDecision,
     Instant fromTime,
     Instant toTime,
-    PageRequest pageRequest) {}
+    PageRequest pageRequest) {
+
+  public static ConsoleAiAuditLogQuery ofTenant(String tenantId, PageRequest pageRequest) {
+    return builder().tenantId(tenantId).pageRequest(pageRequest).build();
+  }
+}

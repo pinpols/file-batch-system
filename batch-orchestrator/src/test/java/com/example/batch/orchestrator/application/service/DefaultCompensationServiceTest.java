@@ -8,8 +8,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.domain.command.CompensationSubmitCommand;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
@@ -162,9 +165,8 @@ class DefaultCompensationServiceTest {
   }
 
   // ── happy path ────────────────────────────────────────────────────────────
-  // V5-P2-4: compensation 6 类 source_type happy-path 验证。
-  // 本批覆盖 PARTITION / STEP / DLQ / FILE 4 类（路径相对独立、mock 量小）。
-  // JOB / BATCH 涉及 LaunchService 全 trigger 流程，留 follow-up（TODO V5-P2-4-ext）。
+  // V5-P2-4: compensation 6 类 source_type happy-path 验证（PARTITION / STEP / DLQ / FILE / JOB /
+  // BATCH）。
   // submit() 返回 commandNo (String)；happy-path 通过 Mockito.verify() 校验侧效（确认 handler
   // 真正调到对应下游服务），不依赖返回值结构。
 
@@ -243,6 +245,69 @@ class DefaultCompensationServiceTest {
 
     assertThat(commandNo).isNotBlank();
     Mockito.verify(fileGovernanceService).redispatchFile(any());
+  }
+
+  @Test
+  void shouldRerunJobSuccessfully_JOB_path() {
+    CompensationSubmitCommand cmd = command("t1", "JOB", 100L);
+    when(compensationCommandMapper.countRunningByTarget(
+            anyString(), anyString(), any(), anyString()))
+        .thenReturn(0);
+
+    JobInstanceEntity sourceInstance = new JobInstanceEntity();
+    sourceInstance.setId(100L);
+    sourceInstance.setInstanceNo("inst-100");
+    sourceInstance.setJobCode("JOB_CODE");
+    sourceInstance.setBizDate(LocalDate.now());
+    sourceInstance.setBatchNo("batch-100");
+    sourceInstance.setTraceId("trace-source");
+    when(jobMappers.jobInstanceMapper.selectById("t1", 100L)).thenReturn(sourceInstance);
+    when(launchService.launch(any(LaunchRequest.class)))
+        .thenReturn(new LaunchResponse("inst-101", "trace-new"));
+
+    JobInstanceEntity launched = new JobInstanceEntity();
+    launched.setId(101L);
+    launched.setInstanceNo("inst-101");
+    when(jobMappers.jobInstanceMapper.selectByInstanceNo("t1", "inst-101")).thenReturn(launched);
+
+    String commandNo = service.submit(cmd);
+
+    assertThat(commandNo).isNotBlank();
+    Mockito.verify(launchService).launch(any(LaunchRequest.class));
+    Mockito.verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
+  }
+
+  @Test
+  void shouldRerunBatchSuccessfully_BATCH_path() {
+    LocalDate bizDate = LocalDate.now();
+    CompensationSubmitCommand cmd =
+        new CompensationSubmitCommand(
+            "t1",
+            "BATCH",
+            null,
+            null,
+            "BATCH_JOB_CODE",
+            bizDate,
+            "batch-200",
+            null,
+            null,
+            "rerun batch",
+            "op-001",
+            null,
+            null,
+            null);
+    when(compensationCommandMapper.countRunningByTarget(
+            anyString(), anyString(), any(), anyString()))
+        .thenReturn(0);
+    when(launchService.launch(any(LaunchRequest.class)))
+        .thenReturn(new LaunchResponse("inst-200", "trace-batch"));
+    when(jobMappers.jobInstanceMapper.selectByInstanceNo("t1", "inst-200")).thenReturn(null);
+
+    String commandNo = service.submit(cmd);
+
+    assertThat(commandNo).isNotBlank();
+    Mockito.verify(launchService).launch(any(LaunchRequest.class));
+    Mockito.verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

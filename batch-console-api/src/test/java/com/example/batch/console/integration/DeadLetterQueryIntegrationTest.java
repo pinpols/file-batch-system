@@ -47,7 +47,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
     List<DeadLetterTaskEntity> newDlq =
         deadLetterTaskMapper.selectByQuery(
-            new DeadLetterTaskQuery(tenantId, null, "NEW", null, new PageRequest(1, 10)));
+            DeadLetterTaskQuery.ofReplayStatus(tenantId, "NEW", new PageRequest(1, 10)));
 
     assertThat(newDlq).hasSize(1);
     assertThat(newDlq.get(0).getReplayStatus()).isEqualTo("NEW");
@@ -62,7 +62,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
     List<DeadLetterTaskEntity> partitionDlq =
         deadLetterTaskMapper.selectByQuery(
-            new DeadLetterTaskQuery(tenantId, "JOB_PARTITION", null, null, new PageRequest(1, 10)));
+            DeadLetterTaskQuery.ofSourceType(tenantId, "JOB_PARTITION", new PageRequest(1, 10)));
 
     assertThat(partitionDlq).hasSize(2);
     assertThat(partitionDlq).allMatch(d -> "JOB_PARTITION".equals(d.getSourceType()));
@@ -76,7 +76,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
     List<DeadLetterTaskEntity> results =
         deadLetterTaskMapper.selectByQuery(
-            new DeadLetterTaskQuery(tenantId, null, null, uniqueTrace, new PageRequest(1, 10)));
+            DeadLetterTaskQuery.ofTraceId(tenantId, uniqueTrace, new PageRequest(1, 10)));
 
     assertThat(results).hasSize(1);
     assertThat(results.get(0).getTraceId()).isEqualTo(uniqueTrace);
@@ -91,7 +91,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
     List<DeadLetterTaskEntity> all =
         deadLetterTaskMapper.selectByQuery(
-            new DeadLetterTaskQuery(tenantId, null, null, null, new PageRequest(1, 10)));
+            DeadLetterTaskQuery.ofTenant(tenantId, new PageRequest(1, 10)));
 
     assertThat(all).hasSize(3);
   }

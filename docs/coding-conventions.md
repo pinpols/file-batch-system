@@ -767,9 +767,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | Helm `examples/values-local-k8s.yaml` | `"true"` | 本地 K8s 演示 |
 | prod profile @PostConstruct | **强制拒绝 `true`** | `BatchSecurityProperties.validateSecuritySettings()` 启动 fail-fast |
 
-**调用规范**：业务代码一律 `batchSecurityProperties.isBypassMode()`；**禁止**调已 deprecated 的 `isTestingOpen()`。
-
-**向后兼容**：旧键 `batch.security.testing-open`（2026-04-19 重命名为 `bypass-mode`）通过 `setTestingOpen` setter + `@DeprecatedConfigurationProperty` 保持可用；启动 WARN 提示迁移，**下一个 minor 版本移除**。
+**调用规范**：业务代码一律 `batchSecurityProperties.isBypassMode()`。旧 `isTestingOpen()` / `setTestingOpen()` / 旧键 `batch.security.testing-open` 已于 2026-05-01 物理删除（`@Deprecated since=2026-04-19, forRemoval=true` 周期到期）。
 
 ---
 

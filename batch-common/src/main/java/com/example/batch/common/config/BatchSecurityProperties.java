@@ -5,7 +5,6 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 import org.springframework.core.env.Environment;
 
 @Data
@@ -38,26 +37,6 @@ public class BatchSecurityProperties {
   @Autowired(required = false)
   private transient Environment environment;
 
-  /**
-   * 兼容旧键 `batch.security.testing-open`（2026-04-19 重命名为 `bypass-mode`）。保留 setter 让 Spring relaxed
-   * binding 仍能把旧键读入同一字段；启动时 @PostConstruct 打 WARN 提示迁移。 下一个 minor 版本移除。
-   */
-  @Deprecated(since = "2026-04-19", forRemoval = true)
-  public void setTestingOpen(boolean testingOpen) {
-    this.bypassMode = testingOpen;
-    this.testingOpenLegacyKeyUsed = true;
-  }
-
-  @Deprecated(since = "2026-04-19", forRemoval = true)
-  @DeprecatedConfigurationProperty(
-      replacement = "batch.security.bypass-mode",
-      reason = "语义重命名：testing-open → bypass-mode，更准确反映放宽整条安全链的副作用")
-  public boolean isTestingOpen() {
-    return bypassMode;
-  }
-
-  private transient boolean testingOpenLegacyKeyUsed = false;
-
   // #5-1: 生产 profile 下强制禁止 bypassMode，防止误配导致认证被绕过
   // #9-1: 生产 profile 下校验密码占位符已被替换
   @PostConstruct
@@ -72,11 +51,6 @@ public class BatchSecurityProperties {
     }
     if (bypassMode) {
       log.warn("batch.security.bypass-mode=true — 全链路安全旁路已启用，仅限本地/联调/E2E 使用");
-    }
-    if (testingOpenLegacyKeyUsed) {
-      log.warn(
-          "batch.security.testing-open 已重命名为 batch.security.bypass-mode，"
-              + "旧键仍可用但会在下一版本移除，请尽快迁移配置");
     }
     if (prod) {
       validateNotPlaceholder("batch.security.internal-secret", internalSecret);

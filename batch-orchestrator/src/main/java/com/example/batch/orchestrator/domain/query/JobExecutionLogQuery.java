@@ -7,4 +7,10 @@ public record JobExecutionLogQuery(
     Long jobInstanceId,
     Long jobPartitionId,
     String logType,
-    PageRequest pageRequest) {}
+    PageRequest pageRequest) {
+
+  public static JobExecutionLogQuery ofPartition(
+      String tenantId, Long jobInstanceId, Long jobPartitionId) {
+    return new JobExecutionLogQuery(tenantId, jobInstanceId, jobPartitionId, null, null);
+  }
+}
