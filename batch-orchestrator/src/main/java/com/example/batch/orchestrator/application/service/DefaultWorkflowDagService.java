@@ -8,12 +8,18 @@ import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -140,6 +146,101 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       case ANY -> matchedCount >= 1;
       case N_OF -> matchedCount >= joinRule.joinThreshold();
     };
+  }
+
+  @Override
+  public List<String> cascadeSkipDownstream(
+      Long workflowRunId, Long workflowDefinitionId, String fromNodeCode) {
+    if (workflowRunId == null
+        || workflowDefinitionId == null
+        || fromNodeCode == null
+        || fromNodeCode.isBlank()) {
+      return List.of();
+    }
+    Deque<String> queue = new ArrayDeque<>();
+    queue.add(fromNodeCode);
+    Set<String> visited = new HashSet<>();
+    List<String> skipped = new ArrayList<>();
+    while (!queue.isEmpty()) {
+      String cur = queue.poll();
+      if (!visited.add(cur)) {
+        continue;
+      }
+      List<WorkflowEdgeEntity> outgoing =
+          workflowEdgeMapper.selectOutgoingEdges(workflowDefinitionId, cur);
+      if (outgoing == null || outgoing.isEmpty()) {
+        continue;
+      }
+      for (WorkflowEdgeEntity edge : outgoing) {
+        String to = edge.getToNodeCode();
+        if (to == null || to.isBlank() || WorkflowNodeCode.END.code().equalsIgnoreCase(to)) {
+          continue;
+        }
+        if (!canNeverFire(workflowRunId, workflowDefinitionId, to)) {
+          continue;
+        }
+        if (insertSkippedNodeRunIfAbsent(workflowRunId, workflowDefinitionId, to)) {
+          skipped.add(to);
+          queue.add(to);
+        }
+      }
+    }
+    if (!skipped.isEmpty()) {
+      log.info(
+          "cascade-skipped {} downstream node(s) of {} on workflow_run {}: {}",
+          skipped.size(),
+          fromNodeCode,
+          workflowRunId,
+          skipped);
+    }
+    return skipped;
+  }
+
+  /** 节点是否再无机会触发：所有入边对应的前驱已达终态且没有任何入边匹配。 该谓词同时满足 ALL / ANY / N_OF 三种 join（任意 join 至少要 1 条匹配）。 */
+  private boolean canNeverFire(Long workflowRunId, Long workflowDefinitionId, String nodeCode) {
+    List<WorkflowEdgeEntity> incoming =
+        workflowEdgeMapper.selectIncomingEdges(workflowDefinitionId, nodeCode);
+    if (incoming == null || incoming.isEmpty()) {
+      return false;
+    }
+    for (WorkflowEdgeEntity edge : incoming) {
+      var pred =
+          workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+              workflowRunId, edge.getFromNodeCode());
+      if (pred == null || !isTerminal(pred.getNodeStatus())) {
+        return false;
+      }
+      if (matchesIncomingEdge(edge, pred.getNodeStatus(), null)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** 同一 workflow_run 已有同 nodeCode 行则跳过；否则插入 SKIPPED 终态行。 */
+  private boolean insertSkippedNodeRunIfAbsent(
+      Long workflowRunId, Long workflowDefinitionId, String nodeCode) {
+    WorkflowNodeRunEntity existing =
+        workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
+    if (existing != null) {
+      return false;
+    }
+    WorkflowNodeEntity node =
+        workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(workflowDefinitionId, nodeCode);
+    String nodeType = node == null ? WorkflowNodeType.TASK.code() : node.getNodeType();
+    WorkflowNodeRunEntity row = new WorkflowNodeRunEntity();
+    row.setWorkflowRunId(workflowRunId);
+    row.setNodeCode(nodeCode);
+    row.setNodeType(nodeType);
+    row.setRunSeq(1);
+    row.setNodeStatus("SKIPPED");
+    row.setRetryCount(0);
+    Instant now = Instant.now();
+    row.setStartedAt(now);
+    row.setFinishedAt(now);
+    row.setDurationMs(0L);
+    workflowNodeRunMapper.insert(row);
+    return true;
   }
 
   private boolean matchesOutgoingEdge(

@@ -22,6 +22,20 @@ public interface WorkflowDagService {
   boolean isNodeReadyForDispatch(
       Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson);
 
+  /**
+   * SKIP 级联：从 {@code fromNodeCode}（FAILED 或 SKIPPED 节点）出发，沿 SUCCESS / CONDITION 出边 寻找无机会再触发的下游节点，写入
+   * {@code SKIPPED} 的 {@code workflow_node_run} 行并继续递归级联。
+   *
+   * <p>"无机会触发"判定：节点的所有入边对应的前驱 node_run 已达终态且没有任何一条入边匹配（即 {@code matchedCount == 0 && terminalCount
+   * == size}）。该判定对 ALL / ANY / N_OF 三种 join 模式都成立——任意 join 至少需要 1 条匹配。
+   *
+   * <p>不级联跨 ALWAYS / FAILURE 出边的下游：那些路径仍可正常派发，由 outcome 主路径推进。
+   *
+   * @return 本次实际新写 SKIPPED 行的 nodeCode 列表（用于日志/监控；为空表示无级联）
+   */
+  List<String> cascadeSkipDownstream(
+      Long workflowRunId, Long workflowDefinitionId, String fromNodeCode);
+
   default DagNodeResolution resolveInitialNode(Long workflowDefinitionId) {
     List<DagNodeResolution> nodes = resolveInitialNodes(workflowDefinitionId, null);
     return nodes == null || nodes.isEmpty() ? null : nodes.get(0);

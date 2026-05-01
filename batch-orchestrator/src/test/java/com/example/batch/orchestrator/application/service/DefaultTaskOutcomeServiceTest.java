@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -37,6 +38,7 @@ class DefaultTaskOutcomeServiceTest {
   @Mock RetryGovernanceService retryGovernanceService;
   @Mock StateMachine<Object> stateMachine;
   @Mock WorkflowDagService workflowDagService;
+  @Mock WorkflowTerminalOutboxService workflowTerminalOutboxService;
 
   @SuppressWarnings("rawtypes")
   @Mock
@@ -65,6 +67,7 @@ class DefaultTaskOutcomeServiceTest {
             stateMachine,
             workflowDagService,
             workflowNodeDispatchServiceProvider,
+            workflowTerminalOutboxService,
             new SimpleMeterRegistry());
   }
 

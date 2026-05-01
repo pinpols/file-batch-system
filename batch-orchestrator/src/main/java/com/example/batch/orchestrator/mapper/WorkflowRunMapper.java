@@ -17,12 +17,13 @@ public interface WorkflowRunMapper {
 
   List<WorkflowRunEntity> selectByQuery(WorkflowRunQuery query);
 
-  int updateStatus(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("runStatus") String runStatus,
-      @Param("currentNodeCode") String currentNodeCode,
-      @Param("finishedAt") Instant finishedAt);
+  /**
+   * 更新 workflow_run 状态/当前节点/完成时间。
+   *
+   * <p>{@link UpdateWorkflowRunStatusParam#getExpectedStatuses()} 非空时附加 {@code and run_status in
+   * (...)} 守护，命中 0 行说明前态不在期望集（cancel/terminate 与 task outcome 抢占等）；调用方按返回行数判定是否冲突。
+   */
+  int updateStatus(UpdateWorkflowRunStatusParam param);
 
   int markRunning(
       @Param("tenantId") String tenantId,
