@@ -87,9 +87,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
           pattern =
               "com\\.example\\.batch\\.worker\\.exports\\.config\\.BusinessDataSourceConfiguration"),
       @ComponentScan.Filter(
-          type = FilterType.REGEX,
-          pattern = "com\\.example\\.batch\\.worker\\.exports\\.config\\.ShedLockConfiguration"),
-      @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
           classes = BatchWorkerImportApplication.class),
       @ComponentScan.Filter(
