@@ -79,29 +79,31 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
-  void awaitDrain_shouldReturnAfterLeasesRemoved() throws Exception {
+  void awaitDrain_shouldReturnTrueAfterLeasesRemoved() throws Exception {
     registry.register("task-1", "t1", "w1");
 
     ExecutorService pool = Executors.newSingleThreadExecutor();
-    Future<?> f = pool.submit(() -> registry.awaitDrain(Duration.ofSeconds(2)));
+    Future<Boolean> f = pool.submit(() -> registry.awaitDrain(Duration.ofSeconds(2)));
 
     // 模拟进行中任务完成
     Thread.sleep(200);
     registry.remove("task-1");
 
-    f.get();
+    Boolean drained = f.get();
     pool.shutdown();
+    assertThat(drained).isTrue();
     assertThat(registry.snapshot()).isEmpty();
   }
 
   @Test
-  void awaitDrain_shouldReturnOnTimeoutEvenIfLeasesRemain() {
+  void awaitDrain_shouldReturnFalseOnTimeout() {
     registry.register("task-1", "t1", "w1");
 
     long start = System.currentTimeMillis();
-    registry.awaitDrain(Duration.ofMillis(200));
+    boolean drained = registry.awaitDrain(Duration.ofMillis(200));
     long elapsed = System.currentTimeMillis() - start;
 
+    assertThat(drained).isFalse();
     assertThat(elapsed).isGreaterThanOrEqualTo(150);
     assertThat(registry.snapshot()).hasSize(1);
   }

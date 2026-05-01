@@ -100,8 +100,10 @@ public class ActiveTaskLeaseRegistry {
    *   <li>不抛异常：避免 shutdown hook 因异常导致更糟的退出路径
    *   <li>超时返回：保证不会无限阻塞进程退出
    * </ul>
+   *
+   * @return {@code true} 表示在超时前已干净排空，{@code false} 表示触发超时（仍有未完成任务）或被中断
    */
-  public void awaitDrain(Duration timeout) {
+  public boolean awaitDrain(Duration timeout) {
     Duration effective = timeout == null ? Duration.ZERO : timeout;
     long deadline = System.currentTimeMillis() + Math.max(0L, effective.toMillis());
     synchronized (drainMonitor) {
@@ -115,7 +117,7 @@ public class ActiveTaskLeaseRegistry {
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
           log.warn("awaitDrain interrupted; remainingLeases={}", activeTaskLeases.size());
-          return;
+          return false;
         }
       }
     }
@@ -124,7 +126,9 @@ public class ActiveTaskLeaseRegistry {
           "awaitDrain timeout; remainingLeases={}, timeoutMs={}",
           activeTaskLeases.size(),
           effective.toMillis());
+      return false;
     }
+    return true;
   }
 
   @Getter

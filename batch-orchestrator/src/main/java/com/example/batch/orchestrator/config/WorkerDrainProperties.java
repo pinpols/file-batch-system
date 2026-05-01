@@ -21,6 +21,15 @@ public class WorkerDrainProperties {
    */
   private int heartbeatTimeoutSeconds = 90;
 
+  /**
+   * 心跳判定的 grace period（秒）：实际超时阈值 = {@link #heartbeatTimeoutSeconds} + {@link
+   * #heartbeatGraceSeconds}。
+   *
+   * <p>用于吸收 worker 长 GC pause、网络抖动、容器迁移等瞬时不可达，避免反复抖动导致的误判（standby/抢占触发）。 cutoff 已在 SQL 内由 DB {@code
+   * current_timestamp} 计算（消除时钟漂移），grace 是业务侧的额外冗余。
+   */
+  private int heartbeatGraceSeconds = 30;
+
   /** Worker 心跳超时扫描间隔。 */
   private long heartbeatCheckIntervalMillis = 30000L;
 }

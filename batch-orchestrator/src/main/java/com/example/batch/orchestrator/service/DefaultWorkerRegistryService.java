@@ -46,7 +46,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
             request,
             WorkerRegistryStatus.ONLINE.code(),
             registry == null ? null : registry.status());
-    Instant heartbeatAt = firstHeartbeat(request);
+    Instant heartbeatAt = firstHeartbeat();
     Integer newLoad =
         request.currentLoad() != null
             ? request.currentLoad()
@@ -88,19 +88,18 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       return register(request);
     }
     String newStatus = resolveHeartbeatStatus(request, registry.status());
-    Instant heartbeatAt = firstHeartbeat(request);
     Integer newLoad =
         request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
     JsonbString newTags =
         request.capabilityTags() != null
             ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
             : registry.capabilityTags();
+    // heartbeat_at 由 mapper xml 直接写为 DB current_timestamp（消除 worker 时钟漂移）。
     workerRegistryMapper.touchHeartbeat(
         TouchHeartbeatParam.builder()
             .tenantId(request.tenantId())
             .workerCode(workerCode)
             .nextStatus(newStatus)
-            .heartbeatAt(heartbeatAt)
             .currentLoad(newLoad)
             .capabilityTags(newTags == null ? null : newTags.getValue())
             .build());
@@ -127,8 +126,13 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     return workerRegistryRepository.save(registry);
   }
 
-  private Instant firstHeartbeat(WorkerHeartbeatDto request) {
-    return request.heartbeatAt() == null ? Instant.now() : request.heartbeatAt();
+  /**
+   * 首次注册 / register 路径的 heartbeat_at。Spring Data JDBC 路径必须 Java 端持有时间，无法直接用 SQL current_timestamp；
+   * 这里统一用 orchestrator JVM 时钟，<b>忽略 worker 提供的 {@code request.heartbeatAt()}</b>，避免 worker NTP
+   * 漂移直接进入 DB 的 heartbeat_at 列。心跳路径走 mybatis xml 直接 current_timestamp，二者口径一致。
+   */
+  private Instant firstHeartbeat() {
+    return Instant.now();
   }
 
   private String resolveHeartbeatStatus(WorkerHeartbeatDto request, String currentStatus) {

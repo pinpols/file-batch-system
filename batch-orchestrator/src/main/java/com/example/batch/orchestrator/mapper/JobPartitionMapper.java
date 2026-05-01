@@ -55,7 +55,19 @@ public interface JobPartitionMapper {
       @Param("runningStatus") String runningStatus);
 
   List<JobPartitionEntity> selectExpiredLeasesGlobal(
-      @Param("readyStatus") String readyStatus, @Param("runningStatus") String runningStatus);
+      @Param("readyStatus") String readyStatus,
+      @Param("runningStatus") String runningStatus,
+      @Param("batchSize") Integer batchSize);
+
+  /**
+   * 兜底扫描：partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task 的死态。 仅用于升级前历史残留清理；新代码已通过
+   * REQUIRES_NEW + 抛异常回滚消除产生路径。
+   */
+  List<JobPartitionEntity> selectOrphanReadyPartitionsWithRunningTask(
+      @Param("readyStatus") String readyStatus,
+      @Param("runningTaskStatus") String runningTaskStatus,
+      @Param("olderThan") Instant olderThan,
+      @Param("batchSize") int batchSize);
 
   List<JobPartitionEntity> selectWaitingPartitionsGlobal(
       @Param("batchSize") int batchSize, @Param("waitingStatus") String waitingStatus);

@@ -3,10 +3,15 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerSelfRegistrationService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.Collection;
-import lombok.RequiredArgsConstructor;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
@@ -25,19 +30,46 @@ import org.springframework.stereotype.Component;
  *   <li>调用 {@link ActiveTaskLeaseRegistry#awaitDrain} 等待 in-flight 任务自然结束， 超时由 {@code
  *       batch.worker.graceful-shutdown.timeout-seconds}（默认 120s）控制。
  * </ol>
+ *
+ * <p><b>v6 hardening · drain 可观测性</b>：记录 drain 持续时间、起始 active lease 数量、是否触发 timeout。 让运维可以在
+ * Prometheus 上观察 drain 健康度，提前发现 timeout 不够 / Kafka 缓冲过深导致的 stuck shutdown：
+ *
+ * <ul>
+ *   <li>{@code batch.worker.drain.duration_seconds}（timer）：每次 drain 整体耗时
+ *   <li>{@code batch.worker.drain.initial_active_leases}（counter）：drain 开始时的 active lease 总数
+ *   <li>{@code batch.worker.drain.outcome_total}（counter，tag {@code
+ *       outcome=success|timeout}）：清晰区分干净排空 vs 强制超时
+ * </ul>
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedEvent> {
+
+  private static final String METRIC_DURATION = "batch.worker.drain.duration_seconds";
+  private static final String METRIC_INITIAL_LEASES = "batch.worker.drain.initial_active_leases";
+  private static final String METRIC_OUTCOME = "batch.worker.drain.outcome_total";
 
   private final WorkerRuntimeState workerRuntimeState;
   private final WorkerSelfRegistrationService workerRegistryService;
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
   @Value("${batch.worker.graceful-shutdown.timeout-seconds:120}")
   private long gracefulShutdownTimeoutSeconds;
+
+  public GracefulKafkaShutdown(
+      WorkerRuntimeState workerRuntimeState,
+      WorkerSelfRegistrationService workerRegistryService,
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+      ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    this.workerRuntimeState = workerRuntimeState;
+    this.workerRegistryService = workerRegistryService;
+    this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
+    this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
+    this.meterRegistryProvider = meterRegistryProvider;
+  }
 
   @Override
   public void onApplicationEvent(ContextClosedEvent event) {
@@ -67,12 +99,40 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
       log.warn("failed to stop kafka listener containers: {}", ex.getMessage(), ex);
     }
 
+    awaitDrainAndRecord();
+  }
+
+  private void awaitDrainAndRecord() {
+    int initialActive = activeTaskLeaseRegistry.size();
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry != null && initialActive > 0) {
+      Counter.builder(METRIC_INITIAL_LEASES).register(registry).increment(initialActive);
+    }
+    long startNanos = System.nanoTime();
+    boolean drained = false;
     try {
-      activeTaskLeaseRegistry.awaitDrain(
-          Duration.ofSeconds(Math.max(0L, gracefulShutdownTimeoutSeconds)));
+      drained =
+          activeTaskLeaseRegistry.awaitDrain(
+              Duration.ofSeconds(Math.max(0L, gracefulShutdownTimeoutSeconds)));
     } catch (Exception ex) {
       log.warn("failed to await in-flight tasks drain: {}", ex.getMessage(), ex);
     }
+    long elapsedNanos = System.nanoTime() - startNanos;
+    if (registry != null) {
+      Timer.builder(METRIC_DURATION).register(registry).record(elapsedNanos, TimeUnit.NANOSECONDS);
+      Counter.builder(METRIC_OUTCOME)
+          .tags(Tags.of("outcome", drained ? "success" : "timeout"))
+          .register(registry)
+          .increment();
+    }
+    log.info(
+        "worker drain completed: outcome={}, initialActive={}, remainingLeases={},"
+            + " elapsedMs={}, timeoutSeconds={}",
+        drained ? "success" : "timeout",
+        initialActive,
+        activeTaskLeaseRegistry.size(),
+        TimeUnit.NANOSECONDS.toMillis(elapsedNanos),
+        gracefulShutdownTimeoutSeconds);
   }
 
   private boolean isValidRegistration(WorkerRegistration registration) {
