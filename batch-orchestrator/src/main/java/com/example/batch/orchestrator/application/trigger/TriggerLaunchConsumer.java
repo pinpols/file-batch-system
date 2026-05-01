@@ -7,6 +7,9 @@ import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.LaunchApplicationService;
 import com.example.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -51,11 +54,19 @@ public class TriggerLaunchConsumer {
 
   private final LaunchApplicationService launchApplicationService;
   private final MeterRegistry meterRegistry;
+  // 2026-05-02: 闭环 trigger_request 状态机 — launch 成功后回写 LAUNCHED + relatedJobInstanceId
+  private final TriggerRequestMapper triggerRequestMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
   public TriggerLaunchConsumer(
-      LaunchApplicationService launchApplicationService, MeterRegistry meterRegistry) {
+      LaunchApplicationService launchApplicationService,
+      MeterRegistry meterRegistry,
+      TriggerRequestMapper triggerRequestMapper,
+      JobInstanceMapper jobInstanceMapper) {
     this.launchApplicationService = launchApplicationService;
     this.meterRegistry = meterRegistry;
+    this.triggerRequestMapper = triggerRequestMapper;
+    this.jobInstanceMapper = jobInstanceMapper;
   }
 
   @KafkaListener(
@@ -96,6 +107,10 @@ public class TriggerLaunchConsumer {
           request.requestId(),
           response == null ? null : response.instanceNo());
       counter(METRIC_CONSUMED, "tenant", tenantId, "outcome", "ok").increment();
+      // 2026-05-02 ADR-010 闭环:回写 trigger_request.LAUNCHED + relatedJobInstanceId,
+      // 让审计 / SLA 报表能从 trigger_request 单表判定"job 是否真跑了"。best-effort,失败仅
+      // log warn — 主路径已 ack,落地由 ad-hoc reconciler 兜底,绝不让回写失败回滚 launch。
+      writeBackTriggerRequestLaunched(tenantId, request.requestId(), response);
       ack.acknowledge();
     } catch (ResponseStatusException ex) {
       // 409 = uk_job_instance_tenant_dedup 兜底命中,视为已处理(同 requestId 已落库一次)
@@ -135,5 +150,36 @@ public class TriggerLaunchConsumer {
 
   private Counter counter(String name, String... tagPairs) {
     return Counter.builder(name).tags(Tags.of(tagPairs)).register(meterRegistry);
+  }
+
+  /**
+   * 把 trigger_request 的 status 推到 LAUNCHED + 写回 relatedJobInstanceId。
+   *
+   * <p>best-effort:任何异常仅 WARN 不抛 — 主路径 launch 已成功并 ack,这一步只是审计字段闭环。失败时 trigger_request 留在 ACCEPTED
+   * 状态(异步路径异常态),由后续 reconciler / 运维 SQL 兜底。
+   */
+  private void writeBackTriggerRequestLaunched(
+      String tenantId, String requestId, LaunchResponse response) {
+    if (tenantId == null || tenantId.isBlank() || requestId == null || requestId.isBlank()) {
+      return;
+    }
+    Long jobInstanceId = null;
+    try {
+      if (response != null && response.instanceNo() != null && !response.instanceNo().isBlank()) {
+        JobInstanceEntity jobInstance =
+            jobInstanceMapper.selectByInstanceNo(tenantId, response.instanceNo());
+        if (jobInstance != null) {
+          jobInstanceId = jobInstance.getId();
+        }
+      }
+      triggerRequestMapper.updateAcceptance(tenantId, requestId, "LAUNCHED", jobInstanceId);
+    } catch (RuntimeException ex) {
+      log.warn(
+          "TriggerLaunchConsumer 回写 trigger_request LAUNCHED 失败(best-effort,主路径已 ack): tenantId={}"
+              + " requestId={} error={}",
+          tenantId,
+          requestId,
+          ex.getMessage());
+    }
   }
 }

@@ -14,6 +14,9 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.LaunchApplicationService;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -29,7 +32,7 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * ADR-010 Stage 5: TriggerLaunchConsumer 单测,覆盖 6 类路径:
+ * ADR-010 Stage 5: TriggerLaunchConsumer 单测,覆盖 9 类路径:
  *
  * <ol>
  *   <li>正常 launch 成功 → ack + counter
@@ -38,6 +41,9 @@ import org.springframework.web.server.ResponseStatusException;
  *   <li>409 dedup 命中 → 视为成功 ack(uk_job_instance_tenant_dedup 兜底)
  *   <li>429 限流 → ack + 由 trigger outbox 重发
  *   <li>RuntimeException → 抛出走 listener 重试
+ *   <li>writeBack 成功:trigger_request 推到 LAUNCHED + relatedJobInstanceId
+ *   <li>writeBack 找不到 job_instance:仍写 LAUNCHED,relatedJobInstanceId=null
+ *   <li>writeBack 抛异常:不影响主路径 ack(best-effort)
  * </ol>
  */
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +51,8 @@ class TriggerLaunchConsumerTest {
 
   @Mock private LaunchApplicationService launchApplicationService;
   @Mock private Acknowledgment ack;
+  @Mock private TriggerRequestMapper triggerRequestMapper;
+  @Mock private JobInstanceMapper jobInstanceMapper;
 
   private SimpleMeterRegistry meterRegistry;
   private TriggerLaunchConsumer consumer;
@@ -52,7 +60,9 @@ class TriggerLaunchConsumerTest {
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    consumer = new TriggerLaunchConsumer(launchApplicationService, meterRegistry);
+    consumer =
+        new TriggerLaunchConsumer(
+            launchApplicationService, meterRegistry, triggerRequestMapper, jobInstanceMapper);
   }
 
   @Test
@@ -126,6 +136,50 @@ class TriggerLaunchConsumerTest {
 
     verify(ack, never()).acknowledge();
     assertThat(failed("runtime")).isEqualTo(1.0);
+  }
+
+  @Test
+  void consume_validEnvelope_writesBackLaunchedWithJobInstanceId() {
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-wb1");
+    when(launchApplicationService.launch(any(LaunchRequest.class)))
+        .thenReturn(new LaunchResponse("inst-77", "trace-1"));
+    JobInstanceEntity job = JobInstanceEntity.builder().id(7701L).build();
+    when(jobInstanceMapper.selectByInstanceNo("tenant-a", "inst-77")).thenReturn(job);
+
+    consumer.consume(record(envelope), ack);
+
+    verify(triggerRequestMapper).updateAcceptance("tenant-a", "req-wb1", "LAUNCHED", 7701L);
+    verify(ack).acknowledge();
+  }
+
+  @Test
+  void consume_validEnvelope_writeBackHandlesMissingJobInstance() {
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-wb2");
+    when(launchApplicationService.launch(any(LaunchRequest.class)))
+        .thenReturn(new LaunchResponse("inst-missing", "trace-2"));
+    when(jobInstanceMapper.selectByInstanceNo("tenant-a", "inst-missing")).thenReturn(null);
+
+    consumer.consume(record(envelope), ack);
+
+    // 仍回写 LAUNCHED,relatedJobInstanceId 为 null(让对账 reconciler 后续兜底补 PK)
+    verify(triggerRequestMapper).updateAcceptance("tenant-a", "req-wb2", "LAUNCHED", null);
+    verify(ack).acknowledge();
+  }
+
+  @Test
+  void consume_writeBackThrows_doesNotPreventAck() {
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-wb3");
+    when(launchApplicationService.launch(any(LaunchRequest.class)))
+        .thenReturn(new LaunchResponse("inst-99", "trace-3"));
+    when(jobInstanceMapper.selectByInstanceNo("tenant-a", "inst-99"))
+        .thenThrow(new IllegalStateException("DB transient down"));
+
+    // 主路径已 launch 成功,回写抛异常仅 WARN,绝不能阻断 ack(否则消息会被重投触发重复 launch)
+    consumer.consume(record(envelope), ack);
+
+    verify(ack).acknowledge();
+    verify(triggerRequestMapper, never()).updateAcceptance(any(), any(), any(), any());
+    assertThat(consumed("tenant-a", "ok")).isEqualTo(1.0);
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
