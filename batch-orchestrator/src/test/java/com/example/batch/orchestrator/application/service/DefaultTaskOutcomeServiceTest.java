@@ -72,10 +72,9 @@ class DefaultTaskOutcomeServiceTest {
   void applyTaskOutcome_taskNotFound_returnsNull() {
     when(jobTaskMapper.selectById(anyString(), anyLong())).thenReturn(null);
 
-    var result =
-        service.applyTaskOutcome(
-            new TaskOutcomeCommand(
-                "t1", 99L, null, true, null, null, null, null, null, null, null));
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder().tenantId("t1").taskId(99L).success(true).build();
+    var result = service.applyTaskOutcome(command);
     assertThat(result).isNull();
   }
 
@@ -83,9 +82,8 @@ class DefaultTaskOutcomeServiceTest {
   void applyTaskOutcome_nullTenantId_returnsNull() {
     when(jobTaskMapper.selectById(null, 1L)).thenReturn(null);
 
-    var result =
-        service.applyTaskOutcome(
-            new TaskOutcomeCommand(null, 1L, null, true, null, null, null, null, null, null, null));
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder().taskId(1L).success(true).build();
+    var result = service.applyTaskOutcome(command);
     assertThat(result).isNull();
   }
 

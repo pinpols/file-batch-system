@@ -40,15 +40,17 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, "t1", "IMPORT", "IMPORT", TriggerType.API);
 
-    launchService.launch(
-        new LaunchRequest(
-            "t1",
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "trace-isolation",
-            Map.of()));
+    LaunchRequest isolationRequest =
+        LaunchRequest.builder()
+            .tenantId("t1")
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("trace-isolation")
+            .params(Map.of())
+            .build();
+    launchService.launch(isolationRequest);
 
     // t1 can find the job instance
     JobInstanceEntity t1Instance =
@@ -67,15 +69,17 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, "t1", "EXPORT", "EXPORT", TriggerType.MANUAL);
 
-    launchService.launch(
-        new LaunchRequest(
-            "t1",
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.MANUAL,
-            seed.requestId(),
-            "trace-outbox-isolation",
-            Map.of()));
+    LaunchRequest outboxIsolationRequest =
+        LaunchRequest.builder()
+            .tenantId("t1")
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.MANUAL)
+            .requestId(seed.requestId())
+            .traceId("trace-outbox-isolation")
+            .params(Map.of())
+            .build();
+    launchService.launch(outboxIsolationRequest);
 
     long t1Outbox = LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, "t1", "EXPORT");
     long t2Outbox = LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, "t2", "EXPORT");
@@ -181,15 +185,17 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, "t2", "IMPORT", "IMPORT", TriggerType.API);
 
-    launchService.launch(
-        new LaunchRequest(
-            "t2",
-            seed.jobCode(),
-            LocalDate.of(2026, 1, 15),
-            TriggerType.API,
-            seed.requestId(),
-            "trace-t2-launch",
-            Map.of()));
+    LaunchRequest t2Request =
+        LaunchRequest.builder()
+            .tenantId("t2")
+            .jobCode(seed.jobCode())
+            .bizDate(LocalDate.of(2026, 1, 15))
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("trace-t2-launch")
+            .params(Map.of())
+            .build();
+    launchService.launch(t2Request);
 
     long t1After = countJobInstances("t1");
     long t2After = countJobInstances("t2");

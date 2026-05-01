@@ -99,16 +99,16 @@ class ConsoleArchivePolicyControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(archivePolicyService)
-        .upsert(
-            new ArchivePolicyUpsertParam(
-                "t1",
-                "job_instance",
-                90,
-                true,
-                false,
-                1000,
-                "Archive job instances",
-                "operator-1"));
+    ArchivePolicyUpsertParam expected =
+        ArchivePolicyUpsertParam.builder()
+            .tenantId("t1")
+            .targetTable("job_instance")
+            .retentionDays(90)
+            .archiveEnabled(true)
+            .batchSize(1000)
+            .description("Archive job instances")
+            .operator("operator-1")
+            .build();
+    verify(archivePolicyService).upsert(expected);
   }
 }

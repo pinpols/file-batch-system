@@ -67,16 +67,17 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
             jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
     // 1) Launch
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                seed.jobCode(),
-                BIZ_DATE,
-                TriggerType.API,
-                seed.requestId(),
-                "trace-lifecycle-" + seed.requestId(),
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("trace-lifecycle-" + seed.requestId())
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();
 
@@ -103,19 +104,14 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
 
     // 3) Report success
-    taskExecutionService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT,
-            task.getId(),
-            null,
-            true,
-            "{\"status\":\"processed ok\"}",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null));
+    TaskOutcomeCommand successOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(task.getId())
+            .success(true)
+            .resultSummary("{\"status\":\"processed ok\"}")
+            .build();
+    taskExecutionService.applyTaskOutcome(successOutcome);
 
     // 4) Verify final task status
     JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
@@ -132,16 +128,17 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                seed.jobCode(),
-                BIZ_DATE,
-                TriggerType.API,
-                seed.requestId(),
-                "trace-fail-" + seed.requestId(),
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("trace-fail-" + seed.requestId())
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();
 
@@ -158,19 +155,14 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
 
     // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）
-    taskExecutionService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT,
-            task.getId(),
-            null,
-            false,
-            null,
-            "TEST_FAILURE",
-            "simulated error",
-            null,
-            null,
-            null,
-            null));
+    TaskOutcomeCommand failureOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(task.getId())
+            .errorCode("TEST_FAILURE")
+            .errorMessage("simulated error")
+            .build();
+    taskExecutionService.applyTaskOutcome(failureOutcome);
 
     JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
     assertThat(finishedTask.getTaskStatus()).isEqualTo(TaskStatus.FAILED.code());

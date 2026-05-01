@@ -125,16 +125,17 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         workerCode);
 
     // 1) Launch
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                jobCode,
-                BIZ_DATE,
-                TriggerType.API,
-                requestId,
-                "trace-retry-" + suffix,
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(jobCode)
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(requestId)
+            .traceId("trace-retry-" + suffix)
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
     JobInstanceEntity jobInstance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
@@ -156,19 +157,14 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     taskExecutionService.assignWorker(TENANT, task.getId(), workerCode);
 
     // 3) Report failure → retry should be scheduled
-    taskExecutionService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT,
-            task.getId(),
-            null,
-            false,
-            null,
-            "SIMULATED_ERROR",
-            "retry flow test",
-            null,
-            null,
-            null,
-            null));
+    TaskOutcomeCommand failureOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(task.getId())
+            .errorCode("SIMULATED_ERROR")
+            .errorMessage("retry flow test")
+            .build();
+    taskExecutionService.applyTaskOutcome(failureOutcome);
 
     // 验证已为该分区创建了 WAITING 状态的 retry_schedule 行
     List<RetryScheduleEntity> retries =

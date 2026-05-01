@@ -75,16 +75,17 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     String loserWorker = "worker-race-b";
     workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
 
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                seed.jobCode(),
-                BIZ_DATE,
-                TriggerType.MANUAL,
-                seed.requestId(),
-                "trace-concurrent-claim",
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.MANUAL)
+            .requestId(seed.requestId())
+            .traceId("trace-concurrent-claim")
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
     JobInstanceEntity jobInstance =
@@ -159,16 +160,17 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
     workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
 
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                seed.jobCode(),
-                BIZ_DATE,
-                TriggerType.MANUAL,
-                seed.requestId(),
-                "trace-concurrent-claim-loop-" + seed.requestId(),
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.MANUAL)
+            .requestId(seed.requestId())
+            .traceId("trace-concurrent-claim-loop-" + seed.requestId())
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
     JobInstanceEntity jobInstance =

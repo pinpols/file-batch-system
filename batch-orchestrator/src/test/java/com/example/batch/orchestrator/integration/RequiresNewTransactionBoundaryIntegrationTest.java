@@ -185,19 +185,14 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   /** 启动任务并让其进入 FAILED 状态（走完 launch → claim → report failure）。 */
   private LaunchedJob launchAndFail(String prefix) {
     LaunchedJob job = launchAndClaim(prefix);
-    taskExecutionService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT,
-            job.taskId,
-            null,
-            false,
-            null,
-            "SIMULATED_ERROR",
-            "boundary test",
-            null,
-            null,
-            null,
-            null));
+    TaskOutcomeCommand failureOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(job.taskId)
+            .errorCode("SIMULATED_ERROR")
+            .errorMessage("boundary test")
+            .build();
+    taskExecutionService.applyTaskOutcome(failureOutcome);
     return job;
   }
 
@@ -263,16 +258,17 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         workerCode,
         workerCode);
 
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                jobCode,
-                BIZ_DATE,
-                TriggerType.API,
-                requestId,
-                "trace-" + suffix,
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(jobCode)
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(requestId)
+            .traceId("trace-" + suffix)
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
 
     JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
     List<JobPartitionEntity> partitions =
@@ -344,9 +340,17 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         workerCode,
         workerCode);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT, jobCode, BIZ_DATE, TriggerType.API, requestId, "trace-" + suffix, Map.of()));
+    LaunchRequest exhaustRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(jobCode)
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(requestId)
+            .traceId("trace-" + suffix)
+            .params(Map.of())
+            .build();
+    launchService.launch(exhaustRequest);
 
     JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
     List<JobPartitionEntity> partitions =
@@ -360,19 +364,14 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
 
     // claim + fail → 进死信（因为 NONE / 0）
     taskExecutionService.assignWorker(TENANT, taskId, workerCode);
-    taskExecutionService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT,
-            taskId,
-            null,
-            false,
-            null,
-            "EXHAUST_ERROR",
-            "exhaust retries",
-            null,
-            null,
-            null,
-            null));
+    TaskOutcomeCommand exhaustOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(taskId)
+            .errorCode("EXHAUST_ERROR")
+            .errorMessage("exhaust retries")
+            .build();
+    taskExecutionService.applyTaskOutcome(exhaustOutcome);
 
     return new LaunchedJob(instance.getId(), partitionId, taskId, workerCode);
   }

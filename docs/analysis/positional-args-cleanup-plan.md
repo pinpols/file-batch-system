@@ -1,14 +1,14 @@
-# 位置参数构造臃肿治理方案 · v3（业界标准对齐版）
+# 位置参数构造臃肿治理方案 · v4（main + test 全清版）
 
 > **产出日期**：2026-05-01
-> **状态**：方案待批准
-> **版本**：v1（49 处 nulls≥3）→ v2（198 处含 argc=4-6）→ **v3（61 处，按 Effective Java / Google Style 收窄）**
+> **状态**：已闭环
+> **版本**：v1（49 处 nulls≥3）→ v2（198 处含 argc=4-6）→ v3（61 处 main，按 Effective Java / Google Style 收窄）→ **v4（main + test 全清，守护测试扩到 test 路径）**
 > **关联规约**：CLAUDE.md §「方法参数约束」（本方案同步追加"调用方约束"子节）
-> **触发**：CLAUDE.md "方法参数 ≥7 必须封装为 Param 类" 第一阶段落地后，参数臃肿从方法签名搬到了构造调用，留下 main 61 处 `f(new XxxParam(a,...,h))` 反例（argc>6）
+> **触发**：CLAUDE.md "方法参数 ≥7 必须封装为 Param 类" 第一阶段落地后，参数臃肿从方法签名搬到了构造调用，留下 main 61 处 + test 41 处 `f(new XxxParam(a,...,h))` 反例（argc>6）
 
 ## 1. 目标
 
-消除 main 中两类反例（业界标准 + Effective Java Item 1-2 对齐）：
+消除 main + test 中两类反例（业界标准 + Effective Java Item 1-2 对齐）：
 
 1. **方法签名 argc>6** —— CLAUDE.md 现有规约硬性违反，必须封装为 Param/Command record
 2. **inline `f(new Xxx(...))` Xxx 构造参数 >6** —— 加 `@Builder` + 提取引用变量 + builder 链（默认值不显式 set）
@@ -193,14 +193,16 @@ public class XxxDto {
 
 ## 6. 守护测试
 
-`PositionalArgsConventionTest`（升级自 `QueryRecordConstructionConventionTest`），扫描 `main + test` 双路径：
+`PositionalArgsConventionTest`（升级自 `QueryRecordConstructionConventionTest`），**扫描 `main + test` 双路径**（v4：test 也走同一约束）：
 
 | 规则 | 反例 | 拒绝模式 |
 |---|---|---|
-| 桶 ①/② 残留 raw 构造 | `new XxxXxx(a, b, c, d, e, f, g)` argc>6 | `\bnew\s+[A-Z]\w*\s*\(([^)]*,){6,}` |
-| 桶 ② 残留 inline builder | `mapper.x(Type.builder()....build())` | `\.\w+\s*\(\s*\w+\.builder\(\)` |
+| 桶 ①/② 残留 raw 构造 | `f(new XxxXxx(a, b, c, d, e, f, g))` 出现在方法实参位置（argc≥6） | `\bnew\s+[A-Z]\w*\s*\(...\)` + 前缀回溯判定（前为 `(` / `,` 才算反例） |
+| 桶 ② 残留 inline builder | `mapper.x(Type.builder()....build())` | `\.\w+\s*\(\s*\w+\.builder\(\)`（排除 `=` / `return` 前缀） |
 
-**白名单**：本方案治理过的所有类型（约 32 个：① 7 个新 Param + ② ~25 类）入白名单，新治理加白名单条目。**只对白名单类型生效**，避免对 JDK / Map.Entry / 声明式注册类等误报。
+**白名单**：本方案治理过的所有类型（约 50 个：Query record 17 类 + Param/Command 30+ 类 + Entry）入白名单，新治理加白名单条目。**只对白名单类型生效**，避免对 JDK / Map.Entry / 声明式注册类等误报。
+
+**赋值/return 豁免**：`Type t = new Type(...)` / `return new Type(...)` 是允许位置（不在方法实参里）。
 
 ## 7. 不做的
 
@@ -210,8 +212,6 @@ public class XxxDto {
 - ❌ 重命名任何字段
 - ❌ Spring Data JDBC entity 强制 `@Builder`（侵入持久化路径）
 - ❌ 顺手"清理"邻近无关代码
-- ❌ test 重灾区 `ImportPayload` / `JobDefinitionRecord` 等（68 处）—— 单独立项 fixture builder
-- ❌ test 代码补 fixture builder（本方案 test 路径只扫合规、不引入 fixture 工程）
 - ❌ 守护测试全仓扩（用白名单方式）
 
 ## 8. 验收

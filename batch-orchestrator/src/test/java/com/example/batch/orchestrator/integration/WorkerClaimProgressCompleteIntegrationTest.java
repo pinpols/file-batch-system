@@ -73,16 +73,17 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
             jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
     // 1) Launch
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                seed.jobCode(),
-                BIZ_DATE,
-                TriggerType.API,
-                seed.requestId(),
-                "trace-wk-" + seed.requestId(),
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("trace-wk-" + seed.requestId())
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
     JobInstanceEntity jobInstance =
@@ -122,19 +123,14 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     assertThat(stolenByRogue).isFalse();
 
     // 4) Worker reports success (progress complete)
-    taskExecutionService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT,
-            task.getId(),
-            null,
-            true,
-            "{\"records\":100,\"status\":\"processed\"}",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null));
+    TaskOutcomeCommand successOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(task.getId())
+            .success(true)
+            .resultSummary("{\"records\":100,\"status\":\"processed\"}")
+            .build();
+    taskExecutionService.applyTaskOutcome(successOutcome);
 
     // 5) Verify task SUCCESS
     JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
@@ -155,15 +151,17 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            seed.jobCode(),
-            BIZ_DATE,
-            TriggerType.API,
-            seed.requestId(),
-            "trace-wk2-" + seed.requestId(),
-            Map.of()));
+    LaunchRequest launchRequest2 =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(seed.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(seed.requestId())
+            .traceId("trace-wk2-" + seed.requestId())
+            .params(Map.of())
+            .build();
+    launchService.launch(launchRequest2);
 
     JobInstanceEntity jobInstance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());

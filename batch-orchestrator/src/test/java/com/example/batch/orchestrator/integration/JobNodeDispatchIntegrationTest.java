@@ -188,16 +188,17 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String childCode = seedChildJob(workerGroup);
     ParentSeed parent = seedParentJob(childCode);
 
-    LaunchResponse response =
-        launchService.launch(
-            new LaunchRequest(
-                TENANT,
-                parent.jobCode(),
-                BIZ_DATE,
-                TriggerType.API,
-                parent.requestId(),
-                "trace-job-node-1",
-                Map.of()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(parent.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(parent.requestId())
+            .traceId("trace-job-node-1")
+            .params(Map.of())
+            .build();
+    LaunchResponse response = launchService.launch(launchRequest);
 
     assertThat(response.instanceNo()).isNotBlank();
 
@@ -261,15 +262,17 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String childCode = seedChildJob(workerGroup);
     ParentSeed parent = seedParentJob(childCode);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            parent.jobCode(),
-            BIZ_DATE,
-            TriggerType.API,
-            parent.requestId(),
-            "trace-job-node-2",
-            Map.of()));
+    LaunchRequest launchRequest2 =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(parent.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(parent.requestId())
+            .traceId("trace-job-node-2")
+            .params(Map.of())
+            .build();
+    launchService.launch(launchRequest2);
 
     JobInstanceEntity parentInstance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, parent.dedupKey());
@@ -302,9 +305,14 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         childTaskId);
 
     // 模拟子任务成功完成
-    taskOutcomeService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT, childTaskId, null, true, "{}", null, null, null, null, null, null));
+    TaskOutcomeCommand childSuccessOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(childTaskId)
+            .success(true)
+            .resultSummary("{}")
+            .build();
+    taskOutcomeService.applyTaskOutcome(childSuccessOutcome);
 
     // 子 job instance 应为 SUCCESS
     String childStatus =
@@ -343,15 +351,17 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String childCode = seedChildJob(workerGroup);
     ParentSeed parent = seedParentJob(childCode);
 
-    launchService.launch(
-        new LaunchRequest(
-            TENANT,
-            parent.jobCode(),
-            BIZ_DATE,
-            TriggerType.API,
-            parent.requestId(),
-            "trace-job-node-3",
-            Map.of()));
+    LaunchRequest launchRequest3 =
+        LaunchRequest.builder()
+            .tenantId(TENANT)
+            .jobCode(parent.jobCode())
+            .bizDate(BIZ_DATE)
+            .triggerType(TriggerType.API)
+            .requestId(parent.requestId())
+            .traceId("trace-job-node-3")
+            .params(Map.of())
+            .build();
+    launchService.launch(launchRequest3);
 
     JobInstanceEntity parentInstance =
         jobInstanceMapper.selectByTenantAndDedupKey(TENANT, parent.dedupKey());
@@ -375,19 +385,15 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         Timestamp.from(Instant.now()),
         childTaskId);
 
-    taskOutcomeService.applyTaskOutcome(
-        new TaskOutcomeCommand(
-            TENANT,
-            childTaskId,
-            null,
-            false,
-            "{}",
-            "ERR_CHILD",
-            "child task failed",
-            null,
-            null,
-            null,
-            null));
+    TaskOutcomeCommand childFailureOutcome =
+        TaskOutcomeCommand.builder()
+            .tenantId(TENANT)
+            .taskId(childTaskId)
+            .resultSummary("{}")
+            .errorCode("ERR_CHILD")
+            .errorMessage("child task failed")
+            .build();
+    taskOutcomeService.applyTaskOutcome(childFailureOutcome);
 
     // 父任务应为 FAILED（子任务失败，无重试策略）
     String parentStatus =
