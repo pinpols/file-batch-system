@@ -62,11 +62,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
           classes = BatchTriggerApplication.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
-          classes = E2eTriggerApplication.class),
-      // E2e 提供自己的 ShedLock + DataSource 配置,排除 trigger 模块的避免双 bean 冲突
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = com.example.batch.trigger.config.ShedLockConfiguration.class)
+          classes = E2eTriggerApplication.class)
     })
 @ImportAutoConfiguration({
   BatchJsonAutoConfiguration.class,

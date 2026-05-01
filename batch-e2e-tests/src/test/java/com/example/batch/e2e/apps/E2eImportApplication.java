@@ -85,9 +85,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
           classes = com.example.batch.worker.imports.config.BusinessDataSourceConfiguration.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
-          classes = com.example.batch.worker.imports.config.ShedLockConfiguration.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
           classes = BatchWorkerImportApplication.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
