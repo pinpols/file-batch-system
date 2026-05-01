@@ -77,5 +77,26 @@ public final class PipelineRuntimeKeys {
    */
   public static final String NODE_OUTPUTS = "nodeOutputs";
 
+  /**
+   * 当前 task 的 1-based partition 序号(读自 EffectiveTaskConfig.partitionNo,源头 {@code
+   * job_partition.partition_no})。Worker step 按 {@code rowIndex % PARTITION_COUNT == PARTITION_NO -
+   * 1} 之类规则切数据时使用。{@code shard_strategy=NONE} 时为 1。
+   */
+  public static final String PARTITION_NO = "partitionNo";
+
+  /**
+   * 本次 job_instance 的 partition 总数(读自 EffectiveTaskConfig.partitionCount,源头 {@code
+   * job_instance.expected_partition_count})。Worker 切分时与 {@link #PARTITION_NO} 配合;{@code count <= 1}
+   * 时不分片。
+   */
+  public static final String PARTITION_COUNT = "partitionCount";
+
+  /**
+   * partition 业务标识(读自 EffectiveTaskConfig.partitionKey,源头 {@code job_partition.partition_key})。
+   * 默认格式 {@code jobCode:bizDate:partitionNo};业务可在 plan-build 阶段覆盖为机构号 / hash 桶 / 数据范围等,worker step
+   * 按业务字段切分时读它。
+   */
+  public static final String PARTITION_KEY = "partitionKey";
+
   private PipelineRuntimeKeys() {}
 }

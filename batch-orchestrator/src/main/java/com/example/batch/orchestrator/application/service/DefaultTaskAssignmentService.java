@@ -272,7 +272,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         instance.getHighWaterMarkIn(),
         definition == null ? null : definition.retryPolicy(),
         definition == null ? null : definition.retryMaxCount(),
-        definition == null ? null : definition.timeoutSeconds());
+        definition == null ? null : definition.timeoutSeconds(),
+        partition == null ? null : partition.getPartitionNo(),
+        instance.getExpectedPartitionCount(),
+        partition == null ? null : partition.getPartitionKey());
   }
 
   private static String resolvePriorityBand(Integer priority) {

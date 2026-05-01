@@ -6,19 +6,27 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class DefaultSchedulePlanBuilderTest {
 
   private OrchestratorConfigCacheService configCacheService;
   private WorkerRegistryRepository workerRegistryRepository;
   private DefaultSchedulePlanBuilder builder;
+  private ListAppender<ILoggingEvent> logAppender;
+  private Logger builderLogger;
 
   @BeforeEach
   void setUp() {
@@ -31,6 +39,18 @@ class DefaultSchedulePlanBuilderTest {
             new RuntimeBasedPartitionCountResolver(),
             new WorkerBasedPartitionCountResolver(workerRegistryRepository));
     builder = new DefaultSchedulePlanBuilder(configCacheService, resolvers);
+
+    builderLogger = (Logger) LoggerFactory.getLogger(DefaultSchedulePlanBuilder.class);
+    logAppender = new ListAppender<>();
+    logAppender.start();
+    builderLogger.addAppender(logAppender);
+  }
+
+  @AfterEach
+  void tearDown() {
+    if (builderLogger != null && logAppender != null) {
+      builderLogger.detachAppender(logAppender);
+    }
   }
 
   // --- null / missing job definition ---
@@ -136,6 +156,50 @@ class DefaultSchedulePlanBuilderTest {
     SchedulePlan plan = builder.build(command(params));
 
     assertThat(plan.getPartitionCount()).isLessThanOrEqualTo(256);
+  }
+
+  // --- resolver chain shadow logging (2026-05-01 hardening) ---
+
+  @Test
+  void shouldLogShadowedResolverWhenExplicitOverridesSize() {
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(jobDef("DYNAMIC", 5, null));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    // 同时给 explicit (=3) 和 size-resolvable (=10) 两组参数 → explicit 赢,size 应被 INFO 记录覆盖
+    Map<String, Object> params =
+        Map.of(
+            "partitionCount", 3,
+            "estimatedItemCount", 1000,
+            "targetItemsPerPartition", 100);
+    SchedulePlan plan = builder.build(command(params));
+
+    assertThat(plan.getPartitionCount()).isEqualTo(3);
+    assertThat(logAppender.list)
+        .anySatisfy(
+            event -> {
+              assertThat(event.getLevel()).isEqualTo(Level.INFO);
+              assertThat(event.getFormattedMessage())
+                  .contains("partition count resolver overridden")
+                  .contains("ExplicitPartitionCountResolver")
+                  .contains("SizeBasedPartitionCountResolver");
+            });
+  }
+
+  @Test
+  void shouldNotLogShadowWhenOnlyOneResolverProducesValue() {
+    when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
+        .thenReturn(jobDef("DYNAMIC", 5, null));
+    when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
+
+    Map<String, Object> params = Map.of("partitionCount", 3);
+    builder.build(command(params));
+
+    assertThat(logAppender.list)
+        .noneSatisfy(
+            event ->
+                assertThat(event.getFormattedMessage())
+                    .contains("partition count resolver overridden"));
   }
 
   // --- partition key format ---

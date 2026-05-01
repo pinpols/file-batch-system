@@ -41,8 +41,29 @@ class DefaultTaskExecutionWrapperTest {
   void shouldDelegateClaimToTaskExecutionClient() {
     EffectiveTaskConfig sample =
         new EffectiveTaskConfig(
-            "t1", 42L, 100L, 200L, "INST-1", "JOB", "IMPORT", 1, "IMPORT", "HIGH", "biz", "idem",
-            "{}", "trace", "FULL", null, null, "NONE", 0, 60);
+            "t1",
+            42L,
+            100L,
+            200L,
+            "INST-1",
+            "JOB",
+            "IMPORT",
+            1,
+            "IMPORT",
+            "HIGH",
+            "biz",
+            "idem",
+            "{}",
+            "trace",
+            "FULL",
+            null,
+            null,
+            "NONE",
+            0,
+            60,
+            1,
+            1,
+            "JOB:2026-05-01:1");
     when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.of(sample));
 
     Optional<EffectiveTaskConfig> result = wrapper.claim("t1", 42L, "w1");

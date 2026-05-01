@@ -25,31 +25,34 @@ public interface PartitionCountResolver {
 }
 ```
 
-注册多个实现，按优先级顺序形成链：
+注册多个实现，按 Spring `@Order` 顺序形成链（首个返回正值的胜出，其余被覆盖时记 INFO log）：
 
-| 顺序 | 实现类 | 解析来源 |
+| `@Order` | 实现类 | 解析来源 |
 |---|---|---|
-| 1 | `RequestParamResolver` | `request.params["partitionCount"]` |
-| 2 | `JobDefinitionResolver` | `jobDefinition.defaultPartitionCount` |
-| 3 | `GlobalDefaultResolver` | `application.yml` 全局配置 |
-| 4 | `FallbackResolver` | 硬编码 1 |
+| 1 | `ExplicitPartitionCountResolver` | `params["partitionCount"]` 等显式 key |
+| 2 | `SizeBasedPartitionCountResolver` | `估算条目数 ÷ targetItemsPerPartition`，或 `估算字节数 ÷ targetBytesPerPartition` |
+| 3 | `RuntimeBasedPartitionCountResolver` | 历史执行时长 ÷ 目标分区时长 |
+| 4 | `WorkerBasedPartitionCountResolver` | 在线 worker 数 × 并发因子（DYNAMIC=2，AUTO=1） |
 
-链上第一个返回非空的解析器生效，后续不再调用。
+兜底：所有 resolver 都返回 0 → `DefaultSchedulePlanBuilder.resolveDynamicPartitionCount` 返回 1。
 
-组装方式：
+链上第一个返回正值的解析器生效，后续 resolver 仍会被调用以便记录覆盖事件（INFO log，2026-05-01 hardening 加入）。这避免了"我配了 `targetItemsPerPartition` 但不生效"的静默调试痛点——日志格式：
+
+```
+INFO partition count resolver overridden: tenantId=t1, jobCode=JOB_X,
+     winner=ExplicitPartitionCountResolver(3),
+     shadowed=SizeBasedPartitionCountResolver(10)
+```
+
+组装方式（`@Order` 注解 + Spring `List` 注入自动排序）：
 
 ```java
-@Bean
-public List<PartitionCountResolver> partitionCountResolvers(
-        GlobalDefaultResolver globalDefaultResolver) {
-    return List.of(
-        new RequestParamResolver(),
-        new JobDefinitionResolver(),
-        globalDefaultResolver,
-        new FallbackResolver()
-    );
-}
+@Component @Order(1) public class ExplicitPartitionCountResolver implements PartitionCountResolver { ... }
+@Component @Order(2) public class SizeBasedPartitionCountResolver implements PartitionCountResolver { ... }
+// ... 同样 Order(3) / Order(4)
 ```
+
+**关键边界**：本责任链只决定 partition **数量**，不决定按什么字段切。具体切分维度（行 mod / 字节 range / 业务键 hash / 机构号）在 worker 端 step / plugin 自行解释 `PARTITION_NO` + `PARTITION_COUNT` + `PARTITION_KEY` + `input_snapshot` 决定。详见 [`core-model.md §3.6`](../core-model.md)。
 
 ## 后果
 
@@ -64,4 +67,11 @@ public List<PartitionCountResolver> partitionCountResolvers(
 
 ## 当前状态
 
-责任链已实现并在 `PartitionDispatchService` 中使用。`FallbackResolver` 保证链永远有返回值，不会出现 NPE。
+责任链已实现并在 `DefaultSchedulePlanBuilder.resolveDynamicPartitionCount` 中使用。所有 resolver 全返 0 时显式 fallback 为 1，不会出现 NPE。
+
+**2026-05-01 hardening**：
+
+- 链上覆盖事件 INFO log（见上文格式），覆盖意图可观测
+- 配套 `EffectiveTaskConfig` 加 3 字段 `partitionNo` / `partitionCount` / `partitionKey`，worker 端无需自行查 DB 即可读 partition 信息
+- `batch-worker-import` 的 `ParseStep` 默认 partition-aware（按 `lineNo % count == partitionNo - 1` 流式过滤 NDJSON staging），开关 `template_config.partition_aware_parse=false`
+- 守护测试：`DefaultSchedulePlanBuilderTest` 11 用例（含覆盖日志 + 单 resolver 不记日志）；`ParseStepPartitionSliceTest` 4 用例（直通 + 3 partition × 9 行零重叠 + 越界警告）
