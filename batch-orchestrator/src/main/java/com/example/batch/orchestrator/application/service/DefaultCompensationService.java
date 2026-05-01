@@ -12,6 +12,7 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
 import com.example.batch.orchestrator.domain.entity.CompensationCommandEntity;
@@ -32,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -99,20 +101,32 @@ public class DefaultCompensationService implements CompensationService {
   @Override
   @Transactional
   public String submit(CompensationSubmitCommand command) {
-    validate(command);
-    String commandNo = IdGenerator.newBusinessNo("cmp");
-    String normalizedType = normalizeType(command.compensationType());
-    String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
-    String traceId =
-        Texts.hasText(resolvedTraceId)
-            ? resolvedTraceId
-            : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
+    // 2026-05-01 hardening: pre-insert 阶段(validate / 冲突检查 / insert 唯一约束)失败时
+    // 也要落审计 trail。原实现只在 insert 成功后才 log,导致"提交即拒"的请求丢线索。
+    String commandNo = null;
+    String traceId = null;
+    try {
+      validate(command);
+      commandNo = IdGenerator.newBusinessNo("cmp");
+      String normalizedType = normalizeType(command.compensationType());
+      String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
+      traceId =
+          Texts.hasText(resolvedTraceId)
+              ? resolvedTraceId
+              : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
+      assertNoRunningConflict(command);
+    } catch (RuntimeException pre) {
+      appendPreInsertFailureLog(command, traceId, commandNo, pre);
+      throw pre;
+    }
     CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
-    assertNoRunningConflict(command);
     try {
       compensationCommandMapper.insert(entity);
     } catch (DataIntegrityViolationException ex) {
-      throw BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
+      BizException wrapped =
+          BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
+      appendPreInsertFailureLog(command, traceId, commandNo, wrapped);
+      throw wrapped;
     }
     try {
       Map<String, Object> result = execute(command, commandNo, traceId, entity);
@@ -264,7 +278,9 @@ public class DefaultCompensationService implements CompensationService {
     Long taskId = stepInstance.getJobTaskId();
     Guard.require(taskId != null, "step jobTaskId is required");
     retryGovernanceService.retryTask(
-        command.tenantId(), taskId, command.tenantId() + ":manual-step:" + commandNo);
+        command.tenantId(),
+        taskId,
+        OutboxEventKeyGenerator.forCompensation(command.tenantId(), commandNo, taskId));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put(KEY_ACTION, "STEP_RERUN");
     result.put("stepInstanceId", stepInstance.getId());
@@ -289,7 +305,7 @@ public class DefaultCompensationService implements CompensationService {
     retryGovernanceService.retryPartition(
         command.tenantId(),
         command.targetId(),
-        command.tenantId() + ":manual-partition:" + commandNo);
+        OutboxEventKeyGenerator.forCompensation(command.tenantId(), commandNo, command.targetId()));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put(KEY_ACTION, "PARTITION_RETRY");
     result.put("partitionId", command.targetId());
@@ -474,6 +490,50 @@ public class DefaultCompensationService implements CompensationService {
     }
     log.setExtraJson(JsonUtils.toJson(detail));
     taskExecutionService.appendLog(log);
+  }
+
+  /**
+   * 2026-05-01 hardening: pre-insert 阶段(validate / 冲突检查 / insert 唯一约束)失败的审计 trail。
+   *
+   * <p>正常 happy/fail 路径用 {@link #appendCompensationLog} 需要 entity 已 insert(commandNo +
+   * relatedJobInstanceId 已知)。本方法允许 entity 未 insert 时仍 log,关联键退化用 tenant + targetType + targetId。
+   *
+   * <p>使用 {@code Propagation.REQUIRES_NEW}:外层 {@code @Transactional} 因业务异常即将回滚,审计行必须独立提交才能留下。
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  void appendPreInsertFailureLog(
+      CompensationSubmitCommand command, String traceId, String commandNo, Exception exception) {
+    try {
+      JobExecutionLogEntity log = new JobExecutionLogEntity();
+      log.setTenantId(command == null ? null : command.tenantId());
+      log.setJobInstanceId(null); // pre-insert 无 entity → jobInstanceId 未知
+      log.setLogLevel("ERROR");
+      log.setLogType("COMPENSATION_REJECTED");
+      log.setTraceId(traceId);
+      String type = command == null ? null : command.compensationType();
+      log.setMessage(
+          "compensation submit rejected before insert: type="
+              + type
+              + ", reason="
+              + (exception == null ? null : exception.getMessage()));
+      Map<String, Object> detail = new LinkedHashMap<>();
+      detail.put("commandNo", commandNo); // 可能 null,看 validate 是否已通过
+      detail.put("compensationType", type);
+      detail.put("targetId", command == null ? null : command.targetId());
+      detail.put("targetInstanceNo", command == null ? null : command.targetInstanceNo());
+      detail.put("operatorId", command == null ? null : command.operatorId());
+      detail.put("error", exception == null ? null : exception.getMessage());
+      detail.put("errorCode", exception == null ? null : resolveErrorCode(exception));
+      log.setExtraJson(JsonUtils.toJson(detail));
+      taskExecutionService.appendLog(log);
+    } catch (RuntimeException loggingEx) {
+      // 落 trail 是 best-effort,不能让审计失败掩盖原始业务异常
+      this.log.warn(
+          "failed to write compensation pre-insert failure trail: tenant={}, type={}, error={}",
+          command == null ? null : command.tenantId(),
+          command == null ? null : command.compensationType(),
+          loggingEx.getMessage());
+    }
   }
 
   private void assertNoRunningConflict(CompensationSubmitCommand command) {

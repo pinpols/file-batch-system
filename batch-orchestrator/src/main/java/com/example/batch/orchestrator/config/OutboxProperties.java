@@ -18,8 +18,27 @@ public class OutboxProperties {
   /** 空闲退避系数：连续空闲时，每轮间隔乘以此系数，直至达到 {@link #pollIntervalMillis}。 */
   private double backoffMultiplier = 1.5;
 
+  /** 失败重试基础延迟(秒);第 N 次失败的实际延迟 = base × multiplier^(N-1),封顶 {@link #retryMaxDelaySeconds}。 */
   private long retryDelaySeconds = 60L;
+
   private int maxRetryAttempts = 5;
+
+  /**
+   * 失败重试指数退避倍数(2026-05-01 加,默认 2.0 = 翻倍退避)。
+   *
+   * <p>避免固定 60s 间隔下,同 batch 失败的多条事件每 60s 同步重试形成 thundering herd。设 1.0 即关闭退避(回到旧行为)。
+   */
+  private double retryBackoffMultiplier = 2.0;
+
+  /** 失败重试单次延迟封顶(秒,默认 600 = 10 min);防止 attempt 大时退避到天文数字。 */
+  private long retryMaxDelaySeconds = 600L;
+
+  /**
+   * 失败重试 jitter 比例(0~1,默认 0.2 = ±20%)。每次计算 nextRetryAt 时在退避值上抖动 ±jitter 比例,打散 herd 重试时间点。设 0 即关闭
+   * jitter。
+   */
+  private double retryJitterRatio = 0.2;
+
   private String producerName = "batch-orchestrator";
   private String defaultTopic = "batch.outbox.event";
 

@@ -218,6 +218,20 @@ groups:
           summary: "Outbox events stuck in PUBLISHING state"
           description: "{{ $value }} Outbox events remain in PUBLISHING beyond timeout for 5 minutes. resetStalePublishing is not running — check orchestrator poll scheduler and ShedLock state for lock name 'outbox_poll'."
 
+      # 2026-05-01 加 — outbox 事件转入 GIVE_UP 终态(5 次重试耗尽后 markGiveUp 触发)。
+      # 稳态应为 0(任何转入都意味着事件最终丢投到 Kafka,只能手工 republish);非 0 必须人工介入排查。
+      # counter rate 只要在 5min 窗口内有任何增长就触发,无忍耐窗口(5 次失败重试已经给了足够"等等看"的时间)。
+      - alert: BatchOutboxEventsGivenUp
+        expr: rate(batch_outbox_events_giveup_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox events transitioned to GIVE_UP terminal state"
+          description: "{{ $value }} outbox events/sec entered GIVE_UP in last 5min. These events are permanently failed and need ops intervention — check Kafka health, then run scripts/ops/heal-stuck-outbox.sh or POST /internal/outbox/republish."
+
       - alert: BatchDeadLetterBacklogHigh
         expr: batch_dead_letter_tasks_pending > 100
         for: 30m
