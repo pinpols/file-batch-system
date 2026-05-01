@@ -2,11 +2,13 @@ package com.example.batch.worker.core.domain;
 
 import com.example.batch.common.utils.Texts;
 import java.util.Map;
+import lombok.Builder;
 
 /**
  * Pipeline 单个步骤的静态定义，从配置层加载后在整个执行周期内只读。 包含步骤标识、实现编码、参数映射、超时与重试策略等元信息； 提供 {@link #textParam} /
  * {@link #booleanParam} 工具方法， 屏蔽 stepParams Map 的类型转换细节，供 StepHandler 安全读取配置。
  */
+@Builder
 public record PipelineStepDefinition(
     Long id,
     Long pipelineDefinitionId,

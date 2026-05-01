@@ -1,6 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import java.time.Instant;
+import lombok.Builder;
 
 /**
  * 渠道健康快照写入参数对象，用于把 {@link DispatchChannelHealthRepository} 的 {@code upsertSuccess} / {@code
@@ -18,6 +19,7 @@ import java.time.Instant;
  *   <li>{@code probeMessage} / {@code probeEvidence}：success / failure 两路都会落库；recalcBackoff 不读取。
  * </ul>
  */
+@Builder
 record DispatchHealthUpsertCommand(
     String tenantId,
     String channelCode,

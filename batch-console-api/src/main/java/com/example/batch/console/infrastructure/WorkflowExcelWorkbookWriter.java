@@ -177,16 +177,13 @@ class WorkflowExcelWorkbookWriter {
 
   private int writeNodeSheet(
       Sheet sheet, String tenantId, WorkflowDefinitionEntity definition, int startRowIndex) {
-    List<WorkflowNodeEntity> nodes =
-        workflowNodeMapper.selectByQuery(
-            new WorkflowNodeQuery(
-                tenantId,
-                definition.getId(),
-                definition.getWorkflowCode(),
-                null,
-                null,
-                null,
-                null));
+    WorkflowNodeQuery nodeQuery =
+        WorkflowNodeQuery.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(definition.getId())
+            .workflowCode(definition.getWorkflowCode())
+            .build();
+    List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(nodeQuery);
     int rowIndex = startRowIndex;
     for (WorkflowNodeEntity node : nodes) {
       Row row = sheet.createRow(rowIndex++);
@@ -212,17 +209,13 @@ class WorkflowExcelWorkbookWriter {
 
   private int writeEdgeSheet(
       Sheet sheet, String tenantId, WorkflowDefinitionEntity definition, int startRowIndex) {
-    List<WorkflowEdgeEntity> edges =
-        workflowEdgeMapper.selectByQuery(
-            new WorkflowEdgeQuery(
-                tenantId,
-                definition.getId(),
-                definition.getWorkflowCode(),
-                null,
-                null,
-                null,
-                null,
-                null));
+    WorkflowEdgeQuery edgeQuery =
+        WorkflowEdgeQuery.builder()
+            .tenantId(tenantId)
+            .workflowDefinitionId(definition.getId())
+            .workflowCode(definition.getWorkflowCode())
+            .build();
+    List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(edgeQuery);
     int rowIndex = startRowIndex;
     for (WorkflowEdgeEntity edge : edges) {
       Row row = sheet.createRow(rowIndex++);

@@ -301,16 +301,17 @@ public class DefaultCompensationService implements CompensationService {
       CompensationSubmitCommand command, String traceId, CompensationCommandEntity entity) {
     Long fileId = firstNonNull(command.relatedFileId(), command.targetId());
     Guard.require(fileId != null, "file targetId is required");
-    String result =
-        fileGovernanceService.redispatchFile(
-            new FileGovernanceCommand(
-                command.tenantId(),
-                fileId,
-                command.channelCode(),
-                command.operatorId(),
-                traceId,
-                command.reason(),
-                command.approvalId()));
+    FileGovernanceCommand redispatchCommand =
+        FileGovernanceCommand.builder()
+            .tenantId(command.tenantId())
+            .fileId(fileId)
+            .channelCode(command.channelCode())
+            .operatorId(command.operatorId())
+            .traceId(traceId)
+            .reason(command.reason())
+            .approvalId(command.approvalId())
+            .build();
+    String result = fileGovernanceService.redispatchFile(redispatchCommand);
     entity.setRelatedFileId(fileId);
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put(KEY_ACTION, "FILE_REPROCESS");
@@ -389,17 +390,17 @@ public class DefaultCompensationService implements CompensationService {
     triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
     triggerRequest.setTraceId(request.traceId());
     jobMappers.triggerRequestMapper.insert(triggerRequest);
-    return launchServiceProvider
-        .getObject()
-        .launch(
-            new LaunchRequest(
-                request.target().tenantId(),
-                request.target().jobCode(),
-                request.target().bizDate(),
-                request.target().triggerType(),
-                requestId,
-                request.traceId(),
-                request.params()));
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(request.target().tenantId())
+            .jobCode(request.target().jobCode())
+            .bizDate(request.target().bizDate())
+            .triggerType(request.target().triggerType())
+            .requestId(requestId)
+            .traceId(request.traceId())
+            .params(request.params())
+            .build();
+    return launchServiceProvider.getObject().launch(launchRequest);
   }
 
   private CompensationCommandEntity buildCommandEntity(

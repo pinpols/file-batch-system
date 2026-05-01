@@ -2,7 +2,9 @@ package com.example.batch.orchestrator.domain.command;
 
 import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.util.Map;
+import lombok.Builder;
 
+@Builder
 public record TaskOutcomeCommand(
     String tenantId,
     Long taskId,

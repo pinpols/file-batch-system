@@ -8,6 +8,7 @@ import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
@@ -31,14 +32,17 @@ public class ConsoleSelfServiceJobService {
     payload.put("bizDate", param.bizDate());
     payload.put("targetInstanceNo", param.targetInstanceNo());
     payload.put("reason", param.reason());
-    return submitApproval(
-        tenantId,
-        "RERUN",
-        "JOB_INSTANCE",
-        param.jobCode(),
-        JsonUtils.toJson(payload),
-        operator,
-        idempotencyKey);
+    SubmitApprovalParam approvalParam =
+        SubmitApprovalParam.builder()
+            .tenantId(tenantId)
+            .actionType("RERUN")
+            .targetType("JOB_INSTANCE")
+            .targetId(param.jobCode())
+            .payloadJson(JsonUtils.toJson(payload))
+            .operator(operator)
+            .idempotencyKey(idempotencyKey)
+            .build();
+    return submitApproval(approvalParam);
   }
 
   public String requestCompensation(
@@ -51,40 +55,36 @@ public class ConsoleSelfServiceJobService {
     payload.put("compensationType", param.compensationType());
     payload.put("targetInstanceNo", param.targetInstanceNo());
     payload.put("reason", param.reason());
-    return submitApproval(
-        tenantId,
-        "COMPENSATION",
-        "JOB_INSTANCE",
-        param.jobCode(),
-        JsonUtils.toJson(payload),
-        operator,
-        idempotencyKey);
+    SubmitApprovalParam approvalParam =
+        SubmitApprovalParam.builder()
+            .tenantId(tenantId)
+            .actionType("COMPENSATION")
+            .targetType("JOB_INSTANCE")
+            .targetId(param.jobCode())
+            .payloadJson(JsonUtils.toJson(payload))
+            .operator(operator)
+            .idempotencyKey(idempotencyKey)
+            .build();
+    return submitApproval(approvalParam);
   }
 
   @SuppressWarnings("unchecked")
-  private String submitApproval(
-      String tenantId,
-      String actionType,
-      String targetType,
-      String targetId,
-      String payloadJson,
-      String operator,
-      String idempotencyKey) {
+  private String submitApproval(SubmitApprovalParam param) {
     String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
     RestClient client = restClientBuilder.baseUrl(baseUrl).build();
     Map<String, Object> body = new LinkedHashMap<>();
-    body.put("tenantId", tenantId);
+    body.put("tenantId", param.tenantId());
     body.put("approvalType", "SELF_SERVICE");
-    body.put("actionType", actionType);
-    body.put("targetType", targetType);
-    body.put("targetId", targetId);
-    body.put("payloadJson", payloadJson);
-    body.put("requesterId", operator);
+    body.put("actionType", param.actionType());
+    body.put("targetType", param.targetType());
+    body.put("targetId", param.targetId());
+    body.put("payloadJson", param.payloadJson());
+    body.put("requesterId", param.operator());
     Map<String, Object> response =
         client
             .post()
             .uri("/internal/approvals/submit")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, param.idempotencyKey())
             .body(body)
             .retrieve()
             .body(Map.class);
@@ -93,6 +93,16 @@ public class ConsoleSelfServiceJobService {
     }
     return (String) response.get("approvalNo");
   }
+
+  @Builder
+  private record SubmitApprovalParam(
+      String tenantId,
+      String actionType,
+      String targetType,
+      String targetId,
+      String payloadJson,
+      String operator,
+      String idempotencyKey) {}
 
   private String resolveUrl(String url) {
     return environment.resolveRequiredPlaceholders(url);

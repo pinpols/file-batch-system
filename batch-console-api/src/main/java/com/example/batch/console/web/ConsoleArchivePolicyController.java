@@ -45,16 +45,18 @@ public class ConsoleArchivePolicyController {
       @RequestParam("tenantId") String tenantId,
       @Valid @RequestBody UpsertArchivePolicyRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    archivePolicyService.upsert(
-        new ArchivePolicyUpsertParam(
-            tenantId,
-            request.targetTable(),
-            request.retentionDays(),
-            request.archiveEnabled(),
-            request.cleanupEnabled(),
-            request.batchSize(),
-            request.description(),
-            operator));
+    ArchivePolicyUpsertParam upsertParam =
+        ArchivePolicyUpsertParam.builder()
+            .tenantId(tenantId)
+            .targetTable(request.targetTable())
+            .retentionDays(request.retentionDays())
+            .archiveEnabled(request.archiveEnabled())
+            .cleanupEnabled(request.cleanupEnabled())
+            .batchSize(request.batchSize())
+            .description(request.description())
+            .operator(operator)
+            .build();
+    archivePolicyService.upsert(upsertParam);
     return responseFactory.success(null);
   }
 

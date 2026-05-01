@@ -292,18 +292,20 @@ public class DefaultProcessStageExecutor
       if (step == null) {
         throw new IllegalStateException("missing process step bean for stage: " + stage.name());
       }
-      templates.add(
-          new PipelineStepTemplate(
-              step.stepCode(),
-              step.stepName(),
-              stage.name(),
-              order++,
-              step.implCode(),
-              Map.of(),
-              0,
-              "NONE",
-              0,
-              true));
+      PipelineStepTemplate template =
+          PipelineStepTemplate.builder()
+              .stepCode(step.stepCode())
+              .stepName(step.stepName())
+              .stageCode(stage.name())
+              .stepOrder(order++)
+              .implCode(step.implCode())
+              .stepParams(Map.of())
+              .timeoutSeconds(0)
+              .retryPolicy("NONE")
+              .retryMaxCount(0)
+              .enabled(true)
+              .build();
+      templates.add(template);
     }
     return List.copyOf(templates);
   }

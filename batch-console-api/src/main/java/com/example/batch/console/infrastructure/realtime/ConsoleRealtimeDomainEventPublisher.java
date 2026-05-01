@@ -32,14 +32,14 @@ public class ConsoleRealtimeDomainEventPublisher {
   private void publish(
       String tenantId, String stream, String eventType, Object data, boolean summaryRefresh) {
     // 这里只发布应用内事件，真正的 SSE 分发由 bridge 在事务提交后统一处理。
-    applicationEventPublisher.publishEvent(
-        new ConsoleRealtimeDomainEvent(
-            tenantId,
-            stream,
-            eventType,
-            cursorFactory.nextCursor(),
-            data,
-            summaryRefresh,
-            Instant.now()));
+    ConsoleRealtimeDomainEvent event =
+        ConsoleRealtimeDomainEvent.builder().tenantId(tenantId).stream(stream)
+            .eventType(eventType)
+            .cursor(cursorFactory.nextCursor())
+            .data(data)
+            .summaryRefresh(summaryRefresh)
+            .emittedAt(Instant.now())
+            .build();
+    applicationEventPublisher.publishEvent(event);
   }
 }

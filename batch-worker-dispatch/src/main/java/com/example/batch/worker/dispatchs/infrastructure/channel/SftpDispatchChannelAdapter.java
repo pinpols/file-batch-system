@@ -18,6 +18,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
@@ -68,6 +69,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
   }
 
+  @Builder
   private record SftpUploadContext(
       Map<String, Object> channelConfig,
       ConnectionConfig connConfig,
@@ -109,16 +111,18 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     boolean pending =
         "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
 
-    return uploadViaSftp(
-        new SftpUploadContext(
-            channelConfig,
-            connConfig,
-            remoteTarget,
-            command.fileRecord(),
-            externalRequestId,
-            receiptCode,
-            acknowledged,
-            pending));
+    SftpUploadContext uploadCtx =
+        SftpUploadContext.builder()
+            .channelConfig(channelConfig)
+            .connConfig(connConfig)
+            .remoteTarget(remoteTarget)
+            .fileRecord(command.fileRecord())
+            .externalRequestId(externalRequestId)
+            .receiptCode(receiptCode)
+            .acknowledged(acknowledged)
+            .pending(pending)
+            .build();
+    return uploadViaSftp(uploadCtx);
   }
 
   private ConnectionConfig resolveConnectionConfig(Map<String, Object> channelConfig) {

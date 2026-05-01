@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -120,6 +121,7 @@ public class ConsoleWebhookService {
     return normalized;
   }
 
+  @Builder
   public record CreateSubscriptionCommand(
       String tenantId,
       String name,
@@ -129,6 +131,7 @@ public class ConsoleWebhookService {
       boolean enabled,
       String operator) {}
 
+  @Builder
   public record UpdateSubscriptionCommand(
       String tenantId,
       Long id,

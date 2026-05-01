@@ -22,6 +22,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -154,20 +155,21 @@ public class LaunchBatchDayService {
               null,
               now,
               now));
-      appendBatchDayAuditLog(
-          new BatchDayAuditLogParam(
-              request.tenantId(),
-              request.traceId(),
-              null,
-              dayStatus,
-              calendarCode,
-              request.bizDate(),
-              reasonCode,
-              auditOperatorId,
-              auditOperatorType,
-              lateAccepted ? 1 : 0,
-              catchUpLaunch ? 1 : 0,
-              cutoffAt));
+      BatchDayAuditLogParam auditParam =
+          BatchDayAuditLogParam.builder()
+              .tenantId(request.tenantId())
+              .traceId(request.traceId())
+              .toDayStatus(dayStatus)
+              .calendarCode(calendarCode)
+              .bizDate(request.bizDate())
+              .reasonCode(reasonCode)
+              .operatorId(auditOperatorId)
+              .operatorType(auditOperatorType)
+              .lateCount(lateAccepted ? 1 : 0)
+              .catchupCount(catchUpLaunch ? 1 : 0)
+              .cutoffAt(cutoffAt)
+              .build();
+      appendBatchDayAuditLog(auditParam);
       return;
     }
     boolean lateAccepted = isLateAccepted(effectiveParams);
@@ -218,20 +220,22 @@ public class LaunchBatchDayService {
     }
     toDayStatus = updated.dayStatus();
     batchDayInstanceRepository.save(updated);
-    appendBatchDayAuditLog(
-        new BatchDayAuditLogParam(
-            request.tenantId(),
-            request.traceId(),
-            fromDayStatus,
-            toDayStatus,
-            calendarCode,
-            request.bizDate(),
-            reasonCode == null ? "BATCH_DAY_UPDATED" : reasonCode,
-            auditOperatorId,
-            auditOperatorType,
-            updated.lateCount(),
-            updated.catchupCount(),
-            cutoffAt));
+    BatchDayAuditLogParam auditParam =
+        BatchDayAuditLogParam.builder()
+            .tenantId(request.tenantId())
+            .traceId(request.traceId())
+            .fromDayStatus(fromDayStatus)
+            .toDayStatus(toDayStatus)
+            .calendarCode(calendarCode)
+            .bizDate(request.bizDate())
+            .reasonCode(reasonCode == null ? "BATCH_DAY_UPDATED" : reasonCode)
+            .operatorId(auditOperatorId)
+            .operatorType(auditOperatorType)
+            .lateCount(updated.lateCount())
+            .catchupCount(updated.catchupCount())
+            .cutoffAt(cutoffAt)
+            .build();
+    appendBatchDayAuditLog(auditParam);
   }
 
   Instant resolveBatchDayCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {
@@ -436,6 +440,7 @@ public class LaunchBatchDayService {
         routedParams);
   }
 
+  @Builder
   record BatchDayAuditLogParam(
       String tenantId,
       String traceId,

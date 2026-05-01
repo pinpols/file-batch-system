@@ -97,17 +97,18 @@ public class GenerateStep implements ExportStageStep {
       generatedFile = createGeneratedFile(context, exportPayload, fileFormatType);
 
       ExportFormatStrategy strategy = formatStrategyRegistry.resolve(fileFormatType);
-      long recordCount =
-          strategy.generate(
-              new ExportFormatContext(
-                  batch,
-                  batchId,
-                  pageSize,
-                  chunkSize,
-                  generatedFile,
-                  context,
-                  dataPlugin,
-                  dataCtx));
+      ExportFormatContext formatCtx =
+          ExportFormatContext.builder()
+              .batch(batch)
+              .batchId(batchId)
+              .pageSize(pageSize)
+              .chunkSize(chunkSize)
+              .generatedFile(generatedFile)
+              .jobContext(context)
+              .dataPlugin(dataPlugin)
+              .dataCtx(dataCtx)
+              .build();
+      long recordCount = strategy.generate(formatCtx);
 
       context.getAttributes().put("exportBatch", batch);
       context

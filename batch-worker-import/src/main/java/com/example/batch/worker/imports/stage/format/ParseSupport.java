@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
 
 /** Shared utilities used by all {@link FormatParser} implementations. */
 public class ParseSupport {
@@ -131,17 +132,14 @@ public class ParseSupport {
     return fields;
   }
 
-  public void writeParsedRecord(
-      ImportJobContext context,
-      BufferedWriter writer,
-      Map<String, ?> row,
-      boolean preserveLogicalRow,
-      long recordNo,
-      String errorCode,
-      Object rawRecord)
-      throws Exception {
-    if (row == null || row.isEmpty()) {
-      recordParseError(context, recordNo, errorCode, "parsed row is empty", rawRecord);
+  public void writeParsedRecord(ParsedRecordWriteParam param) throws Exception {
+    if (param.row() == null || param.row().isEmpty()) {
+      recordParseError(
+          param.context(),
+          param.recordNo(),
+          param.errorCode(),
+          "parsed row is empty",
+          param.rawRecord());
       return;
     }
     // 参数 preserveLogicalRow 保留是为了调用方的 API 兼容，但内部不再区分：
@@ -149,12 +147,25 @@ public class ParseSupport {
     // 被默默丢字段 → validate 阶段集体报 "customerNo is required"。
     // 统一成 Map → NDJSON 后，LoadStep 的流式路径本来就按 Map 读 NDJSON（MAP_TYPE），无行为变化；
     // 单 schema 路径由 jdbc_mapped_import 的 columnMappings 接管字段投影。
-    writeNdjsonValue(writer, row);
-    writer.newLine();
-    context
+    writeNdjsonValue(param.writer(), param.row());
+    param.writer().newLine();
+    param
+        .context()
         .getAttributes()
-        .put(KEY_PARSED_COUNT, numberValue(context.getAttributes().get(KEY_PARSED_COUNT)) + 1);
+        .put(
+            KEY_PARSED_COUNT,
+            numberValue(param.context().getAttributes().get(KEY_PARSED_COUNT)) + 1);
   }
+
+  @Builder
+  public record ParsedRecordWriteParam(
+      ImportJobContext context,
+      BufferedWriter writer,
+      Map<String, ?> row,
+      boolean preserveLogicalRow,
+      long recordNo,
+      String errorCode,
+      Object rawRecord) {}
 
   public void writeNdjsonValue(Writer writer, Object value) throws IOException {
     try (JsonGenerator generator = objectMapper.getFactory().createGenerator(writer)) {

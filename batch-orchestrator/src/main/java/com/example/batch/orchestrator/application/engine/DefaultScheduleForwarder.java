@@ -74,18 +74,16 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       maxAttempts = 3,
       backoff = @Backoff(delay = 100, multiplier = 2, maxDelay = 1000))
   public ScheduleForwarderResult advance(SchedulePlan plan) {
-    List<OutboxEventEntity> pendingEvents =
-        outboxEventMapper.selectPending(
-            new OutboxEventQuery(
-                plan == null ? null : plan.getTenantId(),
-                null,
-                null,
-                null,
-                OutboxPublishStatus.NEW.code(),
-                OutboxPublishStatus.FAILED.code(),
-                governance.outbox().getBatchSize(),
-                plan == null ? 1 : plan.getShardTotal(),
-                plan == null ? 0 : plan.getShardIndex()));
+    OutboxEventQuery pendingQuery =
+        OutboxEventQuery.builder()
+            .tenantId(plan == null ? null : plan.getTenantId())
+            .pendingStatus1(OutboxPublishStatus.NEW.code())
+            .pendingStatus2(OutboxPublishStatus.FAILED.code())
+            .batchSize(governance.outbox().getBatchSize())
+            .shardTotal(plan == null ? 1 : plan.getShardTotal())
+            .shardIndex(plan == null ? 0 : plan.getShardIndex())
+            .build();
+    List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
     // ── 阶段一：批量 markPublishing + 并行触发 Kafka 发送 ──────────────────────
     record InFlight(OutboxEventEntity event, CompletableFuture<Boolean> future) {}
     List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());

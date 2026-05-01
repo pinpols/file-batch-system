@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
@@ -78,16 +79,17 @@ public class DefaultConsoleWorkflowExcelApplicationService
   public ResponseEntity<InputStreamResource> exportWorkflowExcel(
       WorkflowDefinitionQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+    WorkflowDefinitionQuery exportQuery =
+        WorkflowDefinitionQuery.builder()
+            .tenantId(tenantId)
+            .workflowCode(request.getWorkflowCode())
+            .workflowName(request.getWorkflowName())
+            .workflowType(request.getWorkflowType())
+            .version(request.getVersion())
+            .enabled(request.getEnabled())
+            .build();
     List<WorkflowDefinitionEntity> definitions =
-        workflowDefinitionMapper.selectByQuery(
-            new WorkflowDefinitionQuery(
-                tenantId,
-                request.getWorkflowCode(),
-                request.getWorkflowName(),
-                request.getWorkflowType(),
-                request.getVersion(),
-                request.getEnabled(),
-                null));
+        workflowDefinitionMapper.selectByQuery(exportQuery);
     byte[] workbookBytes = workbookWriter.writeMaintenanceWorkbook(tenantId, definitions);
     InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
     String fileName =
@@ -213,15 +215,17 @@ public class DefaultConsoleWorkflowExcelApplicationService
       List<WorkflowEdgeRow> workflowEdges = edgesByWorkflow.getOrDefault(key, List.of());
       applyNodes(saved.getId(), workflowNodes, counters);
       applyEdges(saved.getId(), workflowEdges, counters);
-      logDefinitionChange(
-          new DefinitionChangeContext(
-              row,
-              workflowNodes.size(),
-              workflowEdges.size(),
-              request.getReason(),
-              operatorId,
-              traceId,
-              existing == null ? "CREATE" : "PUBLISH"));
+      DefinitionChangeContext changeCtx =
+          DefinitionChangeContext.builder()
+              .row(row)
+              .nodeCount(workflowNodes.size())
+              .edgeCount(workflowEdges.size())
+              .reason(request.getReason())
+              .operatorId(operatorId)
+              .traceId(traceId)
+              .action(existing == null ? "CREATE" : "PUBLISH")
+              .build();
+      logDefinitionChange(changeCtx);
     }
 
     importStore.remove(uploadToken);
@@ -336,6 +340,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
         session.edges());
   }
 
+  @Builder
   private record DefinitionChangeContext(
       WorkflowDefinitionRow row,
       int nodeCount,

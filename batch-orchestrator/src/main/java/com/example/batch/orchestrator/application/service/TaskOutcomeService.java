@@ -5,6 +5,7 @@ import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import java.time.Instant;
+import lombok.Builder;
 
 /**
  * 处理任务完成上报及工作流节点生命周期跟踪，从 {@link DefaultTaskExecutionService} 中拆分， 隔离高复杂度的结果处理逻辑（重试调度、分区/实例进度推进、DAG
@@ -18,6 +19,7 @@ public interface TaskOutcomeService {
    * @param outputJson ADR-009 Stage 1.2: worker SUCCESS 时上报的产出 JSON(已序列化字符串),写入
    *     workflow_node_run.output JSONB,供下游 workflow 节点 DSL 引用。null 表示无产出。
    */
+  @Builder
   record NodeRunOutcome(
       boolean success,
       String errorCode,
@@ -62,7 +64,13 @@ public interface TaskOutcomeService {
 
     public static NodeRunFinishCommand success(
         NodeRunKey key, Instant startedAt, Instant finishedAt) {
-      return of(key, new NodeRunOutcome(true, null, null, null, null, startedAt, finishedAt, null));
+      NodeRunOutcome outcome =
+          NodeRunOutcome.builder()
+              .success(true)
+              .startedAt(startedAt)
+              .finishedAt(finishedAt)
+              .build();
+      return of(key, outcome);
     }
 
     public String outputJson() {

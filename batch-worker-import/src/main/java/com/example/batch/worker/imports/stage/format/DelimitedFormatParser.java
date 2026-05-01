@@ -92,14 +92,17 @@ public class DelimitedFormatParser implements FormatParser {
             rowMap.put(headers.get(i), i < row.length ? row[i] : null);
           }
           support.collectSchemaFields(context, rowMap);
-          support.writeParsedRecord(
-              context,
-              writer,
-              rowMap,
-              preserveLogicalRow,
-              recordNo,
-              "IMPORT_PARSE_LINE_INVALID",
-              rowMap);
+          ParseSupport.ParsedRecordWriteParam writeParam =
+              ParseSupport.ParsedRecordWriteParam.builder()
+                  .context(context)
+                  .writer(writer)
+                  .row(rowMap)
+                  .preserveLogicalRow(preserveLogicalRow)
+                  .recordNo(recordNo)
+                  .errorCode("IMPORT_PARSE_LINE_INVALID")
+                  .rawRecord(rowMap)
+                  .build();
+          support.writeParsedRecord(writeParam);
         } catch (Exception exception) {
           support.recordParseError(
               context, recordNo, "IMPORT_PARSE_LINE_INVALID", exception.getMessage(), row);

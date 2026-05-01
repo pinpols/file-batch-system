@@ -83,16 +83,17 @@ class ConsoleWebhookServiceTest {
         .thenReturn(Optional.empty())
         .thenReturn(Optional.of(created));
 
-    WebhookSubscriptionEntity result =
-        service.createSubscription(
-            new CreateSubscriptionCommand(
-                "t1",
-                "hook-new",
-                "https://example.com/hook",
-                "JOB_SUCCESS",
-                "secret",
-                true,
-                "admin"));
+    CreateSubscriptionCommand createCmd =
+        CreateSubscriptionCommand.builder()
+            .tenantId("t1")
+            .name("hook-new")
+            .callbackUrl("https://example.com/hook")
+            .eventTypes("JOB_SUCCESS")
+            .secret("secret")
+            .enabled(true)
+            .operator("admin")
+            .build();
+    WebhookSubscriptionEntity result = service.createSubscription(createCmd);
 
     assertThat(result.getName()).isEqualTo("hook-new");
     verify(subscriptionRepository)
@@ -107,17 +108,17 @@ class ConsoleWebhookServiceTest {
     when(subscriptionRepository.findByTenantAndName("t1", "hook-dup"))
         .thenReturn(Optional.of(existing));
 
-    assertThatThrownBy(
-            () ->
-                service.createSubscription(
-                    new CreateSubscriptionCommand(
-                        "t1",
-                        "hook-dup",
-                        "https://example.com/hook",
-                        "JOB_SUCCESS",
-                        "secret",
-                        true,
-                        "admin")))
+    CreateSubscriptionCommand dupCmd =
+        CreateSubscriptionCommand.builder()
+            .tenantId("t1")
+            .name("hook-dup")
+            .callbackUrl("https://example.com/hook")
+            .eventTypes("JOB_SUCCESS")
+            .secret("secret")
+            .enabled(true)
+            .operator("admin")
+            .build();
+    assertThatThrownBy(() -> service.createSubscription(dupCmd))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("subscription_exists");
   }
@@ -137,10 +138,17 @@ class ConsoleWebhookServiceTest {
         .thenReturn(Optional.of(existing))
         .thenReturn(Optional.of(updated));
 
-    WebhookSubscriptionEntity result =
-        service.updateSubscription(
-            new UpdateSubscriptionCommand(
-                "t1", 1L, "https://new-url.com", "JOB_FAILED", "new-secret", false, "admin"));
+    UpdateSubscriptionCommand updateCmd =
+        UpdateSubscriptionCommand.builder()
+            .tenantId("t1")
+            .id(1L)
+            .callbackUrl("https://new-url.com")
+            .eventTypes("JOB_FAILED")
+            .secret("new-secret")
+            .enabled(false)
+            .operator("admin")
+            .build();
+    WebhookSubscriptionEntity result = service.updateSubscription(updateCmd);
 
     assertThat(result).isNotNull();
     verify(subscriptionRepository)
@@ -151,11 +159,17 @@ class ConsoleWebhookServiceTest {
   void shouldThrowNotFoundWhenUpdatingMissing() {
     when(subscriptionRepository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(
-            () ->
-                service.updateSubscription(
-                    new UpdateSubscriptionCommand(
-                        "t1", 99L, "https://example.com", "JOB_SUCCESS", "s", true, "admin")))
+    UpdateSubscriptionCommand missingCmd =
+        UpdateSubscriptionCommand.builder()
+            .tenantId("t1")
+            .id(99L)
+            .callbackUrl("https://example.com")
+            .eventTypes("JOB_SUCCESS")
+            .secret("s")
+            .enabled(true)
+            .operator("admin")
+            .build();
+    assertThatThrownBy(() -> service.updateSubscription(missingCmd))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("not_found");
   }
@@ -178,15 +192,17 @@ class ConsoleWebhookServiceTest {
         .thenReturn(Optional.empty())
         .thenReturn(Optional.of(created));
 
-    service.createSubscription(
-        new CreateSubscriptionCommand(
-            "t1",
-            "hook-norm",
-            "https://example.com/hook",
-            "job-success, JOB_FAILED",
-            "secret",
-            true,
-            "admin"));
+    CreateSubscriptionCommand normCmd =
+        CreateSubscriptionCommand.builder()
+            .tenantId("t1")
+            .name("hook-norm")
+            .callbackUrl("https://example.com/hook")
+            .eventTypes("job-success, JOB_FAILED")
+            .secret("secret")
+            .enabled(true)
+            .operator("admin")
+            .build();
+    service.createSubscription(normCmd);
 
     verify(subscriptionRepository)
         .insert(

@@ -115,18 +115,17 @@ public class DispatchChannelHealthService {
     Instant now = Instant.now();
     if (success) {
       // P2：成功走原子 upsert——HEALTHY + failures=0 + next_probe=now+probeInterval
-      repository.upsertSuccess(
-          new DispatchHealthUpsertCommand(
-              channel.tenantId(),
-              channel.channelCode(),
-              channel.channelType(),
-              now,
-              now.plusMillis(properties.getProbeIntervalMillis()),
-              0,
-              0L,
-              0L,
-              message,
-              evidence));
+      DispatchHealthUpsertCommand successCmd =
+          DispatchHealthUpsertCommand.builder()
+              .tenantId(channel.tenantId())
+              .channelCode(channel.channelCode())
+              .channelType(channel.channelType())
+              .now(now)
+              .nextProbeAt(now.plusMillis(properties.getProbeIntervalMillis()))
+              .probeMessage(message)
+              .probeEvidence(evidence)
+              .build();
+      repository.upsertSuccess(successCmd);
       return;
     }
     // P2：失败两步走。
@@ -135,30 +134,28 @@ public class DispatchChannelHealthService {
     // 第 2 步 recalcBackoff：按新的 failures 重算真实 next_probe_at（指数退避），
     // 该 UPDATE 作用于同一行且只读自己的 consecutive_failures 字段，无竞争。
     Instant firstFailureBackoffAt = now.plusMillis(properties.getProbeIntervalMillis());
-    repository.upsertFailureAndBump(
-        new DispatchHealthUpsertCommand(
-            channel.tenantId(),
-            channel.channelCode(),
-            channel.channelType(),
-            now,
-            firstFailureBackoffAt,
-            Math.max(1, circuitBreakerProperties.getFailureThreshold()),
-            0L,
-            0L,
-            message,
-            evidence));
-    repository.recalcBackoff(
-        new DispatchHealthUpsertCommand(
-            channel.tenantId(),
-            channel.channelCode(),
-            channel.channelType(),
-            now,
-            null,
-            0,
-            properties.getProbeIntervalMillis(),
-            properties.getMaxBackoffMillis(),
-            null,
-            null));
+    DispatchHealthUpsertCommand failureCmd =
+        DispatchHealthUpsertCommand.builder()
+            .tenantId(channel.tenantId())
+            .channelCode(channel.channelCode())
+            .channelType(channel.channelType())
+            .now(now)
+            .nextProbeAt(firstFailureBackoffAt)
+            .failureThreshold(Math.max(1, circuitBreakerProperties.getFailureThreshold()))
+            .probeMessage(message)
+            .probeEvidence(evidence)
+            .build();
+    repository.upsertFailureAndBump(failureCmd);
+    DispatchHealthUpsertCommand recalcCmd =
+        DispatchHealthUpsertCommand.builder()
+            .tenantId(channel.tenantId())
+            .channelCode(channel.channelCode())
+            .channelType(channel.channelType())
+            .now(now)
+            .probeIntervalMillis(properties.getProbeIntervalMillis())
+            .maxBackoffMillis(properties.getMaxBackoffMillis())
+            .build();
+    repository.recalcBackoff(recalcCmd);
   }
 
   public void probeConfiguredChannels() {

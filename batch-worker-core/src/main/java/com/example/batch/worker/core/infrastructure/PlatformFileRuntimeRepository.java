@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -311,35 +312,56 @@ public class PlatformFileRuntimeRepository {
       String errorKey,
       String errorArgs,
       Object outputSummary) {
-    finishStepRun(stepRunId, "FAILED", errorCode, errorMessage, errorKey, errorArgs, outputSummary);
+    FinishStepRunParam param =
+        FinishStepRunParam.builder()
+            .stepRunId(stepRunId)
+            .status("FAILED")
+            .errorCode(errorCode)
+            .errorMessage(errorMessage)
+            .errorKey(errorKey)
+            .errorArgs(errorArgs)
+            .outputSummary(outputSummary)
+            .build();
+    finishStepRun(param);
   }
 
   private void finishStepRun(
       Long stepRunId, String status, String errorCode, String errorMessage, Object outputSummary) {
-    finishStepRun(stepRunId, status, errorCode, errorMessage, null, null, outputSummary);
+    FinishStepRunParam param =
+        FinishStepRunParam.builder()
+            .stepRunId(stepRunId)
+            .status(status)
+            .errorCode(errorCode)
+            .errorMessage(errorMessage)
+            .outputSummary(outputSummary)
+            .build();
+    finishStepRun(param);
   }
 
-  private void finishStepRun(
+  private void finishStepRun(FinishStepRunParam param) {
+    if (param.stepRunId() == null) {
+      return;
+    }
+    platformFileRuntimeMapper.finishStepRun(
+        params(
+            "stepRunId", param.stepRunId(),
+            "status", param.status(),
+            "outputSummaryJson", toJson(param.outputSummary()),
+            "errorCode", param.errorCode(),
+            "errorMessage", truncate(param.errorMessage(), 1024),
+            "errorKey", param.errorKey(),
+            "errorArgs", param.errorArgs()));
+  }
+
+  @Builder
+  private record FinishStepRunParam(
       Long stepRunId,
       String status,
       String errorCode,
       String errorMessage,
       String errorKey,
       String errorArgs,
-      Object outputSummary) {
-    if (stepRunId == null) {
-      return;
-    }
-    platformFileRuntimeMapper.finishStepRun(
-        params(
-            "stepRunId", stepRunId,
-            "status", status,
-            "outputSummaryJson", toJson(outputSummary),
-            "errorCode", errorCode,
-            "errorMessage", truncate(errorMessage, 1024),
-            "errorKey", errorKey,
-            "errorArgs", errorArgs));
-  }
+      Object outputSummary) {}
 
   @Transactional
   public Long createFileRecord(FileRecordParam p) {
@@ -613,20 +635,22 @@ public class PlatformFileRuntimeRepository {
     }
     List<PipelineStepDefinition> definitions = new ArrayList<>(rows.size());
     for (Map<String, Object> row : rows) {
-      definitions.add(
-          new PipelineStepDefinition(
-              toLong(row.get(KEY_ID)),
-              toLong(row.get("pipeline_definition_id")),
-              stringValue(row.get("step_code")),
-              stringValue(row.get("step_name")),
-              stringValue(row.get("stage_code")),
-              toInteger(row.get("step_order")),
-              stringValue(row.get("impl_code")),
-              toMap(row.get("step_params")),
-              toInteger(row.get("timeout_seconds")),
-              stringValue(row.get("retry_policy")),
-              toInteger(row.get("retry_max_count")),
-              Boolean.TRUE.equals(row.get("enabled"))));
+      PipelineStepDefinition definition =
+          PipelineStepDefinition.builder()
+              .id(toLong(row.get(KEY_ID)))
+              .pipelineDefinitionId(toLong(row.get("pipeline_definition_id")))
+              .stepCode(stringValue(row.get("step_code")))
+              .stepName(stringValue(row.get("step_name")))
+              .stageCode(stringValue(row.get("stage_code")))
+              .stepOrder(toInteger(row.get("step_order")))
+              .implCode(stringValue(row.get("impl_code")))
+              .stepParams(toMap(row.get("step_params")))
+              .timeoutSeconds(toInteger(row.get("timeout_seconds")))
+              .retryPolicy(stringValue(row.get("retry_policy")))
+              .retryMaxCount(toInteger(row.get("retry_max_count")))
+              .enabled(Boolean.TRUE.equals(row.get("enabled")))
+              .build();
+      definitions.add(definition);
     }
     return Collections.unmodifiableList(definitions);
   }

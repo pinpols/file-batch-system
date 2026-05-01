@@ -136,10 +136,13 @@ class TenantConfigPackageRowProjections {
       String tenantId, List<WorkflowDefinitionEntity> defs) {
     List<Map<String, Object>> result = new ArrayList<>();
     for (WorkflowDefinitionEntity def : defs) {
-      List<WorkflowNodeEntity> nodes =
-          workflowNodeMapper.selectByQuery(
-              new WorkflowNodeQuery(
-                  tenantId, def.getId(), def.getWorkflowCode(), null, null, null, null));
+      WorkflowNodeQuery nodeQuery =
+          WorkflowNodeQuery.builder()
+              .tenantId(tenantId)
+              .workflowDefinitionId(def.getId())
+              .workflowCode(def.getWorkflowCode())
+              .build();
+      List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(nodeQuery);
       for (WorkflowNodeEntity node : nodes) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put(COL_TENANT_ID, tenantId);
@@ -168,10 +171,13 @@ class TenantConfigPackageRowProjections {
       String tenantId, List<WorkflowDefinitionEntity> defs) {
     List<Map<String, Object>> result = new ArrayList<>();
     for (WorkflowDefinitionEntity def : defs) {
-      List<WorkflowEdgeEntity> edges =
-          workflowEdgeMapper.selectByQuery(
-              new WorkflowEdgeQuery(
-                  tenantId, def.getId(), def.getWorkflowCode(), null, null, null, null, null));
+      WorkflowEdgeQuery edgeQuery =
+          WorkflowEdgeQuery.builder()
+              .tenantId(tenantId)
+              .workflowDefinitionId(def.getId())
+              .workflowCode(def.getWorkflowCode())
+              .build();
+      List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(edgeQuery);
       for (WorkflowEdgeEntity edge : edges) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put(COL_TENANT_ID, tenantId);

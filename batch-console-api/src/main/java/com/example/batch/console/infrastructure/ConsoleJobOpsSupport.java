@@ -280,6 +280,7 @@ class ConsoleJobOpsSupport {
     return null;
   }
 
+  @Builder
   record ApprovalSubmitContext(
       String approvalType,
       String actionType,

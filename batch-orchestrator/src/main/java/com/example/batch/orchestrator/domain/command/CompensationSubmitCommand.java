@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.domain.command;
 
 import java.time.LocalDate;
+import lombok.Builder;
 
+@Builder
 public record CompensationSubmitCommand(
     String tenantId,
     String compensationType,

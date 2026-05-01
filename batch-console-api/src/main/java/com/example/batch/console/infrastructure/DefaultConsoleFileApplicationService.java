@@ -18,6 +18,7 @@ import com.example.batch.console.web.request.RedispatchFileRequest;
 import com.example.batch.console.web.response.ConsoleFileOperationResponse;
 import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
 import java.util.Map;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -54,57 +55,60 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
   @Override
   public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
-    return executeFileOperation(
-        new FileExecContext(
-            request.getTenantId(),
-            request.getFileId(),
-            null,
-            request.getReason(),
-            idempotencyKey,
-            "archive",
-            null));
+    FileExecContext ctx =
+        FileExecContext.builder()
+            .tenantId(request.getTenantId())
+            .fileId(request.getFileId())
+            .reason(request.getReason())
+            .idempotencyKey(idempotencyKey)
+            .operation("archive")
+            .build();
+    return executeFileOperation(ctx);
   }
 
   @Override
   public ConsoleFileOperationResponse delete(DeleteFileRequest request, String idempotencyKey) {
-    return executeFileOperation(
-        new FileExecContext(
-            request.getTenantId(),
-            request.getFileId(),
-            null,
-            request.getReason(),
-            idempotencyKey,
-            "delete",
-            null));
+    FileExecContext ctx =
+        FileExecContext.builder()
+            .tenantId(request.getTenantId())
+            .fileId(request.getFileId())
+            .reason(request.getReason())
+            .idempotencyKey(idempotencyKey)
+            .operation("delete")
+            .build();
+    return executeFileOperation(ctx);
   }
 
   @Override
   public ConsoleFileOperationResponse redispatch(
       RedispatchFileRequest request, String idempotencyKey) {
-    return executeFileOperation(
-        new FileExecContext(
-            request.getTenantId(),
-            request.getFileId(),
-            request.getChannelCode(),
-            request.getReason(),
-            idempotencyKey,
-            "redispatch",
-            null));
+    FileExecContext ctx =
+        FileExecContext.builder()
+            .tenantId(request.getTenantId())
+            .fileId(request.getFileId())
+            .channelCode(request.getChannelCode())
+            .reason(request.getReason())
+            .idempotencyKey(idempotencyKey)
+            .operation("redispatch")
+            .build();
+    return executeFileOperation(ctx);
   }
 
   @Override
   public ConsolePresignDownloadResponse presignDownload(
       PresignDownloadFileRequest request, String idempotencyKey) {
     if (request.getApprovalId() == null || request.getApprovalId().isBlank()) {
-      return submitApproval(
-          new ApprovalSubmitContext(
-              "DOWNLOAD",
-              "DOWNLOAD",
-              "FILE",
-              String.valueOf(request.getFileId()),
-              request,
-              request.getReason(),
-              idempotencyKey));
+      ApprovalSubmitContext approvalCtx =
+          ApprovalSubmitContext.builder()
+              .approvalType("DOWNLOAD")
+              .actionType("DOWNLOAD")
+              .targetType("FILE")
+              .targetId(String.valueOf(request.getFileId()))
+              .payload(request)
+              .approvalReason(request.getReason())
+              .idempotencyKey(idempotencyKey)
+              .build();
+      return submitApproval(approvalCtx);
     }
     requireApprovedApproval(request.getTenantId(), request.getApprovalId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
@@ -185,17 +189,18 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   @Override
   public ConsoleFileOperationResponse confirmArrival(
       String tenantId, Long fileId, String idempotencyKey) {
-    return executeFileOperation(
-        new FileExecContext(
-            tenantId,
-            fileId,
-            null,
-            "tenant confirmed arrival",
-            idempotencyKey,
-            "confirm-arrival",
-            null));
+    FileExecContext ctx =
+        FileExecContext.builder()
+            .tenantId(tenantId)
+            .fileId(fileId)
+            .reason("tenant confirmed arrival")
+            .idempotencyKey(idempotencyKey)
+            .operation("confirm-arrival")
+            .build();
+    return executeFileOperation(ctx);
   }
 
+  @Builder
   private record FileExecContext(
       String tenantId,
       Long fileId,
@@ -205,6 +210,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
       String operation,
       String approvalId) {}
 
+  @Builder
   private record ApprovalSubmitContext(
       String approvalType,
       String actionType,

@@ -23,23 +23,25 @@ public class CompensationController {
 
   @PostMapping
   public CompensationResponse submit(@RequestBody CompensationRequest request) {
-    return new CompensationResponse(
-        compensationService.submit(
-            new CompensationSubmitCommand(
-                request.tenantId(),
-                request.compensationType(),
-                request.targetId(),
-                request.targetInstanceNo(),
-                request.jobCode(),
-                request.bizDate(),
-                request.batchNo(),
-                request.relatedFileId(),
-                request.channelCode(),
-                request.reason(),
-                request.operatorId(),
-                request.approvalId(),
-                request.strategy(),
-                request.traceId())));
+    CompensationSubmitCommand command =
+        CompensationSubmitCommand.builder()
+            .tenantId(request.tenantId())
+            .compensationType(request.compensationType())
+            .targetId(request.targetId())
+            .targetInstanceNo(request.targetInstanceNo())
+            .jobCode(request.jobCode())
+            .bizDate(request.bizDate())
+            .batchNo(request.batchNo())
+            .relatedFileId(request.relatedFileId())
+            .channelCode(request.channelCode())
+            .reason(request.reason())
+            .operatorId(request.operatorId())
+            .approvalId(request.approvalId())
+            .strategy(request.strategy())
+            .traceId(request.traceId())
+            .build();
+    String compensationNo = compensationService.submit(command);
+    return new CompensationResponse(compensationNo);
   }
 
   public record CompensationRequest(

@@ -95,14 +95,14 @@
 
     <update id="markFailed">
         update batch.retry_schedule
-        set retry_status = #{retryStatus},
-            last_error_code = #{lastErrorCode},
-            last_error_message = #{lastErrorMessage},
-            last_error_key = #{lastErrorKey},
-            last_error_args = #{lastErrorArgs,jdbcType=VARCHAR}::jsonb,
-            next_retry_at = #{nextRetryAt},
+        set retry_status = #{p.retryStatus},
+            last_error_code = #{p.lastErrorCode},
+            last_error_message = #{p.lastErrorMessage},
+            last_error_key = #{p.lastErrorKey},
+            last_error_args = #{p.lastErrorArgs,jdbcType=VARCHAR}::jsonb,
+            next_retry_at = #{p.nextRetryAt},
             updated_at = current_timestamp
-        where id = #{id}
+        where id = #{p.id}
     </update>
 
     <update id="resetToWaiting">

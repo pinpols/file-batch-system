@@ -39,24 +39,45 @@ class ConsoleArchivePolicyServiceTest {
     assertThat(result).hasSize(1);
   }
 
+  private static ArchivePolicyUpsertParam paramOf(String table, int batchSize) {
+    return ArchivePolicyUpsertParam.builder()
+        .tenantId("t1")
+        .targetTable(table)
+        .retentionDays(30)
+        .archiveEnabled(true)
+        .cleanupEnabled(false)
+        .batchSize(batchSize)
+        .description("desc")
+        .operator("admin")
+        .build();
+  }
+
+  private static ArchivePolicyUpsertParam paramOfRetention(String table, int retentionDays) {
+    return ArchivePolicyUpsertParam.builder()
+        .tenantId("t1")
+        .targetTable(table)
+        .retentionDays(retentionDays)
+        .archiveEnabled(true)
+        .cleanupEnabled(false)
+        .batchSize(500)
+        .description("desc")
+        .operator("admin")
+        .build();
+  }
+
   @Test
   void shouldUpsertValidTable() {
-    service.upsert(
-        new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
+    ArchivePolicyUpsertParam input = paramOf("job_instance", 500);
+    service.upsert(input);
 
-    verify(repository)
-        .upsert(
-            new ArchivePolicyUpsertParam(
-                "t1", "job_instance", 30, true, false, 500, "desc", "admin"));
+    ArchivePolicyUpsertParam expected = paramOf("job_instance", 500);
+    verify(repository).upsert(expected);
   }
 
   @Test
   void shouldRejectInvalidTable() {
-    assertThatThrownBy(
-            () ->
-                service.upsert(
-                    new ArchivePolicyUpsertParam(
-                        "t1", "unknown_table", 30, true, false, 500, "desc", "admin")))
+    ArchivePolicyUpsertParam invalid = paramOf("unknown_table", 500);
+    assertThatThrownBy(() -> service.upsert(invalid))
         .isInstanceOf(BizException.class)
         // i18n: BizException.getMessage() 返回 messageKey,改用 messageArgs 检查渲染前的 args 文本
         .satisfies(
@@ -68,11 +89,8 @@ class ConsoleArchivePolicyServiceTest {
 
   @Test
   void shouldRejectRetentionDaysLessThan1() {
-    assertThatThrownBy(
-            () ->
-                service.upsert(
-                    new ArchivePolicyUpsertParam(
-                        "t1", "job_instance", 0, true, false, 500, "desc", "admin")))
+    ArchivePolicyUpsertParam invalid = paramOfRetention("job_instance", 0);
+    assertThatThrownBy(() -> service.upsert(invalid))
         .isInstanceOf(BizException.class)
         // 此 case key 本身含 retention_days_min(无 args),检查 messageKey
         .satisfies(
@@ -81,23 +99,19 @@ class ConsoleArchivePolicyServiceTest {
 
   @Test
   void shouldNormalizeTableToLowercase() {
-    service.upsert(
-        new ArchivePolicyUpsertParam("t1", "JOB_INSTANCE", 30, true, false, 500, "desc", "admin"));
+    ArchivePolicyUpsertParam input = paramOf("JOB_INSTANCE", 500);
+    service.upsert(input);
 
-    verify(repository)
-        .upsert(
-            new ArchivePolicyUpsertParam(
-                "t1", "job_instance", 30, true, false, 500, "desc", "admin"));
+    ArchivePolicyUpsertParam expected = paramOf("job_instance", 500);
+    verify(repository).upsert(expected);
   }
 
   @Test
   void shouldEnforceBatchSizeMinimum() {
-    service.upsert(
-        new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 50, "desc", "admin"));
+    ArchivePolicyUpsertParam input = paramOf("job_instance", 50);
+    service.upsert(input);
 
-    verify(repository)
-        .upsert(
-            new ArchivePolicyUpsertParam(
-                "t1", "job_instance", 30, true, false, 100, "desc", "admin"));
+    ArchivePolicyUpsertParam expected = paramOf("job_instance", 100);
+    verify(repository).upsert(expected);
   }
 }

@@ -16,6 +16,7 @@ import com.example.batch.console.web.request.FileTemplateCreateRequest;
 import com.example.batch.console.web.request.FileTemplateUpdateRequest;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -150,16 +151,17 @@ public class DefaultConsoleFileTemplateApplicationService
             request.getPageSize(),
             request.getFetchSize(),
             request.getChunkSize()));
-    param.setSecurity(
-        securityOptions(
-            new SecurityOptionsInput(
-                request.getPreviewMaskingEnabled(),
-                request.getErrorLineMaskingEnabled(),
-                request.getLogMaskingEnabled(),
-                request.getContentEncryptionEnabled(),
-                request.getEncryptionKeyRef(),
-                request.getDownloadRequiresApproval(),
-                request.getMaskingRuleSet())));
+    SecurityOptionsInput securityInput =
+        SecurityOptionsInput.builder()
+            .previewMaskingEnabled(request.getPreviewMaskingEnabled())
+            .errorLineMaskingEnabled(request.getErrorLineMaskingEnabled())
+            .logMaskingEnabled(request.getLogMaskingEnabled())
+            .contentEncryptionEnabled(request.getContentEncryptionEnabled())
+            .encryptionKeyRef(request.getEncryptionKeyRef())
+            .downloadRequiresApproval(request.getDownloadRequiresApproval())
+            .maskingRuleSet(request.getMaskingRuleSet())
+            .build();
+    param.setSecurity(securityOptions(securityInput));
     param.setAudit(auditOptions(operator, operator));
     return param;
   }
@@ -288,30 +290,38 @@ public class DefaultConsoleFileTemplateApplicationService
             request.getChunkSize() != null
                 ? request.getChunkSize()
                 : intValue(existing.get("chunk_size"))));
-    param.setSecurity(
-        securityOptions(
-            new SecurityOptionsInput(
+    SecurityOptionsInput securityInput =
+        SecurityOptionsInput.builder()
+            .previewMaskingEnabled(
                 request.getPreviewMaskingEnabled() != null
                     ? request.getPreviewMaskingEnabled()
-                    : (Boolean) existing.get("preview_masking_enabled"),
+                    : (Boolean) existing.get("preview_masking_enabled"))
+            .errorLineMaskingEnabled(
                 request.getErrorLineMaskingEnabled() != null
                     ? request.getErrorLineMaskingEnabled()
-                    : (Boolean) existing.get("error_line_masking_enabled"),
+                    : (Boolean) existing.get("error_line_masking_enabled"))
+            .logMaskingEnabled(
                 request.getLogMaskingEnabled() != null
                     ? request.getLogMaskingEnabled()
-                    : (Boolean) existing.get("log_masking_enabled"),
+                    : (Boolean) existing.get("log_masking_enabled"))
+            .contentEncryptionEnabled(
                 request.getContentEncryptionEnabled() != null
                     ? request.getContentEncryptionEnabled()
-                    : (Boolean) existing.get("content_encryption_enabled"),
+                    : (Boolean) existing.get("content_encryption_enabled"))
+            .encryptionKeyRef(
                 request.getEncryptionKeyRef() != null
                     ? request.getEncryptionKeyRef()
-                    : (String) existing.get("encryption_key_ref"),
+                    : (String) existing.get("encryption_key_ref"))
+            .downloadRequiresApproval(
                 request.getDownloadRequiresApproval() != null
                     ? request.getDownloadRequiresApproval()
-                    : (Boolean) existing.get("download_requires_approval"),
+                    : (Boolean) existing.get("download_requires_approval"))
+            .maskingRuleSet(
                 request.getMaskingRuleSet() != null
                     ? request.getMaskingRuleSet()
-                    : (String) existing.get("masking_rule_set"))));
+                    : (String) existing.get("masking_rule_set"))
+            .build();
+    param.setSecurity(securityOptions(securityInput));
     param.setAudit(auditOptions(operator, operator));
     return param;
   }
@@ -355,6 +365,7 @@ public class DefaultConsoleFileTemplateApplicationService
     return runtime;
   }
 
+  @Builder
   private record SecurityOptionsInput(
       Boolean previewMaskingEnabled,
       Boolean errorLineMaskingEnabled,

@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -166,16 +167,18 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
         logChange(session.tenantId(), row, reason, operatorId, traceId, "PUBLISH");
       }
     }
-    logImportAudit(
-        new ImportAuditContext(
-            session.tenantId(),
-            session.fileName(),
-            reason,
-            operatorId,
-            traceId,
-            inserted,
-            updated,
-            skipInvalid ? result.invalidRows() : 0));
+    ImportAuditContext auditCtx =
+        ImportAuditContext.builder()
+            .tenantId(session.tenantId())
+            .fileName(session.fileName())
+            .reason(reason)
+            .operatorId(operatorId)
+            .traceId(traceId)
+            .inserted(inserted)
+            .updated(updated)
+            .skipped(skipInvalid ? result.invalidRows() : 0)
+            .build();
+    logImportAudit(auditCtx);
     importStore.remove(uploadToken);
     return new ExcelApplyResponse(
         uploadToken,
@@ -238,6 +241,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   }
 
   /** 批次级审计参数对象，封装 logImportAudit 的 8 个上下文字段。 */
+  @Builder
   public record ImportAuditContext(
       String tenantId,
       String fileName,

@@ -1,5 +1,8 @@
 package com.example.batch.console.repository;
 
+import lombok.Builder;
+
+@Builder
 public record ArchivePolicyUpsertParam(
     String tenantId,
     String targetTable,

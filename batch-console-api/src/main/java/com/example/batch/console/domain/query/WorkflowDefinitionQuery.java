@@ -1,7 +1,9 @@
 package com.example.batch.console.domain.query;
 
 import com.example.batch.common.model.PageRequest;
+import lombok.Builder;
 
+@Builder
 public record WorkflowDefinitionQuery(
     String tenantId,
     String workflowCode,
@@ -13,6 +15,6 @@ public record WorkflowDefinitionQuery(
 
   /** 按租户全量查询，不带过滤条件。 */
   public static WorkflowDefinitionQuery ofTenant(String tenantId, PageRequest pageRequest) {
-    return new WorkflowDefinitionQuery(tenantId, null, null, null, null, null, pageRequest);
+    return builder().tenantId(tenantId).pageRequest(pageRequest).build();
   }
 }

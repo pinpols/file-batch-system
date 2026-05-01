@@ -11,6 +11,7 @@
 | 03 | [hardening-backlog.md](./hardening-backlog.md) | 硬化 backlog（v4，2026-04-20）：剩下的 P0/P1/P2 优先级排序 | 决定下个 sprint 干什么 |
 | 04 | [project-assessment-2026-04-29.md](./project-assessment-2026-04-29.md) | 项目工程深度评估快照 v1（2026-04-29）:四维评分 + 7 轮校正历史 | 历史基线参考 |
 | 05 | [project-assessment-2026-04-30.md](./project-assessment-2026-04-30.md) | 项目工程深度评估快照 v2（2026-04-30）:24h 演进 delta + 实地 grep 复评 + P1 ops 缺口锁定 | **当前权威**,看"项目今天整体水准"一页式判断 |
+| 06 | [positional-args-cleanup-plan.md](./positional-args-cleanup-plan.md) | V6-P2-POSITIONAL-ARGS 治理方案（2026-05-01）：49 处位置参数构造臃肿全清，分 6 批 PR 落地 | 接手该治理 / review 范围与提交策略 |
 
 ## 工作循环
 

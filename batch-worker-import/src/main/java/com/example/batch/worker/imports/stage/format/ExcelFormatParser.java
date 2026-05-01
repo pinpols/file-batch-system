@@ -267,14 +267,17 @@ public class ExcelFormatParser implements FormatParser {
       try {
         Map<String, String> rowMap = buildRowMapFromCells(cells, headers, bindings);
         support.collectSchemaFields(context, rowMap);
-        support.writeParsedRecord(
-            context,
-            writer,
-            rowMap,
-            preserveLogicalRow,
-            recordNo,
-            "IMPORT_PARSE_EXCEL_INVALID",
-            rowMap);
+        ParseSupport.ParsedRecordWriteParam writeParam =
+            ParseSupport.ParsedRecordWriteParam.builder()
+                .context(context)
+                .writer(writer)
+                .row(rowMap)
+                .preserveLogicalRow(preserveLogicalRow)
+                .recordNo(recordNo)
+                .errorCode("IMPORT_PARSE_EXCEL_INVALID")
+                .rawRecord(rowMap)
+                .build();
+        support.writeParsedRecord(writeParam);
       } catch (Exception ex) {
         support.recordParseError(
             context, recordNo, "IMPORT_PARSE_EXCEL_INVALID", ex.getMessage(), cells);

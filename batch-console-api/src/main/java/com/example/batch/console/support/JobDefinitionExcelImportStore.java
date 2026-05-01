@@ -2,6 +2,7 @@ package com.example.batch.console.support;
 
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
 public interface JobDefinitionExcelImportStore {
 
@@ -14,6 +15,7 @@ public interface JobDefinitionExcelImportStore {
   record JobDefinitionExcelSession(
       String fileName, String tenantId, Instant uploadedAt, List<JobDefinitionRow> rows) {}
 
+  @Builder
   record JobDefinitionRow(
       int rowNo,
       String tenantId,

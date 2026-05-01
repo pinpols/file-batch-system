@@ -24,8 +24,12 @@ class ConsoleWebhookDomainEventListenerTest {
   void shouldDispatchEvent() {
     Instant now = Instant.now();
     ConsoleRealtimeDomainEvent event =
-        new ConsoleRealtimeDomainEvent(
-            "tenant1", "job-instance", "JOB_COMPLETED", "cursor-1", "payload", false, now);
+        ConsoleRealtimeDomainEvent.builder().tenantId("tenant1").stream("job-instance")
+            .eventType("JOB_COMPLETED")
+            .cursor("cursor-1")
+            .data("payload")
+            .emittedAt(now)
+            .build();
 
     listener.onDomainEvent(event);
 
@@ -43,8 +47,12 @@ class ConsoleWebhookDomainEventListenerTest {
   @Test
   void shouldSkipEventWithBlankTenantId() {
     ConsoleRealtimeDomainEvent event =
-        new ConsoleRealtimeDomainEvent(
-            "  ", "job-instance", "JOB_COMPLETED", "cursor-1", "payload", false, Instant.now());
+        ConsoleRealtimeDomainEvent.builder().tenantId("  ").stream("job-instance")
+            .eventType("JOB_COMPLETED")
+            .cursor("cursor-1")
+            .data("payload")
+            .emittedAt(Instant.now())
+            .build();
 
     listener.onDomainEvent(event);
 
