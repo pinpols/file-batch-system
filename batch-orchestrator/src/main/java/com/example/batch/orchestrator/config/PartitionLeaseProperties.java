@@ -37,4 +37,25 @@ public class PartitionLeaseProperties {
 
   /** orchestrator 侧 reclaim 扫描过期 lease 的节奏（毫秒）。 */
   private long reclaimIntervalMillis = 15000L;
+
+  /**
+   * 单次 reclaim 扫描的最大处理数量。0 表示不限制（保留旧行为）。 默认 500：在 ShedLock 2 分钟上限内可舒适处理（每次 reclaim 约 2~3 次 SQL，500
+   * 行 ~= 30s）。 命中上限会触发 warn，提示业务方 lease 阈值或 worker 容量异常。
+   */
+  private int reclaimBatchSize = 500;
+
+  /**
+   * 兜底 sweeper：扫描"partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态分区，强制将关联
+   * task 复位。新代码在 REQUIRES_NEW + 第二步 CAS 失败抛异常时已不再产生此态，仅清理升级前残留。 默认开启，每 5 分钟扫一次。
+   */
+  private boolean orphanSweepEnabled = true;
+
+  /** 兜底 sweeper 扫描间隔（毫秒）。 */
+  private long orphanSweepIntervalMillis = 300000L;
+
+  /** 死态分区的 grace 期（秒）：updated_at 早于 now-graceSeconds 才视为真死态，避免误伤 reset 后即将派发的瞬时窗口。 */
+  private long orphanSweepGraceSeconds = 120L;
+
+  /** 单次兜底扫描处理上限。 */
+  private int orphanSweepBatchSize = 200;
 }

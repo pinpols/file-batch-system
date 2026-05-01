@@ -121,7 +121,9 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
       }
       try {
         retryGovernanceService.reclaimTask(
-            tenantId, task.getId(), tenantId + ":drain-takeover:" + task.getId());
+            tenantId,
+            task.getId(),
+            OutboxEventKeyGenerator.forReclaim(tenantId, task.getId(), workerCode));
       } catch (RuntimeException ex) {
         log.warn("drain takeover failed for taskId={}: {}", task.getId(), ex.getMessage());
       }
@@ -130,7 +132,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
   private WorkerRegistryRecord markDecommissioned(String tenantId, String workerCode) {
     requireRegistry(tenantId, workerCode);
-    workerRegistryMapper.markDecommissioned(tenantId, workerCode, Instant.now());
+    workerRegistryMapper.markDecommissioned(tenantId, workerCode);
     return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
   }
 

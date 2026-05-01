@@ -1,6 +1,5 @@
 package com.example.batch.orchestrator.mapper;
 
-import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -9,17 +8,19 @@ public interface WorkerRegistryMapper {
   int touchHeartbeat(TouchHeartbeatParam param);
 
   int markDecommissioned(
-      @Param("tenantId") String tenantId,
-      @Param("workerCode") String workerCode,
-      @Param("heartbeatAt") Instant heartbeatAt);
+      @Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
 
   /**
-   * 把 {@code heartbeat_at &lt; cutoff} 且当前是 ONLINE / DRAINING 的 worker 批量降级为 OFFLINE。 不动
-   * DECOMMISSIONED（已由人工/运维终止的 worker 不应被心跳扫描复活）。
+   * 把 {@code heartbeat_at &lt; current_timestamp - timeoutSeconds} 且当前是 ONLINE / DRAINING 的 worker
+   * 批量降级为 OFFLINE。不动 DECOMMISSIONED（已由人工/运维终止的 worker 不应被心跳扫描复活）。
    *
+   * <p>cutoff 由 DB 直接计算，消除 orchestrator JVM / worker JVM / DB 三方时钟漂移：worker 心跳 SQL 写入 heartbeat_at
+   * = current_timestamp（DB 时钟），扫描比对也用 current_timestamp，时间基准完全统一。
+   *
+   * @param timeoutSeconds 心跳容忍秒数（含 grace period 的累加值）
    * @return 被更新的行数
    */
-  int markStaleHeartbeatsOffline(@Param("cutoff") Instant cutoff);
+  int markStaleHeartbeatsOffline(@Param("timeoutSeconds") long timeoutSeconds);
 
   /**
    * 扫描 ONLINE / DRAINING 的 worker，返回 {@code capability_tags} 不符合"字符串数组"约定的行。

@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +17,18 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+/**
+ * 单元测试：{@link WorkerHeartbeatTimeoutScheduler}。
+ *
+ * <p>v6 hardening 后 cutoff 由 mybatis xml 内 {@code current_timestamp - interval} 计算， scheduler 只负责将
+ * timeoutSeconds + graceSeconds 累加传入；测试覆盖：
+ *
+ * <ul>
+ *   <li>正常流：累加 grace 秒数 → 调用 mapper 一次
+ *   <li>draining 模式跳过
+ *   <li>自定义 timeout / grace 配置生效
+ * </ul>
+ */
 @ExtendWith(MockitoExtension.class)
 class WorkerHeartbeatTimeoutSchedulerTest {
 
@@ -31,22 +42,20 @@ class WorkerHeartbeatTimeoutSchedulerTest {
   @BeforeEach
   void setUp() {
     props.setHeartbeatTimeoutSeconds(90);
+    props.setHeartbeatGraceSeconds(30);
   }
 
   @Test
-  void computesCutoffFromNowAndTimeoutSeconds() {
+  void computesEffectiveSecondsFromTimeoutAndGrace() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(workerRegistryMapper.markStaleHeartbeatsOffline(any())).thenReturn(0);
+    when(workerRegistryMapper.markStaleHeartbeatsOffline(anyLong())).thenReturn(0);
     scheduler = new WorkerHeartbeatTimeoutScheduler(workerRegistryMapper, props, gracefulShutdown);
 
-    Instant before = Instant.now().minusSeconds(90);
     scheduler.markStaleWorkersOffline();
-    Instant after = Instant.now().minusSeconds(90);
 
-    ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
-    verify(workerRegistryMapper).markStaleHeartbeatsOffline(cutoffCaptor.capture());
-    Instant cutoff = cutoffCaptor.getValue();
-    assertThat(cutoff).isBetween(before.minusSeconds(1), after.plusSeconds(1));
+    ArgumentCaptor<Long> secondsCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(workerRegistryMapper).markStaleHeartbeatsOffline(secondsCaptor.capture());
+    assertThat(secondsCaptor.getValue()).isEqualTo(120L); // 90 + 30
   }
 
   @Test
@@ -56,22 +65,35 @@ class WorkerHeartbeatTimeoutSchedulerTest {
 
     scheduler.markStaleWorkersOffline();
 
-    verify(workerRegistryMapper, never()).markStaleHeartbeatsOffline(any());
+    verify(workerRegistryMapper, never()).markStaleHeartbeatsOffline(anyLong());
   }
 
   @Test
-  void customTimeoutSecondsIsRespected() {
+  void customTimeoutAndGraceAreRespected() {
     props.setHeartbeatTimeoutSeconds(300);
+    props.setHeartbeatGraceSeconds(60);
     when(gracefulShutdown.isDraining()).thenReturn(false);
-    when(workerRegistryMapper.markStaleHeartbeatsOffline(any())).thenReturn(2);
+    when(workerRegistryMapper.markStaleHeartbeatsOffline(anyLong())).thenReturn(2);
     scheduler = new WorkerHeartbeatTimeoutScheduler(workerRegistryMapper, props, gracefulShutdown);
 
-    Instant before = Instant.now().minusSeconds(300);
     scheduler.markStaleWorkersOffline();
-    Instant after = Instant.now().minusSeconds(300);
 
-    ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
-    verify(workerRegistryMapper).markStaleHeartbeatsOffline(cutoffCaptor.capture());
-    assertThat(cutoffCaptor.getValue()).isBetween(before.minusSeconds(1), after.plusSeconds(1));
+    ArgumentCaptor<Long> secondsCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(workerRegistryMapper).markStaleHeartbeatsOffline(secondsCaptor.capture());
+    assertThat(secondsCaptor.getValue()).isEqualTo(360L);
+  }
+
+  @Test
+  void zeroGraceFallsBackToPureTimeout() {
+    props.setHeartbeatGraceSeconds(0);
+    when(gracefulShutdown.isDraining()).thenReturn(false);
+    when(workerRegistryMapper.markStaleHeartbeatsOffline(anyLong())).thenReturn(0);
+    scheduler = new WorkerHeartbeatTimeoutScheduler(workerRegistryMapper, props, gracefulShutdown);
+
+    scheduler.markStaleWorkersOffline();
+
+    ArgumentCaptor<Long> secondsCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(workerRegistryMapper).markStaleHeartbeatsOffline(secondsCaptor.capture());
+    assertThat(secondsCaptor.getValue()).isEqualTo(90L);
   }
 }

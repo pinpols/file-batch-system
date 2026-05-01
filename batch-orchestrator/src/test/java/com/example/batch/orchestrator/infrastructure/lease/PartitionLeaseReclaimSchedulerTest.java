@@ -1,9 +1,13 @@
 package com.example.batch.orchestrator.infrastructure.lease;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -11,184 +15,177 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.PartitionStatus;
-import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
-import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
-import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** 单元测试：{@link PartitionLeaseReclaimScheduler#reclaimExpiredPartitions()} 各分支路径。 */
+/** 单元测试：{@link PartitionLeaseReclaimScheduler}. */
 class PartitionLeaseReclaimSchedulerTest {
 
   private JobPartitionMapper jobPartitionMapper;
   private JobTaskMapper jobTaskMapper;
-  private JobInstanceMapper jobInstanceMapper;
-  private TaskDispatchOutboxService taskDispatchOutboxService;
+  private PartitionReclaimUnit reclaimUnit;
   private OrchestratorGracefulShutdown gracefulShutdown;
+  private PartitionLeaseProperties props;
   private PartitionLeaseReclaimScheduler scheduler;
 
   @BeforeEach
   void setUp() {
     jobPartitionMapper = mock(JobPartitionMapper.class);
     jobTaskMapper = mock(JobTaskMapper.class);
-    jobInstanceMapper = mock(JobInstanceMapper.class);
-    taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+    reclaimUnit = mock(PartitionReclaimUnit.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
 
-    PartitionLeaseProperties props = new PartitionLeaseProperties();
+    props = new PartitionLeaseProperties();
     props.setExpireSeconds(60L);
+    props.setReclaimBatchSize(500);
+    props.setOrphanSweepEnabled(true);
+    props.setOrphanSweepBatchSize(200);
+    props.setOrphanSweepGraceSeconds(120L);
     BatchOrchestratorGovernanceProperties governance =
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.partitionLease()).thenReturn(props);
 
     scheduler =
         new PartitionLeaseReclaimScheduler(
-            jobPartitionMapper,
-            jobTaskMapper,
-            jobInstanceMapper,
-            taskDispatchOutboxService,
-            governance,
-            gracefulShutdown);
+            jobPartitionMapper, jobTaskMapper, reclaimUnit, governance, gracefulShutdown);
   }
 
   @Test
   void shouldDoNothingWhenNoExpiredPartitions() {
     when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code()))
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
         .thenReturn(List.of());
 
     scheduler.reclaimExpiredPartitions();
 
-    verify(jobTaskMapper, never()).selectByQuery(any());
+    verify(reclaimUnit, never()).reclaim(any());
   }
 
   @Test
-  void shouldResetPartitionForDispatchWhenNoRunningTaskFound() {
-    JobPartitionEntity partition = expiredPartition("t1", 1L, 10L);
+  void shouldDelegateEachExpiredPartitionToReclaimUnit() {
+    JobPartitionEntity p1 = expiredPartition("t1", 1L);
+    JobPartitionEntity p2 = expiredPartition("t1", 2L);
     when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code()))
-        .thenReturn(List.of(partition));
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of());
-
-    scheduler.reclaimExpiredPartitions();
-
-    verify(jobPartitionMapper).resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 0L);
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
-  }
-
-  @Test
-  void shouldSkipReclaimWhenJobInstanceNotFound() {
-    JobPartitionEntity partition = expiredPartition("t1", 2L, 20L);
-    JobTaskEntity task = runningTask("t1", 200L, 2L);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code()))
-        .thenReturn(List.of(partition));
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
-    when(jobInstanceMapper.selectById("t1", 20L)).thenReturn(null);
-
-    scheduler.reclaimExpiredPartitions();
-
-    verify(taskDispatchOutboxService, never())
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
-  }
-
-  @Test
-  void shouldRedispatchPartitionWhenExpiredAndJobInstanceFound() {
-    JobPartitionEntity partition = expiredPartition("t1", 3L, 30L);
-    JobTaskEntity task = runningTask("t1", 300L, 3L);
-    JobInstanceEntity jobInstance = jobInstance("t1", 30L);
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code()))
-        .thenReturn(List.of(partition));
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
-    when(jobInstanceMapper.selectById("t1", 30L)).thenReturn(jobInstance);
-    when(jobPartitionMapper.resetForDispatch("t1", 3L, PartitionStatus.READY.code(), 0L))
-        .thenReturn(1);
-    when(jobTaskMapper.resetForRetry("t1", 300L, TaskStatus.READY.code(), 0L)).thenReturn(1);
-
-    scheduler.reclaimExpiredPartitions();
-
-    verify(jobPartitionMapper).resetForDispatch("t1", 3L, PartitionStatus.READY.code(), 0L);
-    verify(jobTaskMapper).resetForRetry("t1", 300L, TaskStatus.READY.code(), 0L);
-    verify(taskDispatchOutboxService)
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), eq(RunMode.RECOVER));
-  }
-
-  @Test
-  void shouldProcessMultipleExpiredPartitions() {
-    JobPartitionEntity p1 = expiredPartition("t1", 4L, 40L);
-    JobPartitionEntity p2 = expiredPartition("t1", 5L, 40L);
-    JobTaskEntity t1 = runningTask("t1", 401L, 4L);
-    JobTaskEntity t2 = runningTask("t1", 501L, 5L);
-    JobInstanceEntity instance = jobInstance("t1", 40L);
-
-    when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code()))
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
         .thenReturn(List.of(p1, p2));
-    when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(t1)).thenReturn(List.of(t2));
-    when(jobInstanceMapper.selectById("t1", 40L)).thenReturn(instance);
-    when(jobPartitionMapper.resetForDispatch(eq("t1"), anyLong(), anyString(), eq(0L)))
-        .thenReturn(1);
-    when(jobTaskMapper.resetForRetry(eq("t1"), anyLong(), anyString(), eq(0L))).thenReturn(1);
 
     scheduler.reclaimExpiredPartitions();
 
-    verify(taskDispatchOutboxService, times(2))
-        .writeDispatchEvent(any(), any(), any(), anyString(), anyString(), eq(RunMode.RECOVER));
+    verify(reclaimUnit).reclaim(p1);
+    verify(reclaimUnit).reclaim(p2);
   }
 
   @Test
-  void shouldNotRunConcurrently() throws InterruptedException {
-    // 本用例以连续两次调用近似验证互斥：两次均应进入扫描（未模拟阻塞 select）
+  void shouldContinueProcessingWhenSinglePartitionThrowsRetryable() {
+    JobPartitionEntity p1 = expiredPartition("t1", 1L);
+    JobPartitionEntity p2 = expiredPartition("t1", 2L);
     when(jobPartitionMapper.selectExpiredLeasesGlobal(
-            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code()))
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+        .thenReturn(List.of(p1, p2));
+    doThrow(new ReclaimRetryableException("task version conflict")).when(reclaimUnit).reclaim(p1);
+    doNothing().when(reclaimUnit).reclaim(p2);
+
+    scheduler.reclaimExpiredPartitions();
+
+    verify(reclaimUnit).reclaim(p1);
+    verify(reclaimUnit).reclaim(p2);
+  }
+
+  @Test
+  void shouldContinueProcessingWhenSinglePartitionThrowsUnexpected() {
+    JobPartitionEntity p1 = expiredPartition("t1", 1L);
+    JobPartitionEntity p2 = expiredPartition("t1", 2L);
+    when(jobPartitionMapper.selectExpiredLeasesGlobal(
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 500))
+        .thenReturn(List.of(p1, p2));
+    doThrow(new RuntimeException("db down")).when(reclaimUnit).reclaim(p1);
+
+    scheduler.reclaimExpiredPartitions();
+
+    verify(reclaimUnit).reclaim(p2);
+  }
+
+  @Test
+  void shouldSkipReclaimWhenDraining() {
+    when(gracefulShutdown.isDraining()).thenReturn(true);
+
+    scheduler.reclaimExpiredPartitions();
+
+    verify(jobPartitionMapper, never()).selectExpiredLeasesGlobal(anyString(), anyString(), any());
+    verify(reclaimUnit, never()).reclaim(any());
+  }
+
+  @Test
+  void shouldRunSweeperAndDelegateOrphans() {
+    JobPartitionEntity orphan = expiredPartition("t1", 99L);
+    when(jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(
+            eq(PartitionStatus.READY.code()),
+            eq(TaskStatus.RUNNING.code()),
+            any(Instant.class),
+            anyInt()))
+        .thenReturn(List.of(orphan));
+
+    scheduler.sweepOrphanRunningTasks();
+
+    verify(reclaimUnit, atLeastOnce()).reclaim(orphan);
+  }
+
+  @Test
+  void shouldSkipSweeperWhenDisabled() {
+    props.setOrphanSweepEnabled(false);
+
+    scheduler.sweepOrphanRunningTasks();
+
+    verify(jobPartitionMapper, never())
+        .selectOrphanReadyPartitionsWithRunningTask(anyString(), anyString(), any(), anyInt());
+  }
+
+  @Test
+  void shouldPassNullBatchSizeWhenZero() {
+    props.setReclaimBatchSize(0);
+    when(jobPartitionMapper.selectExpiredLeasesGlobal(
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), null))
         .thenReturn(List.of());
 
     scheduler.reclaimExpiredPartitions();
+
+    verify(jobPartitionMapper, atLeast(1))
+        .selectExpiredLeasesGlobal(
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), null);
+  }
+
+  @Test
+  void shouldWarnWhenBatchCeilingHit() {
+    // 简单验证：返回数量 == batchSize 时仍能正常处理（warn 走日志，不可观察，但流程不应中断）。
+    props.setReclaimBatchSize(2);
+    JobPartitionEntity p1 = expiredPartition("t1", 1L);
+    JobPartitionEntity p2 = expiredPartition("t1", 2L);
+    when(jobPartitionMapper.selectExpiredLeasesGlobal(
+            PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), 2))
+        .thenReturn(List.of(p1, p2));
+
     scheduler.reclaimExpiredPartitions();
 
-    verify(jobPartitionMapper, times(2))
-        .selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
+    verify(reclaimUnit, times(2)).reclaim(any());
   }
 
   // ── 辅助方法 ───────────────────────────────────────────────────────────────
 
-  private static JobPartitionEntity expiredPartition(
-      String tenantId, Long partitionId, Long jobInstanceId) {
+  private static JobPartitionEntity expiredPartition(String tenantId, Long partitionId) {
     JobPartitionEntity p = new JobPartitionEntity();
     p.setTenantId(tenantId);
     p.setId(partitionId);
-    p.setJobInstanceId(jobInstanceId);
+    p.setJobInstanceId(partitionId * 10);
     p.setVersion(0L);
     return p;
-  }
-
-  private static JobTaskEntity runningTask(String tenantId, Long taskId, Long partitionId) {
-    JobTaskEntity t = new JobTaskEntity();
-    t.setTenantId(tenantId);
-    t.setId(taskId);
-    t.setJobPartitionId(partitionId);
-    t.setVersion(0L);
-    return t;
-  }
-
-  private static JobInstanceEntity jobInstance(String tenantId, Long instanceId) {
-    JobInstanceEntity j = new JobInstanceEntity();
-    j.setTenantId(tenantId);
-    j.setId(instanceId);
-    j.setTraceId("trace-" + instanceId);
-    j.setInstanceNo("INST-" + instanceId);
-    return j;
   }
 }

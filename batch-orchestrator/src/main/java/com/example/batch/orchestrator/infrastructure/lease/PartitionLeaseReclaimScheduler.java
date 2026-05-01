@@ -1,20 +1,13 @@
 package com.example.batch.orchestrator.infrastructure.lease;
 
 import com.example.batch.common.enums.PartitionStatus;
-import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
-import com.example.batch.common.logging.BatchMdc;
-import com.example.batch.common.logging.StructuredLogField;
-import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
-import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
@@ -22,15 +15,24 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 任务分区租约回收调度器。
  *
- * <p>默认每 15 秒扫描全局所有租约已过期的 {@code READY}/{@code RUNNING} 分区， 通过两步 CAS（先重置分区版本、再重置任务版本）将其重新置为可派发状态，
- * 并向 Outbox 写入 {@code RECOVER} 模式的派发事件，使任务重新进入执行链路。 两步 CAS 任意一步版本冲突时跳过本次回收，下轮重试，保证不重复派发。 ShedLock
- * 锁名 {@code partition_lease_reclaim}，最长持锁 2 分钟，最短持锁 10 秒； 同时使用 {@link
- * java.util.concurrent.atomic.AtomicBoolean} 防止单节点重入。
+ * <p>默认每 15 秒扫描全局 lease 已过期的 {@code READY}/{@code RUNNING} 分区，逐条委派给 {@link PartitionReclaimUnit}
+ * 在独立事务（REQUIRES_NEW）内执行两步 CAS。
+ *
+ * <ul>
+ *   <li>partition CAS（resetForDispatch）失败：另一并发流程已推进，安静跳过；
+ *   <li>task CAS（resetForRetry）失败：unit 抛 {@link ReclaimRetryableException} 触发该单元事务回滚， partition
+ *       状态恢复，下一轮 reclaim 仍能扫到该过期 lease 行重试。
+ * </ul>
+ *
+ * <p>新增兜底 sweeper（{@code orphan-sweep-enabled}，默认开启）：清理升级前残留的 "partition READY + lease_expire_at
+ * NULL + 关联 task RUNNING" 死态，避免历史半成功态永久卡死。
+ *
+ * <p>ShedLock 锁名 {@code partition_lease_reclaim} / {@code partition_orphan_sweep}， 同时使用 {@link
+ * AtomicBoolean} 防止单节点重入。
  */
 @Slf4j
 @Component
@@ -39,108 +41,100 @@ public class PartitionLeaseReclaimScheduler {
 
   private final JobPartitionMapper jobPartitionMapper;
   private final JobTaskMapper jobTaskMapper;
-  private final JobInstanceMapper jobInstanceMapper;
-  private final TaskDispatchOutboxService taskDispatchOutboxService;
+  private final PartitionReclaimUnit reclaimUnit;
   private final BatchOrchestratorGovernanceProperties governance;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final AtomicBoolean running = new AtomicBoolean(false);
+  private final AtomicBoolean reclaimRunning = new AtomicBoolean(false);
+  private final AtomicBoolean sweepRunning = new AtomicBoolean(false);
 
   @Scheduled(fixedDelayString = "${batch.partition-lease.reclaim-interval-millis:15000}")
   @SchedulerLock(name = "partition_lease_reclaim", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
-  @Transactional
   public void reclaimExpiredPartitions() {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    if (!running.compareAndSet(false, true)) {
+    if (!reclaimRunning.compareAndSet(false, true)) {
       return;
     }
     try {
+      int batchSize = governance.partitionLease().getReclaimBatchSize();
       List<JobPartitionEntity> expiredPartitions =
           jobPartitionMapper.selectExpiredLeasesGlobal(
-              PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
-      expiredPartitions.forEach(this::requeueExpiredPartition);
+              PartitionStatus.READY.code(),
+              PartitionStatus.RUNNING.code(),
+              batchSize > 0 ? batchSize : null);
+      if (batchSize > 0 && expiredPartitions.size() >= batchSize) {
+        log.warn(
+            "partition reclaim hit batch ceiling: scanned={}, batchSize={}; either lease window"
+                + " too short, worker capacity insufficient, or scheduler lagging — investigate",
+            expiredPartitions.size(),
+            batchSize);
+      }
+      for (JobPartitionEntity partition : expiredPartitions) {
+        try {
+          reclaimUnit.reclaim(partition);
+        } catch (ReclaimRetryableException retryable) {
+          log.warn(
+              "partition reclaim rolled back, will retry next cycle: {}", retryable.getMessage());
+        } catch (RuntimeException unexpected) {
+          // 单条 partition 异常不影响后续行处理：下一行继续。
+          log.error(
+              "partition reclaim unexpected error: tenantId={}, partitionId={}",
+              partition.getTenantId(),
+              partition.getId(),
+              unexpected);
+        }
+      }
     } finally {
-      running.set(false);
+      reclaimRunning.set(false);
     }
   }
 
-  private void requeueExpiredPartition(JobPartitionEntity partition) {
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(
-                partition.getTenantId(),
-                partition.getJobInstanceId(),
-                partition.getId(),
-                TaskStatus.RUNNING.code(),
-                null));
-    JobTaskEntity task = tasks.stream().findFirst().orElse(null);
-    if (task == null) {
-      // 无 RUNNING task：partition 可能在 READY 状态等待被 claim，直接重置即可，版本冲突则跳过。
-      int reset =
-          jobPartitionMapper.resetForDispatch(
+  /**
+   * 兜底 sweeper：扫描 "partition_status=READY 且 lease_expire_at IS NULL 但仍有 RUNNING task" 的死态。
+   *
+   * <p>新代码已通过 REQUIRES_NEW + 抛异常回滚消除产生路径；本 sweeper 仅清理升级前残留的历史死态， 通过对仍在 RUNNING 的 task 调 {@code
+   * resetForRetry}（不再触碰 partition）让其回到 READY，下一轮派发兜底走正常路径。
+   */
+  @Scheduled(fixedDelayString = "${batch.partition-lease.orphan-sweep-interval-millis:300000}")
+  @SchedulerLock(name = "partition_orphan_sweep", lockAtMostFor = "PT2M", lockAtLeastFor = "PT30S")
+  public void sweepOrphanRunningTasks() {
+    if (!governance.partitionLease().isOrphanSweepEnabled()) {
+      return;
+    }
+    if (gracefulShutdown.isDraining()) {
+      return;
+    }
+    if (!sweepRunning.compareAndSet(false, true)) {
+      return;
+    }
+    try {
+      Instant olderThan =
+          Instant.now().minusSeconds(governance.partitionLease().getOrphanSweepGraceSeconds());
+      int batchSize = governance.partitionLease().getOrphanSweepBatchSize();
+      List<JobPartitionEntity> orphans =
+          jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(
+              PartitionStatus.READY.code(), TaskStatus.RUNNING.code(), olderThan, batchSize);
+      if (orphans.isEmpty()) {
+        return;
+      }
+      log.warn(
+          "orphan-sweep found {} dead-state partitions (READY + RUNNING task)", orphans.size());
+      for (JobPartitionEntity partition : orphans) {
+        try {
+          reclaimUnit.reclaim(partition);
+        } catch (ReclaimRetryableException retryable) {
+          log.warn("orphan-sweep retryable: {}", retryable.getMessage());
+        } catch (RuntimeException unexpected) {
+          log.error(
+              "orphan-sweep unexpected error: tenantId={}, partitionId={}",
               partition.getTenantId(),
               partition.getId(),
-              PartitionStatus.READY.code(),
-              partition.getVersion());
-      if (reset <= 0) {
-        log.debug(
-            "reclaim skipped (no-task path), partition already updated: partitionId={}",
-            partition.getId());
+              unexpected);
+        }
       }
-      return;
+    } finally {
+      sweepRunning.set(false);
     }
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
-    if (jobInstance == null) {
-      return;
-    }
-    BatchMdc.withTenantAndTrace(
-        jobInstance.getTenantId(),
-        jobInstance.getTraceId(),
-        () -> {
-          BatchMdc.put(
-              StructuredLogField.JOB_INSTANCE_ID,
-              jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
-          try {
-            // 两步 CAS 必须都成功才写 outbox，否则说明 worker 仍在执行（version 已变），跳过本次 reclaim。
-            if (jobPartitionMapper.resetForDispatch(
-                    partition.getTenantId(),
-                    partition.getId(),
-                    PartitionStatus.READY.code(),
-                    partition.getVersion())
-                <= 0) {
-              log.warn(
-                  "reclaim skipped, partition version conflict: partitionId={}", partition.getId());
-              return;
-            }
-            if (jobTaskMapper.resetForRetry(
-                    partition.getTenantId(),
-                    task.getId(),
-                    TaskStatus.READY.code(),
-                    task.getVersion())
-                <= 0) {
-              log.warn("reclaim skipped, task version conflict: taskId={}", task.getId());
-              // partition 已被 resetForDispatch 重置为 READY；task 版本冲突说明状态仍有效，
-              // 不写 outbox 以避免重复派发，下次 reclaim 周期重试。
-              return;
-            }
-            taskDispatchOutboxService.writeDispatchEvent(
-                jobInstance,
-                task,
-                partition,
-                jobInstance.getTraceId(),
-                partition.getTenantId() + ":reclaim:" + partition.getId(),
-                RunMode.RECOVER);
-            log.warn(
-                "expired partition reclaimed and re-dispatched: tenantId={},"
-                    + " partitionId={}, leaseWindowSeconds={}",
-                partition.getTenantId(),
-                partition.getId(),
-                governance.partitionLease().getExpireSeconds());
-          } finally {
-            BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-          }
-        });
   }
 }
