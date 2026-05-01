@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.WorkflowNodeType;
@@ -247,6 +249,104 @@ class DefaultWorkflowDagServiceTest {
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P3")).thenReturn(null);
 
     assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isFalse();
+  }
+
+  // ── cascadeSkipDownstream ─────────────────────────────────────────────────
+
+  @Test
+  void cascadeSkipShouldReturnEmptyOnNullInputs() {
+    assertThat(dagService.cascadeSkipDownstream(null, 1L, "X")).isEmpty();
+    assertThat(dagService.cascadeSkipDownstream(10L, null, "X")).isEmpty();
+    assertThat(dagService.cascadeSkipDownstream(10L, 1L, " ")).isEmpty();
+  }
+
+  @Test
+  void cascadeSkipShouldWriteSkippedRowForUnreachableSuccessEdgeDownstream() {
+    // FAIL_NODE --SUCCESS--> NEXT (NEXT 仅此一条入边，FAIL_NODE 已 FAILED → NEXT 永远无法触发)
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "NEXT", "SUCCESS", null);
+    WorkflowEdgeEntity incoming = edge("FAIL_NODE", "NEXT", "SUCCESS", null);
+    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+    when(edgeMapper.selectIncomingEdges(1L, "NEXT")).thenReturn(List.of(incoming));
+    when(edgeMapper.selectOutgoingEdges(1L, "NEXT")).thenReturn(List.of());
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
+        .thenReturn(nodeRun("FAIL_NODE", "FAILED"));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "NEXT")).thenReturn(null);
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NEXT"))
+        .thenReturn(node("NEXT", WorkflowNodeType.TASK.code()));
+
+    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+    assertThat(skipped).containsExactly("NEXT");
+    verify(nodeRunMapper).insert(any());
+  }
+
+  @Test
+  void cascadeSkipShouldNotSkipWhenJoinNodeStillHasLiveSuccessUpstream() {
+    // FAIL_NODE --SUCCESS--> JOIN
+    // OK_NODE  --SUCCESS--> JOIN  (OK_NODE 还 RUNNING，JOIN 不应被预先 skip)
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "JOIN", "SUCCESS", null);
+    WorkflowEdgeEntity inFromFail = edge("FAIL_NODE", "JOIN", "SUCCESS", null);
+    WorkflowEdgeEntity inFromOk = edge("OK_NODE", "JOIN", "SUCCESS", null);
+    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+    when(edgeMapper.selectIncomingEdges(1L, "JOIN")).thenReturn(List.of(inFromFail, inFromOk));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
+        .thenReturn(nodeRun("FAIL_NODE", "FAILED"));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "OK_NODE"))
+        .thenReturn(nodeRun("OK_NODE", "RUNNING"));
+
+    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+    assertThat(skipped).isEmpty();
+    verify(nodeRunMapper, never()).insert(any());
+  }
+
+  @Test
+  void cascadeSkipShouldNotSkipWhenFailureEdgeMatches() {
+    // FAIL_NODE --FAILURE--> CATCH (FAILURE 边匹配 FAILED 上游，CATCH 仍可正常派发)
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "CATCH", "FAILURE", null);
+    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+
+    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+    assertThat(skipped).isEmpty();
+    verify(nodeRunMapper, never()).insert(any());
+  }
+
+  @Test
+  void cascadeSkipShouldRecurseThroughChain() {
+    // FAIL_NODE --SUCCESS--> A --SUCCESS--> B (两条 SUCCESS 边，FAIL_NODE FAILED → A、B 都 skip)
+    WorkflowEdgeEntity failToA = edge("FAIL_NODE", "A", "SUCCESS", null);
+    WorkflowEdgeEntity aToB = edge("A", "B", "SUCCESS", null);
+    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(failToA));
+    when(edgeMapper.selectOutgoingEdges(1L, "A")).thenReturn(List.of(aToB));
+    when(edgeMapper.selectOutgoingEdges(1L, "B")).thenReturn(List.of());
+    when(edgeMapper.selectIncomingEdges(1L, "A")).thenReturn(List.of(failToA));
+    when(edgeMapper.selectIncomingEdges(1L, "B")).thenReturn(List.of(aToB));
+
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
+        .thenReturn(nodeRun("FAIL_NODE", "FAILED"));
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "A"))
+        .thenReturn(null) // canNeverFire 时 A 还没 node_run
+        .thenReturn(nodeRun("A", "SKIPPED")); // 级联到 B 时 A 已被插为 SKIPPED
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "B")).thenReturn(null);
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
+        .thenReturn(node("DUMMY", WorkflowNodeType.TASK.code()));
+
+    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+    assertThat(skipped).containsExactly("A", "B");
+  }
+
+  @Test
+  void cascadeSkipShouldNotTouchEndNode() {
+    // FAIL_NODE --SUCCESS--> END (END 节点不写 SKIPPED 行，由调度路径处理)
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "END", "SUCCESS", null);
+    when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
+
+    List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
+
+    assertThat(skipped).isEmpty();
+    verify(nodeRunMapper, never()).insert(any());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

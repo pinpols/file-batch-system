@@ -11,6 +11,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -25,6 +26,7 @@ import com.example.batch.orchestrator.mapper.MarkPartitionStatusParam;
 import com.example.batch.orchestrator.mapper.UpdateInstanceProgressParam;
 import com.example.batch.orchestrator.mapper.UpdateNodeRunStatusParam;
 import com.example.batch.orchestrator.mapper.UpdateStepProgressParam;
+import com.example.batch.orchestrator.mapper.UpdateWorkflowRunStatusParam;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -67,12 +69,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
+  /**
+   * workflow_run.updateStatus 期望前态白名单：仅 CREATED / RUNNING 才允许 outcome 推动状态机； cancel/terminate 已把
+   * run 切到 TERMINATED 后再来 outcome 应当被守护拦掉。
+   */
+  private static final List<String> WORKFLOW_RUN_LIVE_STATUSES =
+      List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code());
+
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
   private final RetryGovernanceService retryGovernanceService;
   private final StateMachine<Object> stateMachine;
   private final WorkflowDagService workflowDagService;
   private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;
+  private final WorkflowTerminalOutboxService workflowTerminalOutboxService;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
@@ -83,6 +93,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       StateMachine<Object> stateMachine,
       WorkflowDagService workflowDagService,
       ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
+      WorkflowTerminalOutboxService workflowTerminalOutboxService,
       MeterRegistry meterRegistry) {
     this.jobMappers = jobMappers;
     this.workflowMappers = workflowMappers;
@@ -90,6 +101,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     this.stateMachine = stateMachine;
     this.workflowDagService = workflowDagService;
     this.workflowNodeDispatchServiceProvider = workflowNodeDispatchServiceProvider;
+    this.workflowTerminalOutboxService = workflowTerminalOutboxService;
     this.casMissCounter =
         Counter.builder("batch.orchestrator.cas.miss")
             .description("CAS miss count during optimistic locking updates")
@@ -430,12 +442,29 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (workflowRun != null) {
       String workflowEvent = resolveWorkflowEvent(failedCount, allPartitionsFinished, dagContinues);
       String workflowStatus = stateMachine.transition(workflowRun, workflowEvent).toState();
-      workflowMappers.workflowRunMapper.updateStatus(
-          command.tenantId(),
-          workflowRun.getId(),
-          workflowStatus,
-          resolveWorkflowCurrentNode(activeNodes, workflowStatus, currentNodeCode),
-          jobFullyComplete ? finishedAt : null);
+      Instant workflowFinishedAt = jobFullyComplete ? finishedAt : null;
+      // C-2.3: SQL 守护期望前态 {CREATED, RUNNING}，避免与运维 cancel/terminate 抢占造成 TERMINATED 覆写
+      int updated =
+          workflowMappers.workflowRunMapper.updateStatus(
+              UpdateWorkflowRunStatusParam.builder()
+                  .tenantId(command.tenantId())
+                  .id(workflowRun.getId())
+                  .runStatus(workflowStatus)
+                  .currentNodeCode(
+                      resolveWorkflowCurrentNode(activeNodes, workflowStatus, currentNodeCode))
+                  .finishedAt(workflowFinishedAt)
+                  .expectedStatuses(WORKFLOW_RUN_LIVE_STATUSES)
+                  .build());
+      if (updated <= 0) {
+        log.warn(
+            "workflow_run {} already in terminal state when outcome arrived; skip transition to"
+                + " {} (likely cancel/terminate raced ahead)",
+            workflowRun.getId(),
+            workflowStatus);
+      } else if (WorkflowTerminalOutboxService.isTerminal(workflowStatus)) {
+        workflowTerminalOutboxService.writeTerminalEvent(
+            workflowRun, workflowStatus, workflowFinishedAt);
+      }
     }
   }
 
@@ -511,6 +540,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       if (isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
         ctx.activeNodes().add(nextNode.nodeCode());
       }
+    }
+    // 当前节点 FAILED 时级联将永远无法触发的 SUCCESS-edge 下游写为 SKIPPED；防止 ALL-mode join 因
+    // 缺失上游 node_run 行陷入永久死锁（terminalCount/matchedCount 永远到不了 size）。
+    if (ctx.nodeProgress().failedCount() > 0) {
+      workflowDagService.cascadeSkipDownstream(
+          ctx.workflowRun().getId(),
+          ctx.workflowRun().getWorkflowDefinitionId(),
+          ctx.currentNodeCode());
     }
   }
 
@@ -616,6 +653,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     Set<String> activeNodes =
         workflowRun == null ? Set.of() : parseActiveNodes(workflowRun.getCurrentNodeCode());
+    // 多活动节点同时缺 workflowNodeCode 即数据错乱：fallback 到 iterator.first 会把错误节点结掉，必须拒绝。
+    if (workflowRun != null && activeNodes.size() > 1) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.workflow.task_payload_missing_node_code",
+          String.valueOf(task == null ? null : task.getId()));
+    }
     if (!activeNodes.isEmpty()) {
       return activeNodes.iterator().next();
     }
