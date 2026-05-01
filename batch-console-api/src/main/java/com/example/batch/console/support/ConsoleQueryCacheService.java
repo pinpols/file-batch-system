@@ -3,9 +3,13 @@ package com.example.batch.console.support;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleQueryCacheService {
 
   private static final String PREFIX = "console:cache:";
+
+  /** SCAN 单次返回上限 + DEL 单批次上限：避免一次 DEL 大列表阻塞 Redis 主线程。 */
+  private static final int SCAN_BATCH_SIZE = 500;
 
   /** Meta 枚举（纯静态数据）。 */
   public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
@@ -87,16 +94,38 @@ public class ConsoleQueryCacheService {
     return result;
   }
 
-  /** 按前缀清除缓存（配置变更时调用）。 */
+  /**
+   * 按前缀清除缓存（配置变更时调用）。
+   *
+   * <p>使用 Redis SCAN（非 KEYS）增量扫描 + 分批 DEL，避免 KEYS 命令 O(N) 阻塞主线程。
+   */
   public void evictByPrefix(String keyPrefix) {
-    try {
-      var keys = redisTemplate.keys(PREFIX + keyPrefix + "*");
-      if (keys != null && !keys.isEmpty()) {
-        redisTemplate.delete(keys);
-        log.debug("evicted {} cache keys with prefix: {}", keys.size(), keyPrefix);
+    if (!Texts.hasText(keyPrefix)) {
+      return;
+    }
+    String pattern = PREFIX + keyPrefix + "*";
+    long deleted = 0L;
+    ScanOptions options = ScanOptions.scanOptions().match(pattern).count(SCAN_BATCH_SIZE).build();
+    try (Cursor<String> cursor = redisTemplate.scan(options)) {
+      List<String> batch = new ArrayList<>(SCAN_BATCH_SIZE);
+      while (cursor.hasNext()) {
+        batch.add(cursor.next());
+        if (batch.size() >= SCAN_BATCH_SIZE) {
+          Long n = redisTemplate.delete(batch);
+          deleted += n == null ? 0L : n;
+          batch.clear();
+        }
+      }
+      if (!batch.isEmpty()) {
+        Long n = redisTemplate.delete(batch);
+        deleted += n == null ? 0L : n;
       }
     } catch (Exception e) {
       log.debug("cache evict failed: prefix={}", keyPrefix, e);
+      return;
+    }
+    if (deleted > 0) {
+      log.debug("evicted {} cache keys with prefix: {}", deleted, keyPrefix);
     }
   }
 
