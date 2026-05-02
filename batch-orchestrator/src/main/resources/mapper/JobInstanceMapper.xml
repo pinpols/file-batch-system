@@ -273,7 +273,7 @@
         where instance_status in ('READY', 'RUNNING')
     </select>
 
-    <select id="selectBatchDayMetrics" resultType="com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics">
+    <select id="selectBatchDayMetrics" resultType="com.example.batch.orchestrator.domain.entity.BatchDayInstanceMetrics">
         select
             count(1) as total_count,
             coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING') then 1 else 0 end), 0) as active_count,
