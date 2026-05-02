@@ -30,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /** 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。 */
 @SuppressWarnings("unchecked")
@@ -69,6 +70,7 @@ class DefaultCompensationServiceTest {
             launchServiceProvider,
             taskExecutionService);
     Mockito.when(launchServiceProvider.getObject()).thenReturn(launchService);
+    ReflectionTestUtils.setField(service, "self", service);
   }
 
   // ── validate() ────────────────────────────────────────────────────────────

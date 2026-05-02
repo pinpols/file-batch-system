@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for DefaultConsoleTenantConfigInitApplicationService.
@@ -70,23 +71,25 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
   @BeforeEach
   void setUp() {
-    service =
-        new DefaultConsoleTenantConfigInitApplicationService(
-            new TenantConfigInitApplyHandlers(
-                jobDefinitionMapper,
-                workflowDefinitionMapper,
-                workflowNodeMapper,
-                workflowEdgeMapper,
-                pipelineDefinitionMapper,
-                pipelineStepDefinitionMapper,
-                fileChannelConfigMapper,
-                fileTemplateConfigMapper,
-                resourceQueueMapper,
-                batchWindowMapper,
-                businessCalendarMapper,
-                calendarHolidayMapper,
-                tenantQuotaPolicyMapper,
-                alertRoutingConfigMapper));
+    TenantConfigInitApplyHandlers handlers =
+        new TenantConfigInitApplyHandlers(
+            jobDefinitionMapper,
+            workflowDefinitionMapper,
+            workflowNodeMapper,
+            workflowEdgeMapper,
+            pipelineDefinitionMapper,
+            pipelineStepDefinitionMapper,
+            fileChannelConfigMapper,
+            fileTemplateConfigMapper,
+            resourceQueueMapper,
+            batchWindowMapper,
+            businessCalendarMapper,
+            calendarHolidayMapper,
+            tenantQuotaPolicyMapper,
+            alertRoutingConfigMapper);
+    ReflectionTestUtils.setField(handlers, "self", handlers);
+    service = new DefaultConsoleTenantConfigInitApplicationService(handlers);
+    ReflectionTestUtils.setField(service, "self", service);
   }
 
   // ------------------------------------------------------------------ job definitions

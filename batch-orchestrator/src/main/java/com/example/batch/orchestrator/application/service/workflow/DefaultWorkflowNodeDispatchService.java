@@ -31,6 +31,8 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,6 +70,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   // P2-4 god-class-decomposition: JOB 节点子作业拉起全套(virtual partition/task + 写 trigger_request +
   // 构造 child LaunchRequest + WORKFLOW_INTERNAL_PAYLOAD_KEYS) 抽到 collaborator
   private final ChildJobLaunchSupport childJobLaunchSupport;
+
+  @Lazy @Autowired private DefaultWorkflowNodeDispatchService self;
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
@@ -253,7 +257,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         continue;
       }
       dispatchedCount +=
-          dispatchNode(jobInstance, workflowRun, nextNode, sourcePayload, jobInstance.getTraceId());
+          self.dispatchNode(
+              jobInstance, workflowRun, nextNode, sourcePayload, jobInstance.getTraceId());
     }
     return dispatchedCount;
   }

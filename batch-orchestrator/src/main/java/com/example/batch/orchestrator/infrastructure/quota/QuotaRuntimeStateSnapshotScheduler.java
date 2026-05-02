@@ -14,7 +14,9 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -44,6 +46,8 @@ public class QuotaRuntimeStateSnapshotScheduler {
   private final ResourceQueueMapper resourceQueueMapper;
   private final QuotaProperties quotaProperties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+
+  @Lazy @Autowired private QuotaRuntimeStateSnapshotScheduler self;
 
   @Scheduled(fixedDelayString = "${batch.quota.snapshot.interval-millis:300000}")
   @SchedulerLock(name = "quota_runtime_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
@@ -79,14 +83,14 @@ public class QuotaRuntimeStateSnapshotScheduler {
     for (TenantQuotaPolicyEntity p :
         tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
       written +=
-          writeIfActive(
+          self.writeIfActive(
               tenantId,
               "TENANT_JOBS",
               tenantId,
               p.quotaResetPolicy(),
               p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit()));
       written +=
-          writeIfActive(
+          self.writeIfActive(
               tenantId,
               "TENANT_PARTITIONS",
               tenantId,
@@ -95,10 +99,12 @@ public class QuotaRuntimeStateSnapshotScheduler {
     }
     for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
-      written += writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
+      written +=
+          self.writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
       // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
       written +=
-          writeIfActive(tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
+          self.writeIfActive(
+              tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
     }
     return written;
   }

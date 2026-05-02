@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +44,8 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
   private final TenantConfigInitApplyHandlers applyHandlers;
 
+  @Lazy @Autowired private DefaultConsoleTenantConfigInitApplicationService self;
+
   @Override
   public TenantConfigBatchInitResponse batchInit(
       TenantConfigBatchInitRequest request, String operator, String batchOperationId) {
@@ -52,7 +56,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
     for (String tenantId : request.getTargetTenantIds()) {
       try {
-        TenantInitResult result = initForTenant(tenantId, request, operator, dryRun);
+        TenantInitResult result = self.initForTenant(tenantId, request, operator, dryRun);
         results.add(result);
         if (result.success()) {
           successCount++;
