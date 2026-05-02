@@ -20,7 +20,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableKafka
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
-@MapperScan({"com.example.batch.worker.core.mapper", "com.example.batch.worker.dispatchs.mapper"})
+@MapperScan({
+  "com.example.batch.worker.core.mapper",
+  "com.example.batch.worker.dispatchs.mapper",
+  "com.example.batch.common.mapper"
+})
 /** 分发 Worker 应用程序入口。 */
 public class BatchWorkerDispatchApplication {
 

@@ -2,7 +2,7 @@ package com.example.batch.common.config;
 
 import com.example.batch.common.health.BatchStartupSelfCheck;
 import com.example.batch.common.health.BatchStartupSelfCheckProperties;
-import javax.sql.DataSource;
+import com.example.batch.common.mapper.InformationSchemaMapper;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -21,9 +21,9 @@ public class BatchStartupSelfCheckAutoConfiguration {
 
   @Bean
   public BatchStartupSelfCheck batchStartupSelfCheck(
-      DataSource dataSource,
+      InformationSchemaMapper informationSchemaMapper,
       BatchStartupSelfCheckProperties properties,
       ObjectProvider<Flyway> flyway) {
-    return new BatchStartupSelfCheck(dataSource, properties, flyway);
+    return new BatchStartupSelfCheck(informationSchemaMapper, properties, flyway);
   }
 }

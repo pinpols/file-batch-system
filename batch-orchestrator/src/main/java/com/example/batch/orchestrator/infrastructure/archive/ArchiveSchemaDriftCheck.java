@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.archive;
 
+import com.example.batch.common.mapper.InformationSchemaMapper;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -8,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
@@ -48,7 +48,7 @@ public class ArchiveSchemaDriftCheck {
           "job_execution_log",
           "compensation_command");
 
-  private final JdbcTemplate jdbcTemplate;
+  private final InformationSchemaMapper informationSchemaMapper;
 
   @EventListener(ApplicationReadyEvent.class)
   public void checkOnStartup() {
@@ -91,12 +91,6 @@ public class ArchiveSchemaDriftCheck {
 
   /** Public 让 IT 测试直接调验证查询行为;运行期由 {@link #checkOnStartup()} 内部使用。 */
   public Set<String> columnsOf(String schema, String table) {
-    return new HashSet<>(
-        jdbcTemplate.queryForList(
-            "SELECT column_name FROM information_schema.columns "
-                + "WHERE table_schema = ? AND table_name = ?",
-            String.class,
-            schema,
-            table));
+    return new HashSet<>(informationSchemaMapper.listColumns(schema, table));
   }
 }

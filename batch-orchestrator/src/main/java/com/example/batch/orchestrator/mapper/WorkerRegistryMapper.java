@@ -62,6 +62,12 @@ public interface WorkerRegistryMapper {
       @Param("status") String status);
 
   /**
+   * 启动审计：统计已进入 DRAINING 但 drain_deadline_at 已过期、仍未被 WorkerDrainTimeoutScheduler 接管的 worker 数。 非 0
+   * 说明上轮调度漏跑或异常。
+   */
+  long countDrainingPastDeadline();
+
+  /**
    * Worker 首次注册：插入新行。{@code ON CONFLICT (tenant_id, worker_code) DO NOTHING}：并发同一 workerCode 多次
    * register 只第一行成功，调用方下一次 selectByTenantAndWorkerCode 自然读到已有行。
    *

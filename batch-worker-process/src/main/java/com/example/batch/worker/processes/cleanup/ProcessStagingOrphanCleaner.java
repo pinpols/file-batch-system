@@ -1,20 +1,17 @@
 package com.example.batch.worker.processes.cleanup;
 
+import com.example.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Optional;
-import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -51,15 +48,15 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public class ProcessStagingOrphanCleaner {
 
-  private final NamedParameterJdbcTemplate jdbc;
+  private final ProcessStagingMapper processStagingMapper;
   private final ProcessStagingCleanupProperties properties;
   private final Counter cleanedCounter;
 
   public ProcessStagingOrphanCleaner(
-      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
+      ProcessStagingMapper processStagingMapper,
       ProcessStagingCleanupProperties properties,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this.jdbc = new NamedParameterJdbcTemplate(processBusinessDataSource);
+    this.processStagingMapper = processStagingMapper;
     this.properties = properties;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     this.cleanedCounter =
@@ -96,20 +93,7 @@ public class ProcessStagingOrphanCleaner {
   public int cleanOnce() {
     int retentionHours = Math.max(1, properties.getRetentionHours());
     int batchSize = Math.max(100, properties.getBatchSize());
-    MapSqlParameterSource params = new MapSqlParameterSource();
-    params.addValue("retentionHours", retentionHours);
-    params.addValue("batchSize", batchSize);
-    String sql =
-        """
-        DELETE FROM batch.process_staging
-        WHERE ctid IN (
-          SELECT ctid FROM batch.process_staging
-          WHERE staged_at < now() - make_interval(hours => :retentionHours)
-          ORDER BY staged_at
-          LIMIT :batchSize
-        )
-        """;
-    int deleted = jdbc.update(sql, params);
+    int deleted = processStagingMapper.deleteOrphansOlderThan(retentionHours, batchSize);
     if (deleted > 0) {
       log.info(
           "process staging orphan cleanup: deleted={}, retentionHours={}, batchSize={}",
@@ -126,12 +110,7 @@ public class ProcessStagingOrphanCleaner {
   /** Gauge 回调:返回当前 staging 最老行的秒龄;表空时返 0。SQL 异常时返 -1 让运维察觉。 */
   double oldestAgeSecondsForGauge() {
     try {
-      Optional<Instant> oldest =
-          Optional.ofNullable(
-              jdbc.queryForObject(
-                  "SELECT min(staged_at) FROM batch.process_staging",
-                  new MapSqlParameterSource(),
-                  Instant.class));
+      Optional<Instant> oldest = Optional.ofNullable(processStagingMapper.selectMinStagedAt());
       return oldest
           .map(at -> Math.max(0d, (Instant.now().toEpochMilli() - at.toEpochMilli()) / 1000d))
           .orElse(0d);

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.common.mapper.InformationSchemaMapper">
+
+    <select id="countSchema" resultType="int">
+        SELECT count(*) FROM information_schema.schemata
+         WHERE schema_name = #{schemaName}
+    </select>
+
+    <select id="countTable" resultType="int">
+        SELECT count(*) FROM information_schema.tables
+         WHERE table_schema = #{schemaName}
+           AND table_name = #{tableName}
+    </select>
+
+    <select id="countColumn" resultType="int">
+        SELECT count(*) FROM information_schema.columns
+         WHERE table_schema = #{schemaName}
+           AND table_name = #{tableName}
+           AND column_name = #{columnName}
+    </select>
+
+    <select id="listColumns" resultType="java.lang.String">
+        SELECT column_name FROM information_schema.columns
+         WHERE table_schema = #{schemaName}
+           AND table_name = #{tableName}
+    </select>
+
+</mapper>

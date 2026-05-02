@@ -269,4 +269,11 @@
           and worker_group = #{workerGroup}
           and partition_status in (#{readyStatus}, #{runningStatus}, #{retryingStatus})
     </select>
+
+    <!-- 启动审计：lease_expire_at 已过期未回收（跨租户） -->
+    <select id="countLeaseExpired" resultType="long">
+        select count(1) from batch.job_partition
+         where lease_expire_at is not null
+           and lease_expire_at &lt; current_timestamp
+    </select>
 </mapper>

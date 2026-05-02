@@ -118,6 +118,14 @@
            and status = #{status}
     </select>
 
+    <!-- 启动审计：DRAINING 状态且 drain_deadline_at 已过期未回收（跨租户） -->
+    <select id="countDrainingPastDeadline" resultType="long">
+        select count(1) from batch.worker_registry
+         where status = 'DRAINING'
+           and drain_deadline_at is not null
+           and drain_deadline_at &lt; current_timestamp
+    </select>
+
     <insert id="insert"
             parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         insert into batch.worker_registry (

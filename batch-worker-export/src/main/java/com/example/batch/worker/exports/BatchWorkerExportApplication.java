@@ -24,7 +24,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @MapperScan(
-    basePackages = "com.example.batch.worker.core.mapper",
+    basePackages = {"com.example.batch.worker.core.mapper", "com.example.batch.common.mapper"},
     sqlSessionFactoryRef = "exportPlatformSqlSessionFactory")
 /** 批量导出 Worker 服务启动类。 */
 public class BatchWorkerExportApplication {
