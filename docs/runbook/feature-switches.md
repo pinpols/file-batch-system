@@ -22,7 +22,7 @@
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | ~~trigger~~ | **已移除**（2026-04-25 清理 Phase 2 半成品） | — | — | — |
 | `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟢 低 | `BATCH_QUOTA_RUNTIME_STORE` |
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
-| `batch.trigger.async-launch.enabled` | trigger + orchestrator | **true**（2026-04-30 起改默认开） | **true** | 🟡 中 | `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED`（**两边模块必须一致**） |
+| ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。
 
@@ -199,45 +199,11 @@ docker exec batch-redis redis-cli --scan --pattern "batch:quota:*" | head
 
 ---
 
-### 3.7 `batch.trigger.async-launch.enabled`（ADR-010）
+### 3.7 ~~`batch.trigger.async-launch.enabled`~~（ADR-010，已移除）
 
-**作用**：trigger → orchestrator 调度链路从同步 HTTP 桥（`HttpOrchestratorTriggerAdapter` 已 `@Deprecated forRemoval=true`）切换到 outbox + Kafka 异步路径。开启后 trigger fire 在同事务内写 `trigger_request` + `trigger_outbox_event`（V80 表），`TriggerOutboxRelay`（@Scheduled，ShedLock 互斥）周期发到 Kafka topic `batch.trigger.launch.v1`，orchestrator 端 `TriggerLaunchConsumer` 消费后调 `LaunchApplicationService.launch`；trigger 不再阻塞 Quartz worker thread。
-
-**默认**：`true`（2026-04-30 起切换为默认开）。**两边模块（trigger + orchestrator）必须一致**——单边激活会导致消息堆积或 listener 空跑。**如需回退到原同步 HTTP 路径**：显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` + 重启 trigger + orchestrator。
-
-**配套依赖**：
-- V80 migration 必须 apply 到目标环境（`SELECT 1 FROM batch.trigger_outbox_event LIMIT 1` 不报错）
-- Kafka topic `batch.trigger.launch.v1` 已创建（分区数 ≥ tenant 数，replication-factor=3）
-- orchestrator consumer group `orchestrator-trigger-launch` offset 在最新位置（避免重复消费历史消息）
-- trigger pom 已加 `spring-kafka` 依赖
-
-**风险**：🟡 中
-- 切换后**延迟增加约 200ms**（同步 HTTP < 50ms vs outbox 轮询间隔默认 200ms，可调到 50ms）
-- **double-publish 风险**：Kafka send 成功但 status 未及时更新到 PUBLISHED → 进程崩溃 → 重启后 relay 再发同一条；orchestrator 端 `uk_job_instance_tenant_dedup` 兜底，不会真正双跑
-- **回滚不回收已落库 outbox**：开关切回 `false` 后 trigger 立即走 HTTP，但已落库 outbox 由 relay 继续投递（不阻塞）
-
-**Fail-mode**：🟡 中
-- Kafka broker 短暂不可达 → relay 退避（指数退避 max 60s）+ 自动重试，不影响 trigger fire
-- 反序列化失败（payload 损坏）→ relay 标 GIVE_UP + 告警，不阻塞批次后续条目
-- consumer 限流被拒（429）→ ack 跳过让 outbox 重发，避免 partition 阻塞
-- consumer dedup 命中（409）→ 视为成功 ack（uk_job_instance_tenant_dedup 兜底）
-
-**验证**（启用后 5 分钟内）：
-```sql
--- 全部 PUBLISHED，无 NEW/FAILED 残留
-SELECT publish_status, COUNT(*) FROM batch.trigger_outbox_event
-WHERE created_at > NOW() - INTERVAL '5 min'
-GROUP BY publish_status;
-```
-```bash
-# Grafana / Prometheus
-batch.trigger.launch.consumed.total{outcome="ok"}  # 应增加
-batch.trigger.launch.failed.total{reason!="rate_limited"}  # 应为 0
-```
-
-**回滚**：`BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` → 重启 trigger + orchestrator → 立刻走 HTTP；已落库 outbox 由 relay 继续投递（不回滚）。
-
-**详细灰度切换 SOP（staging → prod-canary 24h → prod 全量）**：见 [`trigger-async-launch-rollout.md`](./trigger-async-launch-rollout.md)。
+> **2026-05-02 已删除**：trigger → orchestrator 异步链路（outbox + Kafka）已固化为唯一路径，开关和同步 HTTP 桥（`HttpOrchestratorTriggerAdapter`）同步删除。无需配置此参数。
+>
+> 链路详情见 `docs/architecture/system-flow-overview.md §1.4`。运维观察指标（outbox GIVE_UP 告警等）仍有效，见 `docker/observability/prometheus-batch-rules.yml`。
 
 ---
 

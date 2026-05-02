@@ -162,9 +162,9 @@ flowchart LR
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态（含 i18n 三元组 + ADR-009 节点 outputs）→ orchestrator 推进状态机 + 落 `workflow_node_run.output` JSONB 列。
 5. **落地**：IMPORT 写 `batch_business.biz.*` 表；EXPORT 把生成的文件 PUT 到 MinIO 并登记 `file_record`；DISPATCH 把 `file_record` 派到外部通道（LOCAL / SFTP / NAS / OSS / API）。
 
-### 1.4 Trigger → Orchestrator 异步路径（ADR-010，可选切换）
+### 1.4 Trigger → Orchestrator 异步路径（ADR-010，固化无开关）
 
-灰度开关 `batch.trigger.async-launch.enabled=true` 时,trigger → orchestrator 调度链从同步 HTTP 桥换成 outbox + Kafka 异步模式（trigger + orchestrator **两边模块必须一致**）：
+trigger → orchestrator 调度链走 outbox + Kafka 异步模式（2026-05-02 固化，原同步 HTTP 桥已删除）：
 
 ```mermaid
 flowchart LR
@@ -192,8 +192,6 @@ flowchart LR
 **收益**：trigger 重启不丢已 fire 的 launch（Quartz fire 后第一时间落 outbox，relay 重启续传）；orchestrator 短暂宕机不阻塞 trigger Quartz worker thread。
 
 **消息载荷**：`LaunchEnvelope` JSON `{ launchRequest, dedupKey, sourceFireTime, envelopeVersion }`，headers 携带 `X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`。
-
-**回滚**：开关切回 `false` → trigger 立刻走 HTTP；已落库 outbox 由 relay 继续投递（不阻塞）。详见 [`docs/runbook/trigger-async-launch-rollout.md`](../runbook/trigger-async-launch-rollout.md)。
 
 ---
 

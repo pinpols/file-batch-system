@@ -304,7 +304,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | T1/T2 大事务 | launch() 拆分（见 ADR-003） |
 | 业务异常无 i18n（zh/en 双语持久化） | i18n 全栈(Phase 1-F + Phase 2):`BizException.of(key, args)` + 11 表 `error_key`/`error_args` JSONB 列 + `LocalizedErrorRenderer` 按 Locale 重渲染。详 `docs/design/i18n.md` |
 | Workflow 节点间参数无显式串联 | ADR-009 受限 JSONPath DSL: `$.nodes.<X>.output.<key>` + V72 `workflow_node_run.output` 列 + `WorkflowParamResolver`。详 `docs/architecture/workflow-dependency-guide.md §10` |
-| trigger → orchestrator 同步 HTTP 桥（鲁棒性短板） | ADR-010 trigger_outbox + Kafka 异步路径：V80 `trigger_outbox_event` + `TriggerOutboxRelay` + `KafkaTriggerEventPublisher` + `TriggerLaunchConsumer`；灰度开关 `batch.trigger.async-launch.enabled`，原 HTTP 路径 `@Deprecated forRemoval=true` 等 1 minor 物理删除 |
+| trigger → orchestrator 同步 HTTP 桥（鲁棒性短板） | ADR-010 trigger_outbox + Kafka 异步路径（2026-05-02 固化）：V80 `trigger_outbox_event` + `TriggerOutboxRelay` + `KafkaTriggerEventPublisher` + `TriggerLaunchConsumer`；同步 HTTP 桥已删除，无开关 |
 
 ### 未关闭（P2，当前优先级）
 

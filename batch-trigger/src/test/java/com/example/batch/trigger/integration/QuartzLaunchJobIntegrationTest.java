@@ -1,17 +1,15 @@
 package com.example.batch.trigger.integration;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
-import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.infrastructure.QuartzLaunchJob;
 import java.time.Instant;
 import java.util.Date;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
@@ -21,7 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
@@ -31,23 +29,23 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       "spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration",
       // 关 QuartzMetricsConfiguration：本测试用 mock(Scheduler) 而非真 Quartz，
       // 否则 mock 的 getListenerManager() 返回 null 在 @PostConstruct 触发 NPE
-      "batch.trigger.quartz-metrics.enabled=false",
-      // ADR-010: 默认 true 切异步路径后,本测试期望走原同步 HTTP 桥(直接调 OrchestratorAdapter),
-      // 显式覆盖回 false 走 forwardToOrchestrator 路径
-      "batch.trigger.async-launch.enabled=false"
+      "batch.trigger.quartz-metrics.enabled=false"
+      // ADR-010: 默认 true，走异步路径写 trigger_outbox_event，不调 OrchestratorAdapter HTTP
     })
 @Import(QuartzLaunchJobIntegrationTest.TestConfig.class)
 class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired QuartzLaunchJob quartzLaunchJob;
+  @Autowired JdbcTemplate jdbcTemplate;
 
-  @MockitoBean OrchestratorTriggerAdapter orchestratorTriggerAdapter;
+  @BeforeEach
+  void cleanUp() {
+    jdbcTemplate.update("delete from batch.trigger_outbox_event");
+    jdbcTemplate.update("delete from batch.trigger_request");
+  }
 
   @Test
-  void shouldInvokeOrchestratorAdapterWhenQuartzFires() throws Exception {
-    when(orchestratorTriggerAdapter.sendTrigger(any()))
-        .thenReturn(new LaunchResponse("inst-quartz-001", "trace-quartz-001"));
-
+  void shouldWriteOutboxEventWhenQuartzFires() throws Exception {
     JobExecutionContext context = mock(JobExecutionContext.class);
     JobDataMap jobDataMap = new JobDataMap();
     jobDataMap.put(QuartzLaunchJob.TENANT_ID, "t1");
@@ -66,7 +64,13 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
 
     quartzLaunchJob.execute(context);
 
-    verify(orchestratorTriggerAdapter).sendTrigger(any());
+    // ADR-010: 异步路径写 trigger_outbox_event 而非调 HTTP adapter
+    Integer outboxCount =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.trigger_outbox_event where tenant_id = ?",
+            Integer.class,
+            "t1");
+    assertThat(outboxCount).as("Quartz fire should produce one outbox event").isEqualTo(1);
   }
 
   @TestConfiguration(proxyBeanMethods = false)

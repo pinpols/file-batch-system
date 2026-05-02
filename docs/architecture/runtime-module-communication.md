@@ -38,8 +38,7 @@ flowchart LR
 
   T -->|"JDBC -> batch_platform<br/>trigger_request + trigger_outbox_event<br/>(同事务 INSERT)"| P
   T -->|"JDBC -> Quartz<br/>quartz.QRTZ_*"| Q
-  T -.->|"HTTP -> orchestrator<br/>launch (sync, default,<br/>async-launch.enabled=false)<br/>@Deprecated forRemoval"| O
-  T ==>|"Kafka publish ->batch.trigger.launch.v1<br/>(async, async-launch.enabled=true)<br/>TriggerOutboxRelay 周期发"| KT
+  T ==>|"Kafka publish ->batch.trigger.launch.v1<br/>(ADR-010 outbox→Kafka)<br/>TriggerOutboxRelay 周期发"| KT
   KT ==>|"Kafka consume ->TriggerLaunchConsumer<br/>调 LaunchApplicationService.launch"| O
 
   O -->|"JDBC -> batch_platform<br/>launch / task-state / retry / replay / worker-lifecycle"| P
@@ -73,7 +72,7 @@ flowchart LR
   O["batch-orchestrator"]
   P["batch_platform"]
 
-  T -->|"HTTP /internal/orchestrator/launch"| O
+  T -->|"Kafka batch.trigger.launch.v1<br/>(ADR-010 outbox→Kafka→TriggerLaunchConsumer)"| O
   W -->|"HTTP /internal/workers/*<br/>register / heartbeat / status"| O
   W -->|"HTTP /internal/tasks/*<br/>claim / renew"| O
   W -->|"HTTP /internal/tasks/*<br/>report"| O
@@ -99,8 +98,7 @@ flowchart LR
   - **i18n 三元组**（V77/V78 后）：`errorKey` + `errorArgs`（JSON 数组）随 BizException.of 跨进程传递，落库 11 张表的 `error_key` + `error_args` JSONB 列；console 读路径过 `LocalizedErrorRenderer` 按当前 Locale 重渲染
   - **节点产出**（ADR-009 Stage 1.2）：`outputs: Map<String, Object>` 字段，worker SUCCESS 时上报 fileId / recordCount / receiptCode 等关键字段，orchestrator 序列化写 `workflow_node_run.output` JSONB 列，供下游 workflow 节点 `$.nodes.<X>.output.<key>` DSL 引用
 
-### 内部 Trigger Kafka 协议要点（ADR-010 异步路径）
-仅当 `batch.trigger.async-launch.enabled=true` 时启用（trigger 端 + orchestrator 端两侧必须一致）：
+### 内部 Trigger Kafka 协议要点（ADR-010 异步路径，固化无开关）
 
 - **Topic**：`batch.trigger.launch.v1`（版本化，未来协议演进升 v2）
 - **Key**：`tenantId:requestId`（同 request 多分区幂等）
@@ -131,8 +129,7 @@ flowchart LR
 
 - worker 注册、心跳、状态更新：`batch-worker-core` 的 `HttpWorkerRegistryClient`
 - worker 任务认领、续租、回报：`batch-worker-core` 的 `HttpTaskExecutionClient`
-- trigger 调 orchestrator（同步桥，默认）：`batch-trigger` 的 `HttpOrchestratorTriggerAdapter`（`@Deprecated forRemoval=true`，等灰度全量切稳定 1 minor 后物理删除）
-- trigger 异步调 orchestrator（ADR-010）：`batch-trigger` 的 `KafkaTriggerEventPublisher` + `TriggerOutboxRelay`；orchestrator 端 `TriggerLaunchConsumer`；详见 `docs/runbook/trigger-async-launch-rollout.md`
+- trigger → orchestrator（ADR-010 固化路径）：`batch-trigger` 的 `KafkaTriggerEventPublisher` + `TriggerOutboxRelay` 发到 `batch.trigger.launch.v1`；orchestrator 端 `TriggerLaunchConsumer` 消费；同步 HTTP 桥已于 2026-05-02 删除
 - launch 初始化运行态：`batch-orchestrator` 的 `DefaultLaunchService`
 - task report / claim / renew：`batch-orchestrator` 的 `DefaultTaskExecutionService`
 - retry / dead-letter / replay：`batch-orchestrator` 的 `DefaultRetryGovernanceService`

@@ -14,8 +14,7 @@ import com.example.batch.common.dto.LaunchEnvelope;
  *   <li>未来扩展(如 Pulsar / 走 HTTP 桥过渡)只需新实现,relay 不变
  * </ul>
  *
- * <p>实现 bean 必须 @Component 并 conditional 在 {@code batch.trigger.async-launch.enabled=true}; 不启用时
- * relay bean 也不创建,因此即使没有 publisher 实现也不会启动失败。
+ * <p>ADR-010 固化路径，实现 bean 无条件 @Component（2026-05-02 同步 HTTP 路径已删除）。
  */
 public interface TriggerEventPublisher {
 

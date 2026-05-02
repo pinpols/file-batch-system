@@ -41,10 +41,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    // ADR-010: 默认 true 切异步路径后,orchestrator 内的 TriggerLaunchConsumer 会启 Kafka listener,
-    // 跑同 JVM 的真 Kafka 容器引入 race(本测试只走 LaunchService 同步生命周期);显式关掉。
-    properties = {"batch.trigger.async-launch.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

@@ -1,6 +1,8 @@
 # trigger 异步 launch 灰度切换 runbook(ADR-010 Stage 6)
 
-> **状态**:Stage 4 Kafka producer/consumer 已实装,Stage 6 灰度切换待执行(operational)。本文档是 staging → 单租户 → 全量切换的操作步骤。
+> **⚠️ 已废止（2026-05-02）**：`batch.trigger.async-launch.enabled` 开关已随同步 HTTP 路径（`HttpOrchestratorTriggerAdapter`）一并删除。异步 Kafka 路径现为**唯一**路径，无需切换操作。本文档仅作历史存档，请勿执行其中步骤。
+
+> ~~**状态**:Stage 4 Kafka producer/consumer 已实装,Stage 6 灰度切换待执行(operational)。本文档是 staging → 单租户 → 全量切换的操作步骤。~~
 
 ## 0. 前置检查清单
 

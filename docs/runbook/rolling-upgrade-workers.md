@@ -50,7 +50,7 @@
 | **V77** | `job_task` / `workflow_node_run` / `event_delivery_log` 加 `error_key VARCHAR(128)` + `error_args JSONB`(i18n Phase F) | orchestrator i18n 三元组持久化路径 | 列缺失时 worker 上报 errorKey 时落库失败 |
 | **V78** | 8 表加 `error_key`/`error_args`(i18n Phase 2):`pipeline_step_run` / `job_step_instance` / `compensation_command` / `compensation_checkpoint` / `file_dispatch_record` / `file_error_record` / `retry_schedule`(`last_error_key`/`last_error_args`)/`notification_delivery_log` | orchestrator + console-api 读路径过 `LocalizedErrorRenderer` | 同 V77 |
 | **V79** | archive.* 冷表同步加 `error_key`/`error_args`(与 batch.* 对齐) | `ArchiveSchemaDriftCheck` 启动自检 | drift 不匹配时 orchestrator **启动失败**,因此必须先 V79 后 orchestrator 重启 |
-| **V80** | `batch.trigger_outbox_event` 表(ADR-010 trigger 异步) | trigger 异步路径(仅 `batch.trigger.async-launch.enabled=true` 时使用) | 表缺失时 trigger 异步 INSERT 失败;同步路径不受影响 |
+| **V80** | `batch.trigger_outbox_event` 表(ADR-010 trigger 异步，固化) | trigger outbox 写入路径（唯一路径，无开关） | 表缺失时 trigger INSERT 失败 |
 
 **滚动顺序**(强烈建议):
 

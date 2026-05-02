@@ -2,8 +2,8 @@ package com.example.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,7 +11,6 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
-import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.service.TriggerService;
@@ -28,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.client.RestClient;
 
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
@@ -39,9 +39,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       // 关 QuartzMetricsConfiguration：本测试用 mock(Scheduler) 而非真 Quartz，
       // 否则 mock 的 getListenerManager() 返回 null 在 @PostConstruct 触发 NPE
       "batch.trigger.quartz-metrics.enabled=false",
-      // ADR-010: 默认 true 切异步路径后,本测试期望走原同步 HTTP 桥(直接调 OrchestratorAdapter),
-      // 显式覆盖回 false 走 forwardToOrchestrator 路径
-      "batch.trigger.async-launch.enabled=false"
+      // ADR-010: 默认 true，test 1 走异步路径写 outbox；test 2 的 approvePendingCatchUp 仍直接调 adapter
     })
 @Import(TriggerServiceIntegrationTest.TestConfig.class)
 class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
@@ -50,18 +48,16 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  @MockitoBean private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
+  @MockitoBean private RestClient orchestratorRestClient;
 
   @BeforeEach
   void cleanUp() {
+    jdbcTemplate.update("delete from batch.trigger_outbox_event");
     jdbcTemplate.update("delete from batch.trigger_request");
   }
 
   @Test
   void shouldPersistAcceptedRequestAndDeduplicateRepeatedLaunch() {
-    when(orchestratorTriggerAdapter.sendTrigger(any()))
-        .thenReturn(new LaunchResponse("inst-001", "trace-001"));
-
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
     request.setJobCode("IMPORT_JOB");
@@ -91,7 +87,15 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(count).isEqualTo(1);
     assertThat(status).isEqualTo("ACCEPTED");
-    verify(orchestratorTriggerAdapter, times(1)).sendTrigger(any());
+    // ADR-010: 异步路径写 trigger_outbox_event，不调 adapter
+    Integer outboxCount =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
+                + " ?",
+            Integer.class,
+            "t1",
+            "req-001");
+    assertThat(outboxCount).isEqualTo(1);
   }
 
   @Test
@@ -110,7 +114,14 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
         "dedup-pending-001",
         "ACCEPTED",
         "trace-pending-001");
-    when(orchestratorTriggerAdapter.sendTrigger(any()))
+    RestClient.RequestBodyUriSpec postSpec = mock(RestClient.RequestBodyUriSpec.class);
+    RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
+    RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+    when(orchestratorRestClient.post()).thenReturn(postSpec);
+    when(postSpec.uri(anyString())).thenReturn(bodySpec);
+    when(bodySpec.body((Object) any())).thenReturn(bodySpec);
+    when(bodySpec.retrieve()).thenReturn(responseSpec);
+    when(responseSpec.body(LaunchResponse.class))
         .thenReturn(new LaunchResponse("inst-002", "trace-pending-001"));
 
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
@@ -130,7 +141,7 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(response.instanceNo()).isEqualTo("inst-002");
     assertThat(status).isEqualTo("LAUNCHED");
-    verify(orchestratorTriggerAdapter).sendTrigger(any());
+    verify(orchestratorRestClient).post();
   }
 
   @TestConfiguration(proxyBeanMethods = false)

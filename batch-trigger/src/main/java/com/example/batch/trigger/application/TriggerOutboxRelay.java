@@ -19,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
@@ -37,8 +36,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>退避策略:失败时 {@code next_publish_at = now + min(60s, 2^attempt 秒)}。
  *
- * <p>条件启用:仅在 {@code batch.trigger.async-launch.enabled=true} 时实例化;默认关闭,trigger 走原同步 HTTP 路径(由
- * {@code DefaultTriggerService} 控制写不写 outbox)。
+ * <p>ADR-010 固化路径，无条件启用（2026-05-02 同步 HTTP 路径已删除）。
  *
  * <p>简化设计(对比 orchestrator 的 OutboxPollScheduler):
  *
@@ -52,11 +50,6 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(
-    prefix = "batch.trigger.async-launch",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
 public class TriggerOutboxRelay {
 
   private static final Duration LOCK_AT_MOST = Duration.ofMinutes(1);

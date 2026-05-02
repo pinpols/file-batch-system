@@ -6,7 +6,6 @@ import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -16,21 +15,13 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
 
 /**
- * ADR-010 Stage 4: orchestrator Kafka 消费侧配置(仅当 trigger async-launch 路径启用)。
- *
- * <p>启用条件:{@code batch.trigger.async-launch.enabled=true}。两边开关一致避免单边激活——trigger 不发但 orchestrator 起
- * listener 浪费连接;trigger 发了但 orchestrator 不接更危险(消息堆积)。
+ * ADR-010 Stage 4: orchestrator Kafka 消费侧配置（固化无开关）。
  *
  * <p>消费模式:MANUAL_IMMEDIATE ack(consumer 端处理完才 ack);失败抛异常 → Spring Kafka 默认 SeekTo 行为重试,失败次数耗尽走
  * DLQ(本 Stage 暂不配 DLQ topic,依赖 orchestrator 端 uk_job_instance_tenant_dedup 兜底重复消息)。
  */
 @Configuration(proxyBeanMethods = false)
 @EnableKafka
-@ConditionalOnProperty(
-    prefix = "batch.trigger.async-launch",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
 public class OrchestratorKafkaConsumerConfiguration {
 
   /** Listener factory bean 名称 — 给 @KafkaListener(containerFactory=...) 引用。 */
