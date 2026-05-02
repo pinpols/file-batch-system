@@ -72,7 +72,8 @@ flowchart TB
 | 想看 | join 路径 |
 |---|---|
 | 某 workflow_run 用了哪些 pipeline | `workflow_run` → `workflow_node`（`node_type=FILE_STEP`）→ `pipeline_definition`（`related_pipeline_code`）|
-| 某 pipeline_instance 是哪个 workflow_run 触发的 | `pipeline_instance.trigger_source` 或 `pipeline_instance.workflow_run_id`（如 schema 有此列；否则靠 `trace_id` 关联）|
+| 某 pipeline_instance 是哪个 workflow_run 触发的 | `pipeline_instance` 没有直连 workflow 的 FK 列；按 `trace_id` 反查 `workflow_run` 即可（同一 traceId 在派发时贯穿）|
+| 某 pipeline_instance 关联的 job | `pipeline_instance.related_job_instance_id` → `job_instance.id` |
 | 某 job 同时被几个 workflow 引用 | `workflow_node` where `related_job_code = ?` |
 
 ---
