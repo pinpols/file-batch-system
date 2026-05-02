@@ -182,7 +182,7 @@ public class SqlTemplateExportSqlValidator {
       }
     }
     // S-1.10：SQL 里出现的所有 :param 必须在白名单内（required + 引擎保留 + 允许扩展）。
-    // 之前仅校验必填存在，未知参数留给 NamedParameterJdbcTemplate 运行时报错——把暴露前移到模板加载阶段。
+    // 之前仅校验必填存在，未知参数留给 JDBC 运行时报错——把暴露前移到模板加载阶段。
     Set<String> allowed = new LinkedHashSet<>();
     allowed.addAll(required);
     // 引擎保留参数（Plugin 内部注入）
