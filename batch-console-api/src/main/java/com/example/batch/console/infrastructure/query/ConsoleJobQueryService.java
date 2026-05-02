@@ -13,8 +13,8 @@ import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.domain.query.JobInstanceQuery;
 import com.example.batch.console.domain.query.JobPartitionQuery;
 import com.example.batch.console.domain.query.JobStepInstanceQuery;
-import com.example.batch.console.support.ConsoleJobQueryMappers;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.querymap.ConsoleJobQueryMappers;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
 import com.example.batch.console.web.query.JobPartitionQueryRequest;
@@ -38,7 +38,8 @@ public class ConsoleJobQueryService {
   private final ConsoleJobQueryMappers jobMappers;
   private final LocalizedErrorRenderer localizedErrorRenderer;
 
-  public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request) {
+  public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
+      JobDefinitionQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     JobDefinitionQuery query =
         new JobDefinitionQuery(
@@ -82,7 +83,8 @@ public class ConsoleJobQueryService {
     return toJobInstanceResponse(requireNotNull(entity, "job instance not found"));
   }
 
-  public List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos) {
+  public List<ConsoleJobInstanceResponse> batchInstanceStatus(
+      String tenantId, List<String> instanceNos) {
     String resolved = resolveTenant(tenantGuard, tenantId);
     return jobMappers.jobInstanceMapper.selectByInstanceNos(resolved, instanceNos).stream()
         .map(this::toJobInstanceResponse)

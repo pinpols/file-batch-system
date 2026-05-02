@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.config.ConsoleRateLimitProperties;
+import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
 
 @ExtendWith(MockitoExtension.class)
 class ConsoleRateLimitFilterTest {

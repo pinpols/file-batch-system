@@ -1,18 +1,17 @@
 package com.example.batch.console.support.auth;
 
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 
 class ConsoleTenantGuardTest {
 

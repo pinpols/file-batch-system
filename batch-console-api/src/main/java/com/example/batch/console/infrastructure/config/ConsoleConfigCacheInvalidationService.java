@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure.config;
 
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.support.ConsoleQueryCacheService;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

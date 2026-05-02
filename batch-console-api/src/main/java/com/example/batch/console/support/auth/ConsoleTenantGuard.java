@@ -1,9 +1,9 @@
 package com.example.batch.console.support.auth;
 
 import com.example.batch.common.enums.ResultCode;
-import com.example.batch.console.support.ConsoleRequestMetadata;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.support.web.ConsoleRequestMetadata;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.support.ScopeNotActiveException;
 import org.springframework.security.core.Authentication;

@@ -8,8 +8,8 @@ import com.example.batch.console.application.ConsoleNotificationApplicationServi
 import com.example.batch.console.mapper.NotificationChannelMapper;
 import com.example.batch.console.mapper.NotificationDeliveryLogMapper;
 import com.example.batch.console.mapper.SubscriptionRuleMapper;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

@@ -5,7 +5,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleUserAccountService;
-import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.auth.ResetPasswordRequest;
 import com.example.batch.console.web.request.auth.UpdateUserAccountRequest;
 import com.example.batch.console.web.response.auth.ConsoleUserAccountResponse;

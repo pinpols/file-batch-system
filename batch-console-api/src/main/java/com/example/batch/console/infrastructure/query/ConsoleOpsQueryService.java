@@ -23,8 +23,8 @@ import com.example.batch.console.domain.query.OutboxRetryLogQuery;
 import com.example.batch.console.domain.query.PendingCatchUpQuery;
 import com.example.batch.console.domain.query.RetryScheduleQuery;
 import com.example.batch.console.domain.query.WorkerRegistryQuery;
-import com.example.batch.console.support.ConsoleOpsQueryMappers;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.querymap.ConsoleOpsQueryMappers;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
@@ -38,17 +38,17 @@ import com.example.batch.console.web.query.PendingCatchUpQueryRequest;
 import com.example.batch.console.web.query.RetryScheduleQueryRequest;
 import com.example.batch.console.web.query.WorkerRegistryQueryRequest;
 import com.example.batch.console.web.response.auth.AiAuditLogResponse;
-import com.example.batch.console.web.response.ops.ConsoleAlertEventResponse;
-import com.example.batch.console.web.response.ops.ConsoleApprovalCommandResponse;
-import com.example.batch.console.web.response.ops.ConsoleAuditLogResponse;
 import com.example.batch.console.web.response.file.ConsoleBatchDayResponse;
 import com.example.batch.console.web.response.file.ConsoleBatchDaySummaryResponse;
 import com.example.batch.console.web.response.file.ConsoleBatchDayWindowResponse;
+import com.example.batch.console.web.response.job.ConsoleRetryScheduleResponse;
+import com.example.batch.console.web.response.ops.ConsoleAlertEventResponse;
+import com.example.batch.console.web.response.ops.ConsoleApprovalCommandResponse;
+import com.example.batch.console.web.response.ops.ConsoleAuditLogResponse;
 import com.example.batch.console.web.response.ops.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.web.response.ops.ConsolePendingCatchUpResponse;
-import com.example.batch.console.web.response.job.ConsoleRetryScheduleResponse;
 import com.example.batch.console.web.response.ops.ConsoleWorkerRegistryResponse;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -93,7 +93,8 @@ public class ConsoleOpsQueryService {
     return auditLogs(request);
   }
 
-  public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request) {
+  public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(
+      OutboxRetryLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     List<Map<String, Object>> rows =
         opsMappers.outboxRetryLogMapper.selectByQuery(
@@ -208,7 +209,8 @@ public class ConsoleOpsQueryService {
     return page(pageRequest, total, rows, this::toRetryScheduleResponse);
   }
 
-  public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request) {
+  public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
+      PendingCatchUpQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     PendingCatchUpQuery query =
         new PendingCatchUpQuery(
@@ -266,7 +268,8 @@ public class ConsoleOpsQueryService {
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), responses);
   }
 
-  public ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request) {
+  public ConsoleBatchDayWindowResponse batchDayWindow(
+      String bizDate, BatchDayWindowQueryRequest request) {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     LocalDate parsedBizDate = parseLocalDate(bizDate, "bizDate");
     return toBatchDayWindowResponse(
@@ -276,7 +279,8 @@ public class ConsoleOpsQueryService {
         opsMappers.batchDayMapper.selectWindow(tenantId, request.getCalendarCode(), parsedBizDate));
   }
 
-  public PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request) {
+  public PageResponse<ConsoleApprovalCommandResponse> approvals(
+      ApprovalCommandQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     ApprovalCommandQuery query = new ApprovalCommandQuery();
     query.setTenantId(resolveTenant(tenantGuard, request.getTenantId()));

@@ -4,7 +4,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.application.ConsoleFileChannelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
 import com.example.batch.console.web.request.file.FileChannelCreateRequest;
 import com.example.batch.console.web.request.file.FileChannelUpdateRequest;

@@ -4,7 +4,7 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleAiApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.auth.AiChatRequest;
 import com.example.batch.console.web.response.auth.AiChatResponse;
 import jakarta.validation.Valid;

@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.file;
 
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
@@ -9,8 +8,9 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.ConsoleFileApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
-import com.example.batch.console.support.ConsoleRequestMetadata;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
+import com.example.batch.console.support.web.ConsoleRequestMetadata;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.file.ArchiveFileRequest;
 import com.example.batch.console.web.request.file.DeleteFileRequest;
 import com.example.batch.console.web.request.file.FileArrivalGroupActionRequest;

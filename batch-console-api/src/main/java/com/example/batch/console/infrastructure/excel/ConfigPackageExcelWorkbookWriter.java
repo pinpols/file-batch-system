@@ -33,7 +33,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import com.example.batch.console.infrastructure.config.DefaultConsoleTenantConfigPackageExcelApplicationService;
 
 /**
  * Generates Excel workbooks (export, template, preview) for the tenant config package. Extracted
@@ -195,7 +194,8 @@ public class ConfigPackageExcelWorkbookWriter {
   private Map<String, List<String>> registeredImplCodesByModule;
 
   /** 设置本次导出用的 (module → impl_code 列表)；由调用方在 build* 前从 step_registry 查出。 */
-  public void setRegisteredImplCodesByModule(Map<String, List<String>> registeredImplCodesByModule) {
+  public void setRegisteredImplCodesByModule(
+      Map<String, List<String>> registeredImplCodesByModule) {
     this.registeredImplCodesByModule = registeredImplCodesByModule;
   }
 

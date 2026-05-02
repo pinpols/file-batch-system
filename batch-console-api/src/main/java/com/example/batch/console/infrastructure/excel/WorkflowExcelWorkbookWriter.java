@@ -40,6 +40,7 @@ import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.query.WorkflowNodeQuery;
+import com.example.batch.console.infrastructure.workflow.DefaultConsoleWorkflowExcelApplicationService;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
@@ -61,7 +62,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Component;
-import com.example.batch.console.infrastructure.workflow.DefaultConsoleWorkflowExcelApplicationService;
 
 /**
  * P2-3 god-class-decomposition extract: 从 {@link DefaultConsoleWorkflowExcelApplicationService} 抽出的
@@ -89,7 +89,8 @@ public class WorkflowExcelWorkbookWriter {
   private final WorkflowEdgeMapper workflowEdgeMapper;
 
   /** 维护态导出:每个 definition 同步带出对应 nodes + edges,含 README/字典/校验 sheet。 */
-  public byte[] writeMaintenanceWorkbook(String tenantId, List<WorkflowDefinitionEntity> definitions) {
+  public byte[] writeMaintenanceWorkbook(
+      String tenantId, List<WorkflowDefinitionEntity> definitions) {
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet definitionSheet = workbook.createSheet(DEF_SHEET);

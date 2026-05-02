@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
-import com.example.batch.console.support.ConsoleQueryCacheService;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.Iterator;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

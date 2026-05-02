@@ -3,7 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.web.Idempotent;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

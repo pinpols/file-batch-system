@@ -1,6 +1,6 @@
 package com.example.batch.console.config;
 
-import com.example.batch.console.support.ConsoleIdempotencyInterceptor;
+import com.example.batch.console.support.web.ConsoleIdempotencyInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;

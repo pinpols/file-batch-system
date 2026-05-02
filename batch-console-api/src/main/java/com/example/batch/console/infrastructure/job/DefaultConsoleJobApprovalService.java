@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.job;
 
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.dto.LaunchResponse;
@@ -12,11 +11,12 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.console.application.ConsoleJobApprovalService;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
+import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;
 import com.example.batch.console.mapper.BatchDayMapper;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
-import com.example.batch.console.support.ConsoleRequestMetadata;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.web.ConsoleRequestMetadata;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.ops.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpItemResponse;

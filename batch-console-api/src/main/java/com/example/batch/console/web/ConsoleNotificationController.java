@@ -3,7 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleNotificationApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.util.List;

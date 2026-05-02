@@ -2,7 +2,7 @@ package com.example.batch.console.service;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
