@@ -12,7 +12,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
-import com.example.batch.orchestrator.application.service.LaunchApplicationService;
+import com.example.batch.orchestrator.application.service.task.LaunchApplicationService;
 import com.example.batch.orchestrator.controller.LaunchController;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;

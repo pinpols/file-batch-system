@@ -5,7 +5,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.application.service.LaunchApplicationService;
+import com.example.batch.orchestrator.application.service.task.LaunchApplicationService;
 import com.example.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;

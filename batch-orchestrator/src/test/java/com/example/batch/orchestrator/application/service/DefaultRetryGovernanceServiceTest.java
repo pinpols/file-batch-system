@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import com.example.batch.orchestrator.application.service.governance.DefaultRetryGovernanceService;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;

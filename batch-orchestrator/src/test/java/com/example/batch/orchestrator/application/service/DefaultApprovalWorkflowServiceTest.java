@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.ApprovalCommandStatus;
+import com.example.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
+import com.example.batch.orchestrator.application.service.governance.DefaultApprovalWorkflowService;
 import com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import com.example.batch.orchestrator.mapper.ApprovalCommandMapper;
 import org.junit.jupiter.api.BeforeEach;

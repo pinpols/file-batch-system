@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.controller;
 
-import com.example.batch.orchestrator.application.service.OutboxOpsApplicationService;
+import com.example.batch.orchestrator.application.service.governance.OutboxOpsApplicationService;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
