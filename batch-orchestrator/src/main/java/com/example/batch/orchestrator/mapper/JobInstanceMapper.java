@@ -1,9 +1,9 @@
 package com.example.batch.orchestrator.mapper;
 
+import com.example.batch.orchestrator.domain.entity.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import com.example.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
-import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.domain.query.JobInstanceQuery;
 import java.time.Instant;
 import java.time.LocalDate;

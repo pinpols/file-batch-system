@@ -1,4 +1,4 @@
-package com.example.batch.console.domain;
+package com.example.batch.console.domain.entity;
 
 import lombok.Data;
 

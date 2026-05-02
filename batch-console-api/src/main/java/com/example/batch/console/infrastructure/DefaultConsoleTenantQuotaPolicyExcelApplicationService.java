@@ -158,15 +158,17 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
   protected boolean upsertRow(PolicyRow row, String tenantId, String operatorId) {
     Map<String, Object> existing =
         tenantQuotaPolicyMapper.selectByUniqueKey(tenantId, row.policyCode());
-    TenantQuotaPolicyUpsertParam param = new TenantQuotaPolicyUpsertParam();
-    param.setTenantId(tenantId);
-    param.setPolicyCode(row.policyCode());
-    param.setMaxRunningJobsPerTenant(row.maxRunningJobsPerTenant());
-    param.setMaxPartitionsPerTenant(row.maxPartitionsPerTenant());
-    param.setMaxQpsPerTenant(row.maxQpsPerTenant());
-    param.setFairShareWeight(row.fairShareWeight());
-    param.setEnabled(row.enabled());
-    param.setDescription(row.description());
+    TenantQuotaPolicyUpsertParam param =
+        TenantQuotaPolicyUpsertParam.builder()
+            .tenantId(tenantId)
+            .policyCode(row.policyCode())
+            .maxRunningJobsPerTenant(row.maxRunningJobsPerTenant())
+            .maxPartitionsPerTenant(row.maxPartitionsPerTenant())
+            .maxQpsPerTenant(row.maxQpsPerTenant())
+            .fairShareWeight(row.fairShareWeight())
+            .enabled(row.enabled())
+            .description(row.description())
+            .build();
     tenantQuotaPolicyMapper.upsertTenantQuotaPolicy(param);
     return existing == null || existing.isEmpty();
   }

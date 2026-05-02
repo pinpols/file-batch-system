@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.application.scheduler;
 
 import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
-import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 
 /**
  * 资源队列管理器。 根据调度请求解析并返回匹配的资源队列配置（{@link ResourceQueueEntity}）， 为后续并发限制、优先级计算等环节提供队列上下文。

@@ -13,7 +13,7 @@ import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
-import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
+import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
 import com.example.batch.orchestrator.infrastructure.quota.DatabaseQuotaRuntimeStateService;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import java.time.Instant;

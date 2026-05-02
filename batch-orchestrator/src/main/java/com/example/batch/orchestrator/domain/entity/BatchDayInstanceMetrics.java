@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.domain.query;
+package com.example.batch.orchestrator.domain.entity;
 
 import lombok.Data;
 

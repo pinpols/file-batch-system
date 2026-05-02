@@ -1,18 +1,14 @@
 package com.example.batch.console.domain.param;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class TenantQuotaPolicyUpsertParam {
+public class TenantQuotaPolicyUpdateParam {
 
   private String tenantId;
-  private String policyCode;
+  private Long id;
   private Integer maxRunningJobsPerTenant;
   private Integer maxPartitionsPerTenant;
   private Integer maxQpsPerTenant;

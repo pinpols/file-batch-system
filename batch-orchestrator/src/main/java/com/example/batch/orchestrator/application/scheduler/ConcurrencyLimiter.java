@@ -1,8 +1,8 @@
 package com.example.batch.orchestrator.application.scheduler;
 
 import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
-import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
-import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
+import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 
 /**
  * 并发度限制器。 检查当前调度请求是否超出队列或租户级别的最大并发约束，返回 {@link ResourceCheck} 决策。

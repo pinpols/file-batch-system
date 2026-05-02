@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.domain.scheduler;
+package com.example.batch.orchestrator.domain.scheduling;
 
 /** {@code waitForCapacity} 表示容量不足可重试；{@code reject} 触发 failFast 不再等待。 */
 public record ResourceCheck(

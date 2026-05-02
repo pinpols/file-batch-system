@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
+import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
 import com.example.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

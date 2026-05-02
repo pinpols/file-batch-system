@@ -1,6 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.console.domain.param.TenantQuotaPolicyUpdateParam;
 import com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +27,9 @@ public interface TenantQuotaPolicyMapper {
 
   int upsertTenantQuotaPolicy(TenantQuotaPolicyUpsertParam param);
 
-  int insert(Map<String, Object> params);
+  int insert(TenantQuotaPolicyUpsertParam param);
 
-  int update(Map<String, Object> params);
+  int update(TenantQuotaPolicyUpdateParam param);
 
   int toggleEnabled(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);

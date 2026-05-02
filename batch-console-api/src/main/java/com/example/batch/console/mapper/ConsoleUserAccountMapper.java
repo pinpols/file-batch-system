@@ -1,7 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
-import com.example.batch.console.domain.ConsoleUserAccountEntity;
+import com.example.batch.console.domain.entity.ConsoleUserAccountEntity;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

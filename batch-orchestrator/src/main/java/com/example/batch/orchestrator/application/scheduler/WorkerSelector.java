@@ -2,7 +2,7 @@ package com.example.batch.orchestrator.application.scheduler;
 
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
-import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 
 /**
  * Worker 选择器（调度上下文感知）。 在已确定目标队列和任务优先级的前提下，从符合条件的 Worker 中选出最终执行节点。 与 {@link

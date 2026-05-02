@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
-import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
+import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;

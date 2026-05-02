@@ -681,15 +681,17 @@ class TenantConfigInitApplyHandlers {
   }
 
   private void upsertQuotaPolicy(String tenantId, TenantQuotaPolicySpec spec) {
-    TenantQuotaPolicyUpsertParam p = new TenantQuotaPolicyUpsertParam();
-    p.setTenantId(tenantId);
-    p.setPolicyCode(spec.getPolicyCode());
-    p.setMaxRunningJobsPerTenant(spec.getMaxRunningJobsPerTenant());
-    p.setMaxPartitionsPerTenant(spec.getMaxPartitionsPerTenant());
-    p.setMaxQpsPerTenant(spec.getMaxQpsPerTenant());
-    p.setFairShareWeight(spec.getFairShareWeight());
-    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
-    p.setDescription(spec.getDescription());
+    TenantQuotaPolicyUpsertParam p =
+        TenantQuotaPolicyUpsertParam.builder()
+            .tenantId(tenantId)
+            .policyCode(spec.getPolicyCode())
+            .maxRunningJobsPerTenant(spec.getMaxRunningJobsPerTenant())
+            .maxPartitionsPerTenant(spec.getMaxPartitionsPerTenant())
+            .maxQpsPerTenant(spec.getMaxQpsPerTenant())
+            .fairShareWeight(spec.getFairShareWeight())
+            .enabled(Nullables.coalesce(spec.getEnabled(), true))
+            .description(spec.getDescription())
+            .build();
     tenantQuotaPolicyMapper.upsertTenantQuotaPolicy(p);
   }
 

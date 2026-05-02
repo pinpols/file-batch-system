@@ -9,7 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
+import com.example.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

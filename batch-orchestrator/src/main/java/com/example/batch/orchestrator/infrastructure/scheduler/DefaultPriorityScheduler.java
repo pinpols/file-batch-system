@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.orchestrator.application.scheduler.PriorityScheduler;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
-import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import org.springframework.stereotype.Component;
 
 /**
