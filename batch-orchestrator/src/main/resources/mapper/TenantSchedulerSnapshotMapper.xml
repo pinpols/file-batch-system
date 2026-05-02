@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper">
     <!--
-      TenantSchedulerSnapshotRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      TenantSchedulerSnapshotEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, snapshotAt, fairShareGroup, policyCode, activeJobs, activePartitions,
          maxJobsBase, burstLimit, effectiveJobCap, groupActiveJobs, groupMaxJobs,
@@ -10,7 +10,7 @@
       detail_json 是 JSONB；读路径通过 ::text 转字符串再走 JsonbStringTypeHandler 包装。
     -->
     <resultMap id="tenantSchedulerSnapshotMap"
-               type="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord">
+               type="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -48,7 +48,7 @@
     </select>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord"
+            parameterType="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.tenant_scheduler_snapshot (
             tenant_id, snapshot_at, fair_share_group, policy_code,

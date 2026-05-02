@@ -15,7 +15,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
-import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
 
 @SpringBootApplication(
     scanBasePackages = {"com.example.batch.console", "com.example.batch.common"},
@@ -36,7 +35,6 @@ import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
   RestClientAutoConfiguration.class
 })
 @MapperScan("com.example.batch.console.mapper")
-@EnableJdbcRepositories(basePackages = "com.example.batch.console.repository")
 @ConfigurationPropertiesScan(
     basePackages = {"com.example.batch.console", "com.example.batch.common"})
 public class BatchConsoleApiApplication {

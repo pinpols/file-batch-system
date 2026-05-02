@@ -13,7 +13,7 @@ import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxServi
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -290,9 +290,9 @@ class DefaultRetryGovernanceServiceTest {
     return j;
   }
 
-  private static JobDefinitionRecord jobDefinitionWithPolicy(
+  private static JobDefinitionEntity jobDefinitionWithPolicy(
       Long id, String retryPolicy, int maxRetry) {
-    return new JobDefinitionRecord(
+    return new JobDefinitionEntity(
         id,
         null,
         null,

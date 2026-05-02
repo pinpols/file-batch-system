@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.JobDefinitionMapper">
     <!--
-      JobDefinitionRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      JobDefinitionEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, jobCode, jobName, jobType, bizType,
          scheduleType, scheduleExpr, timezone, workerGroup, queueCode, calendarCode,
@@ -13,7 +13,7 @@
       param_schema / default_params 是 JSONB；读路径通过 ::text 转字符串再走 MapJsonbTypeHandler。
     -->
     <resultMap id="jobDefinitionMap"
-               type="com.example.batch.orchestrator.domain.entity.JobDefinitionRecord">
+               type="com.example.batch.orchestrator.domain.entity.JobDefinitionEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -86,7 +86,7 @@
     </select>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.JobDefinitionRecord"
+            parameterType="com.example.batch.orchestrator.domain.entity.JobDefinitionEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type,
@@ -133,7 +133,7 @@
     </insert>
 
     <update id="update"
-            parameterType="com.example.batch.orchestrator.domain.entity.JobDefinitionRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.JobDefinitionEntity">
         update batch.job_definition
            set job_name = #{jobName},
                job_type = #{jobType},

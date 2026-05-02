@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
+import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.infrastructure.quota.DatabaseQuotaRuntimeStateService;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
@@ -289,8 +289,8 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldUpdatePeakBorrowedCountWhenHigherBorrowDetected() {
-    QuotaRuntimeStateRecord existingState =
-        new QuotaRuntimeStateRecord(
+    QuotaRuntimeStateEntity existingState =
+        new QuotaRuntimeStateEntity(
             null,
             "t1",
             "JOB",
@@ -319,7 +319,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
             .currentActiveCount(8)
             .build());
 
-    verify(quotaRuntimeStateMapper, times(2)).insert(any(QuotaRuntimeStateRecord.class));
+    verify(quotaRuntimeStateMapper, times(2)).insert(any(QuotaRuntimeStateEntity.class));
   }
 
   // ── describe() ────────────────────────────────────────────────────────────
@@ -385,8 +385,8 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldResetExpiredSlidingWindowState() {
-    QuotaRuntimeStateRecord expired =
-        new QuotaRuntimeStateRecord(
+    QuotaRuntimeStateEntity expired =
+        new QuotaRuntimeStateEntity(
             null,
             "t1",
             "JOB",

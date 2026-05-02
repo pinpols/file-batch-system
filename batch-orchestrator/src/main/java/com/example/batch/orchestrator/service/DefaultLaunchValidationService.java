@@ -7,9 +7,9 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -47,7 +47,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
                 request.tenantId(), request.requestId()),
             "trigger request not found");
 
-    JobDefinitionRecord jobDefinition =
+    JobDefinitionEntity jobDefinition =
         configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
     if (jobDefinition == null) {
       triggerRequestMapper.updateAcceptance(
@@ -57,7 +57,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
 
     // workflow definition 仅对 WORKFLOW 类型 job 必须存在；IMPORT/EXPORT/DISPATCH/GENERAL 无需关联 workflow
     // definition
-    WorkflowDefinitionRecord workflowDefinition = null;
+    WorkflowDefinitionEntity workflowDefinition = null;
     if (JobType.WORKFLOW.code().equals(jobDefinition.jobType())) {
       workflowDefinition =
           configCacheService.findEnabledWorkflowDefinition(request.tenantId(), request.jobCode());

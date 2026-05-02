@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
-import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
+import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import com.example.batch.orchestrator.infrastructure.scheduler.QuotaRuntimeResetScheduler;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -50,8 +50,8 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
   void schedulerReconcileResetsExpiredSlidingWindowState() {
     String ownerCode = "sched-reset-" + System.currentTimeMillis();
 
-    QuotaRuntimeStateRecord expired =
-        new QuotaRuntimeStateRecord(
+    QuotaRuntimeStateEntity expired =
+        new QuotaRuntimeStateEntity(
             null,
             "t1",
             "JOB",
@@ -69,7 +69,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
     // 直接触发调度器（调度间隔为 600 秒，测试中不会自动触发）
     quotaRuntimeResetScheduler.reconcile();
 
-    QuotaRuntimeStateRecord updated =
+    QuotaRuntimeStateEntity updated =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(updated).isNotNull();
     assertThat(updated.peakBorrowedCount()).isZero();
@@ -81,8 +81,8 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "sched-no-expired-" + System.currentTimeMillis();
 
     // 创建一个尚未过期的状态（窗口在未来过期）
-    QuotaRuntimeStateRecord active =
-        new QuotaRuntimeStateRecord(
+    QuotaRuntimeStateEntity active =
+        new QuotaRuntimeStateEntity(
             null,
             "t1",
             "JOB",
@@ -100,7 +100,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
     // reconcile() should not touch non-expired states
     quotaRuntimeResetScheduler.reconcile();
 
-    QuotaRuntimeStateRecord afterReconcile =
+    QuotaRuntimeStateEntity afterReconcile =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(afterReconcile).isNotNull();
     // peakBorrowedCount should remain unchanged since the window hasn't expired

@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.util.Map;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -16,7 +16,7 @@ public class RuntimeBasedPartitionCountResolver implements PartitionCountResolve
 
   @Override
   public int resolve(
-      JobDefinitionRecord jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
     long historicalDurationSeconds =
         firstPositiveLong(
             params.get("historicalAverageDurationSeconds"),

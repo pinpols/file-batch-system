@@ -46,8 +46,8 @@ python3 scripts/ci/check-console-openapi-paths.py
 校验依赖边界约束：
 
 - `batch-common` 不得新增对象存储、OTEL exporter、AI SDK、Excel 处理等运行时重依赖
-- 仅 `batch-console-api`、`batch-orchestrator` 允许保留 `Spring Data JDBC`
-- `batch-trigger`、`batch-worker-*` 不得额外引入 `spring-boot-starter-data-jdbc`
+- 全业务模块不得引入 `spring-boot-starter-data-jdbc`（持久层统一 MyBatis；见 ADR-001）
+- `batch-console-api` 与 `batch-orchestrator` 须在运行时 POM 中同时出现 `spring-boot-starter-jdbc` 与 `mybatis-spring-boot-starter`（脚本会校验）
 
 ```bash
 python3 scripts/ci/check-dependency-boundaries.py

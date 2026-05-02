@@ -2,11 +2,11 @@ package com.example.batch.orchestrator.infrastructure.redis;
 
 import com.example.batch.common.redis.BatchRedisKeys;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.orchestrator.domain.entity.BatchWindowRecord;
-import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
-import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
-import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.BatchWindowEntity;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
+import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.orchestrator.mapper.BatchWindowMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -39,16 +39,16 @@ public class OrchestratorConfigCacheService {
   private final BatchWindowMapper batchWindowMapper;
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
 
-  public JobDefinitionRecord findEnabledJobDefinition(String tenantId, String jobCode) {
+  public JobDefinitionEntity findEnabledJobDefinition(String tenantId, String jobCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "job-definition", jobCode);
-    JobDefinitionRecord cached = redis.getJson(key, JobDefinitionRecord.class);
+    JobDefinitionEntity cached = redis.getJson(key, JobDefinitionEntity.class);
     if (cached != null) {
       return cached;
     }
-    JobDefinitionRecord loaded =
+    JobDefinitionEntity loaded =
         jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
@@ -56,17 +56,17 @@ public class OrchestratorConfigCacheService {
     return loaded;
   }
 
-  public WorkflowDefinitionRecord findEnabledWorkflowDefinition(
+  public WorkflowDefinitionEntity findEnabledWorkflowDefinition(
       String tenantId, String workflowCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(workflowCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "workflow-definition", workflowCode);
-    WorkflowDefinitionRecord cached = redis.getJson(key, WorkflowDefinitionRecord.class);
+    WorkflowDefinitionEntity cached = redis.getJson(key, WorkflowDefinitionEntity.class);
     if (cached != null) {
       return cached;
     }
-    WorkflowDefinitionRecord loaded =
+    WorkflowDefinitionEntity loaded =
         workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, workflowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
@@ -74,16 +74,16 @@ public class OrchestratorConfigCacheService {
     return loaded;
   }
 
-  public BusinessCalendarRecord findEnabledBusinessCalendar(String tenantId, String calendarCode) {
+  public BusinessCalendarEntity findEnabledBusinessCalendar(String tenantId, String calendarCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(calendarCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "business-calendar", calendarCode);
-    BusinessCalendarRecord cached = redis.getJson(key, BusinessCalendarRecord.class);
+    BusinessCalendarEntity cached = redis.getJson(key, BusinessCalendarEntity.class);
     if (cached != null) {
       return cached;
     }
-    BusinessCalendarRecord loaded =
+    BusinessCalendarEntity loaded =
         businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
@@ -91,16 +91,16 @@ public class OrchestratorConfigCacheService {
     return loaded;
   }
 
-  public BatchWindowRecord findEnabledBatchWindow(String tenantId, String windowCode) {
+  public BatchWindowEntity findEnabledBatchWindow(String tenantId, String windowCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(windowCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "batch-window", windowCode);
-    BatchWindowRecord cached = redis.getJson(key, BatchWindowRecord.class);
+    BatchWindowEntity cached = redis.getJson(key, BatchWindowEntity.class);
     if (cached != null) {
       return cached;
     }
-    BatchWindowRecord loaded =
+    BatchWindowEntity loaded =
         batchWindowMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, windowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
@@ -108,16 +108,16 @@ public class OrchestratorConfigCacheService {
     return loaded;
   }
 
-  public TenantQuotaPolicyRecord findEnabledQuotaPolicy(String tenantId) {
+  public TenantQuotaPolicyEntity findEnabledQuotaPolicy(String tenantId) {
     if (!Texts.hasText(tenantId)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first");
-    TenantQuotaPolicyRecord cached = redis.getJson(key, TenantQuotaPolicyRecord.class);
+    TenantQuotaPolicyEntity cached = redis.getJson(key, TenantQuotaPolicyEntity.class);
     if (cached != null) {
       return cached;
     }
-    TenantQuotaPolicyRecord loaded =
+    TenantQuotaPolicyEntity loaded =
         tenantQuotaPolicyMapper.selectFirstEnabledByTenantId(tenantId, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);

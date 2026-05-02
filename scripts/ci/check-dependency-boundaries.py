@@ -63,38 +63,37 @@ def main() -> int:
     data_jdbc_marker = ("org.springframework.boot", "spring-boot-starter-data-jdbc")
     mybatis_marker = ("org.mybatis.spring.boot", "mybatis-spring-boot-starter")
 
-    dual_orm_modules = {
-        "batch-console-api",
-        "batch-orchestrator",
-    }
-    for module in sorted(dual_orm_modules):
+    mybatis_jdbc_modules = {"batch-console-api", "batch-orchestrator"}
+    for module in sorted(mybatis_jdbc_modules):
         deps = runtime_dependencies(module)
         missing = [
             name
             for name, marker in (
                 ("spring-boot-starter-jdbc", jdbc_marker),
-                ("spring-boot-starter-data-jdbc", data_jdbc_marker),
                 ("mybatis-spring-boot-starter", mybatis_marker),
             )
             if marker not in deps
         ]
         if missing:
             errors.append(
-                f"{module} is the documented dual-ORM boundary module, but missing runtime markers: {', '.join(missing)}"
+                f"{module} must carry JDBC + MyBatis runtime markers, but missing: {', '.join(missing)}"
             )
 
     non_data_jdbc_modules = {
+        "batch-console-api",
+        "batch-orchestrator",
         "batch-trigger",
         "batch-worker-core",
         "batch-worker-import",
         "batch-worker-export",
+        "batch-worker-process",
         "batch-worker-dispatch",
     }
     for module in sorted(non_data_jdbc_modules):
         deps = runtime_dependencies(module)
         if data_jdbc_marker in deps:
             errors.append(
-                f"{module} must not add spring-boot-starter-data-jdbc without revisiting ADR-001"
+                f"{module} must not add spring-boot-starter-data-jdbc (platform persistence is MyBatis-only; see ADR-001)"
             )
 
     if errors:

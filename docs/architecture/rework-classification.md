@@ -43,7 +43,7 @@
 
 | 项 | 类型 | 解释 |
 |---|---|---|
-| 单库瓶颈（分库分表）| **G** 重大代码改造 | 数据访问层路由：ShardingSphere / Vitess / 自实现；按 `tenant_id` hash 或 `biz_date` range；MyBatis / Spring Data JDBC 都要适配 |
+| 单库瓶颈（分库分表）| **G** 重大代码改造 | 数据访问层路由：ShardingSphere / Vitess / 自实现；按 `tenant_id` hash 或 `biz_date` range；MyBatis Mapper / SQL 两侧都要适配 |
 | Kafka topic 设计细化 | **D + F** 配置 + 中量代码 | 起多 topic + producer/consumer 路由按 tenant/priority 分流；router service 一层 |
 | 观测性空白 | **A + 少量代码** | 主要是搭 Grafana / Prometheus / OpenTelemetry，micrometer 已经埋了大部分点；缺的话补关键指标 |
 | `workflow_run` 扇出表膨胀 | **B + F** 数据治理 + 中量代码 | 加 archive 调度作业 + workflow_run / workflow_node_run 归档逻辑 |

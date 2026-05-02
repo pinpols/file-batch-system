@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -11,20 +11,20 @@ import org.apache.ibatis.annotations.Param;
 public interface WorkflowDefinitionMapper {
 
   /** 按 (tenantId, workflowCode, enabled) 取首条；用于 cache 服务回源。 */
-  WorkflowDefinitionRecord selectFirstByTenantAndCodeAndEnabled(
+  WorkflowDefinitionEntity selectFirstByTenantAndCodeAndEnabled(
       @Param("tenantId") String tenantId,
       @Param("workflowCode") String workflowCode,
       @Param("enabled") Boolean enabled);
 
   /** 列出指定 tenant 下指定启用状态的全部 workflow 定义；console 列表 / 缓存预热用。 */
-  List<WorkflowDefinitionRecord> selectByTenantAndEnabled(
+  List<WorkflowDefinitionEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  WorkflowDefinitionRecord selectById(@Param("id") Long id);
+  WorkflowDefinitionEntity selectById(@Param("id") Long id);
 
-  int insert(WorkflowDefinitionRecord record);
+  int insert(WorkflowDefinitionEntity record);
 
-  int update(WorkflowDefinitionRecord record);
+  int update(WorkflowDefinitionEntity record);
 
   int deleteById(@Param("id") Long id);
 }

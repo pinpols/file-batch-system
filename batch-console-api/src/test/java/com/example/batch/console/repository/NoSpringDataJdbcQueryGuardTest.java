@@ -14,8 +14,9 @@ import org.junit.jupiter.api.Test;
 /**
  * 守护测试:console-api 已统一走 MyBatis(MyBatis 迁移盘 Phase 0-3 完成)。
  *
- * <p>禁止 console-api {@code main} 路径下任何 Java 文件引入或使用 Spring Data JDBC 的 {@code @Query} 注解 / {@code
- * Repository} 接口。新增查询请走 MyBatis mapper(参见 {@code mapper/Console*Mapper.java} + {@code
+ * <p>禁止 console-api {@code main} 路径下任何 Java 文件引入 Spring Data JDBC / Spring Data Relational
+ * 注解或类型（{@code @Query}、{@code Repository}、{@code CrudRepository}、{@code @Column}、{@code
+ * EnableJdbcRepositories} 等）。新增查询请走 MyBatis mapper(参见 {@code mapper/Console*Mapper.java} + {@code
  * resources/mapper/Console*Mapper.xml})。
  *
  * <p>豁免:仅 test 路径不扫(允许 IT 中用 Spring Data JDBC 做断言查询)。
@@ -28,8 +29,10 @@ class NoSpringDataJdbcQueryGuardTest {
   private static final List<String> FORBIDDEN_TOKENS =
       List.of(
           "org.springframework.data.jdbc.repository.query.Query",
+          "org.springframework.data.jdbc.repository.config.EnableJdbcRepositories",
           "org.springframework.data.repository.Repository",
-          "org.springframework.data.repository.CrudRepository");
+          "org.springframework.data.repository.CrudRepository",
+          "org.springframework.data.relational.core.mapping.Column");
 
   @Test
   void noSpringDataJdbcQueryInMain() throws IOException {

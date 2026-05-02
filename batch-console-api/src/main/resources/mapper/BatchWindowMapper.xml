@@ -60,7 +60,7 @@
         limit 1
     </select>
 
-    <insert id="upsertBatchWindow" parameterType="com.example.batch.console.mapper.param.BatchWindowUpsertParam">
+    <insert id="upsertBatchWindow" parameterType="com.example.batch.console.domain.param.BatchWindowUpsertParam">
         insert into batch.batch_window (
             tenant_id, window_code, window_name, timezone,
             start_time, end_time, end_strategy, out_of_window_action,

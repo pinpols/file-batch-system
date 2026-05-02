@@ -6,7 +6,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,7 +25,7 @@ public class LaunchParamResolver {
   private final BatchTimezoneProvider timezoneProvider;
 
   Map<String, Object> mergeLaunchParams(
-      JobDefinitionRecord jobDefinition,
+      JobDefinitionEntity jobDefinition,
       TriggerType triggerType,
       Map<String, Object> runtimeParams) {
     Map<String, Object> merged = new LinkedHashMap<>();
@@ -114,7 +114,7 @@ public class LaunchParamResolver {
   Instant resolveDeadlineAt(
       Instant createdAt,
       LocalDate bizDate,
-      JobDefinitionRecord jobDefinition,
+      JobDefinitionEntity jobDefinition,
       Map<String, Object> params,
       Instant batchDaySlaDeadlineAt) {
     Instant explicit =
@@ -127,7 +127,7 @@ public class LaunchParamResolver {
     return earliest(explicit, deadlineTime, jobDeadlineAt, batchDaySlaDeadlineAt);
   }
 
-  Instant resolveJobDeadlineAt(Instant createdAt, JobDefinitionRecord jobDefinition) {
+  Instant resolveJobDeadlineAt(Instant createdAt, JobDefinitionEntity jobDefinition) {
     if (createdAt == null
         || jobDefinition == null
         || jobDefinition.timeoutSeconds() == null
@@ -138,7 +138,7 @@ public class LaunchParamResolver {
   }
 
   Integer resolveExpectedDurationSeconds(
-      JobDefinitionRecord jobDefinition, Map<String, Object> params) {
+      JobDefinitionEntity jobDefinition, Map<String, Object> params) {
     Integer explicitValue =
         firstPositiveInt(
             params.get("expectedDurationSeconds"),
@@ -157,7 +157,7 @@ public class LaunchParamResolver {
   }
 
   String buildParamsSnapshot(
-      JobDefinitionRecord jobDefinition,
+      JobDefinitionEntity jobDefinition,
       LaunchRequest request,
       Map<String, Object> effectiveParams,
       String traceId) {

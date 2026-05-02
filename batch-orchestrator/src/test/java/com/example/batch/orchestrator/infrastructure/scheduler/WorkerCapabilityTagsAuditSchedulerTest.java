@@ -5,8 +5,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import com.example.batch.orchestrator.mapper.InvalidCapabilityTagsRecord;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -58,8 +58,7 @@ class WorkerCapabilityTagsAuditSchedulerTest {
   void objectFormIsFlaggedInvalid() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(workerRegistryMapper.selectInvalidCapabilityTags())
-        .thenReturn(
-            List.of(new InvalidCapabilityTagsRecord("ta", "worker-1", "{\"ingest\":true}")));
+        .thenReturn(List.of(new InvalidCapabilityTagsParam("ta", "worker-1", "{\"ingest\":true}")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isEqualTo(1d);
   }
@@ -68,7 +67,7 @@ class WorkerCapabilityTagsAuditSchedulerTest {
   void arrayWithNonStringElementIsFlagged() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(workerRegistryMapper.selectInvalidCapabilityTags())
-        .thenReturn(List.of(new InvalidCapabilityTagsRecord("tb", "worker-2", "[\"ingest\", 42]")));
+        .thenReturn(List.of(new InvalidCapabilityTagsParam("tb", "worker-2", "[\"ingest\", 42]")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isEqualTo(1d);
   }
@@ -78,8 +77,7 @@ class WorkerCapabilityTagsAuditSchedulerTest {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(workerRegistryMapper.selectInvalidCapabilityTags())
         .thenReturn(
-            List.of(
-                new InvalidCapabilityTagsRecord("ta", "worker-x", "[\"ingest\",\"delivery\"]")));
+            List.of(new InvalidCapabilityTagsParam("ta", "worker-x", "[\"ingest\",\"delivery\"]")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isZero();
   }
@@ -90,10 +88,10 @@ class WorkerCapabilityTagsAuditSchedulerTest {
     when(workerRegistryMapper.selectInvalidCapabilityTags())
         .thenReturn(
             List.of(
-                new InvalidCapabilityTagsRecord("ta", "w-ok", "[\"ingest\"]"),
-                new InvalidCapabilityTagsRecord("ta", "w-obj", "{\"a\":1}"),
-                new InvalidCapabilityTagsRecord("tb", "w-scalar", "\"ingest\""),
-                new InvalidCapabilityTagsRecord("tb", "w-num-elem", "[\"a\", 1]")));
+                new InvalidCapabilityTagsParam("ta", "w-ok", "[\"ingest\"]"),
+                new InvalidCapabilityTagsParam("ta", "w-obj", "{\"a\":1}"),
+                new InvalidCapabilityTagsParam("tb", "w-scalar", "\"ingest\""),
+                new InvalidCapabilityTagsParam("tb", "w-num-elem", "[\"a\", 1]")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isEqualTo(3d);
   }
@@ -104,8 +102,8 @@ class WorkerCapabilityTagsAuditSchedulerTest {
     when(workerRegistryMapper.selectInvalidCapabilityTags())
         .thenReturn(
             List.of(
-                new InvalidCapabilityTagsRecord("ta", "w-null", null),
-                new InvalidCapabilityTagsRecord("ta", "w-blank", "  ")));
+                new InvalidCapabilityTagsParam("ta", "w-null", null),
+                new InvalidCapabilityTagsParam("ta", "w-blank", "  ")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isZero();
   }

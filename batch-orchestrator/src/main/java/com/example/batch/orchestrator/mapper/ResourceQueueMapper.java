@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,14 +10,14 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ResourceQueueMapper {
 
-  List<ResourceQueueRecord> selectByTenantAndEnabled(
+  List<ResourceQueueEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  ResourceQueueRecord selectById(@Param("id") Long id);
+  ResourceQueueEntity selectById(@Param("id") Long id);
 
-  int insert(ResourceQueueRecord record);
+  int insert(ResourceQueueEntity record);
 
-  int update(ResourceQueueRecord record);
+  int update(ResourceQueueEntity record);
 
   int deleteById(@Param("id") Long id);
 }

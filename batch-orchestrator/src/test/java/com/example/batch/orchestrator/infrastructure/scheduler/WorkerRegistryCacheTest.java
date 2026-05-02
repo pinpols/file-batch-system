@@ -11,7 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -49,7 +49,7 @@ class WorkerRegistryCacheTest {
   void disabledShouldBypassRedisAndCallLoader() {
     props.setEnabled(false);
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryRecord> result =
+    List<WorkerRegistryEntity> result =
         cache.getOrLoad(
             "t1",
             "EXPORT",
@@ -67,9 +67,9 @@ class WorkerRegistryCacheTest {
     props.setEnabled(true);
     when(valueOps.get(anyString())).thenReturn(null);
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryRecord> records = List.of(record(1L, "w-1"));
+    List<WorkerRegistryEntity> records = List.of(record(1L, "w-1"));
 
-    List<WorkerRegistryRecord> result =
+    List<WorkerRegistryEntity> result =
         cache.getOrLoad(
             "t1",
             "EXPORT",
@@ -82,7 +82,7 @@ class WorkerRegistryCacheTest {
     assertThat(result)
         .hasSize(1)
         .first()
-        .extracting(WorkerRegistryRecord::workerCode)
+        .extracting(WorkerRegistryEntity::workerCode)
         .isEqualTo("w-1");
     verify(valueOps).set(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
   }
@@ -109,7 +109,7 @@ class WorkerRegistryCacheTest {
     when(valueOps.get(anyString())).thenReturn(json);
     AtomicInteger calls = new AtomicInteger();
 
-    List<WorkerRegistryRecord> result =
+    List<WorkerRegistryEntity> result =
         cache.getOrLoad(
             "t1",
             "EXPORT",
@@ -129,9 +129,9 @@ class WorkerRegistryCacheTest {
     props.setEnabled(true);
     when(valueOps.get(anyString())).thenThrow(new QueryTimeoutException("redis down"));
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryRecord> records = List.of(record(2L, "w-2"));
+    List<WorkerRegistryEntity> records = List.of(record(2L, "w-2"));
 
-    List<WorkerRegistryRecord> result =
+    List<WorkerRegistryEntity> result =
         cache.getOrLoad(
             "t1",
             "EXPORT",
@@ -152,9 +152,9 @@ class WorkerRegistryCacheTest {
         .when(valueOps)
         .set(anyString(), anyString(), any(Duration.class));
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryRecord> records = List.of(record(3L, "w-3"));
+    List<WorkerRegistryEntity> records = List.of(record(3L, "w-3"));
 
-    List<WorkerRegistryRecord> result =
+    List<WorkerRegistryEntity> result =
         cache.getOrLoad(
             "t1",
             "EXPORT",
@@ -173,9 +173,9 @@ class WorkerRegistryCacheTest {
     props.setEnabled(true);
     when(valueOps.get(anyString())).thenReturn("not-a-json");
     AtomicInteger calls = new AtomicInteger();
-    List<WorkerRegistryRecord> records = List.of(record(4L, "w-4"));
+    List<WorkerRegistryEntity> records = List.of(record(4L, "w-4"));
 
-    List<WorkerRegistryRecord> result =
+    List<WorkerRegistryEntity> result =
         cache.getOrLoad(
             "t1",
             "EXPORT",
@@ -188,8 +188,8 @@ class WorkerRegistryCacheTest {
     assertThat(result).hasSize(1);
   }
 
-  private static WorkerRegistryRecord record(Long id, String code) {
-    return new WorkerRegistryRecord(
+  private static WorkerRegistryEntity record(Long id, String code) {
+    return new WorkerRegistryEntity(
         id, "t1", code, "EXPORT", null, "report", "ONLINE", Instant.now(), 0, null, null);
   }
 }

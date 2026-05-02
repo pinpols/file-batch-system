@@ -5,12 +5,12 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.PartitionThrottle;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
-import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
+import com.example.batch.orchestrator.domain.param.CountActiveByGroupParam;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -41,12 +41,12 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
   private final BatchOrchestratorGovernanceProperties governance;
 
   @Override
-  public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+  public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     if (request == null || !Texts.hasText(request.getTenantId())) {
       return ResourceCheck.allow();
     }
     int requestedPartitions = Math.max(request.getRequestedPartitionCount(), 1);
-    TenantQuotaPolicyRecord quotaPolicy = resolveQuotaPolicy(request.getTenantId());
+    TenantQuotaPolicyEntity quotaPolicy = resolveQuotaPolicy(request.getTenantId());
     long tenantActivePartitions =
         jobPartitionMapper.countActiveByTenant(
             request.getTenantId(),
@@ -106,7 +106,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
   }
 
   private long countQueueActivePartitions(
-      ResourceSchedulingRequest request, ResourceQueueRecord queue, long tenantActivePartitions) {
+      ResourceSchedulingRequest request, ResourceQueueEntity queue, long tenantActivePartitions) {
     String workerGroup =
         Texts.hasText(request.getWorkerGroup()) ? request.getWorkerGroup() : queue.workerGroup();
     if (!Texts.hasText(workerGroup)) {
@@ -123,7 +123,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
             .build());
   }
 
-  private TenantQuotaPolicyRecord resolveQuotaPolicy(String tenantId) {
+  private TenantQuotaPolicyEntity resolveQuotaPolicy(String tenantId) {
     return configCacheService.findEnabledQuotaPolicy(tenantId);
   }
 }

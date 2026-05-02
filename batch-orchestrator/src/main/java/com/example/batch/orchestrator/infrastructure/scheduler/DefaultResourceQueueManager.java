@@ -2,7 +2,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ResourceQueueManager;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
 import java.util.Comparator;
@@ -30,11 +30,11 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
   private final ResourceQueueMapper resourceQueueMapper;
 
   @Override
-  public ResourceQueueRecord resolveQueue(ResourceSchedulingRequest request) {
+  public ResourceQueueEntity resolveQueue(ResourceSchedulingRequest request) {
     if (request == null || !Texts.hasText(request.getTenantId())) {
       return null;
     }
-    List<ResourceQueueRecord> queues =
+    List<ResourceQueueEntity> queues =
         resourceQueueMapper.selectByTenantAndEnabled(request.getTenantId(), true);
     if (queues == null || queues.isEmpty()) {
       return null;
@@ -49,7 +49,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
         .sorted(
             Comparator.comparing(
-                    (ResourceQueueRecord queue) -> !"MIXED".equalsIgnoreCase(queue.queueType()))
+                    (ResourceQueueEntity queue) -> !"MIXED".equalsIgnoreCase(queue.queueType()))
                 .thenComparing(
                     queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
                 .thenComparing(
@@ -58,13 +58,13 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
                     queue -> normalizedWeight(queue.maxRunningPartitions()),
                     Comparator.reverseOrder())
                 .thenComparing(
-                    ResourceQueueRecord::queueCode,
+                    ResourceQueueEntity::queueCode,
                     Comparator.nullsLast(String::compareToIgnoreCase)))
         .findFirst()
         .orElse(null);
   }
 
-  private boolean matchesQueueType(ResourceQueueRecord queue, String workerType) {
+  private boolean matchesQueueType(ResourceQueueEntity queue, String workerType) {
     if (queue == null) {
       return false;
     }

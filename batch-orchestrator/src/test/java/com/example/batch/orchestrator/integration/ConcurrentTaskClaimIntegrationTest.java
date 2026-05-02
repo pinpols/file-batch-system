@@ -11,7 +11,7 @@ import com.example.batch.orchestrator.application.service.TaskExecutionService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.value.JsonbString;
@@ -214,9 +214,9 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     }
   }
 
-  private static WorkerRegistryRecord onlineWorker(
+  private static WorkerRegistryEntity onlineWorker(
       String tenantId, String workerCode, String workerGroup) {
-    return new WorkerRegistryRecord(
+    return new WorkerRegistryEntity(
         null,
         tenantId,
         workerCode,

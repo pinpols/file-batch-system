@@ -10,7 +10,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
@@ -223,7 +223,7 @@ class DefaultSchedulePlanBuilderTest {
 
   @Test
   void shouldInheritPriorityFromJobDefinition() {
-    JobDefinitionRecord jobDef = jobDef("NONE", 8, null);
+    JobDefinitionEntity jobDef = jobDef("NONE", 8, null);
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString())).thenReturn(jobDef);
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
@@ -238,9 +238,9 @@ class DefaultSchedulePlanBuilderTest {
     return new SchedulePlanCommand("t1", "JOB_001", "2026-01-01", params);
   }
 
-  private static JobDefinitionRecord jobDef(
+  private static JobDefinitionEntity jobDef(
       String shardStrategy, int priority, Map<String, Object> defaultParams) {
-    return new JobDefinitionRecord(
+    return new JobDefinitionEntity(
         1L,
         "t1",
         "JOB_001",

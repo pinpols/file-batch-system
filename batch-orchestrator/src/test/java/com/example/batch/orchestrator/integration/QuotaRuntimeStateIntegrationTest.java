@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
+import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -140,7 +140,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(result.allowed()).isTrue();
 
-    QuotaRuntimeStateRecord state =
+    QuotaRuntimeStateEntity state =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(state).isNotNull();
     assertThat(state.windowStartedAt()).isNotNull();
@@ -164,7 +164,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             .slidingWindowHours(2)
             .build());
 
-    QuotaRuntimeStateRecord state =
+    QuotaRuntimeStateEntity state =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(state).isNotNull();
     assertThat(state.peakBorrowedCount()).isGreaterThan(0);
@@ -206,7 +206,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(result.allowed()).isTrue();
 
-    QuotaRuntimeStateRecord state =
+    QuotaRuntimeStateEntity state =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(state).isNotNull();
     assertThat(state.windowStartedAt()).isNotNull();
@@ -245,8 +245,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     String ownerCode = "reconcile-sw-" + System.currentTimeMillis();
 
     // 直接插入一个已过期的状态
-    QuotaRuntimeStateRecord expiredState =
-        new QuotaRuntimeStateRecord(
+    QuotaRuntimeStateEntity expiredState =
+        new QuotaRuntimeStateEntity(
             null,
             "t1",
             "JOB",
@@ -264,7 +264,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     quotaRuntimeStateService.reconcileExpiredStates(2);
 
     // reconcile 后峰值应被重置
-    QuotaRuntimeStateRecord updated =
+    QuotaRuntimeStateEntity updated =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(updated).isNotNull();
     assertThat(updated.peakBorrowedCount()).isZero();
@@ -274,8 +274,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   void shouldFindExpiredStatesViaRepository() {
     String ownerCode = "find-expired-" + System.currentTimeMillis();
 
-    QuotaRuntimeStateRecord state =
-        new QuotaRuntimeStateRecord(
+    QuotaRuntimeStateEntity state =
+        new QuotaRuntimeStateEntity(
             null,
             "t1",
             "JOB",
@@ -290,7 +290,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             null);
     quotaRuntimeStateMapper.insert(state);
 
-    List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateMapper.selectExpired(Instant.now());
+    List<QuotaRuntimeStateEntity> expired = quotaRuntimeStateMapper.selectExpired(Instant.now());
 
     boolean found = expired.stream().anyMatch(r -> ownerCode.equals(r.ownerCode()));
     assertThat(found).isTrue();

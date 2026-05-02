@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.application.scheduler;
 
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 
@@ -10,5 +10,5 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest
  */
 public interface PartitionThrottle {
 
-  ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue);
+  ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue);
 }

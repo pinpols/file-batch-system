@@ -8,7 +8,7 @@
       统一为 DB 时间消除三方时钟不一致（worker JVM / orchestrator JVM / DB）。
       入参 heartbeatAt 已废弃，保留签名仅为兼容；SQL 不再引用。
     -->
-    <update id="touchHeartbeat" parameterType="com.example.batch.orchestrator.mapper.TouchHeartbeatParam">
+    <update id="touchHeartbeat" parameterType="com.example.batch.orchestrator.domain.param.TouchHeartbeatParam">
         update batch.worker_registry
            set status = case
                             when status in ('DECOMMISSIONED', 'DRAINING') then status
@@ -46,14 +46,14 @@
     </update>
 
     <!--
-      WorkerRegistryRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      WorkerRegistryEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, workerCode, workerGroup, capabilityTags, resourceTag, status,
          heartbeatAt, currentLoad, drainStartedAt, drainDeadlineAt)
       capability_tags 是 JSONB；通过 ::text 转字符串再走 JsonbStringTypeHandler 包装。
     -->
     <resultMap id="workerRegistryMap"
-               type="com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord">
+               type="com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -119,7 +119,7 @@
     </select>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, drain_started_at, drain_deadline_at,
@@ -147,7 +147,7 @@
     </insert>
 
     <update id="updateById"
-            parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         update batch.worker_registry
            set worker_group       = #{workerGroup},
                capability_tags    = cast(#{capabilityTags.value} as jsonb),
@@ -166,7 +166,7 @@
          异常形态：对象、标量、含非字符串元素的数组——selector 会把它当作无能力静默跳过，
          导致 partition 反复无可用 worker；由审计调度器以 WARN + metric 暴露。 -->
     <resultMap id="InvalidCapabilityTagsRecord"
-               type="com.example.batch.orchestrator.mapper.InvalidCapabilityTagsRecord">
+               type="com.example.batch.orchestrator.domain.param.InvalidCapabilityTagsParam">
         <result property="tenantId"   column="tenant_id"/>
         <result property="workerCode" column="worker_code"/>
         <result property="rawValue"   column="raw_value"/>

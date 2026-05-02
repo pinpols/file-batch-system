@@ -2,14 +2,14 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.BatchWindowMapper">
     <!--
-      BatchWindowRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      BatchWindowEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数，
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, windowCode, windowName, timezone,
          startTime, endTime, endStrategy, outOfWindowAction, allowCrossDay, enabled)
       列名按 V3 DDL。
     -->
     <resultMap id="batchWindowMap"
-               type="com.example.batch.orchestrator.domain.entity.BatchWindowRecord">
+               type="com.example.batch.orchestrator.domain.entity.BatchWindowEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -54,7 +54,7 @@
     </select>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchWindowRecord"
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchWindowEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.batch_window (
             tenant_id, window_code, window_name, timezone,
@@ -82,7 +82,7 @@
     </insert>
 
     <update id="update"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchWindowRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchWindowEntity">
         update batch.batch_window
            set window_name = #{windowName},
                timezone = #{timezone},

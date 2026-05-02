@@ -1,8 +1,8 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
+import com.example.batch.console.domain.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
-import com.example.batch.console.mapper.param.JobDefinitionMaintenanceUpdateParam;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

@@ -4,7 +4,7 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
-import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
+import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
@@ -48,8 +48,8 @@ public class TenantSchedulerSnapshotRecorder {
         continue;
       }
       SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
-      TenantSchedulerSnapshotRecord row =
-          new TenantSchedulerSnapshotRecord(
+      TenantSchedulerSnapshotEntity row =
+          new TenantSchedulerSnapshotEntity(
               null,
               tenantId,
               snap.generatedAt(),

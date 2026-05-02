@@ -5,7 +5,7 @@ import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceS
 import com.example.batch.orchestrator.controller.request.WorkerDrainRequest;
 import com.example.batch.orchestrator.controller.request.WorkerTenantRequest;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.service.WorkerRegistryServerService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -32,12 +32,12 @@ public class WorkerController {
   private final WorkerDrainGovernanceService workerDrainGovernanceService;
 
   @PostMapping("/register")
-  public WorkerRegistryRecord register(@RequestBody WorkerHeartbeatDto request) {
+  public WorkerRegistryEntity register(@RequestBody WorkerHeartbeatDto request) {
     return workerRegistryService.register(request);
   }
 
   @PostMapping("/{workerCode}/heartbeat")
-  public WorkerRegistryRecord heartbeat(
+  public WorkerRegistryEntity heartbeat(
       @PathVariable String workerCode, @RequestBody(required = false) WorkerHeartbeatDto request) {
     return workerRegistryService.heartbeat(workerCode, request);
   }
@@ -48,26 +48,26 @@ public class WorkerController {
   }
 
   @PostMapping("/{workerCode}/status")
-  public WorkerRegistryRecord updateStatus(
+  public WorkerRegistryEntity updateStatus(
       @PathVariable String workerCode, @RequestBody WorkerHeartbeatDto request) {
     return workerRegistryService.updateStatus(request.tenantId(), workerCode, request.status());
   }
 
   @PostMapping("/{workerCode}/drain")
-  public WorkerRegistryRecord drain(
+  public WorkerRegistryEntity drain(
       @PathVariable String workerCode, @RequestBody WorkerDrainRequest request) {
     return workerDrainGovernanceService.startDrain(
         request.tenantId(), workerCode, request.timeoutSeconds());
   }
 
   @PostMapping("/{workerCode}/force-offline")
-  public WorkerRegistryRecord forceOffline(
+  public WorkerRegistryEntity forceOffline(
       @PathVariable String workerCode, @RequestBody WorkerTenantRequest request) {
     return workerDrainGovernanceService.forceOffline(request.tenantId(), workerCode);
   }
 
   @PostMapping("/{workerCode}/takeover")
-  public WorkerRegistryRecord takeover(
+  public WorkerRegistryEntity takeover(
       @PathVariable String workerCode, @RequestBody WorkerTenantRequest request) {
     return workerDrainGovernanceService.takeover(request.tenantId(), workerCode);
   }

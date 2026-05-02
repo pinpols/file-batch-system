@@ -2,7 +2,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.orchestrator.application.scheduler.PriorityScheduler;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 public class DefaultPriorityScheduler implements PriorityScheduler {
 
   @Override
-  public Integer resolvePriority(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+  public Integer resolvePriority(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     int priority = request == null || request.getPriority() == null ? 5 : request.getPriority();
     if (priority < 1) {
       return 1;

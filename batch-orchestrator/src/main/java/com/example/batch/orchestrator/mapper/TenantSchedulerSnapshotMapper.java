@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
+import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -14,9 +14,9 @@ import org.apache.ibatis.annotations.Param;
 public interface TenantSchedulerSnapshotMapper {
 
   /** insert 一行；{@code id} 由 BIGSERIAL 自增并回写到 record (Mapper 级 keyProperty)。 */
-  int insert(TenantSchedulerSnapshotRecord record);
+  int insert(TenantSchedulerSnapshotEntity record);
 
   /** 取指定租户最近 {@code limit} 条快照，按 snapshot_at 降序。 */
-  List<TenantSchedulerSnapshotRecord> listRecent(
+  List<TenantSchedulerSnapshotEntity> listRecent(
       @Param("tenantId") String tenantId, @Param("limit") int limit);
 }

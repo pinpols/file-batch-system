@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.infrastructure.quota;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
+import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import com.example.batch.orchestrator.domain.scheduler.QuotaResetPolicy;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
@@ -47,7 +47,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
    * MyBatis 替代原 Spring Data JDBC {@code repository.save}：id==null 走 insert（带 ON CONFLICT DO NOTHING
    * 防 UV）；否则 CAS update，update affected==0 时抛 OLF 保留原乐观锁语义。
    */
-  private void persist(QuotaRuntimeStateRecord state) {
+  private void persist(QuotaRuntimeStateEntity state) {
     if (state.id() == null) {
       // 并发首次创建：unique constraint 保证只一行成功，第二个 insert affected=0；
       // 调用方下次 loadOrCreate 会读到已有行，逻辑自然收敛。
@@ -89,7 +89,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     }
 
     Instant now = Instant.now();
-    QuotaRuntimeStateRecord state =
+    QuotaRuntimeStateEntity state =
         loadOrCreate(
             new StateContext(
                 request.owner(), policy.name(), now, request.policy().slidingWindowHours()));
@@ -143,7 +143,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       return new QuotaRuntimeSnapshot(
           policy.name(), Math.max(0, burstLimit), 0, Math.max(0, burstLimit), null, null, null);
     }
-    QuotaRuntimeStateRecord state =
+    QuotaRuntimeStateEntity state =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
     if (state == null) {
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
@@ -172,9 +172,9 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   @Override
   public void reconcileExpiredStates(int slidingWindowHours) {
     Instant now = Instant.now();
-    List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateMapper.selectExpired(now);
+    List<QuotaRuntimeStateEntity> expired = quotaRuntimeStateMapper.selectExpired(now);
     DatabaseQuotaRuntimeStateService self = selfProvider.getObject();
-    for (QuotaRuntimeStateRecord state : expired) {
+    for (QuotaRuntimeStateEntity state : expired) {
       try {
         self.reconcileOne(state, now, slidingWindowHours);
       } catch (OptimisticLockingFailureException conflict) {
@@ -200,7 +200,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void reconcileOne(QuotaRuntimeStateRecord state, Instant now, int slidingWindowHours) {
+  public void reconcileOne(QuotaRuntimeStateEntity state, Instant now, int slidingWindowHours) {
     QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
     refreshState(state, policy, now, slidingWindowHours, true);
   }
@@ -208,17 +208,17 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   private record StateContext(
       QuotaReservationOwner owner, String quotaResetPolicy, Instant now, int slidingWindowHours) {}
 
-  private QuotaRuntimeStateRecord loadOrCreate(StateContext ctx) {
+  private QuotaRuntimeStateEntity loadOrCreate(StateContext ctx) {
     String tenantId = ctx.owner().tenantId();
     String quotaScope = ctx.owner().quotaScope();
     String ownerCode = ctx.owner().ownerCode();
-    QuotaRuntimeStateRecord state =
+    QuotaRuntimeStateEntity state =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
     if (state != null) {
       return state;
     }
-    QuotaRuntimeStateRecord created =
-        new QuotaRuntimeStateRecord(
+    QuotaRuntimeStateEntity created =
+        new QuotaRuntimeStateEntity(
             null,
             tenantId,
             quotaScope,
@@ -241,13 +241,13 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     return created;
   }
 
-  private QuotaRuntimeStateRecord refreshState(
-      QuotaRuntimeStateRecord state, QuotaResetPolicy policy, Instant now, int slidingWindowHours) {
+  private QuotaRuntimeStateEntity refreshState(
+      QuotaRuntimeStateEntity state, QuotaResetPolicy policy, Instant now, int slidingWindowHours) {
     return refreshState(state, policy, now, slidingWindowHours, true);
   }
 
-  private QuotaRuntimeStateRecord refreshState(
-      QuotaRuntimeStateRecord state,
+  private QuotaRuntimeStateEntity refreshState(
+      QuotaRuntimeStateEntity state,
       QuotaResetPolicy policy,
       Instant now,
       int slidingWindowHours,

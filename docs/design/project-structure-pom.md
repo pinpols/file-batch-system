@@ -100,16 +100,15 @@ batch-worker-dispatch
 
 **落位规则**：
 
-- 链路模板主表、步骤配置表、链路实例主记录属于定义态/轻聚合配置，建议放在 `batch-orchestrator` 并优先走 Spring Data JDBC
+- 链路模板主表、步骤配置表、链路实例主记录属于定义态/轻聚合配置，建议放在 `batch-orchestrator`，**与运行态相同**走 MyBatis Mapper
 - 步骤运行日志、导入/导出/分发结果回写、日志检索、回执查询属于运行态，建议在对应 Worker 中使用 MyBatis
-- 控制台检索接口优先走 MyBatis 查询 DTO，避免用 Spring Data JDBC 承担复杂检索和报表职责
+- 控制台检索接口走 MyBatis 查询 **record** / **View**，与配置维护同一持久化栈
 - 具体步骤实现放在各业务 Worker；步骤注册、统一执行入口、上下文与监控放在 `batch-worker-core` 或 `batch-orchestrator`
 - 不建议在控制台模块直接实现步骤逻辑，控制台只做配置维护、查询与运维入口
 
 **统一落位原则**：
 
-- MyBatis 持久层统一使用 `mapper/*.java + resources/mapper/*.xml`
-- Spring Data JDBC 统一使用 `repository/*.java`，且只出现在明确的定义态/配置态模块中
+- 业务持久化 **只**使用 **`mapper/*.java + resources/mapper/*.xml`（MyBatis）**；**禁止** `repository/*.java` 形式的 Spring Data JDBC 声明式仓库
 - `batch-worker` 单模块表述全部废弃，统一为 `batch-worker-core / batch-worker-import / batch-worker-export / batch-worker-process / batch-worker-dispatch`
 - 运行态核心表的主写路径集中在 `batch-orchestrator` 和对应业务 Worker 中，不在多个模块重复维护
 
@@ -119,23 +118,23 @@ batch-worker-dispatch
 - PostgreSQL 迁移统一使用 `flyway-core + flyway-database-postgresql`
 - Kafka 依赖跟随 Spring Boot 管理版本，不在业务模块单独锁定 `kafka-clients`
 - MinIO Java SDK 在父工程统一声明版本
-- 复杂 SQL 场景统一使用 `mybatis-spring-boot-starter`
-- 定义态和配置态维护场景统一使用 `spring-boot-starter-data-jdbc`
+- 复杂 SQL 场景统一使用 `mybatis-spring-boot-starter`；**全业务模块禁止** `spring-boot-starter-data-jdbc`
 - `batch-common`、`batch-worker-core` 这类纯库模块不引入 `spring-boot-maven-plugin`
 - 所有可执行模块补齐 `spring-boot-starter-actuator`
 - 所有需要集成测试的模块补齐 `spring-boot-starter-test`，Kafka 相关模块补 `spring-kafka-test`
 
 **持久层分层建议**：
 
-| 模块 | Spring Data JDBC | MyBatis | 说明 |
-|---|---|---|---|
-| `batch-trigger` | 可选 | 可选 | 若仅承载 Quartz 触发，可只保留 JDBC；不建议堆积业务 SQL |
-| `batch-orchestrator` | 是 | 是 | 定义态表走 JDBC，运行态表和调度推进走 MyBatis |
-| `batch-worker-core` | 否 | 否 | 仅提供执行基座，不直接持久化业务表 |
-| `batch-worker-import` | 否 | 是 | 文件接收、导入日志、回写状态为主，直接走 MyBatis |
-| `batch-worker-export` | 否 | 是 | 导出任务、文件生成、状态回写为主，直接走 MyBatis |
-| `batch-worker-dispatch` | 否 | 是 | 分发结果、回执、重试回写为主，直接走 MyBatis |
-| `batch-console-api` | 是 | 是 | 简单配置维护可走 JDBC，复杂检索与报表走 MyBatis |
+| 模块 | MyBatis | 说明 |
+|---|---|---|
+| `batch-trigger` | 可选 | 若仅承载 Quartz 触发，可只保留 JDBC；不建议堆积业务 SQL |
+| `batch-orchestrator` | 是 | 编排与配置表统一 MyBatis |
+| `batch-worker-core` | 否 | 仅提供执行基座，不直接持久化业务表 |
+| `batch-worker-import` | 是 | 文件接收、导入日志、回写状态为主，直接走 MyBatis |
+| `batch-worker-export` | 是 | 导出任务、文件生成、状态回写为主，直接走 MyBatis |
+| `batch-worker-dispatch` | 是 | 分发结果、回执、重试回写为主，直接走 MyBatis |
+| `batch-worker-process` | 是 | 处理链任务与状态回写为主，直接走 MyBatis |
+| `batch-console-api` | 是 | 控制台读写与检索/统计统一 MyBatis |
 
 **结构核验后的结论与微调原则**：
 
@@ -517,7 +516,6 @@ BIN / 自定义二进制文件不作为一期标准能力。
 `batch-common` 不应依赖：
 
 - MyBatis
-- Spring Data JDBC
 - PostgreSQL Driver
 - Kafka
 - MinIO SDK
@@ -554,16 +552,12 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - `spring-boot-starter-jdbc`
 - `spring-boot-starter-actuator`
 - `spring-kafka`
-- `spring-data-jdbc`
 - `mybatis-spring-boot-starter`
 - PostgreSQL Driver
 - Flyway
 - `batch-common`
 
-若需要配置类表与运行态表共存，应遵循以下边界：
-
-- 配置定义类表：Spring Data JDBC
-- 运行态、实例态、复杂查询：MyBatis
+配置表与运行态表**统一**走 MyBatis Mapper；不引入 `spring-boot-starter-data-jdbc`。
 
 该模块不建议直接引入：
 
@@ -614,7 +608,6 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - `batch-worker-core`
 - `batch-common`
 - `mybatis-spring-boot-starter`
-- `spring-data-jdbc`（仅在读取定义类配置时按需使用）
 - `univocity-parsers`
 - Apache POI
 - Commons Compress
@@ -622,8 +615,7 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - MinIO Java SDK
 - PostgreSQL Driver（通常由上层统一提供）
 
-如存在导入模板、字段映射、编码规则、头尾记录、校验规则等配置读取，可通过 Spring Data JDBC 访问定义态配置表；  
-运行日志、导入记录、复杂校验查询、入库状态推进等应走 MyBatis。
+定义类配置读取与运行日志、导入记录、状态推进**统一**建议走 MyBatis。
 
 该模块建议内聚以下能力：
 
@@ -699,14 +691,11 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - `spring-boot-starter-web`
 - `spring-boot-starter-validation`
 - `spring-boot-starter-actuator`
-- `spring-data-jdbc`
+- `spring-boot-starter-jdbc`
 - `mybatis-spring-boot-starter`
 - `batch-common`
 
-其中：
-
-- 配置维护、字典维护、简单定义类维护可使用 Spring Data JDBC
-- 文件实例中心、任务实例中心、审计检索、复杂筛选与分页查询应使用 MyBatis
+控制台持久化**统一** MyBatis（配置维护与复杂检索同一套 Mapper）；不引入 `spring-boot-starter-data-jdbc`。
 
 该模块不应直接承担：
 
@@ -805,7 +794,6 @@ spring:
 - Flyway
 - Kafka Client
 - Quartz
-- Spring Data JDBC
 - MyBatis
 - MinIO Java SDK
 - Jackson
@@ -1082,11 +1070,6 @@ spring:
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jdbc</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter</artifactId>
@@ -1433,10 +1416,6 @@ spring:
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jdbc</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter</artifactId>
         </dependency>
@@ -1734,7 +1713,7 @@ batch-trigger
 - `QuartzLaunchJob`：统一 Quartz 入口
 - `LaunchAdapterService`：把 Quartz 上下文转换成 LaunchRequest
 - `TriggerController`：手工 / API 触发入口
-- 定义态目录可使用 `repository/*.java`（Spring Data JDBC），运行态目录统一使用 `mapper/*.java + resources/mapper/*.xml`（MyBatis），两者在同一业务表上禁止混用
+- 定义态 / 运行态目录 **统一** 使用 `mapper/*.java + resources/mapper/*.xml`（MyBatis）；**同一业务表禁止** 第二套声明式 JDBC 仓库
 
 #### batch-orchestrator
 
@@ -1770,7 +1749,6 @@ batch-orchestrator
     ├── domain                                 ← Entity / Record / 枚举 / 值对象
     ├── infrastructure                         ← Kafka Producer / Outbox 转发 / 外部 HTTP 适配 / DatabaseIdempotencyGuard（幂等层）
     ├── mapper                                 ← MyBatis Mapper 接口
-    ├── repository                             ← Spring Data JDBC Repository（定义态/配置态）
     ├── scheduler                              ← @Scheduled 扫描任务（Outbox / Retry / SLA / 分片回收等）
     └── service                                ← LaunchService / LaunchValidationService 接口 + 实现（顶层入口）
 ```
@@ -1950,8 +1928,7 @@ batch-worker-dispatch
 **目录统一说明**：
 
 - MyBatis 访问层统一放 `mapper/*.java + resources/mapper/*.xml`
-- 仅定义态、配置态子目录允许使用 Spring Data JDBC 的 `repository/*.java`
-- 同一模块内不要把 MyBatis Mapper 和 Spring Data JDBC Repository 混命名为 Repository，避免语义混乱
+- **禁止** 以 Spring Data JDBC `repository/*.java` 作为业务表第二写入口；自研 `*Repository` 类须符合 ADR-001 / agent-baseline §7
 
 #### batch-console-api
 

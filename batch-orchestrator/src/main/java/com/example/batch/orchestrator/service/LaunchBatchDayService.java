@@ -8,9 +8,9 @@ import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
-import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
-import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
@@ -60,7 +60,7 @@ public class LaunchBatchDayService {
    */
   void upsertBatchDayInstance(
       LaunchRequest request,
-      JobDefinitionRecord jobDefinition,
+      JobDefinitionEntity jobDefinition,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
     DataAccessException last = null;
@@ -103,7 +103,7 @@ public class LaunchBatchDayService {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void doUpsertBatchDayInstance(
       LaunchRequest request,
-      JobDefinitionRecord jobDefinition,
+      JobDefinitionEntity jobDefinition,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
     if (isMissingLaunchContext(request, jobDefinition)) {
@@ -114,7 +114,7 @@ public class LaunchBatchDayService {
       return;
     }
     Instant now = Instant.now();
-    BatchDayInstanceRecord existing =
+    BatchDayInstanceEntity existing =
         batchDayInstanceMapper.selectByTenantCalendarBizDate(
             request.tenantId(), calendarCode, request.bizDate());
     Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
@@ -137,7 +137,7 @@ public class LaunchBatchDayService {
               ? (lateAccepted ? REASON_LATE_ACCEPTED : "CATCH_UP_LAUNCHED")
               : (pastCutoff ? "CUTOFF_REACHED_ON_CREATE" : "BATCH_DAY_OPENED");
       batchDayInstanceMapper.insert(
-          new BatchDayInstanceRecord(
+          new BatchDayInstanceEntity(
               null,
               request.tenantId(),
               calendarCode,
@@ -177,7 +177,7 @@ public class LaunchBatchDayService {
     boolean shouldMoveToCutoff = "OPEN".equalsIgnoreCase(existing.dayStatus()) && pastCutoff;
     boolean shouldReopen =
         shouldReopenBatchDay(existing.dayStatus()) || lateAccepted || catchUpLaunch;
-    BatchDayInstanceRecord updated = existing;
+    BatchDayInstanceEntity updated = existing;
     boolean changed = false;
     String fromDayStatus = existing.dayStatus();
     String toDayStatus = existing.dayStatus();
@@ -246,7 +246,7 @@ public class LaunchBatchDayService {
   }
 
   Instant resolveBatchDayCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {
-    BusinessCalendarRecord calendar =
+    BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
     if (calendar == null) {
       return null;
@@ -262,7 +262,7 @@ public class LaunchBatchDayService {
    * Asia/Shanghai}），避免落 'UTC' 导致事后 cutoff 回放偏差。
    */
   String resolveCalendarTimezone(String tenantId, String calendarCode) {
-    BusinessCalendarRecord calendar =
+    BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
     if (calendar != null && Texts.hasText(calendar.timezone())) {
       return calendar.timezone();
@@ -271,7 +271,7 @@ public class LaunchBatchDayService {
   }
 
   Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
-    BusinessCalendarRecord calendar =
+    BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
     if (!hasValidSlaOffset(calendar)) {
       return null;
@@ -287,7 +287,7 @@ public class LaunchBatchDayService {
     return "FAILED".equalsIgnoreCase(dayStatus) || "SETTLED".equalsIgnoreCase(dayStatus);
   }
 
-  boolean isPastBatchDayCutoff(BatchDayInstanceRecord batchDay, String calendarCode) {
+  boolean isPastBatchDayCutoff(BatchDayInstanceEntity batchDay, String calendarCode) {
     if (isIncompleteBatchDay(batchDay)) {
       return false;
     }
@@ -298,7 +298,7 @@ public class LaunchBatchDayService {
     return cutoffAt != null && !Instant.now().isBefore(cutoffAt);
   }
 
-  boolean isWithinLateArrivalTolerance(BatchDayInstanceRecord batchDay, String calendarCode) {
+  boolean isWithinLateArrivalTolerance(BatchDayInstanceEntity batchDay, String calendarCode) {
     if (batchDay == null || !Texts.hasText(calendarCode)) {
       return false;
     }
@@ -316,7 +316,7 @@ public class LaunchBatchDayService {
   }
 
   Integer resolveLateArrivalToleranceMin(String tenantId, String calendarCode) {
-    BusinessCalendarRecord calendar =
+    BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
     if (!hasValidLateArrivalTolerance(calendar)) {
       return 0;
@@ -324,19 +324,19 @@ public class LaunchBatchDayService {
     return calendar.lateArrivalToleranceMin();
   }
 
-  private boolean isMissingLaunchContext(LaunchRequest request, JobDefinitionRecord jobDefinition) {
+  private boolean isMissingLaunchContext(LaunchRequest request, JobDefinitionEntity jobDefinition) {
     return request == null || request.bizDate() == null || jobDefinition == null;
   }
 
-  private boolean isIncompleteBatchDay(BatchDayInstanceRecord batchDay) {
+  private boolean isIncompleteBatchDay(BatchDayInstanceEntity batchDay) {
     return batchDay == null || batchDay.bizDate() == null || batchDay.tenantId() == null;
   }
 
-  private boolean hasValidSlaOffset(BusinessCalendarRecord calendar) {
+  private boolean hasValidSlaOffset(BusinessCalendarEntity calendar) {
     return calendar != null && calendar.slaOffsetMin() != null && calendar.slaOffsetMin() > 0;
   }
 
-  private boolean hasValidLateArrivalTolerance(BusinessCalendarRecord calendar) {
+  private boolean hasValidLateArrivalTolerance(BusinessCalendarEntity calendar) {
     return calendar != null
         && calendar.lateArrivalToleranceMin() != null
         && calendar.lateArrivalToleranceMin() >= 0;
@@ -368,7 +368,7 @@ public class LaunchBatchDayService {
     if (!Texts.hasText(calendarCode)) {
       return request;
     }
-    BatchDayInstanceRecord batchDay =
+    BatchDayInstanceEntity batchDay =
         batchDayInstanceMapper.selectByTenantCalendarBizDate(
             request.tenantId(), calendarCode, request.bizDate());
     if (batchDay == null || batchDay.dayStatus() == null) {

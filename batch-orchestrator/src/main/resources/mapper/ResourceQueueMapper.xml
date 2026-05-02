@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.ResourceQueueMapper">
     <!--
-      ResourceQueueRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      ResourceQueueEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, queueCode, queueName, queueType, maxRunningJobs, maxRunningPartitions,
          maxQps, workerGroup, resourceTag, priorityPolicy, fairShareWeight, fairShareGroup,
@@ -10,7 +10,7 @@
       列名按 V3 / V25 / V42 DDL。
     -->
     <resultMap id="resourceQueueMap"
-               type="com.example.batch.orchestrator.domain.entity.ResourceQueueRecord">
+               type="com.example.batch.orchestrator.domain.entity.ResourceQueueEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -54,7 +54,7 @@
     </select>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.ResourceQueueRecord"
+            parameterType="com.example.batch.orchestrator.domain.entity.ResourceQueueEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,
@@ -94,7 +94,7 @@
     </insert>
 
     <update id="update"
-            parameterType="com.example.batch.orchestrator.domain.entity.ResourceQueueRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.ResourceQueueEntity">
         update batch.resource_queue
            set queue_name = #{queueName},
                queue_type = #{queueType},

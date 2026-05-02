@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
+import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,21 +10,21 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface TenantQuotaPolicyMapper {
 
-  List<TenantQuotaPolicyRecord> selectByTenantAndEnabled(
+  List<TenantQuotaPolicyEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
   /** 取指定租户启用的第一条策略（按 id asc）。无对应记录返回 null。 */
-  TenantQuotaPolicyRecord selectFirstEnabledByTenantId(
+  TenantQuotaPolicyEntity selectFirstEnabledByTenantId(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
   /** 列出 enabled=true 的所有 distinct tenantId；snapshot/reconciler 走全租户枚举。 */
   List<String> selectDistinctEnabledTenantIds();
 
-  TenantQuotaPolicyRecord selectById(@Param("id") Long id);
+  TenantQuotaPolicyEntity selectById(@Param("id") Long id);
 
-  int insert(TenantQuotaPolicyRecord record);
+  int insert(TenantQuotaPolicyEntity record);
 
-  int update(TenantQuotaPolicyRecord record);
+  int update(TenantQuotaPolicyEntity record);
 
   int deleteById(@Param("id") Long id);
 }

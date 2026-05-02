@@ -1,7 +1,7 @@
 package com.example.batch.console.mapper;
 
-import com.example.batch.console.mapper.param.FileTemplateConfigUpsertParam;
-import com.example.batch.console.mapper.query.FileTemplateConfigQuery;
+import com.example.batch.console.domain.param.FileTemplateConfigUpsertParam;
+import com.example.batch.console.domain.query.FileTemplateConfigQuery;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;

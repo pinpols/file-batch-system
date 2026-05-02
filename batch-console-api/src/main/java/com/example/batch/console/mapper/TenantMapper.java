@@ -1,7 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
-import com.example.batch.console.mapper.param.TenantUpsertParam;
+import com.example.batch.console.domain.param.TenantUpsertParam;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;

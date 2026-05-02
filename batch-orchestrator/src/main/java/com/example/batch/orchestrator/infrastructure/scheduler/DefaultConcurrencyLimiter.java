@@ -4,8 +4,8 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
-import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  *   <li><b>Tenant</b>：以 {@code TenantQuotaPolicy} 为源。支持 <b>fair-share group</b> 跨租户共享配额 （同 {@code
  *       fairShareGroup} 的 job 总数封顶），再走 {@code maxRunningJobsPerTenant} 基础配额 + {@code burstLimit}
  *       软弹性——通过 {@link QuotaRuntimeStateService} 在 Redis 里管理预留与滑动窗口重置。
- *   <li><b>Queue</b>：以 {@link ResourceQueueRecord} 为源，基础配额 {@code maxRunningJobs} + 队列级 burst
+ *   <li><b>Queue</b>：以 {@link ResourceQueueEntity} 为源，基础配额 {@code maxRunningJobs} + 队列级 burst
  *       limit，同样走 {@code QuotaRuntimeStateService} 软弹性通道。
  * </ol>
  *
@@ -38,7 +38,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
   private final BatchOrchestratorGovernanceProperties governance;
 
   @Override
-  public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+  public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     if (request == null || !Texts.hasText(request.getTenantId())) {
       return ResourceCheck.allow();
     }
@@ -48,7 +48,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       return globalCheck;
     }
 
-    TenantQuotaPolicyRecord quotaPolicy = resolveQuotaPolicy(request.getTenantId());
+    TenantQuotaPolicyEntity quotaPolicy = resolveQuotaPolicy(request.getTenantId());
     ResourceCheck tenantCheck = checkTenantLimit(request, quotaPolicy);
     if (!tenantCheck.allowed()) {
       return tenantCheck;
@@ -75,7 +75,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
   }
 
   private ResourceCheck checkTenantLimit(
-      ResourceSchedulingRequest request, TenantQuotaPolicyRecord quotaPolicy) {
+      ResourceSchedulingRequest request, TenantQuotaPolicyEntity quotaPolicy) {
     if (quotaPolicy == null) {
       return ResourceCheck.allow();
     }
@@ -119,7 +119,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
   }
 
   private ResourceCheck checkQueueLimit(
-      ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+      ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     if (queue == null
         || !Texts.hasText(queue.queueCode())
         || queue.maxRunningJobs() == null
@@ -151,7 +151,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     return ResourceCheck.allow();
   }
 
-  private TenantQuotaPolicyRecord resolveQuotaPolicy(String tenantId) {
+  private TenantQuotaPolicyEntity resolveQuotaPolicy(String tenantId) {
     return configCacheService.findEnabledQuotaPolicy(tenantId);
   }
 }

@@ -10,24 +10,24 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import com.example.batch.orchestrator.domain.param.AssignWorkerParam;
+import com.example.batch.orchestrator.domain.param.ClaimPartitionParam;
+import com.example.batch.orchestrator.domain.param.MarkRunningParam;
+import com.example.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import com.example.batch.orchestrator.domain.query.JobExecutionLogQuery;
-import com.example.batch.orchestrator.mapper.AssignWorkerParam;
-import com.example.batch.orchestrator.mapper.ClaimPartitionParam;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.mapper.MarkRunningParam;
-import com.example.batch.orchestrator.mapper.UpdateTaskStatusParam;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
 import java.util.List;
@@ -244,7 +244,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         task.getJobPartitionId() == null
             ? null
             : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-    JobDefinitionRecord definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
+    JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
     String businessKey =
         partition != null && partition.getBusinessKey() != null ? partition.getBusinessKey() : null;
     String idempotencyKey =
@@ -291,7 +291,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (workerCode == null || workerCode.isBlank()) {
       return false;
     }
-    WorkerRegistryRecord workerRegistry = resolveClaimableWorker(tenantId, workerCode);
+    WorkerRegistryEntity workerRegistry = resolveClaimableWorker(tenantId, workerCode);
     if (workerRegistry == null
         || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
       return false;
@@ -318,8 +318,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
    * outbox，worker 消费后 HTTP POST 回来 claim，如果这里不对称 处理，会卡在"主租户 worker_registry 查不到 →
    * isWorkerClaimable=false → claim 返 409"的死角。 生产 profile 不设置此配置，严格保留 §多租户隔离。
    */
-  private WorkerRegistryRecord resolveClaimableWorker(String tenantId, String workerCode) {
-    WorkerRegistryRecord primary =
+  private WorkerRegistryEntity resolveClaimableWorker(String tenantId, String workerCode) {
+    WorkerRegistryEntity primary =
         workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     if (primary != null) {
       return primary;
@@ -331,7 +331,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (!Texts.hasText(fallbackTenant) || fallbackTenant.equals(tenantId)) {
       return null;
     }
-    WorkerRegistryRecord fallback =
+    WorkerRegistryEntity fallback =
         workerRegistryMapper.selectByTenantAndWorkerCode(fallbackTenant, workerCode);
     if (fallback != null) {
       log.info(

@@ -43,7 +43,7 @@
         limit 1
     </select>
 
-    <insert id="insert" parameterType="com.example.batch.console.mapper.param.TenantUpsertParam">
+    <insert id="insert" parameterType="com.example.batch.console.domain.param.TenantUpsertParam">
         insert into batch.tenant (tenant_id, tenant_name, status, description, created_by)
         values (#{tenantId}, #{tenantName}, #{status}, #{description}, #{createdBy})
     </insert>

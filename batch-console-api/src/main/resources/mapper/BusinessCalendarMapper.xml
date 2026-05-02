@@ -64,7 +64,7 @@
         where tenant_id = #{tenantId} and id = #{id}
     </select>
 
-    <insert id="upsertBusinessCalendar" parameterType="com.example.batch.console.mapper.param.BusinessCalendarUpsertParam">
+    <insert id="upsertBusinessCalendar" parameterType="com.example.batch.console.domain.param.BusinessCalendarUpsertParam">
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
             holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled

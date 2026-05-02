@@ -3,8 +3,10 @@ package com.example.batch.worker.core.domain;
 import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.util.Map;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
 
   private Long taskId;
