@@ -75,7 +75,7 @@
          JOIN 走 (tenant_id, dedup_key) — uk_job_instance_tenant_dedup 保证 ji 至多一行;
          trigger_request 唯一约束在 (tenant_id, request_id),也至多一行。
          olderThan 过滤掉刚 ack 的请求(避免与 consumer writeBack 抢同一行,留 5min 静默期)。 -->
-    <resultMap id="LaunchReconcileRowMap" type="com.example.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow">
+    <resultMap id="LaunchReconcileRowMap" type="com.example.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow">
         <result column="tenant_id" property="tenantId"/>
         <result column="request_id" property="requestId"/>
         <result column="job_instance_id" property="jobInstanceId"/>

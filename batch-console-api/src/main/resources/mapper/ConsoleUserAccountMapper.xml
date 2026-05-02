@@ -3,7 +3,7 @@
 <mapper namespace="com.example.batch.console.mapper.ConsoleUserAccountMapper">
 
     <resultMap id="userAccountEntityMap"
-               type="com.example.batch.console.domain.ConsoleUserAccountEntity">
+               type="com.example.batch.console.domain.entity.ConsoleUserAccountEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="username" property="username"/>
