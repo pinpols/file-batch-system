@@ -1,6 +1,7 @@
 package com.example.batch.worker.processes.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -13,11 +14,14 @@ class ProcessMetricsTest {
   void noopFactory_doesNotThrow_whenRegistryAbsent() {
     ProcessMetrics metrics = ProcessMetrics.noop();
 
-    // 全部调用应当 no-op,不抛异常,不创建 meter。
-    metrics.recordComputeStagedRows("t1", 10);
-    metrics.recordCommitPublishedRows("t1", 5);
-    metrics.incrementValidationFailed("t1", "rule1");
-    metrics.recordStageDuration("PREPARE", "t1", true, 12345L);
+    assertThatCode(
+            () -> {
+              metrics.recordComputeStagedRows("t1", 10);
+              metrics.recordCommitPublishedRows("t1", 5);
+              metrics.incrementValidationFailed("t1", "rule1");
+              metrics.recordStageDuration("PREPARE", "t1", true, 12345L);
+            })
+        .doesNotThrowAnyException();
   }
 
   @Test

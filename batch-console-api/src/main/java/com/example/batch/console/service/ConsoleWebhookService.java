@@ -12,7 +12,6 @@ import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -115,9 +114,6 @@ public class ConsoleWebhookService {
                 () ->
                     BizException.of(
                         ResultCode.INVALID_ARGUMENT, "error.webhook.event_types_required"));
-    if (Objects.equals(normalized, "*")) {
-      return normalized;
-    }
     return normalized;
   }
 

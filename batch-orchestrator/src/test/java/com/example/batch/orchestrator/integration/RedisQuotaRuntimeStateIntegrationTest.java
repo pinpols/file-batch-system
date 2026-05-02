@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
@@ -84,8 +85,8 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void reconcileIsNoOpForRedisBackend() {
-    quotaRuntimeStateService.reconcileExpiredStates(2);
-    // 没异常即过；Redis 实现的 reconcile 是 no-op
+    assertThatCode(() -> quotaRuntimeStateService.reconcileExpiredStates(2))
+        .doesNotThrowAnyException();
   }
 
   // ── describe: 未持久化 owner → 默认快照

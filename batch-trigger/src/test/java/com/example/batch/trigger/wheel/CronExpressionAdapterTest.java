@@ -1,6 +1,7 @@
 package com.example.batch.trigger.wheel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.text.ParseException;
@@ -77,7 +78,7 @@ class CronExpressionAdapterTest {
   void evictRemovesFromCache() {
     String expr = "0 0 * * * ?";
     adapter.next(expr, SHANGHAI, Instant.now()); // 进缓存
-    adapter.evict(expr); // 不抛异常即可
+    assertThatCode(() -> adapter.evict(expr)).doesNotThrowAnyException();
   }
 
   // ── 与 Quartz CronExpression 一致性(切换 sanity check)──

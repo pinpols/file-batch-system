@@ -1,5 +1,7 @@
 package com.example.batch.common.utils;
 
+import org.jetbrains.annotations.Contract;
+
 /**
  * 项目内部字符串工具。替代 {@code org.springframework.util.StringUtils}——全仓仅用到 {@code hasText}
  * 一个方法，没必要为了它保留外部依赖入口；同时和 {@link ConsoleTextSanitizer} / {@link EncodingUtils} 等 batch-common
@@ -12,6 +14,7 @@ public final class Texts {
   private Texts() {}
 
   /** 字符序列是否非空且含至少一个非空白字符。 */
+  @Contract("null -> false")
   public static boolean hasText(CharSequence str) {
     if (str == null) {
       return false;
@@ -29,6 +32,7 @@ public final class Texts {
   }
 
   /** String 重载，避免调用方因 {@code null} 字面量歧义触发 {@code CharSequence} 路径的 NPE。 */
+  @Contract("null -> false")
   public static boolean hasText(String str) {
     return hasText((CharSequence) str);
   }
