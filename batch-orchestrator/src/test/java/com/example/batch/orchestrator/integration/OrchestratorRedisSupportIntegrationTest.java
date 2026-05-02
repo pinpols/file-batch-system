@@ -17,7 +17,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 /** 集成测试：验证 OrchestratorRedisSupport 的核心 Redis 操作使用真实 Redis 容器正确执行。 */
 @SpringBootTest(
     classes = OrchestratorRedisSupportIntegrationTest.TestApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = {"batch.startup-self-check.enabled=false"})
 class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration

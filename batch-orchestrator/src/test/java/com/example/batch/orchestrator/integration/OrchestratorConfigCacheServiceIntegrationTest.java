@@ -25,7 +25,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  */
 @SpringBootTest(
     classes = OrchestratorConfigCacheServiceIntegrationTest.TestApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = {"batch.startup-self-check.enabled=false"})
 class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
