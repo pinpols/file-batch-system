@@ -2,8 +2,8 @@ package com.example.batch.console.application;
 
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
-import com.example.batch.console.web.request.FileChannelCreateRequest;
-import com.example.batch.console.web.request.FileChannelUpdateRequest;
+import com.example.batch.console.web.request.file.FileChannelCreateRequest;
+import com.example.batch.console.web.request.file.FileChannelUpdateRequest;
 import java.util.Map;
 
 /**

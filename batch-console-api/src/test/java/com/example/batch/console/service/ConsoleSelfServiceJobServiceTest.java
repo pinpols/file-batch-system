@@ -12,7 +12,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.CompensationParam;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.RerunParam;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

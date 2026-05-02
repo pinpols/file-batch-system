@@ -4,7 +4,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.example.batch.orchestrator.application.service.RetryGovernanceService;
+import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;

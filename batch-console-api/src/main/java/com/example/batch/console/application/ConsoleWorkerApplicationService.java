@@ -1,9 +1,9 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.DrainWorkerRequest;
-import com.example.batch.console.web.request.ForceOfflineWorkerRequest;
-import com.example.batch.console.web.response.ConsoleWorkerClaimedTaskResponse;
-import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
+import com.example.batch.console.web.request.ops.DrainWorkerRequest;
+import com.example.batch.console.web.request.ops.ForceOfflineWorkerRequest;
+import com.example.batch.console.web.response.ops.ConsoleWorkerClaimedTaskResponse;
+import com.example.batch.console.web.response.ops.ConsoleWorkerRegistryResponse;
 import java.util.List;
 
 /** 控制台 Worker 运维应用服务：优雅排空、强制下线及已认领任务查询。 */

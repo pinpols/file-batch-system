@@ -1,0 +1,20 @@
+package com.example.batch.console.web.request.config;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+public class ConfigApprovalActionRequest {
+
+  @NotBlank
+  @Size(max = 64)
+  private String tenantId;
+
+  @NotBlank
+  @Size(max = 64)
+  private String operatorId;
+
+  @Size(max = 512)
+  private String reason;
+}

@@ -1,9 +1,9 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.BusinessCalendarExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleBusinessCalendarExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleBusinessCalendarExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleBusinessCalendarExcelUploadResponse;
+import com.example.batch.console.web.request.file.BusinessCalendarExcelApplyRequest;
+import com.example.batch.console.web.response.file.ConsoleBusinessCalendarExcelApplyResponse;
+import com.example.batch.console.web.response.file.ConsoleBusinessCalendarExcelPreviewResponse;
+import com.example.batch.console.web.response.file.ConsoleBusinessCalendarExcelUploadResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;

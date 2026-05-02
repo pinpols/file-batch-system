@@ -5,7 +5,7 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

@@ -1,10 +1,10 @@
 package com.example.batch.console.application;
 
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
-import com.example.batch.console.web.request.JobDefinitionExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleJobDefinitionExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleJobDefinitionExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleJobDefinitionExcelUploadResponse;
+import com.example.batch.console.web.request.job.JobDefinitionExcelApplyRequest;
+import com.example.batch.console.web.response.job.ConsoleJobDefinitionExcelApplyResponse;
+import com.example.batch.console.web.response.job.ConsoleJobDefinitionExcelPreviewResponse;
+import com.example.batch.console.web.response.job.ConsoleJobDefinitionExcelUploadResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;

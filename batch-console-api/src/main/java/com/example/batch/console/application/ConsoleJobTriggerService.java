@@ -1,6 +1,6 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.TriggerRequest;
+import com.example.batch.console.web.request.job.TriggerRequest;
 import java.util.List;
 import java.util.Map;
 

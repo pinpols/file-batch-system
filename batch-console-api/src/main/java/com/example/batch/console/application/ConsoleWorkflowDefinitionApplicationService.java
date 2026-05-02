@@ -1,7 +1,7 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.WorkflowDefinitionSaveRequest;
-import com.example.batch.console.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.web.request.workflow.WorkflowDefinitionSaveRequest;
+import com.example.batch.console.web.response.workflow.WorkflowDefinitionDetailResponse;
 import java.util.List;
 
 /** 工作流定义应用服务：管理工作流定义的 CRUD 及 DAG 校验操作。 */

@@ -8,13 +8,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.console.infrastructure.file.DefaultConsoleFileChannelExcelApplicationService;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.support.ExcelImportStore;
-import com.example.batch.console.support.InMemoryExcelImportStore;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.excel.ExcelImportStore;
+import com.example.batch.console.support.excel.InMemoryExcelImportStore;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
 import com.example.batch.console.web.request.ExcelApplyRequest;
 import com.example.batch.testing.TestExcelFileBuilder;

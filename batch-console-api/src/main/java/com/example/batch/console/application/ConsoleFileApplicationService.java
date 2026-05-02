@@ -1,12 +1,12 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.ArchiveFileRequest;
-import com.example.batch.console.web.request.DeleteFileRequest;
-import com.example.batch.console.web.request.FileArrivalGroupActionRequest;
-import com.example.batch.console.web.request.PresignDownloadFileRequest;
-import com.example.batch.console.web.request.RedispatchFileRequest;
-import com.example.batch.console.web.response.ConsoleFileOperationResponse;
-import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
+import com.example.batch.console.web.request.file.ArchiveFileRequest;
+import com.example.batch.console.web.request.file.DeleteFileRequest;
+import com.example.batch.console.web.request.file.FileArrivalGroupActionRequest;
+import com.example.batch.console.web.request.file.PresignDownloadFileRequest;
+import com.example.batch.console.web.request.file.RedispatchFileRequest;
+import com.example.batch.console.web.response.file.ConsoleFileOperationResponse;
+import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.util.Map;
 
 /** 控制台文件治理应用服务：归档、删除、重派、预签名下载及到达组操作。 */

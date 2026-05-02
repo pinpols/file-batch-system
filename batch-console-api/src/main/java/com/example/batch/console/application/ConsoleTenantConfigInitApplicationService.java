@@ -1,7 +1,7 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.TenantConfigBatchInitRequest;
-import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
+import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest;
+import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse;
 
 /**
  * 租户配置批量初始化应用服务。

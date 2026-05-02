@@ -6,9 +6,9 @@ import com.example.batch.console.application.ConsoleFileTemplateApplicationServi
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
-import com.example.batch.console.web.request.EnabledPatchRequest;
-import com.example.batch.console.web.request.FileTemplateCreateRequest;
-import com.example.batch.console.web.request.FileTemplateUpdateRequest;
+import com.example.batch.console.web.request.file.FileTemplateCreateRequest;
+import com.example.batch.console.web.request.file.FileTemplateUpdateRequest;
+import com.example.batch.console.web.request.job.EnabledPatchRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;

@@ -1,0 +1,120 @@
+package com.example.batch.console.infrastructure.config;
+
+import com.example.batch.common.utils.Nullables;
+import com.example.batch.console.application.ConsoleTenantConfigInitApplicationService;
+import com.example.batch.console.infrastructure.config.TenantConfigInitApplyHandlers.ApplyContext;
+import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest.InitMode;
+import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse;
+import com.example.batch.console.web.response.TenantConfigBatchInitResponse.ItemStats;
+import com.example.batch.console.web.response.TenantConfigBatchInitResponse.TenantInitResult;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 跨租户批量配置初始化入口，被 {@link DefaultConsoleConfigSyncApplicationService#importBundle} 和 直接 HTTP 入口两条路调用。
+ *
+ * <p><b>权限边界</b>：直接操作 Mapper 层，主动绕过租户守卫——调用方须在进入本服务前完成 ROLE_ADMIN 校验， 本服务不再重复验证。
+ *
+ * <p><b>10 种配置类型</b>：job / workflow / pipeline / fileChannel / fileTemplate / resourceQueue /
+ * batchWindow / businessCalendar / quotaPolicy / alertRouting，每种类型由 {@link
+ * TenantConfigInitApplyHandlers} 中独立的 {@code apply*} 方法处理(P2-3 god-class-decomposition extract,
+ * 2026-04-30 抽出),公共"查找 → 跳过/更新/创建"循环也在 handler 内部统一驱动并逐项隔离异常(单项失败不中断全批)。
+ *
+ * <p><b>InitMode</b>:
+ *
+ * <ul>
+ *   <li>{@code SKIP_EXISTING}(默认) — 已存在则记为 skipped,适合首次初始化。
+ *   <li>{@code UPSERT} — 已存在则覆盖更新,适合跨环境同步。
+ * </ul>
+ *
+ * <p><b>dryRun</b>:所有 insert/update 被跳过,仅做 find + 计数,用于 ConfigSync preview 预判结果。
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DefaultConsoleTenantConfigInitApplicationService
+    implements ConsoleTenantConfigInitApplicationService {
+
+  private final TenantConfigInitApplyHandlers applyHandlers;
+
+  @Override
+  public TenantConfigBatchInitResponse batchInit(
+      TenantConfigBatchInitRequest request, String operator, String batchOperationId) {
+    boolean dryRun = request.isDryRun();
+    List<TenantInitResult> results = new ArrayList<>();
+    int successCount = 0;
+    int failureCount = 0;
+
+    for (String tenantId : request.getTargetTenantIds()) {
+      try {
+        TenantInitResult result = initForTenant(tenantId, request, operator, dryRun);
+        results.add(result);
+        if (result.success()) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+      } catch (Exception ex) {
+        log.error(
+            "[TenantConfigBatchInit] unexpected error for tenant={} batchOp={}",
+            tenantId,
+            batchOperationId,
+            ex);
+        results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
+        failureCount++;
+      }
+    }
+
+    return new TenantConfigBatchInitResponse(
+        batchOperationId,
+        request.getTargetTenantIds().size(),
+        successCount,
+        failureCount,
+        dryRun,
+        results);
+  }
+
+  @Transactional
+  protected TenantInitResult initForTenant(
+      String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
+    InitMode mode = Nullables.coalesce(request.getMode(), InitMode.SKIP_EXISTING);
+    ApplyContext ctx = new ApplyContext(tenantId, mode, operator, dryRun);
+    try {
+      ItemStats jobStats = applyHandlers.applyJobDefinitions(request.getJobDefinitions(), ctx);
+      ItemStats workflowStats =
+          applyHandlers.applyWorkflowDefinitions(request.getWorkflowDefinitions(), ctx);
+      ItemStats pipelineStats =
+          applyHandlers.applyPipelineDefinitions(request.getPipelineDefinitions(), ctx);
+      ItemStats channelStats = applyHandlers.applyFileChannels(request.getFileChannels(), ctx);
+      ItemStats templateStats = applyHandlers.applyFileTemplates(request.getFileTemplates(), ctx);
+      ItemStats queueStats = applyHandlers.applyResourceQueues(request.getResourceQueues(), ctx);
+      ItemStats windowStats = applyHandlers.applyBatchWindows(request.getBatchWindows(), ctx);
+      ItemStats calendarStats =
+          applyHandlers.applyBusinessCalendars(request.getBusinessCalendars(), ctx);
+      ItemStats quotaStats = applyHandlers.applyQuotaPolicies(request.getQuotaPolicies(), ctx);
+      ItemStats alertStats = applyHandlers.applyAlertRoutings(request.getAlertRoutings(), ctx);
+      return new TenantInitResult(
+          tenantId,
+          true,
+          null,
+          jobStats,
+          workflowStats,
+          pipelineStats,
+          channelStats,
+          templateStats,
+          queueStats,
+          windowStats,
+          calendarStats,
+          quotaStats,
+          alertStats);
+    } catch (Exception ex) {
+      log.warn("[TenantConfigBatchInit] failed for tenant={}: {}", tenantId, ex.getMessage());
+      return TenantInitResult.failed(tenantId, ex.getMessage());
+    }
+  }
+}

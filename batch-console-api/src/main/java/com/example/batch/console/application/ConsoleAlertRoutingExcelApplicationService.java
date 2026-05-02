@@ -2,11 +2,11 @@ package com.example.batch.console.application;
 
 import com.example.batch.console.web.query.AlertRoutingQueryRequest;
 import com.example.batch.console.web.request.ExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleAlertRoutingResponse;
 import com.example.batch.console.web.response.ExcelApplyResponse;
 import com.example.batch.console.web.response.ExcelPreviewResponse;
 import com.example.batch.console.web.response.ExcelQuickImportResponse;
 import com.example.batch.console.web.response.ExcelUploadResponse;
+import com.example.batch.console.web.response.config.ConsoleAlertRoutingResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;

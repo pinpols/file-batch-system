@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.retry;
 
-import com.example.batch.orchestrator.application.service.RetryGovernanceService;
+import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;

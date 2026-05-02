@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.controller;
 
-import com.example.batch.orchestrator.application.service.FileGovernanceService;
+import com.example.batch.orchestrator.application.service.governance.FileGovernanceService;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;

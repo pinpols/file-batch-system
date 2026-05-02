@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ResourceTagEntity;
 import com.example.batch.console.mapper.ConsoleResourceTagMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

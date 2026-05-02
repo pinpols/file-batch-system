@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.domain.entity.ResourceTagEntity;
 import com.example.batch.console.mapper.ConsoleResourceTagMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;

@@ -9,7 +9,7 @@ import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import com.example.batch.e2e.support.E2eTestSql;
-import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
+import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.net.URI;

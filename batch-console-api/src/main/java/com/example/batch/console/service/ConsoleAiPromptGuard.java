@@ -7,7 +7,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleAiProperties;
-import com.example.batch.console.support.AiPromptGateResult;
+import com.example.batch.console.support.auth.AiPromptGateResult;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

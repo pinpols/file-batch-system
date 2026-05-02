@@ -3,12 +3,12 @@ package com.example.batch.console.application;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
 import com.example.batch.console.web.query.SecretVersionQueryRequest;
-import com.example.batch.console.web.request.ConfigReleaseActionRequest;
-import com.example.batch.console.web.request.ConfigReleaseUpsertRequest;
-import com.example.batch.console.web.request.SecretVersionRotateRequest;
-import com.example.batch.console.web.response.ConsoleConfigChangeLogResponse;
-import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
-import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
+import com.example.batch.console.web.request.config.ConfigReleaseActionRequest;
+import com.example.batch.console.web.request.config.ConfigReleaseUpsertRequest;
+import com.example.batch.console.web.request.ops.SecretVersionRotateRequest;
+import com.example.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
+import com.example.batch.console.web.response.config.ConsoleConfigReleaseResponse;
+import com.example.batch.console.web.response.ops.ConsoleSecretVersionResponse;
 import java.util.List;
 import java.util.Map;
 

@@ -9,8 +9,8 @@ import com.example.batch.console.service.ConsoleWebhookService.CreateSubscriptio
 import com.example.batch.console.service.ConsoleWebhookService.UpdateSubscriptionCommand;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.Idempotent;
-import com.example.batch.console.web.request.CreateWebhookRequest;
-import com.example.batch.console.web.request.UpdateWebhookRequest;
+import com.example.batch.console.web.request.ops.CreateWebhookRequest;
+import com.example.batch.console.web.request.ops.UpdateWebhookRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

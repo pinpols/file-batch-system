@@ -1,6 +1,6 @@
 package com.example.batch.console.support.cache;
 
-import com.example.batch.console.infrastructure.ConsoleConfigCacheInvalidationService;
+import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import java.lang.reflect.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;

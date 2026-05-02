@@ -1,9 +1,9 @@
 package com.example.batch.console.application;
 
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.web.request.CalendarSaveRequest;
-import com.example.batch.console.web.request.HolidayImportRequest;
-import com.example.batch.console.web.request.HolidaySaveRequest;
+import com.example.batch.console.web.request.file.CalendarSaveRequest;
+import com.example.batch.console.web.request.file.HolidayImportRequest;
+import com.example.batch.console.web.request.file.HolidaySaveRequest;
 import java.util.List;
 import java.util.Map;
 

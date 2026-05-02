@@ -4,7 +4,7 @@ import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.application.service.AlertEventService;
+import com.example.batch.orchestrator.application.service.governance.AlertEventService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;

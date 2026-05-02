@@ -1,7 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.infrastructure.ConsoleConfigCacheInvalidationService;
+import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.Idempotent;
 import java.util.Map;

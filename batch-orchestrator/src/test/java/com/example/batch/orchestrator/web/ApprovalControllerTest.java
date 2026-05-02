@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.orchestrator.application.service.ApprovalWorkflowService;
+import com.example.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import com.example.batch.orchestrator.controller.ApprovalController;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import org.junit.jupiter.api.Test;

@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
-import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
+import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;

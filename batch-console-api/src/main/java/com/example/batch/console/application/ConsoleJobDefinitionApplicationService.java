@@ -1,9 +1,9 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.JobDefinitionCopyRequest;
-import com.example.batch.console.web.request.JobDefinitionCreateRequest;
-import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
-import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
+import com.example.batch.console.web.request.job.JobDefinitionCopyRequest;
+import com.example.batch.console.web.request.job.JobDefinitionCreateRequest;
+import com.example.batch.console.web.request.job.JobDefinitionUpdateRequest;
+import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
 import java.util.List;
 
 /** 作业定义应用服务：管理作业定义的 CRUD 操作。 */

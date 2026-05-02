@@ -10,8 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.application.ConsoleOpsApplicationService;
-import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;

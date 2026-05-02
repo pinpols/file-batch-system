@@ -10,7 +10,7 @@ import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
 import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

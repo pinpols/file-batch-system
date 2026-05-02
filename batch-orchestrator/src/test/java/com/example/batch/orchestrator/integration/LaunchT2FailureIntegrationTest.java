@@ -9,7 +9,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.application.service.PartitionDispatchService;
+import com.example.batch.orchestrator.application.service.task.PartitionDispatchService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;

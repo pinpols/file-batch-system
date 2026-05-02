@@ -1,6 +1,6 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
+import com.example.batch.console.web.response.ops.ConsoleBatchApprovalResultResponse;
 import java.util.List;
 
 /** 控制台审批应用服务：单条审批通过/拒绝及批量审批。 */

@@ -5,9 +5,9 @@ import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicatio
 import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.Idempotent;
-import com.example.batch.console.web.request.EnabledPatchRequest;
-import com.example.batch.console.web.request.WorkflowDefinitionSaveRequest;
-import com.example.batch.console.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.web.request.job.EnabledPatchRequest;
+import com.example.batch.console.web.request.workflow.WorkflowDefinitionSaveRequest;
+import com.example.batch.console.web.response.workflow.WorkflowDefinitionDetailResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

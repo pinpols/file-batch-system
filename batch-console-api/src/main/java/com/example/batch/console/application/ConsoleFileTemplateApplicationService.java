@@ -2,8 +2,8 @@ package com.example.batch.console.application;
 
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
-import com.example.batch.console.web.request.FileTemplateCreateRequest;
-import com.example.batch.console.web.request.FileTemplateUpdateRequest;
+import com.example.batch.console.web.request.file.FileTemplateCreateRequest;
+import com.example.batch.console.web.request.file.FileTemplateUpdateRequest;
 import java.util.Map;
 
 /** 文件模板应用服务：管理文件模板配置的 CRUD 及启停操作。 */

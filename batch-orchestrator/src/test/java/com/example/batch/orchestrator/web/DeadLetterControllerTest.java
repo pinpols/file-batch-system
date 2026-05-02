@@ -6,7 +6,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.batch.orchestrator.application.service.RetryGovernanceService;
+import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.controller.DeadLetterController;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import org.junit.jupiter.api.Test;
