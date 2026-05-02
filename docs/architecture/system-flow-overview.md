@@ -52,6 +52,7 @@ flowchart LR
   RDS[("Redis<br/>ShedLock / config-cache (pub/sub)<br/>shard-assignment / quota Lua")]:::store
 
   K[("Kafka<br/>batch.task.dispatch.*")]:::store
+  TKAFKA[("Kafka<br/>batch.trigger.launch.v1<br/>(via trigger_outbox + relay · ADR-010)")]:::store
 
   subgraph WORKERS ["执行层 · 四类 Worker"]
     direction TB
@@ -77,8 +78,9 @@ flowchart LR
   QZ      ==>|"cron fire (SCHEDULED · 回退路径)<br/>需显式 BATCH_TRIGGER_SCHEDULER_IMPL=quartz"| TR
   WHEEL   ==>|"tick fire (SCHEDULED · 当前默认)<br/>📈 生产 95%+ 触发量"| WS
   FLAG    -. "scheduler-impl=wheel → autoStartup=false" .-> QZ
-  TR      ==>|"HTTP /internal/launch"| LS
-  WS      ==>|"HTTP /internal/launch"| LS
+  TR      ==>|"INSERT trigger_outbox_event<br/>(同事务) → TriggerOutboxRelay"| TKAFKA
+  WS      ==>|"INSERT trigger_outbox_event<br/>(同事务) → TriggerOutboxRelay"| TKAFKA
+  TKAFKA  ==>|"@KafkaListener consume<br/>→ LaunchApplicationService.launch"| LS
 
   %% ─── 调度写库（JDBC INSERT） ─────────────────────
   LS ==>|"INSERT job_instance<br/>+ partition + outbox_event<br/>(同一 tx)"| PDB
@@ -121,30 +123,30 @@ flowchart LR
   linkStyle 4 stroke:#1565c0,stroke-width:2.5px
   %%   5      feature flag 控制（虚线灰）
   linkStyle 5 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   6,7    trigger → orchestrator（HTTP 蓝，MANUAL 与 SCHEDULED 在此汇合）
-  linkStyle 6,7 stroke:#1565c0,stroke-width:2.5px
-  %%   8     LS → PDB 写（绿）
-  linkStyle 8 stroke:#2e7d32,stroke-width:2.5px
-  %%   9..11 PA/SEL/OUT 读 PDB（紫虚）
-  linkStyle 9,10,11 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   12    SCH ↔ Redis（黄虚）
-  linkStyle 12 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   13..17 Kafka 链(橙) — OUT→K + 4 条 K→worker(import/export/process/dispatch)
-  linkStyle 13,14,15,16,17 stroke:#ef6c00,stroke-width:2.5px
-  %%   18..21 worker → LS 上报(HTTP 蓝虚 = 控制信号,4 条 worker)
-  linkStyle 18,19,20,21 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   22    LS → PDB 状态机更新(绿)
-  linkStyle 22 stroke:#2e7d32,stroke-width:2.5px
-  %%   23    worker-import → biz 写(绿)
+  %%   6,7,8  trigger → TKAFKA → orchestrator（橙 = Kafka 异步，ADR-010 固化路径，MANUAL 与 SCHEDULED 在此汇合）
+  linkStyle 6,7,8 stroke:#ef6c00,stroke-width:2.5px
+  %%   9     LS → PDB 写（绿）
+  linkStyle 9 stroke:#2e7d32,stroke-width:2.5px
+  %%   10..12 PA/SEL/OUT 读 PDB（紫虚）
+  linkStyle 10,11,12 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   13    SCH ↔ Redis（黄虚）
+  linkStyle 13 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   14..18 Kafka 链(橙) — OUT→K + 4 条 K→worker(import/export/process/dispatch)
+  linkStyle 14,15,16,17,18 stroke:#ef6c00,stroke-width:2.5px
+  %%   19..22 worker → LS 上报(HTTP 蓝虚 = 控制信号,4 条 worker)
+  linkStyle 19,20,21,22 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   23    LS → PDB 状态机更新(绿)
   linkStyle 23 stroke:#2e7d32,stroke-width:2.5px
-  %%   24    worker-export 读 biz(紫虚)
-  linkStyle 24 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   25    worker-export → MinIO(外部红)
-  linkStyle 25 stroke:#c62828,stroke-width:2.5px
-  %%   26    worker-dispatch 读 MinIO(紫虚)
-  linkStyle 26 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   27    worker-dispatch → 外部 target(红)
-  linkStyle 27 stroke:#c62828,stroke-width:2.5px
+  %%   24    worker-import → biz 写(绿)
+  linkStyle 24 stroke:#2e7d32,stroke-width:2.5px
+  %%   25    worker-export 读 biz(紫虚)
+  linkStyle 25 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   26    worker-export → MinIO(外部红)
+  linkStyle 26 stroke:#c62828,stroke-width:2.5px
+  %%   27    worker-dispatch 读 MinIO(紫虚)
+  linkStyle 27 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   28    worker-dispatch → 外部 target(红)
+  linkStyle 28 stroke:#c62828,stroke-width:2.5px
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
@@ -156,7 +158,7 @@ flowchart LR
 
 ### 一句话叙事
 
-1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`** 走 Quartz；切到 `wheel` 走新 HashedWheel；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 写 `trigger_request` → 调 orchestrator（**默认同步 HTTP 桥；可切异步 outbox+Kafka 模式，见 §1.4 ADR-010**）。
+1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`** 走 Quartz；切到 `wheel` 走新 HashedWheel；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 同事务写 `trigger_request` + `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch（**ADR-010 固化异步路径，无开关；详见 §1.4**）。
 2. **调度**：orchestrator `LaunchService` 写入 `job_instance` + `job_partition` + `outbox_event`（同一事务）。
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态（含 i18n 三元组 + ADR-009 节点 outputs）→ orchestrator 推进状态机 + 落 `workflow_node_run.output` JSONB 列。
@@ -223,7 +225,7 @@ flowchart LR
   REPL[("PG replica<br/>:15433<br/>readOnly 路由<br/>fail-open 退主")]:::store
   REDIS[("Redis Streams<br/>+ pub/sub config evict")]:::store
   COMPDB[("compensation_command<br/>(在 PRIM 之内)")]:::store
-  TRG["batch-trigger<br/>(/internal/launch)"]:::svc
+  TRG["batch-trigger<br/>(POST /api/triggers/launch)"]:::svc
   ORCH["batch-orchestrator<br/>(/internal/compensate /<br/>config-cache evict)"]:::svc
   OPENAI[(OpenAI / 私有化代理)]:::extern
 
@@ -881,7 +883,7 @@ sequenceDiagram
     participant M as MinIO
 
     U->>T: POST /api/triggers/launch<br/>{tenantId:tc,<br/> jobCode:TC_EXPORT_RISK_ALERT}
-    T->>O: HTTP /internal/launch
+    T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
     O->>DB: INSERT job_instance(415)<br/>+ partition + outbox_event<br/>(同一 tx)
     O->>K: publish task 425
     K->>E: consume task 425
@@ -924,7 +926,7 @@ sequenceDiagram
     participant FS as 临时文件<br/>NDJSON
 
     U->>T: POST /api/triggers/launch<br/>{tenantId:tc, jobCode:TC_IMPORT_RISK_SCORE,<br/> params:{templateCode, content:"[...5 行 JSON...]"}}
-    T->>O: HTTP /internal/launch
+    T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
     O->>DB: INSERT job_instance(416) + partition + outbox<br/>(同一 tx)
     O->>K: publish task 426
     K->>I: consume task 426
@@ -974,7 +976,7 @@ sequenceDiagram
     participant LFS as LOCAL/SFTP/<br/>NAS/OSS/API
 
     U->>T: POST /api/triggers/launch<br/>{tenantId:tc, jobCode:TC_DISPATCH_REVIEW,<br/> params:{fileId:1065, channelCode:tc_local_archive}}
-    T->>O: HTTP /internal/launch
+    T->>O: trigger_outbox_event → Kafka batch.trigger.launch.v1<br/>→ TriggerLaunchConsumer (ADR-010)
     O->>DB: INSERT job_instance(417) + partition + outbox
     O->>K: publish task 427
     K->>D: consume task 427
