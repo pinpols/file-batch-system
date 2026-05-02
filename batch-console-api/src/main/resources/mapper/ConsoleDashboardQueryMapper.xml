@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleDashboardQueryMapper">
+
+    <!-- ============================================================
+         result maps:每个 record View 用 <constructor> 显式按 canonical
+         constructor 入参顺序绑定 SQL 列;不依赖 mapUnderscoreToCamelCase。
+         ============================================================ -->
+
+    <resultMap id="StatusCountResultMap" type="com.example.batch.console.domain.view.dashboard.StatusCountView">
+        <constructor>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="DayStatusCountResultMap" type="com.example.batch.console.domain.view.dashboard.DayStatusCountView">
+        <constructor>
+            <arg column="day" javaType="java.time.LocalDate"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="TypeCountResultMap" type="com.example.batch.console.domain.view.dashboard.TypeCountView">
+        <constructor>
+            <arg column="type" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="DayCountResultMap" type="com.example.batch.console.domain.view.dashboard.DayCountView">
+        <constructor>
+            <arg column="day" javaType="java.time.LocalDate"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="WorkerGroupStatusCountResultMap" type="com.example.batch.console.domain.view.dashboard.WorkerGroupStatusCountView">
+        <constructor>
+            <arg column="worker_group" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="ActivePartitionResultMap" type="com.example.batch.console.domain.view.dashboard.ActivePartitionView">
+        <constructor>
+            <arg column="worker_code" javaType="java.lang.String"/>
+            <arg column="active_partitions" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="SeverityCountResultMap" type="com.example.batch.console.domain.view.dashboard.SeverityCountView">
+        <constructor>
+            <arg column="severity" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="DaySeverityCountResultMap" type="com.example.batch.console.domain.view.dashboard.DaySeverityCountView">
+        <constructor>
+            <arg column="day" javaType="java.time.LocalDate"/>
+            <arg column="severity" javaType="java.lang.String"/>
+            <arg column="count" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="ConfigDependentResultMap" type="com.example.batch.console.domain.view.dashboard.ConfigDependentView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="ExecutionProgressResultMap" type="com.example.batch.console.domain.view.dashboard.ExecutionProgressView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="instance_no" javaType="java.lang.String"/>
+            <arg column="instance_status" javaType="java.lang.String"/>
+            <arg column="expected_partitions" javaType="java.lang.Integer"/>
+            <arg column="success_partitions" javaType="java.lang.Integer"/>
+            <arg column="failed_partitions" javaType="java.lang.Integer"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="SlaStatsResultMap" type="com.example.batch.console.domain.view.dashboard.SlaStatsView">
+        <constructor>
+            <arg column="breached" javaType="java.lang.Long"/>
+            <arg column="on_time" javaType="java.lang.Long"/>
+            <arg column="total_with_sla" javaType="java.lang.Long"/>
+            <arg column="avg_duration_seconds" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="SlaDayResultMap" type="com.example.batch.console.domain.view.dashboard.SlaDayView">
+        <constructor>
+            <arg column="day" javaType="java.time.LocalDate"/>
+            <arg column="breached" javaType="java.lang.Long"/>
+            <arg column="on_time" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="SlaJobReportResultMap" type="com.example.batch.console.domain.view.dashboard.SlaJobReportView">
+        <constructor>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="job_name" javaType="java.lang.String"/>
+            <arg column="total_instances" javaType="java.lang.Long"/>
+            <arg column="success_count" javaType="java.lang.Long"/>
+            <arg column="failed_count" javaType="java.lang.Long"/>
+            <arg column="sla_breached" javaType="java.lang.Long"/>
+            <arg column="sla_on_time" javaType="java.lang.Long"/>
+            <arg column="avg_duration_seconds" javaType="java.math.BigDecimal"/>
+            <arg column="max_duration_seconds" javaType="java.math.BigDecimal"/>
+            <arg column="total_partitions" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <!-- ============================================================
+         简单聚合
+         ============================================================ -->
+
+    <select id="jobStatusCounts" resultMap="StatusCountResultMap">
+        select instance_status as status,
+               count(1)        as count
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+         group by instance_status
+    </select>
+
+    <select id="triggerTypeCounts" resultMap="TypeCountResultMap">
+        select trigger_type as type,
+               count(1)     as count
+          from batch.trigger_request
+         where tenant_id = #{tenantId}
+         group by trigger_type
+    </select>
+
+    <select id="workerStatusCounts" resultMap="StatusCountResultMap">
+        select status,
+               count(1) as count
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+         group by status
+    </select>
+
+    <select id="workerGroupStatusCounts" resultMap="WorkerGroupStatusCountResultMap">
+        select worker_group,
+               status,
+               count(1) as count
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+         group by worker_group, status
+         order by worker_group
+    </select>
+
+    <select id="activePartitionsByWorker" resultMap="ActivePartitionResultMap">
+        select p.worker_code,
+               count(1) as active_partitions
+          from batch.job_partition p
+         where p.tenant_id = #{tenantId}
+           and p.partition_status in ('READY', 'RUNNING')
+           and p.worker_code is not null
+         group by p.worker_code
+         order by active_partitions desc
+    </select>
+
+    <select id="alertSeverityCounts" resultMap="SeverityCountResultMap">
+        select severity,
+               count(1) as count
+          from batch.alert_event
+         where tenant_id = #{tenantId}
+         group by severity
+    </select>
+
+    <select id="executionProgress" resultMap="ExecutionProgressResultMap">
+        select i.id,
+               i.job_code,
+               i.instance_no,
+               i.instance_status,
+               i.expected_partition_count as expected_partitions,
+               i.success_partition_count  as success_partitions,
+               i.failed_partition_count   as failed_partitions,
+               i.started_at,
+               i.finished_at
+          from batch.job_instance i
+         where i.tenant_id = #{tenantId}
+           and i.job_code = #{jobCode}
+           and i.biz_date = cast(#{bizDate} as date)
+         order by i.id desc
+    </select>
+
+    <!-- ============================================================
+         日趋势:current_date - #{days} 在 PG 是 date - integer 操作,
+         参数显式 ::int 避免类型推断歧义。
+         ============================================================ -->
+
+    <select id="jobDailyTrend" resultMap="DayStatusCountResultMap">
+        select cast(created_at as date) as day,
+               instance_status          as status,
+               count(1)                 as count
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
+         group by day, instance_status
+         order by day
+    </select>
+
+    <select id="triggerDailyTrend" resultMap="DayCountResultMap">
+        select cast(created_at as date) as day,
+               count(1)                 as count
+          from batch.trigger_request
+         where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
+         group by day
+         order by day
+    </select>
+
+    <select id="alertDailyTrend" resultMap="DaySeverityCountResultMap">
+        select cast(created_at as date) as day,
+               severity,
+               count(1)                 as count
+          from batch.alert_event
+         where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
+         group by day, severity
+         order by day
+    </select>
+
+    <!-- SLA 日趋势:FILTER (WHERE ...) 是 PG 9.4+ 聚合过滤语法,等价 count CASE WHEN。
+         不写 CASE WHEN 是因为 FILTER 更清晰且 PG 优化器走相同路径。 -->
+    <select id="slaDailyTrend" resultMap="SlaDayResultMap">
+        select cast(created_at as date) as day,
+               count(1) filter (where deadline_at is not null and finished_at &gt; deadline_at)  as breached,
+               count(1) filter (where deadline_at is not null and finished_at &lt;= deadline_at) as on_time
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
+           and instance_status in ('SUCCESS', 'FAILED', 'PARTIAL_FAILED')
+         group by day
+         order by day
+    </select>
+
+    <!-- ============================================================
+         配置依赖反查:4 个查询同构,只是 WHERE 列不同(queue_code / calendar_code /
+         window_code / worker_group);共享 ConfigDependentResultMap。
+         ============================================================ -->
+
+    <select id="jobsByQueueCode" resultMap="ConfigDependentResultMap">
+        select id,
+               job_code as code,
+               job_name as name
+          from batch.job_definition
+         where tenant_id = #{tenantId}
+           and queue_code = #{configCode}
+    </select>
+
+    <select id="jobsByCalendarCode" resultMap="ConfigDependentResultMap">
+        select id,
+               job_code as code,
+               job_name as name
+          from batch.job_definition
+         where tenant_id = #{tenantId}
+           and calendar_code = #{configCode}
+    </select>
+
+    <select id="jobsByWindowCode" resultMap="ConfigDependentResultMap">
+        select id,
+               job_code as code,
+               job_name as name
+          from batch.job_definition
+         where tenant_id = #{tenantId}
+           and window_code = #{configCode}
+    </select>
+
+    <select id="jobsByWorkerGroup" resultMap="ConfigDependentResultMap">
+        select id,
+               job_code as code,
+               job_name as name
+          from batch.job_definition
+         where tenant_id = #{tenantId}
+           and worker_group = #{configCode}
+    </select>
+
+    <!-- ============================================================
+         计数:全部返回 java.lang.Long(SELECT count(1));null 兜底由 service 层做。
+         ============================================================ -->
+
+    <select id="countJobDefinitions" resultType="java.lang.Long">
+        select count(1) from batch.job_definition where tenant_id = #{tenantId}
+    </select>
+
+    <select id="countRecentJobInstances" resultType="java.lang.Long">
+        select count(1)
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
+    </select>
+
+    <select id="countWorkflowDefinitions" resultType="java.lang.Long">
+        select count(1) from batch.workflow_definition where tenant_id = #{tenantId}
+    </select>
+
+    <select id="countRecentFiles" resultType="java.lang.Long">
+        select count(1)
+          from batch.file_record
+         where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
+    </select>
+
+    <select id="countFileChannels" resultType="java.lang.Long">
+        select count(1) from batch.file_channel_config where tenant_id = #{tenantId}
+    </select>
+
+    <select id="countFileTemplates" resultType="java.lang.Long">
+        select count(1) from batch.file_template_config where tenant_id = #{tenantId}
+    </select>
+
+    <!-- ============================================================
+         SLA:FILTER (WHERE ...) 多列聚合;avgDurationSeconds 走
+         EXTRACT(EPOCH FROM interval) → seconds,再 round 到 2 位。
+         ::numeric 是因为 round(double, int) PG 没有,只接 numeric。
+         ============================================================ -->
+
+    <select id="slaStats" resultMap="SlaStatsResultMap">
+        select count(1) filter (where deadline_at is not null and finished_at &gt; deadline_at) as breached,
+               count(1) filter (where deadline_at is not null and (finished_at is null or finished_at &lt;= deadline_at)) as on_time,
+               count(1) filter (where deadline_at is not null) as total_with_sla,
+               round(avg(extract(epoch from (finished_at - started_at)))::numeric, 2) as avg_duration_seconds
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and created_at &gt;= current_date - #{days}::int
+           and instance_status in ('SUCCESS', 'FAILED', 'PARTIAL_FAILED')
+    </select>
+
+    <select id="slaJobReport" resultMap="SlaJobReportResultMap">
+        select i.job_code,
+               d.job_name,
+               count(1) as total_instances,
+               count(1) filter (where i.instance_status = 'SUCCESS') as success_count,
+               count(1) filter (where i.instance_status in ('FAILED','PARTIAL_FAILED')) as failed_count,
+               count(1) filter (where i.deadline_at is not null and i.finished_at &gt; i.deadline_at) as sla_breached,
+               count(1) filter (where i.deadline_at is not null and (i.finished_at is null or i.finished_at &lt;= i.deadline_at)) as sla_on_time,
+               round(avg(extract(epoch from (i.finished_at - i.started_at)))::numeric, 2) as avg_duration_seconds,
+               round(max(extract(epoch from (i.finished_at - i.started_at)))::numeric, 2) as max_duration_seconds,
+               coalesce(sum(i.expected_partition_count), 0) as total_partitions
+          from batch.job_instance i
+          left join batch.job_definition d
+                 on d.tenant_id = i.tenant_id
+                and d.job_code = i.job_code
+         where i.tenant_id = #{tenantId}
+           and i.created_at &gt;= current_date - #{days}::int
+           and i.instance_status in ('SUCCESS', 'FAILED', 'PARTIAL_FAILED')
+         group by i.job_code, d.job_name
+         order by sla_breached desc, total_instances desc
+    </select>
+</mapper>

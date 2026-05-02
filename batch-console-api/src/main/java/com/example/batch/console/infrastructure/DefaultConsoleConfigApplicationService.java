@@ -17,8 +17,8 @@ import com.example.batch.console.domain.query.SecretVersionQuery;
 import com.example.batch.console.domain.view.dashboard.ConfigDependentView;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
+import com.example.batch.console.mapper.ConsoleDashboardQueryMapper;
 import com.example.batch.console.mapper.SecretVersionMapper;
-import com.example.batch.console.repository.ConsoleDashboardQueryRepository;
 import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
@@ -79,7 +79,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private final ConfigReleaseMapper configReleaseMapper;
   private final SecretVersionMapper secretVersionMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
-  private final ConsoleDashboardQueryRepository dashboardQueryRepository;
+  private final ConsoleDashboardQueryMapper dashboardQueryMapper;
 
   @Override
   public List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request) {
@@ -467,12 +467,12 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     List<ConfigDependentView> dependentJobs =
         switch (configType.toUpperCase()) {
           case "QUEUE", "RESOURCE_QUEUE" ->
-              dashboardQueryRepository.jobsByQueueCode(resolved, configCode);
+              dashboardQueryMapper.jobsByQueueCode(resolved, configCode);
           case "CALENDAR", "BUSINESS_CALENDAR" ->
-              dashboardQueryRepository.jobsByCalendarCode(resolved, configCode);
+              dashboardQueryMapper.jobsByCalendarCode(resolved, configCode);
           case "WINDOW", "BATCH_WINDOW" ->
-              dashboardQueryRepository.jobsByWindowCode(resolved, configCode);
-          case "WORKER_GROUP" -> dashboardQueryRepository.jobsByWorkerGroup(resolved, configCode);
+              dashboardQueryMapper.jobsByWindowCode(resolved, configCode);
+          case "WORKER_GROUP" -> dashboardQueryMapper.jobsByWorkerGroup(resolved, configCode);
           default -> List.of();
         };
     result.put(
