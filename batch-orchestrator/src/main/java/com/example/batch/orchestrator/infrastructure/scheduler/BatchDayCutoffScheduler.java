@@ -8,8 +8,8 @@ import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
-import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BatchDayCutoffScheduler {
 
-  private final BatchDayInstanceRepository batchDayInstanceRepository;
+  private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final OrchestratorConfigCacheService configCacheService;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
@@ -53,7 +53,7 @@ public class BatchDayCutoffScheduler {
     Instant now = Instant.now();
     List<String> tracked = List.of("OPEN");
 
-    List<BatchDayInstanceRecord> candidates = batchDayInstanceRepository.findByDayStatusIn(tracked);
+    List<BatchDayInstanceRecord> candidates = batchDayInstanceMapper.selectByDayStatusIn(tracked);
     if (candidates == null || candidates.isEmpty()) {
       return;
     }
@@ -75,7 +75,16 @@ public class BatchDayCutoffScheduler {
       }
       if (!now.isBefore(cutoffAt)) {
         BatchDayInstanceRecord updated = candidate.withCutoff(cutoffAt, now);
-        batchDayInstanceRepository.save(updated);
+        int rows = batchDayInstanceMapper.updateWithCas(updated);
+        if (rows == 0) {
+          // CAS 冲突：另一路径（settle / reopen）抢先写入，本轮跳过该候选不阻塞其他候选
+          log.debug(
+              "batch day cutoff cas conflict; skip: tenantId={}, calendarCode={}, bizDate={}",
+              candidate.tenantId(),
+              candidate.calendarCode(),
+              candidate.bizDate());
+          continue;
+        }
         appendAuditLog(candidate, updated, "CUTOFF_REACHED", now);
         log.info(
             "batch day advanced to CUTOFF: tenantId={}, calendarCode={}, bizDate={}",

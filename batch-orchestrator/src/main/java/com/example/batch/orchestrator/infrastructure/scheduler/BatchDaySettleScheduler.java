@@ -14,10 +14,10 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
-import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -47,7 +47,7 @@ public class BatchDaySettleScheduler {
 
   private static final List<String> TRACKED_STATUSES = List.of("CUTOFF", "IN_FLIGHT");
 
-  private final BatchDayInstanceRepository batchDayInstanceRepository;
+  private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final TriggerRequestMapper triggerRequestMapper;
@@ -68,7 +68,7 @@ public class BatchDaySettleScheduler {
       return;
     }
     List<BatchDayInstanceRecord> candidates =
-        batchDayInstanceRepository.findByDayStatusIn(TRACKED_STATUSES);
+        batchDayInstanceMapper.selectByDayStatusIn(TRACKED_STATUSES);
     if (candidates == null || candidates.isEmpty()) {
       return;
     }
@@ -112,7 +112,7 @@ public class BatchDaySettleScheduler {
     if (activeCount > 0) {
       if (!"IN_FLIGHT".equals(candidate.dayStatus())) {
         BatchDayInstanceRecord to = candidate.withDayStatus("IN_FLIGHT", now);
-        batchDayInstanceRepository.save(to);
+        casUpdate(to);
         appendBatchDayAuditLog(candidate, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES");
       }
       return;
@@ -122,7 +122,7 @@ public class BatchDaySettleScheduler {
     }
     if (failedCount > 0L) {
       BatchDayInstanceRecord to = candidate.withSettled("FAILED", now, now);
-      batchDayInstanceRepository.save(to);
+      casUpdate(to);
       appendBatchDayAuditLog(candidate, to, "BATCH_DAY_FAILED");
       driveCatchUp(candidate, now);
       log.info(
@@ -133,7 +133,7 @@ public class BatchDaySettleScheduler {
       return;
     }
     BatchDayInstanceRecord to = candidate.withSettled("SETTLED", now, now);
-    batchDayInstanceRepository.save(to);
+    casUpdate(to);
     appendBatchDayAuditLog(candidate, to, "BATCH_DAY_SETTLED");
     log.info(
         "batch day settled as SETTLED: tenantId={}, calendarCode={}, bizDate={}",
@@ -144,6 +144,18 @@ public class BatchDaySettleScheduler {
 
   private long value(Long value) {
     return value == null ? 0L : value;
+  }
+
+  /** 替换原 {@code repository.save}：CAS 失败抛 OLF，被外层循环 catch 跳过本条候选下 tick 重扫。 */
+  private void casUpdate(BatchDayInstanceRecord record) {
+    int rows = batchDayInstanceMapper.updateWithCas(record);
+    if (rows == 0) {
+      throw new OptimisticLockingFailureException(
+          "batch_day_instance version mismatch: id="
+              + record.id()
+              + ", version="
+              + record.version());
+    }
   }
 
   private void driveCatchUp(BatchDayInstanceRecord batchDay, Instant now) {

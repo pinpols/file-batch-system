@@ -2,37 +2,36 @@ package com.example.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.Version;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
 /**
- * 批次日实例投影。
+ * 批次日实例投影（MyBatis 通过 {@code resultMap+constructor} 映射；不可变 record）。
  *
- * <p>{@link #version} 是 Spring Data JDBC {@code @Version} 乐观锁列：save 时若值与 DB 不一致会抛 {@code
- * OptimisticLockingFailureException}，由 settle / reopen 调用方负责重试或跳过。
+ * <p>{@link #version} 是乐观锁列：{@code BatchDayInstanceMapper.updateWithCas} 在 update 时检查 {@code WHERE
+ * id=? AND version=?}，affected==0 时调用方应抛 {@code OptimisticLockingFailureException} 让 settle /
+ * reopen / cutoff 调用方按各自语义重试或跳过。
  *
  * <p>{@link #timezoneSnapshot} 是创建时从 business_calendar.timezone 抓的快照 —— 事后日历改时区不影响 历史批次日的 cutoff_at
  * / sla_deadline_at 重放语义。
+ *
+ * <p><b>不要加 Spring Data 注解</b>（{@code @Table @Id @Version @Column}）—— 本表已迁 MyBatis 后由 {@code
+ * BatchDayInstanceMapper} 接管 CRUD + 乐观锁；保留 SDJ 注解会被框架误扫成 Repository。
  */
-@Table(schema = "batch", value = "batch_day_instance")
 public record BatchDayInstanceRecord(
-    @Id Long id,
-    @Column("tenant_id") String tenantId,
-    @Column("calendar_code") String calendarCode,
-    @Column("biz_date") LocalDate bizDate,
-    @Column("day_status") String dayStatus,
-    @Column("open_at") Instant openAt,
-    @Column("cutoff_at") Instant cutoffAt,
-    @Column("settled_at") Instant settledAt,
-    @Column("sla_deadline_at") Instant slaDeadlineAt,
-    @Column("late_count") Integer lateCount,
-    @Column("catchup_count") Integer catchupCount,
-    @Column("timezone_snapshot") String timezoneSnapshot,
-    @Version @Column("version") Long version,
-    @Column("created_at") Instant createdAt,
-    @Column("updated_at") Instant updatedAt) {
+    Long id,
+    String tenantId,
+    String calendarCode,
+    LocalDate bizDate,
+    String dayStatus,
+    Instant openAt,
+    Instant cutoffAt,
+    Instant settledAt,
+    Instant slaDeadlineAt,
+    Integer lateCount,
+    Integer catchupCount,
+    String timezoneSnapshot,
+    Long version,
+    Instant createdAt,
+    Instant updatedAt) {
 
   public BatchDayInstanceRecord withSlaDeadlineAt(Instant slaDeadlineAt, Instant updatedAt) {
     return new BatchDayInstanceRecord(
