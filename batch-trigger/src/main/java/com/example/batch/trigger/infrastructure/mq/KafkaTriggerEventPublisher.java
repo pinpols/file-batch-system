@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
@@ -23,16 +22,11 @@ import org.springframework.stereotype.Component;
  * <p>同步阻塞发送(返回时表示 broker 已 ack 或失败已确定),被 {@link
  * com.example.batch.trigger.application.TriggerOutboxRelay} 在 ShedLock 内逐条调用,无需异步。
  *
- * <p>仅当 {@code batch.trigger.async-launch.enabled=true} 时实例化(与 producer config + relay 同条件)。
+ * <p>ADR-010 固化路径，无条件实例化（2026-05-02 同步 HTTP 路径已删除）。
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(
-    prefix = "batch.trigger.async-launch",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
 public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
   private static final String HEADER_TRACE_ID = "X-Trace-Id";

@@ -47,7 +47,7 @@
 **已覆盖（14 个）：**
 - ✅ DefaultTriggerService、DefaultLaunchAdapterService
 - ✅ BatchDayCutoffScheduler、TriggerSchedulerFacade
-- ✅ HttpOrchestratorTriggerAdapter、QuartzLaunchJob
+- ✅ QuartzLaunchJob（HttpOrchestratorTriggerAdapter 已于 2026-05-02 删除）
 - 🔶 TriggerRegistrationService（集成测试）
 
 **无测试（重要类）：**

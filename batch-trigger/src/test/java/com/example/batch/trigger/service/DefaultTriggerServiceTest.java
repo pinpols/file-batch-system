@@ -3,6 +3,7 @@ package com.example.batch.trigger.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -15,7 +16,6 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
-import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
@@ -35,12 +35,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultTriggerServiceTest {
 
   @Mock private LaunchAdapterService launchAdapterService;
-  @Mock private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
+  @Mock private RestClient orchestratorRestClient;
+  @Mock private RestClient.RequestBodyUriSpec postSpec;
+  @Mock private RestClient.RequestBodySpec bodySpec;
+  @Mock private RestClient.ResponseSpec responseSpec;
   @Mock private TriggerRequestMapper triggerRequestMapper;
   @Mock private com.example.batch.trigger.mapper.TriggerOutboxEventMapper triggerOutboxEventMapper;
   @Mock private BusinessCalendarMapper businessCalendarMapper;
@@ -57,7 +61,7 @@ class DefaultTriggerServiceTest {
     service =
         new DefaultTriggerService(
             launchAdapterService,
-            orchestratorTriggerAdapter,
+            orchestratorRestClient,
             triggerRequestMapper,
             triggerOutboxEventMapper,
             businessCalendarMapper,
@@ -102,40 +106,7 @@ class DefaultTriggerServiceTest {
     assertThat(response).isNotNull();
     assertThat(response.traceId()).isEqualTo("existing-trace");
     verify(triggerRequestMapper, never()).insert(any());
-    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
-  }
-
-  @Test
-  void shouldMarkRequestForwardFailedWhenForwardingFails() {
-    TriggerLaunchCommand command =
-        new TriggerLaunchCommand(validRequest(), "idem-002", "req-002", "trace-002");
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            "t1",
-            "IMPORT_JOB",
-            LocalDate.of(2026, 3, 27),
-            TriggerType.API,
-            "req-002",
-            "trace-002",
-            Map.of("channel", "api"));
-
-    when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
-    when(triggerRequestMapper.selectByTenantAndDedupKey("t1", "idem-002")).thenReturn(null);
-    when(orchestratorTriggerAdapter.sendTrigger(launchRequest))
-        .thenThrow(new IllegalStateException("orchestrator down"));
-
-    // 5.7: transient failures now return a response instead of throwing
-    LaunchResponse response = service.launch(command);
-    assertThat(response.instanceNo()).isEqualTo("req-002");
-    assertThat(response.traceId()).isEqualTo("trace-002");
-
-    ArgumentCaptor<TriggerRequestEntity> captor =
-        ArgumentCaptor.forClass(TriggerRequestEntity.class);
-    verify(triggerRequestMapper).insert(captor.capture());
-    assertThat(captor.getValue().getRequestStatus()).isEqualTo("PENDING");
-    assertThat(captor.getValue().getDedupKey()).isEqualTo("idem-002");
-    // 5.7: status is FORWARD_FAILED (retryable) instead of REJECTED
-    verify(triggerRequestMapper).updateRequestStatus("t1", "req-002", "FORWARD_FAILED");
+    verify(orchestratorRestClient, never()).post();
   }
 
   @Test
@@ -159,13 +130,17 @@ class DefaultTriggerServiceTest {
     when(triggerRequestMapper.updateRequestStatusConditional(
             "t1", "req-pending", "PROCESSING", "ACCEPTED"))
         .thenReturn(1);
-    when(orchestratorTriggerAdapter.sendTrigger(any())).thenReturn(response);
+    when(orchestratorRestClient.post()).thenReturn(postSpec);
+    when(postSpec.uri(anyString())).thenReturn(bodySpec);
+    when(bodySpec.body((Object) any())).thenReturn(bodySpec);
+    when(bodySpec.retrieve()).thenReturn(responseSpec);
+    when(responseSpec.body(LaunchResponse.class)).thenReturn(response);
 
     LaunchResponse approved = service.approvePendingCatchUp(command);
 
     assertThat(approved.instanceNo()).isEqualTo("inst-001");
     ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(orchestratorTriggerAdapter).sendTrigger(captor.capture());
+    verify(bodySpec).body(captor.capture());
     assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
     assertThat(captor.getValue().params())
         .containsEntry("operationType", "CATCH_UP_APPROVAL")
@@ -190,7 +165,7 @@ class DefaultTriggerServiceTest {
         .isInstanceOf(BizException.class)
         .hasMessageContaining("not_catch_up");
 
-    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    verify(orchestratorRestClient, never()).post();
   }
 
   @Test
@@ -219,7 +194,7 @@ class DefaultTriggerServiceTest {
     assertThat(response.instanceNo()).isNull();
     assertThat(response.traceId()).isEqualTo("trace-skip");
     verify(triggerRequestMapper, never()).insert(any());
-    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    verify(orchestratorRestClient, never()).post();
   }
 
   @Test
@@ -237,7 +212,7 @@ class DefaultTriggerServiceTest {
             args -> assertThat(java.util.Arrays.toString((Object[]) args)).contains("suspended"));
 
     verify(triggerRequestMapper, never()).insert(any());
-    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    verify(orchestratorRestClient, never()).post();
   }
 
   @Test

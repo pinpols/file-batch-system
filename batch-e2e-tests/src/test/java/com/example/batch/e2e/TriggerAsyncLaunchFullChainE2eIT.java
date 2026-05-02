@@ -31,9 +31,8 @@ import org.springframework.test.context.ActiveProfiles;
  * ADR-010 Stage 5 Layer 2: trigger → orchestrator 异步链路 Kafka→consumer→job_instance leg E2E。
  *
  * <p>真起 PG + Kafka(Testcontainers via {@link AbstractIntegrationTest})+ orchestrator 全栈 Spring
- * context(via {@link E2eOrchestratorApplication}),启用 {@code
- * batch.trigger.async-launch.enabled=true} 让 {@code TriggerLaunchConsumer} 实例化。测试模拟"trigger 端 已
- * publish 到 Kafka topic":手动用 KafkaTemplate 投一条 LaunchEnvelope,断言:
+ * context(via {@link E2eOrchestratorApplication})，{@code TriggerLaunchConsumer} 无条件启动。 测试模拟"trigger
+ * 端 已 publish 到 Kafka topic":手动用 KafkaTemplate 投一条 LaunchEnvelope,断言:
  *
  * <ol>
  *   <li>orchestrator 端 {@code TriggerLaunchConsumer} 真消费消息(@KafkaListener)
@@ -49,10 +48,7 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(
     classes = E2eOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = {
-      "batch.trigger.async-launch.enabled=true",
-      "batch.outbox.poll-interval-millis=500"
-    })
+    properties = {"batch.outbox.poll-interval-millis=500"})
 @ActiveProfiles({"test", "e2e"})
 @Tag("e2e")
 // E2eOrchestratorApplication ComponentScan 不覆盖 com.example.batch.common.i18n 包,

@@ -1,16 +1,11 @@
 package com.example.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
-import com.example.batch.common.exception.SystemException;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
-import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.service.TriggerService;
 import com.example.batch.trigger.web.request.TriggerLaunchRequest;
@@ -25,14 +20,12 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * REQUIRES_NEW 事务边界集成测试 — Trigger 去重。
+ * REQUIRES_NEW 事务边界集成测试 — Trigger 去重（ADR-010 异步路径）。
  *
- * <p>{@code DefaultTriggerService#persistAndForward} 使用 {@code
- * TransactionDefinition.PROPAGATION_REQUIRES_NEW} 在独立事务中写入 trigger_request， 然后在外层发起 orchestrator
- * RPC。验证：当 RPC 失败时，PENDING 行仍持久化（可对账检测）。
+ * <p>{@code DefaultTriggerService#insertPendingAndOutboxOrReturnExisting} 使用 {@code
+ * PROPAGATION_REQUIRES_NEW} 在同一事务内原子写 trigger_request + trigger_outbox_event。验证：去重检查生效、两表原子落库。
  */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
@@ -45,61 +38,60 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       // 关 QuartzMetricsConfiguration：本测试用 mock(Scheduler) 而非真 Quartz，
       // 否则 mock 的 getListenerManager() 返回 null 在 @PostConstruct 触发 NPE
       "batch.trigger.quartz-metrics.enabled=false",
-      // ADR-010: 默认 true 切异步路径后,本测试断言"orchestrator RPC 失败时 PENDING 行仍持久化",
-      // 异步路径不走 RPC,显式覆盖回 false 复用原同步桥语义
-      "batch.trigger.async-launch.enabled=false"
+      // ADR-010: 默认 true，走异步路径写 trigger_outbox_event，不调 orchestrator HTTP
     })
 @Import(TriggerDedupRequiresNewIntegrationTest.TestConfig.class)
 class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private TriggerService triggerService;
   @Autowired private JdbcTemplate jdbcTemplate;
-  @MockitoBean private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
 
   @BeforeEach
   void cleanUp() {
+    jdbcTemplate.update("delete from batch.trigger_outbox_event");
     jdbcTemplate.update("delete from batch.trigger_request");
   }
 
   @Test
-  void pendingRowPersistsEvenWhenOrchestratorRpcFails() {
-    // orchestrator RPC 抛异常
-    when(orchestratorTriggerAdapter.sendTrigger(any()))
-        .thenThrow(new SystemException("orchestrator unreachable"));
+  void asyncLaunchWritesBothRequestAndOutboxInSameTransaction() {
+    TriggerLaunchCommand command = buildCommand("ASYNC_WRITE", "idem-async", "req-async");
 
-    TriggerLaunchCommand command = buildCommand("DEDUP_RPC_FAIL", "idem-rpc-fail", "req-rpc-fail");
-
-    // 5.7: transient failures no longer throw — they return a response and mark FORWARD_FAILED
-    LaunchResponse response = triggerService.launch(command);
+    var response = triggerService.launch(command);
     assertThat(response).isNotNull();
 
-    // REQUIRES_NEW 内的 INSERT 应已独立提交：行存在
-    Integer count =
+    // trigger_request 已落库且状态为 ACCEPTED
+    Integer requestCount =
         jdbcTemplate.queryForObject(
             "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?",
             Integer.class,
             "t1",
-            "idem-rpc-fail");
-    assertThat(count).as("REQUIRES_NEW should persist row despite RPC failure").isEqualTo(1);
+            "idem-async");
+    assertThat(requestCount).as("trigger_request should be persisted").isEqualTo(1);
 
-    // 5.7: RPC 失败后 catch 块将状态从 PENDING 更新为 FORWARD_FAILED（可重试）
     String status =
         jdbcTemplate.queryForObject(
             "select request_status from batch.trigger_request where tenant_id = ? and dedup_key ="
                 + " ?",
             String.class,
             "t1",
-            "idem-rpc-fail");
-    assertThat(status)
-        .as("row should be FORWARD_FAILED after RPC failure (eligible for retry)")
-        .isEqualTo("FORWARD_FAILED");
+            "idem-async");
+    assertThat(status).as("async path should set ACCEPTED status").isEqualTo("ACCEPTED");
+
+    // trigger_outbox_event 与 trigger_request 在同一 REQUIRES_NEW 事务内原子落库
+    Integer outboxCount =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
+                + " ?",
+            Integer.class,
+            "t1",
+            "req-async");
+    assertThat(outboxCount)
+        .as("trigger_outbox_event should be written atomically with trigger_request")
+        .isEqualTo(1);
   }
 
   @Test
   void dedupCheckPreventsSecondInsertInNewTransaction() {
-    when(orchestratorTriggerAdapter.sendTrigger(any()))
-        .thenReturn(new LaunchResponse("inst-001", "trace-dedup"));
-
     TriggerLaunchCommand first = buildCommand("DEDUP_TWICE", "idem-twice", "req-first");
     TriggerLaunchCommand second = buildCommand("DEDUP_TWICE", "idem-twice", "req-second");
 

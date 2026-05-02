@@ -7,14 +7,12 @@ import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.common.exception.SystemException;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
@@ -34,14 +32,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
 
 /**
  * 触发层核心服务，负责校验 → 持久化 trigger_request → 转发给 Orchestrator，提供 4 条入口：
@@ -57,18 +53,10 @@ import org.springframework.web.client.HttpClientErrorException;
  *       PROCESSING}（防并发双审批），再在事务外 HTTP 转发， 成功后更新为 {@code LAUNCHED}。
  * </ul>
  *
- * <p><b>持久化与转发模式（{@link #persistAndForward}）</b>：
- *
- * <ol>
- *   <li>在 {@code PROPAGATION_REQUIRES_NEW} 事务内以 {@code PENDING} 状态写入 trigger_request（去重检查 + INSERT
- *       在同一小事务内，缩小竞态窗口）。
- *   <li>事务提交后，在主线程调 {@link OrchestratorTriggerAdapter#sendTrigger}（HTTP call 在事务外，避免持锁等待网络 RTT）。
- *   <li>HTTP 成功 → ACCEPTED；4xx → REJECTED（客户端错误，不重试）；5xx/连接异常 → FORWARD_FAILED（由 {@code
- *       TriggerForwardRetryScheduler} 定时重试）。
- * </ol>
- *
- * <p><b>最终去重</b>由 Orchestrator 侧 {@code uk_job_instance_tenant_dedup} 保证， trigger_request
- * 层面的唯一约束已移除（V37），trigger 层只做尽力去重。
+ * <p><b>持久化与转发模式（{@link #persistAndForward}）</b>：在 {@code PROPAGATION_REQUIRES_NEW} 事务内同时写
+ * trigger_request（PENDING）和 trigger_outbox_event（NEW），提交后立即标 ACCEPTED 返回； relay 周期发
+ * Kafka，orchestrator 端 consumer 异步执行 launch。最终去重由 orchestrator 侧 {@code
+ * uk_job_instance_tenant_dedup} 保证，trigger 层只做尽力去重。
  */
 @Service
 @RequiredArgsConstructor
@@ -76,22 +64,12 @@ import org.springframework.web.client.HttpClientErrorException;
 public class DefaultTriggerService implements TriggerService {
 
   private final LaunchAdapterService launchAdapterService;
-  private final OrchestratorTriggerAdapter orchestratorTriggerAdapter;
+  private final RestClient orchestratorRestClient;
   private final TriggerRequestMapper triggerRequestMapper;
   private final TriggerOutboxEventMapper triggerOutboxEventMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
   private final TenantStatusMapper tenantStatusMapper;
   private final PlatformTransactionManager transactionManager;
-
-  /**
-   * ADR-010 灰度开关。{@code true} 时 trigger 转发改走异步路径(同事务写 trigger_request + trigger_outbox_event,relay
-   * 异步发 Kafka,orchestrator 端 consumer 消费);{@code false} 时走原同步 HTTP 路径(deprecation 留 ADR-010 Stage
-   * 7)。
-   */
-  // ADR-010: 默认开异步路径(2026-04-30 起)。同步 HTTP 桥仅作 incident 回退,显式
-  // BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false
-  @Value("${batch.trigger.async-launch.enabled:true}")
-  private boolean asyncLaunchEnabled;
 
   @Override
   public LaunchResponse launch(TriggerLaunchCommand command) {
@@ -195,35 +173,26 @@ public class DefaultTriggerService implements TriggerService {
     }
 
     // 5.8: HTTP call outside transaction boundary
-    LaunchResponse response = orchestratorTriggerAdapter.sendTrigger(launchRequest);
+    LaunchResponse response =
+        orchestratorRestClient
+            .post()
+            .uri("/internal/orchestrator/launch")
+            .body(launchRequest)
+            .retrieve()
+            .body(LaunchResponse.class);
     triggerRequestMapper.updateRequestStatus(
         command.getTenantId(), command.getRequestId(), "LAUNCHED");
     return response;
   }
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
-    if (asyncLaunchEnabled) {
-      // ADR-010: 异步路径 — 同事务写 trigger_request + trigger_outbox_event,
-      // relay 周期发 Kafka,orchestrator 端 consumer 消费 → /internal/launch 内部逻辑。
-      // trigger 立即返回 ACCEPTED,不走 HTTP 调用,完全不阻塞 Quartz fire 线程。
-      TriggerRequestEntity existing =
-          insertPendingAndOutboxOrReturnExisting(launchRequest, dedupKey);
-      if (existing != null) {
-        return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
-      }
-      // 同步路径下 forwardToOrchestrator 会把状态推到 ACCEPTED;异步路径下立即标 ACCEPTED 表示
-      // "已落库 outbox,业务侧视为已接收";真正 launch 由 orchestrator 端 consumer 异步完成
-      // 后由其它机制(例:对账定时器读 trigger_request status / consumer 回调)推进到 LAUNCHED。
-      triggerRequestMapper.updateRequestStatus(
-          launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
-      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
-    }
-    // 同步 HTTP 路径(原行为)
-    TriggerRequestEntity existing = insertPendingOrReturnExisting(launchRequest, dedupKey);
+    TriggerRequestEntity existing = insertPendingAndOutboxOrReturnExisting(launchRequest, dedupKey);
     if (existing != null) {
       return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
     }
-    return forwardToOrchestrator(launchRequest);
+    triggerRequestMapper.updateRequestStatus(
+        launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
+    return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
   }
 
   /**
@@ -263,33 +232,6 @@ public class DefaultTriggerService implements TriggerService {
     return entity;
   }
 
-  /**
-   * C-6: 去重检查在 REQUIRES_NEW 事务内执行，以缩小竞态窗口。
-   *
-   * <p>注意：trigger_request 层面的 (tenant_id, dedup_key) 唯一约束已移除（V37）， 最终去重由 job_instance 层的
-   * uk_job_instance_tenant_dedup 保证。
-   *
-   * <p>H-4: 以 PENDING 状态插入，确保 INSERT 与 sendTrigger 之间崩溃时 记录保持 PENDING（可对账检测），而非 ACCEPTED。
-   */
-  private TriggerRequestEntity insertPendingOrReturnExisting(
-      LaunchRequest launchRequest, String dedupKey) {
-    TransactionTemplate tx = new TransactionTemplate(transactionManager);
-    tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    final TriggerRequestEntity[] existingHolder = new TriggerRequestEntity[1];
-    tx.execute(
-        _ -> {
-          TriggerRequestEntity existing =
-              triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-          if (existing != null) {
-            existingHolder[0] = existing;
-            return null;
-          }
-          triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
-          return null;
-        });
-    return existingHolder[0];
-  }
-
   private TriggerRequestEntity buildPendingEntity(LaunchRequest r, String dedupKey) {
     TriggerRequestEntity entity = new TriggerRequestEntity();
     entity.setTenantId(r.tenantId());
@@ -301,80 +243,6 @@ public class DefaultTriggerService implements TriggerService {
     entity.setRequestStatus("PENDING");
     entity.setTraceId(r.traceId());
     return entity;
-  }
-
-  // ADR-010 Stage 7: 旧同步 HTTP 路径 deprecation,首次进入打 1 条 WARN 提醒切换到 async,
-  // 之后静默执行(避免每次 launch 都刷日志)。物理删除前用作运维提示。
-  private final java.util.concurrent.atomic.AtomicBoolean syncPathDeprecationLogged =
-      new java.util.concurrent.atomic.AtomicBoolean(false);
-
-  private LaunchResponse forwardToOrchestrator(LaunchRequest launchRequest) {
-    if (syncPathDeprecationLogged.compareAndSet(false, true)) {
-      log.warn(
-          "[ADR-010 deprecation] trigger 走同步 HTTP 路径(batch.trigger.async-launch.enabled=false);"
-              + "本路径将在 ADR-010 灰度全量切换稳定后的下一个 minor 版本物理删除,"
-              + "建议尽快切换到异步 outbox 路径,详见 docs/runbook/trigger-async-launch-rollout.md");
-    }
-    try {
-      LaunchResponse response = orchestratorTriggerAdapter.sendTrigger(launchRequest);
-      // H-4: 仅在 Orchestrator 确认接收后标记为 ACCEPTED
-      triggerRequestMapper.updateRequestStatus(
-          launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
-      return response;
-    } catch (HttpClientErrorException e) {
-      return handleHttpClientError(launchRequest, e);
-    } catch (Exception exception) {
-      // 5.7: connectivity / timeout — mark FORWARD_FAILED for retry instead of REJECTED
-      return markForwardFailed(launchRequest, exception.getMessage());
-    }
-  }
-
-  /**
-   * 5.7: 4xx client errors are genuine rejections — mark REJECTED immediately. Other HTTP errors
-   * (5xx, connectivity) are transient — mark FORWARD_FAILED for retry.
-   */
-  private LaunchResponse handleHttpClientError(LaunchRequest r, HttpClientErrorException e) {
-    if (!e.getStatusCode().is4xxClientError()) {
-      return markForwardFailed(r, e.getMessage());
-    }
-    if (e.getStatusCode() == HttpStatusCode.valueOf(409)) {
-      // Transient concurrency conflict (optimistic lock / duplicate insert race).
-      // 不是真正的"拒绝"——对方并发已在改同一资源，下次 tick 再试即可。
-      return markForwardFailed(r, "orchestrator 409 CONFLICT: " + e.getResponseBodyAsString());
-    }
-    triggerRequestMapper.updateRequestStatus(r.tenantId(), r.requestId(), "REJECTED");
-    if (e.getStatusCode() == HttpStatusCode.valueOf(404)) {
-      log.warn(
-          "trigger rejected: orchestrator returned 404 for job [{}] tenant [{}] — {}",
-          r.jobCode(),
-          r.tenantId(),
-          e.getResponseBodyAsString());
-      throw BizException.of(ResultCode.NOT_FOUND, "error.orchestrator.trigger_rejected");
-    }
-    if (e.getStatusCode() == HttpStatusCode.valueOf(422)) {
-      // Business rejection (e.g. outside batch window, late arrival, tenant closed, validation).
-      // Don't throw — request is already marked REJECTED; retrying the same fire time cannot
-      // change the outcome, so quietly consume the exception and let Quartz skip this tick.
-      log.warn(
-          "trigger rejected (business): job [{}] tenant [{}] requestId [{}] — {}",
-          r.jobCode(),
-          r.tenantId(),
-          r.requestId(),
-          e.getResponseBodyAsString());
-      return new LaunchResponse(r.requestId(), r.traceId());
-    }
-    throw new SystemException(ResultCode.SYSTEM_ERROR, "failed to forward trigger request", e);
-  }
-
-  private LaunchResponse markForwardFailed(LaunchRequest r, String errorMessage) {
-    triggerRequestMapper.updateRequestStatus(r.tenantId(), r.requestId(), "FORWARD_FAILED");
-    log.warn(
-        "trigger forward failed (will retry): job [{}] tenant [{}] requestId [{}] — {}",
-        r.jobCode(),
-        r.tenantId(),
-        r.requestId(),
-        errorMessage);
-    return new LaunchResponse(r.requestId(), r.traceId());
   }
 
   /** MANUAL_APPROVAL 场景先把 catch-up 请求登记为待审批，不立即转给 orchestrator。 */

@@ -34,33 +34,9 @@ CLAUDE.md §架构硬约束：
 
 ADR-009 设计上必须 `NamedParameterJdbcTemplate`（用户运行时输入的 SQL，不能预先 mapper 化）。
 
-### 1.3 ⚠️ 真违规：1 处
+### 1.3 ✅ 已修复：1 处（2026-05-02 当日完成）
 
-**[WorkflowNodePayloadBuilder.java:200](batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java:200)**：
-
-```java
-return jdbcTemplate.queryForObject(
-    "select id from batch.file_record where tenant_id = :tenantId "
-    + "and trace_id = :traceId and source_type = 'GENERATED' "
-    + "order by id desc limit 1",
-    params, Long.class);
-```
-
-这是**业务持久查询**（按 traceId 反查 file_record），按规范应放 `FileRecordMapper`。
-
-**修复方案**（建议下次动 workflow 这块时顺手做）：
-
-```java
-// 在 batch-orchestrator/.../mapper/FileRecordMapper.java 加：
-Long selectIdByTenantAndTraceId(@Param("tenantId") String tenantId,
-                                 @Param("traceId") String traceId);
-Long selectIdByTenantAndSourceRef(@Param("tenantId") String tenantId,
-                                  @Param("sourceRef") String sourceRef);
-
-// FileRecordMapper.xml 加对应 select
-```
-
-`WorkflowNodePayloadBuilder` 改为注入 `FileRecordMapper` 替换 `NamedParameterJdbcTemplate`。
+`WorkflowNodePayloadBuilder` 原本用 `NamedParameterJdbcTemplate` 反查 `file_record`，已迁到 `FileRecordLookupMapper`。详见 commit `322ba399`。
 
 ### 1.4 🟡 false positive：1 处
 
@@ -101,132 +77,43 @@ Long selectIdByTenantAndSourceRef(@Param("tenantId") String tenantId,
 
 ---
 
-## 三、测试夹具可抽取 — 三个方向，按 ROI 排序
+## 三、测试夹具抽取 — 三个方向均评估后不做
 
-### 3.1 方向 A：测试夹具 SQL builder（**最大重复**，强烈推荐）
+初稿评估了三种夹具/配置抽取方向，2026-05-02 当日讨论后**全部否决**，理由记录如下，供未来重新评估时参考：
 
-8 个 console / orchestrator integration test 各自写 `insertXxx(jdbcTemplate, ...)`，目测重复 200+ 行 SQL 字符串：
+### 3.1 ❌ 方向 A：测试夹具 SQL builder
 
-| 测试文件 | 表 | 估行 |
-|---|---|---|
-| [AlertEventIntegrationTest](batch-console-api/src/test/java/com/example/batch/console/integration/AlertEventIntegrationTest.java) | `alert_event` | ~20 |
-| [AlertEventActionIntegrationTest](batch-console-api/src/test/java/com/example/batch/console/integration/AlertEventActionIntegrationTest.java) | `alert_event` | inline 重复 |
-| [ApprovalCommandQueryIntegrationTest](batch-console-api/src/test/java/com/example/batch/console/integration/ApprovalCommandQueryIntegrationTest.java) | `approval_command` | ~20 |
-| [ConsoleRetryScheduleQueryIntegrationTest](batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleRetryScheduleQueryIntegrationTest.java) | `retry_schedule` | ~25 |
-| [DeadLetterQueryIntegrationTest](batch-console-api/src/test/java/com/example/batch/console/integration/DeadLetterQueryIntegrationTest.java) | `dead_letter` | ~25 |
-| [JobInstanceQueryIntegrationTest](batch-console-api/src/test/java/com/example/batch/console/integration/JobInstanceQueryIntegrationTest.java) | `job_instance` | ~30 |
-| [ConcurrentTaskFinishIntegrationTest](batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/ConcurrentTaskFinishIntegrationTest.java) | `job_task` | ~15 |
-| [ConcurrentPartitionPromoteIntegrationTest](batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/ConcurrentPartitionPromoteIntegrationTest.java) | `job_partition` | ~15 |
+涉及 8 个 integration test、7 张表（`alert_event`/`approval_command`/`retry_schedule`/`dead_letter`/`job_instance`/`job_task`/`job_partition`）。
 
-**抽取方案**：
+**否决原因**：7 张表里 **6 张只有 1 个测试用**，仅 `alert_event` 是 2 个。所谓"共享夹具"实际只服务一个调用方——这是把代码搬位置加抽象层，不是去重。Builder + 默认值会隐藏 severity/status/title 等字段语义，测试不能独立读懂；几个月后改默认会静默改变所有测试的预期。违反 CLAUDE.md "三行重复好过过早抽象"。
 
-```
-batch-common/src/test/java/com/example/batch/testing/fixtures/
-├─ AlertEventFixtures.java
-├─ ApprovalCommandFixtures.java
-├─ DeadLetterFixtures.java
-├─ RetryScheduleFixtures.java
-├─ JobInstanceFixtures.java
-├─ JobTaskFixtures.java
-└─ JobPartitionFixtures.java
-```
+**未来重新评估的触发条件**：当某张表的测试调用方涨到 3+ 个，且确认每次都是相同字段组合，再单独抽该表的 fixture（不要一次抽 7 个）。
 
-API 设计建议（builder + 默认值）：
+### 3.2 ❌ 方向 B：`@SpringBootTest(properties = ...)` 集中
 
-```java
-public final class AlertEventFixtures {
-  private AlertEventFixtures() {}
+83 处 inline properties，初稿建议抽到 `batch-common/src/test/resources/test-overrides/*.properties` 然后用 `@TestPropertySource`。
 
-  @Builder
-  public record AlertEventSpec(
-      String tenantId,
-      String alertType,        // 默认 "SLA_BREACH"
-      String severity,         // 默认 "CRITICAL"
-      String status,           // 默认 "OPEN"
-      String title,            // 默认 "test-alert-" + uuid
-      String dedupFingerprint, // 默认 tenantId:alertType:nanoTime
-      Instant firstSeenAt) {}  // 默认 Instant.now()
+**否决原因**：单测里 5–10 行 properties 不是真痛点，property key 一年也改不了几次，"schema 演进改 1 处 vs 80 处"是理论收益。改造要动 80+ 文件、`@TestPropertySource` 与 inline properties 优先级语义不同有引入隐性 bug 的风险，ROI 倒挂。
 
-  public static long insert(JdbcTemplate jdbc, AlertEventSpec spec) {
-    // 应用默认值 + 执行 INSERT + 返回 id
-  }
-}
-```
+**未来重新评估的触发条件**：integration test 整套 startup 慢到团队抱怨（>5 min），且 grep 后 83 处 unique combination 收敛到 ≤5 种，再走 **Spring profile + `application-<profile>.yml`** 路线（不要 `.properties` 文件，profile 才是 Spring 官方机制，context cache 命中率也更好）。
 
-**收益**：
-- 同一表多测试夹具集中维护，schema 演进只改一处
-- 消除 5 处 dedup_fingerprint 拼接、firstSeen/lastSeen 时间初始化等小重复
-- 测试可读性提升（`AlertEventFixtures.insert(jdbc, AlertEventSpec.builder().tenantId(t).build())` 比 30 行 SQL 直观）
+### 3.3 ❌ 方向 C：`@MockitoBean` 集合 → `@TestConfiguration`
 
-### 3.2 方向 B：`@SpringBootTest(properties = {...})` 集中
+初稿设想把 `ConsoleTenantGuard` / `ConsoleRequestMetadataResolver` / `ConsoleAuditService` 三个 mock 打包成 `ConsoleSecurityMocksConfiguration`。
 
-83 处 inline `@SpringBootTest(properties = ...)`，常见模式重复，例如：
+**否决原因**：当时就标注"实际重复度需要再扫一次确认是否值得"，未实际度量；按 A/B 同样的尺子，没有清晰的高频调用方，不值得提前抽。
 
-```java
-properties = {
-  "batch.trigger.async-launch.enabled=false",
-  "batch.kafka.enabled=true",
-  "spring.data.redis.host=...",
-  ...
-}
-```
-
-**抽取方案**：
-
-```
-batch-common/src/test/resources/test-overrides/
-├─ sync-trigger-mode.properties     // async-launch=false
-├─ redis-only.properties            // 只 Redis 不 Kafka
-├─ full-stack.properties            // 全栈
-└─ disable-archive-jobs.properties  // 关 archive scheduler
-```
-
-测试改用：
-
-```java
-@SpringBootTest(classes = BatchOrchestratorApplication.class)
-@TestPropertySource("classpath:test-overrides/sync-trigger-mode.properties")
-class XxxTest extends AbstractIntegrationTest { ... }
-```
-
-**收益**：换 property 改 properties 文件，不必改 80+ 测试。
-
-### 3.3 方向 C：`@MockitoBean` 集合 → `@TestConfiguration`
-
-某些测试反复 mock 同一组 console 安全 bean：
-
-```java
-@MockitoBean ConsoleTenantGuard tenantGuard;
-@MockitoBean ConsoleRequestMetadataResolver metadataResolver;
-@MockitoBean ConsoleAuditService auditService;
-```
-
-**抽取方案**：
-
-```java
-@TestConfiguration
-public class ConsoleSecurityMocksConfiguration {
-  @Bean @Primary ConsoleTenantGuard tenantGuard() { return mock(ConsoleTenantGuard.class); }
-  @Bean @Primary ConsoleRequestMetadataResolver metadataResolver() { ... }
-  @Bean @Primary ConsoleAuditService auditService() { ... }
-}
-```
-
-测试 `@Import(ConsoleSecurityMocksConfiguration.class)`。
-
-**收益**：5+ 处一致 mock 组合不再 copy。**实际重复度需要再扫一次确认是否值得**。
+**未来重新评估的触发条件**：扫到 5+ 处一致的 `@MockitoBean` 三件套且字段完全相同时再抽。
 
 ---
 
-## 四、推荐执行顺序
+## 四、本次审计后续动作
 
-| 优先级 | 项 | ROI | 改动面 | 建议 |
-|---|---|---|---|---|
-| **P1** | 方向 A — 抽 `*Fixtures` | 高 | 中（新建 7 个 fixture 类 + 改 8 个测试 import） | **现在做** |
-| **P1** | `WorkflowNodePayloadBuilder` 业务 SQL → `FileRecordMapper` | 中 | 小 | **现在做** |
-| **P2** | 5 个独立 container 测试迁基类（迁 3 个） | 中 | 小 | 顺手 |
-| **P3** | 方向 B — properties 文件抽取 | 中 | 大（80+ 测试） | 等下次动相关测试时顺手 |
-| **P4** | 方向 C — mock 集合 `@TestConfiguration` | 低 | 小 | 真出现 5+ 重复时再做 |
+| 项 | 状态 | 备注 |
+|---|---|---|
+| `WorkflowNodePayloadBuilder` 业务 SQL → MyBatis | ✅ 已做 | commit `322ba399`，迁 `FileRecordLookupMapper` |
+| §2.2 三个非 migration 测试迁 `AbstractIntegrationTest` | 🟡 顺手做 | `SlidingWindowRateLimiterIT` / `SqlConsistencyIntegrationTest` / `SqlTransformComputePluginIntegrationTest`，下次动这些测试时顺手 |
+| 方向 A / B / C | ❌ 不做 | 详见 §三 |
 
 ---
 

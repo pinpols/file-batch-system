@@ -13,7 +13,6 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.application.TriggerOutboxRelay;
-import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
@@ -39,14 +38,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * ADR-010 Stage 5 Layer 1: 4 个 trigger 端 E2E 守护场景。
  *
- * <p>真起 PG + Kafka(Testcontainers via {@link AbstractIntegrationTest}),启用 async-launch 异步路径,从
- * trigger fire 到 Kafka topic 投递的完整链路验证。orchestrator consumer 反序列化已由 {@code
- * TriggerLaunchConsumerTest} 单测覆盖,本测试不接 orchestrator,聚焦 trigger 端闭环。
+ * <p>真起 PG + Kafka(Testcontainers via {@link AbstractIntegrationTest}),从 trigger fire 到 Kafka topic
+ * 投递的完整链路验证。orchestrator consumer 反序列化已由 {@code TriggerLaunchConsumerTest} 单测覆盖,本测试不接
+ * orchestrator,聚焦 trigger 端闭环。
  *
  * <p>4 个 @Test 共享单个 Spring context(节省启动时间),覆盖:
  *
@@ -65,7 +63,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
-      "batch.trigger.async-launch.enabled=true",
       "batch.security.bypass-mode=true",
       "batch.trigger.outbox.poll-interval-millis=300",
       "batch.trigger.kafka.send-timeout-seconds=5",
@@ -80,9 +77,6 @@ class TriggerAsyncLaunchE2eIT extends AbstractIntegrationTest {
   @Autowired private TriggerOutboxEventMapper outboxMapper;
   @Autowired private TriggerRequestMapper triggerRequestMapper;
   @Autowired private TriggerOutboxRelay relay;
-
-  /** 不让真 HTTP 调 orchestrator;async 路径下本 bean 实际不会被调用,但启动期 wiring 需要在。 */
-  @MockitoBean private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
 
   @Value("${spring.kafka.bootstrap-servers}")
   private String bootstrapServers;

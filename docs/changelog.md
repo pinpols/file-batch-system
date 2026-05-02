@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-05-03
+- **CLAUDE.md 配置开关规范移除 `batch.trigger.async-launch.enabled`**（ADR-010 异步链路固化）：同步 HTTP 桥（`HttpOrchestratorTriggerAdapter`、`OrchestratorTriggerAdapter` 接口、`TriggerForwardRetryScheduler`）已删除，异步路径成为唯一链路，开关下线。CLAUDE.md "配置开关规范" 段落更新为"ADR-010 trigger 异步链路（已固化，无开关）"。
+
 ### 2026-05-02
 - **全平台移除 Spring Data JDBC + CLAUDE.md 架构硬约束同步**：所有业务模块（含 `batch-orchestrator`）禁止 `spring-boot-starter-data-jdbc` 与 `@EnableJdbcRepositories`；orchestrator 删除 `WorkerRegistryJdbcConfiguration` 及实体上 SDJ 映射注解，配置表与运行态一律 MyBatis；E2E 入口去掉 JDBC 仓库扫描；CI `check-dependency-boundaries.py` 将 orchestrator 纳入禁止 data-jdbc 列表。ADR-001 改为「仅 MyBatis + JdbcTemplate」。**追加**：CLAUDE.md 明确 `domain/entity` 统一 `*Entity`、禁止 `*Record` 栈分工与同表双写；README / `docs/coding-conventions.md` §9 / `docs/design/tech-stack-and-principles.md` / `docs/architecture/architecture-truth.md` / `docs/agent-baseline.md` §7 / `docs/design/project-structure-pom.md` / `scripts/ci/README.md` / `docs/design/README.md` / `docs/design/capability-assessment.md` / `docs/architecture/rework-classification.md` / `docs/compliance/THIRD-PARTY-LICENSES.md` / 根 `CHANGELOG.md` 与 `docs/changelog.md` 历史条勘误等活文档同步剔除双 ORM 与 `*Record` 规约。
 

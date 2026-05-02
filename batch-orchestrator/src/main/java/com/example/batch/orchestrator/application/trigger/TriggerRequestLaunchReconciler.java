@@ -12,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -34,17 +33,11 @@ import org.springframework.stereotype.Component;
  * <p><b>不解决的问题</b>(交给 ops backlog):trigger_request 卡 ACCEPTED 但 job_instance 始终没出现 (consumer 异常 /
  * launch 失败) — 需要单独的"过期 ACCEPTED"告警 + 人工排查,本 reconciler 不会自动 GIVE_UP。
  *
- * <p><b>条件装配</b>:与 {@link TriggerLaunchConsumer} 共享 {@code batch.trigger.async-launch.enabled} 开关,
- * 默认开启;关闭异步路径时不实例化(同步 HTTP 路径 trigger 端自行回写 LAUNCHED)。
+ * <p>ADR-010 固化路径，无条件启用（2026-05-02 同步 HTTP 路径已删除）。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-    prefix = "batch.trigger.async-launch",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
 public class TriggerRequestLaunchReconciler {
 
   private static final String METRIC_RECONCILED = "batch.trigger.launch.reconciled.total";

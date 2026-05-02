@@ -71,11 +71,6 @@ public abstract class AbstractIntegrationTest {
   static void registerDynamicProperties(DynamicPropertyRegistry registry) {
     IntegrationTestInfrastructure.registerDynamicProperties(
         registry, PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, MINIO, REDIS);
-    // 注意:不要在此处全局覆盖 batch.trigger.async-launch.enabled —— @DynamicPropertySource 优先级
-    // 高于子类 @SpringBootTest(properties=),会把"显式想测异步路径"的 IT(如 TriggerAsyncLaunchFullChainE2eIT)
-    // 强制拉回同步桥,导致 KafkaListener 不实例化、test 超时。需要同步路径的 IT 在自己的 @SpringBootTest
-    // properties 里显式声明 enabled=false (见 TriggerService/TriggerDedupRequiresNew/QuartzLaunchJob/
-    // ConcurrentTaskClaim 等)。
   }
 
   protected static String platformJdbcUrl() {

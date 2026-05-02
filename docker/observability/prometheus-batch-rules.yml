@@ -244,7 +244,7 @@ groups:
           description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Investigate root cause before running scripts/ops/heal-dead-letters.sh."
 
       # ── ADR-010 trigger 异步解耦专项告警 ────────────────────────────────────
-      # 配合 docs/runbook/trigger-async-launch-rollout.md §灰度切换 SOP, 告警阈值与
+      # 异步路径已于 2026-05-02 固化为唯一链路（无开关）. 告警阈值与
       # 验收指标(batch.trigger.outbox.publish.lag p99 < 5s)对齐. 三条告警覆盖:
       #   - 投递管道堆积(产出 > 消费)
       #   - consumer 失败暴增
@@ -288,7 +288,7 @@ groups:
           alert_group: trigger-async
         annotations:
           summary: "Trigger outbox events marked GIVE_UP"
-          description: "{{ $value | humanize }} trigger_outbox_event(s) 在过去 1h 进入 GIVE_UP 状态. 通常是 payload 反序列化失败或重试上限耗尽 — 需要人工查 last_error + 修源端配置 / 删 zombie 行. 参考 docs/runbook/trigger-async-launch-rollout.md §回滚."
+          description: "{{ $value | humanize }} trigger_outbox_event(s) 在过去 1h 进入 GIVE_UP 状态. 通常是 payload 反序列化失败或重试上限耗尽 — 需要人工查 last_error + 修源端配置 / 删 zombie 行."
 
       # ── ADR §5.11 webhook durability ────────────────────────────────────
       # WebhookDeliveryRelay 把 EXHAUSTED 行重投到 absolute-max-attempts 仍失败 → GIVE_UP,

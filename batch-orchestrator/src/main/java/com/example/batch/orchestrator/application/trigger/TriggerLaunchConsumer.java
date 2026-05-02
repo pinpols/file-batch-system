@@ -15,7 +15,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -37,15 +36,10 @@ import org.springframework.web.server.ResponseStatusException;
  *   <li>其他 unchecked → 同上
  * </ul>
  *
- * <p>仅当 {@code batch.trigger.async-launch.enabled=true} 时实例化(两边开关一致避免单边激活)。
+ * <p>ADR-010 固化路径，无条件实例化（2026-05-02 同步 HTTP 路径已删除）。
  */
 @Component
 @Slf4j
-@ConditionalOnProperty(
-    prefix = "batch.trigger.async-launch",
-    name = "enabled",
-    havingValue = "true",
-    matchIfMissing = true)
 public class TriggerLaunchConsumer {
 
   private static final String METRIC_CONSUMED = "batch.trigger.launch.consumed.total";

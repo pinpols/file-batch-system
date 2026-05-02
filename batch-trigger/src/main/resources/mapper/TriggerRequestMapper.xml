@@ -87,25 +87,6 @@
           and request_status = #{expectedStatus}
     </update>
 
-    <select id="selectForwardFailedForRetry" resultMap="TriggerRequestResultMap">
-        select *
-        from batch.trigger_request
-        where request_status = 'FORWARD_FAILED'
-          and forward_retry_count &lt; #{maxRetries}
-          and created_at &gt;= #{createdAfter}
-        order by id asc
-        limit #{limit}
-    </select>
-
-    <update id="incrementForwardRetryCount">
-        update batch.trigger_request
-        set forward_retry_count = forward_retry_count + 1,
-            request_status      = #{requestStatus},
-            updated_at          = current_timestamp
-        where tenant_id  = #{tenantId}
-          and request_id = #{requestId}
-    </update>
-
     <update id="updateRelatedJobInstanceId">
         update batch.trigger_request
         set related_job_instance_id = #{relatedJobInstanceId},
