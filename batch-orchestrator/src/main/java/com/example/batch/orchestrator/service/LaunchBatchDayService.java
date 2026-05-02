@@ -13,8 +13,8 @@ import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
-import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,7 +44,7 @@ public class LaunchBatchDayService {
   private static final int UPSERT_MAX_ATTEMPTS = 3;
 
   private final OrchestratorConfigCacheService configCacheService;
-  private final BatchDayInstanceRepository batchDayInstanceRepository;
+  private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorJobMappers jobMappers;
   private final BatchTimezoneProvider timezoneProvider;
@@ -115,7 +115,7 @@ public class LaunchBatchDayService {
     }
     Instant now = Instant.now();
     BatchDayInstanceRecord existing =
-        batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
+        batchDayInstanceMapper.selectByTenantCalendarBizDate(
             request.tenantId(), calendarCode, request.bizDate());
     Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
     String timezoneSnapshot = resolveCalendarTimezone(request.tenantId(), calendarCode);
@@ -136,7 +136,7 @@ public class LaunchBatchDayService {
           (catchUpLaunch || lateAccepted)
               ? (lateAccepted ? REASON_LATE_ACCEPTED : "CATCH_UP_LAUNCHED")
               : (pastCutoff ? "CUTOFF_REACHED_ON_CREATE" : "BATCH_DAY_OPENED");
-      batchDayInstanceRepository.save(
+      batchDayInstanceMapper.insert(
           new BatchDayInstanceRecord(
               null,
               request.tenantId(),
@@ -150,9 +150,8 @@ public class LaunchBatchDayService {
               lateAccepted ? 1 : 0,
               catchUpLaunch ? 1 : 0,
               timezoneSnapshot,
-              // @Version Long 字段：null 表示"新记录"触发 INSERT；0L 会被 Spring Data JDBC
-              // 当成"已存在"走 updateWithVersion，配合 id=null 抛 IllegalStateException。
-              null,
+              // version=0 让 mapper.xml 默认值生效（非 null 才走显式赋值）；version=null 也可，xml 兜 0
+              0L,
               now,
               now));
       BatchDayAuditLogParam auditParam =
@@ -219,7 +218,15 @@ public class LaunchBatchDayService {
       return;
     }
     toDayStatus = updated.dayStatus();
-    batchDayInstanceRepository.save(updated);
+    int rows = batchDayInstanceMapper.updateWithCas(updated);
+    if (rows == 0) {
+      // CAS 冲突：版本与 DB 不一致；抛出由外层 upsertBatchDayInstance 的重试循环捕获
+      throw new OptimisticLockingFailureException(
+          "batch_day_instance version mismatch: id="
+              + updated.id()
+              + ", version="
+              + updated.version());
+    }
     BatchDayAuditLogParam auditParam =
         BatchDayAuditLogParam.builder()
             .tenantId(request.tenantId())
@@ -362,7 +369,7 @@ public class LaunchBatchDayService {
       return request;
     }
     BatchDayInstanceRecord batchDay =
-        batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
+        batchDayInstanceMapper.selectByTenantCalendarBizDate(
             request.tenantId(), calendarCode, request.bizDate());
     if (batchDay == null || batchDay.dayStatus() == null) {
       return request;

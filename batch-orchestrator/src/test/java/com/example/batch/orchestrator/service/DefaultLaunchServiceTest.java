@@ -25,6 +25,7 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
@@ -34,7 +35,6 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
-import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -58,7 +58,7 @@ class DefaultLaunchServiceTest {
   private WorkflowNodeRunMapper workflowNodeRunMapper;
   private WorkflowDagService workflowDagService;
   private OrchestratorConfigCacheService configCacheService;
-  private BatchDayInstanceRepository batchDayInstanceRepository;
+  private BatchDayInstanceMapper batchDayInstanceMapper;
   private JobExecutionLogMapper jobExecutionLogMapper;
   private LaunchBatchDayService launchBatchDayService;
   private LaunchParamResolver launchParamResolver;
@@ -91,7 +91,7 @@ class DefaultLaunchServiceTest {
             mock(WorkflowNodeMapper.class), workflowRunMapper, workflowNodeRunMapper);
     workflowDagService = mock(WorkflowDagService.class);
     configCacheService = mock(OrchestratorConfigCacheService.class);
-    batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
+    batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     selfProvider = mock(ObjectProvider.class);
     batchDaySelfProvider = mock(ObjectProvider.class);
@@ -100,7 +100,7 @@ class DefaultLaunchServiceTest {
     launchBatchDayService =
         new LaunchBatchDayService(
             configCacheService,
-            batchDayInstanceRepository,
+            batchDayInstanceMapper,
             jobExecutionLogMapper,
             jobMappers,
             timezoneProvider,
@@ -160,10 +160,10 @@ class DefaultLaunchServiceTest {
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(200L), anyString())).thenReturn(List.of());
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
-    when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
-            "t1", "BIZ_CAL", request.bizDate()))
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(null);
-    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+    when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     LaunchResponse response = service.launch(request);
 
@@ -174,7 +174,7 @@ class DefaultLaunchServiceTest {
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
     ArgumentCaptor<BatchDayInstanceRecord> captor =
         ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-    verify(batchDayInstanceRepository).save(captor.capture());
+    verify(batchDayInstanceMapper).insert(captor.capture());
     BatchDayInstanceRecord saved = captor.getValue();
     assertThat(saved.tenantId()).isEqualTo("t1");
     assertThat(saved.calendarCode()).isEqualTo("BIZ_CAL");
@@ -250,10 +250,10 @@ class DefaultLaunchServiceTest {
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(201L), anyString())).thenReturn(List.of());
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
-    when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
-            "t1", "BIZ_CAL", request.bizDate()))
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(existing);
-    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+    when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     service.launch(request);
 
@@ -262,7 +262,7 @@ class DefaultLaunchServiceTest {
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
     ArgumentCaptor<BatchDayInstanceRecord> captor =
         ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-    verify(batchDayInstanceRepository).save(captor.capture());
+    verify(batchDayInstanceMapper).updateWithCas(captor.capture());
     BatchDayInstanceRecord saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("CUTOFF");
     assertThat(saved.cutoffAt()).isEqualTo(existing.cutoffAt());
@@ -328,10 +328,10 @@ class DefaultLaunchServiceTest {
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(202L), anyString())).thenReturn(List.of());
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
-    when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
-            "t1", "BIZ_CAL", request.bizDate()))
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(existing);
-    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+    when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     service.launch(request);
 
@@ -343,7 +343,7 @@ class DefaultLaunchServiceTest {
 
     ArgumentCaptor<BatchDayInstanceRecord> captor =
         ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-    verify(batchDayInstanceRepository).save(captor.capture());
+    verify(batchDayInstanceMapper).updateWithCas(captor.capture());
     BatchDayInstanceRecord saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(saved.lateCount()).isEqualTo(1);
@@ -408,10 +408,10 @@ class DefaultLaunchServiceTest {
     when(launchValidationService.load(request)).thenReturn(loaded);
     when(workflowDagService.resolveInitialNodes(eq(203L), anyString())).thenReturn(List.of());
     when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
-    when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
-            "t1", "BIZ_CAL", request.bizDate()))
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(existing);
-    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+    when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
     when(triggerRequestMapper.updateTriggerType(
             "t1", "req-004", TriggerType.CATCH_UP.code(), TriggerType.EVENT.code()))
         .thenReturn(1);
@@ -426,7 +426,7 @@ class DefaultLaunchServiceTest {
 
     ArgumentCaptor<BatchDayInstanceRecord> captor =
         ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-    verify(batchDayInstanceRepository).save(captor.capture());
+    verify(batchDayInstanceMapper).updateWithCas(captor.capture());
     BatchDayInstanceRecord saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(saved.catchupCount()).isEqualTo(1);
