@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.mapper;
+package com.example.batch.orchestrator.domain.param;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
