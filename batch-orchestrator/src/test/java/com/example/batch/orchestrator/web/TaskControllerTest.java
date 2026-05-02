@@ -14,8 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.TaskStatus;
-import com.example.batch.orchestrator.application.service.TaskControllerApplicationService;
-import com.example.batch.orchestrator.application.service.TaskExecutionService;
+import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
+import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.TaskController;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;

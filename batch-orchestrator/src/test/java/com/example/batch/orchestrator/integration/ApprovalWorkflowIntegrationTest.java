@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.application.service.ApprovalWorkflowService;
+import com.example.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;

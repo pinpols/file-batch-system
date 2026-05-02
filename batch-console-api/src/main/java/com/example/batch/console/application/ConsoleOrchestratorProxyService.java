@@ -1,7 +1,7 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.response.ConsoleSchedulerSnapshotHistoryResponse;
-import com.example.batch.console.web.response.ConsoleSchedulerSnapshotResponse;
+import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotHistoryResponse;
+import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotResponse;
 import java.util.List;
 import java.util.Map;
 

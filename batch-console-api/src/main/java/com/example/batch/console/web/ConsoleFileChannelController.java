@@ -6,9 +6,9 @@ import com.example.batch.console.application.ConsoleFileChannelApplicationServic
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
-import com.example.batch.console.web.request.EnabledPatchRequest;
-import com.example.batch.console.web.request.FileChannelCreateRequest;
-import com.example.batch.console.web.request.FileChannelUpdateRequest;
+import com.example.batch.console.web.request.file.FileChannelCreateRequest;
+import com.example.batch.console.web.request.file.FileChannelUpdateRequest;
+import com.example.batch.console.web.request.job.EnabledPatchRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;

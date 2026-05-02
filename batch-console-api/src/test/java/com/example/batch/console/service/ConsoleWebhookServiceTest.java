@@ -14,7 +14,7 @@ import com.example.batch.console.mapper.ConsoleWebhookSubscriptionMapper;
 import com.example.batch.console.service.ConsoleWebhookService.CreateSubscriptionCommand;
 import com.example.batch.console.service.ConsoleWebhookService.UpdateSubscriptionCommand;
 import com.example.batch.console.support.CallbackUrlValidator;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;

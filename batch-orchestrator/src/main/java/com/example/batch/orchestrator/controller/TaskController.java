@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.controller;
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
-import com.example.batch.orchestrator.application.service.TaskControllerApplicationService;
+import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;

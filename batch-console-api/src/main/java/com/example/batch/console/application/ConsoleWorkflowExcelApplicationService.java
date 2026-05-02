@@ -1,10 +1,10 @@
 package com.example.batch.console.application;
 
 import com.example.batch.console.web.query.WorkflowDefinitionQueryRequest;
-import com.example.batch.console.web.request.WorkflowExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleWorkflowExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleWorkflowExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleWorkflowExcelUploadResponse;
+import com.example.batch.console.web.request.workflow.WorkflowExcelApplyRequest;
+import com.example.batch.console.web.response.workflow.ConsoleWorkflowExcelApplyResponse;
+import com.example.batch.console.web.response.workflow.ConsoleWorkflowExcelPreviewResponse;
+import com.example.batch.console.web.response.workflow.ConsoleWorkflowExcelUploadResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;

@@ -1,6 +1,6 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
+import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 
 /** 控制台运维总览应用服务：按租户聚合关键运行指标摘要。 */
 public interface ConsoleOpsApplicationService {

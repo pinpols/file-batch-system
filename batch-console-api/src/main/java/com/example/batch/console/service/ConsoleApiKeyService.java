@@ -4,7 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ApiKeyEntity;
 import com.example.batch.console.mapper.ConsoleApiKeyMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

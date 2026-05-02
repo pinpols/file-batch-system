@@ -14,7 +14,7 @@ import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.controller;
 
-import com.example.batch.orchestrator.application.service.CompensationService;
+import com.example.batch.orchestrator.application.service.governance.CompensationService;
 import com.example.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;

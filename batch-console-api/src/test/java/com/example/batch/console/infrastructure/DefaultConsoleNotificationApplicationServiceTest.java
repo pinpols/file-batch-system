@@ -7,12 +7,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.infrastructure.monitor.DefaultConsoleNotificationApplicationService;
 import com.example.batch.console.mapper.NotificationChannelMapper;
 import com.example.batch.console.mapper.NotificationDeliveryLogMapper;
 import com.example.batch.console.mapper.SubscriptionRuleMapper;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

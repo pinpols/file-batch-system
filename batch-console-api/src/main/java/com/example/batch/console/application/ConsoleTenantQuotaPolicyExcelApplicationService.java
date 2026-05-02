@@ -1,10 +1,10 @@
 package com.example.batch.console.application;
 
 import com.example.batch.console.web.request.ExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyResponse;
 import com.example.batch.console.web.response.ExcelApplyResponse;
 import com.example.batch.console.web.response.ExcelPreviewResponse;
 import com.example.batch.console.web.response.ExcelUploadResponse;
+import com.example.batch.console.web.response.config.ConsoleTenantQuotaPolicyResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;

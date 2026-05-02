@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.controller;
 
-import com.example.batch.orchestrator.application.service.RetryGovernanceService;
+import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;

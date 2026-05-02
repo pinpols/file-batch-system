@@ -7,7 +7,7 @@ import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
+import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;

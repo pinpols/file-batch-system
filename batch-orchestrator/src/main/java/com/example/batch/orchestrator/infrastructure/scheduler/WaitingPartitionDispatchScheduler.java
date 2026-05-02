@@ -13,9 +13,9 @@ import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxServi
 import com.example.batch.orchestrator.application.ratelimit.RateLimitAction;
 import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import com.example.batch.orchestrator.application.scheduler.ResourceScheduler;
-import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
-import com.example.batch.orchestrator.application.service.OrchestratorWorkflowMappers;
-import com.example.batch.orchestrator.application.service.PartitionLifecycleService;
+import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import com.example.batch.orchestrator.application.service.task.PartitionLifecycleService;
+import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;

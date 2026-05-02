@@ -8,12 +8,13 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.ConfigLifecycleStatus;
 import com.example.batch.console.domain.entity.ConfigReleaseEntity;
+import com.example.batch.console.infrastructure.config.DefaultConsoleConfigApprovalApplicationService;
 import com.example.batch.console.mapper.ConfigApprovalMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.request.ConfigApprovalActionRequest;
-import com.example.batch.console.web.request.ConfigReleaseApprovalSubmitRequest;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.web.request.config.ConfigApprovalActionRequest;
+import com.example.batch.console.web.request.config.ConfigReleaseApprovalSubmitRequest;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

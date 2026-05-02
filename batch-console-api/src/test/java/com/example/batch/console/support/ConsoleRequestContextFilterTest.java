@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.console.support.auth.ConsolePrincipal;
+import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletRequest;

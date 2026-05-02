@@ -3,7 +3,7 @@ package com.example.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import com.example.batch.console.support.ConsoleSessionRegistry;
+import com.example.batch.console.support.auth.ConsoleSessionRegistry;
 import com.example.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

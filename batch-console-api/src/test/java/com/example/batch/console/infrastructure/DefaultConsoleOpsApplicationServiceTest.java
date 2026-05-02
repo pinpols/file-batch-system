@@ -5,14 +5,15 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.console.infrastructure.ops.DefaultConsoleOpsApplicationService;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.mapper.ApprovalCommandMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.OutboxDeliveryLogMapper;
 import com.example.batch.console.mapper.OutboxRetryLogMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

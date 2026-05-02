@@ -6,7 +6,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.application.service.TaskOutcomeService;
+import com.example.batch.orchestrator.application.service.task.TaskOutcomeService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;

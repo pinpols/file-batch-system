@@ -1,16 +1,16 @@
 package com.example.batch.console.service;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import com.example.batch.console.support.ConsoleJwtService;
-import com.example.batch.console.support.ConsoleLoginService;
 import com.example.batch.console.support.ConsoleMenuRegistry;
-import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.support.ConsoleRoles;
-import com.example.batch.console.support.ConsoleSessionRegistry;
-import com.example.batch.console.web.request.ConsoleLoginRequest;
-import com.example.batch.console.web.response.ConsoleAuthProfileResponse;
-import com.example.batch.console.web.response.ConsoleAuthTokenResponse;
+import com.example.batch.console.support.auth.ConsoleJwtService;
+import com.example.batch.console.support.auth.ConsoleLoginService;
+import com.example.batch.console.support.auth.ConsolePrincipal;
+import com.example.batch.console.support.auth.ConsoleRoles;
+import com.example.batch.console.support.auth.ConsoleSessionRegistry;
+import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
+import com.example.batch.console.web.response.auth.ConsoleAuthProfileResponse;
+import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;

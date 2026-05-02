@@ -5,7 +5,7 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.application.ConsoleQueryApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.FilePipelineQueryRequest;
-import com.example.batch.console.web.response.ConsoleFilePipelineResponse;
+import com.example.batch.console.web.response.file.ConsoleFilePipelineResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

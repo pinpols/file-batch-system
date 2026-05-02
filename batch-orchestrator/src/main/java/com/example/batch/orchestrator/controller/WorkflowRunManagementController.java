@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.controller;
 
-import com.example.batch.orchestrator.application.service.WorkflowRunManagementApplicationService;
+import com.example.batch.orchestrator.application.service.workflow.WorkflowRunManagementApplicationService;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;

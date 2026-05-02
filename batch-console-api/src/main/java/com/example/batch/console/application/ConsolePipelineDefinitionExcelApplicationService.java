@@ -1,9 +1,9 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.PipelineDefinitionExcelApplyRequest;
-import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelApplyResponse;
-import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelUploadResponse;
+import com.example.batch.console.web.request.file.PipelineDefinitionExcelApplyRequest;
+import com.example.batch.console.web.response.workflow.ConsolePipelineDefinitionExcelApplyResponse;
+import com.example.batch.console.web.response.workflow.ConsolePipelineDefinitionExcelPreviewResponse;
+import com.example.batch.console.web.response.workflow.ConsolePipelineDefinitionExcelUploadResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;

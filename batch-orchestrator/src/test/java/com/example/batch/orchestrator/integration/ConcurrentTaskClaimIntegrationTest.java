@@ -7,7 +7,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.application.service.TaskExecutionService;
+import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;

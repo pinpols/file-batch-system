@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure.realtime;
 
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.web.response.ConsoleSseEventResponse;
+import com.example.batch.console.web.response.ops.ConsoleSseEventResponse;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Instant;

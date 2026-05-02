@@ -13,7 +13,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.SseTicketService;
-import com.example.batch.console.web.response.ConsoleAuthTokenResponse;
+import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
 import java.time.Instant;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.controller;
 
-import com.example.batch.orchestrator.application.service.InstanceManagementApplicationService;
+import com.example.batch.orchestrator.application.service.task.InstanceManagementApplicationService;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;

@@ -1,8 +1,8 @@
 package com.example.batch.console.application;
 
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.web.request.ResourceQueueCreateRequest;
-import com.example.batch.console.web.request.ResourceQueueUpdateRequest;
+import com.example.batch.console.web.request.config.ResourceQueueCreateRequest;
+import com.example.batch.console.web.request.config.ResourceQueueUpdateRequest;
 import java.util.Map;
 
 /** 资源队列应用服务：管理资源队列的 CRUD 及启停操作。 */

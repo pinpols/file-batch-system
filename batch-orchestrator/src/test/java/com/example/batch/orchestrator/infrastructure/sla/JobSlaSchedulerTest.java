@@ -11,7 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.orchestrator.application.service.AlertEventService;
+import com.example.batch.orchestrator.application.service.governance.AlertEventService;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;

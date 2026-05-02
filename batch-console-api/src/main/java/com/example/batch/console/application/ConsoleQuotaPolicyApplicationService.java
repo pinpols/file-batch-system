@@ -1,7 +1,7 @@
 package com.example.batch.console.application;
 
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.web.request.QuotaPolicySaveRequest;
+import com.example.batch.console.web.request.config.QuotaPolicySaveRequest;
 import java.util.Map;
 
 /** 配额策略应用服务：管理租户配额策略的 CRUD 及启停操作。 */

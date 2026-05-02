@@ -6,12 +6,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.application.ConsoleOrchestratorProxyService;
+import com.example.batch.console.infrastructure.ops.DefaultConsoleOutboxOpsApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.OutboxEventMapper;
-import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.response.ConsoleOutboxCleanupResponse;
-import com.example.batch.console.web.response.ConsoleOutboxRepublishResponse;
-import com.example.batch.console.web.response.ConsoleOutboxStatsResponse;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.web.response.ops.ConsoleOutboxCleanupResponse;
+import com.example.batch.console.web.response.ops.ConsoleOutboxRepublishResponse;
+import com.example.batch.console.web.response.ops.ConsoleOutboxStatsResponse;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

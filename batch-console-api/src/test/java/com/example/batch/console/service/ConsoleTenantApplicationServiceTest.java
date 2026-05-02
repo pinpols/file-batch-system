@@ -15,7 +15,7 @@ import com.example.batch.console.mapper.FilePipelineMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
-import com.example.batch.console.support.ConsolePasswordHasher;
+import com.example.batch.console.support.auth.ConsolePasswordHasher;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

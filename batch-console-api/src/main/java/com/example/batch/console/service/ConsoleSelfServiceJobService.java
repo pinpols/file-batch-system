@@ -5,7 +5,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
-import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;

@@ -7,8 +7,8 @@ import com.example.batch.console.application.ConsoleQuotaPolicyApplicationServic
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleSystemParameterService;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

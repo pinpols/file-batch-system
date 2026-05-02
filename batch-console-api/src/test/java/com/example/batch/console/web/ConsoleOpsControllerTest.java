@@ -17,7 +17,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleQueryCacheService;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
+import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

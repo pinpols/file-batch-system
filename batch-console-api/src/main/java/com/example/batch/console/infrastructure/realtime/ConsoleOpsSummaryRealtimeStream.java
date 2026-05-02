@@ -1,8 +1,8 @@
 package com.example.batch.console.infrastructure.realtime;
 
 import com.example.batch.console.application.ConsoleOpsApplicationService;
-import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;

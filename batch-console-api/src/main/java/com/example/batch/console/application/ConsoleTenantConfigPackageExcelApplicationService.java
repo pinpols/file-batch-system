@@ -1,9 +1,9 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.TenantConfigPackageExcelApplyRequest;
-import com.example.batch.console.web.response.TenantConfigPackageExcelApplyResponse;
-import com.example.batch.console.web.response.TenantConfigPackageExcelPreviewResponse;
-import com.example.batch.console.web.response.TenantConfigPackageExcelUploadResponse;
+import com.example.batch.console.web.request.config.TenantConfigPackageExcelApplyRequest;
+import com.example.batch.console.web.response.config.TenantConfigPackageExcelApplyResponse;
+import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
+import com.example.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;

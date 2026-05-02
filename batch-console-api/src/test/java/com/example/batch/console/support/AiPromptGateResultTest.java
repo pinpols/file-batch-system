@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.AiPromptCategory;
 import com.example.batch.common.enums.AiPromptDecision;
+import com.example.batch.console.support.auth.AiPromptGateResult;
 import org.junit.jupiter.api.Test;
 
 class AiPromptGateResultTest {

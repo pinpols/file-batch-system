@@ -1,8 +1,8 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.BatchDayCatchUpRequest;
-import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
-import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
+import com.example.batch.console.web.request.ops.BatchDayCatchUpRequest;
+import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
+import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpResponse;
 
 /** 控制台作业审批服务：Catch-Up 审批、批量日 Catch-Up。 */
 public interface ConsoleJobApprovalService {
