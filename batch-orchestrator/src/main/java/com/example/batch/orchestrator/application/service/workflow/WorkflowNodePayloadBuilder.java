@@ -11,14 +11,13 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
+import com.example.batch.orchestrator.mapper.FileRecordLookupMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
@@ -43,7 +42,7 @@ public class WorkflowNodePayloadBuilder {
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
   private final WorkflowParamResolver workflowParamResolver;
-  private final NamedParameterJdbcTemplate jdbcTemplate;
+  private final FileRecordLookupMapper fileRecordLookupMapper;
 
   /**
    * 组装下游节点的 task payload。分层优先级(后写覆盖前写):
@@ -164,12 +163,22 @@ public class WorkflowNodePayloadBuilder {
     }
     Long fileId = null;
     if (jobInstance.getTraceId() != null && !jobInstance.getTraceId().isBlank()) {
-      fileId = lookupFileIdByTraceId(jobInstance.getTenantId(), jobInstance.getTraceId());
+      fileId =
+          safeFileIdLookup(
+              fileRecordLookupMapper::selectIdByTenantAndTraceId,
+              jobInstance.getTenantId(),
+              jobInstance.getTraceId(),
+              "traceId");
     }
     if (fileId == null) {
       Object batchNo = payload.get("batchNo");
       if (batchNo != null && !String.valueOf(batchNo).isBlank()) {
-        fileId = lookupFileIdBySourceRef(jobInstance.getTenantId(), String.valueOf(batchNo));
+        fileId =
+            safeFileIdLookup(
+                fileRecordLookupMapper::selectIdByTenantAndSourceRef,
+                jobInstance.getTenantId(),
+                String.valueOf(batchNo),
+                "sourceRef");
       }
     }
     if (fileId != null) {
@@ -177,32 +186,21 @@ public class WorkflowNodePayloadBuilder {
     }
   }
 
-  private Long lookupFileIdByTraceId(String tenantId, String traceId) {
-    return queryFileIdSingle(
-        "select id from batch.file_record where tenant_id = :tenantId"
-            + " and trace_id = :traceId and source_type = 'GENERATED'"
-            + " order by id desc limit 1",
-        new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("traceId", traceId));
-  }
-
-  private Long lookupFileIdBySourceRef(String tenantId, String sourceRef) {
-    return queryFileIdSingle(
-        "select id from batch.file_record where tenant_id = :tenantId"
-            + " and source_ref = :sourceRef and source_type = 'GENERATED'"
-            + " order by id desc limit 1",
-        new MapSqlParameterSource()
-            .addValue("tenantId", tenantId)
-            .addValue("sourceRef", sourceRef));
-  }
-
-  private Long queryFileIdSingle(String sql, MapSqlParameterSource params) {
+  /** Mapper 调用兜底：查询失败（DB 异常）记 warn 返 null，不让 dispatch 链路因此失败。 */
+  private Long safeFileIdLookup(
+      BiFunction<String, String, Long> lookup,
+      String tenantId,
+      String secondArg,
+      String secondArgName) {
     try {
-      return jdbcTemplate.queryForObject(sql, params, Long.class);
-    } catch (EmptyResultDataAccessException ignored) {
-      return null;
+      return lookup.apply(tenantId, secondArg);
     } catch (RuntimeException ex) {
       log.warn(
-          "file_record lookup failed: params={}, error={}", params.getValues(), ex.getMessage());
+          "file_record lookup failed: tenantId={}, {}={}, error={}",
+          tenantId,
+          secondArgName,
+          secondArg,
+          ex.getMessage());
       return null;
     }
   }
