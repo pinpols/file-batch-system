@@ -19,8 +19,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,15 +39,13 @@ public class BatchDayCutoffScheduler {
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchTimezoneProvider timezoneProvider;
 
-  @Lazy @Autowired private BatchDayCutoffScheduler self;
-
+  @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_cutoff", lockAtMostFor = "PT2M", lockAtLeastFor = "PT20S")
   public void scheduledAdvance() {
-    self.advance();
+    advance();
   }
 
-  @Transactional
   public void advance() {
     if (gracefulShutdown.isDraining()) {
       return;
