@@ -7,9 +7,9 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
+import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
-import com.example.batch.console.repository.ConsoleClusterDiagnosticRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class ConsoleClusterDiagnosticServiceTest {
 
   private ConsoleTenantGuard tenantGuard;
-  private ConsoleClusterDiagnosticRepository diagnosticRepository;
+  private ConsoleClusterDiagnosticMapper diagnosticMapper;
   private WorkerRegistryMapper workerRegistryMapper;
   private JobInstanceMapper jobInstanceMapper;
   private ConsoleClusterDiagnosticService service;
@@ -27,12 +27,12 @@ class ConsoleClusterDiagnosticServiceTest {
   @BeforeEach
   void setUp() {
     tenantGuard = mock(ConsoleTenantGuard.class);
-    diagnosticRepository = mock(ConsoleClusterDiagnosticRepository.class);
+    diagnosticMapper = mock(ConsoleClusterDiagnosticMapper.class);
     workerRegistryMapper = mock(WorkerRegistryMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     service =
         new ConsoleClusterDiagnosticService(
-            tenantGuard, diagnosticRepository, workerRegistryMapper, jobInstanceMapper);
+            tenantGuard, diagnosticMapper, workerRegistryMapper, jobInstanceMapper);
   }
 
   @Test
@@ -77,8 +77,8 @@ class ConsoleClusterDiagnosticServiceTest {
   void shouldReturnOutboxHealthyWhenPendingLow() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     DeliveryStatusCountView view = deliveryView("SUCCESS", 100L);
-    when(diagnosticRepository.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
-    when(diagnosticRepository.countPendingOutboxEvents("tenant-a")).thenReturn(50L);
+    when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
+    when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(50L);
 
     Map<String, Object> result = service.outboxHealth("tenant-a");
 
@@ -90,8 +90,8 @@ class ConsoleClusterDiagnosticServiceTest {
   void shouldReturnOutboxUnhealthyWhenPendingHigh() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     DeliveryStatusCountView view = deliveryView("FAILED", 500L);
-    when(diagnosticRepository.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
-    when(diagnosticRepository.countPendingOutboxEvents("tenant-a")).thenReturn(1500L);
+    when(diagnosticMapper.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
+    when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(1500L);
 
     Map<String, Object> result = service.outboxHealth("tenant-a");
 
