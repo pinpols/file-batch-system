@@ -1,20 +1,24 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import java.time.LocalTime;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
-@Table(schema = "batch", value = "batch_window")
+/**
+ * {@code batch.batch_window} 行的不可变快照（MyBatis 通过 {@code resultMap+constructor} 映射）。
+ *
+ * <p>字段顺序与 V3 DDL 列一致。
+ *
+ * <p><b>不要加 Spring Data 注解</b>（{@code @Table @Id @Column}）—— 本表已迁 MyBatis 后由 {@link
+ * com.example.batch.orchestrator.mapper.BatchWindowMapper} 接管 CRUD；保留 SDJ 注解会被框架误扫成 Repository。
+ */
 public record BatchWindowRecord(
-    @Id Long id,
-    @Column("tenant_id") String tenantId,
-    @Column("window_code") String windowCode,
-    @Column("window_name") String windowName,
-    @Column("timezone") String timezone,
-    @Column("start_time") LocalTime startTime,
-    @Column("end_time") LocalTime endTime,
-    @Column("end_strategy") String endStrategy,
-    @Column("out_of_window_action") String outOfWindowAction,
-    @Column("allow_cross_day") Boolean allowCrossDay,
-    @Column("enabled") Boolean enabled) {}
+    Long id,
+    String tenantId,
+    String windowCode,
+    String windowName,
+    String timezone,
+    LocalTime startTime,
+    LocalTime endTime,
+    String endStrategy,
+    String outOfWindowAction,
+    Boolean allowCrossDay,
+    Boolean enabled) {}

@@ -7,11 +7,11 @@ import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
-import com.example.batch.orchestrator.repository.BatchWindowRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
+import com.example.batch.orchestrator.mapper.BatchWindowMapper;
+import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
+import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
-import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +22,9 @@ import org.springframework.stereotype.Service;
  * <p>为作业定义、工作流定义、业务日历、批次窗口、租户配额策略提供统一的 Redis 二级缓存， 缓存 TTL 固定为 5 分钟（{@code CONFIG_CACHE_TTL}）。读取时先查
  * Redis，未命中再查数据库 并回填缓存；仅缓存已启用（{@code enabled=true}）的记录。提供对应的 {@code evict*} 方法
  * 供配置变更时主动失效缓存，防止脏读。所有方法在入参为空时快速返回 {@code null}，不访问缓存。
+ *
+ * <p>P1 迁移：workflow / business_calendar / batch_window 改走 MyBatis Mapper； job_definition /
+ * tenant_quota_policy 留在 Spring Data JDBC 仓库（P2 计划）。
  */
 @Service
 @RequiredArgsConstructor
@@ -31,9 +34,9 @@ public class OrchestratorConfigCacheService {
 
   private final OrchestratorRedisSupport redis;
   private final JobDefinitionRepository jobDefinitionRepository;
-  private final WorkflowDefinitionRepository workflowDefinitionRepository;
-  private final BusinessCalendarRepository businessCalendarRepository;
-  private final BatchWindowRepository batchWindowRepository;
+  private final WorkflowDefinitionMapper workflowDefinitionMapper;
+  private final BusinessCalendarMapper businessCalendarMapper;
+  private final BatchWindowMapper batchWindowMapper;
   private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
 
   public JobDefinitionRecord findEnabledJobDefinition(String tenantId, String jobCode) {
@@ -64,8 +67,7 @@ public class OrchestratorConfigCacheService {
       return cached;
     }
     WorkflowDefinitionRecord loaded =
-        workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(
-            tenantId, workflowCode, true);
+        workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, workflowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
     }
@@ -82,8 +84,7 @@ public class OrchestratorConfigCacheService {
       return cached;
     }
     BusinessCalendarRecord loaded =
-        businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
-            tenantId, calendarCode, true);
+        businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
     }
@@ -100,9 +101,7 @@ public class OrchestratorConfigCacheService {
       return cached;
     }
     BatchWindowRecord loaded =
-        batchWindowRepository
-            .findFirstByTenantIdAndWindowCodeAndEnabled(tenantId, windowCode, true)
-            .orElse(null);
+        batchWindowMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, windowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
     }

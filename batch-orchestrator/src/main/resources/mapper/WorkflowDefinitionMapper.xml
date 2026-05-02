@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper">
+    <!--
+      WorkflowDefinitionRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, workflowCode, workflowName, workflowType, version, enabled)
+      列名按 V4 DDL。
+    -->
+    <resultMap id="workflowDefinitionMap"
+               type="com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="workflow_code" javaType="java.lang.String"/>
+            <arg column="workflow_name" javaType="java.lang.String"/>
+            <arg column="workflow_type" javaType="java.lang.String"/>
+            <arg column="version" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
+    </sql>
+
+    <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="workflowDefinitionMap">
+        select <include refid="columns"/>
+          from batch.workflow_definition
+         where tenant_id = #{tenantId}
+           and workflow_code = #{workflowCode}
+           and enabled = #{enabled}
+         order by version desc, id desc
+         limit 1
+    </select>
+
+    <select id="selectByTenantAndEnabled" resultMap="workflowDefinitionMap">
+        select <include refid="columns"/>
+          from batch.workflow_definition
+         where tenant_id = #{tenantId}
+           and enabled = #{enabled}
+         order by id desc
+    </select>
+
+    <select id="selectById" resultMap="workflowDefinitionMap">
+        select <include refid="columns"/>
+          from batch.workflow_definition
+         where id = #{id}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.workflow_definition (
+            tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
+        ) values (
+            #{tenantId}, #{workflowCode}, #{workflowName}, #{workflowType},
+            <choose>
+                <when test="version != null">#{version}</when>
+                <otherwise>1</otherwise>
+            </choose>,
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <update id="update"
+            parameterType="com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord">
+        update batch.workflow_definition
+           set workflow_name = #{workflowName},
+               workflow_type = #{workflowType},
+               version = #{version},
+               enabled = #{enabled},
+               updated_at = current_timestamp
+         where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.workflow_definition where id = #{id}
+    </delete>
+</mapper>
