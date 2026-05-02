@@ -4,7 +4,7 @@ import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class WorkerBasedPartitionCountResolver implements PartitionCountResolver {
 
-  private final WorkerRegistryRepository workerRegistryRepository;
+  private final WorkerRegistryMapper workerRegistryMapper;
 
   @Override
   public int resolve(
@@ -42,12 +42,12 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
       return firstPositiveLong(params.get("onlineWorkerCount"), params.get("workerCount"));
     }
     if (Texts.hasText(jobDefinition.workerGroup())) {
-      return workerRegistryRepository.countByTenantIdAndWorkerGroupAndStatus(
+      return workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
           jobDefinition.tenantId(),
           jobDefinition.workerGroup(),
           WorkerRegistryStatus.ONLINE.code());
     }
-    return workerRegistryRepository.countByTenantIdAndStatus(
+    return workerRegistryMapper.countByTenantAndStatus(
         jobDefinition.tenantId(), WorkerRegistryStatus.ONLINE.code());
   }
 

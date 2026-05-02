@@ -11,10 +11,10 @@ import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecor
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.orchestrator.repository.ResourceQueueRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +39,7 @@ public class TenantSchedulerSnapshotService {
   private final ResourceQueueRepository resourceQueueRepository;
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
-  private final WorkerRegistryRepository workerRegistryRepository;
+  private final WorkerRegistryMapper workerRegistryMapper;
   private final QuotaRuntimeStateService quotaRuntimeStateService;
   private final ResourceSchedulerProperties resourceSchedulerProperties;
 
@@ -148,8 +148,7 @@ public class TenantSchedulerSnapshotService {
   private List<SchedulerSnapshotResponse.WorkerLoadSnapshot> buildInstanceSnapshot(
       String tenantId) {
     List<WorkerRegistryRecord> workers =
-        workerRegistryRepository.findByTenantIdAndStatus(
-            tenantId, WorkerRegistryStatus.ONLINE.code());
+        workerRegistryMapper.selectByTenantAndStatus(tenantId, WorkerRegistryStatus.ONLINE.code());
     List<SchedulerSnapshotResponse.WorkerLoadSnapshot> wl = new ArrayList<>();
     for (WorkerRegistryRecord w : workers) {
       wl.add(

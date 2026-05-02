@@ -19,7 +19,6 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +26,6 @@ import org.junit.jupiter.api.Test;
 
 class DefaultWorkerDrainGovernanceServiceTest {
 
-  private WorkerRegistryRepository workerRegistryRepository;
   private WorkerRegistryMapper workerRegistryMapper;
   private JobTaskMapper jobTaskMapper;
   private RetryGovernanceService retryGovernanceService;
@@ -36,7 +34,6 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @BeforeEach
   void setUp() {
-    workerRegistryRepository = mock(WorkerRegistryRepository.class);
     workerRegistryMapper = mock(WorkerRegistryMapper.class);
     jobTaskMapper = mock(JobTaskMapper.class);
     retryGovernanceService = mock(RetryGovernanceService.class);
@@ -44,11 +41,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     drainProperties.setDefaultTimeoutSeconds(300);
     service =
         new DefaultWorkerDrainGovernanceService(
-            workerRegistryRepository,
-            workerRegistryMapper,
-            jobTaskMapper,
-            retryGovernanceService,
-            drainProperties);
+            workerRegistryMapper, jobTaskMapper, retryGovernanceService, drainProperties);
   }
 
   // ── startDrain ────────────────────────────────────────────────────────────
@@ -65,7 +58,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldThrowWhenWorkerNotRegisteredOnStartDrain() {
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(null);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(null);
 
     assertThatThrownBy(() -> service.startDrain("t1", "w1", null)).isInstanceOf(BizException.class);
   }
@@ -75,8 +68,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     WorkerRegistryRecord registry =
         onlineWorker("t1", "w1")
             .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), Instant.now());
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
-        .thenReturn(registry);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     assertThatThrownBy(() -> service.startDrain("t1", "w1", null)).isInstanceOf(BizException.class);
   }
@@ -84,9 +76,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldSetDrainingStatusWithDefaultTimeout() {
     WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
-        .thenReturn(registry);
-    when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+    when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
     WorkerRegistryRecord result = service.startDrain("t1", "w1", null);
 
@@ -99,13 +90,12 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldUseCustomTimeoutWhenProvided() {
     WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
-        .thenReturn(registry);
-    when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+    when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
     service.startDrain("t1", "w1", 120);
 
-    verify(workerRegistryRepository).save(any());
+    verify(workerRegistryMapper).updateById(any());
   }
 
   // ── forceOffline ─────────────────────────────────────────────────────────
@@ -117,7 +107,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldThrowWhenWorkerNotRegisteredOnForceOffline() {
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(null);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(null);
 
     assertThatThrownBy(() -> service.forceOffline("t1", "w1")).isInstanceOf(BizException.class);
   }
@@ -126,7 +116,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
   void shouldMarkDecommissionedAndTakeoverTasksOnForceOffline() {
     WorkerRegistryRecord registry = onlineWorker("t1", "w1");
     WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
         .thenReturn(decommissioned);
@@ -147,7 +137,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
   void shouldCompleteForceOfflineEvenWhenNoActiveTasks() {
     WorkerRegistryRecord registry = onlineWorker("t1", "w1");
     WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
         .thenReturn(decommissioned);
@@ -184,20 +174,18 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldDoNothingWhenTenantIdIsBlankOnTakeover() {
     service.takeoverAfterDrainTimeout("", "w1");
-    verify(workerRegistryRepository, never())
-        .findFirstByTenantIdAndWorkerCode(anyString(), anyString());
+    verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
   }
 
   @Test
   void shouldDoNothingWhenWorkerCodeIsBlankOnTakeover() {
     service.takeoverAfterDrainTimeout("t1", "");
-    verify(workerRegistryRepository, never())
-        .findFirstByTenantIdAndWorkerCode(anyString(), anyString());
+    verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
   }
 
   @Test
   void shouldDoNothingWhenRegistryNotFoundOnTakeover() {
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(null);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(null);
 
     service.takeoverAfterDrainTimeout("t1", "w1");
 
@@ -207,8 +195,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldDoNothingWhenWorkerNotDrainingOnTakeover() {
     WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
-        .thenReturn(registry);
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     service.takeoverAfterDrainTimeout("t1", "w1");
 
@@ -225,7 +212,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
                 Instant.now().minusSeconds(100),
                 Instant.now().minusSeconds(600));
 
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry);
     when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"))).thenReturn(1);
@@ -241,7 +228,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     WorkerRegistryRecord registry =
         onlineWorker("t1", "w1").withStatus(WorkerRegistryStatus.DRAINING.code(), Instant.now());
     WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
-    when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
         .thenReturn(decommissioned);

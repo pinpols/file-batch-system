@@ -7,7 +7,6 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.mapper.TouchHeartbeatParam;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,15 +31,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
-  private final WorkerRegistryRepository workerRegistryRepository;
   private final WorkerRegistryMapper workerRegistryMapper;
 
   @Override
   @Transactional
   public WorkerRegistryRecord register(WorkerHeartbeatDto request) {
     WorkerRegistryRecord registry =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(
-            request.tenantId(), request.workerCode());
+        workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
     String newStatus =
         resolveIncomingStatus(
             request,
@@ -73,7 +70,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     } else {
       registry = registry.withHeartbeat(newStatus, heartbeatAt, newLoad, newTags);
     }
-    return workerRegistryRepository.save(registry);
+    return persist(registry);
   }
 
   @Override
@@ -83,7 +80,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       return null;
     }
     WorkerRegistryRecord registry =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(request.tenantId(), workerCode);
+        workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
     if (registry == null) {
       return register(request);
     }
@@ -103,8 +100,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
             .currentLoad(newLoad)
             .capabilityTags(newTags == null ? null : newTags.getValue())
             .build());
-    return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(
-        request.tenantId(), workerCode);
+    return workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
   }
 
   @Override
@@ -117,13 +113,13 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   @Transactional
   public WorkerRegistryRecord updateStatus(String tenantId, String workerCode, String status) {
     WorkerRegistryRecord registry =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     if (registry == null) {
       return null;
     }
     String newStatus = resolveIncomingStatus(null, status, registry.status());
     registry = registry.withStatus(newStatus, Instant.now());
-    return workerRegistryRepository.save(registry);
+    return persist(registry);
   }
 
   /**
@@ -133,6 +129,20 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
    */
   private Instant firstHeartbeat() {
     return Instant.now();
+  }
+
+  /**
+   * MyBatis 替代原 Spring Data JDBC {@code repository.save}：id==null 走 insert（带 ON CONFLICT DO NOTHING
+   * 防 UV 并发）；否则按 id 全字段 updateById。返回最新 DB 行（重新 selectByTenantAndWorkerCode 拿到带 id 的快照）。
+   */
+  private WorkerRegistryRecord persist(WorkerRegistryRecord registry) {
+    if (registry.id() == null) {
+      workerRegistryMapper.insert(registry);
+    } else {
+      workerRegistryMapper.updateById(registry);
+    }
+    return workerRegistryMapper.selectByTenantAndWorkerCode(
+        registry.tenantId(), registry.workerCode());
   }
 
   private String resolveHeartbeatStatus(WorkerHeartbeatDto request, String currentStatus) {

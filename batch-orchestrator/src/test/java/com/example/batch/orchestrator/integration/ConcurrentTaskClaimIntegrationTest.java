@@ -20,7 +20,7 @@ import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixtu
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
@@ -62,7 +62,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private JobPartitionMapper jobPartitionMapper;
 
-  @Autowired private WorkerRegistryRepository workerRegistryRepository;
+  @Autowired private WorkerRegistryMapper workerRegistryMapper;
 
   @Autowired private JdbcTemplate jdbcTemplate;
 
@@ -73,7 +73,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
             jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
     String winnerWorker = seed.workerCode();
     String loserWorker = "worker-race-b";
-    workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
+    workerRegistryMapper.saveLikeSdj(onlineWorker(TENANT, loserWorker, "DEFAULT"));
 
     LaunchRequest launchRequest =
         LaunchRequest.builder()
@@ -158,7 +158,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     String winnerWorker = seed.workerCode();
     String loserWorker = "worker-race-b-" + System.nanoTime();
 
-    workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
+    workerRegistryMapper.saveLikeSdj(onlineWorker(TENANT, loserWorker, "DEFAULT"));
 
     LaunchRequest launchRequest =
         LaunchRequest.builder()
