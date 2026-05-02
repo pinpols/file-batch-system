@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class OutboxArchiveServiceTest {
 
@@ -33,7 +32,6 @@ class OutboxArchiveServiceTest {
     mapper = mock(OutboxEventMapper.class);
     props = new OutboxArchiveProperties();
     service = new OutboxArchiveService(mapper, props);
-    ReflectionTestUtils.setField(service, "self", service);
   }
 
   @Test

@@ -8,8 +8,6 @@ import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,10 +25,7 @@ public class OutboxArchiveService {
   private final OutboxEventMapper outboxEventMapper;
   private final OutboxArchiveProperties properties;
 
-  @Lazy @Autowired private OutboxArchiveService self;
-
   /** 单次归档：按 status + retentionDays 计算 cutoff，单批上限 batchSize。 */
-  @Transactional
   public ArchiveBatchResult archiveOnce(String publishStatus, int retentionDays) {
     if (!properties.isEnabled()) {
       return ArchiveBatchResult.disabled();
@@ -65,15 +60,16 @@ public class OutboxArchiveService {
   }
 
   /** 便捷：用 properties 里的 publishedRetentionDays 跑 PUBLISHED 归档。 */
+  @Transactional
   public ArchiveBatchResult archivePublished() {
-    return self.archiveOnce(
+    return archiveOnce(
         OutboxPublishStatus.PUBLISHED.code(), properties.getPublishedRetentionDays());
   }
 
   /** 便捷：用 properties 里的 giveUpRetentionDays 跑 GIVE_UP 归档。 */
+  @Transactional
   public ArchiveBatchResult archiveGiveUp() {
-    return self.archiveOnce(
-        OutboxPublishStatus.GIVE_UP.code(), properties.getGiveUpRetentionDays());
+    return archiveOnce(OutboxPublishStatus.GIVE_UP.code(), properties.getGiveUpRetentionDays());
   }
 
   public record ArchiveBatchResult(
