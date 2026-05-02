@@ -4,8 +4,10 @@ import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class CompensationCommandEntity extends AbstractLocalizedErrorEntity {
 
   private Long id;

@@ -4,10 +4,12 @@ import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Map;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 // 防滚动升级期间 worker / orchestrator 版本不一致时未识别字段 fail。
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class TaskExecutionReportDto extends AbstractLocalizedErrorEntity {
 
   private Long taskId;
