@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleMetaQueryMapper">
+
+    <!-- 5 个 query 共享同一 result map(record SimpleOptionView 双 String 列 code/label)。 -->
+    <resultMap id="SimpleOptionResultMap" type="com.example.batch.console.domain.view.meta.SimpleOptionView">
+        <constructor>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="label" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="queueOptions" resultMap="SimpleOptionResultMap">
+        select queue_code as code,
+               queue_code as label
+          from batch.resource_queue
+         where tenant_id = #{tenantId}
+           and enabled = true
+         order by queue_code
+    </select>
+
+    <select id="calendarOptions" resultMap="SimpleOptionResultMap">
+        select calendar_code as code,
+               calendar_code as label
+          from batch.business_calendar
+         where tenant_id = #{tenantId}
+           and enabled = true
+         order by calendar_code
+    </select>
+
+    <select id="windowOptions" resultMap="SimpleOptionResultMap">
+        select window_code as code,
+               window_code as label
+          from batch.batch_window
+         where tenant_id = #{tenantId}
+           and enabled = true
+         order by window_code
+    </select>
+
+    <select id="workerGroupOptions" resultMap="SimpleOptionResultMap">
+        select distinct worker_group as code,
+                        worker_group as label
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and status = 'ONLINE'
+         order by worker_group
+    </select>
+
+    <select id="bizTypeOptions" resultMap="SimpleOptionResultMap">
+        select distinct biz_type as code,
+                        biz_type as label
+          from batch.file_record
+         where tenant_id = #{tenantId}
+           and biz_type is not null
+         order by biz_type
+    </select>
+</mapper>

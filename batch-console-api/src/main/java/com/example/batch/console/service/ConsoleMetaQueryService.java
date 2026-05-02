@@ -69,7 +69,7 @@ import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.console.domain.view.meta.SimpleOptionView;
-import com.example.batch.console.repository.ConsoleMetaQueryRepository;
+import com.example.batch.console.mapper.ConsoleMetaQueryMapper;
 import com.example.batch.console.support.ConsoleQueryCacheService;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ConsoleMetaEnumItem;
@@ -91,13 +91,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ConsoleMetaQueryService {
 
-  private final ConsoleMetaQueryRepository repository;
+  private final ConsoleMetaQueryMapper repository;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleQueryCacheService cacheService;
   private final MessageSource messageSource;
 
   public ConsoleMetaQueryService(
-      ConsoleMetaQueryRepository repository,
+      ConsoleMetaQueryMapper repository,
       ConsoleTenantGuard tenantGuard,
       ConsoleQueryCacheService cacheService,
       MessageSource messageSource) {
