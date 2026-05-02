@@ -16,6 +16,7 @@ import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
 import com.example.batch.console.support.auth.ConsolePasswordHasher;
+import com.example.batch.console.web.ConsoleTenantConfigCopyService;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ class ConsoleTenantApplicationServiceTest {
   @Mock private FilePipelineMapper filePipelineMapper;
   @Mock private WorkflowRunMapper workflowRunMapper;
   @Mock private ConsoleTriggerProxyService triggerProxyService;
+  @Mock private ConsoleTenantConfigCopyService configCopyService;
 
   private ConsoleTenantApplicationService service;
 
@@ -58,7 +60,8 @@ class ConsoleTenantApplicationServiceTest {
             jobInstanceMapper,
             filePipelineMapper,
             workflowRunMapper,
-            triggerProxyService);
+            triggerProxyService,
+            configCopyService);
   }
 
   @Test

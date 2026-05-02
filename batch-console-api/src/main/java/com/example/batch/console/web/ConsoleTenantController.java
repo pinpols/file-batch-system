@@ -6,6 +6,7 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleTenantApplicationService;
 import com.example.batch.console.service.ConsoleTenantApplicationService.BatchCreateTenantCommand;
+import com.example.batch.console.service.ConsoleTenantApplicationService.ConfigInitOption;
 import com.example.batch.console.service.ConsoleTenantApplicationService.CreateTenantCommand;
 import com.example.batch.console.service.ConsoleTenantApplicationService.TenantSpec;
 import com.example.batch.console.support.auth.ConsolePrincipal;
@@ -13,13 +14,9 @@ import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.auth.BatchCreateTenantRequest;
 import com.example.batch.console.web.request.auth.CreateTenantRequest;
 import com.example.batch.console.web.request.auth.UpdateTenantRequest;
-import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;
-import com.example.batch.console.web.request.config.TenantConfigCopyRequest;
 import com.example.batch.console.web.response.auth.BatchCreateTenantsResponse;
 import com.example.batch.console.web.response.auth.ConsoleTenantResponse;
-import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -46,7 +43,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConsoleTenantController {
 
   private final ConsoleTenantApplicationService tenantService;
-  private final ConsoleTenantConfigCopyService copyService;
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
@@ -90,23 +86,11 @@ public class ConsoleTenantController {
         request.getTenants().stream()
             .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
             .toList();
-    List<ConsoleTenantResponse> tenants =
+    return responseFactory.success(
         tenantService.batchCreateTenants(
             new BatchCreateTenantCommand(
-                specs, request.getUsernamePrefix(), request.getPassword(), operator));
-
-    TenantConfigBatchInitResponse configInit = null;
-    if (request.getInitConfigFrom() != null && !request.getInitConfigFrom().isBlank()) {
-      List<String> newTenantIds = tenants.stream().map(ConsoleTenantResponse::tenantId).toList();
-      TenantConfigCopyRequest copyRequest = new TenantConfigCopyRequest();
-      copyRequest.setSourceTenantId(request.getInitConfigFrom());
-      copyRequest.setTargetTenantIds(newTenantIds);
-      copyRequest.setMode(
-          request.getInitMode() != null ? request.getInitMode() : InitMode.SKIP_EXISTING);
-      configInit = copyService.copy(copyRequest, operator, UUID.randomUUID().toString());
-    }
-
-    return responseFactory.success(new BatchCreateTenantsResponse(tenants, configInit));
+                specs, request.getUsernamePrefix(), request.getPassword(), operator),
+            new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode())));
   }
 
   @PutMapping("/{tenantId}")
