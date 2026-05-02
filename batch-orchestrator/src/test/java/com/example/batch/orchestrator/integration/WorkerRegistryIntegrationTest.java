@@ -6,7 +6,7 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
@@ -14,21 +14,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-/** 集成测试：WorkerRegistryRepository 在真实数据库上的持久化和查询。 覆盖排空生命周期：ONLINE → DRAINING → DECOMMISSIONED。 */
+/** 集成测试：WorkerRegistryMapper 在真实数据库上的持久化和查询。 覆盖排空生命周期：ONLINE → DRAINING → DECOMMISSIONED。 */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired private WorkerRegistryRepository workerRegistryRepository;
+  @Autowired private WorkerRegistryMapper workerRegistryMapper;
 
   @Test
   void shouldSaveAndFindOnlineWorker() {
     WorkerRegistryRecord worker = onlineWorker("t1", "worker-it-001", "DEFAULT");
-    workerRegistryRepository.save(worker);
+    workerRegistryMapper.saveLikeSdj(worker);
 
     WorkerRegistryRecord found =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "worker-it-001");
+        workerRegistryMapper.selectByTenantAndWorkerCode("t1", "worker-it-001");
 
     assertThat(found).isNotNull();
     assertThat(found.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
@@ -38,14 +38,14 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldTransitionToDrainingStatus() {
     WorkerRegistryRecord worker = onlineWorker("t1", "worker-it-drain", "DEFAULT");
-    worker = workerRegistryRepository.save(worker);
+    worker = workerRegistryMapper.saveLikeSdj(worker);
 
     Instant now = Instant.now();
     worker = worker.withDrain(WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(300), now);
-    workerRegistryRepository.save(worker);
+    workerRegistryMapper.saveLikeSdj(worker);
 
     WorkerRegistryRecord found =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "worker-it-drain");
+        workerRegistryMapper.selectByTenantAndWorkerCode("t1", "worker-it-drain");
     assertThat(found.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
     assertThat(found.drainStartedAt()).isNotNull();
     assertThat(found.drainDeadlineAt()).isNotNull();
@@ -54,13 +54,13 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldTransitionToDecommissionedStatus() {
     WorkerRegistryRecord worker = onlineWorker("t1", "worker-it-decom", "DEFAULT");
-    worker = workerRegistryRepository.save(worker);
+    worker = workerRegistryMapper.saveLikeSdj(worker);
 
     worker = worker.withDecommissioned(Instant.now());
-    workerRegistryRepository.save(worker);
+    workerRegistryMapper.saveLikeSdj(worker);
 
     WorkerRegistryRecord found =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "worker-it-decom");
+        workerRegistryMapper.selectByTenantAndWorkerCode("t1", "worker-it-decom");
     assertThat(found.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
     assertThat(found.drainStartedAt()).isNull();
     assertThat(found.drainDeadlineAt()).isNull();
@@ -74,12 +74,12 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
     WorkerRegistryRecord w3 =
         onlineWorker("t1", "w-offline-" + uniqueGroup, uniqueGroup)
             .withStatus(WorkerRegistryStatus.OFFLINE.code(), Instant.now());
-    workerRegistryRepository.save(w1);
-    workerRegistryRepository.save(w2);
-    workerRegistryRepository.save(w3);
+    workerRegistryMapper.saveLikeSdj(w1);
+    workerRegistryMapper.saveLikeSdj(w2);
+    workerRegistryMapper.saveLikeSdj(w3);
 
     List<WorkerRegistryRecord> online =
-        workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
+        workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
             "t1", uniqueGroup, WorkerRegistryStatus.ONLINE.code());
 
     assertThat(online).hasSize(2);
@@ -91,11 +91,11 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
     String uniqueGroup = "CNT-" + System.currentTimeMillis();
     WorkerRegistryRecord w1 = onlineWorker("t1", "cnt-w1-" + uniqueGroup, uniqueGroup);
     WorkerRegistryRecord w2 = onlineWorker("t1", "cnt-w2-" + uniqueGroup, uniqueGroup);
-    workerRegistryRepository.save(w1);
-    workerRegistryRepository.save(w2);
+    workerRegistryMapper.saveLikeSdj(w1);
+    workerRegistryMapper.saveLikeSdj(w2);
 
     long count =
-        workerRegistryRepository.countByTenantIdAndWorkerGroupAndStatus(
+        workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
             "t1", uniqueGroup, WorkerRegistryStatus.ONLINE.code());
 
     assertThat(count).isEqualTo(2);
@@ -111,10 +111,10 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
                 Instant.now().minusSeconds(60),
                 pastDeadline,
                 Instant.now());
-    workerRegistryRepository.save(draining);
+    workerRegistryMapper.saveLikeSdj(draining);
 
     List<WorkerRegistryRecord> drainingWorkers =
-        workerRegistryRepository.findByStatus(WorkerRegistryStatus.DRAINING.code());
+        workerRegistryMapper.selectByStatus(WorkerRegistryStatus.DRAINING.code());
 
     assertThat(drainingWorkers).isNotEmpty();
     assertThat(drainingWorkers)

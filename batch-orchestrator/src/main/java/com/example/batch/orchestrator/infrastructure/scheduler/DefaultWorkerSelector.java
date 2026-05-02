@@ -11,7 +11,7 @@ import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.domain.value.JsonbString;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -46,17 +46,17 @@ public class DefaultWorkerSelector implements WorkerSelector {
   // A-3.2 a: 指标名对齐 batch.scheduler.* 前缀，和现有 scheduler 指标共面板
   private static final String METRIC_NO_MATCH = "batch.scheduler.worker_selection.no_match";
 
-  private final WorkerRegistryRepository workerRegistryRepository;
+  private final WorkerRegistryMapper workerRegistryMapper;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   private final ResourceSchedulerProperties resourceSchedulerProperties;
   private final ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
 
   public DefaultWorkerSelector(
-      WorkerRegistryRepository workerRegistryRepository,
+      WorkerRegistryMapper workerRegistryMapper,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
       ResourceSchedulerProperties resourceSchedulerProperties,
       ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider) {
-    this.workerRegistryRepository = workerRegistryRepository;
+    this.workerRegistryMapper = workerRegistryMapper;
     this.meterRegistryProvider = meterRegistryProvider;
     this.resourceSchedulerProperties = resourceSchedulerProperties;
     this.workerRegistryCacheProvider = workerRegistryCacheProvider;
@@ -131,9 +131,9 @@ public class DefaultWorkerSelector implements WorkerSelector {
     java.util.function.Supplier<List<WorkerRegistryRecord>> loader =
         () ->
             Texts.hasText(workerGroup)
-                ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
+                ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
                     tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
-                : workerRegistryRepository.findByTenantIdAndStatus(
+                : workerRegistryMapper.selectByTenantAndStatus(
                     tenantId, WorkerRegistryStatus.ONLINE.code());
     WorkerRegistryCache cache = workerRegistryCacheProvider.getIfAvailable();
     if (cache == null) {

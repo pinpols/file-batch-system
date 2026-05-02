@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -31,4 +32,61 @@ public interface WorkerRegistryMapper {
    * 视为"无能力"跳过，建议由审计调度器定期暴露。
    */
   List<InvalidCapabilityTagsRecord> selectInvalidCapabilityTags();
+
+  // ── 替代原 WorkerRegistryRepository 的查询方法（运行态走 MyBatis 闭环 3/3） ─────────────
+
+  /** 按 (tenant_id, worker_code) unique constraint 单行查询。 */
+  WorkerRegistryRecord selectByTenantAndWorkerCode(
+      @Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
+
+  /** 按租户 + 状态过滤；用于 selector / snapshot service / drain timeout 等。 */
+  List<WorkerRegistryRecord> selectByTenantAndStatus(
+      @Param("tenantId") String tenantId, @Param("status") String status);
+
+  /** 按租户 + worker_group + 状态过滤；用于 selector 在 group 维度选 worker。 */
+  List<WorkerRegistryRecord> selectByTenantAndWorkerGroupAndStatus(
+      @Param("tenantId") String tenantId,
+      @Param("workerGroup") String workerGroup,
+      @Param("status") String status);
+
+  /** 跨租户按状态扫描（如 drain timeout 调度器扫所有 DRAINING worker）。 */
+  List<WorkerRegistryRecord> selectByStatus(@Param("status") String status);
+
+  long countByTenantAndStatus(@Param("tenantId") String tenantId, @Param("status") String status);
+
+  long countByTenantAndWorkerGroupAndStatus(
+      @Param("tenantId") String tenantId,
+      @Param("workerGroup") String workerGroup,
+      @Param("status") String status);
+
+  /**
+   * Worker 首次注册：插入新行。{@code ON CONFLICT (tenant_id, worker_code) DO NOTHING}：并发同一 workerCode 多次
+   * register 只第一行成功，调用方下一次 selectByTenantAndWorkerCode 自然读到已有行。
+   *
+   * @return 实际写入行数（0 表示并发已被另一节点抢先创建）
+   */
+  int insert(WorkerRegistryRecord record);
+
+  /**
+   * register / status / drain 等更新路径的统一 upsert：按 id 全字段覆盖 status / heartbeat_at / current_load /
+   * capability_tags / drain_started_at / drain_deadline_at；不参与 CAS（worker_registry 不是状态机推进核心， 业务上由
+   * mapper.touchHeartbeat / markDecommissioned 等单字段 SQL 接管热路径，本方法仅供 register / forceOffline
+   * 等冷路径全字段写入）。
+   *
+   * @return 影响行数（0 表示行不存在）
+   */
+  int updateById(WorkerRegistryRecord record);
+
+  /**
+   * 测试夹具用 SDJ-like 等价 save 助手：record.id() 为空时走 {@link #insert} + 重新 select 拿到带 id 的版本， 否则走 {@link
+   * #updateById}。仅供 integration / test fixture 使用，不要在生产路径调用（生产 callsite 应明确知道走的是新建还是更新，调对应方法语义更清晰）。
+   */
+  default WorkerRegistryRecord saveLikeSdj(WorkerRegistryRecord record) {
+    if (record.id() == null) {
+      insert(record);
+      return selectByTenantAndWorkerCode(record.tenantId(), record.workerCode());
+    }
+    updateById(record);
+    return selectByTenantAndWorkerCode(record.tenantId(), record.workerCode());
+  }
 }

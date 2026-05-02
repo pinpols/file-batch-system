@@ -5,12 +5,12 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanceService {
 
-  private final WorkerRegistryRepository workerRegistryRepository;
   private final WorkerRegistryMapper workerRegistryMapper;
   private final JobTaskMapper jobTaskMapper;
   private final RetryGovernanceService retryGovernanceService;
@@ -62,7 +61,8 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     registry =
         registry.withDrain(
             WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);
-    return workerRegistryRepository.save(registry);
+    workerRegistryMapper.updateById(registry);
+    return registry;
   }
 
   @Override
@@ -101,7 +101,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
       return;
     }
     WorkerRegistryRecord registry =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     if (registry == null || !WorkerRegistryStatus.DRAINING.code().equals(registry.status())) {
       return;
     }
@@ -133,12 +133,12 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
   private WorkerRegistryRecord markDecommissioned(String tenantId, String workerCode) {
     requireRegistry(tenantId, workerCode);
     workerRegistryMapper.markDecommissioned(tenantId, workerCode);
-    return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
   }
 
   private WorkerRegistryRecord requireRegistry(String tenantId, String workerCode) {
     return Guard.requireFound(
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode),
+        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode),
         "worker not registered");
   }
 

@@ -45,6 +45,122 @@
            and heartbeat_at &lt; current_timestamp - (#{timeoutSeconds} * interval '1 second')
     </update>
 
+    <!--
+      WorkerRegistryRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, workerCode, workerGroup, capabilityTags, resourceTag, status,
+         heartbeatAt, currentLoad, drainStartedAt, drainDeadlineAt)
+      capability_tags 是 JSONB；通过 ::text 转字符串再走 JsonbStringTypeHandler 包装。
+    -->
+    <resultMap id="workerRegistryMap"
+               type="com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="worker_code" javaType="java.lang.String"/>
+            <arg column="worker_group" javaType="java.lang.String"/>
+            <arg column="capability_tags_text"
+                 javaType="com.example.batch.orchestrator.domain.value.JsonbString"
+                 typeHandler="com.example.batch.orchestrator.infrastructure.mybatis.JsonbStringTypeHandler"/>
+            <arg column="resource_tag" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="heartbeat_at" javaType="java.time.Instant"/>
+            <arg column="current_load" javaType="java.lang.Integer"/>
+            <arg column="drain_started_at" javaType="java.time.Instant"/>
+            <arg column="drain_deadline_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="workerRegistrySelectColumns">
+        id, tenant_id, worker_code, worker_group,
+        capability_tags::text as capability_tags_text,
+        resource_tag, status, heartbeat_at, current_load,
+        drain_started_at, drain_deadline_at
+    </sql>
+
+    <select id="selectByTenantAndWorkerCode" resultMap="workerRegistryMap">
+        select <include refid="workerRegistrySelectColumns"/>
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and worker_code = #{workerCode}
+    </select>
+
+    <select id="selectByTenantAndStatus" resultMap="workerRegistryMap">
+        select <include refid="workerRegistrySelectColumns"/>
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and status = #{status}
+    </select>
+
+    <select id="selectByTenantAndWorkerGroupAndStatus" resultMap="workerRegistryMap">
+        select <include refid="workerRegistrySelectColumns"/>
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and worker_group = #{workerGroup}
+           and status = #{status}
+    </select>
+
+    <select id="selectByStatus" resultMap="workerRegistryMap">
+        select <include refid="workerRegistrySelectColumns"/>
+          from batch.worker_registry
+         where status = #{status}
+    </select>
+
+    <select id="countByTenantAndStatus" resultType="long">
+        select count(1) from batch.worker_registry
+         where tenant_id = #{tenantId} and status = #{status}
+    </select>
+
+    <select id="countByTenantAndWorkerGroupAndStatus" resultType="long">
+        select count(1) from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and worker_group = #{workerGroup}
+           and status = #{status}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord">
+        insert into batch.worker_registry (
+            tenant_id, worker_code, worker_group, capability_tags, resource_tag,
+            status, heartbeat_at, current_load, drain_started_at, drain_deadline_at,
+            created_at, updated_at
+        ) values (
+            #{tenantId}, #{workerCode}, #{workerGroup},
+            cast(#{capabilityTags.value} as jsonb),
+            #{resourceTag},
+            <choose>
+                <when test="status != null">#{status}</when>
+                <otherwise>'ONLINE'</otherwise>
+            </choose>,
+            <choose>
+                <when test="heartbeatAt != null">#{heartbeatAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>,
+            <choose>
+                <when test="currentLoad != null">#{currentLoad}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            #{drainStartedAt}, #{drainDeadlineAt},
+            current_timestamp, current_timestamp
+        )
+        on conflict (tenant_id, worker_code) do nothing
+    </insert>
+
+    <update id="updateById"
+            parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord">
+        update batch.worker_registry
+           set worker_group       = #{workerGroup},
+               capability_tags    = cast(#{capabilityTags.value} as jsonb),
+               resource_tag       = #{resourceTag},
+               status             = #{status},
+               heartbeat_at       = #{heartbeatAt},
+               current_load       = #{currentLoad},
+               drain_started_at   = #{drainStartedAt},
+               drain_deadline_at  = #{drainDeadlineAt},
+               updated_at         = current_timestamp
+         where id = #{id}
+    </update>
+
     <!-- capability_tags 数据质量扫描：筛出"非字符串数组"形态的活跃 worker。
          正常形态：NULL / [] / ["ingest", "delivery"]。
          异常形态：对象、标量、含非字符串元素的数组——selector 会把它当作无能力静默跳过，

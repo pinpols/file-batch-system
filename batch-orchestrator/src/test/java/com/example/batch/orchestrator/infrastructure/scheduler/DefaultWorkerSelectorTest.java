@@ -12,7 +12,7 @@ import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.domain.value.JsonbString;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +33,7 @@ class DefaultWorkerSelectorTest {
   private static final String TENANT = "default-tenant";
   private static final String GROUP = "EXPORT";
 
-  @Mock private WorkerRegistryRepository workerRegistryRepository;
+  @Mock private WorkerRegistryMapper workerRegistryMapper;
 
   @SuppressWarnings("unchecked")
   @Mock
@@ -50,7 +50,7 @@ class DefaultWorkerSelectorTest {
   void setUp() {
     selector =
         new DefaultWorkerSelector(
-            workerRegistryRepository, meterRegistryProvider, props, workerRegistryCacheProvider);
+            workerRegistryMapper, meterRegistryProvider, props, workerRegistryCacheProvider);
     lenient().when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
     lenient().when(workerRegistryCacheProvider.getIfAvailable()).thenReturn(null);
   }
@@ -121,7 +121,7 @@ class DefaultWorkerSelectorTest {
   }
 
   private void stubCandidates(List<WorkerRegistryRecord> candidates) {
-    when(workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
+    when(workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
             eq(TENANT), eq(GROUP), eq(WorkerRegistryStatus.ONLINE.code())))
         .thenReturn(candidates);
   }

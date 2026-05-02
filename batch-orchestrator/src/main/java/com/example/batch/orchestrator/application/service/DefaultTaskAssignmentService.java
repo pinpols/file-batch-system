@@ -27,8 +27,8 @@ import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.MarkRunningParam;
 import com.example.batch.orchestrator.mapper.UpdateTaskStatusParam;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -65,7 +65,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   private final JobInstanceMapper jobInstanceMapper;
   private final JobStepInstanceMapper jobStepInstanceMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
-  private final WorkerRegistryRepository workerRegistryRepository;
+  private final WorkerRegistryMapper workerRegistryMapper;
   private final JobDefinitionRepository jobDefinitionRepository;
   private final PartitionLeaseProperties partitionLeaseProperties;
   private final ResourceSchedulerProperties resourceSchedulerProperties;
@@ -321,7 +321,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
    */
   private WorkerRegistryRecord resolveClaimableWorker(String tenantId, String workerCode) {
     WorkerRegistryRecord primary =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     if (primary != null) {
       return primary;
     }
@@ -333,7 +333,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       return null;
     }
     WorkerRegistryRecord fallback =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(fallbackTenant, workerCode);
+        workerRegistryMapper.selectByTenantAndWorkerCode(fallbackTenant, workerCode);
     if (fallback != null) {
       log.info(
           "worker claim resolved via shared tenant fallback: tenantId={}, fallbackTenant={},"

@@ -2,23 +2,28 @@ package com.example.batch.orchestrator.domain.entity;
 
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import java.time.Instant;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
-@Table(schema = "batch", value = "worker_registry")
+/**
+ * worker_registry 表的不可变快照（MyBatis 通过 {@code resultMap+constructor} 映射）。
+ *
+ * <p>{@code capability_tags} 是 PG JSONB 列；mapper xml 通过 {@code capability_tags::text as
+ * capability_tags_text} 转字符串走 {@code JsonbStringTypeHandler} 包装为 {@link JsonbString}。
+ *
+ * <p><b>不要加 Spring Data 注解</b>（{@code @Table @Id @Column}）—— 本表已迁 MyBatis 后由 {@code
+ * WorkerRegistryMapper} 接管 CRUD；保留 SDJ 注解会被框架误扫成 Repository。
+ */
 public record WorkerRegistryRecord(
-    @Id Long id,
-    @Column("tenant_id") String tenantId,
-    @Column("worker_code") String workerCode,
-    @Column("worker_group") String workerGroup,
-    @Column("capability_tags") JsonbString capabilityTags,
-    @Column("resource_tag") String resourceTag,
-    @Column("status") String status,
-    @Column("heartbeat_at") Instant heartbeatAt,
-    @Column("current_load") Integer currentLoad,
-    @Column("drain_started_at") Instant drainStartedAt,
-    @Column("drain_deadline_at") Instant drainDeadlineAt) {
+    Long id,
+    String tenantId,
+    String workerCode,
+    String workerGroup,
+    JsonbString capabilityTags,
+    String resourceTag,
+    String status,
+    Instant heartbeatAt,
+    Integer currentLoad,
+    Instant drainStartedAt,
+    Instant drainDeadlineAt) {
   /** 心跳更新：状态、心跳时间、负载、能力标签。 */
   public WorkerRegistryRecord withHeartbeat(
       String status, Instant heartbeatAt, Integer currentLoad, JsonbString capabilityTags) {

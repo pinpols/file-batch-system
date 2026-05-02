@@ -12,7 +12,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 class DefaultSchedulePlanBuilderTest {
 
   private OrchestratorConfigCacheService configCacheService;
-  private WorkerRegistryRepository workerRegistryRepository;
+  private WorkerRegistryMapper workerRegistryMapper;
   private DefaultSchedulePlanBuilder builder;
   private ListAppender<ILoggingEvent> logAppender;
   private Logger builderLogger;
@@ -31,13 +31,13 @@ class DefaultSchedulePlanBuilderTest {
   @BeforeEach
   void setUp() {
     configCacheService = mock(OrchestratorConfigCacheService.class);
-    workerRegistryRepository = mock(WorkerRegistryRepository.class);
+    workerRegistryMapper = mock(WorkerRegistryMapper.class);
     List<PartitionCountResolver> resolvers =
         List.of(
             new ExplicitPartitionCountResolver(),
             new SizeBasedPartitionCountResolver(),
             new RuntimeBasedPartitionCountResolver(),
-            new WorkerBasedPartitionCountResolver(workerRegistryRepository));
+            new WorkerBasedPartitionCountResolver(workerRegistryMapper));
     builder = new DefaultSchedulePlanBuilder(configCacheService, resolvers);
 
     builderLogger = (Logger) LoggerFactory.getLogger(DefaultSchedulePlanBuilder.class);

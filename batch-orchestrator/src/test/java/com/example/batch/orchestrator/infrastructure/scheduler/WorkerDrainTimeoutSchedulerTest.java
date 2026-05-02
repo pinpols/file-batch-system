@@ -11,7 +11,7 @@ import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
 import java.util.Arrays;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WorkerDrainTimeoutSchedulerTest {
 
-  @Mock private WorkerRegistryRepository workerRegistryRepository;
+  @Mock private WorkerRegistryMapper workerRegistryMapper;
 
   @Mock private WorkerDrainGovernanceService workerDrainGovernanceService;
 
@@ -38,7 +38,7 @@ class WorkerDrainTimeoutSchedulerTest {
     workerDrainProperties.setEnabled(true);
     scheduler =
         new WorkerDrainTimeoutScheduler(
-            workerRegistryRepository,
+            workerRegistryMapper,
             workerDrainGovernanceService,
             workerDrainProperties,
             gracefulShutdown);
@@ -50,7 +50,7 @@ class WorkerDrainTimeoutSchedulerTest {
 
     scheduler.expireDrains();
 
-    verify(workerRegistryRepository, never()).findByStatus(WorkerRegistryStatus.DRAINING.code());
+    verify(workerRegistryMapper, never()).selectByStatus(WorkerRegistryStatus.DRAINING.code());
     verify(workerDrainGovernanceService, never())
         .takeoverAfterDrainTimeout(anyString(), anyString());
   }
@@ -65,7 +65,7 @@ class WorkerDrainTimeoutSchedulerTest {
     WorkerRegistryRecord missingDeadline =
         worker("t1", "worker-missing", now.minusSeconds(120), null);
 
-    when(workerRegistryRepository.findByStatus(WorkerRegistryStatus.DRAINING.code()))
+    when(workerRegistryMapper.selectByStatus(WorkerRegistryStatus.DRAINING.code()))
         .thenReturn(Arrays.asList(expired, future, missingDeadline, null));
 
     scheduler.expireDrains();
