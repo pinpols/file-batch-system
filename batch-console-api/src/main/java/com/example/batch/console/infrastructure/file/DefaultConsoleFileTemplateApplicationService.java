@@ -177,154 +177,115 @@ public class DefaultConsoleFileTemplateApplicationService
     FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
     param.setTenantId(tenantId);
     param.setTemplateCode(templateCode);
-    param.setBasicInfo(
-        basicInfo(
-            request.getTemplateName() != null
-                ? request.getTemplateName()
-                : (String) existing.get("template_name"),
-            request.getTemplateType() != null
-                ? request.getTemplateType()
-                : (String) existing.get("template_type"),
-            request.getBizType() != null ? request.getBizType() : (String) existing.get("biz_type"),
-            request.getEnabled() != null ? request.getEnabled() : (Boolean) existing.get("enabled"),
-            version,
-            request.getDescription() != null
-                ? request.getDescription()
-                : (String) existing.get("description")));
-    FileTemplateConfigUpsertParam.FormatOptions format =
-        new FileTemplateConfigUpsertParam.FormatOptions();
-    format.setFileFormatType(
-        request.getFileFormatType() != null
-            ? request.getFileFormatType()
-            : (String) existing.get("file_format_type"));
-    format.setCharset(
-        request.getCharset() != null ? request.getCharset() : (String) existing.get("charset"));
-    format.setTargetCharset(
-        request.getTargetCharset() != null
-            ? request.getTargetCharset()
-            : (String) existing.get("target_charset"));
-    format.setWithBom(
-        request.getWithBom() != null ? request.getWithBom() : (Boolean) existing.get("with_bom"));
-    format.setLineSeparator(
-        request.getLineSeparator() != null
-            ? request.getLineSeparator()
-            : (String) existing.get("line_separator"));
-    format.setDelimiter(
-        request.getDelimiter() != null
-            ? request.getDelimiter()
-            : (String) existing.get("delimiter"));
-    format.setQuoteChar(
-        request.getQuoteChar() != null
-            ? request.getQuoteChar()
-            : (String) existing.get("quote_char"));
-    format.setEscapeChar(
-        request.getEscapeChar() != null
-            ? request.getEscapeChar()
-            : (String) existing.get("escape_char"));
-    format.setRecordLength(
-        request.getRecordLength() != null
-            ? request.getRecordLength()
-            : intValue(existing.get("record_length")));
-    format.setHeaderRows(
-        request.getHeaderRows() != null
-            ? request.getHeaderRows()
-            : intValue(existing.get("header_rows")));
-    format.setFooterRows(
-        request.getFooterRows() != null
-            ? request.getFooterRows()
-            : intValue(existing.get("footer_rows")));
-    format.setHeaderTemplateJson(
-        request.getHeaderTemplateJson() != null
-            ? request.getHeaderTemplateJson()
-            : stringValue(existing.get("header_template")));
-    format.setTrailerTemplateJson(
-        request.getTrailerTemplateJson() != null
-            ? request.getTrailerTemplateJson()
-            : stringValue(existing.get("trailer_template")));
-    format.setChecksumType(
-        request.getChecksumType() != null
-            ? request.getChecksumType()
-            : (String) existing.get("checksum_type"));
-    format.setCompressType(
-        request.getCompressType() != null
-            ? request.getCompressType()
-            : (String) existing.get("compress_type"));
-    format.setEncryptType(
-        request.getEncryptType() != null
-            ? request.getEncryptType()
-            : (String) existing.get("encrypt_type"));
-    format.setNamingRule(
-        request.getNamingRule() != null
-            ? request.getNamingRule()
-            : (String) existing.get("naming_rule"));
-    format.setFieldMappingsJson(
-        request.getFieldMappingsJson() != null
-            ? request.getFieldMappingsJson()
-            : stringValue(existing.get("field_mappings")));
-    format.setValidationRuleSetJson(
-        request.getValidationRuleSetJson() != null
-            ? request.getValidationRuleSetJson()
-            : stringValue(existing.get("validation_rule_set")));
-    param.setFormat(format);
-    param.setQuery(
-        queryOptions(
-            request.getDefaultQueryCode() != null
-                ? request.getDefaultQueryCode()
-                : (String) existing.get("default_query_code"),
-            request.getDefaultQuerySql() != null
-                ? request.getDefaultQuerySql()
-                : (String) existing.get("default_query_sql"),
-            request.getQueryParamSchemaJson() != null
-                ? request.getQueryParamSchemaJson()
-                : stringValue(existing.get("query_param_schema"))));
-    param.setRuntime(
-        runtimeOptions(
-            request.getStreamingEnabled() != null
-                ? request.getStreamingEnabled()
-                : (Boolean) existing.get("streaming_enabled"),
-            request.getPageSize() != null
-                ? request.getPageSize()
-                : intValue(existing.get("page_size")),
-            request.getFetchSize() != null
-                ? request.getFetchSize()
-                : intValue(existing.get("fetch_size")),
-            request.getChunkSize() != null
-                ? request.getChunkSize()
-                : intValue(existing.get("chunk_size"))));
-    SecurityOptionsInput securityInput =
-        SecurityOptionsInput.builder()
-            .previewMaskingEnabled(
-                request.getPreviewMaskingEnabled() != null
-                    ? request.getPreviewMaskingEnabled()
-                    : (Boolean) existing.get("preview_masking_enabled"))
-            .errorLineMaskingEnabled(
-                request.getErrorLineMaskingEnabled() != null
-                    ? request.getErrorLineMaskingEnabled()
-                    : (Boolean) existing.get("error_line_masking_enabled"))
-            .logMaskingEnabled(
-                request.getLogMaskingEnabled() != null
-                    ? request.getLogMaskingEnabled()
-                    : (Boolean) existing.get("log_masking_enabled"))
-            .contentEncryptionEnabled(
-                request.getContentEncryptionEnabled() != null
-                    ? request.getContentEncryptionEnabled()
-                    : (Boolean) existing.get("content_encryption_enabled"))
-            .encryptionKeyRef(
-                request.getEncryptionKeyRef() != null
-                    ? request.getEncryptionKeyRef()
-                    : (String) existing.get("encryption_key_ref"))
-            .downloadRequiresApproval(
-                request.getDownloadRequiresApproval() != null
-                    ? request.getDownloadRequiresApproval()
-                    : (Boolean) existing.get("download_requires_approval"))
-            .maskingRuleSet(
-                request.getMaskingRuleSet() != null
-                    ? request.getMaskingRuleSet()
-                    : (String) existing.get("masking_rule_set"))
-            .build();
-    param.setSecurity(securityOptions(securityInput));
+    param.setBasicInfo(buildBasicInfoForUpdate(request, existing, version));
+    param.setFormat(buildFormatForUpdate(request, existing));
+    param.setQuery(buildQueryForUpdate(request, existing));
+    param.setRuntime(buildRuntimeForUpdate(request, existing));
+    param.setSecurity(securityOptions(buildSecurityInputForUpdate(request, existing)));
     param.setAudit(auditOptions(operator, operator));
     return param;
+  }
+
+  private FileTemplateConfigUpsertParam.BasicInfo buildBasicInfoForUpdate(
+      FileTemplateUpdateRequest req, Map<String, Object> existing, int version) {
+    return basicInfo(
+        coalesceString(req.getTemplateName(), existing, "template_name"),
+        coalesceString(req.getTemplateType(), existing, "template_type"),
+        coalesceString(req.getBizType(), existing, "biz_type"),
+        coalesceBoolean(req.getEnabled(), existing, "enabled"),
+        version,
+        coalesceString(req.getDescription(), existing, "description"));
+  }
+
+  private FileTemplateConfigUpsertParam.FormatOptions buildFormatForUpdate(
+      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+    FileTemplateConfigUpsertParam.FormatOptions format =
+        new FileTemplateConfigUpsertParam.FormatOptions();
+    format.setFileFormatType(coalesceString(req.getFileFormatType(), existing, "file_format_type"));
+    format.setCharset(coalesceString(req.getCharset(), existing, "charset"));
+    format.setTargetCharset(coalesceString(req.getTargetCharset(), existing, "target_charset"));
+    format.setWithBom(coalesceBoolean(req.getWithBom(), existing, "with_bom"));
+    format.setLineSeparator(coalesceString(req.getLineSeparator(), existing, "line_separator"));
+    format.setDelimiter(coalesceString(req.getDelimiter(), existing, "delimiter"));
+    format.setQuoteChar(coalesceString(req.getQuoteChar(), existing, "quote_char"));
+    format.setEscapeChar(coalesceString(req.getEscapeChar(), existing, "escape_char"));
+    format.setRecordLength(coalesceInt(req.getRecordLength(), existing, "record_length"));
+    format.setHeaderRows(coalesceInt(req.getHeaderRows(), existing, "header_rows"));
+    format.setFooterRows(coalesceInt(req.getFooterRows(), existing, "footer_rows"));
+    format.setHeaderTemplateJson(
+        req.getHeaderTemplateJson() != null
+            ? req.getHeaderTemplateJson()
+            : stringValue(existing.get("header_template")));
+    format.setTrailerTemplateJson(
+        req.getTrailerTemplateJson() != null
+            ? req.getTrailerTemplateJson()
+            : stringValue(existing.get("trailer_template")));
+    format.setChecksumType(coalesceString(req.getChecksumType(), existing, "checksum_type"));
+    format.setCompressType(coalesceString(req.getCompressType(), existing, "compress_type"));
+    format.setEncryptType(coalesceString(req.getEncryptType(), existing, "encrypt_type"));
+    format.setNamingRule(coalesceString(req.getNamingRule(), existing, "naming_rule"));
+    format.setFieldMappingsJson(
+        req.getFieldMappingsJson() != null
+            ? req.getFieldMappingsJson()
+            : stringValue(existing.get("field_mappings")));
+    format.setValidationRuleSetJson(
+        req.getValidationRuleSetJson() != null
+            ? req.getValidationRuleSetJson()
+            : stringValue(existing.get("validation_rule_set")));
+    return format;
+  }
+
+  private FileTemplateConfigUpsertParam.QueryOptions buildQueryForUpdate(
+      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+    return queryOptions(
+        coalesceString(req.getDefaultQueryCode(), existing, "default_query_code"),
+        coalesceString(req.getDefaultQuerySql(), existing, "default_query_sql"),
+        req.getQueryParamSchemaJson() != null
+            ? req.getQueryParamSchemaJson()
+            : stringValue(existing.get("query_param_schema")));
+  }
+
+  private FileTemplateConfigUpsertParam.RuntimeOptions buildRuntimeForUpdate(
+      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+    return runtimeOptions(
+        coalesceBoolean(req.getStreamingEnabled(), existing, "streaming_enabled"),
+        coalesceInt(req.getPageSize(), existing, "page_size"),
+        coalesceInt(req.getFetchSize(), existing, "fetch_size"),
+        coalesceInt(req.getChunkSize(), existing, "chunk_size"));
+  }
+
+  private SecurityOptionsInput buildSecurityInputForUpdate(
+      FileTemplateUpdateRequest req, Map<String, Object> existing) {
+    return SecurityOptionsInput.builder()
+        .previewMaskingEnabled(
+            coalesceBoolean(req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled"))
+        .errorLineMaskingEnabled(
+            coalesceBoolean(
+                req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled"))
+        .logMaskingEnabled(
+            coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled"))
+        .contentEncryptionEnabled(
+            coalesceBoolean(
+                req.getContentEncryptionEnabled(), existing, "content_encryption_enabled"))
+        .encryptionKeyRef(coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref"))
+        .downloadRequiresApproval(
+            coalesceBoolean(
+                req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
+        .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
+        .build();
+  }
+
+  private static String coalesceString(String preferred, Map<String, Object> existing, String key) {
+    return preferred != null ? preferred : (String) existing.get(key);
+  }
+
+  private static Boolean coalesceBoolean(
+      Boolean preferred, Map<String, Object> existing, String key) {
+    return preferred != null ? preferred : (Boolean) existing.get(key);
+  }
+
+  private Integer coalesceInt(Integer preferred, Map<String, Object> existing, String key) {
+    return preferred != null ? preferred : intValue(existing.get(key));
   }
 
   private FileTemplateConfigUpsertParam.BasicInfo basicInfo(

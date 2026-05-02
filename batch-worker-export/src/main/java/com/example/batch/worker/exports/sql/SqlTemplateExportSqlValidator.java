@@ -84,48 +84,60 @@ public class SqlTemplateExportSqlValidator {
 
   /** 遍历语句中所有 PlainSelect 主体，拒绝 SELECT * 或 SELECT table.*。 */
   private void checkNoSelectStar(Select select) {
+    Deque<SelectBody> queue = collectInitialBodies(select);
+    while (!queue.isEmpty()) {
+      SelectBody body = queue.poll();
+      if (body instanceof PlainSelect ps) {
+        rejectStarItems(ps);
+        enqueueNestedBodies(ps, queue);
+      } else if (body instanceof SetOperationList sol && sol.getSelects() != null) {
+        queue.addAll(sol.getSelects());
+      }
+    }
+  }
+
+  /** 收集顶层 SelectBody + 所有 WITH 子句的子查询主体。 */
+  private static Deque<SelectBody> collectInitialBodies(Select select) {
     Deque<SelectBody> queue = new ArrayDeque<>();
-    // 收集主体及所有 WITH 子句主体
     if (select.getSelectBody() != null) {
       queue.add(select.getSelectBody());
     }
     if (select.getWithItemsList() != null) {
       for (WithItem wi : select.getWithItemsList()) {
-        if (wi.getSubSelect() != null && wi.getSubSelect().getSelectBody() != null) {
-          queue.add(wi.getSubSelect().getSelectBody());
+        SubSelect sub = wi.getSubSelect();
+        if (sub != null && sub.getSelectBody() != null) {
+          queue.add(sub.getSelectBody());
         }
       }
     }
+    return queue;
+  }
 
-    while (!queue.isEmpty()) {
-      SelectBody body = queue.poll();
-      if (body instanceof PlainSelect ps) {
-        if (ps.getSelectItems() != null) {
-          for (SelectItem item : ps.getSelectItems()) {
-            if (item instanceof AllColumns || item instanceof AllTableColumns) {
-              throw new IllegalArgumentException(
-                  "sql_template_export forbids SELECT * / SELECT table.*;"
-                      + " enumerate columns explicitly");
-            }
-          }
-        }
-        // 将 FROM 中的子查询加入队列
-        if (ps.getFromItem() instanceof SubSelect sub && sub.getSelectBody() != null) {
-          queue.add(sub.getSelectBody());
-        }
-        // 将 JOIN 中的子查询加入队列
-        if (ps.getJoins() != null) {
-          ps.getJoins().stream()
-              .filter(j -> j.getRightItem() instanceof SubSelect)
-              .map(j -> ((SubSelect) j.getRightItem()).getSelectBody())
-              .filter(b -> b != null)
-              .forEach(queue::add);
-        }
-      } else if (body instanceof SetOperationList sol) {
-        if (sol.getSelects() != null) {
-          queue.addAll(sol.getSelects());
-        }
+  /** 单个 PlainSelect 的 selectItems 命中 SELECT * / table.* 即抛。 */
+  private static void rejectStarItems(PlainSelect ps) {
+    if (ps.getSelectItems() == null) {
+      return;
+    }
+    for (SelectItem item : ps.getSelectItems()) {
+      if (item instanceof AllColumns || item instanceof AllTableColumns) {
+        throw new IllegalArgumentException(
+            "sql_template_export forbids SELECT * / SELECT table.*;"
+                + " enumerate columns explicitly");
       }
+    }
+  }
+
+  /** 把 FROM / JOIN 中的子查询加入待检查队列。 */
+  private static void enqueueNestedBodies(PlainSelect ps, Deque<SelectBody> queue) {
+    if (ps.getFromItem() instanceof SubSelect sub && sub.getSelectBody() != null) {
+      queue.add(sub.getSelectBody());
+    }
+    if (ps.getJoins() != null) {
+      ps.getJoins().stream()
+          .filter(j -> j.getRightItem() instanceof SubSelect)
+          .map(j -> ((SubSelect) j.getRightItem()).getSelectBody())
+          .filter(b -> b != null)
+          .forEach(queue::add);
     }
   }
 

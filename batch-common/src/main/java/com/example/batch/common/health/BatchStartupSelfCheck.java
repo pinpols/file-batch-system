@@ -55,40 +55,59 @@ public class BatchStartupSelfCheck {
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
     Flyway fw = flyway.getIfAvailable();
 
-    if (properties.isFlywayValidate()) {
-      if (fw == null) {
-        problems.add("已开启 flyway-validate，但当前上下文不存在 Flyway bean，无法执行校验。");
-      } else {
-        try {
-          fw.validate();
-        } catch (Exception ex) {
-          problems.add("Flyway 脚本校验失败：" + ex.getMessage());
+    runFlywayValidate(fw, problems);
+    runRequiredFlywayVersions(fw, problems);
+    runConfiguredSchemas(jdbc, problems);
+    runConfiguredTables(jdbc, problems);
+    runConfiguredColumns(jdbc, problems);
+    runQuartzStandardTables(jdbc, problems);
+
+    reportResult(problems);
+  }
+
+  private void runFlywayValidate(Flyway fw, List<String> problems) {
+    if (!properties.isFlywayValidate()) {
+      return;
+    }
+    if (fw == null) {
+      problems.add("已开启 flyway-validate，但当前上下文不存在 Flyway bean，无法执行校验。");
+      return;
+    }
+    try {
+      fw.validate();
+    } catch (Exception ex) {
+      problems.add("Flyway 脚本校验失败：" + ex.getMessage());
+    }
+  }
+
+  private void runRequiredFlywayVersions(Flyway fw, List<String> problems) {
+    if (properties.getRequiredFlywayVersions().isEmpty()) {
+      return;
+    }
+    if (fw == null) {
+      problems.add("配置了 required-flyway-versions，但当前上下文不存在 Flyway bean，无法读取已应用迁移。");
+      return;
+    }
+    try {
+      Set<String> applied =
+          Arrays.stream(appliedFlywayVersionsFrom(fw)).collect(Collectors.toSet());
+      for (String version : properties.getRequiredFlywayVersions()) {
+        if (!applied.contains(version)) {
+          problems.add("缺少迁移版本：V" + version + "（请确认对应脚本已应用）。");
         }
       }
+    } catch (Exception ex) {
+      problems.add("读取 Flyway 已应用迁移信息失败：" + ex.getMessage());
     }
+  }
 
-    if (!properties.getRequiredFlywayVersions().isEmpty()) {
-      if (fw == null) {
-        problems.add("配置了 required-flyway-versions，但当前上下文不存在 Flyway bean，无法读取已应用迁移。");
-      } else {
-        try {
-          Set<String> applied =
-              Arrays.stream(appliedFlywayVersionsFrom(fw)).collect(Collectors.toSet());
-          for (String version : properties.getRequiredFlywayVersions()) {
-            if (!applied.contains(version)) {
-              problems.add("缺少迁移版本：V" + version + "（请确认对应脚本已应用）。");
-            }
-          }
-        } catch (Exception ex) {
-          problems.add("读取 Flyway 已应用迁移信息失败：" + ex.getMessage());
-        }
-      }
-    }
-
+  private void runConfiguredSchemas(JdbcTemplate jdbc, List<String> problems) {
     for (String schemaName : properties.getSchemas()) {
       checkSchemaExists(jdbc, problems, schemaName);
     }
+  }
 
+  private void runConfiguredTables(JdbcTemplate jdbc, List<String> problems) {
     for (BatchStartupSelfCheckProperties.TableCheck t : properties.getTables()) {
       if (t.getSchema() == null || t.getName() == null) {
         problems.add("tables 配置项缺少 schema 或 name，请检查 batch.startup-self-check.tables。");
@@ -96,7 +115,9 @@ public class BatchStartupSelfCheck {
       }
       checkTableExists(jdbc, problems, t.getSchema(), t.getName());
     }
+  }
 
+  private void runConfiguredColumns(JdbcTemplate jdbc, List<String> problems) {
     for (BatchStartupSelfCheckProperties.ColumnCheck c : properties.getColumns()) {
       if (c.getSchema() == null || c.getTable() == null || c.getName() == null) {
         problems.add("columns 配置项缺少 schema、table 或 name，请检查 batch.startup-self-check.columns。");
@@ -104,21 +125,25 @@ public class BatchStartupSelfCheck {
       }
       checkColumnExists(jdbc, problems, c.getSchema(), c.getTable(), c.getName(), c.getHint());
     }
+  }
 
-    if (properties.isQuartzStandardTables()) {
-      String qs = properties.getQuartzSchema();
-      checkSchemaExists(jdbc, problems, qs);
-      for (String tableName : QUARTZ_STANDARD_TABLES) {
-        checkTableExists(jdbc, problems, qs, tableName);
-      }
+  private void runQuartzStandardTables(JdbcTemplate jdbc, List<String> problems) {
+    if (!properties.isQuartzStandardTables()) {
+      return;
     }
+    String qs = properties.getQuartzSchema();
+    checkSchemaExists(jdbc, problems, qs);
+    for (String tableName : QUARTZ_STANDARD_TABLES) {
+      checkTableExists(jdbc, problems, qs, tableName);
+    }
+  }
 
+  private void reportResult(List<String> problems) {
     String ctx = properties.getContextName();
     if (problems.isEmpty()) {
       log.info("启动自检通过（{}）：配置项对应的 schema / 表 / 列 / Flyway 均满足预期。", ctx);
       return;
     }
-
     log.error("启动自检发现问题（{}）（请按下列项逐一处理）：", ctx);
     for (String p : problems) {
       log.error(" - {}", p);

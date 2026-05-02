@@ -4,13 +4,14 @@ import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumn
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumnMetadata.EDGE_SHEET;
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumnMetadata.NODE_SHEET;
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelTextUtils.hasText;
+import static com.example.batch.console.support.excel.SheetValidationHelpers.optionalEnum;
+import static com.example.batch.console.support.excel.SheetValidationHelpers.validateJsonField;
 
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.WorkflowEdgeType;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowType;
-import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.infrastructure.excel.WorkflowExcelKeys.EdgeKey;
 import com.example.batch.console.infrastructure.excel.WorkflowExcelKeys.NodeKey;
 import com.example.batch.console.infrastructure.excel.WorkflowExcelKeys.WorkflowKey;
@@ -86,9 +87,7 @@ public class WorkflowExcelRowValidator {
           || row.version() == null) {
         rowIssues.add("workflow definition fields are incomplete");
       }
-      if (hasText(row.workflowType()) && !WORKFLOW_TYPES.contains(row.workflowType())) {
-        rowIssues.add("workflow_type must be one of " + WORKFLOW_TYPES);
-      }
+      optionalEnum(row.workflowType(), "workflow_type", WORKFLOW_TYPES, rowIssues);
       if (!definitionKeys.add(key)) {
         rowIssues.add("duplicate workflow definition in excel: " + key.display());
       }
@@ -129,19 +128,9 @@ public class WorkflowExcelRowValidator {
           || !hasText(row.nodeType())) {
         rowIssues.add("workflow node fields are incomplete");
       }
-      if (hasText(row.nodeType()) && !NODE_TYPES.contains(row.nodeType())) {
-        rowIssues.add("node_type must be one of " + NODE_TYPES);
-      }
-      if (hasText(row.retryPolicy()) && !RETRY_POLICIES.contains(row.retryPolicy())) {
-        rowIssues.add("retry_policy must be one of " + RETRY_POLICIES);
-      }
-      if (row.nodeParams() != null) {
-        try {
-          JsonUtils.fromJson(row.nodeParams(), Object.class);
-        } catch (IllegalArgumentException exception) {
-          rowIssues.add("node_params must be valid JSON");
-        }
-      }
+      optionalEnum(row.nodeType(), "node_type", NODE_TYPES, rowIssues);
+      optionalEnum(row.retryPolicy(), "retry_policy", RETRY_POLICIES, rowIssues);
+      validateJsonField(row.nodeParams(), "node_params", false, rowIssues);
       NodeKey nodeKey = NodeKey.of(workflowKey, row.nodeCode());
       if (!nodeKeys.add(nodeKey)) {
         rowIssues.add("duplicate workflow node in excel: " + nodeKey.display());
@@ -183,9 +172,7 @@ public class WorkflowExcelRowValidator {
           || !hasText(row.edgeType())) {
         rowIssues.add("workflow edge fields are incomplete");
       }
-      if (hasText(row.edgeType()) && !EDGE_TYPES.contains(row.edgeType())) {
-        rowIssues.add("edge_type must be one of " + EDGE_TYPES);
-      }
+      optionalEnum(row.edgeType(), "edge_type", EDGE_TYPES, rowIssues);
       EdgeKey edgeKey =
           EdgeKey.of(workflowKey, row.fromNodeCode(), row.toNodeCode(), row.edgeType());
       if (!edgeKeys.add(edgeKey)) {
