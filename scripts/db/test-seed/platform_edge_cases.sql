@@ -49,17 +49,17 @@ INSERT INTO batch.workflow_definition (
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.workflow_node (
-    id, workflow_definition_id, node_code, node_name, node_type, related_job_code, related_pipeline_code, worker_group,
+    id, tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, related_pipeline_code, worker_group,
     window_code, node_order, retry_policy, retry_max_count, timeout_seconds, node_params, enabled, created_at, updated_at
 ) VALUES
-    (2205, 2103, 'GATEWAY_SPLIT', 'Gateway Split', 'GATEWAY', NULL, NULL, NULL, NULL, 1, 'NONE', 0, 0, jsonb_build_object('branch', 'split'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
-    (2206, 2103, 'PIPELINE_TASK', 'Pipeline Task', 'TASK', 'dispatch_event_job', 'dispatch_settlement_pipeline', 'dispatch', 'night_continue', 2, 'FIXED', 1, 900, jsonb_build_object('branch', 'task'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
+    (2205, 'default-tenant', 2103, 'GATEWAY_SPLIT', 'Gateway Split', 'GATEWAY', NULL, NULL, NULL, NULL, 1, 'NONE', 0, 0, jsonb_build_object('branch', 'split'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2206, 'default-tenant', 2103, 'PIPELINE_TASK', 'Pipeline Task', 'TASK', 'dispatch_event_job', 'dispatch_settlement_pipeline', 'dispatch', 'night_continue', 2, 'FIXED', 1, 900, jsonb_build_object('branch', 'task'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.workflow_edge (
-    id, workflow_definition_id, from_node_code, to_node_code, edge_type, condition_expr, enabled, created_at, updated_at
+    id, tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, condition_expr, enabled, created_at, updated_at
 ) VALUES
-    (2304, 2103, 'GATEWAY_SPLIT', 'PIPELINE_TASK', 'CONDITION', '$.branch == "task"', TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
+    (2304, 'default-tenant', 2103, 'GATEWAY_SPLIT', 'PIPELINE_TASK', 'CONDITION', '$.branch == "task"', TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.trigger_request (

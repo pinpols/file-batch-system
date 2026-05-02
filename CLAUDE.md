@@ -227,6 +227,68 @@ public enum XxxType implements DictEnum {
 
 详见 `docs/coding-conventions.md §20`（含 Maven / Dockerfile / Spring Boot / Export / Import 全层落地表）。
 
+## 多租隔离
+
+**所有业务表必须携带 `tenant_id` 列；所有 UNIQUE/PRIMARY 约束必须包含 `tenant_id`（直接含或通过 FK 间接保证）。**
+
+- **直接含**（首选）：`UNIQUE (tenant_id, code)` —— SELECT 路径 PG planner 直接走 (tenant_id, ...) 复合索引
+- **间接含**（次选）：`UNIQUE (parent_definition_id, code)`，前提是 parent_definition_id 已带 tenant_id 约束 —— 不推荐，未来加 partition / 分库时要先补列
+- **禁止**：`UNIQUE (definition_id, code)` 而 definition 表带 tenant_id 但本表不带 —— 跨表 JOIN 才能租户过滤，违反"主表自闭"原则
+- **合法豁免（4 张系统表）**：
+  - `batch_runtime_default_parameter` — 模块级全局参数
+  - `step_registry` — 应用启动 bean 白名单上报
+  - `shedlock` — ShedLock 官方表
+  - `biz_table_schema` — 目标库 schema 元数据（建议后续也加 tenant_id）
+- **守护**：`ArchiveSchemaDriftCheck` 已覆盖 archive 对齐；新增多租约束应补 `TenantIsolationIntegrationTest` 断言。
+
+详见 [PG Schema 审计 2026-05-03 §P0](analysis/pg-schema-audit-2026-05-03.md)、V82-V85 落地。
+
+## archive 冷表对齐
+
+**热表 `batch.*` 与归档表 `archive.*_archive` 必须 1:1 字段镜像。**
+
+- **拦截机制**：`ArchiveSchemaDriftCheck` 启动期 `@EventListener(ApplicationReadyEvent.class)` 双向 diff 14 张归档对照表，差异即 `IllegalStateException` fail-fast；启动失败比静默归档差异更安全
+- **演进规则**：任何 `ALTER TABLE batch.* ADD COLUMN` 必须**同 PR** 补齐 `ALTER TABLE archive.*_archive` 的 migration（参考 V77 → V79 三轮 i18n 列同步）
+- **覆盖范围**：14 张运行态归档表（job_instance / outbox_event / pipeline_step_run 等）；定义表（job_definition / workflow_definition 等）不入归档，无需对齐
+- **未来演进**：考虑 PG 15+ `MERGE INTO` 或 declarative partition + `DETACH PARTITION` 替代物理双表，彻底消除人工 sync
+
+详见 `batch-orchestrator/src/main/java/.../infrastructure/archive/ArchiveSchemaDriftCheck.java`。
+
+## 异步事件路由政策
+
+**三张异步表各司其职，禁止相互复用，禁止新增第 4 张同义表。**
+
+| 表 | 用途 | 写入方 | 消费 topic |
+|---|---|---|---|
+| `outbox_event` | 通用业务事件（订单 / 配置变更 / 通知） | orchestrator + business domain service | `batch.event.*` |
+| `event_outbox_retry` | `outbox_event` 投递失败的退避重试队列 | OutboxPollScheduler 内部转移 | 同上（重投） |
+| `trigger_outbox_event` | trigger fire → orchestrator launch 的调度事件 | batch-trigger（与 trigger_request 同事务） | `batch.trigger.launch.v1` |
+
+- **不变量**：`(tenant_id, request_id)` 在 trigger_outbox_event 唯一，业务幂等兜底
+- **状态机**：两张 outbox 都用 `OutboxPublishStatus` enum {NEW, PUBLISHING, PUBLISHED, FAILED, GIVE_UP}；event_outbox_retry 用独立 retry_status enum
+- **新事件场景判定**：先问"是不是 trigger fire？" 是 → 走 trigger_outbox_event；否 → 走 outbox_event。**禁止**新事件类型自创第 4 张表
+
+详见 `docs/architecture/event-routing-policy.md`。
+
+## Pipeline vs Workflow vs Job 边界
+
+**三套体系职责切分清楚，禁止混用、禁止 UNION 跨表查询。**
+
+| 体系 | 定义表 | 运行表 | 适用场景 |
+|---|---|---|---|
+| **Pipeline** | `pipeline_definition` `pipeline_step_definition` | `pipeline_instance` `pipeline_step_run` | 文件处理流水线（IMPORT/EXPORT/DISPATCH 固定 9 stages，内置不可扩） |
+| **Workflow** | `workflow_definition` `workflow_node` `workflow_edge` | `workflow_run` `workflow_node_run` | 用户 DAG 编排（任意 Job 组合 / GATEWAY 分支 / 补偿 / 审批） |
+| **Job** | `job_definition` | `job_instance` `job_partition` `job_task` | 单个执行单元（GENERAL / IMPORT / EXPORT / DISPATCH / WORKFLOW） |
+
+- **业务约束**：
+  - ✗ 禁止 `SELECT FROM pipeline_instance UNION SELECT FROM workflow_run`
+  - ✓ pipeline_instance 只读（worker 内部记录，运维不介入）
+  - ✓ workflow_run 支持人工干预（审批 / 重跑 / 补偿）
+- **新增编排选哪边**：固定 9 阶段文件处理 → pipeline；用户自定义图 / 多 Job 组合 → workflow；单一 Job 执行 → job
+- **跨域引用**：workflow_node.related_pipeline_code 指向 pipeline_definition.job_code（FILE_STEP 节点专用），不要反向
+
+详见 `docs/design/pipeline-vs-workflow-definition.md`。
+
 ## 模块边界
 
 模块结构固定，不可擅自增删：

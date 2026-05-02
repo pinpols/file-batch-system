@@ -3,6 +3,7 @@
 <mapper namespace="com.example.batch.orchestrator.mapper.WorkflowNodeMapper">
     <resultMap id="WorkflowNodeResultMap" type="com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity">
         <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
         <result column="workflow_definition_id" property="workflowDefinitionId"/>
         <result column="node_code" property="nodeCode"/>
         <result column="node_name" property="nodeName"/>

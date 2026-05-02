@@ -219,8 +219,8 @@ public class DefaultConsoleWorkflowExcelApplicationService
       }
       List<WorkflowNodeRow> workflowNodes = nodesByWorkflow.getOrDefault(key, List.of());
       List<WorkflowEdgeRow> workflowEdges = edgesByWorkflow.getOrDefault(key, List.of());
-      applyNodes(saved.getId(), workflowNodes, counters);
-      applyEdges(saved.getId(), workflowEdges, counters);
+      applyNodes(row.tenantId(), saved.getId(), workflowNodes, counters);
+      applyEdges(row.tenantId(), saved.getId(), workflowEdges, counters);
       DefinitionChangeContext changeCtx =
           DefinitionChangeContext.builder()
               .row(row)
@@ -274,11 +274,15 @@ public class DefaultConsoleWorkflowExcelApplicationService
   }
 
   private void applyNodes(
-      Long definitionId, List<WorkflowNodeRow> workflowNodes, ApplyCounters counters) {
+      String tenantId,
+      Long definitionId,
+      List<WorkflowNodeRow> workflowNodes,
+      ApplyCounters counters) {
     for (WorkflowNodeRow node : workflowNodes) {
       WorkflowNodeEntity existingNode =
           workflowNodeMapper.selectByUniqueKey(definitionId, node.nodeCode());
       WorkflowNodeUpsertParam nodeParam = new WorkflowNodeUpsertParam();
+      nodeParam.setTenantId(tenantId);
       nodeParam.setWorkflowDefinitionId(definitionId);
       nodeParam.setNodeCode(node.nodeCode());
       nodeParam.setNodeName(node.nodeName());
@@ -303,12 +307,16 @@ public class DefaultConsoleWorkflowExcelApplicationService
   }
 
   private void applyEdges(
-      Long definitionId, List<WorkflowEdgeRow> workflowEdges, ApplyCounters counters) {
+      String tenantId,
+      Long definitionId,
+      List<WorkflowEdgeRow> workflowEdges,
+      ApplyCounters counters) {
     for (WorkflowEdgeRow edge : workflowEdges) {
       WorkflowEdgeEntity existingEdge =
           workflowEdgeMapper.selectByUniqueKey(
               definitionId, edge.fromNodeCode(), edge.toNodeCode(), edge.edgeType());
       WorkflowEdgeUpsertParam edgeParam = new WorkflowEdgeUpsertParam();
+      edgeParam.setTenantId(tenantId);
       edgeParam.setWorkflowDefinitionId(definitionId);
       edgeParam.setFromNodeCode(edge.fromNodeCode());
       edgeParam.setToNodeCode(edge.toNodeCode());

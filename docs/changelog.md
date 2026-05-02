@@ -7,6 +7,12 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-05-03
+- **CLAUDE.md 新增 4 条硬约束 + V82-V85 schema 落地（PG schema 审计 2026-05-03 收尾）**：
+  - **§多租隔离**：所有业务表必须含 `tenant_id`，所有 UNIQUE/PRIMARY 约束必须含 `tenant_id`（4 张系统表豁免：`batch_runtime_default_parameter` / `step_registry` / `shedlock` / `biz_table_schema`）。配套 V84/V85 给 `workflow_node` / `workflow_edge` 加 `tenant_id` 列 + 改唯一约束 + 索引；同 PR 同步 entity / mapper.xml / 4 个 production callers / 4 个 test seed。
+  - **§archive 冷表对齐**：`ArchiveSchemaDriftCheck` 启动期双向 diff 14 张归档对照表，差异即 fail-fast；任何 `ALTER TABLE batch.* ADD COLUMN` 必须同 PR 补 archive 镜像。
+  - **§异步事件路由政策**：三张异步表（`outbox_event` / `event_outbox_retry` / `trigger_outbox_event`）职责边界固化，禁止相互复用，禁止新建第 4 张同义表；新事件类型按决策树选型。配套：`docs/architecture/event-routing-policy.md`。
+  - **§Pipeline vs Workflow vs Job 边界**：三套体系职责切分清楚，禁止 UNION 跨表查询，pipeline_instance 只读，workflow_run 支持人工干预，job 是调度最小单元。配套：`docs/design/pipeline-vs-workflow-definition.md`。
+  - 配套：V82 `job_step_instance.uk_job_step_instance_task` 加 tenant_id（纯约束变更）；V83 `trigger_outbox_event` UNIQUE INDEX → CONSTRAINT（对齐 SQL 标准）；新增 `docs/design/status-state-machines.md` 汇总 13 个状态机；审计报告 `docs/analysis/pg-schema-audit-2026-05-03.md`（13 维评分卡 + P0/P1/P2 + 修复草案）。
 - **CLAUDE.md 配置开关规范移除 `batch.trigger.async-launch.enabled`**（ADR-010 异步链路固化）：同步 HTTP 桥（`HttpOrchestratorTriggerAdapter`、`OrchestratorTriggerAdapter` 接口、`TriggerForwardRetryScheduler`）已删除，异步路径成为唯一链路，开关下线。CLAUDE.md "配置开关规范" 段落更新为"ADR-010 trigger 异步链路（已固化，无开关）"。
 
 ### 2026-05-02

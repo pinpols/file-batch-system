@@ -108,20 +108,20 @@ INSERT INTO batch.workflow_definition (
     (2101, 'tenant-finance', 'finance_recon_flow', 'Finance Recon Flow', 'DAG', 1, TRUE, 'System test DAG flow', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
 
 INSERT INTO batch.workflow_node (
-    id, workflow_definition_id, node_code, node_name, node_type, related_job_code, related_pipeline_code, worker_group,
+    id, tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, related_pipeline_code, worker_group,
     window_code, node_order, retry_policy, retry_max_count, timeout_seconds, node_params, enabled, created_at, updated_at
 ) VALUES
-    (2201, 2101, 'START', 'Start', 'START', NULL, NULL, NULL, NULL, 0, 'NONE', 0, 0, jsonb_build_object('entry', true), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (2202, 2101, 'IMPORT_STEP', 'Import Step', 'FILE_STEP', 'import_customer_job', 'import_customer_pipeline', 'import', 'always_open', 1, 'FIXED', 1, 1800, jsonb_build_object('mode', 'file_import'), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (2203, 2101, 'EXPORT_STEP', 'Export Step', 'TASK', 'export_settlement_job', 'export_settlement_pipeline', 'export', 'always_open', 2, 'FIXED', 1, 1800, jsonb_build_object('mode', 'settlement_export'), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (2204, 2101, 'END', 'End', 'END', NULL, NULL, NULL, NULL, 3, 'NONE', 0, 0, jsonb_build_object('entry', false), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
+    (2201, 'tenant-finance', 2101, 'START', 'Start', 'START', NULL, NULL, NULL, NULL, 0, 'NONE', 0, 0, jsonb_build_object('entry', true), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2202, 'tenant-finance', 2101, 'IMPORT_STEP', 'Import Step', 'FILE_STEP', 'import_customer_job', 'import_customer_pipeline', 'import', 'always_open', 1, 'FIXED', 1, 1800, jsonb_build_object('mode', 'file_import'), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2203, 'tenant-finance', 2101, 'EXPORT_STEP', 'Export Step', 'TASK', 'export_settlement_job', 'export_settlement_pipeline', 'export', 'always_open', 2, 'FIXED', 1, 1800, jsonb_build_object('mode', 'settlement_export'), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2204, 'tenant-finance', 2101, 'END', 'End', 'END', NULL, NULL, NULL, NULL, 3, 'NONE', 0, 0, jsonb_build_object('entry', false), TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
 
 INSERT INTO batch.workflow_edge (
-    id, workflow_definition_id, from_node_code, to_node_code, edge_type, condition_expr, enabled, created_at, updated_at
+    id, tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, condition_expr, enabled, created_at, updated_at
 ) VALUES
-    (2301, 2101, 'START', 'IMPORT_STEP', 'ALWAYS', NULL, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (2302, 2101, 'IMPORT_STEP', 'EXPORT_STEP', 'SUCCESS', NULL, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (2303, 2101, 'EXPORT_STEP', 'END', 'ALWAYS', NULL, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
+    (2301, 'tenant-finance', 2101, 'START', 'IMPORT_STEP', 'ALWAYS', NULL, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2302, 'tenant-finance', 2101, 'IMPORT_STEP', 'EXPORT_STEP', 'SUCCESS', NULL, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2303, 'tenant-finance', 2101, 'EXPORT_STEP', 'END', 'ALWAYS', NULL, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
 
 INSERT INTO batch.config_release (
     id, tenant_id, config_type, config_key, config_name, config_status, version_no, gray_scope, config_payload,

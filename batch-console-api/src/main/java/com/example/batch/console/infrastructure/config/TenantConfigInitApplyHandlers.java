@@ -327,6 +327,7 @@ public class TenantConfigInitApplyHandlers {
       }
       for (WorkflowDefinitionSpec.NodeSpec nodeSpec : spec.getNodes()) {
         WorkflowNodeUpsertParam nodeParam = new WorkflowNodeUpsertParam();
+        nodeParam.setTenantId(tenantId);
         nodeParam.setWorkflowDefinitionId(defId);
         nodeParam.setNodeCode(nodeSpec.getNodeCode());
         nodeParam.setNodeName(nodeSpec.getNodeName());
@@ -346,6 +347,7 @@ public class TenantConfigInitApplyHandlers {
       if (spec.getEdges() != null) {
         for (WorkflowDefinitionSpec.EdgeSpec edgeSpec : spec.getEdges()) {
           WorkflowEdgeUpsertParam edgeParam = new WorkflowEdgeUpsertParam();
+          edgeParam.setTenantId(tenantId);
           edgeParam.setWorkflowDefinitionId(defId);
           edgeParam.setFromNodeCode(edgeSpec.getFromNodeCode());
           edgeParam.setToNodeCode(edgeSpec.getToNodeCode());

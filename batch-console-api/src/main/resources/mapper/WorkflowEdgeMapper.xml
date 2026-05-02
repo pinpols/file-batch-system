@@ -3,6 +3,7 @@
 <mapper namespace="com.example.batch.console.mapper.WorkflowEdgeMapper">
     <resultMap id="WorkflowEdgeResultMap" type="com.example.batch.console.domain.entity.WorkflowEdgeEntity">
         <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
         <result column="workflow_definition_id" property="workflowDefinitionId"/>
         <result column="from_node_code" property="fromNodeCode"/>
         <result column="to_node_code" property="toNodeCode"/>
@@ -90,6 +91,7 @@
 
     <insert id="upsertWorkflowEdge">
         insert into batch.workflow_edge (
+            tenant_id,
             workflow_definition_id,
             from_node_code,
             to_node_code,
@@ -97,6 +99,7 @@
             condition_expr,
             enabled
         ) values (
+            #{tenantId},
             #{workflowDefinitionId},
             #{fromNodeCode},
             #{toNodeCode},
@@ -104,7 +107,7 @@
             #{conditionExpr},
             #{enabled}
         )
-        on conflict (workflow_definition_id, from_node_code, to_node_code, edge_type) do update
+        on conflict (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) do update
         set condition_expr = excluded.condition_expr,
             enabled = excluded.enabled,
             updated_at = current_timestamp

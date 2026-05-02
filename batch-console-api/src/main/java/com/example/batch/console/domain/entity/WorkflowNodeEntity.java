@@ -7,6 +7,7 @@ import lombok.Data;
 public class WorkflowNodeEntity {
 
   private Long id;
+  private String tenantId;
   private Long workflowDefinitionId;
   private String nodeCode;
   private String nodeName;
