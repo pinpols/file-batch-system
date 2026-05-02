@@ -3,8 +3,10 @@ package com.example.batch.orchestrator.domain.entity;
 import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.time.Instant;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class EventDeliveryLogEntity extends AbstractLocalizedErrorEntity {
 
   private Long id;

@@ -4,8 +4,10 @@ import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.time.Instant;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class JobTaskEntity extends AbstractLocalizedErrorEntity implements Stateful {
 
   private Long id;
