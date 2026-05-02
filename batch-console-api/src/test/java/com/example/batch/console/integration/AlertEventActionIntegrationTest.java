@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.console.BatchConsoleApiApplication;
-import com.example.batch.console.application.ConsoleAlertApplicationService;
+import com.example.batch.console.application.monitor.ConsoleAlertApplicationService;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.request.ops.AlertActionRequest;

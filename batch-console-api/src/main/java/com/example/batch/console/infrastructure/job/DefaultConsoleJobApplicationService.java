@@ -1,9 +1,9 @@
 package com.example.batch.console.infrastructure.job;
 
-import com.example.batch.console.application.ConsoleJobApplicationService;
-import com.example.batch.console.application.ConsoleJobApprovalService;
-import com.example.batch.console.application.ConsoleJobRecoveryService;
-import com.example.batch.console.application.ConsoleJobTriggerService;
+import com.example.batch.console.application.job.ConsoleJobApplicationService;
+import com.example.batch.console.application.job.ConsoleJobApprovalService;
+import com.example.batch.console.application.job.ConsoleJobRecoveryService;
+import com.example.batch.console.application.job.ConsoleJobTriggerService;
 import com.example.batch.console.web.request.job.CompensateRequest;
 import com.example.batch.console.web.request.job.CompensationCommandRequest;
 import com.example.batch.console.web.request.job.PartitionReplayRequest;

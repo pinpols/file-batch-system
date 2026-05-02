@@ -7,7 +7,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
+import com.example.batch.console.application.file.ConsoleFileDownloadApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.query.FileErrorRecordQuery;

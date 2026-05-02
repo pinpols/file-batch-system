@@ -1,6 +1,6 @@
 package com.example.batch.console.web.excel;
 
-import com.example.batch.console.application.ConsoleResourceQueueExcelApplicationService;
+import com.example.batch.console.application.config.ConsoleResourceQueueExcelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;

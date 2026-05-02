@@ -5,8 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.console.application.ConsoleConfigApplicationService;
-import com.example.batch.console.application.ConsoleQueryApplicationService;
+import com.example.batch.console.application.config.ConsoleConfigApplicationService;
+import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.report.DefaultConsoleReportExcelApplicationService;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;

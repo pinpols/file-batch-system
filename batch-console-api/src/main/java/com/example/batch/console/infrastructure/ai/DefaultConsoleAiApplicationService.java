@@ -8,7 +8,7 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.application.ConsoleAiApplicationService;
+import com.example.batch.console.application.ai.ConsoleAiApplicationService;
 import com.example.batch.console.config.ConsoleAiProperties;
 import com.example.batch.console.domain.command.AiAuditCommand;
 import com.example.batch.console.service.ConsoleAiAuthorizationService;

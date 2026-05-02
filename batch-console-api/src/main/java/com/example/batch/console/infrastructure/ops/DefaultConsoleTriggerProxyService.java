@@ -2,7 +2,7 @@ package com.example.batch.console.infrastructure.ops;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ConsoleTriggerProxyService;
+import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;

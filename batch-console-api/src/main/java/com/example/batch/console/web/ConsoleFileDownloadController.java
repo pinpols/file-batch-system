@@ -1,6 +1,6 @@
 package com.example.batch.console.web;
 
-import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
+import com.example.batch.console.application.file.ConsoleFileDownloadApplicationService;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;

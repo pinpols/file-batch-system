@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.console.application.ConsoleOrchestratorProxyService;
+import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
 import com.example.batch.console.infrastructure.ops.DefaultConsoleOutboxOpsApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.OutboxEventMapper;

@@ -7,7 +7,7 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.application.ConsoleConfigApplicationService;
+import com.example.batch.console.application.config.ConsoleConfigApplicationService;
 import com.example.batch.console.domain.entity.ConfigChangeLogEntity;
 import com.example.batch.console.domain.entity.ConfigReleaseEntity;
 import com.example.batch.console.domain.entity.SecretVersionEntity;

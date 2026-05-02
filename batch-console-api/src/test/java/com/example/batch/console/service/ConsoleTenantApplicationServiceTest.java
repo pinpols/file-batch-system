@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.application.ConsoleTriggerProxyService;
+import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.mapper.FilePipelineMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;

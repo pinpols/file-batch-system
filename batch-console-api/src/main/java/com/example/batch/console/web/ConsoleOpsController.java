@@ -1,8 +1,8 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ConsoleOpsApplicationService;
-import com.example.batch.console.application.ConsoleOutboxOpsApplicationService;
+import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
+import com.example.batch.console.application.ops.ConsoleOutboxOpsApplicationService;
 import com.example.batch.console.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.cache.ConsoleQueryCacheService;

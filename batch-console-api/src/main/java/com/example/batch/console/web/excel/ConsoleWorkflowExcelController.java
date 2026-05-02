@@ -1,6 +1,6 @@
 package com.example.batch.console.web.excel;
 
-import com.example.batch.console.application.ConsoleWorkflowExcelApplicationService;
+import com.example.batch.console.application.workflow.ConsoleWorkflowExcelApplicationService;
 import com.example.batch.console.web.query.WorkflowDefinitionQueryRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

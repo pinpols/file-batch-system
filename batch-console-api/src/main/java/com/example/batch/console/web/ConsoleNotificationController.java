@@ -1,7 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ConsoleNotificationApplicationService;
+import com.example.batch.console.application.monitor.ConsoleNotificationApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.constraints.NotBlank;

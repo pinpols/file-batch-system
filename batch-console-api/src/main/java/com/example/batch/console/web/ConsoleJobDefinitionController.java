@@ -1,7 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ConsoleJobDefinitionApplicationService;
+import com.example.batch.console.application.job.ConsoleJobDefinitionApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.job.BatchEnabledPatchRequest;

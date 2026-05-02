@@ -2,7 +2,7 @@ package com.example.batch.console.infrastructure.job;
 
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
-import com.example.batch.console.application.ConsoleJobTriggerService;
+import com.example.batch.console.application.job.ConsoleJobTriggerService;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.web.request.job.TriggerRequest;

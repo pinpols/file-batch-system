@@ -6,7 +6,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.application.ConsoleFileApplicationService;
+import com.example.batch.console.application.file.ConsoleFileApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;

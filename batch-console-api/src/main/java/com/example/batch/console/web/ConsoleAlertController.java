@@ -2,7 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ConsoleAlertApplicationService;
+import com.example.batch.console.application.monitor.ConsoleAlertApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.ops.AlertActionRequest;

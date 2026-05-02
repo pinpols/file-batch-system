@@ -1,6 +1,6 @@
 package com.example.batch.console.infrastructure.realtime;
 
-import com.example.batch.console.application.ConsoleOpsApplicationService;
+import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import jakarta.annotation.PreDestroy;

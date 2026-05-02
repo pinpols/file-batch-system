@@ -8,7 +8,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.setGuid
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHeaders;
 
-import com.example.batch.console.application.ConsoleTenantQuotaPolicyExcelApplicationService;
+import com.example.batch.console.application.config.ConsoleTenantQuotaPolicyExcelApplicationService;
 import com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
@@ -19,9 +19,9 @@ import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.excel.ExcelImportStore;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.ExcelApplyRequest;
-import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.config.ConsoleTenantQuotaPolicyResponse;
+import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import java.util.List;
 import java.util.Map;
 import lombok.Builder;

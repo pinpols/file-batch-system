@@ -1,6 +1,6 @@
 package com.example.batch.console.web;
 
-import com.example.batch.console.application.ConsoleReportExcelApplicationService;
+import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;

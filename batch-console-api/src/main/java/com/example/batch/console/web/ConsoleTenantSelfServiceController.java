@@ -3,7 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.application.ConsoleQuotaPolicyApplicationService;
+import com.example.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleSystemParameterService;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;

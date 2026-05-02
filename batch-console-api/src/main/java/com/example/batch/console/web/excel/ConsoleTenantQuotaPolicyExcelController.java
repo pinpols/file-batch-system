@@ -1,6 +1,6 @@
 package com.example.batch.console.web.excel;
 
-import com.example.batch.console.application.ConsoleTenantQuotaPolicyExcelApplicationService;
+import com.example.batch.console.application.config.ConsoleTenantQuotaPolicyExcelApplicationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
