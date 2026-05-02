@@ -7,9 +7,10 @@
 #   ./scripts/dev/sonar-scan.sh --skip-build  # 跳过 mvn install（已构建时）
 #   ./scripts/dev/sonar-scan.sh --stop        # 停止并删除 SonarQube 容器
 #
-# 输出：
+# 输出（reports/sonar/<timestamp>/）：
 #   sonar-report.csv   — 全量 issue 明细（severity/type/组件/行号/规则/描述）
 #   sonar-report.md    — 摘要报告（各模块 BLOCKER/CRITICAL 分布 + 关键指标）
+#   reports/sonar/latest -> <timestamp>  （软链，始终指向最新一次）
 #
 # 依赖：docker、mvn（Java 21）、curl、python3
 # =============================================================================
@@ -33,7 +34,9 @@ SONAR_ADMIN_USER="admin"
 SONAR_ADMIN_PASS="admin"
 PROJECT_KEY="file-batch-system"
 PROJECT_NAME="File Batch System"
-REPORT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"   # 项目根目录
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SCAN_TS="$(date +%Y-%m-%d_%H-%M-%S)"
+OUT_DIR="${PROJECT_ROOT}/reports/sonar/${SCAN_TS}"
 TOKEN_NAME="batch-scan-$(date +%s)"
 
 # ── 颜色 ──────────────────────────────────────────────────────────────────────
@@ -106,7 +109,7 @@ SONAR_TOKEN=$(echo "$TOKEN_JSON" | python3 -c "import json,sys; print(json.load(
 ok "Token generated."
 
 # ── 4. 构建 + 扫描 ────────────────────────────────────────────────────────────
-cd "$REPORT_DIR"
+cd "$PROJECT_ROOT"
 
 if ! $SKIP_BUILD; then
   info "Step 4/5 — Building project (mvn install -DskipTests)..."
@@ -147,7 +150,8 @@ fi
 ok "Analysis complete."
 
 # ── 5. 导出报告 ───────────────────────────────────────────────────────────────
-info "Step 5/5 — Exporting reports..."
+info "Step 5/5 — Exporting reports to reports/sonar/${SCAN_TS}/..."
+mkdir -p "$OUT_DIR"
 
 python3 - <<PYEOF
 import json, urllib.request, base64, csv, io, sys
@@ -172,7 +176,7 @@ while True:
     page += 1
 
 # ── CSV ──────────────────────────────────────────────────────────────────────
-csv_path = "${REPORT_DIR}/sonar-report.csv"
+csv_path = "${OUT_DIR}/sonar-report.csv"
 with open(csv_path, "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
     w.writerow(["severity", "type", "component", "line", "rule", "message", "status", "effort"])
@@ -201,7 +205,7 @@ SEVS = ["BLOCKER","CRITICAL","MAJOR","MINOR","INFO"]
 RATING = {"1.0":"A","2.0":"B","3.0":"C","4.0":"D","5.0":"E"}
 
 # ── Markdown 报告 ─────────────────────────────────────────────────────────────
-md_path = "${REPORT_DIR}/sonar-report.md"
+md_path = "${OUT_DIR}/sonar-report.md"
 now = datetime.now().strftime("%Y-%m-%d %H:%M")
 with open(md_path, "w", encoding="utf-8") as f:
     f.write(f"# SonarQube Scan Report — File Batch System\n\n")
@@ -243,14 +247,19 @@ with open(md_path, "w", encoding="utf-8") as f:
 
     f.write(f"---\n*详细明细见 `sonar-report.csv`（{len(all_issues)} 条）*\n")
 
-print(f"CSV: {csv_path}  ({len(all_issues)} issues)")
-print(f"MD:  {md_path}")
+print(f"CSV:{csv_path}  ({len(all_issues)} issues)")
+print(f"MD: {md_path}")
 PYEOF
+
+# ── latest 软链 ───────────────────────────────────────────────────────────────
+LATEST_LINK="${PROJECT_ROOT}/reports/sonar/latest"
+ln -sfn "${SCAN_TS}" "$LATEST_LINK"
 
 echo ""
 ok "Reports written:"
-echo "   sonar-report.csv  — $(wc -l < "${REPORT_DIR}/sonar-report.csv") lines"
-echo "   sonar-report.md   — $(wc -l < "${REPORT_DIR}/sonar-report.md") lines"
+echo "   reports/sonar/${SCAN_TS}/sonar-report.csv  — $(wc -l < "${OUT_DIR}/sonar-report.csv") lines"
+echo "   reports/sonar/${SCAN_TS}/sonar-report.md"
+echo "   reports/sonar/latest  ->  ${SCAN_TS}  (symlink)"
 echo ""
 echo -e "${GREEN}Dashboard:${NC} ${SONAR_URL}/dashboard?id=${PROJECT_KEY}"
 echo -e "${YELLOW}Tip:${NC} Run with --stop to shut down the SonarQube container when done."
