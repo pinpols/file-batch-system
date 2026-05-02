@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)
-class TriggerRuntimeStateMapperIT extends AbstractIntegrationTest {
+class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private TriggerRuntimeStateMapper mapper;
   @Autowired private JdbcTemplate jdbcTemplate;

@@ -20,6 +20,10 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>说明：{@code docs/sql/system-test/platform_seed.sql} 含 PL/pgSQL 块，经 Spring 按分号切分的脚本加载器回放不可靠； 本测试以
  * Flyway 迁移为权威的 DDL/DML 基线。
+ *
+ * <p><b>故意不继承 {@code AbstractIntegrationTest}</b>：本测试需要"空数据库"作为 Flyway 第一次跑的目标（测的就是 migration
+ * 自身的可重放性）； 共享 {@code platformPostgres} 已被基类 {@code platform-init.sql} + 其他测试的 Flyway run 污染，复用会让
+ * {@code migrate()} 看到 {@code flyway_schema_history} 已存在并跳过执行。
  */
 @Tag("integration")
 @ActiveProfiles("test")

@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestPropertySource(properties = {"batch.trigger.scheduler-impl=wheel"})
 @Transactional(propagation = Propagation.NEVER)
-class WheelTriggerReconcilerIT extends AbstractIntegrationTest {
+class WheelTriggerReconcilerIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private WheelTriggerReconciler reconciler;
   @Autowired private TriggerRuntimeStateMapper stateMapper;
