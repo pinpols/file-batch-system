@@ -94,6 +94,11 @@ done
 echo ""
 ok "SonarQube is UP (${SONAR_URL})"
 
+# 关闭强制登录，Dashboard 可匿名访问（避免 admin 首次打开触发改密弹窗）
+curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+  "${SONAR_URL}/api/settings/set" \
+  -d "key=sonar.forceAuthentication&value=false" &>/dev/null || true
+
 # ── 3. 生成分析 token ─────────────────────────────────────────────────────────
 info "Step 3/5 — Generating analysis token..."
 
@@ -148,6 +153,11 @@ if [ -n "$TASK_URL" ]; then
   done
 fi
 ok "Analysis complete."
+
+# 项目设为 Public，匿名可直接打开 Dashboard
+curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+  "${SONAR_URL}/api/projects/update_visibility" \
+  -d "project=${PROJECT_KEY}&visibility=public" &>/dev/null || true
 
 # ── 5. 导出报告 ───────────────────────────────────────────────────────────────
 info "Step 5/5 — Exporting reports to reports/sonar/${SCAN_TS}/..."
