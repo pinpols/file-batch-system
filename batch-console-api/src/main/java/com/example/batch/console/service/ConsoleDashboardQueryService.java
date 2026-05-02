@@ -1,5 +1,7 @@
 package com.example.batch.console.service;
 
+import com.example.batch.console.domain.view.dashboard.SlaStatsView;
+import com.example.batch.console.domain.view.dashboard.StatusCountView;
 import com.example.batch.console.repository.ConsoleDashboardQueryRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
@@ -33,8 +35,7 @@ public class ConsoleDashboardQueryService {
     Map<String, Object> result = new LinkedHashMap<>();
     Map<String, Long> byStatus = new LinkedHashMap<>();
     long total = 0L;
-    for (ConsoleDashboardQueryRepository.StatusCountView row :
-        repository.jobStatusCounts(resolved)) {
+    for (StatusCountView row : repository.jobStatusCounts(resolved)) {
       long count = row.count() == null ? 0L : row.count();
       byStatus.put(row.status() == null ? UNKNOWN : row.status(), count);
       total += count;
@@ -234,7 +235,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> slaCompliance(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> result = new LinkedHashMap<>();
-    ConsoleDashboardQueryRepository.SlaStatsView stats = repository.slaStats(resolved, days);
+    SlaStatsView stats = repository.slaStats(resolved, days);
     result.put("breached", stats == null || stats.breached() == null ? 0L : stats.breached());
     result.put("onTime", stats == null || stats.onTime() == null ? 0L : stats.onTime());
     result.put(

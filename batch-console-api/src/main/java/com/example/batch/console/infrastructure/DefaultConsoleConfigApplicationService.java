@@ -14,6 +14,7 @@ import com.example.batch.console.domain.entity.SecretVersionEntity;
 import com.example.batch.console.domain.query.ConfigChangeLogQuery;
 import com.example.batch.console.domain.query.ConfigReleaseQuery;
 import com.example.batch.console.domain.query.SecretVersionQuery;
+import com.example.batch.console.domain.view.dashboard.ConfigDependentView;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
 import com.example.batch.console.mapper.SecretVersionMapper;
@@ -463,7 +464,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     result.put(KEY_CONFIG_TYPE, configType);
     result.put("configCode", configCode);
 
-    List<ConsoleDashboardQueryRepository.ConfigDependentView> dependentJobs =
+    List<ConfigDependentView> dependentJobs =
         switch (configType.toUpperCase()) {
           case "QUEUE", "RESOURCE_QUEUE" ->
               dashboardQueryRepository.jobsByQueueCode(resolved, configCode);

@@ -1,6 +1,7 @@
 package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
+import com.example.batch.console.domain.view.meta.SimpleOptionView;
 import java.util.List;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
@@ -57,6 +58,4 @@ public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryA
        ORDER BY biz_type
       """)
   List<SimpleOptionView> bizTypeOptions(@Param("tenantId") String tenantId);
-
-  record SimpleOptionView(String code, String label) {}
 }

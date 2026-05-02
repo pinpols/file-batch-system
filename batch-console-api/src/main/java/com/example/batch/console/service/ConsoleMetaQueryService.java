@@ -68,6 +68,7 @@ import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.enums.WorkflowType;
+import com.example.batch.console.domain.view.meta.SimpleOptionView;
 import com.example.batch.console.repository.ConsoleMetaQueryRepository;
 import com.example.batch.console.support.ConsoleQueryCacheService;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -187,8 +188,7 @@ public class ConsoleMetaQueryService {
         () -> toOptions(repository.bizTypeOptions(resolved)));
   }
 
-  private List<ConsoleMetaOption> toOptions(
-      List<ConsoleMetaQueryRepository.SimpleOptionView> rows) {
+  private List<ConsoleMetaOption> toOptions(List<SimpleOptionView> rows) {
     return rows.stream().map(row -> new ConsoleMetaOption(row.code(), row.label())).toList();
   }
 

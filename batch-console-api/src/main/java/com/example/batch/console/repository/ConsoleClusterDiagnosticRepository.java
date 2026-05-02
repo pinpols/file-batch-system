@@ -1,7 +1,8 @@
 package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
-import java.time.Instant;
+import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
+import com.example.batch.console.domain.view.cluster.ShedLockView;
 import java.util.List;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
@@ -37,34 +38,4 @@ public interface ConsoleClusterDiagnosticRepository
        WHERE tenant_id = :tenantId AND publish_status = 'NEW'
       """)
   Long countPendingOutboxEvents(@Param("tenantId") String tenantId);
-
-  record ShedLockView(String name, Instant lockUntil, Instant lockedAt, String lockedBy) {
-
-    public String getName() {
-      return name;
-    }
-
-    public Instant getLockUntil() {
-      return lockUntil;
-    }
-
-    public Instant getLockedAt() {
-      return lockedAt;
-    }
-
-    public String getLockedBy() {
-      return lockedBy;
-    }
-  }
-
-  record DeliveryStatusCountView(String deliveryStatus, Long cnt) {
-
-    public String getDeliveryStatus() {
-      return deliveryStatus;
-    }
-
-    public Long getCnt() {
-      return cnt;
-    }
-  }
 }
