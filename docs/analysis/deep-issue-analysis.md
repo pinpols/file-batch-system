@@ -250,6 +250,8 @@ JWT 会暴露在：
 
 ### 5.5 P1: Console 幂等拦截器的设计不完整
 
+> 🟢 **[已修，2026-04-30]** ADR-011 三层幂等边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写：key 改绑 `(tenant+method+uri+idempotencyKey)`，两阶段占坑（PENDING 30s → 2xx 升 DONE 24h / 非 2xx DELETE），Redis fail-closed 503；Layer 2 `DefaultTriggerService.approvePendingCatchUp` idempotencyKey 短路；Layer 3 `uk_job_instance_tenant_dedup` DB UNIQUE 兜底 — §5.5/§5.6/§5.10 三处一并闭环。详见 `ADR-011-idempotency-boundary-alignment.md`。
+
 #### 问题
 
 `ConsoleIdempotencyInterceptor` 当前只做了一个很薄的 Redis 占位：
@@ -388,6 +390,8 @@ JWT 会暴露在：
 这不是单个 bug，而是设计事实源不一致。它会让后续改动变得危险。
 
 ### 5.11 P1: Webhook 是进程内 best-effort，不是可靠交付
+
+> 🟢 **[已修，2026-04-30]** `b74e0a0c` 落地 V81 migration（delivery_status 加 GIVE_UP check + (status, next_retry_at) 部分索引）+ `WebhookDeliveryRelay` 278 行：`@Scheduled` + ShedLock 互斥 + `FOR UPDATE SKIP LOCKED`，周期扫 EXHAUSTED 行重投，指数退避（5m → 10m → 20m → 30m cap），绝对上限 8 次后标 GIVE_UP 并打 Prometheus counter `batch_webhook_delivery_give_up_total`；7 个 `WebhookDeliveryRelayTest` 单测全绿。
 
 #### 问题
 
@@ -714,6 +718,6 @@ JWT 会暴露在：
 | 5.8 | `approvePendingCatchUp` 事务拆分：DB 操作用 TransactionTemplate，HTTP 在事务外 |
 | 5.9 | `persistAndForward` 不再 return null，4xx 抛 BizException |
 | 5.10 | 去重注释对齐：明确 dedup 在 job_instance 层，非 trigger_request 层 |
-| 5.11 | Webhook 线程池改有界队列(1024)；加 HTTP 超时(connect 5s, read 10s)；Javadoc 明确 best-effort |
+| 5.11 | ①(2026-04-17) Webhook 线程池改有界队列(1024)；加 HTTP 超时(connect 5s, read 10s)；Javadoc 明确 best-effort ②(2026-04-30) V81 + `WebhookDeliveryRelay`：持久化重试全栈，GIVE_UP Prometheus 告警，完整闭环 |
 | 5.12 | Console Job 服务拆分：843 行 → 91 行 facade + Trigger/Recovery/Approval 三个专项服务 |
 | 5.13 | architecture-truth.md 移除”已清零”过于乐观表述，标注控制平面仍有开放项 |

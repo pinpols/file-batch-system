@@ -55,8 +55,8 @@
 | §5.2 X-Console-Token | 标"未完成" | ✅ `ff20c36f` 物理删除 9 文件 -148 行,grep 全仓 0 残留 |
 | §5.7 trigger→orchestrator 同步桥 | 标"未完成" | ✅ ADR-010 全栈,见上 |
 | §5.12 Console Job 过胖 | 标"未完成" | ✅ 主类 90 LOC + 6 兄弟类(本会话 grep 验证)|
-| §5.5 Console 幂等不一致 | 中 | 🟡 未触 |
-| §5.11 Webhook durability | 中 | 🟡 未触 |
+| §5.5 Console 幂等不一致 | 中 | ✅ ADR-011 三层边界定稿 + `ConsoleIdempotencyInterceptor` 全文重写(tenant+method+uri 绑定，两阶段占坑，Redis fail-closed) — §5.5/§5.6/§5.10 三处一并闭环 |
+| §5.11 Webhook durability | 中 | ✅ `b74e0a0c` V81 migration + `WebhookDeliveryRelay` 278 行(@Scheduled ShedLock 互斥，指数退避 5m→30m cap，最多 8 次，GIVE_UP 打 Prometheus) |
 
 **4-29 评估累计 4 处口径滞后(漏看 + 误判),本次 v2 已实地 grep 全部核查**。
 
@@ -269,7 +269,7 @@ P3 7-12:   背景渐进,每 sprint 抽 1-2 项
 | 文档 | 关系 |
 |---|---|
 | `project-assessment-2026-04-29.md` | v1 基线;本 v2 引用其结构 + 7 轮校正历史 |
-| `deep-issue-analysis.md` | §5.1/§5.2/§5.12 头部已标已修;§5.5/§5.11 仍标 |
+| `deep-issue-analysis.md` | §5.1/§5.2/§5.5/§5.11/§5.12 头部均已标已修 |
 | `hardening-backlog.md` | ✅ 已滚 v6(`6d977766` / 后续多轮),完成率 33/42 = 79% |
 | `fix-report.md` | §八 2026-04-30 校正补录已记录 |
 | `ADR-010-trigger-async-decoupling.md` | 7 stage 路线图实施事实源 |
