@@ -19,7 +19,8 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
   @BeforeEach
   void setUp() {
-    RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(redisHost(), redisPort());
+    RedisStandaloneConfiguration config =
+        new RedisStandaloneConfiguration(redisHost(), redisPort());
     LettuceConnectionFactory factory = new LettuceConnectionFactory(config);
     factory.afterPropertiesSet();
     StringRedisTemplate template = new StringRedisTemplate(factory);

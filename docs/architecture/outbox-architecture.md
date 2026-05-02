@@ -1,6 +1,6 @@
 # Outbox 子系统总览 — 主表与副表关系
 
-> **结论先行**：outbox 子系统由 1 张主表（`outbox_event`）+ 2 张副表（`event_outbox_retry` / `event_delivery_log`）+ 1 张同构兄弟表（`trigger_outbox_event`）组成。本文档**只讲表与表之间的边界、归属和 FK 关系**；状态机、调度、退避、归档等运行时细节看 [ADR-002 §当前状态](adr/ADR-002-transactional-outbox.md)。
+> **结论先行**：outbox 子系统由 1 张主表（`outbox_event`）+ 2 张副表（`event_outbox_retry` / `event_delivery_log`）+ 1 张兄弟表（`trigger_outbox_event`，**复用 outbox 模式但字段名独立**：`request_id` 代替 `event_key`、`payload` 代替 `payload_json`）组成。本文档**只讲表与表之间的边界、归属和 FK 关系**；状态机、调度、退避、归档等运行时细节看 [ADR-002 §当前状态](adr/ADR-002-transactional-outbox.md)。
 
 ---
 
@@ -45,7 +45,16 @@ erDiagram
 
   trigger_outbox_event {
     bigint id PK
-    string note "schema 同构 outbox_event<br/>但独立表"
+    string tenant_id
+    string request_id UK "tenant_id+request_id 防双写"
+    string topic "默认 batch.trigger.launch.v1"
+    jsonb payload
+    string publish_status "5态 同 outbox_event"
+    int publish_attempt
+    string last_error
+    string trace_id
+    timestamp next_publish_at
+    timestamp published_at
   }
 ```
 
@@ -102,7 +111,7 @@ erDiagram
 | 消费方 | worker（dispatch / retry / reclaim 等多种 event）| orchestrator `TriggerLaunchConsumer` 单一消费者 |
 | Kafka topic | 多（`BatchTopicResolver` 按 eventType 解析）| 固定 `batch.trigger.launch.v1` |
 | 归档策略 | 与业务事件归档一致 | 独立 cutoff |
-| 表 schema | 同构 | 同构（共用同一套 outbox 模式但物理隔离）|
+| 表 schema | `event_key` / `payload_json` / `aggregate_*` | `request_id` / `payload`（无 aggregate 列，复用模式但字段名独立）|
 
 **为什么不复用同一张表**：trigger 链路的 SLA / 流量 / 故障模式与业务事件不同；混在一张表 polling 时 trigger 事件可能被业务事件的积压拖累。物理隔离 = 故障域隔离。
 
