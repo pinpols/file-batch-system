@@ -13,7 +13,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.application.service.LaunchApplicationService;
+import com.example.batch.orchestrator.application.service.task.LaunchApplicationService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;

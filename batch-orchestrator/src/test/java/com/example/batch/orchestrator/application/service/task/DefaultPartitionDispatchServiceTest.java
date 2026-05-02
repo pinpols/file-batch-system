@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.application.service;
+package com.example.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

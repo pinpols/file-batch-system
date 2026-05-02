@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.application.service;
+package com.example.batch.orchestrator.application.service.task;
 
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
