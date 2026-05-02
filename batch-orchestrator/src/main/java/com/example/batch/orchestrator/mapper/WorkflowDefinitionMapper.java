@@ -1,0 +1,30 @@
+package com.example.batch.orchestrator.mapper;
+
+import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import java.util.List;
+import org.apache.ibatis.annotations.Param;
+
+/**
+ * batch.workflow_definition CRUD。原 {@code WorkflowDefinitionRepository}（Spring Data JDBC）已下线，
+ * 配置态写读统一由本 Mapper 接管。
+ */
+public interface WorkflowDefinitionMapper {
+
+  /** 按 (tenantId, workflowCode, enabled) 取首条；用于 cache 服务回源。 */
+  WorkflowDefinitionRecord selectFirstByTenantAndCodeAndEnabled(
+      @Param("tenantId") String tenantId,
+      @Param("workflowCode") String workflowCode,
+      @Param("enabled") Boolean enabled);
+
+  /** 列出指定 tenant 下指定启用状态的全部 workflow 定义；console 列表 / 缓存预热用。 */
+  List<WorkflowDefinitionRecord> selectByTenantAndEnabled(
+      @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
+
+  WorkflowDefinitionRecord selectById(@Param("id") Long id);
+
+  int insert(WorkflowDefinitionRecord record);
+
+  int update(WorkflowDefinitionRecord record);
+
+  int deleteById(@Param("id") Long id);
+}

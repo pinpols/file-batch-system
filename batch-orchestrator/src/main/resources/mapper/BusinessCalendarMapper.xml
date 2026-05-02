@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.BusinessCalendarMapper">
+    <!--
+      BusinessCalendarRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, calendarCode, calendarName, timezone,
+         holidayRollRule, catchUpPolicy, catchUpMaxDays, cutoffTime,
+         lateArrivalToleranceMin, slaOffsetMin, enabled)
+      列名按 V3 + V32 DDL。
+    -->
+    <resultMap id="businessCalendarMap"
+               type="com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="calendar_name" javaType="java.lang.String"/>
+            <arg column="timezone" javaType="java.lang.String"/>
+            <arg column="holiday_roll_rule" javaType="java.lang.String"/>
+            <arg column="catch_up_policy" javaType="java.lang.String"/>
+            <arg column="catch_up_max_days" javaType="java.lang.Integer"/>
+            <arg column="cutoff_time" javaType="java.time.LocalTime"/>
+            <arg column="late_arrival_tolerance_min" javaType="java.lang.Integer"/>
+            <arg column="sla_offset_min" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, calendar_code, calendar_name, timezone,
+        holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
+        late_arrival_tolerance_min, sla_offset_min, enabled
+    </sql>
+
+    <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="businessCalendarMap">
+        select <include refid="columns"/>
+          from batch.business_calendar
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and enabled = #{enabled}
+         limit 1
+    </select>
+
+    <select id="selectByTenantAndEnabled" resultMap="businessCalendarMap">
+        select <include refid="columns"/>
+          from batch.business_calendar
+         where tenant_id = #{tenantId}
+           and enabled = #{enabled}
+         order by id desc
+    </select>
+
+    <select id="selectById" resultMap="businessCalendarMap">
+        select <include refid="columns"/>
+          from batch.business_calendar
+         where id = #{id}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.business_calendar (
+            tenant_id, calendar_code, calendar_name, timezone,
+            holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
+            late_arrival_tolerance_min, sla_offset_min, enabled
+        ) values (
+            #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
+            <choose>
+                <when test="holidayRollRule != null">#{holidayRollRule}</when>
+                <otherwise>'SKIP'</otherwise>
+            </choose>,
+            <choose>
+                <when test="catchUpPolicy != null">#{catchUpPolicy}</when>
+                <otherwise>'NONE'</otherwise>
+            </choose>,
+            <choose>
+                <when test="catchUpMaxDays != null">#{catchUpMaxDays}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            #{cutoffTime},
+            #{lateArrivalToleranceMin},
+            #{slaOffsetMin},
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <update id="update"
+            parameterType="com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord">
+        update batch.business_calendar
+           set calendar_name = #{calendarName},
+               timezone = #{timezone},
+               holiday_roll_rule = #{holidayRollRule},
+               catch_up_policy = #{catchUpPolicy},
+               catch_up_max_days = #{catchUpMaxDays},
+               cutoff_time = #{cutoffTime},
+               late_arrival_tolerance_min = #{lateArrivalToleranceMin},
+               sla_offset_min = #{slaOffsetMin},
+               enabled = #{enabled},
+               updated_at = current_timestamp
+         where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.business_calendar where id = #{id}
+    </delete>
+</mapper>

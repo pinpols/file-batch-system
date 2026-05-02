@@ -9,11 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
-import com.example.batch.orchestrator.repository.BatchWindowRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
+import com.example.batch.orchestrator.mapper.BatchWindowMapper;
+import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
+import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
-import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,9 +26,9 @@ class OrchestratorConfigCacheServiceTest {
 
   @Mock private OrchestratorRedisSupport redis;
   @Mock private JobDefinitionRepository jobDefinitionRepository;
-  @Mock private WorkflowDefinitionRepository workflowDefinitionRepository;
-  @Mock private BusinessCalendarRepository businessCalendarRepository;
-  @Mock private BatchWindowRepository batchWindowRepository;
+  @Mock private WorkflowDefinitionMapper workflowDefinitionMapper;
+  @Mock private BusinessCalendarMapper businessCalendarMapper;
+  @Mock private BatchWindowMapper batchWindowMapper;
   @Mock private TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
 
   private OrchestratorConfigCacheService service;
@@ -39,9 +39,9 @@ class OrchestratorConfigCacheServiceTest {
         new OrchestratorConfigCacheService(
             redis,
             jobDefinitionRepository,
-            workflowDefinitionRepository,
-            businessCalendarRepository,
-            batchWindowRepository,
+            workflowDefinitionMapper,
+            businessCalendarMapper,
+            batchWindowMapper,
             tenantQuotaPolicyRepository);
   }
 

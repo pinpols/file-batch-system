@@ -9,11 +9,11 @@ import com.example.batch.common.redis.BatchRedisKeys;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import com.example.batch.orchestrator.repository.BatchWindowRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
+import com.example.batch.orchestrator.mapper.BatchWindowMapper;
+import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
+import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
-import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import com.example.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,9 +38,9 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   static class TestApplication {}
 
   @MockitoBean private JobDefinitionRepository jobDefinitionRepository;
-  @MockitoBean private WorkflowDefinitionRepository workflowDefinitionRepository;
-  @MockitoBean private BusinessCalendarRepository businessCalendarRepository;
-  @MockitoBean private BatchWindowRepository batchWindowRepository;
+  @MockitoBean private WorkflowDefinitionMapper workflowDefinitionMapper;
+  @MockitoBean private BusinessCalendarMapper businessCalendarMapper;
+  @MockitoBean private BatchWindowMapper batchWindowMapper;
   @MockitoBean private TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
 
   @Autowired private OrchestratorConfigCacheService configCacheService;

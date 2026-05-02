@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.BatchWindowMapper">
+    <!--
+      BatchWindowRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, windowCode, windowName, timezone,
+         startTime, endTime, endStrategy, outOfWindowAction, allowCrossDay, enabled)
+      列名按 V3 DDL。
+    -->
+    <resultMap id="batchWindowMap"
+               type="com.example.batch.orchestrator.domain.entity.BatchWindowRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="window_code" javaType="java.lang.String"/>
+            <arg column="window_name" javaType="java.lang.String"/>
+            <arg column="timezone" javaType="java.lang.String"/>
+            <arg column="start_time" javaType="java.time.LocalTime"/>
+            <arg column="end_time" javaType="java.time.LocalTime"/>
+            <arg column="end_strategy" javaType="java.lang.String"/>
+            <arg column="out_of_window_action" javaType="java.lang.String"/>
+            <arg column="allow_cross_day" javaType="java.lang.Boolean"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, window_code, window_name, timezone,
+        start_time, end_time, end_strategy, out_of_window_action, allow_cross_day, enabled
+    </sql>
+
+    <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="batchWindowMap">
+        select <include refid="columns"/>
+          from batch.batch_window
+         where tenant_id = #{tenantId}
+           and window_code = #{windowCode}
+           and enabled = #{enabled}
+         limit 1
+    </select>
+
+    <select id="selectByTenantAndEnabled" resultMap="batchWindowMap">
+        select <include refid="columns"/>
+          from batch.batch_window
+         where tenant_id = #{tenantId}
+           and enabled = #{enabled}
+         order by id desc
+    </select>
+
+    <select id="selectById" resultMap="batchWindowMap">
+        select <include refid="columns"/>
+          from batch.batch_window
+         where id = #{id}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchWindowRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.batch_window (
+            tenant_id, window_code, window_name, timezone,
+            start_time, end_time, end_strategy, out_of_window_action, allow_cross_day, enabled
+        ) values (
+            #{tenantId}, #{windowCode}, #{windowName}, #{timezone},
+            #{startTime}, #{endTime},
+            <choose>
+                <when test="endStrategy != null">#{endStrategy}</when>
+                <otherwise>'FINISH_RUNNING'</otherwise>
+            </choose>,
+            <choose>
+                <when test="outOfWindowAction != null">#{outOfWindowAction}</when>
+                <otherwise>'WAIT'</otherwise>
+            </choose>,
+            <choose>
+                <when test="allowCrossDay != null">#{allowCrossDay}</when>
+                <otherwise>false</otherwise>
+            </choose>,
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <update id="update"
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchWindowRecord">
+        update batch.batch_window
+           set window_name = #{windowName},
+               timezone = #{timezone},
+               start_time = #{startTime},
+               end_time = #{endTime},
+               end_strategy = #{endStrategy},
+               out_of_window_action = #{outOfWindowAction},
+               allow_cross_day = #{allowCrossDay},
+               enabled = #{enabled},
+               updated_at = current_timestamp
+         where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.batch_window where id = #{id}
+    </delete>
+</mapper>
