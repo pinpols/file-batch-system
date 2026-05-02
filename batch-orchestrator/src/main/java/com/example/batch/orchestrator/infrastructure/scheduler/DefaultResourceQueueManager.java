@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
-import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
 import java.util.Comparator;
 import java.util.List;

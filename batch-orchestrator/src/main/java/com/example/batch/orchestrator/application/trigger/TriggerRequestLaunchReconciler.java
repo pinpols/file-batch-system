@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.application.trigger;
 
-import com.example.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
+import com.example.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.Counter;

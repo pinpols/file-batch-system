@@ -1,7 +1,7 @@
 package com.example.batch.console.support;
 
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.domain.ConsoleUserAccountEntity;
+import com.example.batch.console.domain.entity.ConsoleUserAccountEntity;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import java.util.Arrays;
 import java.util.LinkedHashSet;

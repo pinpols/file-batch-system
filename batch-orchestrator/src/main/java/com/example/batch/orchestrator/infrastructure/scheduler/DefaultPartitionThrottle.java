@@ -8,8 +8,8 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import com.example.batch.orchestrator.domain.param.CountActiveByGroupParam;
-import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
-import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
+import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import lombok.RequiredArgsConstructor;

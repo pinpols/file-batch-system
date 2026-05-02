@@ -1,11 +1,12 @@
 package com.example.batch.orchestrator.application.scheduler;
 
+import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
 import java.time.Instant;
 
 /**
  * 配额运行时状态服务：管理租户/队列的突发配额（burst quota）窗口，支持三种重置策略。
  *
- * <p><b>重置策略</b>（{@link com.example.batch.orchestrator.domain.scheduler.QuotaResetPolicy}）：
+ * <p><b>重置策略</b>（{@link com.example.batch.orchestrator.domain.scheduling.QuotaResetPolicy}）：
  *
  * <ul>
  *   <li>{@code NONE} / 非运行时管理策略：直接与 baseCap+burstLimit 比较，无窗口状态
@@ -58,11 +59,9 @@ public interface QuotaRuntimeStateService {
   /**
    * 判断当前活跃数+请求数是否超过 baseCap+burst。需要 burst 时持久化峰值（{@code peakBorrowedCount}）。
    *
-   * <p>返回 {@link com.example.batch.orchestrator.domain.scheduler.ResourceCheck#allow()} 或 {@link
-   * com.example.batch.orchestrator.domain.scheduler.ResourceCheck#waitForCapacity(String, String)}。
+   * <p>返回 {@link ResourceCheck#allow()} 或 {@link ResourceCheck#waitForCapacity(String, String)}。
    */
-  com.example.batch.orchestrator.domain.scheduler.ResourceCheck evaluateAndReserve(
-      QuotaReservationRequest request);
+  ResourceCheck evaluateAndReserve(QuotaReservationRequest request);
 
   /** Console / 监控读路径：返回当前窗口状态快照，不修改持久化数据。 */
   QuotaRuntimeSnapshot describe(QuotaDescribeRequest request);

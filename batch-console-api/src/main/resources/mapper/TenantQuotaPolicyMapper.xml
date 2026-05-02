@@ -77,28 +77,30 @@
             updated_at = current_timestamp
     </insert>
 
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert"
+            parameterType="com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
         insert into batch.tenant_quota_policy (
             tenant_id, policy_code, max_running_jobs_per_tenant,
             max_partitions_per_tenant, max_qps_per_tenant,
             fair_share_weight, enabled, description
         ) values (
-            #{tenant_id}, #{policy_code}, #{max_running_jobs_per_tenant},
-            #{max_partitions_per_tenant}, #{max_qps_per_tenant},
-            #{fair_share_weight}, #{enabled}, #{description}
+            #{tenantId}, #{policyCode}, #{maxRunningJobsPerTenant},
+            #{maxPartitionsPerTenant}, #{maxQpsPerTenant},
+            #{fairShareWeight}, #{enabled}, #{description}
         )
     </insert>
 
-    <update id="update" parameterType="map">
+    <update id="update"
+            parameterType="com.example.batch.console.domain.param.TenantQuotaPolicyUpdateParam">
         update batch.tenant_quota_policy
-        set max_running_jobs_per_tenant = #{max_running_jobs_per_tenant},
-            max_partitions_per_tenant = #{max_partitions_per_tenant},
-            max_qps_per_tenant = #{max_qps_per_tenant},
-            fair_share_weight = #{fair_share_weight},
+        set max_running_jobs_per_tenant = #{maxRunningJobsPerTenant},
+            max_partitions_per_tenant = #{maxPartitionsPerTenant},
+            max_qps_per_tenant = #{maxQpsPerTenant},
+            fair_share_weight = #{fairShareWeight},
             enabled = #{enabled},
             description = #{description},
             updated_at = current_timestamp
-        where tenant_id = #{tenant_id}
+        where tenant_id = #{tenantId}
           and id = #{id}
     </update>
 

@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
-import com.example.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
+import com.example.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;

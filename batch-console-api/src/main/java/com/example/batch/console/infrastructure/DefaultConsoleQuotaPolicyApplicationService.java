@@ -6,10 +6,11 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsoleQuotaPolicyApplicationService;
+import com.example.batch.console.domain.param.TenantQuotaPolicyUpdateParam;
+import com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import com.example.batch.console.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.QuotaPolicySaveRequest;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -47,27 +48,28 @@ public class DefaultConsoleQuotaPolicyApplicationService
           "error.common.conflict_detail",
           "policy code already exists: " + request.getPolicyCode());
     }
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("policy_code", request.getPolicyCode());
-    params.put(
-        "max_running_jobs_per_tenant",
-        request.getMaxRunningJobsPerTenant() != null ? request.getMaxRunningJobsPerTenant() : 0);
-    params.put(
-        "max_partitions_per_tenant",
-        request.getMaxPartitionsPerTenant() != null ? request.getMaxPartitionsPerTenant() : 0);
-    params.put(
-        "max_qps_per_tenant",
-        request.getMaxQpsPerTenant() != null ? request.getMaxQpsPerTenant() : 0);
-    params.put(
-        "fair_share_weight",
-        request.getFairShareWeight() != null ? request.getFairShareWeight() : 1);
-    params.put("enabled", request.getEnabled() != null ? request.getEnabled() : true);
-    params.put("description", request.getDescription());
-    quotaPolicyMapper.insert(params);
+    TenantQuotaPolicyUpsertParam param =
+        TenantQuotaPolicyUpsertParam.builder()
+            .tenantId(tenantId)
+            .policyCode(request.getPolicyCode())
+            .maxRunningJobsPerTenant(
+                request.getMaxRunningJobsPerTenant() != null
+                    ? request.getMaxRunningJobsPerTenant()
+                    : 0)
+            .maxPartitionsPerTenant(
+                request.getMaxPartitionsPerTenant() != null
+                    ? request.getMaxPartitionsPerTenant()
+                    : 0)
+            .maxQpsPerTenant(
+                request.getMaxQpsPerTenant() != null ? request.getMaxQpsPerTenant() : 0)
+            .fairShareWeight(
+                request.getFairShareWeight() != null ? request.getFairShareWeight() : 1)
+            .enabled(request.getEnabled() != null ? request.getEnabled() : true)
+            .description(request.getDescription())
+            .build();
+    quotaPolicyMapper.insert(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
-    Long id = ((Number) params.get("id")).longValue();
-    return quotaPolicyMapper.selectById(tenantId, id);
+    return quotaPolicyMapper.selectByUniqueKey(tenantId, param.getPolicyCode());
   }
 
   @Override
@@ -75,35 +77,36 @@ public class DefaultConsoleQuotaPolicyApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
         Guard.requireFound(quotaPolicyMapper.selectById(tenantId, id), "quota policy not found");
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("id", id);
-    params.put(
-        "max_running_jobs_per_tenant",
-        request.getMaxRunningJobsPerTenant() != null
-            ? request.getMaxRunningJobsPerTenant()
-            : existing.get("max_running_jobs_per_tenant"));
-    params.put(
-        "max_partitions_per_tenant",
-        request.getMaxPartitionsPerTenant() != null
-            ? request.getMaxPartitionsPerTenant()
-            : existing.get("max_partitions_per_tenant"));
-    params.put(
-        "max_qps_per_tenant",
-        request.getMaxQpsPerTenant() != null
-            ? request.getMaxQpsPerTenant()
-            : existing.get("max_qps_per_tenant"));
-    params.put(
-        "fair_share_weight",
-        request.getFairShareWeight() != null
-            ? request.getFairShareWeight()
-            : existing.get("fair_share_weight"));
-    params.put(
-        "enabled", request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
-    params.put(
-        "description",
-        request.getDescription() != null ? request.getDescription() : existing.get("description"));
-    quotaPolicyMapper.update(params);
+    TenantQuotaPolicyUpdateParam param =
+        TenantQuotaPolicyUpdateParam.builder()
+            .tenantId(tenantId)
+            .id(id)
+            .maxRunningJobsPerTenant(
+                request.getMaxRunningJobsPerTenant() != null
+                    ? request.getMaxRunningJobsPerTenant()
+                    : (Integer) existing.get("max_running_jobs_per_tenant"))
+            .maxPartitionsPerTenant(
+                request.getMaxPartitionsPerTenant() != null
+                    ? request.getMaxPartitionsPerTenant()
+                    : (Integer) existing.get("max_partitions_per_tenant"))
+            .maxQpsPerTenant(
+                request.getMaxQpsPerTenant() != null
+                    ? request.getMaxQpsPerTenant()
+                    : (Integer) existing.get("max_qps_per_tenant"))
+            .fairShareWeight(
+                request.getFairShareWeight() != null
+                    ? request.getFairShareWeight()
+                    : (Integer) existing.get("fair_share_weight"))
+            .enabled(
+                request.getEnabled() != null
+                    ? request.getEnabled()
+                    : (Boolean) existing.get("enabled"))
+            .description(
+                request.getDescription() != null
+                    ? request.getDescription()
+                    : (String) existing.get("description"))
+            .build();
+    quotaPolicyMapper.update(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
     return quotaPolicyMapper.selectById(tenantId, id);
   }

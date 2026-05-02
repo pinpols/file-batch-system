@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
+import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
 import com.example.batch.orchestrator.infrastructure.quota.RedisQuotaRuntimeStateService;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import java.util.HashMap;
