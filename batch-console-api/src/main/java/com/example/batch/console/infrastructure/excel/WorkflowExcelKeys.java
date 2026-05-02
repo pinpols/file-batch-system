@@ -68,7 +68,8 @@ public final class WorkflowExcelKeys {
     }
   }
 
-  public record EdgeKey(WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
+  public record EdgeKey(
+      WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
     public static EdgeKey of(
         WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
       return new EdgeKey(workflowKey, fromNodeCode, toNodeCode, edgeType);

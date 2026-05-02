@@ -19,8 +19,8 @@ import com.example.batch.console.domain.query.FileErrorRecordQuery;
 import com.example.batch.console.domain.query.FilePipelineQuery;
 import com.example.batch.console.domain.query.FileRecordQuery;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
-import com.example.batch.console.support.ConsoleFileQueryMappers;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.querymap.ConsoleFileQueryMappers;
 import com.example.batch.console.web.query.FileArrivalGroupQueryRequest;
 import com.example.batch.console.web.query.FileChainQueryRequest;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
@@ -234,7 +234,8 @@ public class ConsoleFileQueryService {
         "file channel not found: " + channelCode);
   }
 
-  public Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version) {
+  public Map<String, Object> fileTemplateDetail(
+      String tenantId, String templateCode, Integer version) {
     String resolved = resolveTenant(tenantGuard, tenantId);
     Integer ver = version != null ? version : 1;
     return requireRow(

@@ -7,9 +7,10 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsoleJobDefinitionApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.param.JobDefinitionMaintenanceUpdateParam;
+import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.job.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.job.JobDefinitionCreateRequest;
 import com.example.batch.console.web.request.job.JobDefinitionUpdateRequest;
@@ -17,7 +18,6 @@ import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 
 /**
  * Job 定义的 CRUD + 批量启停 + 克隆入口。

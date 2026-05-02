@@ -9,8 +9,8 @@ import com.example.batch.console.application.ConsoleFileChannelApplicationServic
 import com.example.batch.console.domain.param.FileChannelConfigUpdateParam;
 import com.example.batch.console.domain.param.FileChannelConfigUpsertParam;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
 import com.example.batch.console.web.request.file.FileChannelCreateRequest;
 import com.example.batch.console.web.request.file.FileChannelUpdateRequest;

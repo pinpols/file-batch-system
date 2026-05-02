@@ -1,4 +1,4 @@
-package com.example.batch.console.support;
+package com.example.batch.console.support.web;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;

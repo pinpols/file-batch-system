@@ -9,7 +9,7 @@ import com.example.batch.console.application.ConsoleJobApprovalService;
 import com.example.batch.console.application.ConsoleJobRecoveryService;
 import com.example.batch.console.application.ConsoleJobTriggerService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.job.CompensateRequest;
 import com.example.batch.console.web.request.job.CompensationCommandRequest;
 import com.example.batch.console.web.request.job.PartitionReplayRequest;

@@ -2,12 +2,12 @@ package com.example.batch.console.service;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.support.ConsoleMenuRegistry;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleJwtService;
 import com.example.batch.console.support.auth.ConsoleLoginService;
 import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.example.batch.console.support.auth.ConsoleRoles;
 import com.example.batch.console.support.auth.ConsoleSessionRegistry;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
 import com.example.batch.console.web.response.auth.ConsoleAuthProfileResponse;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;

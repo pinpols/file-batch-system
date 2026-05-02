@@ -1,4 +1,4 @@
-package com.example.batch.console.support;
+package com.example.batch.console.support.web;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

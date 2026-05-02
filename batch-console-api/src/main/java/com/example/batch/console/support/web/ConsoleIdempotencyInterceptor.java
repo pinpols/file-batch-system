@@ -1,4 +1,4 @@
-package com.example.batch.console.support;
+package com.example.batch.console.support.web;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;

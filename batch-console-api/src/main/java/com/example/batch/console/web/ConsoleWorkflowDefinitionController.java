@@ -4,7 +4,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.Idempotent;
+import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.job.EnabledPatchRequest;
 import com.example.batch.console.web.request.workflow.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.web.response.workflow.WorkflowDefinitionDetailResponse;

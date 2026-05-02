@@ -1,4 +1,4 @@
-package com.example.batch.console.support;
+package com.example.batch.console.support.querymap;
 
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;

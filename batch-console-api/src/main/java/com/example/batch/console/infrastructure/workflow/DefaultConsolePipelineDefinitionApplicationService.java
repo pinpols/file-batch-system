@@ -12,7 +12,7 @@ import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.request.file.PipelineDefinitionSaveRequest;
 import com.example.batch.console.web.response.workflow.PipelineDefinitionDetailResponse;
-import com.example.batch.console.web.response.PipelineDefinitionDetailResponse.StepResponse;
+import com.example.batch.console.web.response.workflow.PipelineDefinitionDetailResponse.StepResponse;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;

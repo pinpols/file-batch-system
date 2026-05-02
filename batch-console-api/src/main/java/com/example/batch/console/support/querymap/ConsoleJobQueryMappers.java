@@ -1,4 +1,4 @@
-package com.example.batch.console.support;
+package com.example.batch.console.support.querymap;
 
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;

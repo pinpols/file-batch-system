@@ -1,6 +1,5 @@
 package com.example.batch.console.support.ratelimit;
 
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.redis.testcontainers.RedisContainer;

@@ -11,9 +11,9 @@ import com.example.batch.console.infrastructure.monitor.DefaultConsoleNotificati
 import com.example.batch.console.mapper.NotificationChannelMapper;
 import com.example.batch.console.mapper.NotificationDeliveryLogMapper;
 import com.example.batch.console.mapper.SubscriptionRuleMapper;
-import com.example.batch.console.support.ConsoleRequestMetadata;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.ConsoleRequestMetadata;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

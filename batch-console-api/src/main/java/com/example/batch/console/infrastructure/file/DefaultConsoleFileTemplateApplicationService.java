@@ -8,9 +8,10 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsoleFileTemplateApplicationService;
 import com.example.batch.console.domain.param.FileTemplateConfigUpsertParam;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
+import com.example.batch.console.infrastructure.job.DefaultConsoleJobDefinitionApplicationService;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.request.file.FileTemplateCreateRequest;
 import com.example.batch.console.web.request.file.FileTemplateUpdateRequest;
@@ -19,7 +20,6 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import com.example.batch.console.infrastructure.job.DefaultConsoleJobDefinitionApplicationService;
 
 /**
  * 文件模板配置的 CRUD：list / get / create / update / toggle。

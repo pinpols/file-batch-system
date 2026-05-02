@@ -12,15 +12,15 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
-import com.example.batch.console.support.ConsoleRequestMetadata;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.ConsoleRequestMetadata;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.job.CompensationCommandRequest;
-import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
-import com.example.batch.console.web.request.ops.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.job.PartitionReplayRequest;
 import com.example.batch.console.web.request.job.TaskReplayRequest;
 import com.example.batch.console.web.request.job.TriggerRequest;
+import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
+import com.example.batch.console.web.request.ops.DeadLetterReplayRequest;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
@@ -33,7 +33,6 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import com.example.batch.console.infrastructure.job.DefaultConsoleJobRecoveryService;
 
 /**
  * 作业运维操作的公共基础设施：审批提交、补偿提交、recovery 触发、trigger launch 委派、租户解析、事件广播。

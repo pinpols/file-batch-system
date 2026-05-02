@@ -3,7 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.ConsoleQueryCacheService;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotResponse;
 import java.util.List;

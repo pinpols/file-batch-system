@@ -1,13 +1,13 @@
 package com.example.batch.console.infrastructure.ops;
 
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.application.ConsoleWorkerApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
-import com.example.batch.console.support.ConsoleRequestMetadata;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.ConsoleRequestMetadata;
+import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.ops.DrainWorkerRequest;
 import com.example.batch.console.web.request.ops.ForceOfflineWorkerRequest;
 import com.example.batch.console.web.response.ops.ConsoleWorkerClaimedTaskResponse;

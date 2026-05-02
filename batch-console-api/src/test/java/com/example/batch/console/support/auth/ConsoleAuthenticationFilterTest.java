@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.console.config.ConsoleSecurityProperties;
+import com.example.batch.console.support.SseTicketService;
 import jakarta.servlet.FilterChain;
 import java.util.List;
 import java.util.Set;
@@ -27,7 +28,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
-import com.example.batch.console.support.SseTicketService;
 
 // SseTicketService used in mock() call below
 

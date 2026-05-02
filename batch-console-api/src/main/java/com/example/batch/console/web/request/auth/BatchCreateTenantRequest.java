@@ -1,6 +1,6 @@
 package com.example.batch.console.web.request.auth;
 
-import com.example.batch.console.web.request.TenantConfigBatchInitRequest.InitMode;
+import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;
 import jakarta.annotation.Nullable;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;

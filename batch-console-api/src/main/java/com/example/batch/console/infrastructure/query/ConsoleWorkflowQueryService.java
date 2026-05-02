@@ -16,7 +16,7 @@ import com.example.batch.console.domain.query.WorkflowNodeQuery;
 import com.example.batch.console.domain.query.WorkflowNodeRunQuery;
 import com.example.batch.console.domain.query.WorkflowRunQuery;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
-import com.example.batch.console.support.ConsoleWorkflowQueryMappers;
+import com.example.batch.console.support.querymap.ConsoleWorkflowQueryMappers;
 import com.example.batch.console.web.query.WorkflowDefinitionQueryRequest;
 import com.example.batch.console.web.query.WorkflowEdgeQueryRequest;
 import com.example.batch.console.web.query.WorkflowNodeQueryRequest;

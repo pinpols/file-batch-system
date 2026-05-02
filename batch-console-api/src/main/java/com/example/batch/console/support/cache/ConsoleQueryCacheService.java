@@ -1,4 +1,4 @@
-package com.example.batch.console.support;
+package com.example.batch.console.support.cache;
 
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
