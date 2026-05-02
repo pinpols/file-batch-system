@@ -6,7 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.domain.entity.SystemParameterEntity;
-import com.example.batch.console.repository.ConsoleSystemParameterRepository;
+import com.example.batch.console.mapper.ConsoleSystemParameterMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.time.Duration;
 import java.util.List;
@@ -19,7 +19,7 @@ import org.springframework.data.redis.core.ValueOperations;
 @SuppressWarnings("unchecked")
 class ConsoleSystemParameterServiceTest {
 
-  private ConsoleSystemParameterRepository repository;
+  private ConsoleSystemParameterMapper repository;
   private ConsoleTenantGuard tenantGuard;
   private StringRedisTemplate redisTemplate;
   private ValueOperations<String, String> valueOperations;
@@ -27,7 +27,7 @@ class ConsoleSystemParameterServiceTest {
 
   @BeforeEach
   void setUp() {
-    repository = mock(ConsoleSystemParameterRepository.class);
+    repository = mock(ConsoleSystemParameterMapper.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
     redisTemplate = mock(StringRedisTemplate.class);
     valueOperations = mock(ValueOperations.class);

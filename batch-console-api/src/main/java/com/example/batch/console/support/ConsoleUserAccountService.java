@@ -2,7 +2,7 @@ package com.example.batch.console.support;
 
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.domain.ConsoleUserAccountEntity;
-import com.example.batch.console.repository.ConsoleUserAccountRepository;
+import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -14,9 +14,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleUserAccountService {
 
-  private final ConsoleUserAccountRepository repository;
+  private final ConsoleUserAccountMapper repository;
 
-  public ConsoleUserAccountService(ConsoleUserAccountRepository repository) {
+  public ConsoleUserAccountService(ConsoleUserAccountMapper repository) {
     this.repository = repository;
   }
 

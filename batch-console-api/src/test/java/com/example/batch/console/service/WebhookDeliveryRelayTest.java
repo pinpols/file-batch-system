@@ -14,8 +14,8 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
-import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
-import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
+import com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper;
+import com.example.batch.console.mapper.ConsoleWebhookSubscriptionMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
@@ -27,16 +27,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class WebhookDeliveryRelayTest {
 
-  private ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
-  private ConsoleWebhookSubscriptionRepository subscriptionRepository;
+  private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
+  private ConsoleWebhookSubscriptionMapper subscriptionRepository;
   private WebhookDispatcher dispatcher;
   private SimpleMeterRegistry meterRegistry;
   private WebhookDeliveryRelay relay;
 
   @BeforeEach
   void setUp() throws Throwable {
-    deliveryLogRepository = mock(ConsoleWebhookDeliveryLogRepository.class);
-    subscriptionRepository = mock(ConsoleWebhookSubscriptionRepository.class);
+    deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
+    subscriptionRepository = mock(ConsoleWebhookSubscriptionMapper.class);
     dispatcher = mock(WebhookDispatcher.class);
     meterRegistry = new SimpleMeterRegistry();
     LockingTaskExecutor lockExecutor = mock(LockingTaskExecutor.class);

@@ -2,14 +2,11 @@ package com.example.batch.console.domain.entity;
 
 import java.time.Instant;
 import lombok.Data;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.webhook_delivery_log")
 public class WebhookDeliveryLogEntity {
 
-  @Id private Long id;
+  private Long id;
   private String tenantId;
   private Long subscriptionId;
   private String eventType;

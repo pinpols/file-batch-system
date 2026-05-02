@@ -3,8 +3,8 @@ package com.example.batch.console.service;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
+import com.example.batch.console.mapper.ConsoleArchivePolicyMapper;
 import com.example.batch.console.repository.ArchivePolicyUpsertParam;
-import com.example.batch.console.repository.ConsoleArchivePolicyRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Locale;
@@ -28,7 +28,7 @@ public class ConsoleArchivePolicyService {
           "event_delivery_log",
           "webhook_delivery_log");
 
-  private final ConsoleArchivePolicyRepository repository;
+  private final ConsoleArchivePolicyMapper repository;
   private final ConsoleTenantGuard tenantGuard;
 
   public List<ArchivePolicyEntity> list(String tenantId) {

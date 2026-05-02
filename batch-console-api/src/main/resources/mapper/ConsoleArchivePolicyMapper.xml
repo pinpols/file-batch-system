@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleArchivePolicyMapper">
+    <resultMap id="archivePolicyMap"
+               type="com.example.batch.console.domain.entity.ArchivePolicyEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="target_table" property="targetTable"/>
+        <result column="retention_days" property="retentionDays"/>
+        <result column="archive_enabled" property="archiveEnabled"/>
+        <result column="cleanup_enabled" property="cleanupEnabled"/>
+        <result column="batch_size" property="batchSize"/>
+        <result column="description" property="description"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="findAllByTenant" resultMap="archivePolicyMap">
+        select * from batch.archive_policy
+         where tenant_id = #{tenantId}
+         order by target_table
+    </select>
+
+    <select id="findByTenantAndTable" resultMap="archivePolicyMap">
+        select * from batch.archive_policy
+         where tenant_id = #{tenantId} and target_table = #{targetTable}
+         limit 1
+    </select>
+
+    <insert id="upsert">
+        insert into batch.archive_policy (
+            tenant_id, target_table, retention_days, archive_enabled, cleanup_enabled,
+            batch_size, description, created_by, updated_by
+        ) values (
+            #{p.tenantId}, #{p.targetTable}, #{p.retentionDays}, #{p.archiveEnabled},
+            #{p.cleanupEnabled}, #{p.batchSize}, #{p.description}, #{p.operator}, #{p.operator}
+        )
+        on conflict (tenant_id, target_table) do update
+            set retention_days  = #{p.retentionDays},
+                archive_enabled = #{p.archiveEnabled},
+                cleanup_enabled = #{p.cleanupEnabled},
+                batch_size      = #{p.batchSize},
+                description     = #{p.description},
+                updated_by      = #{p.operator},
+                updated_at      = current_timestamp
+    </insert>
+</mapper>

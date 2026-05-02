@@ -1,13 +1,10 @@
 package com.example.batch.console.domain;
 
-import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
-@Table(schema = "batch", name = "console_user_account")
 public class ConsoleUserAccountEntity {
 
-  @Id private Long id;
+  private Long id;
 
   @Column("tenant_id")
   private String tenantId;

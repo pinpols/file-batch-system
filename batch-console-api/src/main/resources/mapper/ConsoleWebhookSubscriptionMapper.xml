@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleWebhookSubscriptionMapper">
+    <resultMap id="subscriptionMap"
+               type="com.example.batch.console.domain.entity.WebhookSubscriptionEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="name" property="name"/>
+        <result column="callback_url" property="callbackUrl"/>
+        <result column="event_types" property="eventTypes"/>
+        <result column="secret" property="secret"/>
+        <result column="enabled" property="enabled"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, name, callback_url, event_types, secret, enabled,
+        created_by, updated_by, created_at, updated_at
+    </sql>
+
+    <select id="findAllByTenant" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId}
+         order by name
+    </select>
+
+    <select id="findByTenantAndId" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and id = #{id}
+         limit 1
+    </select>
+
+    <select id="findByTenantAndName" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and name = #{name}
+         limit 1
+    </select>
+
+    <select id="findEnabledByTenant" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and enabled = true
+    </select>
+
+    <insert id="insert">
+        insert into batch.webhook_subscription (
+            tenant_id, name, callback_url, event_types, secret, enabled, created_by, updated_by
+        ) values (
+            #{tenantId}, #{name}, #{callbackUrl}, #{eventTypes}, #{secret}, #{enabled}, #{operator}, #{operator}
+        )
+    </insert>
+
+    <update id="update">
+        update batch.webhook_subscription
+           set callback_url = #{callbackUrl},
+               event_types  = #{eventTypes},
+               secret       = #{secret},
+               enabled      = #{enabled},
+               updated_by   = #{operator},
+               updated_at   = current_timestamp
+         where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <delete id="deleteByTenantAndId">
+        delete from batch.webhook_subscription where tenant_id = #{tenantId} and id = #{id}
+    </delete>
+</mapper>

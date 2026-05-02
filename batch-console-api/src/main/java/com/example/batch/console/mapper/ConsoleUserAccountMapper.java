@@ -1,11 +1,19 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.console.domain.ConsoleUserAccountEntity;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
 
 public interface ConsoleUserAccountMapper {
+
+  /**
+   * 认证路径专用：lower(username) ilike 匹配，返回 entity（替代
+   * ConsoleUserAccountRepository#findByUsernameIgnoreCase）。
+   */
+  Optional<ConsoleUserAccountEntity> findByUsernameIgnoreCase(@Param("username") String username);
 
   List<Map<String, Object>> selectByQuery(
       @Param("tenantId") String tenantId,

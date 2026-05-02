@@ -2,6 +2,25 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.console.mapper.ConsoleUserAccountMapper">
 
+    <resultMap id="userAccountEntityMap"
+               type="com.example.batch.console.domain.ConsoleUserAccountEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="username" property="username"/>
+        <result column="display_name" property="displayName"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="authorities_csv" property="authoritiesCsv"/>
+        <result column="enabled" property="enabled"/>
+    </resultMap>
+
+    <!-- 认证路径专用：返回完整 entity 含 password_hash，供 spring security UserDetailsService 加载。 -->
+    <select id="findByUsernameIgnoreCase" resultMap="userAccountEntityMap">
+        select id, tenant_id, username, display_name, password_hash, authorities_csv, enabled
+          from batch.console_user_account
+         where lower(username) = lower(#{username})
+         limit 1
+    </select>
+
     <select id="selectByQuery" resultType="map">
         select id, tenant_id, username, display_name, authorities_csv, enabled, created_at, updated_at
         from batch.console_user_account

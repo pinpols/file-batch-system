@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleResourceTagMapper">
+    <resultMap id="resourceTagMap"
+               type="com.example.batch.console.domain.entity.ResourceTagEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="resource_type" property="resourceType"/>
+        <result column="resource_code" property="resourceCode"/>
+        <result column="tag_key" property="tagKey"/>
+        <result column="tag_value" property="tagValue"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, resource_type, resource_code, tag_key, tag_value, created_by, created_at
+    </sql>
+
+    <select id="findByResource" resultMap="resourceTagMap">
+        select <include refid="selectColumns"/>
+          from batch.resource_tag
+         where tenant_id = #{tenantId}
+           and resource_type = #{resourceType}
+           and resource_code = #{resourceCode}
+         order by tag_key
+    </select>
+
+    <select id="findByTagKey" resultMap="resourceTagMap">
+        select <include refid="selectColumns"/>
+          from batch.resource_tag
+         where tenant_id = #{tenantId}
+           and tag_key = #{tagKey}
+         order by resource_type, resource_code
+    </select>
+
+    <select id="findByTagKeyAndValue" resultMap="resourceTagMap">
+        select <include refid="selectColumns"/>
+          from batch.resource_tag
+         where tenant_id = #{tenantId}
+           and tag_key = #{tagKey}
+           and tag_value = #{tagValue}
+         order by resource_type, resource_code
+    </select>
+
+    <select id="findDistinctTagKeys" resultType="string">
+        select distinct tag_key
+          from batch.resource_tag
+         where tenant_id = #{tenantId}
+         order by tag_key
+    </select>
+
+    <select id="findByResourceAndKey" resultMap="resourceTagMap">
+        select <include refid="selectColumns"/>
+          from batch.resource_tag
+         where tenant_id = #{tenantId}
+           and resource_type = #{resourceType}
+           and resource_code = #{resourceCode}
+           and tag_key = #{tagKey}
+         limit 1
+    </select>
+
+    <insert id="upsert">
+        insert into batch.resource_tag (
+            tenant_id, resource_type, resource_code, tag_key, tag_value, created_by
+        ) values (
+            #{tenantId}, #{resourceType}, #{resourceCode}, #{tagKey}, #{tagValue}, #{operator}
+        )
+        on conflict (tenant_id, resource_type, resource_code, tag_key) do update
+            set tag_value  = #{tagValue},
+                created_by = #{operator},
+                created_at = current_timestamp
+    </insert>
+
+    <delete id="deleteByResourceAndKey">
+        delete from batch.resource_tag
+         where tenant_id = #{tenantId}
+           and resource_type = #{resourceType}
+           and resource_code = #{resourceCode}
+           and tag_key = #{tagKey}
+    </delete>
+
+    <delete id="deleteAllByResource">
+        delete from batch.resource_tag
+         where tenant_id = #{tenantId}
+           and resource_type = #{resourceType}
+           and resource_code = #{resourceCode}
+    </delete>
+</mapper>
