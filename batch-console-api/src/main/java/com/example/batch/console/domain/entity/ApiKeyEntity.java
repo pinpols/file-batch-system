@@ -2,15 +2,12 @@ package com.example.batch.console.domain.entity;
 
 import java.time.Instant;
 import lombok.Data;
-import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table(schema = "batch", value = "api_key")
 public class ApiKeyEntity {
 
-  @Id private Long id;
+  private Long id;
 
   @Column("tenant_id")
   private String tenantId;

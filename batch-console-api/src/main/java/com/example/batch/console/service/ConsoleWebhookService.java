@@ -5,8 +5,8 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
-import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
-import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
+import com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper;
+import com.example.batch.console.mapper.ConsoleWebhookSubscriptionMapper;
 import com.example.batch.console.support.CallbackUrlValidator;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.Arrays;
@@ -21,8 +21,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleWebhookService {
 
-  private final ConsoleWebhookSubscriptionRepository subscriptionRepository;
-  private final ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
+  private final ConsoleWebhookSubscriptionMapper subscriptionRepository;
+  private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private final ConsoleTenantGuard tenantGuard;
   private final CallbackUrlValidator callbackUrlValidator;
 

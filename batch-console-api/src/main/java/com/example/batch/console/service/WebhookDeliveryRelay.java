@@ -3,8 +3,8 @@ package com.example.batch.console.service;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
-import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
-import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
+import com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper;
+import com.example.batch.console.mapper.ConsoleWebhookSubscriptionMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -63,8 +63,8 @@ public class WebhookDeliveryRelay {
   /** 退避基数 = dispatcher burst 完后的初次 relay 延迟,与 dispatcher 的 INITIAL_RELAY_DELAY_SECONDS 对齐。 */
   private static final long BACKOFF_BASE_SECONDS = 5L * 60L;
 
-  private final ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
-  private final ConsoleWebhookSubscriptionRepository subscriptionRepository;
+  private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
+  private final ConsoleWebhookSubscriptionMapper subscriptionRepository;
   private final WebhookDispatcher dispatcher;
   private final LockingTaskExecutor lockingTaskExecutor;
   private final Counter giveUpCounter;
@@ -86,8 +86,8 @@ public class WebhookDeliveryRelay {
   private ScheduledExecutorService executor;
 
   public WebhookDeliveryRelay(
-      ConsoleWebhookDeliveryLogRepository deliveryLogRepository,
-      ConsoleWebhookSubscriptionRepository subscriptionRepository,
+      ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
+      ConsoleWebhookSubscriptionMapper subscriptionRepository,
       WebhookDispatcher dispatcher,
       LockingTaskExecutor lockingTaskExecutor,
       MeterRegistry meterRegistry) {

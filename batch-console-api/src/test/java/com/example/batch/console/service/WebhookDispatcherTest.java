@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
+import com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,14 +15,14 @@ import org.springframework.web.client.RestClient;
 class WebhookDispatcherTest {
 
   private ConsoleWebhookService webhookService;
-  private ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
+  private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private RestClient.Builder restClientBuilder;
   private WebhookDispatcher dispatcher;
 
   @BeforeEach
   void setUp() {
     webhookService = mock(ConsoleWebhookService.class);
-    deliveryLogRepository = mock(ConsoleWebhookDeliveryLogRepository.class);
+    deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
     restClientBuilder = mock(RestClient.Builder.class);
     dispatcher = new WebhookDispatcher(webhookService, deliveryLogRepository, restClientBuilder);
   }

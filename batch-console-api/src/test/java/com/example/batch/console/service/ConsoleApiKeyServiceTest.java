@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ApiKeyEntity;
-import com.example.batch.console.repository.ConsoleApiKeyRepository;
+import com.example.batch.console.mapper.ConsoleApiKeyMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.time.Instant;
 import java.util.List;
@@ -20,13 +20,13 @@ import org.junit.jupiter.api.Test;
 
 class ConsoleApiKeyServiceTest {
 
-  private ConsoleApiKeyRepository repository;
+  private ConsoleApiKeyMapper repository;
   private ConsoleTenantGuard tenantGuard;
   private ConsoleApiKeyService service;
 
   @BeforeEach
   void setUp() {
-    repository = mock(ConsoleApiKeyRepository.class);
+    repository = mock(ConsoleApiKeyMapper.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
     service = new ConsoleApiKeyService(repository, tenantGuard);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");

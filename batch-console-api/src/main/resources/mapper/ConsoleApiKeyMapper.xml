@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleApiKeyMapper">
+    <resultMap id="apiKeyMap" type="com.example.batch.console.domain.entity.ApiKeyEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="key_name" property="keyName"/>
+        <result column="key_prefix" property="keyPrefix"/>
+        <result column="key_hash" property="keyHash"/>
+        <result column="scopes" property="scopes"/>
+        <result column="enabled" property="enabled"/>
+        <result column="expires_at" property="expiresAt"/>
+        <result column="last_used_at" property="lastUsedAt"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="revoked_by" property="revokedBy"/>
+        <result column="revoked_at" property="revokedAt"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, key_name, key_prefix, key_hash, scopes, enabled,
+        expires_at, last_used_at, created_by, revoked_by, revoked_at, created_at
+    </sql>
+
+    <select id="findAllByTenant" resultMap="apiKeyMap">
+        select <include refid="selectColumns"/>
+          from batch.api_key
+         where tenant_id = #{tenantId}
+         order by created_at desc
+    </select>
+
+    <select id="findByTenantAndId" resultMap="apiKeyMap">
+        select <include refid="selectColumns"/>
+          from batch.api_key
+         where tenant_id = #{tenantId} and id = #{id}
+         limit 1
+    </select>
+
+    <select id="findByTenantAndName" resultMap="apiKeyMap">
+        select <include refid="selectColumns"/>
+          from batch.api_key
+         where tenant_id = #{tenantId} and key_name = #{keyName}
+         limit 1
+    </select>
+
+    <insert id="insert">
+        insert into batch.api_key (tenant_id, key_name, key_prefix, key_hash, scopes, enabled, expires_at, created_by)
+        values (#{tenantId}, #{keyName}, #{keyPrefix}, #{keyHash}, #{scopes}, true, #{expiresAt}, #{operator})
+    </insert>
+
+    <update id="revoke">
+        update batch.api_key
+           set enabled = false,
+               revoked_by = #{operator},
+               revoked_at = current_timestamp
+         where tenant_id = #{tenantId} and id = #{id} and enabled = true
+    </update>
+</mapper>

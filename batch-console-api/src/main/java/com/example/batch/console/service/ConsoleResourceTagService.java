@@ -4,7 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.domain.entity.ResourceTagEntity;
-import com.example.batch.console.repository.ConsoleResourceTagRepository;
+import com.example.batch.console.mapper.ConsoleResourceTagMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Locale;
@@ -20,7 +20,7 @@ public class ConsoleResourceTagService {
   private static final Set<String> VALID_RESOURCE_TYPES =
       Set.of("JOB", "WORKFLOW", "FILE_CHANNEL", "FILE_TEMPLATE");
 
-  private final ConsoleResourceTagRepository repository;
+  private final ConsoleResourceTagMapper repository;
   private final ConsoleTenantGuard tenantGuard;
 
   public List<ResourceTagEntity> listByResource(

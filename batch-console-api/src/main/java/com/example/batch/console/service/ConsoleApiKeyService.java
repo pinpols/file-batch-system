@@ -3,7 +3,7 @@ package com.example.batch.console.service;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ApiKeyEntity;
-import com.example.batch.console.repository.ConsoleApiKeyRepository;
+import com.example.batch.console.mapper.ConsoleApiKeyMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -24,7 +24,7 @@ public class ConsoleApiKeyService {
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private static final int RAW_KEY_BYTES = 32;
 
-  private final ConsoleApiKeyRepository repository;
+  private final ConsoleApiKeyMapper repository;
   private final ConsoleTenantGuard tenantGuard;
 
   public List<ApiKeyEntity> list(String tenantId) {

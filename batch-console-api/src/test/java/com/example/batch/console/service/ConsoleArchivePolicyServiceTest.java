@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
+import com.example.batch.console.mapper.ConsoleArchivePolicyMapper;
 import com.example.batch.console.repository.ArchivePolicyUpsertParam;
-import com.example.batch.console.repository.ConsoleArchivePolicyRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,13 +17,13 @@ import org.junit.jupiter.api.Test;
 
 class ConsoleArchivePolicyServiceTest {
 
-  private ConsoleArchivePolicyRepository repository;
+  private ConsoleArchivePolicyMapper repository;
   private ConsoleTenantGuard tenantGuard;
   private ConsoleArchivePolicyService service;
 
   @BeforeEach
   void setUp() {
-    repository = mock(ConsoleArchivePolicyRepository.class);
+    repository = mock(ConsoleArchivePolicyMapper.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
     service = new ConsoleArchivePolicyService(repository, tenantGuard);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");

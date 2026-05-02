@@ -4,7 +4,7 @@ import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
-import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
+import com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper;
 import com.example.batch.console.repository.WebhookDeliveryLogInsertParam;
 import jakarta.annotation.PreDestroy;
 import java.net.URI;
@@ -61,7 +61,7 @@ public class WebhookDispatcher {
   private static final long INITIAL_RELAY_DELAY_SECONDS = 5L * 60L;
 
   private final ConsoleWebhookService webhookService;
-  private final ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
+  private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private final RestClient.Builder restClientBuilder;
   // 5.11: 改用有界队列 + CallerRunsPolicy 替代无界队列
   private final ExecutorService executor =

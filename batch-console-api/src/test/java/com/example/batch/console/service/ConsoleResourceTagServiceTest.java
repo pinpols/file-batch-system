@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ResourceTagEntity;
-import com.example.batch.console.repository.ConsoleResourceTagRepository;
+import com.example.batch.console.mapper.ConsoleResourceTagMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,13 +16,13 @@ import org.junit.jupiter.api.Test;
 
 class ConsoleResourceTagServiceTest {
 
-  private ConsoleResourceTagRepository repository;
+  private ConsoleResourceTagMapper repository;
   private ConsoleTenantGuard tenantGuard;
   private ConsoleResourceTagService service;
 
   @BeforeEach
   void setUp() {
-    repository = mock(ConsoleResourceTagRepository.class);
+    repository = mock(ConsoleResourceTagMapper.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
     service = new ConsoleResourceTagService(repository, tenantGuard);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");

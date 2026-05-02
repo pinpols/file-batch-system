@@ -9,8 +9,8 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
-import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
-import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
+import com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper;
+import com.example.batch.console.mapper.ConsoleWebhookSubscriptionMapper;
 import com.example.batch.console.service.ConsoleWebhookService.CreateSubscriptionCommand;
 import com.example.batch.console.service.ConsoleWebhookService.UpdateSubscriptionCommand;
 import com.example.batch.console.support.CallbackUrlValidator;
@@ -22,16 +22,16 @@ import org.junit.jupiter.api.Test;
 
 class ConsoleWebhookServiceTest {
 
-  private ConsoleWebhookSubscriptionRepository subscriptionRepository;
-  private ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
+  private ConsoleWebhookSubscriptionMapper subscriptionRepository;
+  private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private ConsoleTenantGuard tenantGuard;
   private CallbackUrlValidator callbackUrlValidator;
   private ConsoleWebhookService service;
 
   @BeforeEach
   void setUp() {
-    subscriptionRepository = mock(ConsoleWebhookSubscriptionRepository.class);
-    deliveryLogRepository = mock(ConsoleWebhookDeliveryLogRepository.class);
+    subscriptionRepository = mock(ConsoleWebhookSubscriptionMapper.class);
+    deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
     callbackUrlValidator = mock(CallbackUrlValidator.class);
     service =

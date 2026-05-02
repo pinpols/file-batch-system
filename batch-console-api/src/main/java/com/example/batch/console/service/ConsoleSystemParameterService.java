@@ -1,7 +1,7 @@
 package com.example.batch.console.service;
 
 import com.example.batch.console.domain.entity.SystemParameterEntity;
-import com.example.batch.console.repository.ConsoleSystemParameterRepository;
+import com.example.batch.console.mapper.ConsoleSystemParameterMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.time.Duration;
 import java.util.List;
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleSystemParameterService {
 
-  private final ConsoleSystemParameterRepository repository;
+  private final ConsoleSystemParameterMapper repository;
   private final ConsoleTenantGuard tenantGuard;
   private final StringRedisTemplate redisTemplate;
 

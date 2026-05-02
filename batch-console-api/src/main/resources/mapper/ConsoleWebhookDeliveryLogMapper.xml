@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper">
+    <resultMap id="deliveryLogMap"
+               type="com.example.batch.console.domain.entity.WebhookDeliveryLogEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="subscription_id" property="subscriptionId"/>
+        <result column="event_type" property="eventType"/>
+        <result column="payload_json" property="payloadJson"/>
+        <result column="http_status" property="httpStatus"/>
+        <result column="response_body" property="responseBody"/>
+        <result column="delivery_status" property="deliveryStatus"/>
+        <result column="attempt" property="attempt"/>
+        <result column="next_retry_at" property="nextRetryAt"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, subscription_id, event_type, payload_json, http_status,
+        response_body, delivery_status, attempt, next_retry_at, created_at
+    </sql>
+
+    <select id="findRecentByTenant" resultMap="deliveryLogMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_delivery_log
+         where tenant_id = #{tenantId}
+         order by created_at desc
+         limit #{limit}
+    </select>
+
+    <select id="findBySubscription" resultMap="deliveryLogMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_delivery_log
+         where tenant_id = #{tenantId} and subscription_id = #{subscriptionId}
+         order by created_at desc
+         limit #{limit}
+    </select>
+
+    <insert id="insert">
+        insert into batch.webhook_delivery_log (
+            tenant_id, subscription_id, event_type, payload_json, http_status,
+            response_body, delivery_status, attempt, next_retry_at
+        ) values (
+            #{p.tenantId}, #{p.subscriptionId}, #{p.eventType},
+            cast(#{p.payloadJson} as jsonb),
+            #{p.httpStatus}, #{p.responseBody}, #{p.deliveryStatus},
+            #{p.attempt}, #{p.nextRetryAt}
+        )
+    </insert>
+
+    <select id="findEligibleRetries" resultMap="deliveryLogMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_delivery_log
+         where delivery_status = 'EXHAUSTED'
+           and next_retry_at is not null
+           and next_retry_at &lt;= #{now}
+         order by next_retry_at asc
+         limit #{limit}
+         for update skip locked
+    </select>
+
+    <select id="findById" resultMap="deliveryLogMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_delivery_log
+         where id = #{id}
+         limit 1
+    </select>
+
+    <update id="claimForRetry">
+        update batch.webhook_delivery_log
+           set next_retry_at = null
+         where id = #{id}
+           and delivery_status = 'EXHAUSTED'
+           and next_retry_at is not null
+    </update>
+
+    <update id="markRetrySuccess">
+        update batch.webhook_delivery_log
+           set delivery_status = 'SUCCESS',
+               http_status     = #{httpStatus},
+               response_body   = null,
+               attempt         = #{attempt},
+               next_retry_at   = null
+         where id = #{id}
+    </update>
+
+    <update id="markRetryFailure">
+        update batch.webhook_delivery_log
+           set attempt        = #{attempt},
+               http_status    = #{httpStatus},
+               response_body  = #{responseBody},
+               next_retry_at  = #{nextRetryAt}
+         where id = #{id}
+    </update>
+
+    <update id="markGiveUp">
+        update batch.webhook_delivery_log
+           set delivery_status = 'GIVE_UP',
+               attempt         = #{attempt},
+               http_status     = #{httpStatus},
+               response_body   = #{responseBody},
+               next_retry_at   = null
+         where id = #{id}
+    </update>
+</mapper>

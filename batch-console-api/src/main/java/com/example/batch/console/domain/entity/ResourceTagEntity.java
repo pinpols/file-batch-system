@@ -2,15 +2,18 @@ package com.example.batch.console.domain.entity;
 
 import java.time.Instant;
 import lombok.Data;
-import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
+/**
+ * {@code batch.resource_tag} 行的 MyBatis ResultMap 数据载体。
+ *
+ * <p><b>不是 Spring Data JDBC 实体</b>—— CRUD 全走 {@code ConsoleResourceTagMapper}。 {@code @Column}
+ * 注解保留作可读性（MyBatis 无视）；不能加 {@code @Table @Id}。
+ */
 @Data
-@Table(schema = "batch", value = "resource_tag")
 public class ResourceTagEntity {
 
-  @Id private Long id;
+  private Long id;
 
   @Column("tenant_id")
   private String tenantId;
