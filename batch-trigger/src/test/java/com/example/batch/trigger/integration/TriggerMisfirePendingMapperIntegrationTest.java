@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)
-class TriggerMisfirePendingMapperIT extends AbstractIntegrationTest {
+class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private TriggerMisfirePendingMapper mapper;
   @Autowired private TriggerRuntimeStateMapper runtimeStateMapper;

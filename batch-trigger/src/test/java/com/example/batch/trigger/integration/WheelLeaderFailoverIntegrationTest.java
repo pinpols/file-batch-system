@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
       "batch.trigger.wheel.stale-marker-threshold-seconds=2" // 2s 阈值,IT 容易构造
     })
 @Transactional(propagation = Propagation.NEVER)
-class WheelLeaderFailoverIT extends AbstractIntegrationTest {
+class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private HashedWheelTriggerScheduler wheelScheduler;
   @Autowired private TriggerRuntimeStateMapper stateMapper;

@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)
-class ArchiveSchemaDriftCheckIT extends AbstractIntegrationTest {
+class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private ArchiveSchemaDriftCheck check;
   @Autowired private JdbcTemplate jdbcTemplate;

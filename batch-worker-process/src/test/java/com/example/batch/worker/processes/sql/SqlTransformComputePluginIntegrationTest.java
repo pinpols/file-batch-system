@@ -32,6 +32,11 @@ import org.testcontainers.containers.PostgreSQLContainer;
  *   <li>commit 用 jsonb_populate_record 把 staging 反序列化到 target,带 ON CONFLICT
  *   <li>feedback 清空 staging,水位通过 attributes 传递回 worker(由 worker 上报 orchestrator)
  * </ul>
+ *
+ * <p><b>故意不继承 {@code AbstractIntegrationTest}</b>：每个 @BeforeEach 都 {@code DROP SCHEMA biz CASCADE}
+ * + {@code DROP SCHEMA batch CASCADE} 重建结构。共享 {@code businessPostgres} 里 {@code
+ * biz.customer_account} 等 是其它测试依赖的种子数据；共享 {@code platformPostgres} 里 {@code batch.shedlock /
+ * outbox_event} 等是其它测试运行时状态。 在共享容器上跑会把这些数据全删干净，破坏并行 / 后续测试。
  */
 class SqlTransformComputePluginIntegrationTest {
 

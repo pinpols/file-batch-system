@@ -2,7 +2,7 @@ package com.example.batch.console.support.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.redis.testcontainers.RedisContainer;
+import com.example.batch.testing.AbstractIntegrationTest;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -12,22 +12,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
-@Testcontainers
-class SlidingWindowRateLimiterIT {
-
-  @Container
-  static final RedisContainer REDIS = new RedisContainer(DockerImageName.parse("redis:7-alpine"));
+class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
   private SlidingWindowRateLimiter rateLimiter;
 
   @BeforeEach
   void setUp() {
-    RedisStandaloneConfiguration config =
-        new RedisStandaloneConfiguration(REDIS.getHost(), REDIS.getFirstMappedPort());
+    RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(redisHost(), redisPort());
     LettuceConnectionFactory factory = new LettuceConnectionFactory(config);
     factory.afterPropertiesSet();
     StringRedisTemplate template = new StringRedisTemplate(factory);

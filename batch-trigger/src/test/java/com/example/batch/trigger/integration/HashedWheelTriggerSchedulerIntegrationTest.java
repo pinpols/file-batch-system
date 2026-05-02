@@ -45,7 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
       "batch.trigger.wheel.tick-millis=50"
     })
 @Transactional(propagation = Propagation.NEVER)
-class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
+class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private HashedWheelTriggerScheduler wheelScheduler;
   @Autowired private TriggerRuntimeStateMapper stateMapper;

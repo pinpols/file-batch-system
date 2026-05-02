@@ -44,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
       "batch.trigger.wheel.misfire-threshold-seconds=2"
     })
 @Transactional(propagation = Propagation.NEVER)
-class WheelMisfireIT extends AbstractIntegrationTest {
+class WheelMisfireIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private HashedWheelTriggerScheduler wheelScheduler;
   @Autowired private TriggerRuntimeStateMapper stateMapper;
