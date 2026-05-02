@@ -1,5 +1,12 @@
 package com.example.batch.console.infrastructure.workflow;
 
+import static com.example.batch.console.support.excel.ExcelMapRowReader.optionalBoolean;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.optionalJson;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.optionalText;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.requireEnum;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.requireInteger;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.requireText;
+
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.PipelineType;
 import com.example.batch.common.enums.ResultCode;
@@ -33,7 +40,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -71,7 +77,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private static final String COL_TIMEOUT_SECONDS = "timeout_seconds";
   private static final String COL_RETRY_MAX_COUNT = "retry_max_count";
   private static final String STAGE_PARSE = "PARSE";
-  private static final String GUIDE_FALSE = "FALSE";
   private static final String COL_STAGE_CODE = "stage_code";
   private static final String COL_ENABLED = "enabled";
   private static final String GUIDE_STR = "字符串";
@@ -82,7 +87,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private static final String COL_RETRY_POLICY = "retry_policy";
   private static final String KEY_SEP_COLON = ":";
   private static final String COL_DESCRIPTION = "description";
-  private static final String GUIDE_TRUE = "TRUE";
   private static final String COL_PIPELINE_NAME = "pipeline_name";
   private static final String COL_BIZ_TYPE = "biz_type";
   private static final String COL_WORKER_GROUP = "worker_group";
@@ -364,7 +368,8 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       Map<String, String> rowValues = new LinkedHashMap<>();
       for (String header : columns) {
         Integer columnIndex = headerIndex.get(header);
-        rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
+        rowValues.put(
+            header, ConsoleTextSanitizer.normalize(cellText(row, columnIndex, formatter)));
       }
       if (defaultTenantId != null && columns.contains(COL_TENANT_ID)) {
         if (!Texts.hasText(rowValues.get(COL_TENANT_ID))) {
@@ -439,7 +444,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private PipelineRow toPipelineRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
-    String effectiveTenant = normalize(values.get(COL_TENANT_ID));
+    String effectiveTenant = ConsoleTextSanitizer.normalize(values.get(COL_TENANT_ID));
     if (!Texts.hasText(effectiveTenant)) {
       effectiveTenant = tenantId;
     } else if (!tenantId.equals(effectiveTenant)) {
@@ -477,111 +482,13 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         .build();
   }
 
-  private String requireText(
-      Map<String, String> values, String key, int maxLength, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return null;
-    }
-    if (normalized.length() > maxLength) {
-      issues.add(key + " too long (max " + maxLength + ")");
-      return normalized.substring(0, maxLength);
-    }
-    return normalized;
-  }
-
-  private String optionalText(
-      Map<String, String> values, String key, int maxLength, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return null;
-    }
-    if (normalized.length() > maxLength) {
-      issues.add(key + " too long (max " + maxLength + ")");
-      return normalized.substring(0, maxLength);
-    }
-    return normalized;
-  }
-
-  private String requireEnum(
-      Map<String, String> values,
-      String key,
-      Set<String> allowed,
-      int maxLength,
-      List<String> issues) {
-    String normalized = requireText(values, key, maxLength, issues);
-    if (normalized == null) {
-      return null;
-    }
-    String normalizedUpper = normalized.toUpperCase(Locale.ROOT);
-    if (!allowed.contains(normalizedUpper)) {
-      issues.add(key + " must be one of " + allowed);
-    }
-    return normalizedUpper;
-  }
-
-  private Integer requireInteger(
-      Map<String, String> values, String key, int min, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return min;
-    }
-    try {
-      int value = Integer.parseInt(normalized);
-      if (value < min) {
-        issues.add(key + " must be >= " + min);
-      }
-      return value;
-    } catch (NumberFormatException exception) {
-      issues.add(key + " must be integer");
-      return min;
-    }
-  }
-
-  private Boolean optionalBoolean(
-      Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return defaultValue;
-    }
-    String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
-      return true;
-    }
-    if (List.of(GUIDE_FALSE, "N", "0", "NO").contains(upper)) {
-      return false;
-    }
-    issues.add(key + " must be boolean");
-    return defaultValue;
-  }
-
-  private String optionalJson(Map<String, String> values, String key, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return null;
-    }
-    try {
-      JsonUtils.fromJson(normalized, Object.class);
-      return normalized;
-    } catch (IllegalArgumentException exception) {
-      issues.add(key + " must be valid JSON");
-      return normalized;
-    }
-  }
-
-  private String normalize(String value) {
-    return ConsoleTextSanitizer.normalize(value);
-  }
-
   private Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
     Map<String, Integer> headers = new LinkedHashMap<>();
     for (int cellIndex = headerRow.getFirstCellNum();
         cellIndex < headerRow.getLastCellNum();
         cellIndex++) {
       Cell cell = headerRow.getCell(cellIndex);
-      String header = normalize(formatter.formatCellValue(cell));
+      String header = ConsoleTextSanitizer.normalize(formatter.formatCellValue(cell));
       if (Texts.hasText(header)) {
         headers.put(header, cellIndex);
       }
@@ -603,7 +510,8 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private boolean rowIsBlank(Row row, DataFormatter formatter) {
     for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
-      String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
+      String value =
+          ConsoleTextSanitizer.normalize(formatter.formatCellValue(row.getCell(cellIndex)));
       if (Texts.hasText(value)) {
         return false;
       }

@@ -1,5 +1,12 @@
 package com.example.batch.console.infrastructure.config;
 
+import static com.example.batch.console.support.excel.ExcelMapRowReader.optionalBoolean;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.optionalText;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.requireDate;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.requireEnum;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.requireInteger;
+import static com.example.batch.console.support.excel.ExcelMapRowReader.requireText;
+
 import com.example.batch.common.enums.CalendarDayType;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.DictEnum;
@@ -33,13 +40,10 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.Builder;
@@ -71,7 +75,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   private static final String COL_CATCH_UP_MAX_DAYS = "catch_up_max_days";
   private static final String COL_BIZ_DATE = "biz_date";
   private static final String COL_HOLIDAY_NAME = "holiday_name";
-  private static final String GUIDE_TRUE = "TRUE";
   private static final String COL_CALENDAR_CODE = "calendar_code";
   private static final String COL_TENANT_ID = "tenant_id";
   private static final String COL_HOLIDAY_ROLL_RULE = "holiday_roll_rule";
@@ -101,7 +104,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
   private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
   private static final Set<String> DAY_TYPES = DictEnum.codes(CalendarDayType.class);
-  private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -385,7 +387,8 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       Map<String, String> rowValues = new LinkedHashMap<>();
       for (String header : columns) {
         Integer columnIndex = headerIndex.get(header);
-        rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
+        rowValues.put(
+            header, ConsoleTextSanitizer.normalize(cellText(row, columnIndex, formatter)));
       }
       if (tenantId != null && columns.contains(COL_TENANT_ID)) {
         rowValues.put(
@@ -464,7 +467,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
   private CalendarRow toCalendarRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
-    String effectiveTenant = normalize(values.get(COL_TENANT_ID));
+    String effectiveTenant = ConsoleTextSanitizer.normalize(values.get(COL_TENANT_ID));
     if (!Texts.hasText(effectiveTenant)) {
       effectiveTenant = tenantId;
     } else if (!tenantId.equals(effectiveTenant)) {
@@ -494,111 +497,13 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         .build();
   }
 
-  private String requireText(
-      Map<String, String> values, String key, int maxLength, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return null;
-    }
-    if (normalized.length() > maxLength) {
-      issues.add(key + " too long (max " + maxLength + ")");
-      return normalized.substring(0, maxLength);
-    }
-    return normalized;
-  }
-
-  private String optionalText(
-      Map<String, String> values, String key, int maxLength, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return null;
-    }
-    if (normalized.length() > maxLength) {
-      issues.add(key + " too long (max " + maxLength + ")");
-      return normalized.substring(0, maxLength);
-    }
-    return normalized;
-  }
-
-  private String requireEnum(
-      Map<String, String> values,
-      String key,
-      Set<String> allowed,
-      int maxLength,
-      List<String> issues) {
-    String normalized = requireText(values, key, maxLength, issues);
-    if (normalized == null) {
-      return null;
-    }
-    String normalizedUpper = normalized.toUpperCase(Locale.ROOT);
-    if (!allowed.contains(normalizedUpper)) {
-      issues.add(key + " must be one of " + allowed);
-    }
-    return normalizedUpper;
-  }
-
-  private Integer requireInteger(
-      Map<String, String> values, String key, int min, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return min;
-    }
-    try {
-      int value = Integer.parseInt(normalized);
-      if (value < min) {
-        issues.add(key + " must be >= " + min);
-      }
-      return value;
-    } catch (NumberFormatException exception) {
-      issues.add(key + " must be integer");
-      return min;
-    }
-  }
-
-  private Boolean optionalBoolean(
-      Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      return defaultValue;
-    }
-    String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
-      return true;
-    }
-    if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
-      return false;
-    }
-    issues.add(key + " must be boolean");
-    return defaultValue;
-  }
-
-  private LocalDate requireDate(Map<String, String> values, String key, List<String> issues) {
-    String normalized = normalize(values.get(key));
-    if (!Texts.hasText(normalized)) {
-      issues.add(key + " is required");
-      return null;
-    }
-    try {
-      return LocalDate.parse(normalized, DATE_FORMAT);
-    } catch (DateTimeParseException exception) {
-      issues.add(key + " must be date in yyyy-MM-dd format");
-      return null;
-    }
-  }
-
-  private String normalize(String value) {
-    return ConsoleTextSanitizer.normalize(value);
-  }
-
   private Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
     Map<String, Integer> headers = new LinkedHashMap<>();
     for (int cellIndex = headerRow.getFirstCellNum();
         cellIndex < headerRow.getLastCellNum();
         cellIndex++) {
       Cell cell = headerRow.getCell(cellIndex);
-      String header = normalize(formatter.formatCellValue(cell));
+      String header = ConsoleTextSanitizer.normalize(formatter.formatCellValue(cell));
       if (Texts.hasText(header)) {
         headers.put(header, cellIndex);
       }
@@ -620,7 +525,8 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
   private boolean rowIsBlank(Row row, DataFormatter formatter) {
     for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
-      String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
+      String value =
+          ConsoleTextSanitizer.normalize(formatter.formatCellValue(row.getCell(cellIndex)));
       if (Texts.hasText(value)) {
         return false;
       }
