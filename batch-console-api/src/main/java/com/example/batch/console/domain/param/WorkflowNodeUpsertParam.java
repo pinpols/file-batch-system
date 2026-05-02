@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class WorkflowNodeUpsertParam {
 
+  private String tenantId;
   private Long workflowDefinitionId;
   private String nodeCode;
   private String nodeName;

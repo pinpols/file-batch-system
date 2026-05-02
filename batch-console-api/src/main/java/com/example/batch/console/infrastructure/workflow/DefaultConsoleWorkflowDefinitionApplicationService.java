@@ -110,7 +110,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     entity.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
     definitionMapper.insert(entity);
 
-    upsertNodesAndEdges(entity.getId(), request);
+    upsertNodesAndEdges(resolvedTenant, entity.getId(), request);
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, request.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-created");
 
@@ -135,7 +135,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
 
     nodeMapper.deleteByWorkflowDefinitionId(id);
     edgeMapper.deleteByWorkflowDefinitionId(id);
-    upsertNodesAndEdges(id, request);
+    upsertNodesAndEdges(resolvedTenant, id, request);
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-updated");
 
@@ -172,10 +172,12 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     return new DagValidationResult(errors.isEmpty(), errors);
   }
 
-  private void upsertNodesAndEdges(Long definitionId, WorkflowDefinitionSaveRequest request) {
+  private void upsertNodesAndEdges(
+      String tenantId, Long definitionId, WorkflowDefinitionSaveRequest request) {
     if (request.getNodes() != null) {
       for (WorkflowDefinitionSaveRequest.NodeItem n : request.getNodes()) {
         WorkflowNodeUpsertParam param = new WorkflowNodeUpsertParam();
+        param.setTenantId(tenantId);
         param.setWorkflowDefinitionId(definitionId);
         param.setNodeCode(n.getNodeCode());
         param.setNodeName(n.getNodeName());
@@ -196,6 +198,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     if (request.getEdges() != null) {
       for (WorkflowDefinitionSaveRequest.EdgeItem e : request.getEdges()) {
         WorkflowEdgeUpsertParam param = new WorkflowEdgeUpsertParam();
+        param.setTenantId(tenantId);
         param.setWorkflowDefinitionId(definitionId);
         param.setFromNodeCode(e.getFromNodeCode());
         param.setToNodeCode(e.getToNodeCode());

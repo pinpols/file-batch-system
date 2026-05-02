@@ -135,12 +135,13 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(
         """
         insert into batch.workflow_node (
-            workflow_definition_id, node_code, node_name, node_type,
+            tenant_id, workflow_definition_id, node_code, node_name, node_type,
             related_job_code, node_order, retry_policy, retry_max_count,
             timeout_seconds, enabled
-        ) values (?, 'JOB_NODE_1', 'Child Job Node', 'JOB',
+        ) values (?, ?, 'JOB_NODE_1', 'Child Job Node', 'JOB',
             ?, 1, 'NONE', 0, 0, true)
         """,
+        TENANT,
         parentWfDefId,
         childJobCode);
 
@@ -148,17 +149,19 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(
         """
         insert into batch.workflow_edge (
-            workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
-        ) values (?, 'START', 'JOB_NODE_1', 'ALWAYS', true)
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values (?, ?, 'START', 'JOB_NODE_1', 'ALWAYS', true)
         """,
+        TENANT,
         parentWfDefId);
 
     jdbcTemplate.update(
         """
         insert into batch.workflow_edge (
-            workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
-        ) values (?, 'JOB_NODE_1', 'END', 'SUCCESS', true)
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values (?, ?, 'JOB_NODE_1', 'END', 'SUCCESS', true)
         """,
+        TENANT,
         parentWfDefId);
 
     // 父任务启动所需的触发请求

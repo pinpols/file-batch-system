@@ -521,15 +521,16 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       }
       Long defId = saved.getId();
       String wfKey = wfCode + KEY_SEP_COLON + version;
-      applyWfNodes(defId, nodesByWf.getOrDefault(wfKey, List.of()));
-      applyWfEdges(defId, edgesByWf.getOrDefault(wfKey, List.of()));
+      applyWfNodes(ctx.tenantId(), defId, nodesByWf.getOrDefault(wfKey, List.of()));
+      applyWfEdges(ctx.tenantId(), defId, edgesByWf.getOrDefault(wfKey, List.of()));
     }
     return new ApplyStats(inserted, updated);
   }
 
-  private void applyWfNodes(Long defId, List<Map<String, String>> nodes) {
+  private void applyWfNodes(String tenantId, Long defId, List<Map<String, String>> nodes) {
     for (Map<String, String> node : nodes) {
       WorkflowNodeUpsertParam p = new WorkflowNodeUpsertParam();
+      p.setTenantId(tenantId);
       p.setWorkflowDefinitionId(defId);
       p.setNodeCode(normalize(node.get(COL_NODE_CODE)));
       p.setNodeName(normalize(node.get(COL_NODE_NAME)));
@@ -548,9 +549,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     }
   }
 
-  private void applyWfEdges(Long defId, List<Map<String, String>> edges) {
+  private void applyWfEdges(String tenantId, Long defId, List<Map<String, String>> edges) {
     for (Map<String, String> edge : edges) {
       WorkflowEdgeUpsertParam p = new WorkflowEdgeUpsertParam();
+      p.setTenantId(tenantId);
       p.setWorkflowDefinitionId(defId);
       p.setFromNodeCode(normalize(edge.get(COL_FROM_NODE_CODE)));
       p.setToNodeCode(normalize(edge.get(COL_TO_NODE_CODE)));

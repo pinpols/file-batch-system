@@ -388,25 +388,25 @@ VALUES
 ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
 
 INSERT INTO batch.workflow_node
-  (workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
-SELECT d.id, 'START', 'Start', 'START', 0, 'NONE', 0, 0, true, now(), now()
+  (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
+SELECT d.tenant_id, d.id, 'START', 'Start', 'START', 0, 'NONE', 0, 0, true, now(), now()
   FROM batch.workflow_definition d
  WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
-ON CONFLICT (workflow_definition_id, node_code) DO NOTHING;
+ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING;
 
 INSERT INTO batch.workflow_node
-  (workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
-SELECT d.id, 'END', 'End', 'END', 1, 'NONE', 0, 0, true, now(), now()
+  (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
+SELECT d.tenant_id, d.id, 'END', 'End', 'END', 1, 'NONE', 0, 0, true, now(), now()
   FROM batch.workflow_definition d
  WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
-ON CONFLICT (workflow_definition_id, node_code) DO NOTHING;
+ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING;
 
 INSERT INTO batch.workflow_edge
-  (workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
-SELECT d.id, 'START', 'END', 'SUCCESS', true, now(), now()
+  (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT d.tenant_id, d.id, 'START', 'END', 'SUCCESS', true, now(), now()
   FROM batch.workflow_definition d
  WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
-ON CONFLICT (workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;
+ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;
 
 -- ── P2 种子补齐（2026-04-22）─────────────────────────────────────────────
 -- 新增 tb 两条文件格式模板（FIXED_WIDTH + XML），复用 biz.transaction 表：
@@ -502,8 +502,8 @@ VALUES
 ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
 
 INSERT INTO batch.workflow_node
-  (workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
-SELECT wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
+  (tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
+SELECT wd.tenant_id, wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
 FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_pipeline','START','Start','START',NULL::text,0,'{"entry":true}'),
   ('wf_probe_pipeline','PROBE_TASK','Probe Task','TASK','exp_settlement_daily',1,'{"step":"probe"}'),
@@ -519,8 +519,8 @@ WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.workflow_edge
-  (workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
-SELECT wd.id, v.f, v.t, v.et, true, now(), now()
+  (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT wd.tenant_id, wd.id, v.f, v.t, v.et, true, now(), now()
 FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_pipeline','START','PROBE_TASK','ALWAYS'),
   ('wf_probe_pipeline','PROBE_TASK','END','ALWAYS'),
@@ -550,8 +550,8 @@ VALUES
 ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
 
 INSERT INTO batch.workflow_node
-  (workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
-SELECT wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
+  (tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
+SELECT wd.tenant_id, wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
 FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_mixed','START','Start','START',NULL::text,0,'{"entry":true}'),
   ('wf_probe_mixed','PROCESS','Process Task','TASK','exp_settlement_daily',1,'{"step":"process"}'),
@@ -564,8 +564,8 @@ WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.workflow_edge
-  (workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
-SELECT wd.id, v.f, v.t, v.et, true, now(), now()
+  (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT wd.tenant_id, wd.id, v.f, v.t, v.et, true, now(), now()
 FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_mixed','START','PROCESS','ALWAYS'),
   ('wf_probe_mixed','PROCESS','REPORT','SUCCESS'),
