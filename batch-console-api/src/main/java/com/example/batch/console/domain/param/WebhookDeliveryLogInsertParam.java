@@ -1,4 +1,4 @@
-package com.example.batch.console.repository;
+package com.example.batch.console.mapper.param;
 
 import java.time.Instant;
 import lombok.Builder;
