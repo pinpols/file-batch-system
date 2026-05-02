@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper">
+    <!--
+      QuotaRuntimeStateRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, quotaScope, ownerCode, quotaResetPolicy,
+         windowStartedAt, windowExpiresAt, peakBorrowedCount, lastResetAt,
+         createdAt, updatedAt, version)
+      列名按 V25 + V59 DDL。
+    -->
+    <resultMap id="quotaRuntimeStateMap"
+               type="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="quota_scope" javaType="java.lang.String"/>
+            <arg column="owner_code" javaType="java.lang.String"/>
+            <arg column="quota_reset_policy" javaType="java.lang.String"/>
+            <arg column="window_started_at" javaType="java.time.Instant"/>
+            <arg column="window_expires_at" javaType="java.time.Instant"/>
+            <arg column="peak_borrowed_count" javaType="java.lang.Integer"/>
+            <arg column="last_reset_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="version" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord">
+        insert into batch.quota_runtime_state (
+            tenant_id, quota_scope, owner_code, quota_reset_policy,
+            window_started_at, window_expires_at, peak_borrowed_count, last_reset_at,
+            created_at, updated_at, version
+        ) values (
+            #{tenantId}, #{quotaScope}, #{ownerCode}, #{quotaResetPolicy},
+            #{windowStartedAt}, #{windowExpiresAt},
+            <choose>
+                <when test="peakBorrowedCount != null">#{peakBorrowedCount}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            #{lastResetAt},
+            <choose>
+                <when test="createdAt != null">#{createdAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>,
+            <choose>
+                <when test="updatedAt != null">#{updatedAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>,
+            <choose>
+                <when test="version != null">#{version}</when>
+                <otherwise>0</otherwise>
+            </choose>
+        )
+        on conflict (tenant_id, quota_scope, owner_code) do nothing
+    </insert>
+
+    <update id="updateWithCas"
+            parameterType="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord">
+        update batch.quota_runtime_state
+           set quota_reset_policy = #{quotaResetPolicy},
+               window_started_at  = #{windowStartedAt},
+               window_expires_at  = #{windowExpiresAt},
+               peak_borrowed_count = #{peakBorrowedCount},
+               last_reset_at      = #{lastResetAt},
+               updated_at         = current_timestamp,
+               version            = version + 1
+         where id = #{id}
+           and version = #{version}
+    </update>
+
+    <select id="selectByTenantQuotaScopeOwner" resultMap="quotaRuntimeStateMap">
+        select *
+          from batch.quota_runtime_state
+         where tenant_id = #{tenantId}
+           and quota_scope = #{quotaScope}
+           and owner_code = #{ownerCode}
+    </select>
+
+    <select id="selectExpired" resultMap="quotaRuntimeStateMap">
+        select *
+          from batch.quota_runtime_state
+         where quota_reset_policy in ('CALENDAR_DAY', 'SLIDING_WINDOW')
+           and window_expires_at is not null
+           and window_expires_at &lt;= #{now}
+    </select>
+</mapper>

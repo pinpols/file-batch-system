@@ -6,7 +6,7 @@ import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateSer
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.domain.scheduler.QuotaResetPolicy;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
-import com.example.batch.orchestrator.repository.QuotaRuntimeStateRepository;
+import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -28,19 +28,40 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty(name = "batch.quota.runtime-store", havingValue = "database")
 public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateService {
 
-  private final QuotaRuntimeStateRepository quotaRuntimeStateRepository;
+  private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
   private final BatchTimezoneProvider timezoneProvider;
   // C-2.8：自引用，供 reconcileExpiredStates 内触发 REQUIRES_NEW 子事务。
   // 通过 ObjectProvider 打破 bean 循环依赖，并拿到 Spring 代理后的实例。
   private final ObjectProvider<DatabaseQuotaRuntimeStateService> selfProvider;
 
   public DatabaseQuotaRuntimeStateService(
-      QuotaRuntimeStateRepository quotaRuntimeStateRepository,
+      QuotaRuntimeStateMapper quotaRuntimeStateMapper,
       BatchTimezoneProvider timezoneProvider,
       ObjectProvider<DatabaseQuotaRuntimeStateService> selfProvider) {
-    this.quotaRuntimeStateRepository = quotaRuntimeStateRepository;
+    this.quotaRuntimeStateMapper = quotaRuntimeStateMapper;
     this.timezoneProvider = timezoneProvider;
     this.selfProvider = selfProvider;
+  }
+
+  /**
+   * MyBatis 替代原 Spring Data JDBC {@code repository.save}：id==null 走 insert（带 ON CONFLICT DO NOTHING
+   * 防 UV）；否则 CAS update，update affected==0 时抛 OLF 保留原乐观锁语义。
+   */
+  private void persist(QuotaRuntimeStateRecord state) {
+    if (state.id() == null) {
+      // 并发首次创建：unique constraint 保证只一行成功，第二个 insert affected=0；
+      // 调用方下次 loadOrCreate 会读到已有行，逻辑自然收敛。
+      quotaRuntimeStateMapper.insert(state);
+      return;
+    }
+    int rows = quotaRuntimeStateMapper.updateWithCas(state);
+    if (rows == 0) {
+      throw new OptimisticLockingFailureException(
+          "quota_runtime_state version mismatch: id="
+              + state.id()
+              + ", version="
+              + state.version());
+    }
   }
 
   @Override
@@ -80,7 +101,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
             (int)
                 (request.currentActiveCount() + normalizedRequested - request.policy().baseCap()));
     if (borrowedNeeded == 0) {
-      quotaRuntimeStateRepository.save(state);
+      persist(state);
       return ResourceCheck.allow();
     }
     if (borrowedNeeded > normalizedBurst) {
@@ -94,7 +115,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
               borrowedNeeded, state.lastResetAt() == null ? now : state.lastResetAt(), now);
     }
     // M-4: 只要使用了突发容量就必须持久化状态，否则 lastUpdatedAt 漂移导致窗口过期误判
-    quotaRuntimeStateRepository.save(state);
+    persist(state);
     return ResourceCheck.allow();
   }
 
@@ -123,8 +144,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
           policy.name(), Math.max(0, burstLimit), 0, Math.max(0, burstLimit), null, null, null);
     }
     QuotaRuntimeStateRecord state =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            tenantId, quotaScope, ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
     if (state == null) {
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
@@ -152,7 +172,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   @Override
   public void reconcileExpiredStates(int slidingWindowHours) {
     Instant now = Instant.now();
-    List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateRepository.findExpired(now);
+    List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateMapper.selectExpired(now);
     DatabaseQuotaRuntimeStateService self = selfProvider.getObject();
     for (QuotaRuntimeStateRecord state : expired) {
       try {
@@ -193,8 +213,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     String quotaScope = ctx.owner().quotaScope();
     String ownerCode = ctx.owner().ownerCode();
     QuotaRuntimeStateRecord state =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            tenantId, quotaScope, ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
     if (state != null) {
       return state;
     }
@@ -257,7 +276,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
         changed = true;
       }
       if (changed && persist) {
-        quotaRuntimeStateRepository.save(state);
+        persist(state);
       }
       return state;
     }
@@ -286,7 +305,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       }
     }
     if (changed && persist) {
-      quotaRuntimeStateRepository.save(state);
+      persist(state);
     }
     return state;
   }
