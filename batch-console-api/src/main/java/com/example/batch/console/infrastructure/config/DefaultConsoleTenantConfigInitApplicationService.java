@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure.config;
 
 import com.example.batch.common.utils.Nullables;
-import com.example.batch.console.application.ConsoleTenantConfigInitApplicationService;
+import com.example.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.infrastructure.config.TenantConfigInitApplyHandlers.ApplyContext;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;

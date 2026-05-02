@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure.report;
 
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.application.ConsoleQueryApplicationService;
+import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.infrastructure.query.ConsoleFileQueryService;
 import com.example.batch.console.infrastructure.query.ConsoleJobQueryService;
 import com.example.batch.console.infrastructure.query.ConsoleOpsQueryService;

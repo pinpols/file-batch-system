@@ -9,7 +9,7 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.application.ConsolePipelineDefinitionExcelApplicationService;
+import com.example.batch.console.application.workflow.ConsolePipelineDefinitionExcelApplicationService;
 import com.example.batch.console.infrastructure.excel.PipelineExcelWorkbookWriter;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;

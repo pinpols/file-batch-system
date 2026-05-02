@@ -2,7 +2,7 @@ package com.example.batch.console.infrastructure.ops;
 
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
-import com.example.batch.console.application.ConsoleOpsApplicationService;
+import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.mapper.ApprovalCommandMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;

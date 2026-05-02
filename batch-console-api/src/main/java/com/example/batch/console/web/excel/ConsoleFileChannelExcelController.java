@@ -1,6 +1,6 @@
 package com.example.batch.console.web.excel;
 
-import com.example.batch.console.application.ConsoleFileChannelExcelApplicationService;
+import com.example.batch.console.application.file.ConsoleFileChannelExcelApplicationService;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

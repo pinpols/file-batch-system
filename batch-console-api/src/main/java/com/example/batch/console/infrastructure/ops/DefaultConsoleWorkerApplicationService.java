@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure.ops;
 
 import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.console.application.ConsoleWorkerApplicationService;
+import com.example.batch.console.application.ops.ConsoleWorkerApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;

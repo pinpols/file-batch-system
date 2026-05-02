@@ -4,7 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.console.application.ConsoleJobDefinitionApplicationService;
+import com.example.batch.console.application.job.ConsoleJobDefinitionApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;

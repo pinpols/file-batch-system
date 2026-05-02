@@ -2,7 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.application.ConsoleBatchWindowApplicationService;
+import com.example.batch.console.application.config.ConsoleBatchWindowApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.file.BatchWindowCreateRequest;

@@ -19,7 +19,7 @@ import com.example.batch.console.support.excel.InMemoryExcelImportStore;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
-import com.example.batch.console.web.request.ExcelApplyRequest;
+import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.testing.TestExcelFileBuilder;
 import java.util.LinkedHashMap;
 import java.util.List;

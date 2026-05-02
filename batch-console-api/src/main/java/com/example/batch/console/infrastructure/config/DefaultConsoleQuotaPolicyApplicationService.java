@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.console.application.ConsoleQuotaPolicyApplicationService;
+import com.example.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import com.example.batch.console.domain.param.TenantQuotaPolicyUpdateParam;
 import com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import com.example.batch.console.mapper.TenantQuotaPolicyMapper;

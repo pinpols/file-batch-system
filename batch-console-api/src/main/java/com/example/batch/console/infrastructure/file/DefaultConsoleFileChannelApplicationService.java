@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.console.application.ConsoleFileChannelApplicationService;
+import com.example.batch.console.application.file.ConsoleFileChannelApplicationService;
 import com.example.batch.console.domain.param.FileChannelConfigUpdateParam;
 import com.example.batch.console.domain.param.FileChannelConfigUpsertParam;
 import com.example.batch.console.mapper.FileChannelConfigMapper;

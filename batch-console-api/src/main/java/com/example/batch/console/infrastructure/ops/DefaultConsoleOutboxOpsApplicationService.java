@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure.ops;
 
-import com.example.batch.console.application.ConsoleOrchestratorProxyService;
-import com.example.batch.console.application.ConsoleOutboxOpsApplicationService;
+import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
+import com.example.batch.console.application.ops.ConsoleOutboxOpsApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.OutboxEventMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;

@@ -2,7 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.application.ConsoleQueryApplicationService;
+import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;

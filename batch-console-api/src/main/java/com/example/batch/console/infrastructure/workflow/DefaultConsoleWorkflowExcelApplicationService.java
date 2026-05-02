@@ -7,7 +7,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.application.ConsoleWorkflowExcelApplicationService;
+import com.example.batch.console.application.workflow.ConsoleWorkflowExcelApplicationService;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;

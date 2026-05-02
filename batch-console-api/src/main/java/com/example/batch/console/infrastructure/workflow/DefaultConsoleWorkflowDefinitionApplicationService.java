@@ -3,7 +3,7 @@ package com.example.batch.console.infrastructure.workflow;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicationService;
+import com.example.batch.console.application.workflow.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;

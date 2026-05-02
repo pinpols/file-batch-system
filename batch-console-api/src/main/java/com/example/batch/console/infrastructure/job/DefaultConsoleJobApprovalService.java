@@ -9,7 +9,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.IdGenerator;
-import com.example.batch.console.application.ConsoleJobApprovalService;
+import com.example.batch.console.application.job.ConsoleJobApprovalService;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;

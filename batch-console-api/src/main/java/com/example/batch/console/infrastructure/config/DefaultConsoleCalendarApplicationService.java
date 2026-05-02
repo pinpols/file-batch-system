@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.console.application.ConsoleCalendarApplicationService;
+import com.example.batch.console.application.config.ConsoleCalendarApplicationService;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.CalendarHolidayMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;

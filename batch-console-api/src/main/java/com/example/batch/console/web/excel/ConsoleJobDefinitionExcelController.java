@@ -1,6 +1,6 @@
 package com.example.batch.console.web.excel;
 
-import com.example.batch.console.application.ConsoleJobDefinitionExcelApplicationService;
+import com.example.batch.console.application.job.ConsoleJobDefinitionExcelApplicationService;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

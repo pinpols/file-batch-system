@@ -9,7 +9,7 @@ import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.application.ConsoleTenantConfigPackageExcelApplicationService;
+import com.example.batch.console.application.config.ConsoleTenantConfigPackageExcelApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.param.AlertRoutingConfigUpsertParam;

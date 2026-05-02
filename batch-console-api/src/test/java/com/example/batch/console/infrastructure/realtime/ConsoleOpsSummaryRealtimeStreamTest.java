@@ -9,7 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.console.application.ConsoleOpsApplicationService;
+import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import org.junit.jupiter.api.BeforeEach;

@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.application.ConsoleAlertApplicationService;
+import com.example.batch.console.application.monitor.ConsoleAlertApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;

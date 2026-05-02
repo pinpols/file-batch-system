@@ -14,9 +14,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.ResponseMeta;
-import com.example.batch.console.application.ConsoleJobApprovalService;
-import com.example.batch.console.application.ConsoleJobRecoveryService;
-import com.example.batch.console.application.ConsoleJobTriggerService;
+import com.example.batch.console.application.job.ConsoleJobApprovalService;
+import com.example.batch.console.application.job.ConsoleJobRecoveryService;
+import com.example.batch.console.application.job.ConsoleJobTriggerService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;

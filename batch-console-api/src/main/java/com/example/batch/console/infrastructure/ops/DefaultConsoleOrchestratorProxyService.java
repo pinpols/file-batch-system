@@ -1,6 +1,6 @@
 package com.example.batch.console.infrastructure.ops;
 
-import com.example.batch.console.application.ConsoleOrchestratorProxyService;
+import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;

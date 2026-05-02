@@ -1,7 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.model.PageRequest;
-import com.example.batch.console.application.ConsoleTenantConfigInitApplicationService;
+import com.example.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;

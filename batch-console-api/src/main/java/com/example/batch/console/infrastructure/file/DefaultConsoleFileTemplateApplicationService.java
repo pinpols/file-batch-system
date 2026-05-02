@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.console.application.ConsoleFileTemplateApplicationService;
+import com.example.batch.console.application.file.ConsoleFileTemplateApplicationService;
 import com.example.batch.console.domain.param.FileTemplateConfigUpsertParam;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
 import com.example.batch.console.infrastructure.job.DefaultConsoleJobDefinitionApplicationService;

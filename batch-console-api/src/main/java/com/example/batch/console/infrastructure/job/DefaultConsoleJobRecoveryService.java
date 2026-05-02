@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure.job;
 
 import com.example.batch.common.utils.ConsoleTextSanitizer;
-import com.example.batch.console.application.ConsoleJobRecoveryService;
+import com.example.batch.console.application.job.ConsoleJobRecoveryService;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.CompensationPayload;
