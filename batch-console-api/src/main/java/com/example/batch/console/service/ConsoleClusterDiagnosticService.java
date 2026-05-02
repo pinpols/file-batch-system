@@ -2,9 +2,9 @@ package com.example.batch.console.service;
 
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
-import com.example.batch.console.repository.ConsoleClusterDiagnosticRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleClusterDiagnosticService {
 
   private final ConsoleTenantGuard tenantGuard;
-  private final ConsoleClusterDiagnosticRepository diagnosticRepository;
+  private final ConsoleClusterDiagnosticMapper diagnosticMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
   private final JobInstanceMapper jobInstanceMapper;
 
@@ -37,7 +37,7 @@ public class ConsoleClusterDiagnosticService {
   public Map<String, Object> shedLockStatus(String tenantId) {
     tenantGuard.resolveTenant(tenantId);
     List<Map<String, Object>> locks =
-        diagnosticRepository.shedlockAll().stream()
+        diagnosticMapper.shedlockAll().stream()
             .map(
                 v -> {
                   Map<String, Object> row = new LinkedHashMap<>();
@@ -77,7 +77,7 @@ public class ConsoleClusterDiagnosticService {
   public Map<String, Object> outboxHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     List<Map<String, Object>> stats =
-        diagnosticRepository.eventDeliveryStatusCounts(resolved).stream()
+        diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
             .map(
                 v -> {
                   Map<String, Object> row = new LinkedHashMap<>();
@@ -86,7 +86,7 @@ public class ConsoleClusterDiagnosticService {
                   return row;
                 })
             .collect(Collectors.toList());
-    long pendingCount = diagnosticRepository.countPendingOutboxEvents(resolved);
+    long pendingCount = diagnosticMapper.countPendingOutboxEvents(resolved);
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("pendingEvents", pendingCount);
     result.put("deliveryStats", stats);
