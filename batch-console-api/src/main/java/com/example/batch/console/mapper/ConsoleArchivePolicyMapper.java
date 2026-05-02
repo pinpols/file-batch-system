@@ -1,7 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
-import com.example.batch.console.repository.ArchivePolicyUpsertParam;
+import com.example.batch.console.domain.param.ArchivePolicyUpsertParam;
 import java.util.List;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Param;

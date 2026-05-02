@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper">
     <!--
-      QuotaRuntimeStateRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      QuotaRuntimeStateEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数，
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, quotaScope, ownerCode, quotaResetPolicy,
          windowStartedAt, windowExpiresAt, peakBorrowedCount, lastResetAt,
@@ -10,7 +10,7 @@
       列名按 V25 + V59 DDL。
     -->
     <resultMap id="quotaRuntimeStateMap"
-               type="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord">
+               type="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -28,7 +28,7 @@
     </resultMap>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity">
         insert into batch.quota_runtime_state (
             tenant_id, quota_scope, owner_code, quota_reset_policy,
             window_started_at, window_expires_at, peak_borrowed_count, last_reset_at,
@@ -58,7 +58,7 @@
     </insert>
 
     <update id="updateWithCas"
-            parameterType="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity">
         update batch.quota_runtime_state
            set quota_reset_policy = #{quotaResetPolicy},
                window_started_at  = #{windowStartedAt},

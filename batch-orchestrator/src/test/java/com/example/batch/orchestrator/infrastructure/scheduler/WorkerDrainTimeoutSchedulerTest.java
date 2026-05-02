@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -58,11 +58,11 @@ class WorkerDrainTimeoutSchedulerTest {
   @Test
   void shouldTakeOverOnlyExpiredDrainingWorkers() {
     Instant now = Instant.now();
-    WorkerRegistryRecord expired =
+    WorkerRegistryEntity expired =
         worker("t1", "worker-expired", now.minusSeconds(120), now.minusSeconds(1));
-    WorkerRegistryRecord future =
+    WorkerRegistryEntity future =
         worker("t1", "worker-future", now.minusSeconds(120), now.plusSeconds(60));
-    WorkerRegistryRecord missingDeadline =
+    WorkerRegistryEntity missingDeadline =
         worker("t1", "worker-missing", now.minusSeconds(120), null);
 
     when(workerRegistryMapper.selectByStatus(WorkerRegistryStatus.DRAINING.code()))
@@ -75,9 +75,9 @@ class WorkerDrainTimeoutSchedulerTest {
     verify(workerDrainGovernanceService, never()).takeoverAfterDrainTimeout("t1", "worker-missing");
   }
 
-  private static WorkerRegistryRecord worker(
+  private static WorkerRegistryEntity worker(
       String tenantId, String workerCode, Instant heartbeatAt, Instant drainDeadlineAt) {
-    return new WorkerRegistryRecord(
+    return new WorkerRegistryEntity(
         1L,
         tenantId,
         workerCode,

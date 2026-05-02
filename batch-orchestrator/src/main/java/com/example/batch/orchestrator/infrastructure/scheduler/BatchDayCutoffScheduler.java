@@ -3,8 +3,8 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
-import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
+import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
@@ -53,12 +53,12 @@ public class BatchDayCutoffScheduler {
     Instant now = Instant.now();
     List<String> tracked = List.of("OPEN");
 
-    List<BatchDayInstanceRecord> candidates = batchDayInstanceMapper.selectByDayStatusIn(tracked);
+    List<BatchDayInstanceEntity> candidates = batchDayInstanceMapper.selectByDayStatusIn(tracked);
     if (candidates == null || candidates.isEmpty()) {
       return;
     }
 
-    for (BatchDayInstanceRecord candidate : candidates) {
+    for (BatchDayInstanceEntity candidate : candidates) {
       if (candidate == null
           || candidate.tenantId() == null
           || candidate.calendarCode() == null
@@ -74,7 +74,7 @@ public class BatchDayCutoffScheduler {
         continue;
       }
       if (!now.isBefore(cutoffAt)) {
-        BatchDayInstanceRecord updated = candidate.withCutoff(cutoffAt, now);
+        BatchDayInstanceEntity updated = candidate.withCutoff(cutoffAt, now);
         int rows = batchDayInstanceMapper.updateWithCas(updated);
         if (rows == 0) {
           // CAS 冲突：另一路径（settle / reopen）抢先写入，本轮跳过该候选不阻塞其他候选
@@ -96,7 +96,7 @@ public class BatchDayCutoffScheduler {
   }
 
   private Instant resolveCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {
-    BusinessCalendarRecord calendar =
+    BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
     if (calendar == null) {
       return null;
@@ -108,7 +108,7 @@ public class BatchDayCutoffScheduler {
   }
 
   private void appendAuditLog(
-      BatchDayInstanceRecord from, BatchDayInstanceRecord to, String reasonCode, Instant now) {
+      BatchDayInstanceEntity from, BatchDayInstanceEntity to, String reasonCode, Instant now) {
     JobExecutionLogEntity logEntity = new JobExecutionLogEntity();
     logEntity.setTenantId(from.tenantId());
     logEntity.setJobInstanceId(null);

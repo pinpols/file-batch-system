@@ -1,8 +1,8 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import com.example.batch.orchestrator.mapper.InvalidCapabilityTagsRecord;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -67,14 +67,14 @@ public class WorkerCapabilityTagsAuditScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    List<InvalidCapabilityTagsRecord> rows = workerRegistryMapper.selectInvalidCapabilityTags();
+    List<InvalidCapabilityTagsParam> rows = workerRegistryMapper.selectInvalidCapabilityTags();
     if (rows == null || rows.isEmpty()) {
       invalidCount.set(0L);
       return;
     }
     int confirmed = 0;
     int logged = 0;
-    for (InvalidCapabilityTagsRecord row : rows) {
+    for (InvalidCapabilityTagsParam row : rows) {
       if (!looksValidStringArray(row.getRawValue())) {
         confirmed++;
         if (logged < logSampleLimit) {

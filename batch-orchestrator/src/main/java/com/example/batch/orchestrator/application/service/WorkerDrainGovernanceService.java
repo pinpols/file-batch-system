@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import java.util.List;
 
 /**
@@ -15,11 +15,11 @@ import java.util.List;
  */
 public interface WorkerDrainGovernanceService {
 
-  WorkerRegistryRecord startDrain(String tenantId, String workerCode, Integer timeoutSeconds);
+  WorkerRegistryEntity startDrain(String tenantId, String workerCode, Integer timeoutSeconds);
 
-  WorkerRegistryRecord forceOffline(String tenantId, String workerCode);
+  WorkerRegistryEntity forceOffline(String tenantId, String workerCode);
 
-  WorkerRegistryRecord takeover(String tenantId, String workerCode);
+  WorkerRegistryEntity takeover(String tenantId, String workerCode);
 
   List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode);
 

@@ -284,7 +284,7 @@ public CommonResponse<...> delete(
 | 查询参数 | `class` + `@Data` | `XxxQueryRequest` |
 | 内部命令 | `record` | `XxxCommand` |
 | 参数聚合 | `record` | `XxxParam` / `XxxContext` |
-| DB 投影 | `interface` | `XxxView`（Spring Data JDBC 投影接口） |
+| DB 投影 / 列表行 | `record` | `XxxView`（MyBatis `resultType` / 查询投影） |
 
 请求类使用 `@Data`（Lombok）以支持 Spring MVC 参数绑定；响应/命令类使用 `record` 以保证不可变性。
 
@@ -334,6 +334,91 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 **已有工厂方法的 Query 类：**`JobDefinitionQuery.ofTenant`、`WorkflowDefinitionQuery.ofTenant`、`WorkflowNodeQuery.ofDefinition`、`WorkflowEdgeQuery.ofDefinition`
 
+### 8.2 Domain 子包与代码风格（按职责）
+
+各业务模块的 `com.example.batch.<module>.domain`（及_worker 模块的 `.../domain` 单包）承载**领域侧数据结构**，与 `controller` / `service` / `mapper` 分层正交。以下按**子目录**约定形态、命名与 Refactor 方向；若与上文总表冲突，以本节 **domain 落位** 为准。
+
+#### 8.2.1 总原则
+
+| 原则 | 说明 |
+|------|------|
+| **包即词汇表** | `entity` / `query` / `command`一眼可读；不要把 API 的 `*Request` / `*Dto` 塞进 `domain`（除非明确是跨层复用的查询契约）。 |
+| **禁止 `*Record` 表映射后缀** | 表行一律 `*Entity`；Java `record` 关键字仍可用于 **非表** 的不可变 DTO。 |
+| **单向依赖** | `command` / `query` → 可依赖 `common`；**避免** `entity` 依赖 `command`；子域模型（`pipeline`）尽量只吃 JDK + `common`。 |
+| **与 §1 参数规约衔接** | 对外 `Command` 若构造字段很多，按 CLAUDE.md：`argc > 6` 须 `@Builder` 且调用方先赋变量再传入；`domain.param` 中 Mapper 单次写入参数同理。 |
+
+#### 8.2.2 `domain/entity` — 表行映射（MyBatis 主类型）
+
+| 项 | 约定 |
+|----|------|
+| **命名** | `XxxEntity`，与表含义对应，不缩写业务词。 |
+| **形态** | **默认** `class` + `@Data`，运行态大行、多 null 更新、`version` 乐观锁时更合适。 |
+| **Lombok** | 需 MyBatis 无参构造时：`@NoArgsConstructor` + `@AllArgsConstructor`；若加 `@Builder`，三连兜底（与 CLAUDE.md 「Builder 与反射路径」一致）。 |
+| **可变边界** | 仅在编排内核、状态推进路径上允许对 Entity 做「读完—改字段—写回」；不要在 Controller 层持有可变 Entity 横穿多层。 |
+| **可选：不可变** | 少数只读/窄表可用 `record` + XML `resultMap`/`<constructor>`；新代码无必要时优先与大多数字段对齐用 `@Data` class。 |
+| **接口混入** | 实现 `Stateful`、`LocalizedErrorCarrier` 等横切接口时保持类在 `entity` 内，不为此单独开包。 |
+
+**治理**：`domain` 根下零散的 `*Entity`（如历史遗留）应**迁入** `domain/entity`，保持「表映射只此一包」。
+
+#### 8.2.3 `domain/query` — 列表/分页查询条件
+
+| 项 | 约定 |
+|----|------|
+| **命名** | `XxxQuery`（不叫 `XxxQueryParam` 以免与 `param` 混淆）。 |
+| **形态** | **`record` 优先**：不可变、线程安全、适合拼条件。 |
+| **工厂方法** | 字段数 ≥ 5 且常见调用只带少数维度时，**必须**提供 `ofTenant` / `ofDefinition` 等静态工厂（见 **§8.1**）。 |
+| **分页** | 统一携带 `PageRequest`（或模块内等价的分页值对象），命名字段建议 `pageRequest`。 |
+
+#### 8.2.4 `domain/command` — 用例级输入（编排 / 触发 / 控制台动作）
+
+| 项 | 约定 |
+|----|------|
+| **命名** | `XxxCommand`，表达一次业务动作（提交补偿、治理任务等）。 |
+| **形态** | **`record` 优先**；字段多、调用方需按需缺省时用 **`@Builder` + record**（Java 16+ record 可用 `@Builder` on record 按项目统一风格，与现有 `CompensationSubmitCommand` 一致）。 |
+| **边界** | 从 Controller / Listener 入参组装为 Command，在 ApplicationService 入口消费；**不**直接下传到 Mapper。 |
+
+#### 8.2.5 `domain/param` — 单次持久化/领域操作参数束
+
+| 项 | 约定 |
+|----|------|
+| **命名** | `XxxParam`（如 `FinishTaskParam`、`XxxUpsertParam`）。 |
+| **形态** | **`class` + `@Getter` + `private final` + `@Builder`** 为主，便于实现 `LocalizedErrorCarrier` 等接口、且与 MyBatis `@Param` 属性映射习惯一致。 |
+| **与 Command 区别** | **Command** = 用例边界；**Param** = **单次** `update`/`insert`/领域方法参数聚合，字段更贴近 SQL 列或存储过程语义。 |
+| **不可变** | 字段 `final`，无 setter；禁止在 Mapper 调用返回后再改 Param 实例。 |
+
+#### 8.2.6 `domain/view` — 只读查询投影（Console 等）
+
+| 项 | 约定 |
+|----|------|
+| **命名** | `XxxView`，按业务场景分子包（如 `view/dashboard`、`view/cluster`、`view/meta`）。 |
+| **形态** | **`record` 优先**；MyBatis `resultType`/Constructor 映射简单。 |
+| **边界** | 不写回业务表；不含业务方法，仅承载展示/报表列。 |
+
+#### 8.2.7 Orchestrator 专有子域（可长期保留在 `domain` 下）
+
+| 子包 | 用途 | 形态建议 |
+|------|------|----------|
+| **`pipeline`** | Pipeline 定义、步骤注册、执行上下文 | **定义/配置加载结果**可用 `@Data class`（字段需陆续填充）；**窄元组**（如步骤键、阶段结果）用 `record`。接口 + 实现（`PipelineExecutor`）可同包。 |
+| **`scheduler`** | 资源调度决策、配额策略 | 决策对象多为「多字段、逐步填空」：`@Data class` 更常见；策略枚举/纯函数放 `common` 若跨模块复用。 |
+| **`statemachine`** | 状态迁移表、状态机描述 | **迁移边、小事件**：`record`；**有行为的机**可用 `class`。 |
+| **`value`** | DB 语义包装（如 JSONB 原始串） | **`final class`** + 静态 `of` + 正确 `equals`/`hashCode`，避免与 `String` 混用语义。 |
+
+#### 8.2.8 Worker 模块 `.../domain`（非多子包时）
+
+| 项 | 约定 |
+|----|------|
+| **命名** | 阶段/步骤结果：`XxxStageResult`、`XxxStepContext` 等，后缀表达生命周期阶段。 |
+| **形态** | **`record` 优先**（Worker 热路径短生命周期对象）。 |
+| **膨胀时** | 再行拆 `domain/step` / `domain/model` 子包，避免单文件堆积。 |
+
+#### 8.2.9 自检清单（PR / 重构）
+
+- [ ] 新业务表映射类是否落在 `domain/entity` 且以 `Entity` 结尾？
+- [ ] `domain/query` 宽表条件是否已有工厂方法，避免调用处一长串 `null`？
+- [ ] Application **Command** 与 Mapper **Param** 是否未混在同一类型里？
+- [ ] `domain/view` 是否保持无写模型逻辑、无对 `entity` 的回写依赖？
+- [ ] 新增 `*Record` **类名**仅用于非持久化语义时，是否避免与「表行」误命名冲突（表行请用 `Entity`）？
+
 ---
 
 ## 9. 持久层规范
@@ -342,20 +427,20 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 | 场景 | 技术 | 说明 |
 |------|------|------|
-| 配置态（Console） | Spring Data JDBC | Repository 接口 + `@Query` |
-| 运行态（Orchestrator/Worker） | MyBatis | XML Mapper |
-| **禁止** | JPA / Hibernate | 整个项目禁用 |
+| 业务表 CRUD / CAS / 复杂 SQL | **MyBatis** | `mapper/*.java` + `resources/mapper/*.xml` |
+| 锁表、极薄支撑查询 | `JdbcTemplate` | 非默认业务持久化手段 |
+| **禁止** | JPA / Hibernate / **Spring Data JDBC** | 不得 `spring-boot-starter-data-jdbc`、`@EnableJdbcRepositories`、`CrudRepository` |
 
-### 9.2 Spring Data JDBC 约定
+### 9.2 实体与命名
 
-- 实体类必须标注 `@Id` + `@Table("schema.table_name")`
-- 查询投影使用 `interface`（getter 风格：`getXxx()`）
-- Repository 继承 `Repository<Entity, Long>` 或 `CrudRepository`
+- 表行映射类型放在 `domain/entity`，类名 **`*Entity` 后缀**（与 CLAUDE.md / ADR-001 一致）。
+- 可为不可变 **`record`**（配合 `resultMap` + `<constructor>`）或 **`@Data` class**（可变运行态行）；**禁止**再用 `*Record` 后缀区分「配置态」。
+- **同一表、同一写路径**只能有一个主入口：禁止 **Mapper 写 + 自建 Repository 写** 或历史意义上的 **Repository + Mapper 双写**。
 
 ### 9.3 MyBatis 约定
 
-- Mapper XML 放在 `classpath:mapper/*.xml`
-- type-aliases-package 指向 domain 包
+- Mapper XML 放在 `classpath:mapper/*.xml`（或模块约定路径）
+- `type-aliases-package` 指向 domain 包
 
 ---
 
@@ -521,7 +606,7 @@ public record ConsoleProperties(
 **动态配置标准链路**（任何"运行时改 + 立即生效"需求按此串）：
 
 1. DB 表（权威源）
-2. MyBatis / Spring Data JDBC 仓储读取
+2. MyBatis Mapper 读取
 3. 应用内 cache（自建 Redis cache 或 `@Cacheable`）
 4. Console UI / Ops 端点改 DB → 调 `/api/console/ops/cache/evict-*` 触发 Redis pub/sub
 5. 多实例订阅 channel，本地 cache 失效后下次读重新加载
@@ -592,7 +677,8 @@ assertThat(list).hasSize(3).extracting("jobCode").contains("JOB_A");
 | 接口 | `XxxService` | `TriggerService` |
 | 默认实现 | `DefaultXxxService` | `DefaultTriggerService` |
 | Controller | `XxxController` | `ConsoleJobController` |
-| Repository | `XxxRepository` | `ConsoleDashboardQueryRepository` |
+| MyBatis Mapper | `XxxMapper` | `JobInstanceMapper` |
+| 自研仓储（**非** Spring Data `Repository` 接口） | `XxxRepository` | `FileGovernanceRepository` |
 | 配置类 | `XxxConfiguration` | `ConsoleKafkaConfiguration` |
 | Properties | `XxxProperties` | `WorkerLeaseProperties` |
 | 异常处理器 | `XxxApiExceptionHandler` | `ConsoleApiExceptionHandler` |
@@ -617,7 +703,7 @@ assertThat(list).hasSize(3).extracting("jobCode").contains("JOB_A");
 2. **Orchestrator 是唯一状态主机**；Worker 不能直接改写 `job_instance` / `workflow_run` / `workflow_node_run`
 3. **outbox_event 必须与任务状态写入处于同一事务**
 4. **Worker 执行前必须先 CLAIM**，不能绕过
-5. **禁止 JPA/Hibernate**；持久层 MyBatis（运行态）/ Spring Data JDBC（配置态）不混用
+5. **禁止 JPA/Hibernate** 与 **Spring Data JDBC**；持久层 **统一 MyBatis**（同一写路径禁止双入口，见 §9）
 
 ---
 

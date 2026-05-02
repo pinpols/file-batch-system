@@ -1,6 +1,8 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import com.example.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
+import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -31,26 +33,26 @@ public interface WorkerRegistryMapper {
    * com.example.batch.orchestrator.infrastructure.scheduler.DefaultWorkerSelector} 静默把该 worker
    * 视为"无能力"跳过，建议由审计调度器定期暴露。
    */
-  List<InvalidCapabilityTagsRecord> selectInvalidCapabilityTags();
+  List<InvalidCapabilityTagsParam> selectInvalidCapabilityTags();
 
   // ── 替代原 WorkerRegistryRepository 的查询方法（运行态走 MyBatis 闭环 3/3） ─────────────
 
   /** 按 (tenant_id, worker_code) unique constraint 单行查询。 */
-  WorkerRegistryRecord selectByTenantAndWorkerCode(
+  WorkerRegistryEntity selectByTenantAndWorkerCode(
       @Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
 
   /** 按租户 + 状态过滤；用于 selector / snapshot service / drain timeout 等。 */
-  List<WorkerRegistryRecord> selectByTenantAndStatus(
+  List<WorkerRegistryEntity> selectByTenantAndStatus(
       @Param("tenantId") String tenantId, @Param("status") String status);
 
   /** 按租户 + worker_group + 状态过滤；用于 selector 在 group 维度选 worker。 */
-  List<WorkerRegistryRecord> selectByTenantAndWorkerGroupAndStatus(
+  List<WorkerRegistryEntity> selectByTenantAndWorkerGroupAndStatus(
       @Param("tenantId") String tenantId,
       @Param("workerGroup") String workerGroup,
       @Param("status") String status);
 
   /** 跨租户按状态扫描（如 drain timeout 调度器扫所有 DRAINING worker）。 */
-  List<WorkerRegistryRecord> selectByStatus(@Param("status") String status);
+  List<WorkerRegistryEntity> selectByStatus(@Param("status") String status);
 
   long countByTenantAndStatus(@Param("tenantId") String tenantId, @Param("status") String status);
 
@@ -65,7 +67,7 @@ public interface WorkerRegistryMapper {
    *
    * @return 实际写入行数（0 表示并发已被另一节点抢先创建）
    */
-  int insert(WorkerRegistryRecord record);
+  int insert(WorkerRegistryEntity record);
 
   /**
    * register / status / drain 等更新路径的统一 upsert：按 id 全字段覆盖 status / heartbeat_at / current_load /
@@ -75,13 +77,13 @@ public interface WorkerRegistryMapper {
    *
    * @return 影响行数（0 表示行不存在）
    */
-  int updateById(WorkerRegistryRecord record);
+  int updateById(WorkerRegistryEntity record);
 
   /**
    * 测试夹具用 SDJ-like 等价 save 助手：record.id() 为空时走 {@link #insert} + 重新 select 拿到带 id 的版本， 否则走 {@link
    * #updateById}。仅供 integration / test fixture 使用，不要在生产路径调用（生产 callsite 应明确知道走的是新建还是更新，调对应方法语义更清晰）。
    */
-  default WorkerRegistryRecord saveLikeSdj(WorkerRegistryRecord record) {
+  default WorkerRegistryEntity saveLikeSdj(WorkerRegistryEntity record) {
     if (record.id() == null) {
       insert(record);
       return selectByTenantAndWorkerCode(record.tenantId(), record.workerCode());

@@ -8,7 +8,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
@@ -45,11 +45,11 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
   @Override
   @Transactional
-  public WorkerRegistryRecord startDrain(
+  public WorkerRegistryEntity startDrain(
       String tenantId, String workerCode, Integer timeoutSeconds) {
     validateTenant(tenantId);
     Guard.requireText(workerCode, "workerCode is required");
-    WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
+    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
     if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
     }
@@ -67,7 +67,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
   @Override
   @Transactional
-  public WorkerRegistryRecord forceOffline(String tenantId, String workerCode) {
+  public WorkerRegistryEntity forceOffline(String tenantId, String workerCode) {
     validateTenant(tenantId);
     requireRegistry(tenantId, workerCode);
     takeoverTasks(tenantId, workerCode);
@@ -76,9 +76,9 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
   @Override
   @Transactional
-  public WorkerRegistryRecord takeover(String tenantId, String workerCode) {
+  public WorkerRegistryEntity takeover(String tenantId, String workerCode) {
     validateTenant(tenantId);
-    WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
+    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
     if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
     }
@@ -100,7 +100,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     if (!Texts.hasText(tenantId) || !Texts.hasText(workerCode)) {
       return;
     }
-    WorkerRegistryRecord registry =
+    WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     if (registry == null || !WorkerRegistryStatus.DRAINING.code().equals(registry.status())) {
       return;
@@ -130,13 +130,13 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     }
   }
 
-  private WorkerRegistryRecord markDecommissioned(String tenantId, String workerCode) {
+  private WorkerRegistryEntity markDecommissioned(String tenantId, String workerCode) {
     requireRegistry(tenantId, workerCode);
     workerRegistryMapper.markDecommissioned(tenantId, workerCode);
     return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
   }
 
-  private WorkerRegistryRecord requireRegistry(String tenantId, String workerCode) {
+  private WorkerRegistryEntity requireRegistry(String tenantId, String workerCode) {
     return Guard.requireFound(
         workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode),
         "worker not registered");

@@ -12,7 +12,7 @@ import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
@@ -425,7 +425,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
     }
-    JobDefinitionRecord jobDefinitionRecord = jobDefinitionMapper.selectById(jobDefinitionId);
+    JobDefinitionEntity jobDefinitionRecord = jobDefinitionMapper.selectById(jobDefinitionId);
     if (jobDefinitionRecord == null) {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());

@@ -1,7 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
-import com.example.batch.console.repository.WebhookDeliveryLogInsertParam;
+import com.example.batch.console.domain.param.WebhookDeliveryLogInsertParam;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

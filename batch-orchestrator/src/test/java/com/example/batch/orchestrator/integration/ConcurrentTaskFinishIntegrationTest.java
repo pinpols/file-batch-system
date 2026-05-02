@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.mapper.FinishTaskParam;
+import com.example.batch.orchestrator.domain.param.FinishTaskParam;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.util.ArrayList;

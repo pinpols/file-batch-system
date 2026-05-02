@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -43,8 +43,8 @@ public class WorkerRegistryCache {
     this.properties = properties;
   }
 
-  public List<WorkerRegistryRecord> getOrLoad(
-      String tenantId, String workerGroup, Supplier<List<WorkerRegistryRecord>> loader) {
+  public List<WorkerRegistryEntity> getOrLoad(
+      String tenantId, String workerGroup, Supplier<List<WorkerRegistryEntity>> loader) {
     if (!properties.isEnabled()) {
       return loader.get();
     }
@@ -62,7 +62,7 @@ public class WorkerRegistryCache {
           workerGroup,
           ex.getMessage());
     }
-    List<WorkerRegistryRecord> fresh = loader.get();
+    List<WorkerRegistryEntity> fresh = loader.get();
     try {
       String json = objectMapper.writeValueAsString(toEntries(fresh));
       redis
@@ -87,9 +87,9 @@ public class WorkerRegistryCache {
     return value == null || value.isBlank() ? "_" : value.replace(':', '_');
   }
 
-  private static List<Entry> toEntries(List<WorkerRegistryRecord> records) {
+  private static List<Entry> toEntries(List<WorkerRegistryEntity> records) {
     List<Entry> entries = new ArrayList<>(records.size());
-    for (WorkerRegistryRecord r : records) {
+    for (WorkerRegistryEntity r : records) {
       Entry entry =
           Entry.builder()
               .id(r.id())
@@ -111,11 +111,11 @@ public class WorkerRegistryCache {
     return entries;
   }
 
-  private static List<WorkerRegistryRecord> toRecords(List<Entry> entries) {
-    List<WorkerRegistryRecord> records = new ArrayList<>(entries.size());
+  private static List<WorkerRegistryEntity> toRecords(List<Entry> entries) {
+    List<WorkerRegistryEntity> records = new ArrayList<>(entries.size());
     for (Entry e : entries) {
       records.add(
-          new WorkerRegistryRecord(
+          new WorkerRegistryEntity(
               e.id,
               e.tenantId,
               e.workerCode,

@@ -3,8 +3,10 @@ package com.example.batch.console.domain.entity;
 import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.time.Instant;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class JobStepInstanceEntity extends AbstractLocalizedErrorEntity {
 
   private Long id;

@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.WorkerController;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.service.WorkerRegistryServerService;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ class WorkerControllerTest {
   void shouldBindDrainRequestTimeoutSeconds() throws Exception {
     when(workerDrainGovernanceService.startDrain(eq("t1"), eq("worker-1"), eq(1)))
         .thenReturn(
-            new WorkerRegistryRecord(
+            new WorkerRegistryEntity(
                 1L,
                 "t1",
                 "worker-1",

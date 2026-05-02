@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.util.Map;
 
 /**
@@ -12,5 +12,5 @@ public interface PartitionCountResolver {
 
   /** 能解析时返回正整数分区数，不适用时返回 {@code 0}。 */
   int resolve(
-      JobDefinitionRecord jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy);
+      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy);
 }

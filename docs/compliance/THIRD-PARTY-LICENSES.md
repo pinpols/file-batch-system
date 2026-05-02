@@ -24,7 +24,7 @@ mvn -P compliance cyclonedx:makeAggregateBom
 
 | License family | Representative components |
 |---|---|
-| Apache License 2.0 | Spring Boot, Spring Framework, Spring Kafka, Spring Data JDBC, Spring Data Redis, Spring Security, Spring AI, Flyway, MyBatis starter, Hibernate Validator, MinIO Java SDK, OkHttp, Apache POI, JSqlParser, ShedLock, Micrometer, OpenTelemetry, Testcontainers, WireMock, GreenMail |
+| Apache License 2.0 | Spring Boot, Spring Framework, Spring Kafka, Spring Data Redis, Spring Security, Spring AI, Flyway, MyBatis starter, Hibernate Validator, MinIO Java SDK, OkHttp, Apache POI, JSqlParser, ShedLock, Micrometer, OpenTelemetry, Testcontainers, WireMock, GreenMail |
 | MIT License | Project Lombok, SLF4J, Mockito |
 | BSD 2-Clause | PostgreSQL JDBC Driver |
 | BSD 3-Clause | JSch (mwiede fork) |
@@ -41,7 +41,6 @@ These are the main runtime-facing third-party components currently used by the p
 | Spring Boot | 4.0.3 | Apache-2.0 | all | Parent BOM |
 | Spring Framework | managed by Spring Boot 4.0.3 | Apache-2.0 | all | Transitive |
 | Spring Kafka | managed by Spring Boot 4.0.3 | Apache-2.0 | orchestrator, worker-core, workers | Runtime messaging |
-| Spring Data JDBC | managed by Spring Boot 4.0.3 | Apache-2.0 | orchestrator, console-api | Configuration-layer persistence |
 | Spring Data Redis (Lettuce) | managed by Spring Boot 4.0.3 | Apache-2.0 | orchestrator, console-api | 分布式缓存、SSE 广播 |
 | Spring Security | managed by Spring Boot 4.0.3 | Apache-2.0 | console-api | Console 鉴权 |
 | Spring Security OAuth2 JOSE | managed by Spring Boot 4.0.3 | Apache-2.0 | console-api | JWT Token 签发/验签 |

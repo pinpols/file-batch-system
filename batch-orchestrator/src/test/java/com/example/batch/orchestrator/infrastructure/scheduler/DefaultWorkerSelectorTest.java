@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -57,7 +57,7 @@ class DefaultWorkerSelectorTest {
 
   @Test
   void matchesWhenQueueHasNoTag() {
-    WorkerRegistryRecord worker = worker("w-1", null, null);
+    WorkerRegistryEntity worker = worker("w-1", null, null);
     stubCandidates(List.of(worker));
 
     WorkerRouteModel route = selector.select(request(), queue(null), 5);
@@ -68,7 +68,7 @@ class DefaultWorkerSelectorTest {
 
   @Test
   void matchesWhenQueueTagEqualsWorkerSingleTag() {
-    WorkerRegistryRecord worker = worker("w-1", "report", null);
+    WorkerRegistryEntity worker = worker("w-1", "report", null);
     stubCandidates(List.of(worker));
 
     WorkerRouteModel route = selector.select(request(), queue("report"), 5);
@@ -79,7 +79,7 @@ class DefaultWorkerSelectorTest {
 
   @Test
   void matchesWhenQueueTagHitsCapabilityTagsArray() {
-    WorkerRegistryRecord worker =
+    WorkerRegistryEntity worker =
         worker("w-1", null, new JsonbString("[\"report\", \"workflow\"]"));
     stubCandidates(List.of(worker));
 
@@ -91,7 +91,7 @@ class DefaultWorkerSelectorTest {
 
   @Test
   void capabilityTagsMatchIsCaseInsensitive() {
-    WorkerRegistryRecord worker = worker("w-1", null, new JsonbString("[\"Report\"]"));
+    WorkerRegistryEntity worker = worker("w-1", null, new JsonbString("[\"Report\"]"));
     stubCandidates(List.of(worker));
 
     WorkerRouteModel route = selector.select(request(), queue("REPORT"), 5);
@@ -101,7 +101,7 @@ class DefaultWorkerSelectorTest {
 
   @Test
   void returnsNoMatchWhenNeitherResourceTagNorCapabilityMatches() {
-    WorkerRegistryRecord worker = worker("w-1", "delivery", new JsonbString("[\"ingest\"]"));
+    WorkerRegistryEntity worker = worker("w-1", "delivery", new JsonbString("[\"ingest\"]"));
     stubCandidates(List.of(worker));
 
     WorkerRouteModel route = selector.select(request(), queue("report"), 5);
@@ -112,7 +112,7 @@ class DefaultWorkerSelectorTest {
 
   @Test
   void malformedCapabilityTagsJsonDoesNotCrashSelector() {
-    WorkerRegistryRecord worker = worker("w-1", null, new JsonbString("{not-an-array}"));
+    WorkerRegistryEntity worker = worker("w-1", null, new JsonbString("{not-an-array}"));
     stubCandidates(List.of(worker));
 
     WorkerRouteModel route = selector.select(request(), queue("report"), 5);
@@ -120,7 +120,7 @@ class DefaultWorkerSelectorTest {
     assertThat(route.getAvailable()).isFalse();
   }
 
-  private void stubCandidates(List<WorkerRegistryRecord> candidates) {
+  private void stubCandidates(List<WorkerRegistryEntity> candidates) {
     when(workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
             eq(TENANT), eq(GROUP), eq(WorkerRegistryStatus.ONLINE.code())))
         .thenReturn(candidates);
@@ -134,8 +134,8 @@ class DefaultWorkerSelectorTest {
     return req;
   }
 
-  private static ResourceQueueRecord queue(String resourceTag) {
-    return new ResourceQueueRecord(
+  private static ResourceQueueEntity queue(String resourceTag) {
+    return new ResourceQueueEntity(
         1L,
         TENANT,
         "export_queue",
@@ -155,9 +155,9 @@ class DefaultWorkerSelectorTest {
         Boolean.TRUE);
   }
 
-  private static WorkerRegistryRecord worker(
+  private static WorkerRegistryEntity worker(
       String code, String resourceTag, JsonbString capabilityTags) {
-    return new WorkerRegistryRecord(
+    return new WorkerRegistryEntity(
         1L,
         TENANT,
         code,

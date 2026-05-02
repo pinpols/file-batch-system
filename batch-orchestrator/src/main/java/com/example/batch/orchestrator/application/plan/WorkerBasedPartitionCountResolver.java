@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.application.plan;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
 
   @Override
   public int resolve(
-      JobDefinitionRecord jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
     long onlineWorkerCount = resolveOnlineWorkerCount(jobDefinition, params);
     if (onlineWorkerCount <= 0) {
       return 0;
@@ -37,7 +37,7 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
   }
 
   private long resolveOnlineWorkerCount(
-      JobDefinitionRecord jobDefinition, Map<String, Object> params) {
+      JobDefinitionEntity jobDefinition, Map<String, Object> params) {
     if (jobDefinition == null || !Texts.hasText(jobDefinition.tenantId())) {
       return firstPositiveLong(params.get("onlineWorkerCount"), params.get("workerCount"));
     }

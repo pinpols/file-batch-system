@@ -277,7 +277,7 @@
   - `logging` — 结构化日志锚点
   - `plugin` — 插件接口族
   - `constants` — `BatchStatusConstants` / `CommonConstants`
-- 技术选型：Spring Boot 4.0.3 + MyBatis（运行态）+ Spring Data JDBC（配置态）+ Flyway + Kafka + Redis + MinIO
+- 技术选型：Spring Boot 4.0.3 + MyBatis + Flyway + Kafka + Redis + MinIO（首版骨架曾含 Spring Data JDBC，已于后续版本移除，现全平台统一 MyBatis）
 - 架构主链：`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`（文档化）
 - `AGENT.md` + `.env.example` + `.gitignore`
 - 477 文件 / 30430 行，奠定整体形状

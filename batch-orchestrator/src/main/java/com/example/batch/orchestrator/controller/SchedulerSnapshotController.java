@@ -2,7 +2,7 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
-import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
+import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,7 +27,7 @@ public class SchedulerSnapshotController {
   }
 
   @GetMapping("/snapshot/history")
-  public List<TenantSchedulerSnapshotRecord> history(
+  public List<TenantSchedulerSnapshotEntity> history(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "limit", defaultValue = "20") int limit) {
     return tenantSchedulerSnapshotService.history(tenantId, limit);

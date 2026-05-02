@@ -2,7 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
-import com.example.batch.console.repository.ArchivePolicyUpsertParam;
+import com.example.batch.console.domain.param.ArchivePolicyUpsertParam;
 import com.example.batch.console.service.ConsoleArchivePolicyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;

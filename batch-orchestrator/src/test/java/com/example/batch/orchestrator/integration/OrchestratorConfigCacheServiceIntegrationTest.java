@@ -6,14 +6,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.redis.BatchRedisKeys;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import com.example.batch.orchestrator.mapper.BatchWindowMapper;
-import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
-import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
+import com.example.batch.orchestrator.mapper.*;
 import com.example.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,11 +33,11 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   @Import({OrchestratorRedisSupport.class, OrchestratorConfigCacheService.class})
   static class TestApplication {}
 
-  @MockitoBean private JobDefinitionRepository jobDefinitionRepository;
+  @MockitoBean private JobDefinitionMapper jobDefinitionMapper;
   @MockitoBean private WorkflowDefinitionMapper workflowDefinitionMapper;
   @MockitoBean private BusinessCalendarMapper businessCalendarMapper;
   @MockitoBean private BatchWindowMapper batchWindowMapper;
-  @MockitoBean private TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+  @MockitoBean private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
 
   @Autowired private OrchestratorConfigCacheService configCacheService;
 
@@ -51,11 +47,11 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void cacheMissLoadsFromRepositoryAndPopulatesRedis() {
     String tenantId = "t-cache-" + System.nanoTime();
     String jobCode = "JOB-" + System.nanoTime();
-    JobDefinitionRecord record = jobDefinitionRecord(tenantId, jobCode);
-    when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(tenantId, jobCode, true))
+    JobDefinitionEntity record = jobDefinitionRecord(tenantId, jobCode);
+    when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
         .thenReturn(record);
 
-    JobDefinitionRecord result = configCacheService.findEnabledJobDefinition(tenantId, jobCode);
+    JobDefinitionEntity result = configCacheService.findEnabledJobDefinition(tenantId, jobCode);
 
     assertThat(result).isNotNull();
     assertThat(result.jobCode()).isEqualTo(jobCode);
@@ -67,23 +63,23 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void cacheHitSkipsRepository() {
     String tenantId = "t-hit-" + System.nanoTime();
     String jobCode = "JOB-HIT-" + System.nanoTime();
-    JobDefinitionRecord record = jobDefinitionRecord(tenantId, jobCode);
-    when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(tenantId, jobCode, true))
+    JobDefinitionEntity record = jobDefinitionRecord(tenantId, jobCode);
+    when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
         .thenReturn(record);
 
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // cache miss — populates
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // cache hit — skips repo
 
-    verify(jobDefinitionRepository, times(1))
-        .findFirstByTenantIdAndJobCodeAndEnabled(tenantId, jobCode, true);
+    verify(jobDefinitionMapper, times(1))
+        .selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
   }
 
   @Test
   void evictClearsRedisKeyAndNextCallHitsRepository() {
     String tenantId = "t-evict-" + System.nanoTime();
     String jobCode = "JOB-EVICT-" + System.nanoTime();
-    JobDefinitionRecord record = jobDefinitionRecord(tenantId, jobCode);
-    when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(tenantId, jobCode, true))
+    JobDefinitionEntity record = jobDefinitionRecord(tenantId, jobCode);
+    when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
         .thenReturn(record);
 
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // populates cache
@@ -94,12 +90,12 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
 
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // cache miss again
 
-    verify(jobDefinitionRepository, times(2))
-        .findFirstByTenantIdAndJobCodeAndEnabled(tenantId, jobCode, true);
+    verify(jobDefinitionMapper, times(2))
+        .selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
   }
 
-  private static JobDefinitionRecord jobDefinitionRecord(String tenantId, String jobCode) {
-    return new JobDefinitionRecord(
+  private static JobDefinitionEntity jobDefinitionRecord(String tenantId, String jobCode) {
+    return new JobDefinitionEntity(
         1L,
         tenantId,
         jobCode,

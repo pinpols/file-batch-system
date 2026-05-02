@@ -1,4 +1,4 @@
-package com.example.batch.console.mapper.query;
+package com.example.batch.console.domain.query;
 
 import com.example.batch.common.model.PageRequest;
 import java.time.Instant;

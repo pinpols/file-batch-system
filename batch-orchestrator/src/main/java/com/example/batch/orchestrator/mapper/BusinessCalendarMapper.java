@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,19 +10,19 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface BusinessCalendarMapper {
 
-  BusinessCalendarRecord selectFirstByTenantAndCodeAndEnabled(
+  BusinessCalendarEntity selectFirstByTenantAndCodeAndEnabled(
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,
       @Param("enabled") Boolean enabled);
 
-  List<BusinessCalendarRecord> selectByTenantAndEnabled(
+  List<BusinessCalendarEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  BusinessCalendarRecord selectById(@Param("id") Long id);
+  BusinessCalendarEntity selectById(@Param("id") Long id);
 
-  int insert(BusinessCalendarRecord record);
+  int insert(BusinessCalendarEntity record);
 
-  int update(BusinessCalendarRecord record);
+  int update(BusinessCalendarEntity record);
 
   int deleteById(@Param("id") Long id);
 }

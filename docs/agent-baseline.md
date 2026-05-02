@@ -196,7 +196,7 @@
 - MinIO
 - Flyway
 - MyBatis
-- Spring Data JDBC
+- `JdbcTemplate`（基础设施，非默认 CRUD）
 
 ### 4.1 明确禁止
 
@@ -277,59 +277,33 @@ Quartz 相关表只能放在 `quartz` schema，不要混入 `batch`。
 
 ## 7. 持久层策略固定
 
-### 7.1 Spring Data JDBC
+### 7.1 单一栈：MyBatis
 
-仅用于：
+- **所有**业务表（配置 / 定义 / 运行 / 实例）的 **主 CRUD 与复杂查询** 走 **`mapper/*.java` + `resources/mapper/*.xml`**（ADR-001）。
+- 表行映射类型放在 `domain/entity`，统一 **`*Entity` 后缀**（`record` 或 `@Data` class）；**禁止**用 `*Record` 后缀区分「配置态 vs 运行态」。
+- **禁止** `spring-boot-starter-data-jdbc`、`@EnableJdbcRepositories`、`extends CrudRepository`。
+- **`JdbcTemplate`** 仅 ShedLock、极薄支撑查询等；不作为默认业务 CRUD。
 
-- 简单配置类表
-- 定义类表
-- 小聚合对象
-- 后台管理类静态主数据
+### 7.2 MyBatis 必须覆盖的能力
 
-### 7.2 MyBatis
-
-必须用于：
-
-- 运行态表
-- 实例态表
-- 状态推进 SQL
-- 分片、重试、死信相关表
-- 文件链路相关表
-- 审计相关表
-- 复杂查询
-- 批量更新 / 批量扫描
+含：状态推进 SQL、CAS、分片/重试/死信、文件链路、审计、报表、控制台配置维护涉及的表——**一律 Mapper**，不按「配置态例外」走第二套 ORM。
 
 ### 7.3 禁止项
 
-- 禁止在同一核心主写路径上混用 Repository 和 Mapper
-- 禁止让同一语义对象同时存在无边界的 Repository 与 Mapper 双入口
-- 禁止把 MyBatis 实体、查询对象继续放在 `mapper` 包
+- 禁止同一 **表** / 同一 **写路径** 上 **Repository（Spring Data 意义）+ Mapper** 双写或双主入口。
+- 禁止把实体类放进 `mapper` 包（`mapper` 只放 Mapper **接口**）。
+- 禁止新建 `repository/*Repository.java` 作为 **Spring Data JDBC** 声明式仓库（历史已移除）。
 
 ### 7.4 MyBatis 目录规范固定
 
-- `mapper/*.java`：只放 MyBatis 接口
+- `mapper/*.java`：只放 MyBatis Mapper 接口
 - `resources/mapper/*.xml`：只放 MyBatis XML
-- `domain/entity`：放持久层实体
-- `domain/query`：放 MyBatis 查询对象
+- `domain/entity`：表行载体（`*Entity`）
+- `domain/query`：查询对象（多为 `record`）
 
-### 7.5 Spring Data JDBC 目录约定
+### 7.5 名为 `*Repository` 的自研类（非 Spring Data）
 
-Spring Data JDBC 实体统一放在 `domain/entity` 下，但类名必须使用 `*Record` 后缀，用于与 MyBatis 实体区分。
-
-具体约束：
-
-- `domain/entity/*Record`：Spring Data JDBC 实体
-- `domain/entity/*Entity`：MyBatis 实体
-- 不要把 Spring Data JDBC 实体放进 `mapper` 包
-- 不要把 MyBatis 实体改成 `Record` 后缀
-
-对于当前仓库已经存在的 Spring Data JDBC 结构，允许：
-
-- `repository/*Repository.java`
-- `repository/*` 聚合对象
-
-没有明确需求时，不要为了“更纯粹”去大规模重构现有 `repository` 包结构。
-如果后续要收敛命名，优先把 Spring Data JDBC 聚合对象逐步迁到 `domain/entity` 并改为 `*Record`，不要一次性大范围重命名。
+- 极少数聚合访问可保留类名 `*Repository`，但必须是 **普通 Spring `@Component` / 自建类**，**不是** `org.springframework.data.repository.Repository` 子类型，且 **不得** 与同表 Mapper 形成第二写路径。
 
 ---
 
@@ -458,7 +432,7 @@ Step 可声明：
 - `mapper`
   - MyBatis 接口
 - `repository`
-  - Spring Data JDBC Repository 与当前既有聚合对象
+  - **禁止** 新增 Spring Data JDBC 声明式仓库；仅历史/自研 **非** `CrudRepository` 的聚合访问类可保留在此包名（须与 §7 一致）
 - `support`
   - 轻量技术辅助、解析器、帮助类、门面小组件
 
@@ -533,7 +507,7 @@ Step 可声明：
 - 跨模块不可变值对象、稳定消息模型、简单不可变返回对象：允许使用 `record`
 - 同一类目的对象不要半数用 `record`、半数用 Lombok class
 - `@Builder` 默认只给 `DTO`、`Command`、`Query`、`Response`、复杂装配对象使用
-- MyBatis 实体、Spring Data JDBC 实体默认不强制加 `@Builder`
+- MyBatis 映射实体（`*Entity`）默认不强制加 `@Builder`
 - 如果一个对象的职责是持久化映射，优先保持构造和字段显式，不要为了创建方便把它改成值对象风格
 
 ### 11.3 依赖注入约束

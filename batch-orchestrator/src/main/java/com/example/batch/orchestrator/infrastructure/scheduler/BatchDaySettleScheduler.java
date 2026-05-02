@@ -7,8 +7,8 @@ import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
-import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
+import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
@@ -67,14 +67,14 @@ public class BatchDaySettleScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    List<BatchDayInstanceRecord> candidates =
+    List<BatchDayInstanceEntity> candidates =
         batchDayInstanceMapper.selectByDayStatusIn(TRACKED_STATUSES);
     if (candidates == null || candidates.isEmpty()) {
       return;
     }
     Instant now = Instant.now();
     BatchDaySettleScheduler self = selfProvider.getObject();
-    for (BatchDayInstanceRecord candidate : candidates) {
+    for (BatchDayInstanceEntity candidate : candidates) {
       if (candidate == null || candidate.id() == null) {
         continue;
       }
@@ -99,7 +99,7 @@ public class BatchDaySettleScheduler {
    * <p>必须是 {@code public}，且通过 self-proxy 调用才能被 Spring AOP 织入事务。
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void settleOne(BatchDayInstanceRecord candidate, Instant now) {
+  public void settleOne(BatchDayInstanceEntity candidate, Instant now) {
     BatchDayInstanceMetrics metrics =
         jobInstanceMapper.selectBatchDayMetrics(
             candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
@@ -111,7 +111,7 @@ public class BatchDaySettleScheduler {
     long totalCount = value(metrics.getTotalCount());
     if (activeCount > 0) {
       if (!"IN_FLIGHT".equals(candidate.dayStatus())) {
-        BatchDayInstanceRecord to = candidate.withDayStatus("IN_FLIGHT", now);
+        BatchDayInstanceEntity to = candidate.withDayStatus("IN_FLIGHT", now);
         casUpdate(to);
         appendBatchDayAuditLog(candidate, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES");
       }
@@ -121,7 +121,7 @@ public class BatchDaySettleScheduler {
       return;
     }
     if (failedCount > 0L) {
-      BatchDayInstanceRecord to = candidate.withSettled("FAILED", now, now);
+      BatchDayInstanceEntity to = candidate.withSettled("FAILED", now, now);
       casUpdate(to);
       appendBatchDayAuditLog(candidate, to, "BATCH_DAY_FAILED");
       driveCatchUp(candidate, now);
@@ -132,7 +132,7 @@ public class BatchDaySettleScheduler {
           candidate.bizDate());
       return;
     }
-    BatchDayInstanceRecord to = candidate.withSettled("SETTLED", now, now);
+    BatchDayInstanceEntity to = candidate.withSettled("SETTLED", now, now);
     casUpdate(to);
     appendBatchDayAuditLog(candidate, to, "BATCH_DAY_SETTLED");
     log.info(
@@ -147,7 +147,7 @@ public class BatchDaySettleScheduler {
   }
 
   /** 替换原 {@code repository.save}：CAS 失败抛 OLF，被外层循环 catch 跳过本条候选下 tick 重扫。 */
-  private void casUpdate(BatchDayInstanceRecord record) {
+  private void casUpdate(BatchDayInstanceEntity record) {
     int rows = batchDayInstanceMapper.updateWithCas(record);
     if (rows == 0) {
       throw new OptimisticLockingFailureException(
@@ -158,8 +158,8 @@ public class BatchDaySettleScheduler {
     }
   }
 
-  private void driveCatchUp(BatchDayInstanceRecord batchDay, Instant now) {
-    BusinessCalendarRecord calendar =
+  private void driveCatchUp(BatchDayInstanceEntity batchDay, Instant now) {
+    BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(
             batchDay.tenantId(), batchDay.calendarCode());
     if (calendar == null
@@ -218,7 +218,7 @@ public class BatchDaySettleScheduler {
   }
 
   private void appendBatchDayAuditLog(
-      BatchDayInstanceRecord from, BatchDayInstanceRecord to, String reasonCode) {
+      BatchDayInstanceEntity from, BatchDayInstanceEntity to, String reasonCode) {
     JobExecutionLogEntity audit = new JobExecutionLogEntity();
     audit.setTenantId(from.tenantId());
     audit.setJobInstanceId(null);
@@ -256,7 +256,7 @@ public class BatchDaySettleScheduler {
   }
 
   private String buildCatchUpDedupKey(
-      BatchDayInstanceRecord batchDay, JobInstanceEntity candidate) {
+      BatchDayInstanceEntity batchDay, JobInstanceEntity candidate) {
     return batchDay.tenantId()
         + ":batch-day-catchup:"
         + batchDay.calendarCode()
@@ -267,9 +267,9 @@ public class BatchDaySettleScheduler {
   }
 
   private Map<String, Object> buildCatchUpParams(
-      BatchDayInstanceRecord batchDay,
+      BatchDayInstanceEntity batchDay,
       JobInstanceEntity candidate,
-      BusinessCalendarRecord calendar,
+      BusinessCalendarEntity calendar,
       Instant now) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchDayCatchUp", true);

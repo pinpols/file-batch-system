@@ -3,9 +3,9 @@ package com.example.batch.orchestrator.service;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
 import com.example.batch.orchestrator.domain.value.JsonbString;
-import com.example.batch.orchestrator.mapper.TouchHeartbeatParam;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -35,8 +35,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
   @Override
   @Transactional
-  public WorkerRegistryRecord register(WorkerHeartbeatDto request) {
-    WorkerRegistryRecord registry =
+  public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
+    WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
     String newStatus =
         resolveIncomingStatus(
@@ -55,7 +55,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
     if (registry == null) {
       registry =
-          new WorkerRegistryRecord(
+          new WorkerRegistryEntity(
               null,
               request.tenantId(),
               request.workerCode(),
@@ -75,11 +75,11 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
   @Override
   @Transactional
-  public WorkerRegistryRecord heartbeat(String workerCode, WorkerHeartbeatDto request) {
+  public WorkerRegistryEntity heartbeat(String workerCode, WorkerHeartbeatDto request) {
     if (request == null) {
       return null;
     }
-    WorkerRegistryRecord registry =
+    WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
     if (registry == null) {
       return register(request);
@@ -111,8 +111,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
   @Override
   @Transactional
-  public WorkerRegistryRecord updateStatus(String tenantId, String workerCode, String status) {
-    WorkerRegistryRecord registry =
+  public WorkerRegistryEntity updateStatus(String tenantId, String workerCode, String status) {
+    WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
     if (registry == null) {
       return null;
@@ -135,7 +135,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
    * MyBatis 替代原 Spring Data JDBC {@code repository.save}：id==null 走 insert（带 ON CONFLICT DO NOTHING
    * 防 UV 并发）；否则按 id 全字段 updateById。返回最新 DB 行（重新 selectByTenantAndWorkerCode 拿到带 id 的快照）。
    */
-  private WorkerRegistryRecord persist(WorkerRegistryRecord registry) {
+  private WorkerRegistryEntity persist(WorkerRegistryEntity registry) {
     if (registry.id() == null) {
       workerRegistryMapper.insert(registry);
     } else {

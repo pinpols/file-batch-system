@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import com.example.batch.orchestrator.domain.query.WorkflowRunQuery;
 import java.time.Instant;
 import java.util.List;

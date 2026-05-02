@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.mapper;
+package com.example.batch.orchestrator.domain.param;
 
 import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;

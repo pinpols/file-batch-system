@@ -94,8 +94,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 |------|------|------|---------|------|
 | 框架 | Spring Boot | **4.0.3** | all | Parent BOM |
 | 语言 | Java | **25** | all | Records、Sealed Classes、Pattern Matching |
-| 持久化（定义层） | Spring Data JDBC | managed | orchestrator, console-api | `*Record` 对象，读多写少 |
-| 持久化（运行时层） | MyBatis | 4.0.0 | orchestrator, workers, trigger, console-api | `*Entity` 对象，CAS 条件更新 |
+| 持久化（PG） | MyBatis Spring Boot Starter | 4.0.0 | orchestrator, workers, trigger, console-api | 配置态与运行态同一套 Mapper；行载体 `domain/entity/*Entity` |
 | 数据库迁移 | Flyway | managed | all | PostgreSQL dialect |
 | 消息 | Apache Kafka | 4.1.2 | orchestrator, worker-core, workers | Outbox 模式解耦 |
 | 对象存储 | MinIO SDK | 8.6.0 | common, orchestrator, workers | — |
@@ -332,7 +331,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 | ADR | 标题 | 状态 | 决策日期 |
 |-----|------|------|---------|
-| [ADR-001](./adr/ADR-001-dual-orm.md) | MyBatis + Spring Data JDBC 双 ORM（不用 JPA） | Accepted | 2026-03-01 |
+| [ADR-001](./adr/ADR-001-dual-orm.md) | 全模块 MyBatis + JdbcTemplate（不用 JPA / Spring Data JDBC） | Accepted | 2026-03-01 |
 | [ADR-002](./adr/ADR-002-transactional-outbox.md) | 事务发件箱模式（不直接发 Kafka，不用 CDC） | Accepted | 2026-03-01 |
 | [ADR-003](./adr/ADR-003-launch-t1-t2-split.md) | launch() T1/T2 事务拆分与 CGLIB 自注入 | Accepted | 2026-03-25 |
 | [ADR-004](./adr/ADR-004-worker-lifecycle-template.md) | Worker 生命周期模板方法（AbstractWorkerLoop） | Accepted | 2026-03-25 |

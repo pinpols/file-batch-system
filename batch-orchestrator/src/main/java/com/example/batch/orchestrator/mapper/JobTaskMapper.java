@@ -2,6 +2,9 @@ package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.example.batch.orchestrator.domain.param.AssignWorkerParam;
+import com.example.batch.orchestrator.domain.param.FinishTaskParam;
+import com.example.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;

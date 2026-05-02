@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import com.example.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

@@ -7,6 +7,8 @@ import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicatio
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
+import com.example.batch.console.domain.param.WorkflowEdgeUpsertParam;
+import com.example.batch.console.domain.param.WorkflowNodeUpsertParam;
 import com.example.batch.console.domain.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.query.WorkflowNodeQuery;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
@@ -14,8 +16,6 @@ import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
-import com.example.batch.console.mapper.param.WorkflowEdgeUpsertParam;
-import com.example.batch.console.mapper.param.WorkflowNodeUpsertParam;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.web.response.ConsoleWorkflowEdgeResponse;

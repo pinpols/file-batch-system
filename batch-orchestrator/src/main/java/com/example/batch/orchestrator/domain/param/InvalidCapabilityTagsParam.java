@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class InvalidCapabilityTagsRecord {
+public class InvalidCapabilityTagsParam {
   private String tenantId;
   private String workerCode;
   private String rawValue;

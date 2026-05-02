@@ -1,6 +1,9 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
+import com.example.batch.orchestrator.domain.param.ClaimPartitionParam;
+import com.example.batch.orchestrator.domain.param.CountActiveByGroupParam;
+import com.example.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import java.time.Instant;
 import java.util.List;

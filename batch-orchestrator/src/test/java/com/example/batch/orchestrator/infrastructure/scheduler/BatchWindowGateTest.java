@@ -13,7 +13,7 @@ import com.example.batch.orchestrator.application.scheduler.PartitionThrottle;
 import com.example.batch.orchestrator.application.scheduler.PriorityScheduler;
 import com.example.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import com.example.batch.orchestrator.application.scheduler.WorkerSelector;
-import com.example.batch.orchestrator.domain.entity.BatchWindowRecord;
+import com.example.batch.orchestrator.domain.entity.BatchWindowEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
@@ -152,9 +152,9 @@ class BatchWindowGateTest {
     return r;
   }
 
-  private static BatchWindowRecord window(
+  private static BatchWindowEntity window(
       String outOfWindowAction, LocalTime start, LocalTime end) {
-    return new BatchWindowRecord(
+    return new BatchWindowEntity(
         1L,
         "tenant-window-test",
         "daily-window",

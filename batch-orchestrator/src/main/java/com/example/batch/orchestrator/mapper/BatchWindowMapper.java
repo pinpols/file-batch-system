@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.BatchWindowRecord;
+import com.example.batch.orchestrator.domain.entity.BatchWindowEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,19 +10,19 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface BatchWindowMapper {
 
-  BatchWindowRecord selectFirstByTenantAndCodeAndEnabled(
+  BatchWindowEntity selectFirstByTenantAndCodeAndEnabled(
       @Param("tenantId") String tenantId,
       @Param("windowCode") String windowCode,
       @Param("enabled") Boolean enabled);
 
-  List<BatchWindowRecord> selectByTenantAndEnabled(
+  List<BatchWindowEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  BatchWindowRecord selectById(@Param("id") Long id);
+  BatchWindowEntity selectById(@Param("id") Long id);
 
-  int insert(BatchWindowRecord record);
+  int insert(BatchWindowEntity record);
 
-  int update(BatchWindowRecord record);
+  int update(BatchWindowEntity record);
 
   int deleteById(@Param("id") Long id);
 }

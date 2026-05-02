@@ -18,7 +18,6 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -43,7 +42,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
           .ManagementWebSecurityAutoConfiguration.class,
     })
 @EnableKafka
-@EnableJdbcRepositories(basePackages = "com.example.batch.orchestrator.repository")
 @Import({
   E2ePlatformDataSourceConfiguration.class,
   E2eProcessWorkerDataSourceConfiguration.class,

@@ -2,9 +2,9 @@ package com.example.batch.orchestrator.infrastructure.quota;
 
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.QuotaProperties;
-import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
-import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
+import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
@@ -76,7 +76,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
 
   private int snapshotTenant(String tenantId) {
     int written = 0;
-    for (TenantQuotaPolicyRecord p :
+    for (TenantQuotaPolicyEntity p :
         tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
       written +=
           writeIfActive(
@@ -93,7 +93,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
               p.quotaResetPolicy(),
               p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit()));
     }
-    for (ResourceQueueRecord q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
+    for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
       written += writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
       // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
@@ -124,11 +124,11 @@ public class QuotaRuntimeStateSnapshotScheduler {
       return 0;
     }
     Instant now = Instant.now();
-    QuotaRuntimeStateRecord existing =
+    QuotaRuntimeStateEntity existing =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
     if (existing == null) {
-      QuotaRuntimeStateRecord toInsert =
-          new QuotaRuntimeStateRecord(
+      QuotaRuntimeStateEntity toInsert =
+          new QuotaRuntimeStateEntity(
               null,
               tenantId,
               scope,
@@ -144,7 +144,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
       quotaRuntimeStateMapper.insert(toInsert);
       return 1;
     }
-    QuotaRuntimeStateRecord toUpdate =
+    QuotaRuntimeStateEntity toUpdate =
         existing.withRefresh(
             snap.quotaResetPolicy(),
             snap.windowStartedAt(),

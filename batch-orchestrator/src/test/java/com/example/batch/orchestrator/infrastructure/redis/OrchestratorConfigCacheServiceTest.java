@@ -8,7 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.mapper.BatchWindowMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -62,10 +62,10 @@ class OrchestratorConfigCacheServiceTest {
 
   @Test
   void cacheHitReturnsValueWithoutCallingRepository() {
-    JobDefinitionRecord cached = jobDefinitionRecord("t1", "JOB1");
-    when(redis.getJson(anyString(), eq(JobDefinitionRecord.class))).thenReturn(cached);
+    JobDefinitionEntity cached = jobDefinitionRecord("t1", "JOB1");
+    when(redis.getJson(anyString(), eq(JobDefinitionEntity.class))).thenReturn(cached);
 
-    JobDefinitionRecord result = service.findEnabledJobDefinition("t1", "JOB1");
+    JobDefinitionEntity result = service.findEnabledJobDefinition("t1", "JOB1");
 
     assertThat(result).isSameAs(cached);
     verify(jobDefinitionMapper, never()).selectFirstByTenantAndCodeAndEnabled(any(), any(), any());
@@ -74,12 +74,12 @@ class OrchestratorConfigCacheServiceTest {
 
   @Test
   void cacheMissCallsRepositoryAndCachesResult() {
-    JobDefinitionRecord fromDb = jobDefinitionRecord("t1", "JOB2");
-    when(redis.getJson(anyString(), eq(JobDefinitionRecord.class))).thenReturn(null);
+    JobDefinitionEntity fromDb = jobDefinitionRecord("t1", "JOB2");
+    when(redis.getJson(anyString(), eq(JobDefinitionEntity.class))).thenReturn(null);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled("t1", "JOB2", true))
         .thenReturn(fromDb);
 
-    JobDefinitionRecord result = service.findEnabledJobDefinition("t1", "JOB2");
+    JobDefinitionEntity result = service.findEnabledJobDefinition("t1", "JOB2");
 
     assertThat(result).isSameAs(fromDb);
     verify(redis).setJson(anyString(), eq(fromDb), any(Duration.class));
@@ -92,8 +92,8 @@ class OrchestratorConfigCacheServiceTest {
     verify(redis).delete("config:t1:job-definition:JOB3");
   }
 
-  private static JobDefinitionRecord jobDefinitionRecord(String tenantId, String jobCode) {
-    return new JobDefinitionRecord(
+  private static JobDefinitionEntity jobDefinitionRecord(String tenantId, String jobCode) {
+    return new JobDefinitionEntity(
         1L, tenantId, jobCode, "Job", "IMPORT", "BIZ", "MANUAL", null, "UTC", "default", "default",
         null, null, "MANUAL", false, null, null, null, null, null, null, 5, null, 1, true, null,
         null, null);

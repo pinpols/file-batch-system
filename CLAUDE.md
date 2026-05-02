@@ -200,8 +200,9 @@ public enum XxxType implements DictEnum {
 - **Console-api 也不能直接 UPDATE/DELETE outbox_event**（runtime 状态表外延）；运维操作（cleanup / republish）必须经 `ConsoleOrchestratorProxyService` 转发到 orchestrator `/internal/outbox/*` 接口执行
 - outbox_event 必须与任务状态写入处于同一事务
 - Worker 执行前必须先 CLAIM，不能绕过
-- 禁止 JPA/Hibernate；持久层 MyBatis（运行态）/ Spring Data JDBC（配置态）不混用
-  - **Console-api 豁免**：console-api 因 read-write 混合（既读 runtime 状态表又写配置表）+ 复杂分页/聚合查询，配置表写入也使用 MyBatis（如 `secret_version` / `workflow_node` / `tenant_quota_policy` / `file_channel_config` / `pipeline_step_definition` / `alert_routing_config` / `calendar_holiday` / `config_change_log`）。orchestrator 内仍严格按运行态 MyBatis / 配置态 Spring Data JDBC 分层
+- 禁止 JPA/Hibernate；**全业务模块**持久层**统一 MyBatis**（运行态与配置态均 Mapper）+ `JdbcTemplate` 基础设施；**禁止** Spring Data JDBC（见 ADR-001）
+  - **`batch-console-api`** / **`batch-orchestrator`** / **`batch-trigger`** / **`batch-worker-*`** 均不引入 `spring-boot-starter-data-jdbc`
+  - 表行映射类型放在 `domain/entity`，统一 **`*Entity` 后缀**（`record` 或 `@Data` class）；**禁止**用 `*Record` 后缀区分技术栈；**同一表、同一写路径**禁止 Mapper 与 Spring Data `Repository` 双主入口
 - **读写分离仅 console-api 启用**；主链路（trigger / orchestrator / worker）严禁引入。原因：状态机依赖 read-after-write 强一致性（`INSERT job_instance` → 立即 `SELECT` 验证、worker `CLAIM` 后立即读自己的 lease），PG 异步流复制秒级延迟会引入 race condition；且这些模块写为主，读路径分离也无收益。详见 `docs/runbook/read-replica.md` §六。
 - **模块不得覆盖 batch-common AutoConfiguration 的基础设施 bean**（`taskScheduler` / `lockProvider` / 等）。要定制行为就提供扩展点 bean 让 AutoConfiguration 通过 `ObjectProvider` 注入（例：`SchedulerErrorHandlerConfiguration` 只暴露 `ErrorHandler` bean，不重新定义 `taskScheduler`）。重复 `@Bean` 同名定义会触发 `BeanDefinitionOverrideException` 启动失败。
 

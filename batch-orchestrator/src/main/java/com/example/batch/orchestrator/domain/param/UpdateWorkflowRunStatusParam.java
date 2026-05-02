@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.mapper;
+package com.example.batch.orchestrator.domain.param;
 
 import java.time.Instant;
 import java.util.Collection;

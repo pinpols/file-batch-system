@@ -68,7 +68,7 @@
         limit 1
     </select>
 
-    <insert id="upsertResourceQueue" parameterType="com.example.batch.console.mapper.param.ResourceQueueUpsertParam">
+    <insert id="upsertResourceQueue" parameterType="com.example.batch.console.domain.param.ResourceQueueUpsertParam">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,
             max_running_jobs, max_running_partitions, max_qps,

@@ -2,8 +2,8 @@ package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.model.WorkerRouteModel;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
-import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,9 +41,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
   @Override
   public SchedulePlan build(SchedulePlanCommand command) {
-    JobDefinitionRecord jobDefinition =
+    JobDefinitionEntity jobDefinition =
         configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
-    WorkflowDefinitionRecord workflowDefinition =
+    WorkflowDefinitionEntity workflowDefinition =
         configCacheService.findEnabledWorkflowDefinition(command.tenantId(), command.jobCode());
     Map<String, Object> planParams = mergePlanParams(jobDefinition, command.params());
 
@@ -85,7 +85,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
   }
 
   private Map<String, Object> mergePlanParams(
-      JobDefinitionRecord jobDefinition, Map<String, Object> runtimeParams) {
+      JobDefinitionEntity jobDefinition, Map<String, Object> runtimeParams) {
     Map<String, Object> merged = new LinkedHashMap<>();
     if (jobDefinition != null && jobDefinition.defaultParams() != null) {
       merged.putAll(jobDefinition.defaultParams());
@@ -96,7 +96,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     return merged;
   }
 
-  private int resolvePartitionCount(JobDefinitionRecord jobDefinition, Map<String, Object> params) {
+  private int resolvePartitionCount(JobDefinitionEntity jobDefinition, Map<String, Object> params) {
     ShardStrategy shardStrategy =
         jobDefinition == null
             ? ShardStrategy.NONE
@@ -139,7 +139,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
    * 当所有解析器均返回 {@code 0} 时，回退为 {@code 1}。
    */
   private int resolveDynamicPartitionCount(
-      JobDefinitionRecord jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
     Integer winnerCount = null;
     String winnerName = null;
     for (PartitionCountResolver resolver : dynamicResolvers) {

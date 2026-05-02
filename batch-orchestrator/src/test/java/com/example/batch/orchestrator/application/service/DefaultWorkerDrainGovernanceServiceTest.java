@@ -16,7 +16,7 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
@@ -65,7 +65,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldThrowWhenWorkerAlreadyDecommissionedOnStartDrain() {
-    WorkerRegistryRecord registry =
+    WorkerRegistryEntity registry =
         onlineWorker("t1", "w1")
             .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), Instant.now());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
@@ -75,11 +75,11 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldSetDrainingStatusWithDefaultTimeout() {
-    WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1");
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
     when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
-    WorkerRegistryRecord result = service.startDrain("t1", "w1", null);
+    WorkerRegistryEntity result = service.startDrain("t1", "w1", null);
 
     assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
     assertThat(result.drainStartedAt()).isNotNull();
@@ -89,7 +89,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldUseCustomTimeoutWhenProvided() {
-    WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1");
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
     when(workerRegistryMapper.updateById(any())).thenReturn(1);
 
@@ -114,8 +114,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldMarkDecommissionedAndTakeoverTasksOnForceOffline() {
-    WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-    WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1");
+    WorkerRegistryEntity decommissioned = registry.withDecommissioned(Instant.now());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
@@ -127,7 +127,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     task.setTenantId("t1");
     when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task));
 
-    WorkerRegistryRecord result = service.forceOffline("t1", "w1");
+    WorkerRegistryEntity result = service.forceOffline("t1", "w1");
 
     assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
     verify(retryGovernanceService).reclaimTask(eq("t1"), eq(100L), anyString());
@@ -135,8 +135,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldCompleteForceOfflineEvenWhenNoActiveTasks() {
-    WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-    WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1");
+    WorkerRegistryEntity decommissioned = registry.withDecommissioned(Instant.now());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
@@ -144,7 +144,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"))).thenReturn(1);
     when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
 
-    WorkerRegistryRecord result = service.forceOffline("t1", "w1");
+    WorkerRegistryEntity result = service.forceOffline("t1", "w1");
 
     assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
     verify(retryGovernanceService, never()).reclaimTask(anyString(), anyLong(), anyString());
@@ -194,7 +194,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldDoNothingWhenWorkerNotDrainingOnTakeover() {
-    WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1");
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     service.takeoverAfterDrainTimeout("t1", "w1");
@@ -204,7 +204,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldTakeoverAndDecommissionWhenDrainingWorkerFound() {
-    WorkerRegistryRecord registry =
+    WorkerRegistryEntity registry =
         onlineWorker("t1", "w1")
             .withDrain(
                 WorkerRegistryStatus.DRAINING.code(),
@@ -225,9 +225,9 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   @Test
   void shouldContinueTakeoverWhenOneTaskRetryFails() {
-    WorkerRegistryRecord registry =
+    WorkerRegistryEntity registry =
         onlineWorker("t1", "w1").withStatus(WorkerRegistryStatus.DRAINING.code(), Instant.now());
-    WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
+    WorkerRegistryEntity decommissioned = registry.withDecommissioned(Instant.now());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
@@ -253,8 +253,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
-  private static WorkerRegistryRecord onlineWorker(String tenantId, String workerCode) {
-    return new WorkerRegistryRecord(
+  private static WorkerRegistryEntity onlineWorker(String tenantId, String workerCode) {
+    return new WorkerRegistryEntity(
         null,
         tenantId,
         workerCode,

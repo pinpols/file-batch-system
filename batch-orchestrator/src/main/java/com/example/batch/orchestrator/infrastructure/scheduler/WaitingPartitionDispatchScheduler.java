@@ -17,15 +17,15 @@ import com.example.batch.orchestrator.application.service.OrchestratorJobMappers
 import com.example.batch.orchestrator.application.service.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.PartitionLifecycleService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.example.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -164,7 +164,7 @@ public class WaitingPartitionDispatchScheduler {
       log.debug("skip partitionId={}: job_instance missing", partition.getId());
       return null;
     }
-    JobDefinitionRecord jobDefinition =
+    JobDefinitionEntity jobDefinition =
         configCacheService.findEnabledJobDefinition(
             jobInstance.getTenantId(), jobInstance.getJobCode());
     ResourceSchedulingDecision decision =
@@ -285,7 +285,7 @@ public class WaitingPartitionDispatchScheduler {
       JobInstanceEntity jobInstance,
       JobPartitionEntity partition,
       JobTaskEntity task,
-      JobDefinitionRecord jobDefinition) {
+      JobDefinitionEntity jobDefinition) {
     ResourceSchedulingRequest request = new ResourceSchedulingRequest();
     request.setTenantId(jobInstance.getTenantId());
     request.setJobCode(jobInstance.getJobCode());

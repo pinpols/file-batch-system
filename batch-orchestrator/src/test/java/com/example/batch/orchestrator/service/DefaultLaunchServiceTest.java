@@ -19,11 +19,11 @@ import com.example.batch.orchestrator.application.service.OrchestratorJobMappers
 import com.example.batch.orchestrator.application.service.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.PartitionDispatchService;
 import com.example.batch.orchestrator.application.service.WorkflowDagService;
-import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
-import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -135,15 +135,15 @@ class DefaultLaunchServiceTest {
     triggerRequest.setId(100L);
     triggerRequest.setDedupKey("dedup-001");
 
-    JobDefinitionRecord jobDefinition = jobDefinition("BIZ_CAL");
-    WorkflowDefinitionRecord workflowDefinition =
-        new WorkflowDefinitionRecord(200L, "t1", "WF", "wf", "FLOW", 1, true);
+    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    WorkflowDefinitionEntity workflowDefinition =
+        new WorkflowDefinitionEntity(200L, "t1", "WF", "wf", "FLOW", 1, true);
     LaunchValidationService.LaunchLoadResult loaded =
         new LaunchValidationService.LaunchLoadResult(
             triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarRecord calendar =
-        new BusinessCalendarRecord(
+    BusinessCalendarEntity calendar =
+        new BusinessCalendarEntity(
             1L,
             "t1",
             "BIZ_CAL",
@@ -172,10 +172,10 @@ class DefaultLaunchServiceTest {
     ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
-    ArgumentCaptor<BatchDayInstanceRecord> captor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).insert(captor.capture());
-    BatchDayInstanceRecord saved = captor.getValue();
+    BatchDayInstanceEntity saved = captor.getValue();
     assertThat(saved.tenantId()).isEqualTo("t1");
     assertThat(saved.calendarCode()).isEqualTo("BIZ_CAL");
     assertThat(saved.bizDate()).isEqualTo(request.bizDate());
@@ -208,15 +208,15 @@ class DefaultLaunchServiceTest {
     triggerRequest.setId(101L);
     triggerRequest.setDedupKey("dedup-002");
 
-    JobDefinitionRecord jobDefinition = jobDefinition("BIZ_CAL");
-    WorkflowDefinitionRecord workflowDefinition =
-        new WorkflowDefinitionRecord(201L, "t1", "WF", "wf", "FLOW", 1, true);
+    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    WorkflowDefinitionEntity workflowDefinition =
+        new WorkflowDefinitionEntity(201L, "t1", "WF", "wf", "FLOW", 1, true);
     LaunchValidationService.LaunchLoadResult loaded =
         new LaunchValidationService.LaunchLoadResult(
             triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarRecord calendar =
-        new BusinessCalendarRecord(
+    BusinessCalendarEntity calendar =
+        new BusinessCalendarEntity(
             2L,
             "t1",
             "BIZ_CAL",
@@ -229,8 +229,8 @@ class DefaultLaunchServiceTest {
             15,
             120,
             true);
-    BatchDayInstanceRecord existing =
-        new BatchDayInstanceRecord(
+    BatchDayInstanceEntity existing =
+        new BatchDayInstanceEntity(
             88L,
             "t1",
             "BIZ_CAL",
@@ -260,10 +260,10 @@ class DefaultLaunchServiceTest {
     ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
-    ArgumentCaptor<BatchDayInstanceRecord> captor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).updateWithCas(captor.capture());
-    BatchDayInstanceRecord saved = captor.getValue();
+    BatchDayInstanceEntity saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("CUTOFF");
     assertThat(saved.cutoffAt()).isEqualTo(existing.cutoffAt());
     assertThat(saved.slaDeadlineAt()).isEqualTo(expectedSlaDeadline());
@@ -285,15 +285,15 @@ class DefaultLaunchServiceTest {
     triggerRequest.setDedupKey("dedup-003");
     triggerRequest.setTriggerType(TriggerType.EVENT.code());
 
-    JobDefinitionRecord jobDefinition = jobDefinition("BIZ_CAL");
-    WorkflowDefinitionRecord workflowDefinition =
-        new WorkflowDefinitionRecord(202L, "t1", "WF", "wf", "FLOW", 1, true);
+    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    WorkflowDefinitionEntity workflowDefinition =
+        new WorkflowDefinitionEntity(202L, "t1", "WF", "wf", "FLOW", 1, true);
     LaunchValidationService.LaunchLoadResult loaded =
         new LaunchValidationService.LaunchLoadResult(
             triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarRecord calendar =
-        new BusinessCalendarRecord(
+    BusinessCalendarEntity calendar =
+        new BusinessCalendarEntity(
             3L,
             "t1",
             "BIZ_CAL",
@@ -307,8 +307,8 @@ class DefaultLaunchServiceTest {
             120,
             true);
     Instant now = Instant.now();
-    BatchDayInstanceRecord existing =
-        new BatchDayInstanceRecord(
+    BatchDayInstanceEntity existing =
+        new BatchDayInstanceEntity(
             89L,
             "t1",
             "BIZ_CAL",
@@ -341,10 +341,10 @@ class DefaultLaunchServiceTest {
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getTriggerType()).isEqualTo(TriggerType.EVENT.code());
 
-    ArgumentCaptor<BatchDayInstanceRecord> captor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).updateWithCas(captor.capture());
-    BatchDayInstanceRecord saved = captor.getValue();
+    BatchDayInstanceEntity saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(saved.lateCount()).isEqualTo(1);
     assertThat(saved.catchupCount()).isEqualTo(0);
@@ -366,15 +366,15 @@ class DefaultLaunchServiceTest {
     triggerRequest.setDedupKey("dedup-004");
     triggerRequest.setTriggerType(TriggerType.EVENT.code());
 
-    JobDefinitionRecord jobDefinition = jobDefinition("BIZ_CAL");
-    WorkflowDefinitionRecord workflowDefinition =
-        new WorkflowDefinitionRecord(203L, "t1", "WF", "wf", "FLOW", 1, true);
+    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    WorkflowDefinitionEntity workflowDefinition =
+        new WorkflowDefinitionEntity(203L, "t1", "WF", "wf", "FLOW", 1, true);
     LaunchValidationService.LaunchLoadResult loaded =
         new LaunchValidationService.LaunchLoadResult(
             triggerRequest, jobDefinition, workflowDefinition, null);
 
-    BusinessCalendarRecord calendar =
-        new BusinessCalendarRecord(
+    BusinessCalendarEntity calendar =
+        new BusinessCalendarEntity(
             4L,
             "t1",
             "BIZ_CAL",
@@ -387,8 +387,8 @@ class DefaultLaunchServiceTest {
             30,
             120,
             true);
-    BatchDayInstanceRecord existing =
-        new BatchDayInstanceRecord(
+    BatchDayInstanceEntity existing =
+        new BatchDayInstanceEntity(
             90L,
             "t1",
             "BIZ_CAL",
@@ -424,17 +424,17 @@ class DefaultLaunchServiceTest {
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getTriggerType()).isEqualTo(TriggerType.CATCH_UP.code());
 
-    ArgumentCaptor<BatchDayInstanceRecord> captor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).updateWithCas(captor.capture());
-    BatchDayInstanceRecord saved = captor.getValue();
+    BatchDayInstanceEntity saved = captor.getValue();
     assertThat(saved.dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(saved.catchupCount()).isEqualTo(1);
     assertThat(saved.lateCount()).isEqualTo(0);
   }
 
-  private JobDefinitionRecord jobDefinition(String calendarCode) {
-    return new JobDefinitionRecord(
+  private JobDefinitionEntity jobDefinition(String calendarCode) {
+    return new JobDefinitionEntity(
         11L,
         "t1",
         "IMPORT_JOB",

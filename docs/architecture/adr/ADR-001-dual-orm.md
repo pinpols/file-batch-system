@@ -1,62 +1,49 @@
-# ADR-001: 使用 MyBatis + Spring Data JDBC 双 ORM，不引入 JPA
+# ADR-001: 全平台持久层统一 MyBatis + `JdbcTemplate`（不引入 JPA / Spring Data JDBC）
 
-- **状态**: 已采纳
+- **状态**: 已采纳（2026-05-02：**全模块**移除 `spring-boot-starter-data-jdbc` 与 Spring Data JDBC 仓库）
 - **日期**: 2026-03-25
 - **决策人**: 后端平台团队
 
 ## 背景
 
-批量调度平台需要在多个模块中持久化实体：orchestrator 管理 job_instance / job_partition / job_task 等核心表，worker-core 管理 job_task 的认领与状态变更，两侧都有高并发的 UPDATE 语句（CAS 乐观锁）和动态分页查询。
+批量调度平台需要在多个模块中持久化实体：orchestrator 管理 job_instance / job_partition / job_task 等核心表，worker 管理认领与状态变更，两侧都有高并发的 UPDATE（CAS 乐观锁）和动态分页查询。
 
 选型时考虑了三个备选方案：
 
-1. **JPA / Hibernate**：对象关系映射最完整，但代理延迟加载、一级缓存、脏检测机制与 CAS UPDATE 语义冲突；批量 MERGE 场景下 SQL 可预测性差。
-2. **纯 MyBatis**：SQL 完全可控，适合复杂查询和 CAS；但简单 CRUD 仍需手写 XML，对轻量管理实体（WorkflowTemplate、JobDefinition）开发效率低。
-3. **MyBatis（核心热路径）+ Spring Data JDBC（轻量管理路径）**：按场景选型，SQL 可控性与开发效率兼顾。
+1. **JPA / Hibernate** — 代理、`@Version` 异常语义等与现有 CAS / 集成测试断言不一致。
+2. **MyBatis（XML Mapper）** — SQL 可控、`<if>` 动态查询、乐观锁影响行数判断清晰。
+3. **Spring Data JDBC** — 曾用于少量配置态 `CrudRepository`；**已弃用**，配置态与运行态一律 Mapper，减少双 ORM 与启动期仓库扫描。
 
 ## 决策
 
-**采用方案 3**：核心热路径（job_partition、job_task、outbox_event 的认领/状态变更/CAS）使用 MyBatis XML Mapper；低频管理路径（job_definition、workflow_template 等配置类实体）使用 Spring Data JDBC Repository。
+**全业务模块**（`batch-orchestrator`、`batch-console-api`、`batch-trigger`、`batch-worker-*`）持久化：**`mybatis-spring-boot-starter` + `spring-boot-starter-jdbc`**。**禁止** `spring-boot-starter-data-jdbc`、**禁止** `@EnableJdbcRepositories`。
 
-具体分工：
+| 场景 | 技术 | 说明 |
+|------|------|------|
+| CAS / 热路径 / 复杂 SQL | MyBatis XML | `claimPartition`、`finishTask`、outbox、分页列表等 |
+| 配置态表（job_definition、workflow、calendar、quota 等） | MyBatis XML | 与运行态同一套 Mapper + `resultMap` / constructor 映射 |
+| 极薄基础设施 | `JdbcTemplate` | 锁表、支撑查询（不作为默认业务持久化） |
 
-| 使用场景 | 技术 | 理由 |
-|---|---|---|
-| `claimPartition` / `finishTask` / `markPublishing` CAS UPDATE | MyBatis XML | SQL 精确控制，返回影响行数用于乐观锁判断 |
-| 动态分页查询（管理后台列表） | MyBatis XML | `<if>` 动态拼接，避免 Criteria API 复杂性 |
-| `job_definition` / `workflow_template` CRUD | Spring Data JDBC | 无复杂查询，Repository 接口够用，代码量少 |
-| `trigger_request` 插入与状态更新 | MyBatis XML | 需要 `INSERT ... ON CONFLICT DO NOTHING` 精确语义 |
+### 模块边界
 
-### 模块级使用边界
+| 模块 | 约束 |
+|------|------|
+| `batch-orchestrator` / `batch-console-api` | `MyBatis` + `JdbcTemplate`；**禁止** Spring Data JDBC |
+| `batch-trigger` / `batch-worker-*` | `MyBatis` + `JdbcTemplate`；**禁止** Spring Data JDBC |
+| `batch-common` | 不承载 ORM 实现 |
 
-为避免双 ORM 继续无序扩散，补充以下模块边界：
+### 依赖治理
 
-| 模块 | 允许使用 | 约束 |
-|---|---|---|
-| `batch-console-api` | `MyBatis` + `Spring Data JDBC` + `JdbcTemplate` 基础设施支撑 | 控制台管理读写允许双 ORM；控制层不直接写 SQL 和业务编排 |
-| `batch-orchestrator` | `MyBatis` + `Spring Data JDBC` + `JdbcTemplate` 基础设施支撑 | 编排核心允许双 ORM；CAS / 热路径固定走 MyBatis |
-| `batch-trigger` | `MyBatis` + `JdbcTemplate` | 不新增 `Spring Data JDBC` |
-| `batch-worker-*` | `MyBatis` + `JdbcTemplate` | 不新增 `Spring Data JDBC`，避免执行链继续叠 ORM |
-| `batch-common` | 不承载 ORM 实现 | 只放轻量公共模型、配置和工具，不放运行时重依赖 |
-
-### 依赖治理补充
-
-- `batch-common` 禁止新增以下运行时依赖：对象存储 SDK、OTEL exporter、AI 模型 SDK、Excel 处理库。
-- `batch-console-api` 与 `batch-orchestrator` 是当前仅有的双 ORM 模块；其他模块如需新增 `Spring Data JDBC`，必须先修订本 ADR。
-- `JdbcTemplate` 仅用于配置支撑、锁表/基础设施或极薄查询支撑，不作为默认业务持久化手段。
+- `batch-common` 禁止新增重运行时依赖（对象存储 SDK、OTEL exporter、AI SDK、Excel 库等）。
+- **任何**业务模块 **不得** 引入 `spring-boot-starter-data-jdbc`；`scripts/ci/check-dependency-boundaries.py` 门禁拦截。
+- JSONB / 自定义类型通过 **MyBatis `TypeHandler`**（如 `JsonbStringTypeHandler`、`MapJsonbTypeHandler`）映射，不依赖 Spring Data 的 `Converter`。
 
 ## 后果
 
-**正面**：
-- CAS UPDATE 的 `affectedRows == 1` 判断在 MyBatis 中天然成立，不受 ORM 缓存干扰。
-- 热路径 SQL 在 Mapper XML 中可审计，DBA 可直接 review。
-- Spring Data JDBC 的 `CrudRepository` 减少了管理路径的样板代码。
+**正面**：单一持久化风格；SQL 可审计；无 SDJ 与 MyBatis 的重复注册与转换器分叉。
 
-**负面**：
-- 项目中存在两套 ORM 风格，新成员需要了解边界划分。
-- Spring Data JDBC 不支持懒加载，管理路径如需关联查询仍需手写 MyBatis。
-- MyBatis 4.0.0（Spring Boot 4.0 配套版本）与旧版配置方式有差异，需注意 `mybatis-spring-boot-starter` 版本对齐。
+**负面**：配置表也要维护 Mapper XML；新成员以 **Mapper 约定** 为主而非 `Repository` 接口。
 
 ## 替代方案拒绝原因
 
-**JPA 拒绝**：Hibernate 的一级缓存会导致 CAS UPDATE 后实体状态与数据库不同步；`@Version` 乐观锁抛出 `OptimisticLockException` 而非返回 0，与现有并发测试（`ConcurrentTaskFinishIntegrationTest`）的断言模式不兼容。
+**JPA**：见上。**Spring Data JDBC（历史）**：Repository 与 MyBatis 双栈增加心智与 CI 复杂度；配置表已全部有 Mapper 后下线 SDJ。

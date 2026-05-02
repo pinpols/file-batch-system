@@ -12,8 +12,8 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
-import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
-import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
+import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -79,7 +79,7 @@ class BatchDaySettleSchedulerTest {
 
   @Test
   void shouldPromoteToInFlightWhenActiveInstancesExist() {
-    BatchDayInstanceRecord candidate = candidate("CUTOFF");
+    BatchDayInstanceEntity candidate = candidate("CUTOFF");
     BatchDayInstanceMetrics metrics = metrics(3L, 2L, 1L, 0L);
 
     when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(candidate));
@@ -89,8 +89,8 @@ class BatchDaySettleSchedulerTest {
 
     scheduler.settle();
 
-    ArgumentCaptor<BatchDayInstanceRecord> captor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).updateWithCas(captor.capture());
     assertThat(captor.getValue().dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(captor.getValue().settledAt()).isNull();
@@ -98,7 +98,7 @@ class BatchDaySettleSchedulerTest {
 
   @Test
   void shouldSettleWhenAllInstancesSucceeded() {
-    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceMetrics metrics = metrics(4L, 0L, 4L, 0L);
 
     when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(candidate));
@@ -108,8 +108,8 @@ class BatchDaySettleSchedulerTest {
 
     scheduler.settle();
 
-    ArgumentCaptor<BatchDayInstanceRecord> captor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).updateWithCas(captor.capture());
     assertThat(captor.getValue().dayStatus()).isEqualTo("SETTLED");
     assertThat(captor.getValue().settledAt()).isNotNull();
@@ -117,7 +117,7 @@ class BatchDaySettleSchedulerTest {
 
   @Test
   void shouldFailWhenAllInstancesTerminalAndAnyFailed() {
-    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
 
     when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(candidate));
@@ -126,8 +126,8 @@ class BatchDaySettleSchedulerTest {
 
     scheduler.settle();
 
-    ArgumentCaptor<BatchDayInstanceRecord> captor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).updateWithCas(captor.capture());
     assertThat(captor.getValue().dayStatus()).isEqualTo("FAILED");
     assertThat(captor.getValue().settledAt()).isNotNull();
@@ -135,10 +135,10 @@ class BatchDaySettleSchedulerTest {
 
   @Test
   void shouldLaunchAutoCatchUpWhenBatchDayFailed() {
-    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
     JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 101L);
-    BusinessCalendarRecord calendar = calendar("AUTO");
+    BusinessCalendarEntity calendar = calendar("AUTO");
 
     when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(candidate));
     when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate()))
@@ -152,8 +152,8 @@ class BatchDaySettleSchedulerTest {
 
     scheduler.settle();
 
-    ArgumentCaptor<BatchDayInstanceRecord> batchCaptor =
-        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    ArgumentCaptor<BatchDayInstanceEntity> batchCaptor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).updateWithCas(batchCaptor.capture());
     assertThat(batchCaptor.getValue().dayStatus()).isEqualTo("FAILED");
     verify(triggerRequestMapper).insert(any());
@@ -165,10 +165,10 @@ class BatchDaySettleSchedulerTest {
 
   @Test
   void shouldCreatePendingCatchUpWhenApprovalRequired() {
-    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
     JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 102L);
-    BusinessCalendarRecord calendar = calendar("MANUAL_APPROVAL");
+    BusinessCalendarEntity calendar = calendar("MANUAL_APPROVAL");
 
     when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(candidate));
     when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate()))
@@ -185,8 +185,8 @@ class BatchDaySettleSchedulerTest {
     verify(launchService, never()).launch(any());
   }
 
-  private BatchDayInstanceRecord candidate(String status) {
-    return new BatchDayInstanceRecord(
+  private BatchDayInstanceEntity candidate(String status) {
+    return new BatchDayInstanceEntity(
         1L,
         "t1",
         "CAL",
@@ -213,8 +213,8 @@ class BatchDaySettleSchedulerTest {
     return entity;
   }
 
-  private BusinessCalendarRecord calendar(String catchUpPolicy) {
-    return new BusinessCalendarRecord(
+  private BusinessCalendarEntity calendar(String catchUpPolicy) {
+    return new BusinessCalendarEntity(
         1L,
         "t1",
         "CAL",

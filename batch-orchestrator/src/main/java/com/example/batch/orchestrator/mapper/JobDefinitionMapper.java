@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -13,19 +13,19 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface JobDefinitionMapper {
 
-  JobDefinitionRecord selectFirstByTenantAndCodeAndEnabled(
+  JobDefinitionEntity selectFirstByTenantAndCodeAndEnabled(
       @Param("tenantId") String tenantId,
       @Param("jobCode") String jobCode,
       @Param("enabled") Boolean enabled);
 
-  List<JobDefinitionRecord> selectByTenantAndEnabled(
+  List<JobDefinitionEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  JobDefinitionRecord selectById(@Param("id") Long id);
+  JobDefinitionEntity selectById(@Param("id") Long id);
 
-  int insert(JobDefinitionRecord record);
+  int insert(JobDefinitionEntity record);
 
-  int update(JobDefinitionRecord record);
+  int update(JobDefinitionEntity record);
 
   int deleteById(@Param("id") Long id);
 }

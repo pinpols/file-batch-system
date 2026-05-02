@@ -57,7 +57,7 @@
         limit 1
     </select>
 
-    <insert id="upsertTenantQuotaPolicy" parameterType="com.example.batch.console.mapper.param.TenantQuotaPolicyUpsertParam">
+    <insert id="upsertTenantQuotaPolicy" parameterType="com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
         insert into batch.tenant_quota_policy (
             tenant_id, policy_code, max_running_jobs_per_tenant,
             max_partitions_per_tenant, max_qps_per_tenant,

@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.CompensationCommandEntity;
+import com.example.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
 import org.apache.ibatis.annotations.Param;
 
 public interface CompensationCommandMapper {

@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.BusinessCalendarMapper">
     <!--
-      BusinessCalendarRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      BusinessCalendarEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数，
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, calendarCode, calendarName, timezone,
          holidayRollRule, catchUpPolicy, catchUpMaxDays, cutoffTime,
@@ -10,7 +10,7 @@
       列名按 V3 + V32 DDL。
     -->
     <resultMap id="businessCalendarMap"
-               type="com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord">
+               type="com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
@@ -57,7 +57,7 @@
     </select>
 
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord"
+            parameterType="com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
@@ -88,7 +88,7 @@
     </insert>
 
     <update id="update"
-            parameterType="com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord">
+            parameterType="com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity">
         update batch.business_calendar
            set calendar_name = #{calendarName},
                timezone = #{timezone},

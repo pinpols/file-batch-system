@@ -1,6 +1,8 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
+import com.example.batch.orchestrator.domain.param.MarkRunningParam;
+import com.example.batch.orchestrator.domain.param.UpdateStepProgressParam;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

@@ -1,8 +1,8 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
+import com.example.batch.console.domain.param.WorkflowDefinitionUpsertParam;
 import com.example.batch.console.domain.query.WorkflowDefinitionQuery;
-import com.example.batch.console.mapper.param.WorkflowDefinitionUpsertParam;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

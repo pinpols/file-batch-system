@@ -11,14 +11,14 @@ import com.example.batch.orchestrator.application.scheduler.PriorityScheduler;
 import com.example.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import com.example.batch.orchestrator.application.scheduler.ResourceScheduler;
 import com.example.batch.orchestrator.application.scheduler.WorkerSelector;
-import com.example.batch.orchestrator.domain.entity.BatchWindowRecord;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
-import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
+import com.example.batch.orchestrator.domain.entity.BatchWindowEntity;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
+import com.example.batch.orchestrator.domain.param.CountActiveByGroupParam;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import java.time.LocalTime;
@@ -74,7 +74,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   /** 资源调度统一收口在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
   @Override
   public ResourceSchedulingDecision schedule(ResourceSchedulingRequest request) {
-    ResourceQueueRecord queue = resourceQueueManager.resolveQueue(request);
+    ResourceQueueEntity queue = resourceQueueManager.resolveQueue(request);
     Integer priority = priorityScheduler.resolvePriority(request, queue);
     String priorityBand = priorityScheduler.resolvePriorityBand(priority);
     ResourceCheck windowCheck = checkBatchWindow(request);
@@ -115,7 +115,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
 
   private ResourceSchedulingDecision blockedDecision(
       ResourceSchedulingRequest request,
-      ResourceQueueRecord queue,
+      ResourceQueueEntity queue,
       Integer priority,
       String priorityBand,
       ResourceCheck check) {
@@ -140,7 +140,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         || !Texts.hasText(request.getWindowCode())) {
       return ResourceCheck.allow();
     }
-    BatchWindowRecord window =
+    BatchWindowEntity window =
         configCacheService.findEnabledBatchWindow(request.getTenantId(), request.getWindowCode());
     if (window == null || isWithinWindow(window)) {
       return ResourceCheck.allow();
@@ -152,7 +152,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     return ResourceCheck.waitForCapacity("OUT_OF_WINDOW_WAIT", "waiting for batch window");
   }
 
-  private boolean isWithinWindow(BatchWindowRecord window) {
+  private boolean isWithinWindow(BatchWindowEntity window) {
     if (window == null || window.startTime() == null || window.endTime() == null) {
       return true;
     }
@@ -170,7 +170,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     return !now.isBefore(start) && !now.isAfter(end);
   }
 
-  private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+  private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     if (request != null && Texts.hasText(request.getWorkerGroup())) {
       return request.getWorkerGroup();
     }
@@ -179,7 +179,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
 
   private void enrichFairnessScore(
       ResourceSchedulingRequest request,
-      ResourceQueueRecord queue,
+      ResourceQueueEntity queue,
       Integer priority,
       String priorityBand,
       ResourceSchedulingDecision decision) {
@@ -214,13 +214,13 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     if (!Texts.hasText(tenantId)) {
       return 1;
     }
-    TenantQuotaPolicyRecord policy = configCacheService.findEnabledQuotaPolicy(tenantId);
+    TenantQuotaPolicyEntity policy = configCacheService.findEnabledQuotaPolicy(tenantId);
     return hasValidFairShareWeight(policy == null ? null : policy.fairShareWeight())
         ? policy.fairShareWeight()
         : 1;
   }
 
-  private int resolveQueueWeight(ResourceQueueRecord queue) {
+  private int resolveQueueWeight(ResourceQueueEntity queue) {
     return hasValidFairShareWeight(queue == null ? null : queue.fairShareWeight())
         ? queue.fairShareWeight()
         : 1;
@@ -250,7 +250,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
             PartitionStatus.RETRYING.code());
   }
 
-  private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+  private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     if (request == null
         || !Texts.hasText(request.getTenantId())
         || queue == null
@@ -262,7 +262,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   }
 
   private int resolveQueueActivePartitions(
-      ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+      ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     if (request == null
         || !Texts.hasText(request.getTenantId())
         || queue == null

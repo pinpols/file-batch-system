@@ -7,8 +7,8 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.WorkerSelector;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
-import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -64,7 +64,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
 
   @Override
   public WorkerRouteModel select(
-      ResourceSchedulingRequest request, ResourceQueueRecord queue, Integer priority) {
+      ResourceSchedulingRequest request, ResourceQueueEntity queue, Integer priority) {
     WorkerRouteModel route = new WorkerRouteModel();
     route.setWorkerType(request == null ? null : request.getWorkerType());
     route.setPriority(priority);
@@ -76,8 +76,8 @@ public class DefaultWorkerSelector implements WorkerSelector {
     // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较兜底，
     // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
     String workerGroup = CodeNormalizer.toUpperOrNull(resolveWorkerGroup(request, queue));
-    List<WorkerRegistryRecord> candidates = findCandidates(request.getTenantId(), workerGroup);
-    WorkerRegistryRecord selected = pickBest(candidates, queue);
+    List<WorkerRegistryEntity> candidates = findCandidates(request.getTenantId(), workerGroup);
+    WorkerRegistryEntity selected = pickBest(candidates, queue);
 
     // 共享 worker 池 fallback（仅本地联调 / 共享 dev 环境）：主租户查不到 ONLINE worker 时，
     // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
@@ -86,8 +86,8 @@ public class DefaultWorkerSelector implements WorkerSelector {
     if (selected == null
         && Texts.hasText(fallbackTenant)
         && !fallbackTenant.equals(request.getTenantId())) {
-      List<WorkerRegistryRecord> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
-      WorkerRegistryRecord fallbackSelected = pickBest(fallbackCandidates, queue);
+      List<WorkerRegistryEntity> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
+      WorkerRegistryEntity fallbackSelected = pickBest(fallbackCandidates, queue);
       if (fallbackSelected != null) {
         log.info(
             "worker selection fell back to shared tenant: tenantId={}, fallbackTenant={},"
@@ -127,8 +127,8 @@ public class DefaultWorkerSelector implements WorkerSelector {
     return route;
   }
 
-  private List<WorkerRegistryRecord> findCandidates(String tenantId, String workerGroup) {
-    java.util.function.Supplier<List<WorkerRegistryRecord>> loader =
+  private List<WorkerRegistryEntity> findCandidates(String tenantId, String workerGroup) {
+    java.util.function.Supplier<List<WorkerRegistryEntity>> loader =
         () ->
             Texts.hasText(workerGroup)
                 ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(
@@ -142,21 +142,21 @@ public class DefaultWorkerSelector implements WorkerSelector {
     return cache.getOrLoad(tenantId, workerGroup, loader);
   }
 
-  private WorkerRegistryRecord pickBest(
-      List<WorkerRegistryRecord> candidates, ResourceQueueRecord queue) {
+  private WorkerRegistryEntity pickBest(
+      List<WorkerRegistryEntity> candidates, ResourceQueueEntity queue) {
     return candidates.stream()
         .filter(candidate -> matchesResourceTag(candidate, queue))
         .min(
             Comparator.comparingInt(
-                    (WorkerRegistryRecord r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
+                    (WorkerRegistryEntity r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
                 .thenComparing(
-                    WorkerRegistryRecord::heartbeatAt,
+                    WorkerRegistryEntity::heartbeatAt,
                     Comparator.nullsLast(Comparator.reverseOrder())))
         .orElse(null);
   }
 
   private void incrementNoMatchCounter(
-      ResourceSchedulingRequest request, ResourceQueueRecord queue, String reason) {
+      ResourceSchedulingRequest request, ResourceQueueEntity queue, String reason) {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {
       return;
@@ -176,7 +176,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
         .increment();
   }
 
-  private boolean matchesResourceTag(WorkerRegistryRecord candidate, ResourceQueueRecord queue) {
+  private boolean matchesResourceTag(WorkerRegistryEntity candidate, ResourceQueueEntity queue) {
     if (queue == null || !Texts.hasText(queue.resourceTag())) {
       return true;
     }
@@ -210,7 +210,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
     return false;
   }
 
-  private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+  private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
     if (request != null && Texts.hasText(request.getWorkerGroup())) {
       return request.getWorkerGroup();
     }

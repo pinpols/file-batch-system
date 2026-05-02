@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.service;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
-import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 
 /**
  * Worker 注册中心服务（服务端视角）。 处理 Worker 节点的首次注册、定期心跳上报、主动下线以及状态更新操作。 实现类须维护 Worker
@@ -9,11 +9,11 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
  */
 public interface WorkerRegistryServerService {
 
-  WorkerRegistryRecord register(WorkerHeartbeatDto request);
+  WorkerRegistryEntity register(WorkerHeartbeatDto request);
 
-  WorkerRegistryRecord heartbeat(String workerCode, WorkerHeartbeatDto request);
+  WorkerRegistryEntity heartbeat(String workerCode, WorkerHeartbeatDto request);
 
   void deactivate(String tenantId, String workerCode);
 
-  WorkerRegistryRecord updateStatus(String tenantId, String workerCode, String status);
+  WorkerRegistryEntity updateStatus(String tenantId, String workerCode, String status);
 }

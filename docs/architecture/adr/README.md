@@ -6,7 +6,7 @@
 
 | # | 文件 | 决策摘要 |
 |---|---|---|
-| 001 | [ADR-001-dual-orm.md](./ADR-001-dual-orm.md) | 持久层用 MyBatis（运行态）+ Spring Data JDBC（配置态），不引入 JPA |
+| 001 | [ADR-001-dual-orm.md](./ADR-001-dual-orm.md) | 持久层统一 MyBatis + `JdbcTemplate`；禁止 JPA / Spring Data JDBC |
 | 002 | [ADR-002-transactional-outbox.md](./ADR-002-transactional-outbox.md) | 使用事务性 Outbox 模式发布 Kafka，避免双写不一致 |
 | 003 | [ADR-003-launch-t1-t2-split.md](./ADR-003-launch-t1-t2-split.md) | `launch()` 拆 T1/T2 两事务 + CGLIB 自注入解决 `@Transactional` 自调用 |
 | 004 | [ADR-004-worker-lifecycle-template.md](./ADR-004-worker-lifecycle-template.md) | Worker 生命周期用模板方法模式，子类只填扩展点 |
