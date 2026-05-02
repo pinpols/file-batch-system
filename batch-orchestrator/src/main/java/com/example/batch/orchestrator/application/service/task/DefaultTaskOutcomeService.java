@@ -45,6 +45,8 @@ import java.util.Set;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,6 +91,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private final WorkflowTerminalOutboxService workflowTerminalOutboxService;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
+
+  @Lazy @Autowired private DefaultTaskOutcomeService self;
 
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
@@ -178,7 +182,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             command.workflowRunId(), command.nodeCode());
     if (current == null) {
       current =
-          recordNodeRunStart(
+          self.recordNodeRunStart(
               command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
     }
     long duration =
@@ -503,7 +507,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     NodeRunKey currentKey =
         new NodeRunKey(
             ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task()));
-    recordNodeRunFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
+    self.recordNodeRunFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodes(
             ctx.workflowRun().getWorkflowDefinitionId(),
@@ -520,7 +524,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             ctx.workflowRun().getWorkflowDefinitionId(),
             nextNode.nodeCode(),
             ctx.task().getTaskPayload())) {
-          recordNodeRunStart(
+          self.recordNodeRunStart(
               ctx.workflowRun().getId(),
               nextNode.nodeCode(),
               nextNode.nodeType(),
@@ -538,7 +542,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                   .build();
           NodeRunKey endKey =
               new NodeRunKey(ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType());
-          recordNodeRunFinish(NodeRunFinishCommand.of(endKey, endOutcome));
+          self.recordNodeRunFinish(NodeRunFinishCommand.of(endKey, endOutcome));
         }
         continue;
       }
@@ -625,7 +629,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .errorArgs(nodeSuccess ? null : childCommand.errorArgs())
             .outputs(nodeSuccess ? childCommand.outputs() : null)
             .build();
-    applyTaskOutcome(parentCommand);
+    self.applyTaskOutcome(parentCommand);
   }
 
   @SuppressWarnings("unchecked")

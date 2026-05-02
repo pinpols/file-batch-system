@@ -33,6 +33,8 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -66,6 +68,8 @@ public class DefaultCompensationService implements CompensationService {
   private final FileGovernanceService fileGovernanceService;
   private final ObjectProvider<LaunchService> launchServiceProvider;
   private final TaskExecutionService taskExecutionService;
+
+  @Lazy @Autowired private DefaultCompensationService self;
 
   /** 路由表：compensationType → handler。构造时一次性构建；O(1) 查找。 */
   private final Map<String, CompensationHandler> handlersByType =
@@ -118,7 +122,7 @@ public class DefaultCompensationService implements CompensationService {
               : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
       assertNoRunningConflict(command);
     } catch (RuntimeException pre) {
-      appendPreInsertFailureLog(command, traceId, commandNo, pre);
+      self.appendPreInsertFailureLog(command, traceId, commandNo, pre);
       throw pre;
     }
     CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
@@ -127,7 +131,7 @@ public class DefaultCompensationService implements CompensationService {
     } catch (DataIntegrityViolationException ex) {
       BizException wrapped =
           BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
-      appendPreInsertFailureLog(command, traceId, commandNo, wrapped);
+      self.appendPreInsertFailureLog(command, traceId, commandNo, wrapped);
       throw wrapped;
     }
     try {

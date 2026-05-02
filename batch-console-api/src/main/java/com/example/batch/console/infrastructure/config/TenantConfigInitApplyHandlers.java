@@ -53,6 +53,8 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,6 +72,8 @@ public class TenantConfigInitApplyHandlers {
 
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_ID = "id";
+
+  @Lazy @Autowired private TenantConfigInitApplyHandlers self;
 
   private final JobDefinitionMapper jobDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -290,9 +294,9 @@ public class TenantConfigInitApplyHandlers {
             (tid, s) ->
                 Optional.ofNullable(
                     workflowDefinitionMapper.selectByUniqueKey(tid, s.getWorkflowCode(), 1)),
-            (c, s) -> upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
+            (c, s) -> self.upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
             (c, s, existing) ->
-                upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
+                self.upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
   }
 
   @Transactional
@@ -367,9 +371,9 @@ public class TenantConfigInitApplyHandlers {
                       tid, s.getJobCode(), s.getPipelineType(), null, new PageRequest(1, 1));
               return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
             },
-            (c, s) -> insertPipelineDefinition(c.tenantId(), s),
+            (c, s) -> self.insertPipelineDefinition(c.tenantId(), s),
             (c, s, existing) ->
-                updatePipelineDefinition(
+                self.updatePipelineDefinition(
                     c.tenantId(), ((Number) existing.get(KEY_ID)).longValue(), s, existing)));
   }
 

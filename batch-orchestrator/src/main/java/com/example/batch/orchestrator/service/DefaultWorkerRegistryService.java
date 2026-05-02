@@ -9,6 +9,8 @@ import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
   private final WorkerRegistryMapper workerRegistryMapper;
+
+  @Lazy @Autowired private DefaultWorkerRegistryService self;
 
   @Override
   @Transactional
@@ -82,7 +86,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
     if (registry == null) {
-      return register(request);
+      return self.register(request);
     }
     String newStatus = resolveHeartbeatStatus(request, registry.status());
     Integer newLoad =
@@ -106,7 +110,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   @Override
   @Transactional
   public void deactivate(String tenantId, String workerCode) {
-    updateStatus(tenantId, workerCode, WorkerRegistryStatus.OFFLINE.code());
+    self.updateStatus(tenantId, workerCode, WorkerRegistryStatus.OFFLINE.code());
   }
 
   @Override

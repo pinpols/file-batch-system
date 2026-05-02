@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +40,8 @@ public class TaskDispatchOutboxService {
   private final OutboxEventMapper outboxEventMapper;
   private final JobTaskMapper jobTaskMapper;
 
+  @Lazy @Autowired private TaskDispatchOutboxService self;
+
   /**
    * 写入一条“任务派发事件”到 outbox。
    *
@@ -57,7 +61,7 @@ public class TaskDispatchOutboxService {
       JobPartitionEntity partition,
       String traceId,
       String eventKey) {
-    writeDispatchEvent(jobInstance, task, partition, traceId, eventKey, null);
+    self.writeDispatchEvent(jobInstance, task, partition, traceId, eventKey, null);
   }
 
   /**
