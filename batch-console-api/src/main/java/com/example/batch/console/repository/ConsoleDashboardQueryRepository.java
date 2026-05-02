@@ -1,9 +1,19 @@
 package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
+import com.example.batch.console.domain.view.dashboard.ActivePartitionView;
+import com.example.batch.console.domain.view.dashboard.ConfigDependentView;
+import com.example.batch.console.domain.view.dashboard.DayCountView;
+import com.example.batch.console.domain.view.dashboard.DaySeverityCountView;
+import com.example.batch.console.domain.view.dashboard.DayStatusCountView;
+import com.example.batch.console.domain.view.dashboard.ExecutionProgressView;
+import com.example.batch.console.domain.view.dashboard.SeverityCountView;
+import com.example.batch.console.domain.view.dashboard.SlaDayView;
+import com.example.batch.console.domain.view.dashboard.SlaJobReportView;
+import com.example.batch.console.domain.view.dashboard.SlaStatsView;
+import com.example.batch.console.domain.view.dashboard.StatusCountView;
+import com.example.batch.console.domain.view.dashboard.TypeCountView;
+import com.example.batch.console.domain.view.dashboard.WorkerGroupStatusCountView;
 import java.util.List;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
@@ -131,22 +141,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       """)
   List<SlaDayView> slaDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  record StatusCountView(String status, Long count) {}
-
-  record DayStatusCountView(LocalDate day, String status, Long count) {}
-
-  record TypeCountView(String type, Long count) {}
-
-  record DayCountView(LocalDate day, Long count) {}
-
-  record WorkerGroupStatusCountView(String workerGroup, String status, Long count) {}
-
-  record ActivePartitionView(String workerCode, Long activePartitions) {}
-
-  record SeverityCountView(String severity, Long count) {}
-
-  record DaySeverityCountView(LocalDate day, String severity, Long count) {}
-
   @Query(
       """
       SELECT id, job_code AS code, job_name AS name
@@ -183,8 +177,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
   List<ConfigDependentView> jobsByWorkerGroup(
       @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-  record ConfigDependentView(Long id, String code, String name) {}
-
   @Query(
       """
       SELECT i.id,
@@ -206,17 +198,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       @Param("tenantId") String tenantId,
       @Param("jobCode") String jobCode,
       @Param("bizDate") String bizDate);
-
-  record ExecutionProgressView(
-      Long id,
-      String jobCode,
-      String instanceNo,
-      String instanceStatus,
-      Integer expectedPartitions,
-      Integer successPartitions,
-      Integer failedPartitions,
-      Instant startedAt,
-      Instant finishedAt) {}
 
   @Query(
       """
@@ -277,21 +258,4 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
        ORDER BY slaBreached DESC, totalInstances DESC
       """)
   List<SlaJobReportView> slaJobReport(@Param("tenantId") String tenantId, @Param("days") int days);
-
-  record SlaJobReportView(
-      String jobCode,
-      String jobName,
-      Long totalInstances,
-      Long successCount,
-      Long failedCount,
-      Long slaBreached,
-      Long slaOnTime,
-      BigDecimal avgDurationSeconds,
-      BigDecimal maxDurationSeconds,
-      Long totalPartitions) {}
-
-  record SlaStatsView(
-      Long breached, Long onTime, Long totalWithSla, BigDecimal avgDurationSeconds) {}
-
-  record SlaDayView(LocalDate day, Long breached, Long onTime) {}
 }

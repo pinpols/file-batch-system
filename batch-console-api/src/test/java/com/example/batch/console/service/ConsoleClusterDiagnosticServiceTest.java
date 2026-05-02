@@ -6,10 +6,10 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
 import com.example.batch.console.repository.ConsoleClusterDiagnosticRepository;
-import com.example.batch.console.repository.ConsoleClusterDiagnosticRepository.DeliveryStatusCountView;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Map;
