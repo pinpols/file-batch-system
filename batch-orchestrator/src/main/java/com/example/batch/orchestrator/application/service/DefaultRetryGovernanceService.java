@@ -21,12 +21,12 @@ import com.example.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.query.RetryScheduleQuery;
 import com.example.batch.orchestrator.mapper.DeadLetterTaskMapper;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -75,7 +75,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
   private final RetryScheduleMapper retryScheduleMapper;
   private final DeadLetterTaskMapper deadLetterTaskMapper;
-  private final JobDefinitionRepository jobDefinitionRepository;
+  private final JobDefinitionMapper jobDefinitionMapper;
   private final JobTaskMapper jobTaskMapper;
   private final JobPartitionMapper jobPartitionMapper;
   private final JobInstanceMapper jobInstanceMapper;
@@ -425,8 +425,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
     }
-    JobDefinitionRecord jobDefinitionRecord =
-        jobDefinitionRepository.findById(jobDefinitionId).orElse(null);
+    JobDefinitionRecord jobDefinitionRecord = jobDefinitionMapper.selectById(jobDefinitionId);
     if (jobDefinitionRecord == null) {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.ResourceQueueMapper">
+    <!--
+      ResourceQueueRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, queueCode, queueName, queueType, maxRunningJobs, maxRunningPartitions,
+         maxQps, workerGroup, resourceTag, priorityPolicy, fairShareWeight, fairShareGroup,
+         burstLimit, quotaResetPolicy, groupSharedMaxRunningJobs, enabled)
+      列名按 V3 / V25 / V42 DDL。
+    -->
+    <resultMap id="resourceQueueMap"
+               type="com.example.batch.orchestrator.domain.entity.ResourceQueueRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="queue_code" javaType="java.lang.String"/>
+            <arg column="queue_name" javaType="java.lang.String"/>
+            <arg column="queue_type" javaType="java.lang.String"/>
+            <arg column="max_running_jobs" javaType="java.lang.Integer"/>
+            <arg column="max_running_partitions" javaType="java.lang.Integer"/>
+            <arg column="max_qps" javaType="java.lang.Integer"/>
+            <arg column="worker_group" javaType="java.lang.String"/>
+            <arg column="resource_tag" javaType="java.lang.String"/>
+            <arg column="priority_policy" javaType="java.lang.String"/>
+            <arg column="fair_share_weight" javaType="java.lang.Integer"/>
+            <arg column="fair_share_group" javaType="java.lang.String"/>
+            <arg column="burst_limit" javaType="java.lang.Integer"/>
+            <arg column="quota_reset_policy" javaType="java.lang.String"/>
+            <arg column="group_shared_max_running_jobs" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, queue_code, queue_name, queue_type,
+        max_running_jobs, max_running_partitions, max_qps, worker_group, resource_tag,
+        priority_policy, fair_share_weight, fair_share_group, burst_limit, quota_reset_policy,
+        group_shared_max_running_jobs, enabled
+    </sql>
+
+    <select id="selectByTenantAndEnabled" resultMap="resourceQueueMap">
+        select <include refid="columns"/>
+          from batch.resource_queue
+         where tenant_id = #{tenantId}
+           and enabled = #{enabled}
+         order by id asc
+    </select>
+
+    <select id="selectById" resultMap="resourceQueueMap">
+        select <include refid="columns"/>
+          from batch.resource_queue
+         where id = #{id}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.ResourceQueueRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.resource_queue (
+            tenant_id, queue_code, queue_name, queue_type,
+            max_running_jobs, max_running_partitions, max_qps, worker_group, resource_tag,
+            priority_policy, fair_share_weight, fair_share_group, burst_limit, quota_reset_policy,
+            group_shared_max_running_jobs, enabled
+        ) values (
+            #{tenantId}, #{queueCode}, #{queueName}, #{queueType},
+            <choose>
+                <when test="maxRunningJobs != null">#{maxRunningJobs}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            <choose>
+                <when test="maxRunningPartitions != null">#{maxRunningPartitions}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            <choose>
+                <when test="maxQps != null">#{maxQps}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            #{workerGroup}, #{resourceTag},
+            <choose>
+                <when test="priorityPolicy != null">#{priorityPolicy}</when>
+                <otherwise>'FIFO'</otherwise>
+            </choose>,
+            <choose>
+                <when test="fairShareWeight != null">#{fairShareWeight}</when>
+                <otherwise>1</otherwise>
+            </choose>,
+            #{fairShareGroup}, #{burstLimit}, #{quotaResetPolicy},
+            #{groupSharedMaxRunningJobs},
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <update id="update"
+            parameterType="com.example.batch.orchestrator.domain.entity.ResourceQueueRecord">
+        update batch.resource_queue
+           set queue_name = #{queueName},
+               queue_type = #{queueType},
+               max_running_jobs = #{maxRunningJobs},
+               max_running_partitions = #{maxRunningPartitions},
+               max_qps = #{maxQps},
+               worker_group = #{workerGroup},
+               resource_tag = #{resourceTag},
+               priority_policy = #{priorityPolicy},
+               fair_share_weight = #{fairShareWeight},
+               fair_share_group = #{fairShareGroup},
+               burst_limit = #{burstLimit},
+               quota_reset_policy = #{quotaResetPolicy},
+               group_shared_max_running_jobs = #{groupSharedMaxRunningJobs},
+               enabled = #{enabled},
+               updated_at = current_timestamp
+         where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.resource_queue where id = #{id}
+    </delete>
+</mapper>

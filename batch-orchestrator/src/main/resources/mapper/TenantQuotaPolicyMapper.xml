@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper">
+    <!--
+      TenantQuotaPolicyRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, policyCode, maxRunningJobsPerTenant, maxPartitionsPerTenant,
+         maxQpsPerTenant, fairShareWeight, fairShareGroup, burstLimit, partitionBurstLimit,
+         quotaResetPolicy, groupSharedMaxRunningJobs, enabled)
+    -->
+    <resultMap id="tenantQuotaPolicyMap"
+               type="com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="policy_code" javaType="java.lang.String"/>
+            <arg column="max_running_jobs_per_tenant" javaType="java.lang.Integer"/>
+            <arg column="max_partitions_per_tenant" javaType="java.lang.Integer"/>
+            <arg column="max_qps_per_tenant" javaType="java.lang.Integer"/>
+            <arg column="fair_share_weight" javaType="java.lang.Integer"/>
+            <arg column="fair_share_group" javaType="java.lang.String"/>
+            <arg column="burst_limit" javaType="java.lang.Integer"/>
+            <arg column="partition_burst_limit" javaType="java.lang.Integer"/>
+            <arg column="quota_reset_policy" javaType="java.lang.String"/>
+            <arg column="group_shared_max_running_jobs" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, policy_code,
+        max_running_jobs_per_tenant, max_partitions_per_tenant, max_qps_per_tenant,
+        fair_share_weight, fair_share_group, burst_limit, partition_burst_limit,
+        quota_reset_policy, group_shared_max_running_jobs, enabled
+    </sql>
+
+    <select id="selectByTenantAndEnabled" resultMap="tenantQuotaPolicyMap">
+        select <include refid="columns"/>
+          from batch.tenant_quota_policy
+         where tenant_id = #{tenantId}
+           and enabled = #{enabled}
+         order by id asc
+    </select>
+
+    <select id="selectFirstEnabledByTenantId" resultMap="tenantQuotaPolicyMap">
+        select <include refid="columns"/>
+          from batch.tenant_quota_policy
+         where tenant_id = #{tenantId}
+           and enabled = #{enabled}
+         order by id asc
+         limit 1
+    </select>
+
+    <select id="selectDistinctEnabledTenantIds" resultType="java.lang.String">
+        select distinct tenant_id from batch.tenant_quota_policy where enabled = true
+    </select>
+
+    <select id="selectById" resultMap="tenantQuotaPolicyMap">
+        select <include refid="columns"/>
+          from batch.tenant_quota_policy
+         where id = #{id}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.tenant_quota_policy (
+            tenant_id, policy_code,
+            max_running_jobs_per_tenant, max_partitions_per_tenant, max_qps_per_tenant,
+            fair_share_weight, fair_share_group, burst_limit, partition_burst_limit,
+            quota_reset_policy, group_shared_max_running_jobs, enabled
+        ) values (
+            #{tenantId}, #{policyCode},
+            #{maxRunningJobsPerTenant}, #{maxPartitionsPerTenant}, #{maxQpsPerTenant},
+            <choose>
+                <when test="fairShareWeight != null">#{fairShareWeight}</when>
+                <otherwise>1</otherwise>
+            </choose>,
+            #{fairShareGroup}, #{burstLimit}, #{partitionBurstLimit},
+            #{quotaResetPolicy}, #{groupSharedMaxRunningJobs},
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <update id="update"
+            parameterType="com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord">
+        update batch.tenant_quota_policy
+           set policy_code = #{policyCode},
+               max_running_jobs_per_tenant = #{maxRunningJobsPerTenant},
+               max_partitions_per_tenant = #{maxPartitionsPerTenant},
+               max_qps_per_tenant = #{maxQpsPerTenant},
+               fair_share_weight = #{fairShareWeight},
+               fair_share_group = #{fairShareGroup},
+               burst_limit = #{burstLimit},
+               partition_burst_limit = #{partitionBurstLimit},
+               quota_reset_policy = #{quotaResetPolicy},
+               group_shared_max_running_jobs = #{groupSharedMaxRunningJobs},
+               enabled = #{enabled},
+               updated_at = current_timestamp
+         where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.tenant_quota_policy where id = #{id}
+    </delete>
+</mapper>

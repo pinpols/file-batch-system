@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.JobDefinitionMapper">
+    <!--
+      JobDefinitionRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, jobCode, jobName, jobType, bizType,
+         scheduleType, scheduleExpr, timezone, workerGroup, queueCode, calendarCode,
+         windowCode, triggerMode, dagEnabled, shardStrategy, retryPolicy, retryMaxCount,
+         timeoutSeconds, executionHandler, paramSchema, priority, defaultParams,
+         version, enabled, description, executionMode, watermarkField)
+
+      param_schema / default_params 是 JSONB；读路径通过 ::text 转字符串再走 MapJsonbTypeHandler。
+    -->
+    <resultMap id="jobDefinitionMap"
+               type="com.example.batch.orchestrator.domain.entity.JobDefinitionRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="job_name" javaType="java.lang.String"/>
+            <arg column="job_type" javaType="java.lang.String"/>
+            <arg column="biz_type" javaType="java.lang.String"/>
+            <arg column="schedule_type" javaType="java.lang.String"/>
+            <arg column="schedule_expr" javaType="java.lang.String"/>
+            <arg column="timezone" javaType="java.lang.String"/>
+            <arg column="worker_group" javaType="java.lang.String"/>
+            <arg column="queue_code" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="window_code" javaType="java.lang.String"/>
+            <arg column="trigger_mode" javaType="java.lang.String"/>
+            <arg column="dag_enabled" javaType="java.lang.Boolean"/>
+            <arg column="shard_strategy" javaType="java.lang.String"/>
+            <arg column="retry_policy" javaType="java.lang.String"/>
+            <arg column="retry_max_count" javaType="java.lang.Integer"/>
+            <arg column="timeout_seconds" javaType="java.lang.Integer"/>
+            <arg column="execution_handler" javaType="java.lang.String"/>
+            <arg column="param_schema_text"
+                 javaType="java.util.Map"
+                 typeHandler="com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler"/>
+            <arg column="priority" javaType="java.lang.Integer"/>
+            <arg column="default_params_text"
+                 javaType="java.util.Map"
+                 typeHandler="com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler"/>
+            <arg column="version" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="execution_mode" javaType="java.lang.String"/>
+            <arg column="watermark_field" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, job_code, job_name, job_type, biz_type,
+        schedule_type, schedule_expr, timezone, worker_group, queue_code, calendar_code,
+        window_code, trigger_mode, dag_enabled, shard_strategy, retry_policy, retry_max_count,
+        timeout_seconds, execution_handler,
+        param_schema::text AS param_schema_text,
+        priority,
+        default_params::text AS default_params_text,
+        version, enabled, description, execution_mode, watermark_field
+    </sql>
+
+    <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="jobDefinitionMap">
+        select <include refid="selectColumns"/>
+          from batch.job_definition
+         where tenant_id = #{tenantId}
+           and job_code = #{jobCode}
+           and enabled = #{enabled}
+         order by version desc, id desc
+         limit 1
+    </select>
+
+    <select id="selectByTenantAndEnabled" resultMap="jobDefinitionMap">
+        select <include refid="selectColumns"/>
+          from batch.job_definition
+         where tenant_id = #{tenantId}
+           and enabled = #{enabled}
+         order by id desc
+    </select>
+
+    <select id="selectById" resultMap="jobDefinitionMap">
+        select <include refid="selectColumns"/>
+          from batch.job_definition
+         where id = #{id}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.JobDefinitionRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_definition (
+            tenant_id, job_code, job_name, job_type, biz_type,
+            schedule_type, schedule_expr, timezone, worker_group, queue_code, calendar_code,
+            window_code, trigger_mode, dag_enabled, shard_strategy, retry_policy, retry_max_count,
+            timeout_seconds, execution_handler, param_schema, priority, default_params,
+            version, enabled, description, execution_mode, watermark_field
+        ) values (
+            #{tenantId}, #{jobCode}, #{jobName}, #{jobType}, #{bizType},
+            #{scheduleType}, #{scheduleExpr}, #{timezone}, #{workerGroup}, #{queueCode},
+            #{calendarCode}, #{windowCode}, #{triggerMode},
+            <choose>
+                <when test="dagEnabled != null">#{dagEnabled}</when>
+                <otherwise>false</otherwise>
+            </choose>,
+            #{shardStrategy}, #{retryPolicy}, #{retryMaxCount},
+            #{timeoutSeconds}, #{executionHandler},
+            <choose>
+                <when test="paramSchema != null">
+                    cast(#{paramSchema,jdbcType=VARCHAR,typeHandler=com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler} as jsonb)
+                </when>
+                <otherwise>null</otherwise>
+            </choose>,
+            <choose>
+                <when test="priority != null">#{priority}</when>
+                <otherwise>5</otherwise>
+            </choose>,
+            <choose>
+                <when test="defaultParams != null">
+                    cast(#{defaultParams,jdbcType=VARCHAR,typeHandler=com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler} as jsonb)
+                </when>
+                <otherwise>null</otherwise>
+            </choose>,
+            <choose>
+                <when test="version != null">#{version}</when>
+                <otherwise>1</otherwise>
+            </choose>,
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>,
+            #{description}, #{executionMode}, #{watermarkField}
+        )
+    </insert>
+
+    <update id="update"
+            parameterType="com.example.batch.orchestrator.domain.entity.JobDefinitionRecord">
+        update batch.job_definition
+           set job_name = #{jobName},
+               job_type = #{jobType},
+               biz_type = #{bizType},
+               schedule_type = #{scheduleType},
+               schedule_expr = #{scheduleExpr},
+               timezone = #{timezone},
+               worker_group = #{workerGroup},
+               queue_code = #{queueCode},
+               calendar_code = #{calendarCode},
+               window_code = #{windowCode},
+               trigger_mode = #{triggerMode},
+               dag_enabled = #{dagEnabled},
+               shard_strategy = #{shardStrategy},
+               retry_policy = #{retryPolicy},
+               retry_max_count = #{retryMaxCount},
+               timeout_seconds = #{timeoutSeconds},
+               execution_handler = #{executionHandler},
+               param_schema =
+                  <choose>
+                      <when test="paramSchema != null">
+                          cast(#{paramSchema,jdbcType=VARCHAR,typeHandler=com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler} as jsonb)
+                      </when>
+                      <otherwise>null</otherwise>
+                  </choose>,
+               priority = #{priority},
+               default_params =
+                  <choose>
+                      <when test="defaultParams != null">
+                          cast(#{defaultParams,jdbcType=VARCHAR,typeHandler=com.example.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler} as jsonb)
+                      </when>
+                      <otherwise>null</otherwise>
+                  </choose>,
+               version = #{version},
+               enabled = #{enabled},
+               description = #{description},
+               execution_mode = #{executionMode},
+               watermark_field = #{watermarkField},
+               updated_at = current_timestamp
+         where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.job_definition where id = #{id}
+    </delete>
+</mapper>

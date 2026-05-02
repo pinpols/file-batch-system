@@ -7,9 +7,9 @@ import com.example.batch.orchestrator.controller.response.SchedulerSnapshotRespo
 import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
+import com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
-import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,9 +21,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantSchedulerSnapshotRecorder {
 
-  private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private final TenantSchedulerSnapshotService snapshotService;
-  private final TenantSchedulerSnapshotRepository snapshotRepository;
+  private final TenantSchedulerSnapshotMapper snapshotMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
@@ -42,7 +42,7 @@ public class TenantSchedulerSnapshotRecorder {
     if (!persistEnabled) {
       return;
     }
-    for (String tenantId : tenantQuotaPolicyRepository.findDistinctTenantIdsEnabled()) {
+    for (String tenantId : tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds()) {
       SchedulerSnapshotResponse snap = snapshotService.buildLive(tenantId);
       if (snap.policies().isEmpty()) {
         continue;
@@ -67,7 +67,7 @@ public class TenantSchedulerSnapshotRecorder {
                   workerRegistryMapper.countByTenantAndStatus(
                       tenantId, WorkerRegistryStatus.ONLINE.code()),
               JsonbString.of(JsonUtils.toJson(snap)));
-      snapshotRepository.save(row);
+      snapshotMapper.insert(row);
     }
   }
 }

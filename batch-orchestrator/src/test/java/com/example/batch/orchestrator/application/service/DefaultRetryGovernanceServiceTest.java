@@ -19,15 +19,14 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import com.example.batch.orchestrator.mapper.DeadLetterTaskMapper;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -36,7 +35,7 @@ class DefaultRetryGovernanceServiceTest {
 
   private RetryScheduleMapper retryScheduleMapper;
   private DeadLetterTaskMapper deadLetterTaskMapper;
-  private JobDefinitionRepository jobDefinitionRepository;
+  private JobDefinitionMapper jobDefinitionMapper;
   private JobTaskMapper jobTaskMapper;
   private JobPartitionMapper jobPartitionMapper;
   private JobInstanceMapper jobInstanceMapper;
@@ -50,7 +49,7 @@ class DefaultRetryGovernanceServiceTest {
   void setUp() {
     retryScheduleMapper = mock(RetryScheduleMapper.class);
     deadLetterTaskMapper = mock(DeadLetterTaskMapper.class);
-    jobDefinitionRepository = mock(JobDefinitionRepository.class);
+    jobDefinitionMapper = mock(JobDefinitionMapper.class);
     jobTaskMapper = mock(JobTaskMapper.class);
     jobPartitionMapper = mock(JobPartitionMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
@@ -68,7 +67,7 @@ class DefaultRetryGovernanceServiceTest {
         new DefaultRetryGovernanceService(
             retryScheduleMapper,
             deadLetterTaskMapper,
-            jobDefinitionRepository,
+            jobDefinitionMapper,
             jobTaskMapper,
             jobPartitionMapper,
             jobInstanceMapper,
@@ -104,8 +103,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldCreateDeadLetterWhenRetryPolicyIsNone() {
-    when(jobDefinitionRepository.findById(1L))
-        .thenReturn(Optional.of(jobDefinitionWithPolicy(1L, "NONE", 3)));
+    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "NONE", 3));
 
     boolean result =
         service.scheduleRetryIfNecessary(
@@ -118,8 +116,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldCreateDeadLetterWhenMaxRetryCountZero() {
-    when(jobDefinitionRepository.findById(1L))
-        .thenReturn(Optional.of(jobDefinitionWithPolicy(1L, "FIXED", 0)));
+    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 0));
 
     boolean result =
         service.scheduleRetryIfNecessary(
@@ -133,8 +130,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldCreateDeadLetterWhenRetryCountExhausted() {
-    when(jobDefinitionRepository.findById(1L))
-        .thenReturn(Optional.of(jobDefinitionWithPolicy(1L, "FIXED", 2)));
+    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 2));
 
     // partition already has 2 retries, max is 2 → exhausted
     boolean result =
@@ -150,8 +146,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldInsertRetryScheduleWithCorrectStatusAndDedup() {
-    when(jobDefinitionRepository.findById(1L))
-        .thenReturn(Optional.of(jobDefinitionWithPolicy(1L, "FIXED", 3)));
+    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
 
     boolean result =
         service.scheduleRetryIfNecessary(
@@ -169,7 +164,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldUseDefaultRetryPolicyWhenJobDefinitionNotFound() {
-    when(jobDefinitionRepository.findById(anyLong())).thenReturn(Optional.empty());
+    when(jobDefinitionMapper.selectById(anyLong())).thenReturn(null);
 
     boolean result =
         service.scheduleRetryIfNecessary(

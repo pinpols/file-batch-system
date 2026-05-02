@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper">
+    <!--
+      TenantSchedulerSnapshotRecord 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      参数顺序必须与 record canonical constructor 完全一致：
+        (id, tenantId, snapshotAt, fairShareGroup, policyCode, activeJobs, activePartitions,
+         maxJobsBase, burstLimit, effectiveJobCap, groupActiveJobs, groupMaxJobs,
+         quotaResetPolicy, onlineWorkers, detailJson)
+      detail_json 是 JSONB；读路径通过 ::text 转字符串再走 JsonbStringTypeHandler 包装。
+    -->
+    <resultMap id="tenantSchedulerSnapshotMap"
+               type="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="snapshot_at" javaType="java.time.Instant"/>
+            <arg column="fair_share_group" javaType="java.lang.String"/>
+            <arg column="policy_code" javaType="java.lang.String"/>
+            <arg column="active_jobs" javaType="java.lang.Integer"/>
+            <arg column="active_partitions" javaType="java.lang.Integer"/>
+            <arg column="max_jobs_base" javaType="java.lang.Integer"/>
+            <arg column="burst_limit" javaType="java.lang.Integer"/>
+            <arg column="effective_job_cap" javaType="java.lang.Integer"/>
+            <arg column="group_active_jobs" javaType="java.lang.Integer"/>
+            <arg column="group_max_jobs" javaType="java.lang.Integer"/>
+            <arg column="quota_reset_policy" javaType="java.lang.String"/>
+            <arg column="online_workers" javaType="java.lang.Integer"/>
+            <arg column="detail_json_text"
+                 javaType="com.example.batch.orchestrator.domain.value.JsonbString"
+                 typeHandler="com.example.batch.orchestrator.infrastructure.mybatis.JsonbStringTypeHandler"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, snapshot_at, fair_share_group, policy_code,
+        active_jobs, active_partitions, max_jobs_base, burst_limit, effective_job_cap,
+        group_active_jobs, group_max_jobs, quota_reset_policy, online_workers,
+        detail_json::text AS detail_json_text
+    </sql>
+
+    <select id="listRecent" resultMap="tenantSchedulerSnapshotMap">
+        select <include refid="selectColumns"/>
+          from batch.tenant_scheduler_snapshot
+         where tenant_id = #{tenantId}
+         order by snapshot_at desc
+         limit #{limit}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.tenant_scheduler_snapshot (
+            tenant_id, snapshot_at, fair_share_group, policy_code,
+            active_jobs, active_partitions, max_jobs_base, burst_limit, effective_job_cap,
+            group_active_jobs, group_max_jobs, quota_reset_policy, online_workers, detail_json
+        ) values (
+            #{tenantId},
+            <choose>
+                <when test="snapshotAt != null">#{snapshotAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>,
+            #{fairShareGroup}, #{policyCode},
+            <choose>
+                <when test="activeJobs != null">#{activeJobs}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            <choose>
+                <when test="activePartitions != null">#{activePartitions}</when>
+                <otherwise>0</otherwise>
+            </choose>,
+            #{maxJobsBase}, #{burstLimit}, #{effectiveJobCap},
+            #{groupActiveJobs}, #{groupMaxJobs}, #{quotaResetPolicy}, #{onlineWorkers},
+            <choose>
+                <when test="detailJson != null">cast(#{detailJson.value} as jsonb)</when>
+                <otherwise>null</otherwise>
+            </choose>
+        )
+    </insert>
+</mapper>

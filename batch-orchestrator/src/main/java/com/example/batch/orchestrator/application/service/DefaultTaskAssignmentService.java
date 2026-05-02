@@ -20,6 +20,7 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.query.JobExecutionLogQuery;
 import com.example.batch.orchestrator.mapper.AssignWorkerParam;
 import com.example.batch.orchestrator.mapper.ClaimPartitionParam;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
@@ -28,7 +29,6 @@ import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.MarkRunningParam;
 import com.example.batch.orchestrator.mapper.UpdateTaskStatusParam;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -66,7 +66,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   private final JobStepInstanceMapper jobStepInstanceMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
-  private final JobDefinitionRepository jobDefinitionRepository;
+  private final JobDefinitionMapper jobDefinitionMapper;
   private final PartitionLeaseProperties partitionLeaseProperties;
   private final ResourceSchedulerProperties resourceSchedulerProperties;
 
@@ -244,8 +244,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         task.getJobPartitionId() == null
             ? null
             : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-    JobDefinitionRecord definition =
-        jobDefinitionRepository.findById(instance.getJobDefinitionId()).orElse(null);
+    JobDefinitionRecord definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
     String businessKey =
         partition != null && partition.getBusinessKey() != null ? partition.getBusinessKey() : null;
     String idempotencyKey =

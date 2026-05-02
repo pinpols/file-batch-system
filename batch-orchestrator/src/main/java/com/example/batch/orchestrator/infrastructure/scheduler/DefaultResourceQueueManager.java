@@ -4,7 +4,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
-import com.example.batch.orchestrator.repository.ResourceQueueRepository;
+import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DefaultResourceQueueManager implements ResourceQueueManager {
 
-  private final ResourceQueueRepository resourceQueueRepository;
+  private final ResourceQueueMapper resourceQueueMapper;
 
   @Override
   public ResourceQueueRecord resolveQueue(ResourceSchedulingRequest request) {
@@ -35,7 +35,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
       return null;
     }
     List<ResourceQueueRecord> queues =
-        resourceQueueRepository.findByTenantIdAndEnabled(request.getTenantId(), true);
+        resourceQueueMapper.selectByTenantAndEnabled(request.getTenantId(), true);
     if (queues == null || queues.isEmpty()) {
       return null;
     }
