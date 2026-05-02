@@ -1,9 +1,9 @@
 # SonarQube 治理修复日志 — 2026-05-02
 
 > 基准：本地 sonar-scan.sh 跑出 `reports/sonar/2026-05-02_18-31-55/sonar-report.csv`，共 **1024 条** issue
-> 范围：P1（BLOCKER + 高优 NPE）+ S112 真边界 + S3776 高复杂度方法 + 抽通用 Excel 校验 helper + 标注脚本
-> 验证：跨模块 `mvn compile test-compile` 通过，所有受影响测试 51/51 绿
-> 已合并到 `main`：`59d37ef6` / `8510f690` / `301c5699`
+> 范围：P0（BLOCKER BUG 事务代理）+ P1（BLOCKER CODE_SMELL + 高优 NPE）+ S112 真边界 + S3776 高复杂度方法 + 抽通用 Excel 校验 helper + 标注脚本
+> 验证：跨模块 `mvn test` 通过，548 tests 绿（排除 2 个已知 flaky IT）
+> 已合并到 `main`：`de055f2c` / `f2cfbbc6` / `59d37ef6` / `8510f690` / `301c5699`
 
 ---
 
@@ -11,7 +11,7 @@
 
 | action | 数量 | 说明 |
 |---|---:|---|
-| **FIXED** | **31** | 本次代码已改 |
+| **FIXED** | **59** | 本次代码已改（P0: 28 + P1: 31） |
 | **ANNOTATION** | **29** | `Texts.hasText` / `Guard.require*` 加 `@Contract`，下次扫描应自动消除（FP 治理） |
 | **DEFERRED** | 2 | 业务关键路径但 CC 中段，下次迭代到此功能时"经过即重构" |
 | **KEEP** | 22 | Worker 内部 helper（顶层 stage `execute()` 已 catch）/ abstract 模板基类 |
@@ -25,9 +25,43 @@
 
 ---
 
-## 二、P1 修复（commit `59d37ef6`）
+## 二、P0 修复 — BLOCKER BUG 事务代理
 
-### 2.1 · BLOCKER S2699 缺断言测试（4 处）
+### 2.1 · S6809 Self-invocation 绕过 AOP 代理（24 处）— commit `de055f2c`
+
+Spring AOP 代理只拦截**从外部进入**的方法调用；`this.method()` 直接调到实现类，`@Transactional` / `@Cacheable` 注解失效。
+
+**修复模式**：在每个受影响的 Bean 中注入自身代理引用 `@Lazy @Autowired private XxxService self;`，再把原 `this.method()` 改为 `self.method()`。测试中用 `ReflectionTestUtils.setField(service, "self", service)` 在 `@BeforeEach` 注入。
+
+| 文件 | 受影响调用 |
+|---|---|
+| `DefaultTaskOutcomeService` | `self.recordNodeRunStart/Finish()`, `self.applyTaskOutcome()` ×5 |
+| `QuotaRuntimeStateSnapshotScheduler` | `self.writeIfActive()` ×4 |
+| `TenantConfigInitApplyHandlers` | `self.upsertWorkflowDefinition()`, `self.insertPipelineDefinition()`, `self.updatePipelineDefinition()` ×4 |
+| `DefaultConsoleTenantConfigInitApplicationService` | `self.initForTenant()` |
+| `TaskDispatchOutboxService` | `self.writeDispatchEvent()` (5-arg → 6-arg 重载) |
+| `DefaultWorkflowNodeDispatchService` | `self.dispatchNode()` |
+| `DefaultWorkerRegistryService` | `self.register()`, `self.updateStatus()` |
+| `DefaultCompensationService` | `self.appendPreInsertFailureLog()` ×2（`REQUIRES_NEW` 跨事务最关键） |
+| `OutboxArchiveService`（S6809 部分） | 后被 S2229 修复取代，`self` 字段已移除 |
+
+### 2.2 · S2229 @Transactional 传播级别不兼容（4 处）— commit `f2cfbbc6`
+
+S2229 的根因与 S6809 不同：外层方法**无** `@Transactional`，直接调用内层**有** `@Transactional` 的方法 → propagation 语义失效（该传播的不传播）。修复方式是把 `@Transactional` **上移**到入口方法，内层方法改为普通调用。
+
+| 文件 | 修复方式 |
+|---|---|
+| `OutboxArchiveService` | `@Transactional` 从 `archiveOnce()` 移到 `archivePublished()` / `archiveGiveUp()`；`archiveOnce` 无注解，直接 `archiveOnce(...)` 调用；`self` 字段完全移除 |
+| `orchestrator/BatchDayCutoffScheduler` | `@Transactional` 从 `advance()` 移到 `scheduledAdvance()`；`advance()` 无注解；`self` 移除 |
+| `trigger/BatchDayCutoffScheduler` | 同上，`@Transactional` 移到 `scheduledCutoff()`；`cutoff()` 无注解 |
+
+> **测试影响**：`OutboxArchiveServiceTest` 原注入的 `self` 字段已不存在，同步删除 `ReflectionTestUtils.setField(service, "self", service)` 调用。
+
+---
+
+## 三、P1 修复（commit `59d37ef6`）
+
+### 3.1 · BLOCKER S2699 缺断言测试（4 处）
 
 | 测试 | 修复 |
 |---|---|
@@ -36,11 +70,11 @@
 | [AbstractWorkerLoopTest:112](batch-worker-core/src/test/java/com/example/batch/worker/core/support/AbstractWorkerLoopTest.java) | `doHeartbeat` 异常路径同上 |
 | [ProcessMetricsTest:13](batch-worker-process/src/test/java/com/example/batch/worker/processes/metrics/ProcessMetricsTest.java) | `noopFactory` 4 行调用包成 lambda |
 
-### 2.2 · BLOCKER S3516 死分支（1 处）
+### 3.2 · BLOCKER S3516 死分支（1 处）
 
 [ConsoleWebhookService.normalizeEventTypes:105](batch-console-api/src/main/java/com/example/batch/console/service/ConsoleWebhookService.java)：恒等 `if Objects.equals(normalized, "*") return normalized; return normalized;` 删第一分支。
 
-### 2.3 · S2259 真 NPE（5 处）
+### 3.3 · S2259 真 NPE（5 处）
 
 | 位置 | 修复手法 | 风险等级 |
 |---|---|---|
@@ -50,7 +84,7 @@
 | [RetryDispatchStep:51](batch-worker-dispatch/src/main/java/com/example/batch/worker/dispatchs/stage/RetryDispatchStep.java) | `context==null` 早返 + 失败结果 | 三元运算符让 context 可 null 后裸用 `getAttributes()` |
 | [ConsoleAuthController:60](batch-console-api/src/main/java/com/example/batch/console/web/ConsoleAuthController.java) | `getPrincipal()` 强转改 pattern-match `instanceof ConsolePrincipal principal`，配套新增 i18n key `error.auth.principal_missing`（zh+en） | `Authentication.getPrincipal()` 可返非 ConsolePrincipal 类型 |
 
-### 2.4 · S112 Controller 边界（3 处）
+### 3.4 · S112 Controller 边界（3 处）
 
 [TriggerManagementController:98/103/109](batch-trigger/src/main/java/com/example/batch/trigger/web/TriggerManagementController.java) drain 三接口的 `throws Exception` 收窄为 `throws SchedulerException`（实际抛出的就是 Quartz 的 SchedulerException）。
 
@@ -59,7 +93,7 @@
 - 4 个 Plugin SPI 接口 — SPI 设计契约
 - 24 个 Worker 阶段内部 helper — 顶层 stage `execute()` 已统一 catch 包成 `BizException` / `XxxStageResult.failure`
 
-### 2.5 · S2259 噪音治理（29 处批量）
+### 3.5 · S2259 噪音治理（29 处批量）
 
 `Texts.hasText` / `Guard.require` / `Guard.requireText` / `Guard.requireFound` 加 `@org.jetbrains.annotations.Contract` 注解（jar 已通过 spring-core 传递存在）：
 
@@ -78,9 +112,9 @@ SonarJava 识别此契约后，`if (Texts.hasText(x))` 和 `Guard.require(x != n
 
 ---
 
-## 三、S3776 高复杂度重构
+## 四、S3776 高复杂度重构
 
-### 3.1 · Tier 1（CC ≥ 30，8 个方法）— commit `8510f690`
+### 4.1 · Tier 1（CC ≥ 30，8 个方法）— commit `8510f690`
 
 | # | 方法 | 原 CC | 拆法 |
 |---|---|---:|---|
@@ -93,7 +127,7 @@ SonarJava 识别此契约后，`if (Texts.hasText(x))` 和 `Guard.require(x != n
 | 7 | `LaunchBatchDayService.doUpsertBatchDayInstance` | 49 | 拆 `insertNewBatchDay` / `updateExistingBatchDay` + `BatchDayUpsertContext` / `BatchDayUpdatePlan` record |
 | 8 | `DefaultConsoleJobDefinitionExcelApplicationService.validate` | 51 | 拆 `validateRow` + `validateIdentity/Existing/Enum/Numeric/FK/Json` |
 
-### 3.2 · Tier 2（CC 19-28，10 个方法）— commit `8510f690`
+### 4.2 · Tier 2（CC 19-28，10 个方法）— commit `8510f690`
 
 | # | 方法 | 原 CC | 拆法 |
 |---|---|---:|---|
@@ -102,7 +136,7 @@ SonarJava 识别此契约后，`if (Texts.hasText(x))` 和 `Guard.require(x != n
 | 9 | `DefaultPartitionDispatchService.dispatch` | 26 | 拆 `dispatchInitialDagNodes` / `dispatchByPlan` / `transitionInstanceToRunning/Waiting` + `DispatchOutcome` record |
 | 10 | `ConfigPackageExcelWorkbookWriter.createFieldGuideSheet` | 27 | 拆 `setGuideColumnWidths` / `buildGuideStyles` / `writeGuideHeader` / `writeGuideRow` + `GuideStyles` record |
 
-### 3.3 · 重构手法分类总结
+### 4.3 · 重构手法分类总结
 
 | 类型 | 例子 | 套路 |
 |---|---|---|
@@ -116,7 +150,7 @@ SonarJava 识别此契约后，`if (Texts.hasText(x))` 和 `Guard.require(x != n
 
 ---
 
-## 四、Plan A — 抽 SheetValidationHelpers（commit `8510f690`）
+## 五、Plan A — 抽 SheetValidationHelpers（commit `8510f690`）
 
 新建 [SheetValidationHelpers.java](batch-console-api/src/main/java/com/example/batch/console/support/excel/SheetValidationHelpers.java) — 5 个静态工具方法：
 
@@ -138,7 +172,7 @@ validateJsonField(value, fieldName, required, ri)
 
 ---
 
-## 五、CSV 标注脚本（commit `301c5699`）
+## 六、CSV 标注脚本（commit `301c5699`）
 
 新增 [scripts/dev/annotate-sonar-report.py](scripts/dev/annotate-sonar-report.py)：读 `sonar-report.csv`，按"精确表 + 规则默认表 + S112/S3776 特殊分级"为每条 issue 加两列 `action` + `note`，输出 `sonar-report-annotated.csv`。
 
@@ -148,7 +182,7 @@ validateJsonField(value, fieldName, required, ri)
 
 ---
 
-## 六、关于 Sonar 阈值
+## 七、关于 Sonar 阈值
 
 **S3776 阈值建议放宽**：当前默认 15 偏严，对项目实际复杂度过敏感。建议在 SonarQube Quality Profile 把 S3776 `Threshold` 参数从 15 调到 **20**：
 
@@ -160,7 +194,7 @@ validateJsonField(value, fieldName, required, ri)
 
 ---
 
-## 七、跳过的批量噪音（说明 + 不修原因）
+## 八、跳过的批量噪音（说明 + 不修原因）
 
 ### S1192 字符串常量化（256 条 / SKIP_BULK）
 
@@ -184,7 +218,7 @@ validateJsonField(value, fieldName, required, ri)
 
 ---
 
-## 八、未尽事宜（DEFERRED / 后续迭代）
+## 九、未尽事宜（DEFERRED / 后续迭代）
 
 ### 未修但记录的 S3776 残余 ~20 条（CC ≥ 22 不在 Tier 1/2 名单）
 
@@ -202,12 +236,14 @@ validateJsonField(value, fieldName, required, ri)
 
 ---
 
-## 九、commits
+## 十、commits
 
 ```
 301c5699 chore(dev): 新增 annotate-sonar-report.py — sonar 报告本次处置标注脚本
 8510f690 refactor(sonar): S3776 Tier 1+2 复杂度重构 + 抽 SheetValidationHelpers 工具
 59d37ef6 fix(sonar): P1 BLOCKER + 真 NPE + S112 controller 收窄 + helper 加 @Contract
+f2cfbbc6 fix(p0): 修复 S2229 @Transactional 传播级别不兼容（4处 BLOCKER BUG）
+de055f2c fix(p0): 修复 28 处 @Transactional self-invocation（S6809 BLOCKER/CRITICAL）
 ```
 
 ---
