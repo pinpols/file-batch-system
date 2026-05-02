@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -113,8 +114,7 @@ class AbstractWorkerLoopTest {
     loop.ensureStarted();
     doThrow(new RuntimeException("network error")).when(workerRuntimeFacade).heartbeat(any());
 
-    // 异常不应向外传播
-    loop.doHeartbeat();
+    assertThatCode(() -> loop.doHeartbeat()).doesNotThrowAnyException();
   }
 
   @Test

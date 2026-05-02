@@ -1,6 +1,8 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.SseTicketService;
@@ -56,7 +58,10 @@ public class ConsoleAuthController {
   @PostMapping("/stream/ticket")
   @PreAuthorize("isAuthenticated()")
   public CommonResponse<Map<String, String>> streamTicket(Authentication authentication) {
-    ConsolePrincipal principal = (ConsolePrincipal) authentication.getPrincipal();
+    Object raw = authentication.getPrincipal();
+    if (!(raw instanceof ConsolePrincipal principal)) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
+    }
     String ticket = sseTicketService.issue(principal.username(), principal.tenantId());
     return responseFactory.success(Map.of("ticket", ticket));
   }

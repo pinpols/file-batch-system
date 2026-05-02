@@ -7,6 +7,7 @@ import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.quartz.SchedulerException;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -95,18 +96,18 @@ public class TriggerManagementController {
   }
 
   @GetMapping("/drain/status")
-  public CommonResponse<Map<String, Object>> drainStatus() throws Exception {
+  public CommonResponse<Map<String, Object>> drainStatus() throws SchedulerException {
     return CommonResponse.success(gracefulShutdown.status());
   }
 
   @PostMapping("/drain/enable")
-  public CommonResponse<Map<String, Object>> enableDrain() throws Exception {
+  public CommonResponse<Map<String, Object>> enableDrain() throws SchedulerException {
     gracefulShutdown.startDraining("manual-enable");
     return CommonResponse.success(gracefulShutdown.status());
   }
 
   @PostMapping("/drain/disable")
-  public CommonResponse<Map<String, Object>> disableDrain() throws Exception {
+  public CommonResponse<Map<String, Object>> disableDrain() throws SchedulerException {
     gracefulShutdown.stopDraining("manual-disable");
     return CommonResponse.success(gracefulShutdown.status());
   }

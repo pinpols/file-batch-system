@@ -46,7 +46,16 @@ public class RetryDispatchStep implements DispatchStageStep {
 
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
-    Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
+    if (context == null) {
+      return DispatchStageResult.failure(
+          stage(),
+          "DISPATCH_RETRY_NO_CONTEXT",
+          "error.dispatch.payload_missing",
+          new Object[0],
+          "dispatch context missing",
+          ERROR_OBJECT_MAPPER);
+    }
+    Object payload = context.getAttributes().get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       context
           .getAttributes()

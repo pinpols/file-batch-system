@@ -94,6 +94,9 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
             new StateContext(
                 request.owner(), policy.name(), now, request.policy().slidingWindowHours()));
     state = refreshState(state, policy, now, request.policy().slidingWindowHours());
+    if (state == null) {
+      return ResourceCheck.allow();
+    }
 
     int borrowedNeeded =
         Math.max(
@@ -255,7 +258,8 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     if (state == null) {
       return null;
     }
-    String normalizedPolicy = policy == null ? QuotaResetPolicy.NONE.name() : policy.name();
+    QuotaResetPolicy effectivePolicy = policy == null ? QuotaResetPolicy.NONE : policy;
+    String normalizedPolicy = effectivePolicy.name();
     boolean changed = false;
     if (!normalizedPolicy.equalsIgnoreCase(state.quotaResetPolicy())) {
       state =
@@ -267,7 +271,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
               state.lastResetAt());
       changed = true;
     }
-    if (!policy.isRuntimeManaged()) {
+    if (!effectivePolicy.isRuntimeManaged()) {
       if (state.peakBorrowedCount() == null
           || state.peakBorrowedCount() != 0
           || state.windowStartedAt() != null
@@ -281,7 +285,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       return state;
     }
 
-    if (policy == QuotaResetPolicy.CALENDAR_DAY) {
+    if (effectivePolicy == QuotaResetPolicy.CALENDAR_DAY) {
       // 自然日窗口使用平台默认时区（batch.timezone.default-zone），与调度日历时区语义一致；
       // 避免 JVM default 在容器间漂移导致同一租户跨节点看到不同的"自然日"边界。
       ZonedDateTime nowZdt = now.atZone(timezoneProvider.defaultZone());
@@ -293,7 +297,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
         state = state.withRefresh(normalizedPolicy, windowStart, windowEnd, 0, now);
         changed = true;
       }
-    } else if (policy == QuotaResetPolicy.SLIDING_WINDOW) {
+    } else if (effectivePolicy == QuotaResetPolicy.SLIDING_WINDOW) {
       int normalizedHours = Math.max(1, slidingWindowHours);
       if (state.windowStartedAt() == null
           || state.windowExpiresAt() == null

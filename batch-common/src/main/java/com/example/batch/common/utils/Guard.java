@@ -2,6 +2,7 @@ package com.example.batch.common.utils;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import org.jetbrains.annotations.Contract;
 
 /**
  * 轻量前置校验工具。
@@ -33,6 +34,7 @@ public final class Guard {
    * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
    * }</pre>
    */
+  @Contract("null, _ -> fail; !null, _ -> param1")
   public static <T> T requireFound(T entity, String message) {
     if (entity == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
@@ -41,6 +43,7 @@ public final class Guard {
   }
 
   /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
+  @Contract("null, _ -> fail")
   public static void requireText(String str, String message) {
     if (!Texts.hasText(str)) {
       throw BizException.of(
@@ -49,6 +52,7 @@ public final class Guard {
   }
 
   /** 通用业务条件断言。 */
+  @Contract("false, _ -> fail")
   public static void require(boolean condition, String message) {
     if (!condition) {
       throw BizException.of(
@@ -60,6 +64,7 @@ public final class Guard {
    * S-1.9：带错误码的通用业务条件断言。业务需要 {@link ResultCode#CONFLICT} / {@link ResultCode#STATE_CONFLICT} /
    * {@link ResultCode#FORBIDDEN} 等非 INVALID_ARGUMENT 语义时， 通过此重载指定，避免绕过工具类直接 throw。
    */
+  @Contract("false, _, _ -> fail")
   public static void require(boolean condition, ResultCode resultCode, String message) {
     if (!condition) {
       ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
@@ -68,6 +73,7 @@ public final class Guard {
   }
 
   /** S-1.9：带错误码的字符串非空断言。 */
+  @Contract("null, _, _ -> fail")
   public static void requireText(String str, ResultCode resultCode, String message) {
     if (!Texts.hasText(str)) {
       ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
