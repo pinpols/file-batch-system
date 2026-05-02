@@ -51,7 +51,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
       "batch.file-governance.archive.retention-days=7",
       "batch.file-governance.archive.cleanup-batch-size=10",
       "batch.file-governance.arrival.batch-size=10",
-      "batch.file-governance.reconcile.batch-size=10"
+      "batch.file-governance.reconcile.batch-size=10",
+      "batch.startup-self-check.enabled=false"
     })
 class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
