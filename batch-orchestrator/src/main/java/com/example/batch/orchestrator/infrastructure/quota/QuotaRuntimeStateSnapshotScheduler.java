@@ -7,8 +7,8 @@ import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
-import com.example.batch.orchestrator.repository.ResourceQueueRepository;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
+import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
+import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -40,8 +40,8 @@ public class QuotaRuntimeStateSnapshotScheduler {
 
   private final QuotaRuntimeStateService quotaRuntimeStateService;
   private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
-  private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
-  private final ResourceQueueRepository resourceQueueRepository;
+  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+  private final ResourceQueueMapper resourceQueueMapper;
   private final QuotaProperties quotaProperties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
@@ -58,7 +58,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
     if (!quotaProperties.getSnapshot().isEnabled()) {
       return;
     }
-    List<String> tenantIds = tenantQuotaPolicyRepository.findDistinctTenantIdsEnabled();
+    List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
     int snapshotted = 0;
     for (String tenantId : tenantIds) {
       try {
@@ -77,7 +77,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
   private int snapshotTenant(String tenantId) {
     int written = 0;
     for (TenantQuotaPolicyRecord p :
-        tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true)) {
+        tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true)) {
       written +=
           writeIfActive(
               tenantId,
@@ -93,7 +93,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
               p.quotaResetPolicy(),
               p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit()));
     }
-    for (ResourceQueueRecord q : resourceQueueRepository.findByTenantIdAndEnabled(tenantId, true)) {
+    for (ResourceQueueRecord q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
       written += writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
       // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列

@@ -11,10 +11,10 @@ import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecor
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
+import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
+import com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import com.example.batch.orchestrator.repository.ResourceQueueRepository;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
-import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,9 +34,9 @@ public class TenantSchedulerSnapshotService {
 
   private static final int MAX_SNAPSHOT_LIMIT = 100;
 
-  private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
-  private final TenantSchedulerSnapshotRepository tenantSchedulerSnapshotRepository;
-  private final ResourceQueueRepository resourceQueueRepository;
+  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+  private final TenantSchedulerSnapshotMapper tenantSchedulerSnapshotMapper;
+  private final ResourceQueueMapper resourceQueueMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
@@ -68,7 +68,7 @@ public class TenantSchedulerSnapshotService {
       String tenantId, long tenantActiveJobs, long tenantActivePartitions) {
     List<SchedulerSnapshotResponse.PolicySnapshot> policies = new ArrayList<>();
     List<TenantQuotaPolicyRecord> quotaRows =
-        tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
+        tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true);
     for (TenantQuotaPolicyRecord p : quotaRows) {
       long groupJobs = 0L;
       if (Texts.hasText(p.fairShareGroup())) {
@@ -113,7 +113,7 @@ public class TenantSchedulerSnapshotService {
 
   private List<SchedulerSnapshotResponse.QueueSnapshot> buildQueueSnapshot(String tenantId) {
     List<SchedulerSnapshotResponse.QueueSnapshot> queues = new ArrayList<>();
-    for (ResourceQueueRecord q : resourceQueueRepository.findByTenantIdAndEnabled(tenantId, true)) {
+    for (ResourceQueueRecord q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
       long qj = jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, q.queueCode());
       int qmax = q.maxRunningJobs() == null ? 0 : q.maxRunningJobs();
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
@@ -160,6 +160,6 @@ public class TenantSchedulerSnapshotService {
 
   public List<TenantSchedulerSnapshotRecord> history(String tenantId, int limit) {
     int boundedLimit = Math.min(Math.max(limit, 1), MAX_SNAPSHOT_LIMIT);
-    return tenantSchedulerSnapshotRepository.listRecent(tenantId, boundedLimit);
+    return tenantSchedulerSnapshotMapper.listRecent(tenantId, boundedLimit);
   }
 }

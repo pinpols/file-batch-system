@@ -11,9 +11,9 @@ import static org.mockito.Mockito.when;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.mapper.BatchWindowMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
+import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,11 +25,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OrchestratorConfigCacheServiceTest {
 
   @Mock private OrchestratorRedisSupport redis;
-  @Mock private JobDefinitionRepository jobDefinitionRepository;
+  @Mock private JobDefinitionMapper jobDefinitionMapper;
   @Mock private WorkflowDefinitionMapper workflowDefinitionMapper;
   @Mock private BusinessCalendarMapper businessCalendarMapper;
   @Mock private BatchWindowMapper batchWindowMapper;
-  @Mock private TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+  @Mock private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
 
   private OrchestratorConfigCacheService service;
 
@@ -38,11 +38,11 @@ class OrchestratorConfigCacheServiceTest {
     service =
         new OrchestratorConfigCacheService(
             redis,
-            jobDefinitionRepository,
+            jobDefinitionMapper,
             workflowDefinitionMapper,
             businessCalendarMapper,
             batchWindowMapper,
-            tenantQuotaPolicyRepository);
+            tenantQuotaPolicyMapper);
   }
 
   @Test
@@ -68,8 +68,7 @@ class OrchestratorConfigCacheServiceTest {
     JobDefinitionRecord result = service.findEnabledJobDefinition("t1", "JOB1");
 
     assertThat(result).isSameAs(cached);
-    verify(jobDefinitionRepository, never())
-        .findFirstByTenantIdAndJobCodeAndEnabled(any(), any(), any());
+    verify(jobDefinitionMapper, never()).selectFirstByTenantAndCodeAndEnabled(any(), any(), any());
     verify(redis, never()).setJson(anyString(), any(), any(Duration.class));
   }
 
@@ -77,7 +76,7 @@ class OrchestratorConfigCacheServiceTest {
   void cacheMissCallsRepositoryAndCachesResult() {
     JobDefinitionRecord fromDb = jobDefinitionRecord("t1", "JOB2");
     when(redis.getJson(anyString(), eq(JobDefinitionRecord.class))).thenReturn(null);
-    when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled("t1", "JOB2", true))
+    when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled("t1", "JOB2", true))
         .thenReturn(fromDb);
 
     JobDefinitionRecord result = service.findEnabledJobDefinition("t1", "JOB2");

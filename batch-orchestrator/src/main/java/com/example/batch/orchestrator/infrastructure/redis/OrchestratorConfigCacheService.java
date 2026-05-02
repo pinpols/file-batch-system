@@ -9,9 +9,9 @@ import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
 import com.example.batch.orchestrator.mapper.BatchWindowMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
+import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,11 +33,11 @@ public class OrchestratorConfigCacheService {
   private static final Duration CONFIG_CACHE_TTL = Duration.ofMinutes(5);
 
   private final OrchestratorRedisSupport redis;
-  private final JobDefinitionRepository jobDefinitionRepository;
+  private final JobDefinitionMapper jobDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
   private final BatchWindowMapper batchWindowMapper;
-  private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+  private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
 
   public JobDefinitionRecord findEnabledJobDefinition(String tenantId, String jobCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
@@ -49,7 +49,7 @@ public class OrchestratorConfigCacheService {
       return cached;
     }
     JobDefinitionRecord loaded =
-        jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(tenantId, jobCode, true);
+        jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
     }
@@ -118,7 +118,7 @@ public class OrchestratorConfigCacheService {
       return cached;
     }
     TenantQuotaPolicyRecord loaded =
-        tenantQuotaPolicyRepository.findFirstEnabledByTenantId(tenantId, true).orElse(null);
+        tenantQuotaPolicyMapper.selectFirstEnabledByTenantId(tenantId, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
     }
