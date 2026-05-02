@@ -94,7 +94,17 @@ done
 echo ""
 ok "SonarQube is UP (${SONAR_URL})"
 
-# 关闭强制登录，Dashboard 可匿名访问（避免 admin 首次打开触发改密弹窗）
+# 清除 admin 的强制改密标记（H2 直连，容器需处于运行态但刚就绪时 H2 TCP 端口已开）
+# SonarQube 启动 H2 TCP server 在 9092，通过端口转发直连
+H2_PORT=9092
+docker exec "$SONAR_CONTAINER" java \
+  -cp /opt/sonarqube/lib/jdbc/h2/h2-2.3.232.jar org.h2.tools.Shell \
+  -url "jdbc:h2:tcp://127.0.0.1:${H2_PORT}/sonar;NON_KEYWORDS=VALUE" \
+  -user "" -password "" \
+  -sql "UPDATE USERS SET RESET_PASSWORD=FALSE WHERE LOGIN='${SONAR_ADMIN_USER}';" \
+  &>/dev/null || true
+
+# 关闭强制登录，Dashboard 可匿名访问
 curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   "${SONAR_URL}/api/settings/set" \
   -d "key=sonar.forceAuthentication&value=false" &>/dev/null || true
