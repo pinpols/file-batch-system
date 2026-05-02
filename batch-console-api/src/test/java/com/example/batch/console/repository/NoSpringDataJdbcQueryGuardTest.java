@@ -12,19 +12,36 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * 守护测试:console-api 已统一走 MyBatis(MyBatis 迁移盘 Phase 0-3 完成)。
+ * 守护测试:全 reactor 已统一走 MyBatis(ADR-001 决策落地,SDJ 迁移盘 Phase 0-4 完成)。
  *
- * <p>禁止 console-api {@code main} 路径下任何 Java 文件引入 Spring Data JDBC / Spring Data Relational
- * 注解或类型（{@code @Query}、{@code Repository}、{@code CrudRepository}、{@code @Column}、{@code
- * EnableJdbcRepositories} 等）。新增查询请走 MyBatis mapper(参见 {@code mapper/Console*Mapper.java} + {@code
- * resources/mapper/Console*Mapper.xml})。
+ * <p>禁止任何业务模块 {@code main} 路径下的 Java 文件引入 Spring Data JDBC / Spring Data Relational
+ * 注解或类型({@code @Query}、{@code Repository}、{@code CrudRepository}、{@code @Column}、{@code
+ * EnableJdbcRepositories} 等)。新增查询请走 MyBatis mapper。
  *
- * <p>豁免:仅 test 路径不扫(允许 IT 中用 Spring Data JDBC 做断言查询)。
+ * <p>扫描范围:9 个业务模块(batch-common / batch-trigger / batch-orchestrator / batch-worker-* /
+ * batch-console-api)的 {@code src/main/java}。
+ *
+ * <p>豁免:test 路径不扫(允许 IT 中用 Spring Data JDBC 做断言查询)。
+ *
+ * <p>放在 console-api 模块是因为它最早完成 SDJ→MyBatis 迁移(Phase 0-4)、最有完整 mapper 模板可参考;实际守护范围覆盖全 reactor。 pom 层
+ * {@code spring-boot-starter-data-jdbc} 依赖由 {@code scripts/ci/check-dependency-boundaries.py}
+ * 把关,与本测试互补。
  */
 class NoSpringDataJdbcQueryGuardTest {
 
-  private static final Path MAIN_JAVA =
-      Path.of("..").toAbsolutePath().normalize().resolve("batch-console-api/src/main/java");
+  private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
+
+  private static final List<String> SCAN_MODULES =
+      List.of(
+          "batch-common",
+          "batch-trigger",
+          "batch-orchestrator",
+          "batch-worker-core",
+          "batch-worker-import",
+          "batch-worker-export",
+          "batch-worker-process",
+          "batch-worker-dispatch",
+          "batch-console-api");
 
   private static final List<String> FORBIDDEN_TOKENS =
       List.of(
@@ -36,17 +53,21 @@ class NoSpringDataJdbcQueryGuardTest {
 
   @Test
   void noSpringDataJdbcQueryInMain() throws IOException {
-    if (!Files.isDirectory(MAIN_JAVA)) {
-      return;
-    }
     List<String> violations = new ArrayList<>();
-    try (Stream<Path> stream = Files.walk(MAIN_JAVA)) {
-      stream.filter(p -> p.toString().endsWith(".java")).forEach(p -> scanFile(p, violations));
+    for (String module : SCAN_MODULES) {
+      Path mainJava = REPO_ROOT.resolve(module).resolve("src/main/java");
+      if (!Files.isDirectory(mainJava)) {
+        continue;
+      }
+      try (Stream<Path> stream = Files.walk(mainJava)) {
+        stream.filter(p -> p.toString().endsWith(".java")).forEach(p -> scanFile(p, violations));
+      }
     }
     assertThat(violations)
         .as(
-            "console-api 已统一走 MyBatis;新增查询请走 mapper,不要再引入 Spring Data JDBC @Query / Repository。"
-                + " 详见 commit 历史 'refactor(console): * 迁 MyBatis (Phase 0-3)'")
+            "全 reactor 已统一走 MyBatis(ADR-001);新增查询请走 mapper,不要再引入 Spring Data JDBC @Query /"
+                + " Repository / @Column / EnableJdbcRepositories。详见 commit 7870f06e + Phase 0-4"
+                + " 迁移历史。")
         .isEmpty();
   }
 
