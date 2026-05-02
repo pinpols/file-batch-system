@@ -25,7 +25,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
       "batch.console.realtime.replay-max-entries=100",
-      "batch.console.realtime.replay-ttl=1h"
+      "batch.console.realtime.replay-ttl=1h",
+      "batch.startup-self-check.enabled=false"
     })
 class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest {
 

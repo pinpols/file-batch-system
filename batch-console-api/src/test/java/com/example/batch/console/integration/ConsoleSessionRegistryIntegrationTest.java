@@ -20,7 +20,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
       "batch.console.security.single-session-enabled=true",
-      "batch.console.security.session-state-ttl=30d"
+      "batch.console.security.session-state-ttl=30d",
+      "batch.startup-self-check.enabled=false"
     })
 class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
 
