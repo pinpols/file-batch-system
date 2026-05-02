@@ -2,7 +2,7 @@ package com.example.batch.console.service;
 
 import com.example.batch.console.domain.view.dashboard.SlaStatsView;
 import com.example.batch.console.domain.view.dashboard.StatusCountView;
-import com.example.batch.console.repository.ConsoleDashboardQueryRepository;
+import com.example.batch.console.mapper.ConsoleDashboardQueryMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,11 +21,11 @@ public class ConsoleDashboardQueryService {
   // null status / day 占位，13 处使用提常量
   private static final String UNKNOWN = "UNKNOWN";
 
-  private final ConsoleDashboardQueryRepository repository;
+  private final ConsoleDashboardQueryMapper repository;
   private final ConsoleTenantGuard tenantGuard;
 
   public ConsoleDashboardQueryService(
-      ConsoleDashboardQueryRepository repository, ConsoleTenantGuard tenantGuard) {
+      ConsoleDashboardQueryMapper repository, ConsoleTenantGuard tenantGuard) {
     this.repository = repository;
     this.tenantGuard = tenantGuard;
   }
