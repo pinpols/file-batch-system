@@ -19,7 +19,7 @@ import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoCon
     scanBasePackages = "com.example.batch",
     exclude = UserDetailsServiceAutoConfiguration.class)
 @ImportAutoConfiguration({BatchJsonAutoConfiguration.class, RestClientAutoConfiguration.class})
-@MapperScan("com.example.batch.trigger.mapper")
+@MapperScan({"com.example.batch.trigger.mapper", "com.example.batch.common.mapper"})
 public class BatchTriggerApplication {
 
   public static void main(String[] args) {

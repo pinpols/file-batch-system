@@ -31,7 +31,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
   BatchStartupSelfCheckAutoConfiguration.class,
   RestClientAutoConfiguration.class
 })
-@MapperScan("com.example.batch.orchestrator.mapper")
+@MapperScan({"com.example.batch.orchestrator.mapper", "com.example.batch.common.mapper"})
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @EnableScheduling
 public class BatchOrchestratorApplication {

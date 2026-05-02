@@ -1,10 +1,13 @@
 package com.example.batch.orchestrator.infrastructure.startup;
 
-import javax.sql.DataSource;
+import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.OutboxEventMapper;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,39 +29,24 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OrchestratorStartupLeaseAudit {
 
-  private final DataSource dataSource;
+  /** outbox 卡住判定阈值：与原 SQL `current_timestamp - interval '10 minutes'` 等价。 */
+  private static final long OUTBOX_STUCK_THRESHOLD_SECONDS = 600L;
 
-  public OrchestratorStartupLeaseAudit(DataSource dataSource) {
-    this.dataSource = dataSource;
-  }
+  private final WorkerRegistryMapper workerRegistryMapper;
+  private final JobPartitionMapper jobPartitionMapper;
+  private final OutboxEventMapper outboxEventMapper;
 
   @EventListener(ApplicationReadyEvent.class)
   public void audit() {
-    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
     try {
-      long drainingStale =
-          firstNonNull(
-              jdbc.queryForObject(
-                  "select count(*) from batch.worker_registry "
-                      + "where status = 'DRAINING' and drain_deadline_at is not null "
-                      + "and drain_deadline_at < current_timestamp",
-                  Long.class));
-      long leasesExpired =
-          firstNonNull(
-              jdbc.queryForObject(
-                  "select count(*) from batch.job_partition "
-                      + "where lease_expire_at is not null "
-                      + "and lease_expire_at < current_timestamp",
-                  Long.class));
+      long drainingStale = workerRegistryMapper.countDrainingPastDeadline();
+      long leasesExpired = jobPartitionMapper.countLeaseExpired();
       long outboxStuck =
-          firstNonNull(
-              jdbc.queryForObject(
-                  "select count(*) from batch.outbox_event "
-                      + "where publish_status = 'PUBLISHING' "
-                      + "and updated_at < current_timestamp - interval '10 minutes'",
-                  Long.class));
+          outboxEventMapper.countStalePublishing(
+              OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);
 
       if (drainingStale == 0 && leasesExpired == 0 && outboxStuck == 0) {
         log.info("启动租约审计通过（orchestrator）：无残留 drain / 过期租约 / 卡死 PUBLISHING");
@@ -76,9 +64,5 @@ public class OrchestratorStartupLeaseAudit {
       // 审计失败不阻塞应用启动；可能是首次启动时部分表未建（Flyway 还没跑完）
       log.warn("启动租约审计执行失败（不影响启动）：{}", ex.getMessage());
     }
-  }
-
-  private static long firstNonNull(Long v) {
-    return v == null ? 0L : v;
   }
 }

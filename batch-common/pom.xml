@@ -25,6 +25,15 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
         </dependency>
+        <!--
+          MyBatis 共享 mapper（如 InformationSchemaMapper）需要 @Param 等注解；optional=true 不传递依赖，
+          每个使用方模块（orchestrator / console / trigger / worker-*）已自带 mybatis-spring-boot-starter。
+        -->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>

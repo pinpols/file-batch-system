@@ -96,4 +96,10 @@ public interface JobPartitionMapper {
       @Param("retryingStatus") String retryingStatus);
 
   long countActiveByTenantAndWorkerGroup(CountActiveByGroupParam param);
+
+  /**
+   * 启动审计：统计 lease_expire_at 已过期、仍未被 PartitionLeaseReclaimScheduler 回收的 partition 数。 非 0
+   * 说明上轮调度漏跑或异常。
+   */
+  long countLeaseExpired();
 }

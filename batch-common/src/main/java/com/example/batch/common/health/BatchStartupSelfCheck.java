@@ -1,18 +1,17 @@
 package com.example.batch.common.health;
 
+import com.example.batch.common.mapper.InformationSchemaMapper;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 通用启动自检：检查项完全由 {@link BatchStartupSelfCheckProperties} 配置，避免各模块复制 JDBC 校验逻辑。 */
 @Slf4j
@@ -32,15 +31,15 @@ public class BatchStartupSelfCheck {
           "qrtz_scheduler_state",
           "qrtz_locks");
 
-  private final DataSource dataSource;
+  private final InformationSchemaMapper informationSchemaMapper;
   private final BatchStartupSelfCheckProperties properties;
   private final ObjectProvider<Flyway> flyway;
 
   public BatchStartupSelfCheck(
-      DataSource dataSource,
+      InformationSchemaMapper informationSchemaMapper,
       BatchStartupSelfCheckProperties properties,
       ObjectProvider<Flyway> flyway) {
-    this.dataSource = dataSource;
+    this.informationSchemaMapper = informationSchemaMapper;
     this.properties = properties;
     this.flyway = flyway;
   }
@@ -52,15 +51,14 @@ public class BatchStartupSelfCheck {
     }
 
     List<String> problems = new ArrayList<>();
-    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
     Flyway fw = flyway.getIfAvailable();
 
     runFlywayValidate(fw, problems);
     runRequiredFlywayVersions(fw, problems);
-    runConfiguredSchemas(jdbc, problems);
-    runConfiguredTables(jdbc, problems);
-    runConfiguredColumns(jdbc, problems);
-    runQuartzStandardTables(jdbc, problems);
+    runConfiguredSchemas(problems);
+    runConfiguredTables(problems);
+    runConfiguredColumns(problems);
+    runQuartzStandardTables(problems);
 
     reportResult(problems);
   }
@@ -101,40 +99,40 @@ public class BatchStartupSelfCheck {
     }
   }
 
-  private void runConfiguredSchemas(JdbcTemplate jdbc, List<String> problems) {
+  private void runConfiguredSchemas(List<String> problems) {
     for (String schemaName : properties.getSchemas()) {
-      checkSchemaExists(jdbc, problems, schemaName);
+      checkSchemaExists(problems, schemaName);
     }
   }
 
-  private void runConfiguredTables(JdbcTemplate jdbc, List<String> problems) {
+  private void runConfiguredTables(List<String> problems) {
     for (BatchStartupSelfCheckProperties.TableCheck t : properties.getTables()) {
       if (t.getSchema() == null || t.getName() == null) {
         problems.add("tables 配置项缺少 schema 或 name，请检查 batch.startup-self-check.tables。");
         continue;
       }
-      checkTableExists(jdbc, problems, t.getSchema(), t.getName());
+      checkTableExists(problems, t.getSchema(), t.getName());
     }
   }
 
-  private void runConfiguredColumns(JdbcTemplate jdbc, List<String> problems) {
+  private void runConfiguredColumns(List<String> problems) {
     for (BatchStartupSelfCheckProperties.ColumnCheck c : properties.getColumns()) {
       if (c.getSchema() == null || c.getTable() == null || c.getName() == null) {
         problems.add("columns 配置项缺少 schema、table 或 name，请检查 batch.startup-self-check.columns。");
         continue;
       }
-      checkColumnExists(jdbc, problems, c.getSchema(), c.getTable(), c.getName(), c.getHint());
+      checkColumnExists(problems, c.getSchema(), c.getTable(), c.getName(), c.getHint());
     }
   }
 
-  private void runQuartzStandardTables(JdbcTemplate jdbc, List<String> problems) {
+  private void runQuartzStandardTables(List<String> problems) {
     if (!properties.isQuartzStandardTables()) {
       return;
     }
     String qs = properties.getQuartzSchema();
-    checkSchemaExists(jdbc, problems, qs);
+    checkSchemaExists(problems, qs);
     for (String tableName : QUARTZ_STANDARD_TABLES) {
-      checkTableExists(jdbc, problems, qs, tableName);
+      checkTableExists(problems, qs, tableName);
     }
   }
 
@@ -179,60 +177,21 @@ public class BatchStartupSelfCheck {
     return properties.isQuartzStandardTables();
   }
 
-  private static void checkSchemaExists(
-      JdbcTemplate jdbc, List<String> problems, String schemaName) {
-    Integer cnt =
-        jdbc.queryForObject(
-            """
-            select count(*) from information_schema.schemata
-            where schema_name = ?
-            """,
-            Integer.class,
-            schemaName);
-    if (cnt == null || cnt == 0) {
+  private void checkSchemaExists(List<String> problems, String schemaName) {
+    if (informationSchemaMapper.countSchema(schemaName) == 0) {
       problems.add("缺少 schema：`" + schemaName + "`（请确认数据库初始化或 Flyway 迁移已创建）。");
     }
   }
 
-  private static void checkTableExists(
-      JdbcTemplate jdbc, List<String> problems, String schemaName, String tableName) {
-    Integer cnt =
-        jdbc.queryForObject(
-            """
-            select count(*)
-              from information_schema.tables
-             where table_schema = ?
-               and table_name = ?
-            """,
-            Integer.class,
-            schemaName,
-            tableName);
-    if (cnt == null || cnt == 0) {
+  private void checkTableExists(List<String> problems, String schemaName, String tableName) {
+    if (informationSchemaMapper.countTable(schemaName, tableName) == 0) {
       problems.add("缺少表：`" + schemaName + "." + tableName + "`（请确认对应迁移版本已应用）。");
     }
   }
 
-  private static void checkColumnExists(
-      JdbcTemplate jdbc,
-      List<String> problems,
-      String schemaName,
-      String tableName,
-      String columnName,
-      String hint) {
-    Integer cnt =
-        jdbc.queryForObject(
-            """
-            select count(*)
-              from information_schema.columns
-             where table_schema = ?
-               and table_name = ?
-               and column_name = ?
-            """,
-            Integer.class,
-            schemaName,
-            tableName,
-            columnName);
-    if (cnt == null || cnt == 0) {
+  private void checkColumnExists(
+      List<String> problems, String schemaName, String tableName, String columnName, String hint) {
+    if (informationSchemaMapper.countColumn(schemaName, tableName, columnName) == 0) {
       String suffix = hint == null || hint.isBlank() ? "" : "（请确认 " + hint + " 已执行）";
       problems.add("缺少列：`" + schemaName + "." + tableName + "." + columnName + "`" + suffix + "。");
     }
