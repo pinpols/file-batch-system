@@ -192,6 +192,8 @@ T+33s  A GC 结束,继续执行 fire(T)
 
 ### 3.2 解决方案 — DB 强约束
 
+> ⚠️ **状态更新（2026-05-02）**：本节描述的 `uk_trigger_request_fire_dedup` 索引最终落地为 `V68__add_trigger_request_fire_dedup.sql`（**不是 V101**），后于 `V70__revert_trigger_request_fire_dedup.sql` 撤销。当前 fire 幂等改由 `trigger_request.dedup_key` 唯一约束兜底（`(tenant_id, dedup_key)`），不再依赖 `(trigger_runtime_state_id, scheduled_fire_time)` 组合索引。下面的 SQL 仅作历史决策追溯保留，**勿照抄**。
+
 `trigger_request` 表加 **fire 幂等列 + 唯一约束**:
 
 ```sql

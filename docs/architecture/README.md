@@ -19,7 +19,10 @@
 | 09 | [rework-classification.md](./rework-classification.md) | scalability 评估的"改什么"分类（代码 / 配置 / 数据 / 运维 / SQL / 部署 / 文档） | 决定哪些项目立项、哪些当下办 |
 | 10 | [quartz-replacement-design.md](./quartz-replacement-design.md) | Quartz → HashedWheelTimer 生产级实施设计 | 调度器选型 / 上线 |
 | 11 | [quartz-replacement-evaluation.md](./quartz-replacement-evaluation.md) | Quartz 替换可行性评估 + 落地路径 | 同上，看决策上下文 |
-| 12 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
+| 12 | [pipeline-vs-workflow-boundary.md](./pipeline-vs-workflow-boundary.md) | `pipeline_*` 与 `workflow_*` 职责边界（命名相似但不重叠） | 看到 pipeline / workflow 表名困惑时 |
+| 13 | [governance-tables-boundary.md](./governance-tables-boundary.md) | `config_approval` vs `approval_command` / `subscription_rule` vs `alert_routing_config` 职责边界 | 看到 governance 表对疑似重叠时 |
+| 14 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
+| 15 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
 
 ## 角色路径
 
