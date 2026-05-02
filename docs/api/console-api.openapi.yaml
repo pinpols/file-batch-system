@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-04-16"
+  x-last-updated: "2026-05-03"
   x-changelog:
+    - date: "2026-05-03"
+      summary: "POST /api/console/config/tenant-init 与 POST /api/console/config/tenant-copy 的 requestBody 改为 $ref 引用：新增 TenantConfigBatchInitRequest（含 11 个嵌套 Spec：JobDefinitionSpec/WorkflowDefinitionSpec(NodeSpec/EdgeSpec)/PipelineDefinitionSpec(StepSpec)/FileChannelSpec/FileTemplateSpec/ResourceQueueSpec/BatchWindowSpec/BusinessCalendarSpec/TenantQuotaPolicySpec/AlertRoutingSpec）+ TenantConfigCopyRequest + TenantConfigCopyType enum，前端 codegen 现可拿到完整嵌套结构"
     - date: "2026-04-16"
       summary: "6 个 Excel 控制器（file-templates/file-channels/alert-routings/batch-windows/quota-policies/resource-queues）的 upload/apply 请求响应统一为共享类型 ExcelUploadResponse/ExcelApplyResponse/ExcelApplyRequest/ExcelRowIssue，旧 per-entity schema 改为 $ref 别名"
     - date: "2026-04-11"
@@ -5989,8 +5991,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: TenantConfigBatchInitRequest
+              $ref: '#/components/schemas/TenantConfigBatchInitRequest'
       responses:
         '200':
           description: Batch init result
@@ -6016,32 +6017,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [sourceTenantId, targetTenantIds]
-              properties:
-                sourceTenantId:
-                  type: string
-                  maxLength: 64
-                targetTenantIds:
-                  type: array
-                  items:
-                    type: string
-                    maxLength: 64
-                  maxItems: 50
-                configTypes:
-                  type: array
-                  items:
-                    type: string
-                    enum: [JOB_DEFINITION, WORKFLOW_DEFINITION, PIPELINE_DEFINITION, FILE_CHANNEL, FILE_TEMPLATE,
-                           RESOURCE_QUEUE, BATCH_WINDOW, BUSINESS_CALENDAR, QUOTA_POLICY, ALERT_ROUTING]
-                  description: Empty means all 10 types
-                mode:
-                  type: string
-                  enum: [SKIP_EXISTING, UPSERT]
-                  default: SKIP_EXISTING
-                dryRun:
-                  type: boolean
-                  default: false
+              $ref: '#/components/schemas/TenantConfigCopyRequest'
       responses:
         '200':
           description: Copy result (same schema as tenant-init)
@@ -10987,6 +10963,350 @@ components:
           type: string
           format: date-time
       required: [tenantId, tenantName, status]
+
+    TenantConfigBatchInitRequest:
+      type: object
+      required: [targetTenantIds]
+      description: |
+        批量租户配置初始化请求。
+        mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。
+        dryRun=true 时只校验不落库。
+        各 List<XxxSpec> 字段为可选；未传则该类配置不初始化。
+      properties:
+        targetTenantIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        mode:
+          type: string
+          enum: [SKIP_EXISTING, UPSERT]
+          default: SKIP_EXISTING
+        dryRun:
+          type: boolean
+          default: false
+        jobDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobDefinitionSpec'
+        workflowDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowDefinitionSpec'
+        pipelineDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineDefinitionSpec'
+        fileChannels:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileChannelSpec'
+        fileTemplates:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileTemplateSpec'
+        resourceQueues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceQueueSpec'
+        batchWindows:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchWindowSpec'
+        businessCalendars:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusinessCalendarSpec'
+        quotaPolicies:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantQuotaPolicySpec'
+        alertRoutings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertRoutingSpec'
+
+    TenantConfigCopyRequest:
+      type: object
+      required: [sourceTenantId, targetTenantIds]
+      description: |
+        跨租户配置复制请求。从源租户读取配置，推送到目标租户列表。
+        configTypes 为空表示复制全部 10 类。
+      properties:
+        sourceTenantId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        targetTenantIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        configTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigCopyType'
+          description: 空表示复制全部 10 类
+        mode:
+          type: string
+          enum: [SKIP_EXISTING, UPSERT]
+          default: SKIP_EXISTING
+        dryRun:
+          type: boolean
+          default: false
+
+    TenantConfigCopyType:
+      type: string
+      enum:
+        - JOB_DEFINITION
+        - WORKFLOW_DEFINITION
+        - PIPELINE_DEFINITION
+        - FILE_CHANNEL
+        - FILE_TEMPLATE
+        - RESOURCE_QUEUE
+        - BATCH_WINDOW
+        - BUSINESS_CALENDAR
+        - QUOTA_POLICY
+        - ALERT_ROUTING
+      description: |
+        配置类型枚举。后端 @JsonCreator 兼容简写：
+        "JOB" → JOB_DEFINITION / "WORKFLOW" → WORKFLOW_DEFINITION /
+        "PIPELINE" → PIPELINE_DEFINITION（仅 *_DEFINITION 三类支持简写）。
+        其余类型必须传完整名称。
+
+    JobDefinitionSpec:
+      type: object
+      properties:
+        jobCode: { type: string, maxLength: 128 }
+        jobName: { type: string, maxLength: 256 }
+        jobType: { type: string }
+        bizType: { type: string }
+        scheduleType: { type: string }
+        scheduleExpr: { type: string }
+        timezone: { type: string }
+        triggerMode: { type: string }
+        workerGroup: { type: string }
+        queueCode: { type: string }
+        calendarCode: { type: string }
+        windowCode: { type: string }
+        dagEnabled: { type: boolean, nullable: true }
+        shardStrategy: { type: string }
+        retryPolicy: { type: string }
+        retryMaxCount: { type: integer, nullable: true }
+        timeoutSeconds: { type: integer, nullable: true }
+        executionHandler: { type: string }
+        paramSchema: { type: string }
+        defaultParams: { type: string }
+        priority: { type: integer, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string }
+
+    WorkflowDefinitionSpec:
+      type: object
+      properties:
+        workflowCode: { type: string, maxLength: 128 }
+        workflowName: { type: string, maxLength: 256 }
+        workflowType: { type: string }
+        enabled: { type: boolean, nullable: true }
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowNodeSpec'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowEdgeSpec'
+
+    WorkflowNodeSpec:
+      type: object
+      properties:
+        nodeCode: { type: string }
+        nodeName: { type: string }
+        nodeType: { type: string }
+        relatedJobCode: { type: string }
+        relatedPipelineCode: { type: string }
+        workerGroup: { type: string }
+        windowCode: { type: string }
+        nodeOrder: { type: integer, nullable: true }
+        retryPolicy: { type: string }
+        retryMaxCount: { type: integer, nullable: true }
+        timeoutSeconds: { type: integer, nullable: true }
+        nodeParams: { type: string }
+        enabled: { type: boolean, nullable: true }
+
+    WorkflowEdgeSpec:
+      type: object
+      properties:
+        fromNodeCode: { type: string }
+        toNodeCode: { type: string }
+        edgeType: { type: string }
+        conditionExpr: { type: string }
+        enabled: { type: boolean, nullable: true }
+
+    PipelineDefinitionSpec:
+      type: object
+      properties:
+        jobCode: { type: string, maxLength: 128 }
+        pipelineName: { type: string, maxLength: 256 }
+        pipelineType: { type: string, maxLength: 32 }
+        bizType: { type: string, maxLength: 64 }
+        workerGroup: { type: string, maxLength: 128 }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string, maxLength: 512 }
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineStepSpec'
+
+    PipelineStepSpec:
+      type: object
+      properties:
+        stepCode: { type: string }
+        stepName: { type: string }
+        stageCode: { type: string }
+        stepOrder: { type: integer, nullable: true }
+        implCode: { type: string }
+        stepParams: { type: string }
+        timeoutSeconds: { type: integer, nullable: true }
+        retryPolicy: { type: string }
+        retryMaxCount: { type: integer, nullable: true }
+        enabled: { type: boolean, nullable: true }
+
+    FileChannelSpec:
+      type: object
+      properties:
+        channelCode: { type: string, maxLength: 128 }
+        channelName: { type: string, maxLength: 256 }
+        channelType: { type: string, maxLength: 32 }
+        targetEndpoint: { type: string, maxLength: 512 }
+        authType: { type: string, maxLength: 32 }
+        configJson: { type: string }
+        receiptPolicy: { type: string, maxLength: 32 }
+        timeoutSeconds: { type: integer, nullable: true }
+        enabled: { type: boolean, nullable: true }
+
+    FileTemplateSpec:
+      type: object
+      properties:
+        templateCode: { type: string, maxLength: 128 }
+        templateName: { type: string, maxLength: 256 }
+        templateType: { type: string, maxLength: 32 }
+        bizType: { type: string, maxLength: 64 }
+        fileFormatType: { type: string, maxLength: 32 }
+        charset: { type: string, maxLength: 32 }
+        targetCharset: { type: string, maxLength: 32 }
+        withBom: { type: boolean, nullable: true }
+        lineSeparator: { type: string, maxLength: 16 }
+        delimiter: { type: string, maxLength: 8 }
+        quoteChar: { type: string, maxLength: 8 }
+        escapeChar: { type: string, maxLength: 8 }
+        recordLength: { type: integer, nullable: true }
+        headerRows: { type: integer, nullable: true }
+        footerRows: { type: integer, nullable: true }
+        headerTemplateJson: { type: string }
+        trailerTemplateJson: { type: string }
+        checksumType: { type: string, maxLength: 32 }
+        compressType: { type: string, maxLength: 32 }
+        encryptType: { type: string, maxLength: 32 }
+        namingRule: { type: string, maxLength: 512 }
+        fieldMappingsJson: { type: string }
+        validationRuleSetJson: { type: string }
+        defaultQueryCode: { type: string, maxLength: 128 }
+        defaultQuerySql: { type: string }
+        queryParamSchemaJson: { type: string }
+        streamingEnabled: { type: boolean, nullable: true }
+        pageSize: { type: integer, nullable: true }
+        fetchSize: { type: integer, nullable: true }
+        chunkSize: { type: integer, nullable: true }
+        previewMaskingEnabled: { type: boolean, nullable: true }
+        errorLineMaskingEnabled: { type: boolean, nullable: true }
+        logMaskingEnabled: { type: boolean, nullable: true }
+        contentEncryptionEnabled: { type: boolean, nullable: true }
+        encryptionKeyRef: { type: string, maxLength: 256 }
+        downloadRequiresApproval: { type: boolean, nullable: true }
+        maskingRuleSet: { type: string }
+        enabled: { type: boolean, nullable: true }
+        version: { type: integer, nullable: true }
+        description: { type: string, maxLength: 512 }
+
+    ResourceQueueSpec:
+      type: object
+      properties:
+        queueCode: { type: string, maxLength: 128 }
+        queueName: { type: string, maxLength: 256 }
+        queueType: { type: string, maxLength: 32 }
+        maxRunningJobs: { type: integer, nullable: true }
+        maxRunningPartitions: { type: integer, nullable: true }
+        maxQps: { type: integer, nullable: true }
+        workerGroup: { type: string, maxLength: 128 }
+        resourceTag: { type: string, maxLength: 128 }
+        priorityPolicy: { type: string, maxLength: 32 }
+        fairShareWeight: { type: integer, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string, maxLength: 512 }
+
+    BatchWindowSpec:
+      type: object
+      properties:
+        windowCode: { type: string, maxLength: 128 }
+        windowName: { type: string, maxLength: 256 }
+        timezone: { type: string, maxLength: 64 }
+        startTime: { type: string, maxLength: 8 }
+        endTime: { type: string, maxLength: 8 }
+        endStrategy: { type: string, maxLength: 32 }
+        outOfWindowAction: { type: string, maxLength: 32 }
+        allowCrossDay: { type: boolean, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string, maxLength: 512 }
+
+    BusinessCalendarSpec:
+      type: object
+      properties:
+        calendarCode: { type: string, maxLength: 128 }
+        calendarName: { type: string, maxLength: 256 }
+        timezone: { type: string, maxLength: 64 }
+        holidayRollRule: { type: string, maxLength: 32 }
+        catchUpPolicy: { type: string, maxLength: 32 }
+        catchUpMaxDays: { type: integer, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        holidays:
+          type: array
+          items:
+            type: string
+            description: yyyy-MM-dd
+
+    TenantQuotaPolicySpec:
+      type: object
+      properties:
+        policyCode: { type: string, maxLength: 128 }
+        maxRunningJobsPerTenant: { type: integer, nullable: true }
+        maxPartitionsPerTenant: { type: integer, nullable: true }
+        maxQpsPerTenant: { type: integer, nullable: true }
+        fairShareWeight: { type: integer, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string, maxLength: 512 }
+
+    AlertRoutingSpec:
+      type: object
+      properties:
+        routeCode: { type: string, maxLength: 128 }
+        routeName: { type: string, maxLength: 256 }
+        team: { type: string, maxLength: 128 }
+        alertGroup: { type: string, maxLength: 128 }
+        severity: { type: string, maxLength: 32 }
+        receiver: { type: string, maxLength: 512 }
+        groupBy: { type: string, maxLength: 256 }
+        groupWaitSeconds: { type: integer, nullable: true }
+        groupIntervalSeconds: { type: integer, nullable: true }
+        repeatIntervalSeconds: { type: integer, nullable: true }
+        enabled: { type: boolean, nullable: true }
+        description: { type: string, maxLength: 512 }
 
     TenantConfigBatchInitResponse:
       type: object

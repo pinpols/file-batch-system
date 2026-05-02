@@ -119,7 +119,9 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 ## 4. 数据库 Schema 基线
 
-**当前版本**：Flyway V40（`db/migration/`，跳过 V31）
+**当前版本**：Flyway V85（`db/migration/`，跳过 V31）
+
+> 本表早期手工维护到 V40，V41–V81 的演进未在此回填（涉及 archive / outbox 硬化 / i18n 三元组 / ADR-009 / ADR-010 等专题，详见各 `db/migration/V*.sql` 文件头注释 + [`docs/analysis/pg-schema-audit-2026-05-03.md`](../analysis/pg-schema-audit-2026-05-03.md) 的当前 schema 全量审计）。下表只补录 2026-05-03 多租隔离硬化批次（V82–V85）。
 
 | 版本 | 内容摘要 | 核心表 |
 |------|---------|-------|
@@ -161,6 +163,11 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | V38 | 幂等记录表 | idempotency_record（`DatabaseIdempotencyGuard` 使用） |
 | V39 | trigger_request status CHECK 扩展 | 增加 PENDING / PROCESSING 状态 |
 | V40 | job_execution_log type CHECK 扩展 | 增加 COMPENSATION 类型 |
+| ⋯ | （V41-V81 见 `db/migration/V*.sql` 头注释） | — |
+| V82 | `job_step_instance` 唯一约束补 `tenant_id` | `uk_job_step_instance_task` 改为 `(tenant_id, job_task_id)` — 对齐 V57 cross_tenant_check trigger 前提 |
+| V83 | `trigger_outbox_event` 唯一索引提升为 UNIQUE 约束 | `uk_trigger_outbox_event_tenant_request UNIQUE (tenant_id, request_id)` — 对 ON CONFLICT / pg_dump 友好 |
+| V84 | `workflow_node` 加 `tenant_id` 列 + 唯一约束扩展 | 新列 `tenant_id NOT NULL`（backfill 自 workflow_definition）；`uk_workflow_node_def_code` 扩为 `(tenant_id, workflow_definition_id, node_code)`；新索引 `idx_workflow_node_tenant_code` |
+| V85 | `workflow_edge` 加 `tenant_id` 列 + 唯一约束扩展 | 新列 `tenant_id NOT NULL`（backfill 自 workflow_definition）；`uk_workflow_edge` 扩为 `(tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type)`；新索引 `idx_workflow_edge_tenant_def` |
 
 **关键唯一约束**（由 `SqlConsistencyIT` 持续守卫）：
 
@@ -170,6 +177,10 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | outbox_event | uk_outbox_event_key |
 | job_definition | uk_job_definition_tenant_code |
 | batch_runtime_default_parameter | uk on (module, parameter_key) |
+| job_step_instance | `uk_job_step_instance_task (tenant_id, job_task_id)` (V82) |
+| trigger_outbox_event | `uk_trigger_outbox_event_tenant_request (tenant_id, request_id)` (V83) |
+| workflow_node | `uk_workflow_node_def_code (tenant_id, workflow_definition_id, node_code)` (V84) |
+| workflow_edge | `uk_workflow_edge (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type)` (V85) |
 
 ---
 
