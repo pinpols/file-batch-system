@@ -14,10 +14,16 @@ import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
 import com.example.batch.console.support.auth.ConsolePasswordHasher;
 import com.example.batch.console.support.auth.ConsoleRoles;
+import com.example.batch.console.web.ConsoleTenantConfigCopyService;
+import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;
+import com.example.batch.console.web.request.config.TenantConfigCopyRequest;
+import com.example.batch.console.web.response.auth.BatchCreateTenantsResponse;
 import com.example.batch.console.web.response.auth.ConsoleTenantResponse;
+import com.example.batch.console.web.response.config.TenantConfigBatchInitResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +45,7 @@ public class ConsoleTenantApplicationService {
   private final FilePipelineMapper filePipelineMapper;
   private final WorkflowRunMapper workflowRunMapper;
   private final ConsoleTriggerProxyService triggerProxyService;
+  private final ConsoleTenantConfigCopyService configCopyService;
 
   public record CreateTenantCommand(
       String tenantId,
@@ -52,6 +59,13 @@ public class ConsoleTenantApplicationService {
 
   public record BatchCreateTenantCommand(
       List<TenantSpec> tenants, String usernamePrefix, String plainPassword, String operator) {}
+
+  /** sourceTenantId 为 null/blank 表示不复制配置；mode 为 null 时落 SKIP_EXISTING 默认。 */
+  public record ConfigInitOption(String sourceTenantId, InitMode mode) {
+    public boolean enabled() {
+      return sourceTenantId != null && !sourceTenantId.isBlank();
+    }
+  }
 
   public PageResponse<ConsoleTenantResponse> listTenants(
       String keyword, String status, PageRequest pageRequest) {
@@ -86,7 +100,23 @@ public class ConsoleTenantApplicationService {
   }
 
   @Transactional
-  public List<ConsoleTenantResponse> batchCreateTenants(BatchCreateTenantCommand cmd) {
+  public BatchCreateTenantsResponse batchCreateTenants(
+      BatchCreateTenantCommand cmd, ConfigInitOption init) {
+    List<ConsoleTenantResponse> tenants = doBatchCreateTenants(cmd);
+    TenantConfigBatchInitResponse configInit = null;
+    if (init != null && init.enabled()) {
+      TenantConfigCopyRequest copyRequest = new TenantConfigCopyRequest();
+      copyRequest.setSourceTenantId(init.sourceTenantId());
+      copyRequest.setTargetTenantIds(
+          tenants.stream().map(ConsoleTenantResponse::tenantId).toList());
+      copyRequest.setMode(init.mode() != null ? init.mode() : InitMode.SKIP_EXISTING);
+      configInit =
+          configCopyService.copy(copyRequest, cmd.operator(), UUID.randomUUID().toString());
+    }
+    return new BatchCreateTenantsResponse(tenants, configInit);
+  }
+
+  private List<ConsoleTenantResponse> doBatchCreateTenants(BatchCreateTenantCommand cmd) {
     String prefix = cmd.usernamePrefix();
     for (TenantSpec spec : cmd.tenants()) {
       if (tenantMapper.selectByTenantId(spec.tenantId()) != null) {
