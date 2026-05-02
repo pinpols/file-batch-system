@@ -72,6 +72,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @MapperScan(
+    basePackages = "com.example.batch.common.mapper",
+    sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(
     basePackages = "com.example.batch.trigger.mapper",
     sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eTriggerApplication {

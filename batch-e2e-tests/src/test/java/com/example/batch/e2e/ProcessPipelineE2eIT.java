@@ -62,7 +62,9 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
   private static final String CUSTOM_PLUGIN_CODE = "e2eProcessCompute";
-  private static final String CUSTOM_PLUGIN_WATERMARK = "wm-custom-plugin-2026-01-15";
+  // d60c9ad4 起 updateHighWaterMarkOut 加 numeric CAS 守护(value 必须匹配 ^-?[0-9]+(\.[0-9]+)?$),
+  // 否则静默 no-op 防御非数字回报。测试 watermark 用 YYYYMMDD 数字形式,语义对齐 bizDate=2026-01-15。
+  private static final String CUSTOM_PLUGIN_WATERMARK = "20260115";
 
   @Autowired private LaunchService launchService;
   @Autowired private JdbcTemplate jdbcTemplate;
