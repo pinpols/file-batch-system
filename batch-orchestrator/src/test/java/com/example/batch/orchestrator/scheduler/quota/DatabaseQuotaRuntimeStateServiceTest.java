@@ -15,7 +15,7 @@ import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateSer
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.infrastructure.quota.DatabaseQuotaRuntimeStateService;
-import com.example.batch.orchestrator.repository.QuotaRuntimeStateRepository;
+import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -93,19 +93,19 @@ class DatabaseQuotaRuntimeStateServiceTest {
     }
   }
 
-  private QuotaRuntimeStateRepository quotaRuntimeStateRepository;
+  private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
   private DatabaseQuotaRuntimeStateService service;
 
   @BeforeEach
   void setUp() {
-    quotaRuntimeStateRepository = mock(QuotaRuntimeStateRepository.class);
+    quotaRuntimeStateMapper = mock(QuotaRuntimeStateMapper.class);
     // C-2.8：selfProvider 在单测里直通（不走 REQUIRES_NEW 子事务），
     // 等 reconcileOne 的事务语义由集成测试覆盖
     org.springframework.beans.factory.ObjectProvider<DatabaseQuotaRuntimeStateService>
         selfProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
     service =
         new DatabaseQuotaRuntimeStateService(
-            quotaRuntimeStateRepository,
+            quotaRuntimeStateMapper,
             new BatchTimezoneProvider(new BatchTimezoneProperties()),
             selfProvider);
     org.mockito.Mockito.when(selfProvider.getObject()).thenReturn(service);
@@ -200,10 +200,9 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldAllowWhenSlidingWindowPolicyAndBorrowedBelowBurst() {
-    when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", "job-sw"))
+    when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-sw"))
         .thenReturn(null);
-    when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=5, burst=10, active=7, requested=1 → borrowed=7+1-5=3, burst=10 → ok
     ResourceCheck result =
@@ -218,15 +217,14 @@ class DatabaseQuotaRuntimeStateServiceTest {
                 .build());
 
     assertThat(result.allowed()).isTrue();
-    verify(quotaRuntimeStateRepository).save(any());
+    verify(quotaRuntimeStateMapper).insert(any());
   }
 
   @Test
   void shouldBlockWhenSlidingWindowPolicyAndBorrowedExceedsBurst() {
-    when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", "job-sw"))
+    when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-sw"))
         .thenReturn(null);
-    when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=5, burst=3, active=8, requested=2 → borrowed=8+2-5=5 > burst=3
     ResourceCheck result =
@@ -246,10 +244,10 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldAllowWhenActivePlusRequestedWithinBaseCap() {
-    when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
+    when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(
             anyString(), anyString(), anyString()))
         .thenReturn(null);
-    when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=10, burst=5, active=3, requested=2 → borrowed=0, no burst needed
     ResourceCheck result =
@@ -271,10 +269,9 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldAllowWhenCalendarDayPolicyAndBorrowedBelowBurst() {
-    when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", "job-cal"))
+    when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-cal"))
         .thenReturn(null);
-    when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // baseCap=5, burst=10, active=7, requested=1 → borrowed=3 ≤ burst=10
     ResourceCheck result =
@@ -308,10 +305,9 @@ class DatabaseQuotaRuntimeStateServiceTest {
             null);
     // 窗口仍然有效（远未到期）
 
-    when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", "job-cal"))
+    when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-cal"))
         .thenReturn(existingState);
-    when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     // active=8, baseCap=5, requested=1 → borrowed=4 > current peak=1
     service.evaluateAndReserve(
@@ -323,7 +319,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
             .currentActiveCount(8)
             .build());
 
-    verify(quotaRuntimeStateRepository, times(2)).save(any(QuotaRuntimeStateRecord.class));
+    verify(quotaRuntimeStateMapper, times(2)).insert(any(QuotaRuntimeStateRecord.class));
   }
 
   // ── describe() ────────────────────────────────────────────────────────────
@@ -359,8 +355,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldReturnDefaultSnapshotWhenNoStateRecord() {
-    when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", "job-001"))
+    when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-001"))
         .thenReturn(null);
 
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
@@ -379,12 +374,13 @@ class DatabaseQuotaRuntimeStateServiceTest {
 
   @Test
   void shouldReconcileNoExpiredStatesGracefully() {
-    when(quotaRuntimeStateRepository.findExpired(any(Instant.class))).thenReturn(List.of());
+    when(quotaRuntimeStateMapper.selectExpired(any(Instant.class))).thenReturn(List.of());
 
     service.reconcileExpiredStates(24);
 
-    verify(quotaRuntimeStateRepository).findExpired(any(Instant.class));
-    verify(quotaRuntimeStateRepository, never()).save(any());
+    verify(quotaRuntimeStateMapper).selectExpired(any(Instant.class));
+    verify(quotaRuntimeStateMapper, never()).insert(any());
+    verify(quotaRuntimeStateMapper, never()).updateWithCas(any());
   }
 
   @Test
@@ -404,11 +400,11 @@ class DatabaseQuotaRuntimeStateServiceTest {
             Instant.now(),
             null); // already expired
 
-    when(quotaRuntimeStateRepository.findExpired(any(Instant.class))).thenReturn(List.of(expired));
-    when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(quotaRuntimeStateMapper.selectExpired(any(Instant.class))).thenReturn(List.of(expired));
+    when(quotaRuntimeStateMapper.insert(any())).thenReturn(1);
 
     service.reconcileExpiredStates(2);
 
-    verify(quotaRuntimeStateRepository).save(any());
+    verify(quotaRuntimeStateMapper).insert(any());
   }
 }

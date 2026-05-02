@@ -6,7 +6,7 @@ import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import com.example.batch.orchestrator.repository.QuotaRuntimeStateRepository;
+import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.orchestrator.repository.ResourceQueueRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import java.time.Instant;
@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuotaRuntimeStateSnapshotScheduler {
 
   private final QuotaRuntimeStateService quotaRuntimeStateService;
-  private final QuotaRuntimeStateRepository quotaRuntimeStateRepository;
+  private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
   private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
   private final ResourceQueueRepository resourceQueueRepository;
   private final QuotaProperties quotaProperties;
@@ -125,11 +125,9 @@ public class QuotaRuntimeStateSnapshotScheduler {
     }
     Instant now = Instant.now();
     QuotaRuntimeStateRecord existing =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            tenantId, scope, ownerCode);
-    QuotaRuntimeStateRecord toSave;
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
     if (existing == null) {
-      toSave =
+      QuotaRuntimeStateRecord toInsert =
           new QuotaRuntimeStateRecord(
               null,
               tenantId,
@@ -143,16 +141,26 @@ public class QuotaRuntimeStateSnapshotScheduler {
               now,
               now,
               null);
-    } else {
-      toSave =
-          existing.withRefresh(
-              snap.quotaResetPolicy(),
-              snap.windowStartedAt(),
-              snap.windowExpiresAt(),
-              snap.peakBorrowedCount(),
-              snap.lastResetAt());
+      quotaRuntimeStateMapper.insert(toInsert);
+      return 1;
     }
-    quotaRuntimeStateRepository.save(toSave);
+    QuotaRuntimeStateRecord toUpdate =
+        existing.withRefresh(
+            snap.quotaResetPolicy(),
+            snap.windowStartedAt(),
+            snap.windowExpiresAt(),
+            snap.peakBorrowedCount(),
+            snap.lastResetAt());
+    int rows = quotaRuntimeStateMapper.updateWithCas(toUpdate);
+    if (rows == 0) {
+      // 并发节点抢先 update 把 version 推走了；下一轮 snapshot 自然会读到新 version 重试
+      log.debug(
+          "quota snapshot CAS conflict, skipping: tenantId={}, scope={}, owner={}",
+          tenantId,
+          scope,
+          ownerCode);
+      return 0;
+    }
     return 1;
   }
 }

@@ -6,7 +6,7 @@ import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
-import com.example.batch.orchestrator.repository.QuotaRuntimeStateRepository;
+import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
@@ -91,7 +91,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private QuotaRuntimeStateService quotaRuntimeStateService;
 
-  @Autowired private QuotaRuntimeStateRepository quotaRuntimeStateRepository;
+  @Autowired private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
   @Test
   void shouldAllowWhenWithinBaseCapNoBurstNeeded() {
@@ -141,8 +141,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     assertThat(result.allowed()).isTrue();
 
     QuotaRuntimeStateRecord state =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(state).isNotNull();
     assertThat(state.windowStartedAt()).isNotNull();
     assertThat(state.windowExpiresAt()).isNotNull();
@@ -166,8 +165,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             .build());
 
     QuotaRuntimeStateRecord state =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(state).isNotNull();
     assertThat(state.peakBorrowedCount()).isGreaterThan(0);
   }
@@ -209,8 +207,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     assertThat(result.allowed()).isTrue();
 
     QuotaRuntimeStateRecord state =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(state).isNotNull();
     assertThat(state.windowStartedAt()).isNotNull();
   }
@@ -262,14 +259,13 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             Instant.now(),
             Instant.now(),
             null);
-    quotaRuntimeStateRepository.save(expiredState);
+    quotaRuntimeStateMapper.insert(expiredState);
 
     quotaRuntimeStateService.reconcileExpiredStates(2);
 
     // reconcile 后峰值应被重置
     QuotaRuntimeStateRecord updated =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(updated).isNotNull();
     assertThat(updated.peakBorrowedCount()).isZero();
   }
@@ -292,9 +288,9 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             Instant.now(),
             Instant.now(),
             null);
-    quotaRuntimeStateRepository.save(state);
+    quotaRuntimeStateMapper.insert(state);
 
-    List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateRepository.findExpired(Instant.now());
+    List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateMapper.selectExpired(Instant.now());
 
     boolean found = expired.stream().anyMatch(r -> ownerCode.equals(r.ownerCode()));
     assertThat(found).isTrue();

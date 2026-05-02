@@ -7,7 +7,7 @@ import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateSer
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.infrastructure.scheduler.QuotaRuntimeResetScheduler;
-import com.example.batch.orchestrator.repository.QuotaRuntimeStateRepository;
+import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private QuotaRuntimeStateService quotaRuntimeStateService;
 
-  @Autowired private QuotaRuntimeStateRepository quotaRuntimeStateRepository;
+  @Autowired private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
   @Autowired private ResourceSchedulerProperties resourceSchedulerProperties;
 
@@ -64,14 +64,13 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
             Instant.now(),
             Instant.now(),
             null);
-    quotaRuntimeStateRepository.save(expired);
+    quotaRuntimeStateMapper.insert(expired);
 
     // 直接触发调度器（调度间隔为 600 秒，测试中不会自动触发）
     quotaRuntimeResetScheduler.reconcile();
 
     QuotaRuntimeStateRecord updated =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(updated).isNotNull();
     assertThat(updated.peakBorrowedCount()).isZero();
   }
@@ -96,14 +95,13 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
             Instant.now(),
             Instant.now(),
             null);
-    quotaRuntimeStateRepository.save(active);
+    quotaRuntimeStateMapper.insert(active);
 
     // reconcile() should not touch non-expired states
     quotaRuntimeResetScheduler.reconcile();
 
     QuotaRuntimeStateRecord afterReconcile =
-        quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
-            "t1", "JOB", ownerCode);
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
     assertThat(afterReconcile).isNotNull();
     // peakBorrowedCount should remain unchanged since the window hasn't expired
     assertThat(afterReconcile.peakBorrowedCount()).isEqualTo(3);
