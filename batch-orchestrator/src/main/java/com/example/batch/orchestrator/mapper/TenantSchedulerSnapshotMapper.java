@@ -13,7 +13,7 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface TenantSchedulerSnapshotMapper {
 
-  /** insert 一行；{@code id} 由 BIGSERIAL 自增并回写到 record (Mapper 级 keyProperty)。 */
+  /** insert 一行；{@code id} 由 BIGSERIAL 自增（不回写：entity 是 record，调用方也无需 id）。 */
   int insert(TenantSchedulerSnapshotEntity record);
 
   /** 取指定租户最近 {@code limit} 条快照，按 snapshot_at 降序。 */
