@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
@@ -362,6 +363,22 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private void createFieldGuideSheet(Workbook wb) {
     Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_GUIDE);
+    setGuideColumnWidths(sheet);
+    GuideStyles styles = buildGuideStyles(wb);
+    writeGuideHeader(sheet, styles.head());
+    int rowIdx = 1;
+    for (SheetDef spec : sheetDefs) {
+      for (int ci = 0; ci < spec.columns().size(); ci++) {
+        String colName = spec.columns().get(ci);
+        Row row = sheet.createRow(rowIdx++);
+        row.setHeightInPoints(18);
+        writeGuideRow(
+            row, ci == 0 ? spec.name() : EMPTY, colName, spec.guides().get(colName), styles);
+      }
+    }
+  }
+
+  private static void setGuideColumnWidths(Sheet sheet) {
     sheet.setColumnWidth(0, 7000);
     sheet.setColumnWidth(1, 7000);
     sheet.setColumnWidth(2, 3500);
@@ -369,15 +386,20 @@ public class ConfigPackageExcelWorkbookWriter {
     sheet.setColumnWidth(4, 14000);
     sheet.setColumnWidth(5, 18000);
     sheet.setColumnWidth(6, 7000);
+  }
 
-    CellStyle headStyle = ConsoleExcelStyles.createHeaderStyle(wb);
+  private GuideStyles buildGuideStyles(Workbook wb) {
     CellStyle bodyStyle = ConsoleExcelStyles.createDataStyle(wb);
     bodyStyle.setWrapText(true);
     CellStyle requiredStyle = createRequiredMarkStyle(wb);
     requiredStyle.setWrapText(true);
     CellStyle optionalStyle = createOptionalMarkStyle(wb);
     optionalStyle.setWrapText(true);
+    return new GuideStyles(
+        ConsoleExcelStyles.createHeaderStyle(wb), bodyStyle, requiredStyle, optionalStyle);
+  }
 
+  private static void writeGuideHeader(Sheet sheet, CellStyle headStyle) {
     Row header = sheet.createRow(0);
     header.setHeightInPoints(22);
     String[] headers = {"所属 Sheet", "列名", "必填", "类型", "可选值", "说明", "示例"};
@@ -386,31 +408,43 @@ public class ConfigPackageExcelWorkbookWriter {
       c.setCellValue(headers[i]);
       c.setCellStyle(headStyle);
     }
-
-    int rowIdx = 1;
-    for (SheetDef spec : sheetDefs) {
-      for (int ci = 0; ci < spec.columns().size(); ci++) {
-        String colName = spec.columns().get(ci);
-        ConsoleExcelStyles.ColumnGuide guide = spec.guides().get(colName);
-        Row row = sheet.createRow(rowIdx++);
-        row.setHeightInPoints(18);
-
-        writeGuideCell(row, 0, ci == 0 ? spec.name() : EMPTY, bodyStyle);
-        writeGuideCell(row, 1, colName, bodyStyle);
-        boolean isRequired = guide != null && guide.required();
-        writeGuideCell(
-            row, 2, isRequired ? "★ 必填" : "选填", isRequired ? requiredStyle : optionalStyle);
-        writeGuideCell(row, 3, guide != null ? guide.formatHint() : EMPTY, bodyStyle);
-        String values =
-            guide != null && !guide.allowedValues().isEmpty()
-                ? String.join(" / ", guide.allowedValues())
-                : EMPTY;
-        writeGuideCell(row, 4, values, bodyStyle);
-        writeGuideCell(row, 5, guide != null ? guide.description() : EMPTY, bodyStyle);
-        writeGuideCell(row, 6, guide != null ? guide.example() : EMPTY, bodyStyle);
-      }
-    }
   }
+
+  private void writeGuideRow(
+      Row row,
+      String sectionLabel,
+      String colName,
+      ConsoleExcelStyles.ColumnGuide guide,
+      GuideStyles styles) {
+    boolean isRequired = guide != null && guide.required();
+    writeGuideCell(row, 0, sectionLabel, styles.body());
+    writeGuideCell(row, 1, colName, styles.body());
+    writeGuideCell(
+        row, 2, isRequired ? "★ 必填" : "选填", isRequired ? styles.required() : styles.optional());
+    writeGuideCell(
+        row, 3, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::formatHint), styles.body());
+    writeGuideCell(row, 4, joinAllowedValues(guide), styles.body());
+    writeGuideCell(
+        row, 5, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
+    writeGuideCell(
+        row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example), styles.body());
+  }
+
+  private static String guideOrEmpty(
+      ConsoleExcelStyles.ColumnGuide guide,
+      Function<ConsoleExcelStyles.ColumnGuide, String> getter) {
+    return guide == null ? EMPTY : getter.apply(guide);
+  }
+
+  private static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
+    if (guide == null || guide.allowedValues().isEmpty()) {
+      return EMPTY;
+    }
+    return String.join(" / ", guide.allowedValues());
+  }
+
+  private record GuideStyles(
+      CellStyle head, CellStyle body, CellStyle required, CellStyle optional) {}
 
   private void writeGuideCell(Row row, int col, String value, CellStyle style) {
     Cell cell = row.createCell(col);

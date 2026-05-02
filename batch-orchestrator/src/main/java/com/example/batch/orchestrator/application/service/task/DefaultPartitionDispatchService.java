@@ -96,103 +96,134 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     WorkflowRunEntity workflowRun = context.workflowRun();
     List<WorkflowDagService.DagNodeResolution> initialNodes = context.initialNodes();
     Instant startedAt = context.startedAt();
-    // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
-    boolean dispatchable = true;
-    int partitionCount;
     String sourcePayload = buildPayloadJson(request, jobInstance, effectiveParams);
-    if (initialNodes != null && !initialNodes.isEmpty()) {
-      partitionCount = 0;
-      for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
-        if (initialNode == null || WorkflowNodeCode.START.code().equals(initialNode.nodeCode())) {
-          continue;
-        }
-        partitionCount +=
-            workflowNodeDispatchService.dispatchNode(
-                jobInstance, workflowRun, initialNode, sourcePayload, traceId);
-      }
+    // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
+    DispatchOutcome outcome =
+        (initialNodes != null && !initialNodes.isEmpty())
+            ? dispatchInitialDagNodes(
+                initialNodes, jobInstance, workflowRun, sourcePayload, traceId)
+            : dispatchByPlan(request, effectiveParams, traceId, jobInstance);
+    refreshJobInstanceVersion(jobInstance);
+    if (outcome.dispatchable()) {
+      transitionInstanceToRunning(jobInstance, workflowRun, outcome.partitionCount(), startedAt);
     } else {
-      SchedulePlan plan =
-          schedulePlanBuilder.build(
-              new SchedulePlanCommand(
-                  request.tenantId(),
-                  request.jobCode(),
-                  request.bizDate().toString(),
-                  effectiveParams));
-      ResourceSchedulingDecision decision =
-          resourceScheduler.schedule(buildSchedulingRequest(plan));
-      if (decision.isFailFast()) {
-        throw BizException.of(
-            ResultCode.BUSINESS_ERROR,
-            "error.partition.dispatch_business_error",
-            decision.getReasonMessage());
-      }
-      applySchedulingDecision(plan, decision);
-      List<JobPartitionEntity> partitions =
-          partitionLifecycleService.createPartitions(
-              plan, jobInstance.getId(), decision.getPartitionStatus());
-      createTasksAndMaybeOutboxEvents(
-          new TaskCreationContext(
-              new TaskExecutionContext(request, effectiveParams, traceId, jobInstance),
-              new TaskSchedulingContext(plan, partitions, decision)));
-      partitionCount = partitions.size();
-      dispatchable = decision.isDispatchable();
+      transitionInstanceToWaiting(jobInstance, workflowRun, outcome.partitionCount());
     }
-    // C-2.4: 重新读取 jobInstance 获取最新 version，避免并发创建分区/任务后 version 漂移导致 markRunning CAS 失败
-    JobInstanceEntity freshJobInstance =
+  }
+
+  private record DispatchOutcome(int partitionCount, boolean dispatchable) {}
+
+  private DispatchOutcome dispatchInitialDagNodes(
+      List<WorkflowDagService.DagNodeResolution> initialNodes,
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun,
+      String sourcePayload,
+      String traceId) {
+    int partitionCount = 0;
+    for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
+      if (initialNode == null || WorkflowNodeCode.START.code().equals(initialNode.nodeCode())) {
+        continue;
+      }
+      partitionCount +=
+          workflowNodeDispatchService.dispatchNode(
+              jobInstance, workflowRun, initialNode, sourcePayload, traceId);
+    }
+    return new DispatchOutcome(partitionCount, true);
+  }
+
+  private DispatchOutcome dispatchByPlan(
+      LaunchRequest request,
+      Map<String, Object> effectiveParams,
+      String traceId,
+      JobInstanceEntity jobInstance) {
+    SchedulePlan plan =
+        schedulePlanBuilder.build(
+            new SchedulePlanCommand(
+                request.tenantId(),
+                request.jobCode(),
+                request.bizDate().toString(),
+                effectiveParams));
+    ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
+    if (decision.isFailFast()) {
+      throw BizException.of(
+          ResultCode.BUSINESS_ERROR,
+          "error.partition.dispatch_business_error",
+          decision.getReasonMessage());
+    }
+    applySchedulingDecision(plan, decision);
+    List<JobPartitionEntity> partitions =
+        partitionLifecycleService.createPartitions(
+            plan, jobInstance.getId(), decision.getPartitionStatus());
+    createTasksAndMaybeOutboxEvents(
+        new TaskCreationContext(
+            new TaskExecutionContext(request, effectiveParams, traceId, jobInstance),
+            new TaskSchedulingContext(plan, partitions, decision)));
+    return new DispatchOutcome(partitions.size(), decision.isDispatchable());
+  }
+
+  // C-2.4: 重新读取 jobInstance 获取最新 version，避免并发创建分区/任务后 version 漂移导致 markRunning CAS 失败
+  private void refreshJobInstanceVersion(JobInstanceEntity jobInstance) {
+    JobInstanceEntity fresh =
         jobInstanceMapper.selectById(jobInstance.getTenantId(), jobInstance.getId());
-    if (freshJobInstance != null) {
-      jobInstance.setVersion(freshJobInstance.getVersion());
+    if (fresh != null) {
+      jobInstance.setVersion(fresh.getVersion());
     }
-    if (dispatchable) {
-      // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
-      int updated =
-          jobInstanceMapper.markRunning(
-              MarkInstanceRunningParam.builder()
-                  .tenantId(jobInstance.getTenantId())
-                  .id(jobInstance.getId())
-                  .instanceStatus(stateMachine.transition(jobInstance, "START").toState())
-                  .expectedPartitionCount(partitionCount)
-                  .startedAt(startedAt)
-                  .expectedVersion(jobInstance.getVersion())
-                  .build());
-      if (updated <= 0) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
-      }
-      jobInstance.setVersion(
-          (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-      if (workflowRun != null) {
-        workflowRunMapper.markRunning(
-            jobInstance.getTenantId(),
-            workflowRun.getId(),
-            stateMachine.transition(workflowRun, "START").toState(),
-            workflowRun.getCurrentNodeCode(),
-            startedAt);
-      }
-    } else {
-      // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
-      int updated =
-          jobInstanceMapper.markRunning(
-              MarkInstanceRunningParam.builder()
-                  .tenantId(jobInstance.getTenantId())
-                  .id(jobInstance.getId())
-                  .instanceStatus(JobInstanceStatus.WAITING.code())
-                  .expectedPartitionCount(partitionCount)
-                  .startedAt(null)
-                  .expectedVersion(jobInstance.getVersion())
-                  .build());
-      if (updated <= 0) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_waiting_conflict");
-      }
-      jobInstance.setVersion(
-          (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-      if (workflowRun != null) {
-        workflowRunMapper.markRunning(
-            jobInstance.getTenantId(),
-            workflowRun.getId(),
-            WorkflowRunStatus.CREATED.code(),
-            workflowRun.getCurrentNodeCode(),
-            null);
-      }
+  }
+
+  private void transitionInstanceToRunning(
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun,
+      int partitionCount,
+      Instant startedAt) {
+    // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
+    int updated =
+        jobInstanceMapper.markRunning(
+            MarkInstanceRunningParam.builder()
+                .tenantId(jobInstance.getTenantId())
+                .id(jobInstance.getId())
+                .instanceStatus(stateMachine.transition(jobInstance, "START").toState())
+                .expectedPartitionCount(partitionCount)
+                .startedAt(startedAt)
+                .expectedVersion(jobInstance.getVersion())
+                .build());
+    if (updated <= 0) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
+    }
+    jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+    if (workflowRun != null) {
+      workflowRunMapper.markRunning(
+          jobInstance.getTenantId(),
+          workflowRun.getId(),
+          stateMachine.transition(workflowRun, "START").toState(),
+          workflowRun.getCurrentNodeCode(),
+          startedAt);
+    }
+  }
+
+  private void transitionInstanceToWaiting(
+      JobInstanceEntity jobInstance, WorkflowRunEntity workflowRun, int partitionCount) {
+    // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
+    int updated =
+        jobInstanceMapper.markRunning(
+            MarkInstanceRunningParam.builder()
+                .tenantId(jobInstance.getTenantId())
+                .id(jobInstance.getId())
+                .instanceStatus(JobInstanceStatus.WAITING.code())
+                .expectedPartitionCount(partitionCount)
+                .startedAt(null)
+                .expectedVersion(jobInstance.getVersion())
+                .build());
+    if (updated <= 0) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_waiting_conflict");
+    }
+    jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+    if (workflowRun != null) {
+      workflowRunMapper.markRunning(
+          jobInstance.getTenantId(),
+          workflowRun.getId(),
+          WorkflowRunStatus.CREATED.code(),
+          workflowRun.getCurrentNodeCode(),
+          null);
     }
   }
 

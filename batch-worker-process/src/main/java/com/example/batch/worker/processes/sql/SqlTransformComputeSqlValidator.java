@@ -80,45 +80,60 @@ public class SqlTransformComputeSqlValidator {
   }
 
   private void checkNoSelectStar(Select select) {
+    Deque<SelectBody> queue = collectInitialBodies(select);
+    while (!queue.isEmpty()) {
+      SelectBody body = queue.poll();
+      if (body instanceof PlainSelect ps) {
+        rejectStarItems(ps);
+        enqueueNestedBodies(ps, queue);
+      } else if (body instanceof SetOperationList sol && sol.getSelects() != null) {
+        queue.addAll(sol.getSelects());
+      }
+    }
+  }
+
+  /** 收集顶层 SelectBody + 所有 WITH 子句的子查询主体。 */
+  private static Deque<SelectBody> collectInitialBodies(Select select) {
     Deque<SelectBody> queue = new ArrayDeque<>();
     if (select.getSelectBody() != null) {
       queue.add(select.getSelectBody());
     }
     if (select.getWithItemsList() != null) {
-      for (WithItem item : select.getWithItemsList()) {
-        if (item.getSubSelect() != null && item.getSubSelect().getSelectBody() != null) {
-          queue.add(item.getSubSelect().getSelectBody());
+      for (WithItem wi : select.getWithItemsList()) {
+        SubSelect sub = wi.getSubSelect();
+        if (sub != null && sub.getSelectBody() != null) {
+          queue.add(sub.getSelectBody());
         }
       }
     }
+    return queue;
+  }
 
-    while (!queue.isEmpty()) {
-      SelectBody body = queue.poll();
-      if (body instanceof PlainSelect plainSelect) {
-        if (plainSelect.getSelectItems() != null) {
-          for (SelectItem item : plainSelect.getSelectItems()) {
-            if (item instanceof AllColumns || item instanceof AllTableColumns) {
-              throw new IllegalArgumentException(
-                  "sqlTransformCompute forbids SELECT * / SELECT table.*;"
-                      + " enumerate columns explicitly");
-            }
-          }
-        }
-        if (plainSelect.getFromItem() instanceof SubSelect subSelect
-            && subSelect.getSelectBody() != null) {
-          queue.add(subSelect.getSelectBody());
-        }
-        if (plainSelect.getJoins() != null) {
-          plainSelect.getJoins().stream()
-              .filter(join -> join.getRightItem() instanceof SubSelect)
-              .map(join -> ((SubSelect) join.getRightItem()).getSelectBody())
-              .filter(selectBody -> selectBody != null)
-              .forEach(queue::add);
-        }
-      } else if (body instanceof SetOperationList setOperationList
-          && setOperationList.getSelects() != null) {
-        queue.addAll(setOperationList.getSelects());
+  /** 单个 PlainSelect 命中 SELECT * / table.* 即抛。 */
+  private static void rejectStarItems(PlainSelect ps) {
+    if (ps.getSelectItems() == null) {
+      return;
+    }
+    for (SelectItem item : ps.getSelectItems()) {
+      if (item instanceof AllColumns || item instanceof AllTableColumns) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute forbids SELECT * / SELECT table.*;"
+                + " enumerate columns explicitly");
       }
+    }
+  }
+
+  /** 把 FROM / JOIN 中的子查询加入待检查队列。 */
+  private static void enqueueNestedBodies(PlainSelect ps, Deque<SelectBody> queue) {
+    if (ps.getFromItem() instanceof SubSelect sub && sub.getSelectBody() != null) {
+      queue.add(sub.getSelectBody());
+    }
+    if (ps.getJoins() != null) {
+      ps.getJoins().stream()
+          .filter(j -> j.getRightItem() instanceof SubSelect)
+          .map(j -> ((SubSelect) j.getRightItem()).getSelectBody())
+          .filter(b -> b != null)
+          .forEach(queue::add);
     }
   }
 

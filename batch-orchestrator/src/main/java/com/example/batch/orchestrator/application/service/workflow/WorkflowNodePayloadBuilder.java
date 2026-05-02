@@ -91,7 +91,9 @@ public class WorkflowNodePayloadBuilder {
    * {@code fileCode} 这类跨节点常用字段挑出来塞进 payload。保守做法:只挑已知少量字段(避免把 partition 内部诊断字段污染到 worker
    * payload)。多分区并存时最新成功的胜出。
    */
-  @SuppressWarnings("unchecked")
+  private static final List<String> UPSTREAM_OUTPUT_WHITELIST =
+      List.of("fileId", "fileCode", "batchNo", "recordCount", "bizDate");
+
   private void mergeUpstreamPartitionOutputs(
       Map<String, Object> payload, JobInstanceEntity jobInstance) {
     if (jobInstance == null || jobInstance.getId() == null) {
@@ -103,54 +105,75 @@ public class WorkflowNodePayloadBuilder {
     if (siblings == null || siblings.isEmpty()) {
       return;
     }
-    JobPartitionEntity latestSuccess = null;
+    JobPartitionEntity latestSuccess = findLatestSuccessPartition(siblings);
+    mergeWhitelistedOutputFields(payload, latestSuccess);
+    fallbackFileIdLookup(payload, jobInstance);
+  }
+
+  private static JobPartitionEntity findLatestSuccessPartition(List<JobPartitionEntity> siblings) {
+    JobPartitionEntity latest = null;
     for (JobPartitionEntity p : siblings) {
       if (!PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())) {
         continue;
       }
-      if (latestSuccess == null
-          || (p.getFinishedAt() != null
-              && latestSuccess.getFinishedAt() != null
-              && p.getFinishedAt().isAfter(latestSuccess.getFinishedAt()))) {
-        latestSuccess = p;
+      if (latest == null || isFinishedLater(p, latest)) {
+        latest = p;
       }
     }
-    if (latestSuccess != null && latestSuccess.getOutputSummary() != null) {
-      try {
-        Object outputObj = JsonUtils.fromJson(latestSuccess.getOutputSummary(), Object.class);
-        if (outputObj instanceof Map<?, ?> outMap) {
-          Map<String, Object> out = (Map<String, Object>) outMap;
-          // 保守白名单：只把已知的跨节点常用字段挑出来
-          for (String key : List.of("fileId", "fileCode", "batchNo", "recordCount", "bizDate")) {
-            Object v = out.get(key);
-            if (v != null && !payload.containsKey(key)) {
-              payload.put(key, v);
-            }
-          }
+    return latest;
+  }
+
+  private static boolean isFinishedLater(JobPartitionEntity p, JobPartitionEntity reference) {
+    return p.getFinishedAt() != null
+        && reference.getFinishedAt() != null
+        && p.getFinishedAt().isAfter(reference.getFinishedAt());
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void mergeWhitelistedOutputFields(
+      Map<String, Object> payload, JobPartitionEntity latestSuccess) {
+    if (latestSuccess == null || latestSuccess.getOutputSummary() == null) {
+      return;
+    }
+    try {
+      Object outputObj = JsonUtils.fromJson(latestSuccess.getOutputSummary(), Object.class);
+      if (!(outputObj instanceof Map<?, ?> outMap)) {
+        return;
+      }
+      Map<String, Object> out = (Map<String, Object>) outMap;
+      // 保守白名单：只把已知的跨节点常用字段挑出来
+      for (String key : UPSTREAM_OUTPUT_WHITELIST) {
+        Object v = out.get(key);
+        if (v != null && !payload.containsKey(key)) {
+          payload.put(key, v);
         }
-      } catch (IllegalArgumentException ignored) {
-        // 跳过脏 outputSummary
+      }
+    } catch (IllegalArgumentException ignored) {
+      // 跳过脏 outputSummary
+    }
+  }
+
+  // 兜底：partition.output_summary 不含 fileId 时，通过 trace_id 或 batchNo 反查 file_record。
+  // 两条独立的线索都要查：
+  //   (a) trace_id - 本次 run 期间 EXPORT worker 新建的 file_record 会打同一 trace_id
+  //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
+  //       （settlement-2026-04-22 这种业务上每日唯一的文件就是这种场景）
+  private void fallbackFileIdLookup(Map<String, Object> payload, JobInstanceEntity jobInstance) {
+    if (payload.containsKey("fileId") || jobInstance.getTenantId() == null) {
+      return;
+    }
+    Long fileId = null;
+    if (jobInstance.getTraceId() != null && !jobInstance.getTraceId().isBlank()) {
+      fileId = lookupFileIdByTraceId(jobInstance.getTenantId(), jobInstance.getTraceId());
+    }
+    if (fileId == null) {
+      Object batchNo = payload.get("batchNo");
+      if (batchNo != null && !String.valueOf(batchNo).isBlank()) {
+        fileId = lookupFileIdBySourceRef(jobInstance.getTenantId(), String.valueOf(batchNo));
       }
     }
-    // 兜底：partition.output_summary 不含 fileId 时，通过 trace_id 或 batchNo 反查 file_record。
-    // 两条独立的线索都要查：
-    //   (a) trace_id - 本次 run 期间 EXPORT worker 新建的 file_record 会打同一 trace_id
-    //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
-    //       （settlement-2026-04-22 这种业务上每日唯一的文件就是这种场景）
-    if (!payload.containsKey("fileId") && jobInstance.getTenantId() != null) {
-      Long fileId = null;
-      if (jobInstance.getTraceId() != null && !jobInstance.getTraceId().isBlank()) {
-        fileId = lookupFileIdByTraceId(jobInstance.getTenantId(), jobInstance.getTraceId());
-      }
-      if (fileId == null) {
-        Object batchNo = payload.get("batchNo");
-        if (batchNo != null && !String.valueOf(batchNo).isBlank()) {
-          fileId = lookupFileIdBySourceRef(jobInstance.getTenantId(), String.valueOf(batchNo));
-        }
-      }
-      if (fileId != null) {
-        payload.put("fileId", String.valueOf(fileId));
-      }
+    if (fileId != null) {
+      payload.put("fileId", String.valueOf(fileId));
     }
   }
 

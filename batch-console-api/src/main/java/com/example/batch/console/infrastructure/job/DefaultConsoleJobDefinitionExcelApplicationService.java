@@ -354,85 +354,110 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     Set<String> seen = new LinkedHashSet<>();
     for (JobDefinitionRow row : session.rows()) {
       List<String> rowIssues = new ArrayList<>();
-      String rowKey = row.jobCode();
-      if (!hasText(row.tenantId()) || !hasText(row.jobCode())) {
-        rowIssues.add("tenant_id and job_code are required");
-      }
-      if (!seen.add(row.tenantId() + "#" + row.jobCode())) {
-        rowIssues.add("duplicate job definition in excel: " + row.tenantId() + "#" + row.jobCode());
-      }
-      JobDefinitionEntity existing =
-          hasText(row.tenantId()) && hasText(row.jobCode())
-              ? jobDefinitionMapper.selectByUniqueKey(row.tenantId(), row.jobCode())
-              : null;
-      if (existing == null) {
-        rowIssues.add("job definition not found for maintenance: " + row.jobCode());
-      } else {
-        checkReadOnly(row.jobType(), existing.getJobType(), COL_JOB_TYPE, rowIssues);
-        checkReadOnly(row.scheduleType(), existing.getScheduleType(), COL_SCHEDULE_TYPE, rowIssues);
-        checkReadOnly(
-            row.executionHandler(),
-            existing.getExecutionHandler(),
-            COL_EXECUTION_HANDLER,
-            rowIssues);
-        checkReadOnly(row.paramSchema(), existing.getParamSchema(), COL_PARAM_SCHEMA, rowIssues);
-        checkReadOnly(
-            row.defaultParams(), existing.getDefaultParams(), COL_DEFAULT_PARAMS, rowIssues);
-      }
-      if (hasText(row.retryPolicy()) && !RETRY_POLICIES.contains(row.retryPolicy())) {
-        rowIssues.add("retry_policy must be one of " + RETRY_POLICIES);
-      }
-      if (hasText(row.shardStrategy()) && !SHARD_STRATEGIES.contains(row.shardStrategy())) {
-        rowIssues.add("shard_strategy must be one of " + SHARD_STRATEGIES);
-      }
-      if (hasText(row.enabled() == null ? null : String.valueOf(row.enabled()))
-          && !ENABLED_VALUES.contains(String.valueOf(row.enabled()).toUpperCase(Locale.ROOT))) {
-        rowIssues.add("enabled must be TRUE or FALSE");
-      }
-      if (row.retryMaxCount() != null && row.retryMaxCount() < 0) {
-        rowIssues.add("retry_max_count must be >= 0");
-      }
-      if (row.timeoutSeconds() != null && row.timeoutSeconds() < 0) {
-        rowIssues.add("timeout_seconds must be >= 0");
-      }
-      if (hasText(row.queueCode())
-          && resourceQueueMapper.selectByUniqueKey(row.tenantId(), row.queueCode()) == null) {
-        rowIssues.add("queue_code references non-existent resource queue: " + row.queueCode());
-      }
-      if (hasText(row.calendarCode())
-          && businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-                  row.tenantId(), row.calendarCode())
-              == null) {
-        rowIssues.add(
-            "calendar_code references non-existent business calendar: " + row.calendarCode());
-      }
-      if (hasText(row.windowCode())
-          && batchWindowMapper.selectByUniqueKey(row.tenantId(), row.windowCode()) == null) {
-        rowIssues.add("window_code references non-existent batch window: " + row.windowCode());
-      }
-      if (row.paramSchema() != null) {
-        try {
-          JsonUtils.fromJson(row.paramSchema(), Object.class);
-        } catch (IllegalArgumentException exception) {
-          rowIssues.add("param_schema must be valid JSON");
-        }
-      }
-      if (row.defaultParams() != null) {
-        try {
-          JsonUtils.fromJson(row.defaultParams(), Object.class);
-        } catch (IllegalArgumentException exception) {
-          rowIssues.add("default_params must be valid JSON");
-        }
-      }
+      validateRow(row, seen, rowIssues);
       if (rowIssues.isEmpty()) {
         validRows.add(row);
       } else {
         issues.add(
             new ConsoleJobDefinitionExcelRowIssueResponse(
-                SHEET, row.rowNo(), rowKey, row.jobCode(), List.copyOf(rowIssues)));
+                SHEET, row.rowNo(), row.jobCode(), row.jobCode(), List.copyOf(rowIssues)));
       }
     }
     return new ValidationResult(session.rows().size(), validRows, issues);
+  }
+
+  private void validateRow(JobDefinitionRow row, Set<String> seen, List<String> rowIssues) {
+    validateIdentity(row, seen, rowIssues);
+    validateAgainstExisting(row, rowIssues);
+    validateEnumFields(row, rowIssues);
+    validateNumericFields(row, rowIssues);
+    validateForeignKeys(row, rowIssues);
+    validateJsonFields(row, rowIssues);
+  }
+
+  private static void validateIdentity(
+      JobDefinitionRow row, Set<String> seen, List<String> rowIssues) {
+    if (!hasText(row.tenantId()) || !hasText(row.jobCode())) {
+      rowIssues.add("tenant_id and job_code are required");
+    }
+    if (!seen.add(row.tenantId() + "#" + row.jobCode())) {
+      rowIssues.add("duplicate job definition in excel: " + row.tenantId() + "#" + row.jobCode());
+    }
+  }
+
+  private void validateAgainstExisting(JobDefinitionRow row, List<String> rowIssues) {
+    JobDefinitionEntity existing =
+        hasText(row.tenantId()) && hasText(row.jobCode())
+            ? jobDefinitionMapper.selectByUniqueKey(row.tenantId(), row.jobCode())
+            : null;
+    if (existing == null) {
+      rowIssues.add("job definition not found for maintenance: " + row.jobCode());
+      return;
+    }
+    checkReadOnly(row.jobType(), existing.getJobType(), COL_JOB_TYPE, rowIssues);
+    checkReadOnly(row.scheduleType(), existing.getScheduleType(), COL_SCHEDULE_TYPE, rowIssues);
+    checkReadOnly(
+        row.executionHandler(), existing.getExecutionHandler(), COL_EXECUTION_HANDLER, rowIssues);
+    checkReadOnly(row.paramSchema(), existing.getParamSchema(), COL_PARAM_SCHEMA, rowIssues);
+    checkReadOnly(row.defaultParams(), existing.getDefaultParams(), COL_DEFAULT_PARAMS, rowIssues);
+  }
+
+  private static void validateEnumFields(JobDefinitionRow row, List<String> rowIssues) {
+    if (hasText(row.retryPolicy()) && !RETRY_POLICIES.contains(row.retryPolicy())) {
+      rowIssues.add("retry_policy must be one of " + RETRY_POLICIES);
+    }
+    if (hasText(row.shardStrategy()) && !SHARD_STRATEGIES.contains(row.shardStrategy())) {
+      rowIssues.add("shard_strategy must be one of " + SHARD_STRATEGIES);
+    }
+    String enabled = row.enabled() == null ? null : String.valueOf(row.enabled());
+    if (hasText(enabled) && !ENABLED_VALUES.contains(enabled.toUpperCase(Locale.ROOT))) {
+      rowIssues.add("enabled must be TRUE or FALSE");
+    }
+  }
+
+  private static void validateNumericFields(JobDefinitionRow row, List<String> rowIssues) {
+    if (row.retryMaxCount() != null && row.retryMaxCount() < 0) {
+      rowIssues.add("retry_max_count must be >= 0");
+    }
+    if (row.timeoutSeconds() != null && row.timeoutSeconds() < 0) {
+      rowIssues.add("timeout_seconds must be >= 0");
+    }
+  }
+
+  private void validateForeignKeys(JobDefinitionRow row, List<String> rowIssues) {
+    if (hasText(row.queueCode())
+        && resourceQueueMapper.selectByUniqueKey(row.tenantId(), row.queueCode()) == null) {
+      rowIssues.add("queue_code references non-existent resource queue: " + row.queueCode());
+    }
+    if (hasText(row.calendarCode())
+        && businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+                row.tenantId(), row.calendarCode())
+            == null) {
+      rowIssues.add(
+          "calendar_code references non-existent business calendar: " + row.calendarCode());
+    }
+    if (hasText(row.windowCode())
+        && batchWindowMapper.selectByUniqueKey(row.tenantId(), row.windowCode()) == null) {
+      rowIssues.add("window_code references non-existent batch window: " + row.windowCode());
+    }
+  }
+
+  private static void validateJsonFields(JobDefinitionRow row, List<String> rowIssues) {
+    if (row.paramSchema() != null && !isValidJson(row.paramSchema())) {
+      rowIssues.add("param_schema must be valid JSON");
+    }
+    if (row.defaultParams() != null && !isValidJson(row.defaultParams())) {
+      rowIssues.add("default_params must be valid JSON");
+    }
+  }
+
+  private static boolean isValidJson(String text) {
+    try {
+      JsonUtils.fromJson(text, Object.class);
+      return true;
+    } catch (IllegalArgumentException ignored) {
+      return false;
+    }
   }
 
   private void checkReadOnly(
@@ -532,8 +557,8 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     return defaultValue;
   }
 
-  private boolean hasText(String value) {
-    return Texts.hasText(normalize(value));
+  private static boolean hasText(String value) {
+    return Texts.hasText(ConsoleTextSanitizer.normalize(value));
   }
 
   private String tenantOrDefault(String value, String tenantId) {
