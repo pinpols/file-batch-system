@@ -2,15 +2,19 @@ package com.example.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
 import lombok.Data;
-import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
+/**
+ * {@code batch.approval_command} 表的 MyBatis ResultMap 数据载体。
+ *
+ * <p>本类<b>不是 Spring Data JDBC 实体</b>——审批命令属运行态状态机表（CLAUDE.md §架构硬约束），CRUD 全走 {@code
+ * ApprovalCommandMapper.xml}（已存在）。{@code @Column} 注解对 MyBatis 无意义但保留以提升可读性， 不能加 {@code @Table} /
+ * 不应被任何 {@code Repository<T,ID>} 引用。
+ */
 @Data
-@Table(schema = "batch", value = "approval_command")
 public class ApprovalCommandEntity {
 
-  @Id private Long id;
+  private Long id;
 
   @Column("tenant_id")
   private String tenantId;
