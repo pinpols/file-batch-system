@@ -216,6 +216,8 @@ public class DefaultLaunchService implements LaunchService {
         .paramsSnapshot(
             launchParamResolver.buildParamsSnapshot(
                 loaded.jobDefinition(), request, effectiveParams, traceId))
+        // V93 P0-4: 创建时从 jobDefinition 抓 calendarCode 快照, 之后 config 变更不污染历史 instance
+        .calendarCode(loaded.jobDefinition().calendarCode())
         .deadlineAt(
             launchParamResolver.resolveDeadlineAt(
                 Instant.now(),

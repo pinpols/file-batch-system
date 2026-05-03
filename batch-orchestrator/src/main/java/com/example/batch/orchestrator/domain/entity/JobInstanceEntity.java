@@ -42,6 +42,9 @@ public class JobInstanceEntity implements Stateful {
   private String traceId;
   private String paramsSnapshot;
 
+  /** V93 P0-4: 创建时从 job_definition.calendar_code 抓快照, 与 batch_day_instance 关联, 不随 config 变更漂移. */
+  private String calendarCode;
+
   /** 增量模式下本次执行的水位起点(orchestrator 派发时从上次成功实例的 OUT 读出)。 */
   private String highWaterMarkIn;
 
