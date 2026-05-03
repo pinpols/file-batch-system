@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import com.example.batch.common.kafka.BatchTopics;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 
 @ExtendWith(MockitoExtension.class)
 class DeadLetterPublisherTest {
@@ -23,10 +27,15 @@ class DeadLetterPublisherTest {
   @Mock private KafkaTemplate<String, String> kafkaTemplate;
 
   private DeadLetterPublisher publisher;
+  private MeterRegistry registry;
 
   @BeforeEach
   void setUp() {
-    publisher = new DeadLetterPublisher(kafkaTemplate);
+    registry = new SimpleMeterRegistry();
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(registry);
+    publisher = new DeadLetterPublisher(kafkaTemplate, provider);
   }
 
   @Test
@@ -45,6 +54,11 @@ class DeadLetterPublisherTest {
     assertThat(sent).contains("workerType");
     assertThat(sent).contains("errorMessage");
     assertThat(sent).contains("failedAt");
+    assertThat(
+            registry
+                .counter("worker.dlq.publish.success.total", "topic", BatchTopics.TASK_DEAD_LETTER)
+                .count())
+        .isEqualTo(1.0);
   }
 
   @Test
@@ -57,7 +71,6 @@ class DeadLetterPublisherTest {
 
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(kafkaTemplate).send(anyString(), captor.capture());
-    // 截断后的消息不应包含完整的 3000 个字符
     assertThat(captor.getValue().length()).isLessThan(4000);
   }
 
@@ -70,7 +83,7 @@ class DeadLetterPublisherTest {
     verify(kafkaTemplate).send(anyString(), anyString());
   }
 
-  // #4-3: DLQ 发送失败时应抛出异常，让调用方感知并决定是否提交偏移量
+  /** #4-3: DLQ 发送失败时应抛出异常，让调用方感知并决定是否提交偏移量. */
   @Test
   void publish_kafkaTemplateThrows_propagatesException() {
     doThrow(new RuntimeException("kafka down")).when(kafkaTemplate).send(anyString(), anyString());
@@ -78,5 +91,46 @@ class DeadLetterPublisherTest {
     assertThatThrownBy(() -> publisher.publish("p", "t", "w", "err"))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("kafka down");
+  }
+
+  /**
+   * P0-3: future 一直不完成 → 5s 后超时抛 IllegalStateException + timeout counter +1; 不再无限阻塞 listener 线程.
+   */
+  @Test
+  void publish_brokerSlow_timesOutAndThrows() {
+    // 永不完成的 future 模拟 broker 卡死
+    CompletableFuture<SendResult<String, String>> stuck = new CompletableFuture<>();
+    when(kafkaTemplate.send(anyString(), anyString())).thenReturn(stuck);
+
+    long start = System.currentTimeMillis();
+    assertThatThrownBy(() -> publisher.publish("p", "t", "w", "err"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("timeout");
+    long elapsed = System.currentTimeMillis() - start;
+
+    // 必须在 5s ~ 10s 之间返回 (超时常量 5s + 调度抖动)
+    assertThat(elapsed).isBetween(4500L, 10_000L);
+    assertThat(
+            registry
+                .counter("worker.dlq.publish.timeout.total", "topic", BatchTopics.TASK_DEAD_LETTER)
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  /** P0-3: future 完成但 ack 异常 → 失败 counter +1, 抛 IllegalStateException 保留 cause. */
+  @Test
+  void publish_ackFails_throwsAndRecordsFailureMetric() {
+    CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
+    failed.completeExceptionally(new RuntimeException("broker rejected"));
+    when(kafkaTemplate.send(anyString(), anyString())).thenReturn(failed);
+
+    assertThatThrownBy(() -> publisher.publish("p", "t", "w", "err"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("publish failed");
+    assertThat(
+            registry
+                .counter("worker.dlq.publish.failed.total", "topic", BatchTopics.TASK_DEAD_LETTER)
+                .count())
+        .isEqualTo(1.0);
   }
 }
