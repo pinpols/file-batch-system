@@ -30,4 +30,14 @@ public class RetryGovernanceProperties {
 
   /** 默认最大重试次数（job_definition 未配 max_retry_count 时使用）。 */
   private int defaultMaxRetryCount = 3;
+
+  /**
+   * 重试退避 jitter 比例（0~1，默认 0.0 = 关闭，兼容现有行为）。
+   *
+   * <p>每次计算 {@code nextRetryAt} 时在 backoff 值上抖动 ±jitterRatio 比例，打散 thundering herd
+   * （大批失败任务同步触发重试）。生产建议 0.1~0.3，参考 {@code OutboxProperties.retryJitterRatio} (默认 0.2)。
+   *
+   * <p>详见 docs/analysis/orchestrator-vs-industry-2026-05-03.md §2.3。
+   */
+  private double jitterRatio = 0.0;
 }

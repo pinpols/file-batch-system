@@ -191,6 +191,20 @@
           and version = #{expectedVersion}
     </update>
 
+    <select id="selectTimedOutCandidates" resultMap="JobInstanceResultMap">
+        select ji.*
+        from batch.job_instance ji
+        join batch.job_definition jd
+          on jd.id = ji.job_definition_id
+         and jd.tenant_id = ji.tenant_id
+        where ji.instance_status = 'RUNNING'
+          and ji.started_at is not null
+          and jd.timeout_seconds &gt; 0
+          and ji.started_at &lt; current_timestamp - (jd.timeout_seconds * interval '1 second')
+        order by ji.started_at asc, ji.id asc
+        limit #{limit}
+    </select>
+
     <select id="selectSlaViolationCandidates" resultMap="JobInstanceResultMap">
         select *
         from batch.job_instance

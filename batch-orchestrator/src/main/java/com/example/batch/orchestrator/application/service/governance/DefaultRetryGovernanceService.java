@@ -523,7 +523,24 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       }
       delaySeconds = candidate;
     }
+    delaySeconds = applyJitter(delaySeconds);
     return Instant.now().plusSeconds(delaySeconds);
+  }
+
+  /**
+   * 在 backoff 上叠加 ±jitterRatio 的随机偏移，打散 thundering herd。
+   *
+   * <p>jitterRatio=0（默认）时直接返回原值，行为兼容现有逻辑。详见 {@code RetryGovernanceProperties.jitterRatio}。
+   */
+  private long applyJitter(long delaySeconds) {
+    double jitterRatio = governance.retry().getJitterRatio();
+    if (jitterRatio <= 0.0 || delaySeconds <= 0L) {
+      return delaySeconds;
+    }
+    double range = delaySeconds * Math.min(jitterRatio, 1.0);
+    double offset =
+        (java.util.concurrent.ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * range;
+    return Math.max(1L, delaySeconds + (long) offset);
   }
 
   private void createDeadLetter(

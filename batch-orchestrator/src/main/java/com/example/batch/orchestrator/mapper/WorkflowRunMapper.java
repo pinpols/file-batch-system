@@ -36,6 +36,14 @@ public interface WorkflowRunMapper {
   /** P3-3 archive: 选出终结态、finished_at 早于 cutoff 的 workflow_run id（带 limit 防长事务）。 */
   List<Long> selectArchivableIds(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
+  /**
+   * 选 RUNNING 中且 {@code updated_at} 早于 {@code stuckBefore} 的 workflow_run（疑似 stuck，等下游
+   * 推进信号永远没回来）。配合 {@link WorkflowNodeRunMapper#selectByWorkflowRunId} 判定是否所有 node 已终态后做兜底
+   * finalize。详见 {@code WorkflowRunStuckReconciler}。
+   */
+  List<WorkflowRunEntity> selectStuckRunningCandidates(
+      @Param("stuckBefore") Instant stuckBefore, @Param("limit") int limit);
+
   /** P3-3 archive: 按 id 列表删除 workflow_node_run（FK 子表），返回删除行数。 */
   int deleteNodeRunsByWorkflowRunIds(@Param("ids") List<Long> workflowRunIds);
 
