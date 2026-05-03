@@ -55,6 +55,9 @@ public class TaskDispatchExecutor {
     task.setPartitionCount(effective.partitionCount());
     task.setPartitionKey(effective.partitionKey());
     task.setTimeoutSeconds(effective.timeoutSeconds());
+    // V94: data_interval 透传给 worker, 业务 SQL 拼时间窗
+    task.setDataIntervalStart(effective.dataIntervalStart());
+    task.setDataIntervalEnd(effective.dataIntervalEnd());
     return workerRuntimeFacade.execute(task);
   }
 }

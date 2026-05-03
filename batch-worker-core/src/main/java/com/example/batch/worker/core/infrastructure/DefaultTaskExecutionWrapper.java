@@ -277,6 +277,13 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       // INCREMENTAL pipeline 业务读 attributes 拼 SQL 水位条件;FULL/CDC/历史首跑为 null。
       executionContext.put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, task.getHighWaterMarkIn());
     }
+    // V94: data_interval 半开区间, 业务可拼时间窗 SQL. null 时不放, 业务侧用 bizDate 兜底.
+    if (task.getDataIntervalStart() != null) {
+      executionContext.put(PipelineRuntimeKeys.DATA_INTERVAL_START, task.getDataIntervalStart());
+    }
+    if (task.getDataIntervalEnd() != null) {
+      executionContext.put(PipelineRuntimeKeys.DATA_INTERVAL_END, task.getDataIntervalEnd());
+    }
     // partition 信息透传:worker step / plugin 据此 + PARTITION_COUNT 决定切哪部分。null 时按"不分片"处理(下游
     // ParseStep 等会兜底为 1/1)。
     if (task.getPartitionNo() != null) {

@@ -95,7 +95,9 @@ class DefaultTaskExecutionWrapperTest {
             60,
             1,
             1,
-            "JOB:2026-05-01:1");
+            "JOB:2026-05-01:1",
+            null,
+            null);
     when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.of(sample));
 
     Optional<EffectiveTaskConfig> result = wrapper.claim("t1", 42L, "w1");

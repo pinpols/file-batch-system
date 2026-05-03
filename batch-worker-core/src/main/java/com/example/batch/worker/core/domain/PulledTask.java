@@ -43,4 +43,14 @@ public class PulledTask {
    * null/0 表示走 worker 端配置兜底 (batch.worker.execution.default-timeout-seconds, 默认 1800s).
    */
   private Integer timeoutSeconds;
+
+  /**
+   * V94: data_interval 半开区间起点. 业务可读 {@code
+   * ExecutionContext.getAttributes().get(PipelineRuntimeKeys.DATA_INTERVAL_START)} 拼 SQL {@code
+   * WHERE update_time >= :start}. null 时退化为 bizDate.atStartOfDay (worker 端兜底).
+   */
+  private java.time.Instant dataIntervalStart;
+
+  /** V94: data_interval 半开区间终点. null 时退化为 bizDate+1.atStartOfDay (worker 端兜底). */
+  private java.time.Instant dataIntervalEnd;
 }

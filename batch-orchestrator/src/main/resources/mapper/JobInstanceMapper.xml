@@ -30,6 +30,8 @@
         <result column="trace_id" property="traceId"/>
         <result column="params_snapshot" property="paramsSnapshot"/>
         <result column="calendar_code" property="calendarCode"/>
+        <result column="data_interval_start" property="dataIntervalStart"/>
+        <result column="data_interval_end" property="dataIntervalEnd"/>
         <result column="high_water_mark_in" property="highWaterMarkIn"/>
         <result column="high_water_mark_out" property="highWaterMarkOut"/>
         <result column="result_summary" property="resultSummary"/>
@@ -102,6 +104,8 @@
             trace_id,
             params_snapshot,
             calendar_code,
+            data_interval_start,
+            data_interval_end,
             high_water_mark_in,
             high_water_mark_out,
             result_summary,
@@ -136,6 +140,8 @@
             #{traceId},
             #{paramsSnapshot,jdbcType=VARCHAR}::jsonb,
             #{calendarCode},
+            #{dataIntervalStart},
+            #{dataIntervalEnd},
             #{highWaterMarkIn},
             #{highWaterMarkOut},
             #{resultSummary,jdbcType=VARCHAR}::jsonb,
