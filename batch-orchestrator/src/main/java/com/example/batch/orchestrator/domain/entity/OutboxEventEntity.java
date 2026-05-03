@@ -24,6 +24,10 @@ public class OutboxEventEntity {
 
   private Instant nextPublishAt;
   private String traceId;
+
+  /** V88: 拷自 source job_definition.priority. OutboxPollScheduler 按 desc 排序优先派发. 默认 5 (范围 0-10). */
+  private Integer priority;
+
   private Instant createdAt;
   private Instant updatedAt;
 }

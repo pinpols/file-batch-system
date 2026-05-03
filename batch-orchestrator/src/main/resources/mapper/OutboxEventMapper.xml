@@ -13,6 +13,7 @@
         <result column="publish_attempt" property="publishAttempt"/>
         <result column="next_publish_at" property="nextPublishAt"/>
         <result column="trace_id" property="traceId"/>
+        <result column="priority" property="priority"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -29,7 +30,8 @@
             publish_status,
             publish_attempt,
             next_publish_at,
-            trace_id
+            trace_id,
+            priority
         ) values (
             #{tenantId},
             #{aggregateType},
@@ -40,7 +42,8 @@
             #{publishStatus},
             #{publishAttempt},
             #{nextPublishAt},
-            #{traceId}
+            #{traceId},
+            coalesce(#{priority}, 5)
         )
         on conflict (tenant_id, event_key) do nothing
     </insert>
@@ -63,7 +66,8 @@
         <if test="publishStatus != null and publishStatus != ''">
             and publish_status = #{publishStatus}
         </if>
-        order by id asc
+        <!-- V88: priority desc 优先派发高优 task; id asc 兜底先到先服务 -->
+        order by priority desc, id asc
         <if test="batchSize != null and batchSize > 0">
             limit #{batchSize}
         </if>
