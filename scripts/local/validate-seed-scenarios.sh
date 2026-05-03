@@ -20,6 +20,7 @@
 #   - Worker 链路覆盖 ×7: IMPORT/EXPORT/DISPATCH + 4 种 workflow_type
 #     (DAG/PIPELINE/GATEWAY/MIXED), 验证 instance 创建,不强制 worker SUCCESS
 #   - 多租并发隔离: ta/tb 同时 fire,验证 tenant_id 不串
+#   - ADVANCED=1: orch /internal/{outbox,compensations} + console 鉴权 (5 项)
 #   - 探针清理: cascade 删 7 张表
 #
 # 用法:
@@ -40,6 +41,7 @@
 #   PG_USER / PG_DB                          (默认 batch_user / batch_platform)
 #   AWAIT_TIMEOUT                            异步链路等待秒数(默认 30)
 #   LOAD_SEED                                1=运行前先 reload 种子(默认 0)
+#   ADVANCED                                 1=跑 §9 advanced 段(默认 0)
 # =========================================================
 set -uo pipefail
 
@@ -54,6 +56,7 @@ PG_USER="${PG_USER:-batch_user}"
 PG_DB="${PG_DB:-batch_platform}"
 AWAIT_TIMEOUT="${AWAIT_TIMEOUT:-30}"
 LOAD_SEED="${LOAD_SEED:-0}"
+ADVANCED="${ADVANCED:-0}"
 
 # 探针标识 — 所有探针 trigger 用此前缀,便于清理 / 与种子区分
 PROBE_TAG="seedval-$(date +%s)"
@@ -465,6 +468,76 @@ if [[ -n "$ta_id" && -n "$tb_id" ]]; then
   fi
 else
   result fail "多租并发 推 LAUNCHED" "ta_id=$ta_id tb_id=$tb_id (${AWAIT_TIMEOUT}s)"
+fi
+
+# ---------- 9. ADVANCED gate: orch 运维 API + console auth + trigger cron ----------
+# ADVANCED=1 才跑;默认跳过(避免常规 smoke 跑得太重)
+if [[ "$ADVANCED" == "1" ]]; then
+  section "9. Advanced (ADVANCED=1): orch /internal/* + console auth + trigger cron"
+
+  # 9.1 Outbox cleanup smoke
+  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+    -X POST "http://localhost:${ORCH_PORT}/internal/outbox/cleanup?tenantId=ta&retainDays=99999" \
+    -H "X-Internal-Secret: $INTERNAL_SECRET" 2>/dev/null)
+  if [[ "$resp" == "200" ]]; then
+    body=$(cat /tmp/resp.body)
+    result pass "Outbox cleanup API" "HTTP 200 $body"
+  else
+    result fail "Outbox cleanup API" "HTTP $resp body=$(cat /tmp/resp.body | head -c 80)"
+  fi
+
+  # 9.2 Outbox republish smoke (空列表,验证接口可达 + 返回 reset=0)
+  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+    -X POST "http://localhost:${ORCH_PORT}/internal/outbox/republish?tenantId=ta" \
+    -H "X-Internal-Secret: $INTERNAL_SECRET" \
+    -H "Content-Type: application/json" \
+    -d '{"ids":[]}' 2>/dev/null)
+  if [[ "$resp" == "200" ]]; then
+    body=$(cat /tmp/resp.body)
+    if echo "$body" | grep -q '"reset":0'; then
+      result pass "Outbox republish API" "HTTP 200 $body (空列表 reset=0)"
+    else
+      result fail "Outbox republish API" "HTTP 200 但 body 异常: $body"
+    fi
+  else
+    result fail "Outbox republish API" "HTTP $resp body=$(cat /tmp/resp.body | head -c 80)"
+  fi
+
+  # 9.3 Compensate submit (使用合法 type=JOB + 不存在的 instance, 期望 4xx 业务错误而非 500)
+  # 注意: 已知 bug — DefaultCompensationService 的 audit log 用 'COMPENSATION_REJECTED' log_type
+  # 但 V13 ck_job_execution_log_type CHECK 约束不含此值,导致 reject 路径会回 500 而不是 4xx
+  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+    -X POST "http://localhost:${ORCH_PORT}/internal/compensations" \
+    -H "X-Internal-Secret: $INTERNAL_SECRET" \
+    -H "Content-Type: application/json" \
+    -d '{"tenantId":"ta","compensationType":"JOB","jobCode":"TA_IMPORT_CUSTOMER","bizDate":"2026-05-03","operatorId":"seedval","reason":"smoke probe","traceId":"'"${PROBE_TAG}"'-comp"}' 2>/dev/null)
+  body_short=$(cat /tmp/resp.body | head -c 120)
+  case "$resp" in
+    200) result pass "Compensate submit API" "HTTP 200 — $body_short" ;;
+    400|404|409) result pass "Compensate API (业务拒绝)" "HTTP $resp — $body_short" ;;
+    500)
+      # 已知 bug: V13 ck_job_execution_log_type CHECK 不含 COMPENSATION_REJECTED → 拒绝路径 500
+      # (compensate 同 jobCode+bizDate 已 running 时 audit log 写不进去) — schema 漏需独立 V8x 修
+      if echo "$body_short" | grep -q "SYSTEM_ERROR"; then
+        result fail "Compensate API (V13 audit log CHECK 漏 COMPENSATION_REJECTED)" "HTTP 500 — 已知 schema bug"
+      else
+        result fail "Compensate API" "HTTP 500 — $body_short"
+      fi
+      ;;
+    *) result fail "Compensate API" "HTTP $resp — $body_short" ;;
+  esac
+
+  # 9.4 Console-api auth gate
+  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+    "http://localhost:${CONSOLE_PORT}/api/console/job-definitions?tenantId=ta&pageNo=1&pageSize=5" 2>/dev/null)
+  case "$resp" in
+    401) result pass "Console-api 鉴权拦截" "HTTP 401(无认证 token,gate 工作)" ;;
+    200) result pass "Console-api 可达" "HTTP 200(bypass-mode=true)" ;;
+    *) result fail "Console-api 可达性" "HTTP $resp body=$(cat /tmp/resp.body | head -c 60)" ;;
+  esac
+
+  # 9.5 Trigger cron 真触发
+  result skip "Trigger cron 真触发" "时序不确定,不纳入自动化(改 schedule_type=FIXED_RATE 等待 1 个周期 → 看 trigger_request 自增)"
 fi
 
 # ---------- 11. 清理探针 ----------
