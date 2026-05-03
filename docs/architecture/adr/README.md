@@ -19,7 +19,7 @@
 | 010 | [ADR-010-trigger-async-decoupling.md](./ADR-010-trigger-async-decoupling.md)             | Trigger → Orchestrator 异步解耦（trigger_outbox + Kafka，复用 ADR-002 模式，~7-8 人天分 7 stage）            |
 | 011 | [ADR-011-idempotency-boundary-alignment.md](./ADR-011-idempotency-boundary-alignment.md) | Console / Trigger / Orchestrator 三层幂等责任边界对齐                                                   |
 | 013 | [ADR-013-distributed-tracing.md](./ADR-013-distributed-tracing.md)                       | Micrometer Observation + OTel 桥接；`ObservedAspect`；种子 `@Observed`；业务 `trace_id` ↔ OTel traceId |
-| 014 | [ADR-014-claim-idempotency.md](./ADR-014-claim-idempotency.md)                           | Worker CLAIM 幂等（invocation-id 模型，Proposed）                                                    |
+| 014 | [ADR-014-claim-idempotency.md](./ADR-014-claim-idempotency.md)                           | Worker CLAIM 幂等（invocation-id，**V95 已落地**）                                                    |
 | 015 | [ADR-015-worker-side-outbox.md](./ADR-015-worker-side-outbox.md)                         | Worker REPORT outbox（PG/SQLite、SKIP LOCKED、熔断协同；Accepted）                                     |
 | 016 | [ADR-016-batch-renew-lease-api.md](./ADR-016-batch-renew-lease-api.md)                   | Renew lease 批量 API 收敛 HTTP（Accepted，MVP）                                                          |
 
