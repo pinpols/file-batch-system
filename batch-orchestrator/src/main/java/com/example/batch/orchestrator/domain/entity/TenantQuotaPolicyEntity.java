@@ -13,4 +13,5 @@ public record TenantQuotaPolicyEntity(
     Integer partitionBurstLimit,
     String quotaResetPolicy,
     Integer groupSharedMaxRunningJobs,
-    Boolean enabled) {}
+    Boolean enabled,
+    String exceededStrategy) {}

@@ -6,7 +6,7 @@
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, policyCode, maxRunningJobsPerTenant, maxPartitionsPerTenant,
          maxQpsPerTenant, fairShareWeight, fairShareGroup, burstLimit, partitionBurstLimit,
-         quotaResetPolicy, groupSharedMaxRunningJobs, enabled)
+         quotaResetPolicy, groupSharedMaxRunningJobs, enabled, exceededStrategy)
     -->
     <resultMap id="tenantQuotaPolicyMap"
                type="com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity">
@@ -24,6 +24,7 @@
             <arg column="quota_reset_policy" javaType="java.lang.String"/>
             <arg column="group_shared_max_running_jobs" javaType="java.lang.Integer"/>
             <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="exceeded_strategy" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -31,7 +32,7 @@
         id, tenant_id, policy_code,
         max_running_jobs_per_tenant, max_partitions_per_tenant, max_qps_per_tenant,
         fair_share_weight, fair_share_group, burst_limit, partition_burst_limit,
-        quota_reset_policy, group_shared_max_running_jobs, enabled
+        quota_reset_policy, group_shared_max_running_jobs, enabled, exceeded_strategy
     </sql>
 
     <select id="selectByTenantAndEnabled" resultMap="tenantQuotaPolicyMap">
@@ -68,7 +69,7 @@
             tenant_id, policy_code,
             max_running_jobs_per_tenant, max_partitions_per_tenant, max_qps_per_tenant,
             fair_share_weight, fair_share_group, burst_limit, partition_burst_limit,
-            quota_reset_policy, group_shared_max_running_jobs, enabled
+            quota_reset_policy, group_shared_max_running_jobs, enabled, exceeded_strategy
         ) values (
             #{tenantId}, #{policyCode},
             #{maxRunningJobsPerTenant}, #{maxPartitionsPerTenant}, #{maxQpsPerTenant},
@@ -81,7 +82,8 @@
             <choose>
                 <when test="enabled != null">#{enabled}</when>
                 <otherwise>true</otherwise>
-            </choose>
+            </choose>,
+            coalesce(#{exceededStrategy}, 'REJECT')
         )
     </insert>
 
@@ -99,6 +101,7 @@
                quota_reset_policy = #{quotaResetPolicy},
                group_shared_max_running_jobs = #{groupSharedMaxRunningJobs},
                enabled = #{enabled},
+               exceeded_strategy = coalesce(#{exceededStrategy}, exceeded_strategy),
                updated_at = current_timestamp
          where id = #{id}
     </update>

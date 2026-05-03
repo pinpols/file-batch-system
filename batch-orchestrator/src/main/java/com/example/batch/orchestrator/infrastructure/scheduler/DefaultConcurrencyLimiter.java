@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.enums.QuotaExceededStrategy;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
@@ -80,13 +81,16 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       return ResourceCheck.allow();
     }
 
+    QuotaExceededStrategy strategy = QuotaExceededStrategy.from(quotaPolicy.exceededStrategy());
+
     if (Texts.hasText(quotaPolicy.fairShareGroup())
         && quotaPolicy.groupSharedMaxRunningJobs() != null
         && quotaPolicy.groupSharedMaxRunningJobs() > 0) {
       long groupActive =
           jobInstanceMapper.countActiveByFairShareGroup(quotaPolicy.fairShareGroup());
       if (groupActive >= quotaPolicy.groupSharedMaxRunningJobs()) {
-        return ResourceCheck.waitForCapacity(
+        return applyStrategy(
+            strategy,
             "FAIR_SHARE_GROUP_JOB_LIMIT",
             "fair-share group job cap reached for group " + quotaPolicy.fairShareGroup());
       }
@@ -111,11 +115,31 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
                   new QuotaRuntimeStateService.QuotaReservationReason(
                       "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)")));
       if (!burstCheck.allowed()) {
-        return burstCheck;
+        return applyStrategy(strategy, burstCheck.reasonCode(), burstCheck.reasonMessage());
       }
     }
 
     return ResourceCheck.allow();
+  }
+
+  /**
+   * V89: 把租户级超额检查的结果按 {@link QuotaExceededStrategy} 转换。
+   *
+   * <ul>
+   *   <li>{@code REJECT} → fail-fast，launch 立刻抛 BizException
+   *   <li>{@code QUEUE_DEFER} → 维持 V89 之前的隐式行为（{@code waitForCapacity}），partition 留 WAITING
+   *   <li>{@code DEGRADE_PRIORITY} → 仍 defer 但 reasonCode 加 {@code _DEGRADED} 后缀， {@code
+   *       DefaultResourceScheduler} 见此后缀会把决策 priority/band 砍到最低， fairnessScore 自然落到 WAITING 队尾
+   * </ul>
+   */
+  private static ResourceCheck applyStrategy(
+      QuotaExceededStrategy strategy, String reasonCode, String reasonMessage) {
+    return switch (strategy) {
+      case REJECT -> ResourceCheck.reject(reasonCode, reasonMessage);
+      case QUEUE_DEFER -> ResourceCheck.waitForCapacity(reasonCode, reasonMessage);
+      case DEGRADE_PRIORITY ->
+          ResourceCheck.waitForCapacity(reasonCode + "_DEGRADED", reasonMessage);
+    };
   }
 
   private ResourceCheck checkQueueLimit(
