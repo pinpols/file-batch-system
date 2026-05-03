@@ -126,6 +126,33 @@ public class BatchObjectCryptoService {
     }
   }
 
+  /**
+   * ⚠2 (2026-05-03): 流式解密 Path → Path. 之前 decrypt(byte[]) 走 readAllBytes() → 100 MB 输入会让堆瞬间峰值 200
+   * MB (input + output 双倍). 这条路径只走 Files.copy 级别 IO, 完成后调用方可释放原 byte[] 引用 GC.
+   *
+   * <p>调用方典型用法 (PreprocessStep): 当 rawBytes.length > spool 阈值且 isEncrypted 时, 先
+   * Files.write(rawBytes, temp) → rawBytes=null → decrypt(temp, decrypted) →
+   * Files.readAllBytes(decrypted), 最终堆峰值降为单 100 MB.
+   */
+  public Path decrypt(Path source, Path target) {
+    if (source == null || target == null) {
+      throw new IllegalArgumentException("source and target are required");
+    }
+    try (InputStream raw = Files.newInputStream(source);
+        InputStream decrypted = decryptIfNeeded(raw);
+        OutputStream out = Files.newOutputStream(target)) {
+      decrypted.transferTo(out);
+      return target;
+    } catch (IOException exception) {
+      throw new IllegalStateException("failed to decrypt file", exception);
+    }
+  }
+
+  /** 公开 magic byte 探测 (流式解密前置判断). 返回 true 说明 byte[] 是 BATCHENC 加密格式. */
+  public boolean isEncryptedContent(byte[] content) {
+    return content != null && content.length > 0 && isEncrypted(content);
+  }
+
   public Path encrypt(Path source, Path target, String keyRef) {
     if (source == null || target == null) {
       throw new IllegalArgumentException("source and target are required");

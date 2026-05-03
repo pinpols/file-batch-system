@@ -4,8 +4,6 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.activation.DataHandler;
-import jakarta.activation.FileDataSource;
-import jakarta.activation.FileTypeMap;
 import jakarta.mail.Message;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
@@ -13,12 +11,10 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
-import java.io.File;
+import jakarta.mail.util.ByteArrayDataSource;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
@@ -94,11 +90,13 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     boolean pending =
         "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
 
-    Path attachmentFile = null;
     try {
       MimeMessage message = buildMimeMessage(mailConfig, command, externalRequestId);
-      attachmentFile = buildAttachment(command.fileRecord());
-      addAttachment(message, attachmentFile, command.fileRecord());
+      // ⚠4 (2026-05-03): 改 ByteArrayDataSource 直接桥接 InputStream → SMTP socket. 之前 Files.copy 落 temp
+      // file
+      // 后 FileDataSource 又被 jakarta.mail 整块读到 socket = 2× 磁盘 IO. 25MB 上限已防 OOM.
+      byte[] attachmentBytes = readBoundedAttachment(command.fileRecord());
+      addAttachment(message, attachmentBytes, command.fileRecord());
       sendMail(mailConfig, message);
       return new DispatchResult(
           true,
@@ -111,8 +109,6 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     } catch (Exception ex) {
       return new DispatchResult(
           false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
-    } finally {
-      deleteQuietly(attachmentFile);
     }
   }
 
@@ -200,28 +196,31 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     return message;
   }
 
-  private Path buildAttachment(Map<String, Object> fileRecord) throws Exception {
-    String attachName =
-        firstNonBlank(
-            String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
-            String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin")));
-    Path attachmentFile =
-        Files.createTempFile("dispatch-mail-", "-" + sanitizeAttachmentSuffix(attachName));
+  /**
+   * ⚠4 (2026-05-03): 流式读 attachment 到 bounded byte[]. 边读边检 cap 防 OOM, 不再用 Files.copy 落 temp.
+   * MAX_ATTACHMENT_BYTES (25MB) cap 撑得住 byte[] 中转, 几个并发 SMTP 也不到 200MB 堆.
+   */
+  private byte[] readBoundedAttachment(Map<String, Object> fileRecord) throws Exception {
+    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     try (InputStream in = fileContentResolver.openInputStream(fileRecord)) {
-      Files.copy(in, attachmentFile, StandardCopyOption.REPLACE_EXISTING);
+      byte[] chunk = new byte[8192];
+      long total = 0;
+      int n;
+      while ((n = in.read(chunk)) > 0) {
+        total += n;
+        if (total > MAX_ATTACHMENT_BYTES) {
+          throw new IllegalStateException(
+              "mail attachment size exceeds cap " + MAX_ATTACHMENT_BYTES + " bytes");
+        }
+        buffer.write(chunk, 0, n);
+      }
     }
-    // S-1.7：附件大小硬上限。超限立即拒绝，避免把大文件打到 SMTP 服务器才被 reject
-    long size = Files.size(attachmentFile);
-    if (size > MAX_ATTACHMENT_BYTES) {
-      Files.deleteIfExists(attachmentFile);
-      throw new IllegalStateException(
-          "mail attachment size " + size + " bytes exceeds cap " + MAX_ATTACHMENT_BYTES + " bytes");
-    }
-    return attachmentFile;
+    return buffer.toByteArray();
   }
 
   private void addAttachment(
-      MimeMessage message, Path attachmentFile, Map<String, Object> fileRecord) throws Exception {
+      MimeMessage message, byte[] attachmentBytes, Map<String, Object> fileRecord)
+      throws Exception {
     String attachName =
         firstNonBlank(
             String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
@@ -230,8 +229,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         String.valueOf(fileRecord.getOrDefault("mime_type", "application/octet-stream"));
 
     MimeBodyPart attachPart = new MimeBodyPart();
-    FileDataSource dataSource = new FileDataSource(attachmentFile.toFile());
-    dataSource.setFileTypeMap(new SingleMimeTypeFileTypeMap(mimeType));
+    ByteArrayDataSource dataSource = new ByteArrayDataSource(attachmentBytes, mimeType);
+    dataSource.setName(attachName);
     attachPart.setDataHandler(new DataHandler(dataSource));
     attachPart.setFileName(attachName);
 
@@ -283,41 +282,5 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       return b.trim();
     }
     return "";
-  }
-
-  private static String sanitizeAttachmentSuffix(String fileName) {
-    if (!Texts.hasText(fileName)) {
-      return "attachment.bin";
-    }
-    return fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-  }
-
-  private static void deleteQuietly(Path path) {
-    if (path == null) {
-      return;
-    }
-    try {
-      Files.deleteIfExists(path);
-    } catch (Exception ignored) {
-    }
-  }
-
-  private static final class SingleMimeTypeFileTypeMap extends FileTypeMap {
-
-    private final String mimeType;
-
-    private SingleMimeTypeFileTypeMap(String mimeType) {
-      this.mimeType = Texts.hasText(mimeType) ? mimeType : "application/octet-stream";
-    }
-
-    @Override
-    public String getContentType(File file) {
-      return mimeType;
-    }
-
-    @Override
-    public String getContentType(String filename) {
-      return mimeType;
-    }
   }
 }
