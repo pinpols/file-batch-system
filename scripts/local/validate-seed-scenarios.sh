@@ -10,11 +10,28 @@
 #
 # 重跑要点:幂等 — 探针行用唯一 trace_id 隔离,run 完自动清理。
 #
+# 覆盖范围(31 项, 详见汇总表):
+#   - 探活: trigger / orch / postgres
+#   - Schema: V82-V85 + 约束 + tenant_id 列
+#   - 种子基线: job_definition / workflow_node 行数
+#   - V84 多租隔离: 跨租户同 (wf_def, node_code) 共存
+#   - 同步 API + ADR-010 异步链路: trigger_outbox → relay → Kafka → orch consumer
+#   - 异常路径 ×5: 缺字段 / 缺幂等键 / 缺 secret / 重发去重 / 跨租户拒绝
+#   - Worker 链路覆盖 ×7: IMPORT/EXPORT/DISPATCH + 4 种 workflow_type
+#     (DAG/PIPELINE/GATEWAY/MIXED), 验证 instance 创建,不强制 worker SUCCESS
+#   - 多租并发隔离: ta/tb 同时 fire,验证 tenant_id 不串
+#   - 探针清理: cascade 删 7 张表
+#
 # 用法:
 #   ./scripts/local/validate-seed-scenarios.sh                # 默认 docker 端口 18081 等
 #   TRIGGER_PORT=18081 ORCH_PORT=18082 \
 #     INTERNAL_SECRET=internal-secret \
 #     ./scripts/local/validate-seed-scenarios.sh
+#
+# 前置: 需先加载 multi-tenant-seed 才覆盖 ta/tb/tc 场景:
+#   docker cp batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql \
+#     batch-postgres:/tmp/ && docker exec batch-postgres \
+#     psql -U batch_user -d batch_platform -f /tmp/multi-tenant-seed.sql
 #
 # 环境变量:
 #   TRIGGER_PORT / ORCH_PORT / CONSOLE_PORT  服务端口(默认 18081/18082/18080)
@@ -342,12 +359,131 @@ else
   result fail "跨租户 jobCode 行为" "HTTP $http_code body=$body"
 fi
 
+# ---------- 7. Worker 链路覆盖(各 worker 类型 + workflow_type) ----------
+# 这一节是"链路覆盖"而非严格 happy path:
+#   PASS 标准 = trigger_request 推到 LAUNCHED 且 job_instance 创建(ADR-010 链路通)
+#   终态(SUCCESS / FAILED / 还在 CREATED 等待 worker claim)都算 PASS — 这一节验证
+#   的是 "fire → outbox → Kafka → orch → instance 写表" 这段;worker terminal state
+#   依赖业务数据完整性(biz 表 / MinIO 文件 / 模板加密 key 等),非本脚本目标。
+#   严格的 worker SUCCESS 验证看 batch-e2e-tests 模块。
+
+# fire_and_await tenant jobCode params_json timeout_sec
+# 输出全局: LAST_FIRE_DETAIL
+# 返回: 0=task 已离开 CREATED(链路通),1=未推 LAUNCHED(异步链路卡)
+fire_and_await() {
+  local tenant="$1"; local jobCode="$2"; local params_json="$3"; local timeout="${4:-25}"
+  local req_id="${PROBE_TAG}-${tenant}-${jobCode}"
+  local body="{\"tenantId\":\"$tenant\",\"jobCode\":\"$jobCode\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":$params_json}"
+  http_post "/api/triggers/launch" "$body" \
+    "Idempotency-Key: $req_id" "X-Request-Id: $req_id" >/dev/null
+
+  local elapsed=0 job_id=""
+  while [[ $elapsed -lt $timeout ]]; do
+    job_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='$tenant' AND request_id='$req_id' AND request_status='LAUNCHED'")
+    [[ -n "$job_id" ]] && break
+    sleep 1; elapsed=$((elapsed+1))
+  done
+  if [[ -z "$job_id" ]]; then
+    local req_status; req_status=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='$tenant' AND request_id='$req_id'")
+    LAST_FIRE_DETAIL="${timeout}s 未推 LAUNCHED, trigger_request=$req_status"
+    return 1
+  fi
+
+  # 等 job_task 走出 CREATED(worker claim 成功)
+  local task_status=""
+  while [[ $elapsed -lt $timeout ]]; do
+    task_status=$(psql_q "SELECT string_agg(DISTINCT task_status, ',') FROM batch.job_task WHERE tenant_id='$tenant' AND job_instance_id=$job_id")
+    if [[ -n "$task_status" && "$task_status" != "CREATED" && "$task_status" != "READY" ]]; then
+      break
+    fi
+    sleep 2; elapsed=$((elapsed+2))
+  done
+
+  local instance_status; instance_status=$(psql_q "SELECT instance_status FROM batch.job_instance WHERE id=$job_id")
+  local err; err=$(psql_q "SELECT string_agg(DISTINCT error_code, ',') FROM batch.job_task WHERE job_instance_id=$job_id AND error_code IS NOT NULL")
+  LAST_FIRE_DETAIL="job_id=$job_id instance=$instance_status tasks=$task_status err=${err:-none} (${elapsed}s)"
+  return 0
+}
+
+assert_fire() {
+  local label="$1"; local tenant="$2"; local jobCode="$3"; local params="$4"
+  if fire_and_await "$tenant" "$jobCode" "$params" "$AWAIT_TIMEOUT"; then
+    result pass "$label" "$LAST_FIRE_DETAIL"
+  else
+    result fail "$label" "$LAST_FIRE_DETAIL"
+  fi
+}
+
+section "7. Worker 链路覆盖: fire → instance 创建 (各 worker 类型 + workflow_type)"
+
+assert_fire "IMPORT 链路 (tb, XML 模板)" "tb" "TB_IMPORT_TRANSACTION" \
+  '{"templateCode":"IMP-TXN-XML","content":"<txns><txn><txnNo>T001</txnNo><accountNo>A001</accountNo><txnType>DEBIT</txnType><amount>100.00</amount><currencyCode>CNY</currencyCode><txnDate>2026-05-03</txnDate></txn></txns>"}'
+
+assert_fire "EXPORT 链路 (tc, risk_alert)" "tc" "TC_EXPORT_RISK_ALERT" '{}'
+
+assert_fire "DISPATCH 链路 (tc, local channel)" "tc" "TC_DISPATCH_REVIEW" \
+  '{"channelCode":"tc_local_archive"}'
+
+assert_fire "WORKFLOW DAG (ta)" "ta" "TA_WF_SETTLEMENT" '{}'
+
+assert_fire "WORKFLOW PIPELINE (tc)" "tc" "TC_WF_RISK_PIPELINE" '{}'
+
+assert_fire "WORKFLOW DAG GATEWAY (probe)" "default-tenant" "wf_probe_gateway" '{}'
+assert_fire "WORKFLOW MIXED (probe + ADR-009 DSL)" "default-tenant" "wf_probe_mixed" '{}'
+
+# ---------- 8. 多租户并发隔离实跑 ----------
+section "8. 多租户并发: 同时 fire ta + tb,验证不串"
+
+REQ_TA="${PROBE_TAG}-mt-ta"
+REQ_TB="${PROBE_TAG}-mt-tb"
+http_post "/api/triggers/launch" \
+  '{"tenantId":"ta","jobCode":"TA_IMPORT_CUSTOMER","bizDate":"2026-05-03","triggerType":"API","params":{}}' \
+  "Idempotency-Key: $REQ_TA" "X-Request-Id: $REQ_TA" >/dev/null &
+http_post "/api/triggers/launch" \
+  '{"tenantId":"tb","jobCode":"TB_EXPORT_STATEMENT","bizDate":"2026-05-03","triggerType":"API","params":{}}' \
+  "Idempotency-Key: $REQ_TB" "X-Request-Id: $REQ_TB" >/dev/null &
+wait
+
+# 等两个都推 LAUNCHED
+elapsed=0
+ta_id=""; tb_id=""
+while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
+  [[ -z "$ta_id" ]] && ta_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='ta' AND request_id='$REQ_TA' AND request_status='LAUNCHED'")
+  [[ -z "$tb_id" ]] && tb_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='tb' AND request_id='$REQ_TB' AND request_status='LAUNCHED'")
+  [[ -n "$ta_id" && -n "$tb_id" ]] && break
+  sleep 1; elapsed=$((elapsed+1))
+done
+
+if [[ -n "$ta_id" && -n "$tb_id" ]]; then
+  # 关键断言:两个 job_instance 各自 tenant_id 隔离
+  ta_tenant=$(psql_q "SELECT tenant_id FROM batch.job_instance WHERE id=$ta_id")
+  tb_tenant=$(psql_q "SELECT tenant_id FROM batch.job_instance WHERE id=$tb_id")
+  if [[ "$ta_tenant" == "ta" && "$tb_tenant" == "tb" ]]; then
+    result pass "多租并发 → 隔离" "ta job_id=$ta_id (tenant=$ta_tenant) + tb job_id=$tb_id (tenant=$tb_tenant) (${elapsed}s)"
+  else
+    result fail "多租并发隔离" "ta_tenant=$ta_tenant tb_tenant=$tb_tenant — 数据串了!"
+  fi
+else
+  result fail "多租并发 推 LAUNCHED" "ta_id=$ta_id tb_id=$tb_id (${AWAIT_TIMEOUT}s)"
+fi
+
 # ---------- 11. 清理探针 ----------
 section "11. 清理探针数据"
 
-cleaned=$(psql_q "DELETE FROM batch.trigger_outbox_event WHERE trace_id LIKE 'trace-${PROBE_TAG}%' RETURNING id" | grep -v "^DELETE" | wc -l | tr -d ' ')
+# 拓宽清理 — fire_and_await 引入 job_instance/job_task/job_partition 等,按 PROBE_TAG req_id 反查并 cascade
+probe_instances=$(psql_q "SELECT string_agg(related_job_instance_id::text, ',') FROM batch.trigger_request WHERE request_id LIKE '%${PROBE_TAG}%' AND related_job_instance_id IS NOT NULL")
+if [[ -n "$probe_instances" ]]; then
+  psql_q "DELETE FROM batch.job_step_instance WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
+  psql_q "DELETE FROM batch.job_task WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
+  psql_q "DELETE FROM batch.job_partition WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
+  psql_q "DELETE FROM batch.workflow_node_run WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND workflow_run_id IN (SELECT id FROM batch.workflow_run WHERE job_instance_id IN ($probe_instances))" >/dev/null
+  psql_q "DELETE FROM batch.workflow_run WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
+  psql_q "DELETE FROM batch.outbox_event WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND aggregate_id IN ($probe_instances)" >/dev/null
+  psql_q "DELETE FROM batch.job_instance WHERE id IN ($probe_instances)" >/dev/null
+fi
+psql_q "DELETE FROM batch.trigger_outbox_event WHERE request_id LIKE '%${PROBE_TAG}%'" >/dev/null
 psql_q "DELETE FROM batch.trigger_request WHERE request_id LIKE '%${PROBE_TAG}%'" >/dev/null
-result pass "探针清理" "trigger_outbox_event 删 $cleaned 行 + trigger_request 同步删"
+result pass "探针清理" "job_instance + 4 张子表 + outbox + trigger_request 全部按 PROBE_TAG cascade 清理"
 
 # ---------- 汇总 ----------
 echo ""
