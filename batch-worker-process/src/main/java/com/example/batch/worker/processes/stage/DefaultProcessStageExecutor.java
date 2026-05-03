@@ -2,7 +2,6 @@ package com.example.batch.worker.processes.stage;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
@@ -111,13 +110,19 @@ public class DefaultProcessStageExecutor
     return fallback == null ? null : String.valueOf(fallback);
   }
 
+  /**
+   * P0-2: batchKey 必须按 taskId 稳定. 之前用 traceId 后缀让每次 attempt 不同, 导致 orchestrator reclaim 后 worker
+   * 重派的 compute 跑 pre-DELETE 时不匹配前次残留 staging → COMMIT 把两轮并集 publish 到 target. 现在 taskId
+   * (BIGSERIAL, 全局唯一) 直接做 batchKey, 同 task 重派 pre-DELETE 命中, 跨 task 不冲突.
+   *
+   * <p>无 taskId 兜底场景仅本地测试 / 一次性运行, 用 thread + nano 拼一个进程内唯一值即可, 不影响生产路径.
+   */
   private String generateBatchKey(ProcessJobContext context) {
     Long taskId = toLong(context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
-    String suffix = IdGenerator.newTraceId();
-    if (taskId == null) {
-      return "process-" + suffix;
+    if (taskId != null) {
+      return "process-" + taskId;
     }
-    return "process-" + taskId + "-" + suffix;
+    return "process-" + Thread.currentThread().getId() + "-" + System.nanoTime();
   }
 
   private static Long toLong(Object value) {
