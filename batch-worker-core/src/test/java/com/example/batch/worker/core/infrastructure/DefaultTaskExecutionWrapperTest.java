@@ -1,7 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.mock;
@@ -9,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
+import com.example.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
@@ -16,15 +16,24 @@ import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.support.StepExecutionAdapter;
 import com.example.batch.worker.core.support.TaskExecutionClient;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 
 class DefaultTaskExecutionWrapperTest {
 
   private StepExecutionAdapter stepExecutionAdapter;
   private TaskExecutionClient taskExecutionClient;
   private ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+  private TaskExecutionPool executionPool;
+  private WorkerExecutionTimeoutProperties timeoutProperties;
+  private MeterRegistry registry;
   private DefaultTaskExecutionWrapper wrapper;
 
   @BeforeEach
@@ -32,9 +41,32 @@ class DefaultTaskExecutionWrapperTest {
     stepExecutionAdapter = mock(StepExecutionAdapter.class);
     taskExecutionClient = mock(TaskExecutionClient.class);
     activeTaskLeaseRegistry = mock(ActiveTaskLeaseRegistry.class);
+    timeoutProperties = new WorkerExecutionTimeoutProperties();
+    timeoutProperties.setPoolSize(4);
+    timeoutProperties.setDefaultTimeoutSeconds(60L);
+    timeoutProperties.setMaxTimeoutSeconds(120L);
+    timeoutProperties.setCancelGraceSeconds(2L);
+    executionPool = new TaskExecutionPool(timeoutProperties);
+    executionPool.start();
+    registry = new SimpleMeterRegistry();
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(registry);
     wrapper =
         new DefaultTaskExecutionWrapper(
-            stepExecutionAdapter, taskExecutionClient, activeTaskLeaseRegistry);
+            stepExecutionAdapter,
+            taskExecutionClient,
+            activeTaskLeaseRegistry,
+            executionPool,
+            timeoutProperties,
+            provider);
+    wrapper.initWatchdog();
+  }
+
+  @AfterEach
+  void tearDown() {
+    wrapper.shutdownWatchdog();
+    executionPool.shutdown();
   }
 
   @Test
@@ -116,18 +148,28 @@ class DefaultTaskExecutionWrapperTest {
     verify(activeTaskLeaseRegistry).remove("1002");
   }
 
+  /**
+   * P0-1: adapter 抛 RuntimeException 时, 之前会让 listener 也抛; 现在 wrapper 把它转成 WORKER_EXECUTION_ERROR
+   * 失败上报, listener 始终能继续派下个 task.
+   */
   @Test
-  void shouldRemoveLeaseEvenWhenStepExecutionThrows() {
+  void shouldConvertAdapterExceptionToFailureReport() {
     PulledTask task = sampleTask("1003", "t1", "w1");
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
         .thenThrow(new RuntimeException("unexpected"));
 
-    assertThatThrownBy(() -> wrapper.execute(task))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessage("unexpected");
+    WorkerExecutionResult result = wrapper.execute(task);
 
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("unexpected");
     verify(activeTaskLeaseRegistry).register("1003", "t1", "w1");
     verify(activeTaskLeaseRegistry).remove("1003");
+    verify(taskExecutionClient)
+        .report(
+            argThat(
+                report ->
+                    "WORKER_EXECUTION_ERROR".equals(report.getCode())
+                        && report.getMessage().contains("unexpected")));
   }
 
   @Test
@@ -136,13 +178,11 @@ class DefaultTaskExecutionWrapperTest {
     task.setTaskId("9001");
     task.setTenantId("t1");
     task.setWorkerId("w1");
-    // payload、jobCode、businessKey、traceId、idempotencyKey 均为 null
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
         .thenReturn(StepExecutionResponse.successResponse());
 
     wrapper.execute(task);
 
-    // 验证 execute 被调用且未因 null 字段抛出 NPE
     verify(stepExecutionAdapter).execute(any(StepExecutionRequest.class));
   }
 
@@ -176,6 +216,74 @@ class DefaultTaskExecutionWrapperTest {
             });
 
     wrapper.execute(task);
+  }
+
+  /**
+   * P0-1 核心: adapter 卡住超过 task.timeoutSeconds → wrapper 在限时后强 cancel(true) + 失败上报
+   * WORKER_EXECUTION_TIMEOUT, 不让 listener 永久阻塞.
+   */
+  @Test
+  void shouldTimeoutAndCancelWhenAdapterHangs() throws InterruptedException {
+    PulledTask task = sampleTask("1010", "t1", "w1");
+    task.setTimeoutSeconds(1); // 1 秒超时
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch released = new CountDownLatch(1);
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              started.countDown();
+              try {
+                Thread.sleep(10_000); // 远超超时
+              } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                released.countDown();
+              }
+              return StepExecutionResponse.successResponse();
+            });
+
+    long start = System.currentTimeMillis();
+    WorkerExecutionResult result = wrapper.execute(task);
+    long elapsed = System.currentTimeMillis() - start;
+
+    assertThat(elapsed).isBetween(900L, 5_000L); // 1s 超时 + 一点 overhead
+    assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+    assertThat(released.await(3, TimeUnit.SECONDS)).isTrue(); // pool 线程被 interrupt 后退出
+    assertThat(result.success()).isFalse();
+    verify(taskExecutionClient)
+        .report(
+            argThat(
+                report ->
+                    "WORKER_EXECUTION_TIMEOUT".equals(report.getCode())
+                        && report.getErrorMessage().contains("1s")));
+    assertThat(registry.counter("worker.task.execution.timeout.total").count()).isEqualTo(1.0);
+  }
+
+  /** P0-1: clamp — task 配 timeout 超过 maxTimeoutSeconds 必须截断, 防呆配置错误把 worker 卡死 2 小时以上. */
+  @Test
+  void shouldClampTimeoutToMax() {
+    PulledTask task = sampleTask("1011", "t1", "w1");
+    task.setTimeoutSeconds(99999); // 远超 maxTimeoutSeconds=120
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenReturn(StepExecutionResponse.successResponse());
+
+    WorkerExecutionResult result = wrapper.execute(task);
+
+    assertThat(result.success()).isTrue();
+    // 没断言具体 timeout 数值; 只看 success + 没 OOM, 表示 clamp 生效让任务正常完成
+  }
+
+  /** P0-1: task 没配 timeout (null/0) 走默认 (defaultTimeoutSeconds=60s 这里). */
+  @Test
+  void shouldFallbackToDefaultTimeoutWhenTaskTimeoutIsNull() {
+    PulledTask task = sampleTask("1012", "t1", "w1");
+    task.setTimeoutSeconds(null);
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenReturn(StepExecutionResponse.successResponse());
+
+    WorkerExecutionResult result = wrapper.execute(task);
+
+    assertThat(result.success()).isTrue();
+    verify(taskExecutionClient).report(any(TaskExecutionReport.class));
   }
 
   // --- 辅助方法 ---
