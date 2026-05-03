@@ -454,10 +454,35 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
       return false;
     }
     WorkerConfiguration cfg = workerConfiguration();
-    return cfg.workerType() != null
-        && cfg.workerType().equalsIgnoreCase(message.workerType())
-        && (message.selectedWorkerId() == null
-            || (registration != null
-                && message.selectedWorkerId().equals(registration.getWorkerId())));
+    if (cfg.workerType() == null || !cfg.workerType().equalsIgnoreCase(message.workerType())) {
+      return false;
+    }
+    if (message.selectedWorkerId() != null
+        && (registration == null
+            || !message.selectedWorkerId().equals(registration.getWorkerId()))) {
+      return false;
+    }
+    // P2-13 软 tenant 隔离: cfg.tenantId() 声明特定 tenant 时,只接受该 tenant 的消息;
+    // 留出 SHARED_TENANT_WILDCARD ("default-tenant" / 空) 表示通配 — 与 orch 端
+    // shared-tenant-fallback 协议对齐,本地联调 + 共享 worker pool 场景仍可消费所有 tenant.
+    String configuredTenant = cfg.tenantId();
+    if (configuredTenant != null
+        && !configuredTenant.isBlank()
+        && !SHARED_TENANT_WILDCARD.equalsIgnoreCase(configuredTenant)
+        && !configuredTenant.equalsIgnoreCase(message.tenantId())) {
+      log.debug(
+          "worker rejecting cross-tenant task: configuredTenant={}, messageTenant={}, taskId={}",
+          configuredTenant,
+          message.tenantId(),
+          message.taskId());
+      return false;
+    }
+    return true;
   }
+
+  /**
+   * 共享 worker pool 通配标识 — cfg.tenantId() 等于此值时, worker 接受所有 tenant 的消息. 与 orch 端 {@code
+   * batch.resource-scheduler.shared-tenant-fallback} 配置协议对齐.
+   */
+  static final String SHARED_TENANT_WILDCARD = "default-tenant";
 }
