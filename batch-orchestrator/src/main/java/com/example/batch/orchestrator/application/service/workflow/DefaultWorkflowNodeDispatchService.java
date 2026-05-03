@@ -186,6 +186,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       task.setAssignedWorkerCode(resolveSelectedWorkerId(plan, partition));
       task.setTaskStatus(decision.getTaskStatus());
       task.setVersion(0L);
+      // V88: 拷 priority (workflow node task 的 priority 源 = SchedulePlan, 由
+      // DefaultSchedulePlanBuilder 读 job_definition)
+      task.setPriority(plan.getPriority());
       task.setTaskPayload(taskPayload);
       taskExecutionServiceProvider.getObject().createTask(task);
       if (decision.isDispatchable()

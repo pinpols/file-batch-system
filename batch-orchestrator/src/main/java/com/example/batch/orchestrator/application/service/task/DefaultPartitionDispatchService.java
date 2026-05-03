@@ -263,6 +263,8 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             ? TaskStatus.READY.code()
             : decision.getTaskStatus());
     task.setVersion(0L);
+    // V88: 拷 priority (源 = SchedulePlan.priority, 由 DefaultSchedulePlanBuilder 从 job_definition 读)
+    task.setPriority(context.creation().scheduling().plan().getPriority());
     task.setTaskPayload(
         buildPayloadJson(
             context.creation().execution().request(),

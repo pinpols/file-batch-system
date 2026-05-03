@@ -115,6 +115,10 @@ public class TaskDispatchOutboxService {
     event.setPublishStatus(OutboxPublishStatus.NEW.code());
     event.setPublishAttempt(0);
     event.setTraceId(traceId);
+    // V88: 拷 priority 到 outbox_event, OutboxPollScheduler 按 priority desc 排序优先派发
+    // 优先级源: task.priority (V88 加列), DefaultPartitionDispatchService.buildTask 设置.
+    // 兜底: jobInstance.priority (老逻辑); 都缺则走 DB DEFAULT 5 (coalesce in INSERT SQL).
+    event.setPriority(task.getPriority() != null ? task.getPriority() : jobInstance.getPriority());
     outboxEventMapper.insert(event);
   }
 

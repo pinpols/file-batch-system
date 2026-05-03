@@ -23,6 +23,9 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
   private String resultSummary;
   private String errorCode;
 
+  /** V88: 拷自 job_definition.priority, scheduler/selector 按 desc 排序优先派发. 默认 5 (范围 0-10). */
+  private Integer priority;
+
   private Instant startedAt;
   private Instant finishedAt;
   private Instant createdAt;
