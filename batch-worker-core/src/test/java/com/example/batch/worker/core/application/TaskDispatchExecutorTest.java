@@ -73,7 +73,8 @@ class TaskDispatchExecutorTest {
             1,
             "FRESH_JOB:2026-05-01:1",
             null,
-            null);
+            null,
+            "inv-fresh");
     when(workerRuntimeFacade.claim(eq("t1"), eq(42L), eq("w1"))).thenReturn(Optional.of(fresh));
     when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
 
@@ -96,6 +97,7 @@ class TaskDispatchExecutorTest {
     assertThat(task.getTaskSeq()).isEqualTo(99);
     assertThat(task.getPayload()).isEqualTo("FRESH_PAYLOAD");
     assertThat(task.getHighWaterMarkIn()).isEqualTo("fresh-watermark");
+    assertThat(task.getPartitionInvocationId()).isEqualTo("inv-fresh");
   }
 
   @Test

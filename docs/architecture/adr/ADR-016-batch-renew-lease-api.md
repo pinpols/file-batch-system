@@ -16,6 +16,7 @@ M workers × N tasks = M×N HTTP req / 10s (平均 M×N/10 QPS to orch renew end
 ```
 
 高并发租户场景:
+
 - 100 worker × 50 task each = 5000 task,每 10s = 500 QPS 单 endpoint
 - orch 单 endpoint 响应 + DB UPDATE 单条 → 网络/DB 同等放大
 
@@ -23,11 +24,13 @@ P1-8 (本次已落地) 的熔断减轻了 orch 不可达时的 worker hammer,但
 
 ## 业界对比
 
-| 系统 | 机制 |
-|---|---|
-| **Temporal** | activity heartbeat 用 long-poll + bidirectional gRPC stream,activity 完成前 server-side 持续心跳,无 N+1 |
-| **AWS SQS** | ChangeMessageVisibilityBatch — 单个 API 调用更新最多 10 条消息可见性 |
-| **Spring Batch (远程分区)** | 集中式 job repository,单 update 多 step status,但单机模式 |
+
+| 系统                      | 机制                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| **Temporal**            | activity heartbeat 用 long-poll + bidirectional gRPC stream,activity 完成前 server-side 持续心跳,无 N+1 |
+| **AWS SQS**             | ChangeMessageVisibilityBatch — 单个 API 调用更新最多 10 条消息可见性                                         |
+| **Spring Batch (远程分区)** | 集中式 job repository,单 update 多 step status,但单机模式                                                |
+
 
 ## 决策提案
 
@@ -57,6 +60,7 @@ Response:
 ```
 
 实现:
+
 - Controller 接收 batch,转发到 service
 - Service 选择实施策略:
   - **MVP**: 内部循环现有单 renew(只省 HTTP roundtrip,SQL 仍 N 次)
@@ -65,6 +69,7 @@ Response:
 ### worker 端
 
 `TaskExecutionClient` 加方法:
+
 ```java
 Map<Long, Boolean> renewBatch(List<RenewItem> items);
 ```
@@ -72,6 +77,7 @@ Map<Long, Boolean> renewBatch(List<RenewItem> items);
 `HttpTaskExecutionClient` 实现:批量打包 → 单 HTTP POST → 解析返回 map。
 
 `WorkerTaskLeaseRenewer.renewActiveTaskLeases` 改:
+
 - 收集本 tick 所有 active lease
 - 一次 batch 调用
 - 解析返回 → 按 taskId 分发到 attemptRenew 的成功/失败统计 (复用熔断逻辑)
@@ -81,11 +87,13 @@ Map<Long, Boolean> renewBatch(List<RenewItem> items);
 ## 影响面
 
 **正面**:
+
 - HTTP req 量从 `M×N/10 QPS` 降到 `M/10 QPS` (省去 N 倍)
 - TCP 连接复用 + JSON 解析 overhead 减少
 - 配合完整版 batch SQL,DB UPDATE 也省
 
 **负面**:
+
 - 协议 breaking change → 需要 worker / orch 兼容性窗口
 - batch 调用失败时,fallback 到逐条 renew?还是直接全部失败标 consecutive++?
   - 推荐 **fallback 逐条** — 网络层失败时降级到原行为,业务无感知
@@ -107,10 +115,10 @@ Map<Long, Boolean> renewBatch(List<RenewItem> items);
 
 ## 验收标准
 
-- [ ] orch endpoint 落地,老的单 renew endpoint 保留向后兼容
-- [ ] worker 端 batch 调用 + fallback 逐条
-- [ ] 集成测试:模拟 50 task,验证单 tick 仅 1 个 HTTP req
-- [ ] metric:`batch.worker.lease.renew.batch.size` 暴露 batch size 分布
+- orch endpoint 落地,老的单 renew endpoint 保留向后兼容
+- worker 端 batch 调用 + fallback 逐条
+- 集成测试:模拟 50 task,验证单 tick 仅 1 个 HTTP req
+- metric:`batch.worker.lease.renew.batch.size` 暴露 batch size 分布
 
 ## 不变量
 

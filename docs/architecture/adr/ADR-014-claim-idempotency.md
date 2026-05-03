@@ -17,14 +17,16 @@ Kafka receive → CLAIM (status RUNNING + lease) → execute 业务 → REPORT
 CLAIM 守护:`updateStatus where partition_status='READY'` CAS,确保同一 partition 同时只一个 worker 持有。
 
 **漏洞**:
+
 1. Kafka rebalance 触发 partition 重指派 → 同一消息可能投给两个 worker 实例
 2. 假设 worker A 已 CLAIM partition 进入 RUNNING,然后:
-   - A 进程 GC pause / 网络抖动 → lease 过期
-   - `PartitionLeaseReclaimScheduler` 把 partition 释放回 READY
-   - worker B 再次 CLAIM 成功 → 业务执行
-   - A 恢复 → 继续执行 → **业务跑两次**
+  - A 进程 GC pause / 网络抖动 → lease 过期
+  - `PartitionLeaseReclaimScheduler` 把 partition 释放回 READY
+  - worker B 再次 CLAIM 成功 → 业务执行
+  - A 恢复 → 继续执行 → **业务跑两次**
 
 当前依赖业务侧自带幂等性:
+
 - `SqlTransformCompute` 有 ON CONFLICT
 - `outbox_event` 有 `uk_outbox_event_key UNIQUE (tenant_id, event_key)`
 - `job_instance` 有 `uk_job_instance_tenant_dedup`
@@ -33,11 +35,13 @@ CLAIM 守护:`updateStatus where partition_status='READY'` CAS,确保同一 part
 
 ## 业界对比
 
-| 系统 | 机制 |
-|---|---|
-| **Temporal** | activity 有 invocation_id (server-assigned UUID),server 端 dedupe;worker reconnect 后查 server 知道当前 invocation 是否还有效 |
-| **Stripe pattern** | idempotency_key 客户端生成,server 端 idempotency_key table 短期(24h)存请求 → 响应,重复 key 返回缓存响应 |
-| **AWS SQS** | DeduplicationId + 5min 窗口去重,但不解决"已成功执行后重复消费"问题 |
+
+| 系统                 | 机制                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| **Temporal**       | activity 有 invocation_id (server-assigned UUID),server 端 dedupe;worker reconnect 后查 server 知道当前 invocation 是否还有效 |
+| **Stripe pattern** | idempotency_key 客户端生成,server 端 idempotency_key table 短期(24h)存请求 → 响应,重复 key 返回缓存响应                               |
+| **AWS SQS**        | DeduplicationId + 5min 窗口去重,但不解决"已成功执行后重复消费"问题                                                                   |
+
 
 ## 决策提案
 
@@ -46,10 +50,12 @@ CLAIM 守护:`updateStatus where partition_status='READY'` CAS,确保同一 part
 ### 数据模型
 
 `job_partition` 加列:
+
 - `current_invocation_id VARCHAR(64)` — CLAIM 时 server-assigned UUID
 - `invocation_started_at TIMESTAMPTZ`
 
 CLAIM 时:
+
 ```sql
 UPDATE job_partition
 SET partition_status = 'RUNNING',
@@ -80,10 +86,12 @@ worker 续约时带上 invocation_id,server 校验 → 不一致拒绝 → worke
 ## 影响面
 
 **正面**:
+
 - 真正解决 CLAIM 重复执行问题
 - 配合 P0-1 cancellation,worker 在被替换后能主动停业务,节省资源
 
 **负面**:
+
 - 协议 breaking change:TaskDispatchMessage / RenewRequest / ReportRequest 都加 invocation_id
 - 老 worker 升级前需要兼容期(server 容忍 invocation_id 缺失,降级为现有"先到先得")
 - 工时:2-3 天
@@ -105,9 +113,9 @@ worker 续约时带上 invocation_id,server 校验 → 不一致拒绝 → worke
 
 ## 验收标准
 
-- [ ] migration V8X 落地 + `SqlConsistencyIT` 守护新约束
-- [ ] CLAIM/RENEW/REPORT 协议向后兼容 (老 worker 仍工作)
-- [ ] 端到端测试:模拟 partition 被 reclaim 后两个 worker 并发 → 后到的 worker 业务执行结果被 server 拒,数据无重复
+- migration V8X 落地 + `SqlConsistencyIT` 守护新约束
+- CLAIM/RENEW/REPORT 协议向后兼容 (老 worker 仍工作)
+- 端到端测试:模拟 partition 被 reclaim 后两个 worker 并发 → 后到的 worker 业务执行结果被 server 拒,数据无重复
 
 ## 不变量
 

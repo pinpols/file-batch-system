@@ -38,6 +38,9 @@ public class PulledTask {
   /** partition 业务标识(claim 拿,源头 job_partition.partition_key)。 */
   private String partitionKey;
 
+  /** ADR-014: partition 认领 invocation id（claim 返回的 EffectiveTaskConfig 快照）。 */
+  private String partitionInvocationId;
+
   /**
    * P0-1: task 超时秒数 (从 EffectiveTaskConfig.timeoutSeconds 透传, 即 step_definition.timeout_seconds).
    * null/0 表示走 worker 端配置兜底 (batch.worker.execution.default-timeout-seconds, 默认 1800s).

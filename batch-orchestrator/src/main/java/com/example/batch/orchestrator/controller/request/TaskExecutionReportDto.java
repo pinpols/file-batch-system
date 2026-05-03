@@ -34,4 +34,7 @@ public class TaskExecutionReportDto extends AbstractLocalizedErrorEntity {
    * null,workflow_node_run.output 保持 null。
    */
   private Map<String, Object> outputs;
+
+  /** ADR-014: optional; mismatched invocation → orchestrator rejects report with CONFLICT。 */
+  private String partitionInvocationId;
 }

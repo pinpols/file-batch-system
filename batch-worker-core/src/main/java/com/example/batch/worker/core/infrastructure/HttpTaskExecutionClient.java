@@ -63,7 +63,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
   private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG =
       new EffectiveTaskConfig(
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null, null, null, null, null, null, null, null);
+          null, null, null, null, null, null, null, null, null, null, null);
 
   @Override
   public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
@@ -79,7 +79,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
                     .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                    .body(new ClaimRequest(tenantId, workerId))
+                    .body(new ClaimRequest(tenantId, workerId, null))
                     .retrieve()
                     .body(EffectiveTaskConfig.class));
     if (!outcome.success()) {
@@ -89,7 +89,8 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
   }
 
   @Override
-  public boolean renewLease(String tenantId, Long taskId, String workerId) {
+  public boolean renewLease(
+      String tenantId, Long taskId, String workerId, String partitionInvocationId) {
     String traceId = currentTraceId();
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
     return executeClaimLike(
@@ -101,7 +102,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
                     .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                    .body(new ClaimRequest(tenantId, workerId))
+                    .body(new ClaimRequest(tenantId, workerId, partitionInvocationId))
                     .retrieve()
                     .toBodilessEntity())
         .success();
@@ -351,5 +352,5 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
         "Unable to resolve batch.worker.task-client.base-url for task execution client");
   }
 
-  private record ClaimRequest(String tenantId, String workerId) {}
+  private record ClaimRequest(String tenantId, String workerId, String partitionInvocationId) {}
 }

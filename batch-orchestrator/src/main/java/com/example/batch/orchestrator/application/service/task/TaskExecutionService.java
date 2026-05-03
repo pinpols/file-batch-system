@@ -24,7 +24,8 @@ public interface TaskExecutionService {
    */
   EffectiveTaskConfig loadEffectiveConfig(String tenantId, Long taskId);
 
-  boolean renewTaskLease(String tenantId, Long taskId, String workerCode);
+  boolean renewTaskLease(
+      String tenantId, Long taskId, String workerCode, String partitionInvocationId);
 
   JobTaskEntity updateTaskStatus(
       String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage);

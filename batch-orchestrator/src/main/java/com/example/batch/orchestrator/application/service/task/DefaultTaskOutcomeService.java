@@ -11,6 +11,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -233,6 +234,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     Instant finishedAt = Instant.now();
     JobPartitionEntity partition =
         jobMappers.jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId());
+    if (task.getJobPartitionId() != null && Texts.hasText(command.partitionInvocationId())) {
+      if (partition == null
+          || partition.getCurrentInvocationId() == null
+          || !partition.getCurrentInvocationId().equals(command.partitionInvocationId())) {
+        throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
+      }
+    }
     JobInstanceEntity jobInstance =
         jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
     // 失败时是否进入重试：由治理层统一决策（NONE/预算耗尽 → dead-letter；否则写 retry_schedule）。

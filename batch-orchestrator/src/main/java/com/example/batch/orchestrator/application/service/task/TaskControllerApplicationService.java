@@ -64,13 +64,15 @@ public class TaskControllerApplicationService {
             .errorArgs(request.getErrorArgs())
             .highWaterMarkOut(request.getHighWaterMarkOut())
             .outputs(request.getOutputs())
+            .partitionInvocationId(request.getPartitionInvocationId())
             .build();
     taskExecutionService.applyTaskOutcome(command);
   }
 
   public void renew(Long taskId, TaskClaimRequest request) {
     boolean renewed =
-        taskExecutionService.renewTaskLease(request.tenantId(), taskId, request.workerId());
+        taskExecutionService.renewTaskLease(
+            request.tenantId(), taskId, request.workerId(), request.partitionInvocationId());
     if (!renewed) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
     }

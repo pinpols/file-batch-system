@@ -8,6 +8,7 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.param.ClaimPartitionParam;
 import com.example.batch.orchestrator.domain.param.MarkPartitionStatusParam;
+import com.example.batch.orchestrator.domain.param.RenewLeaseParam;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.time.Instant;
@@ -103,7 +104,15 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (existingPartition == null) {
       return null;
     }
-    int updated = jobPartitionMapper.renewLease(tenantId, partitionId, workerCode, leaseExpireAt);
+    int updated =
+        jobPartitionMapper.renewLease(
+            RenewLeaseParam.builder()
+                .tenantId(tenantId)
+                .id(partitionId)
+                .workerCode(workerCode)
+                .leaseExpireAt(leaseExpireAt)
+                .expectedInvocationId(null)
+                .build());
     return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
   }
 

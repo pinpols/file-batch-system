@@ -21,6 +21,7 @@ CLAIM → 业务 execute → REPORT (HTTP POST orch)
 ```
 
 **漏洞**:
+
 - 业务**已成功执行**,但 REPORT 因网络抖动 / orch GC pause / 短暂不可达失败
 - 当前流程把它当成"任务失败"处理,送 DLQ → 运维 replay → orch 重派 → 业务重复执行
 - `LeaseRenewer` 的熔断 (P1-8) 减轻了 orch 长不可达的连锁,但**业务已成功这种情况无关熔断**
@@ -29,11 +30,13 @@ CLAIM → 业务 execute → REPORT (HTTP POST orch)
 
 ## 业界对比
 
-| 系统 | 机制 |
-|---|---|
-| **Temporal** | activity 完成后 worker 持久化结果到本地,SDK 自动 retry (exponential backoff) 直到 server 接收 |
+
+| 系统                | 机制                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| **Temporal**      | activity 完成后 worker 持久化结果到本地,SDK 自动 retry (exponential backoff) 直到 server 接收         |
 | **Kafka Streams** | EOS (exactly-once semantics) 通过 transactional producer + sink 端 atomic offset commit |
-| **Airflow** | task instance 状态写本地 SQLite,scheduler 拉取 (polling) — 与本系统反向 |
+| **Airflow**       | task instance 状态写本地 SQLite,scheduler 拉取 (polling) — 与本系统反向                           |
+
 
 ## 决策提案
 
@@ -52,6 +55,7 @@ CLAIM → 业务 execute → REPORT (HTTP POST orch)
 ```
 
 **关键不变量**:
+
 - 业务结果一旦写入本地 outbox,Kafka offset 即可 ack — orch 重派路径被 ADR-014 invocation_id 兜底(老 invocation 的 result orch 拒收)
 - 本地 outbox 与业务执行**同事务**(SQLite atomic) — 业务 success 但 outbox 未写 = transaction rollback,业务也回滚
 - REPORT 重试**与业务执行解耦** — worker 进程崩溃重启后,本地 outbox 上的未发记录被新 worker 进程接管(同 worker_code 启动后扫本地 outbox 续推)
@@ -64,10 +68,12 @@ CLAIM → 业务 execute → REPORT (HTTP POST orch)
 ## 影响面
 
 **正面**:
+
 - 业务结果不再因 REPORT 失败而丢失 → 重派/重复执行场景大幅减少
 - 与 ADR-014 invocation_id 协同:重派的"过期 invocation" REPORT 被 orch 拒收,不污染 active invocation
 
 **负面**:
+
 - worker 容器加 SQLite 文件依赖 (volume 挂载 / persistent storage)
 - 本地 outbox poll loop + 状态机
 - worker 进程崩溃后本地 outbox 文件不丢失才能保证 → K8s ephemeral pod 需要 PVC
@@ -86,6 +92,7 @@ orch 端从 HTTP `/internal/tasks/{taskId}/report` 改为 Kafka topic `batch.tas
 **优点**:Kafka 持久化 + 异步,自带重投。
 
 **否决理由**:
+
 - 协议 breaking change (老 worker 仍走 HTTP)
 - worker 仍需要"同事务 producer + ack" 机制确保业务-发布原子性
 - 复杂度类似本地 outbox,但增加 Kafka 流量
@@ -95,15 +102,16 @@ orch 端从 HTTP `/internal/tasks/{taskId}/report` 改为 Kafka topic `batch.tas
 orch 周期 poll worker 的 `/internal/results` endpoint。
 
 **否决理由**:
+
 - 反 push/pull 方向,worker 暴露 endpoint 增加攻击面
 - 延迟敏感场景不友好
 
 ## 验收标准
 
-- [ ] worker SQLite outbox schema 落地
-- [ ] WorkerOutboxWriter / WorkerOutboxPoller / WorkerOutboxRetryScheduler
-- [ ] 端到端测试:模拟 orch 不可达 60s,业务结果写本地 outbox,orch 恢复后自动 REPORT
-- [ ] 与 ADR-014 invocation_id 协同测试
+- worker SQLite outbox schema 落地
+- WorkerOutboxWriter / WorkerOutboxPoller / WorkerOutboxRetryScheduler
+- 端到端测试:模拟 orch 不可达 60s,业务结果写本地 outbox,orch 恢复后自动 REPORT
+- 与 ADR-014 invocation_id 协同测试
 
 ## 不变量
 

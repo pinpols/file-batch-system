@@ -112,14 +112,17 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     // 分区也应为 RUNNING 状态
     JobPartitionEntity runningPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
     assertThat(runningPartition.getPartitionStatus()).isEqualTo(PartitionStatus.RUNNING.code());
+    assertThat(runningPartition.getCurrentInvocationId()).isNotBlank();
 
     // 3) Worker renews lease (simulates heartbeat / progress ping)
-    boolean renewed = taskExecutionService.renewTaskLease(TENANT, task.getId(), seed.workerCode());
+    boolean renewed =
+        taskExecutionService.renewTaskLease(
+            TENANT, task.getId(), seed.workerCode(), runningPartition.getCurrentInvocationId());
     assertThat(renewed).isTrue();
 
     // A different worker should not be able to steal the lease
     boolean stolenByRogue =
-        taskExecutionService.renewTaskLease(TENANT, task.getId(), "rogue-worker");
+        taskExecutionService.renewTaskLease(TENANT, task.getId(), "rogue-worker", null);
     assertThat(stolenByRogue).isFalse();
 
     // 4) Worker reports success (progress complete)
@@ -129,6 +132,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
             .taskId(task.getId())
             .success(true)
             .resultSummary("{\"records\":100,\"status\":\"processed\"}")
+            .partitionInvocationId(runningPartition.getCurrentInvocationId())
             .build();
     taskExecutionService.applyTaskOutcome(successOutcome);
 

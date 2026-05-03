@@ -34,6 +34,9 @@ public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
    */
   private String highWaterMarkOut;
 
+  /** ADR-014: optional; sent with report when worker holds current partition invocation id。 */
+  private String partitionInvocationId;
+
   /**
    * ADR-009 Stage 1.2: 节点产出 Map(供下游 workflow 节点 $.nodes.&lt;X&gt;.output.&lt;key&gt; 引用)。Worker 侧仅放
    * JSON 原生类型(String/Number/Boolean/List/Map);orchestrator 在 SUCCESS 路径写入 workflow_node_run.output

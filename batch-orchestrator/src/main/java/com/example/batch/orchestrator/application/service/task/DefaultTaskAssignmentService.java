@@ -7,6 +7,7 @@ import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
@@ -20,6 +21,7 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.param.AssignWorkerParam;
 import com.example.batch.orchestrator.domain.param.ClaimPartitionParam;
 import com.example.batch.orchestrator.domain.param.MarkRunningParam;
+import com.example.batch.orchestrator.domain.param.RenewLeaseParam;
 import com.example.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import com.example.batch.orchestrator.domain.query.JobExecutionLogQuery;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -105,6 +107,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         return current;
       }
+      String invocationId = IdGenerator.newInvocationId();
+      Instant invocationStartedAt = Instant.now();
       int claimed =
           jobPartitionMapper.claimPartition(
               ClaimPartitionParam.builder()
@@ -116,6 +120,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                   .fromStatus(PartitionStatus.READY.code())
                   .toStatus(PartitionStatus.RUNNING.code())
                   .expectedVersion(partition.getVersion())
+                  .currentInvocationId(invocationId)
+                  .invocationStartedAt(invocationStartedAt)
                   .build());
       if (claimed <= 0) {
         // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
@@ -141,7 +147,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
   @Override
   @Transactional
-  public boolean renewTaskLease(String tenantId, Long taskId, String workerCode) {
+  public boolean renewTaskLease(
+      String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
     // 续租语义：只有 RUNNING 且 worker 匹配时允许续租；失败由 controller 统一转成 409。
     JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
     if (current == null || current.getJobPartitionId() == null) {
@@ -153,11 +160,16 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (workerCode == null || !workerCode.equals(current.getAssignedWorkerCode())) {
       return false;
     }
+    String expectedInvocation = Texts.hasText(partitionInvocationId) ? partitionInvocationId : null;
     return jobPartitionMapper.renewLease(
-            tenantId,
-            current.getJobPartitionId(),
-            workerCode,
-            Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+            RenewLeaseParam.builder()
+                .tenantId(tenantId)
+                .id(current.getJobPartitionId())
+                .workerCode(workerCode)
+                .leaseExpireAt(
+                    Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+                .expectedInvocationId(expectedInvocation)
+                .build())
         > 0;
   }
 
@@ -277,7 +289,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         partition == null ? null : partition.getPartitionKey(),
         // V94: data_interval 透传 — 创建 instance 时已落到 job_instance, claim 时实时读
         instance.getDataIntervalStart(),
-        instance.getDataIntervalEnd());
+        instance.getDataIntervalEnd(),
+        partition == null ? null : partition.getCurrentInvocationId());
   }
 
   private static String resolvePriorityBand(Integer priority) {

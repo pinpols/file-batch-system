@@ -4,6 +4,7 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.param.ClaimPartitionParam;
 import com.example.batch.orchestrator.domain.param.CountActiveByGroupParam;
 import com.example.batch.orchestrator.domain.param.MarkPartitionStatusParam;
+import com.example.batch.orchestrator.domain.param.RenewLeaseParam;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import java.time.Instant;
 import java.util.List;
@@ -27,11 +28,7 @@ public interface JobPartitionMapper {
 
   int claimPartition(ClaimPartitionParam param);
 
-  int renewLease(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("workerCode") String workerCode,
-      @Param("leaseExpireAt") Instant leaseExpireAt);
+  int renewLease(RenewLeaseParam param);
 
   int markRetrying(
       @Param("tenantId") String tenantId,

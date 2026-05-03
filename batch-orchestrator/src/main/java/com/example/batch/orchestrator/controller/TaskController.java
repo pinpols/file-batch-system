@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.controller;
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,5 +42,6 @@ public class TaskController {
     taskControllerApplicationService.renew(taskId, request);
   }
 
-  public record TaskClaimRequest(String tenantId, String workerId) {}
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record TaskClaimRequest(String tenantId, String workerId, String partitionInvocationId) {}
 }

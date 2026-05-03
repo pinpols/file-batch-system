@@ -64,12 +64,12 @@ class DefaultTaskExecutionServiceTest {
 
   @Test
   void renewTaskLease_delegatesToAssignmentService() {
-    when(taskAssignmentService.renewTaskLease("t1", 1L, "w1")).thenReturn(true);
+    when(taskAssignmentService.renewTaskLease("t1", 1L, "w1", null)).thenReturn(true);
 
-    boolean result = service.renewTaskLease("t1", 1L, "w1");
+    boolean result = service.renewTaskLease("t1", 1L, "w1", null);
 
     assertThat(result).isTrue();
-    verify(taskAssignmentService).renewTaskLease("t1", 1L, "w1");
+    verify(taskAssignmentService).renewTaskLease("t1", 1L, "w1", null);
   }
 
   @Test
@@ -120,7 +120,8 @@ class DefaultTaskExecutionServiceTest {
   @Test
   void applyTaskOutcome_delegatesToOutcomeService() {
     TaskOutcomeCommand command =
-        new TaskOutcomeCommand("t1", 1L, null, true, null, null, null, null, null, null, null);
+        new TaskOutcomeCommand(
+            "t1", 1L, null, true, null, null, null, null, null, null, null, null);
     JobTaskEntity task = new JobTaskEntity();
     when(taskOutcomeService.applyTaskOutcome(command)).thenReturn(task);
 

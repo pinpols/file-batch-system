@@ -11,7 +11,8 @@ public interface TaskAssignmentService {
 
   JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode);
 
-  boolean renewTaskLease(String tenantId, Long taskId, String workerCode);
+  boolean renewTaskLease(
+      String tenantId, Long taskId, String workerCode, String partitionInvocationId);
 
   /**
    * 加载任务的 effective config 快照(实时读 job_task / job_instance / job_partition / job_definition)。

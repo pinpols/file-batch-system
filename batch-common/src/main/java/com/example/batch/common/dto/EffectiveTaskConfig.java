@@ -75,4 +75,9 @@ public record EffectiveTaskConfig(
      */
     Instant dataIntervalStart,
     /** V94: data_interval 半开区间终点. null 时业务退化为 bizDate+1 天. */
-    Instant dataIntervalEnd) {}
+    Instant dataIntervalEnd,
+    /**
+     * ADR-014: 本轮分区认领 invocation id（读 {@code job_partition.current_invocation_id}）。worker
+     * renew/report 可选带上做幂等与过期 worker 隔离。
+     */
+    String partitionInvocationId) {}

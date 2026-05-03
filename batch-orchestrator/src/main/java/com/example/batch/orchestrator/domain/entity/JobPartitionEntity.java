@@ -16,6 +16,13 @@ public class JobPartitionEntity implements Stateful {
   private String workerGroup;
   private String workerCode;
   private Instant leaseExpireAt;
+
+  /** ADR-014: 本轮 READY→RUNNING claim 生成的 invocation id；回收/重试时清空。 */
+  private String currentInvocationId;
+
+  /** ADR-014: {@link #currentInvocationId} 写入时间（UTC）。 */
+  private Instant invocationStartedAt;
+
   private Long version;
 
   /** 分区生命周期内的业务重试次数。 */

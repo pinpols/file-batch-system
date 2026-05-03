@@ -139,7 +139,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
             task.getTaskType(),
             task.getWorkerId(),
             executionContext);
-    activeTaskLeaseRegistry.register(task.getTaskId(), task.getTenantId(), task.getWorkerId());
+    activeTaskLeaseRegistry.register(
+        task.getTaskId(), task.getTenantId(), task.getWorkerId(), task.getPartitionInvocationId());
     long timeoutSeconds = resolveEffectiveTimeoutSeconds(task);
     long startNanos = System.nanoTime();
     try {
@@ -320,6 +321,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
     // 将 traceId 传递给 Orchestrator,确保状态更新与重试/DLQ 全链路可追踪
     report.setTraceId(task.getTraceId());
+    report.setPartitionInvocationId(task.getPartitionInvocationId());
     report.setResultSummary(
         JsonUtils.toJson(
             Map.of(
