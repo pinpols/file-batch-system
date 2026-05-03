@@ -142,14 +142,17 @@ export OTEL_SAMPLING_PROBABILITY=0.1   # 10%
 
 或在 collector 侧加 tail-based sampling（修改 `docker/observability/otel-collector.yml`）。
 
-### 4.3 业务 trace_id 与 OTel traceId 对不上
+### 4.3 业务 trace_id 与 OTel traceId 关系
 
-**已知 limitation**（见 ADR-013 follow-up）：业务字段 `trace_id`（持久化在 V77/V78 i18n 三元组等表里）与 OTel 自动生成的 traceId 是两套。当前要桥接需要：
+**2026-05-03 已自动桥接**：`IdGenerator.newTraceId()` 优先取当前 OTel active span 的 traceId（32 hex chars），无 OTel context 时 fallback UUID。HTTP/Kafka 入口处自动 instrument 已建立 OTel current span → **业务持久化字段 `trace_id` 自然与 OTel traceId 一致**。
 
-- 排障时优先用 OTel traceId（在 Jaeger/Tempo URL 里）
-- grep 业务日志时用业务 `trace_id`（MDC 已含）
+排障时:
+- 用业务字段 `trace_id`（在 SQL 表 / MDC / 日志里）粘到 Jaeger/Tempo 搜索框 → 直接定位 timeline
+- 反向: 在 Jaeger/Tempo 看到的 traceId 也能直接 SQL `WHERE trace_id = '...'` 查业务表
 
-未来 follow-up 会做桥接。
+边界 case:
+- 在没有 OTel context 的内部触发（如某些 unit test / 后台脚本入口），`IdGenerator.newTraceId()` 仍生成 UUID 格式（也是 32 hex chars）
+- 入参带 `trace_id` 的请求（如 trigger 重发）会保留入参值，不会被 OTel 覆盖（`resolveTraceId` 优先级）
 
 ---
 
