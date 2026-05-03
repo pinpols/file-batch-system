@@ -7,10 +7,10 @@
 
 本文分析 `batch-e2e-tests` 中三个 E2E 测试类当前覆盖了哪些核心链路、哪些风险点仍未覆盖，并给出后续可执行的覆盖优化清单。
 
-涉及测试类（截至 2026-04-08，共 15 个 E2E）：
+涉及测试类（截至 2026-05-03，共 19 个 E2E in `batch-e2e-tests` + 1 个在 `batch-trigger` 模块）：
 
 **主链路（Happy Path）**
-- `ImportPipelineE2eIT`、`ExportPipelineE2eIT`、`DispatchPipelineE2eIT`
+- `ImportPipelineE2eIT`、`ExportPipelineE2eIT`、`DispatchPipelineE2eIT`、`ProcessPipelineE2eIT`
 - `OutboxForwarderE2eIT`（outbox 自动轮询）
 - `ExportContentVerificationE2eIT`（内容级验证）
 
@@ -18,13 +18,19 @@
 - `ImportFailureE2eIT`、`ImportFailurePipelineE2eIT`
 - `ExportFailurePipelineE2eIT`、`ExportStorageFailureE2eIT`
 - `DispatchFailurePipelineE2eIT`
+- `ProcessFailurePipelineE2eIT`（加工链路失败 + 补偿）
 
 **稳健性**
 - `MultiTenantConcurrentE2eIT`（多租户并发隔离）
 - `DedupJobLaunchE2eIT`（顺序 + 并发 dedup 幂等）
 - `OutboxForwarderRetryE2eIT`（Outbox 失败重试）
 - `WorkerDrainE2eIT`（Worker 排空接管）
+- `WorkerProcessRestartRecoveryE2eIT`（worker 重启后 lease/认领恢复）
 - `DeadLetterApprovalReplayE2eIT`（死信审批重放全链路）
+- `TriggerAsyncLaunchFullChainE2eIT`（ADR-010 trigger → outbox → Kafka → orchestrator launch 全链路）
+
+**触发器异步链路**（在 `batch-trigger` 模块，非 batch-e2e-tests 但属端到端覆盖）
+- `TriggerAsyncLaunchE2eIT`（trigger 模块内 outbox relay + Kafka publish）
 
 ---
 

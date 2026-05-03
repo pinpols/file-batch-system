@@ -8,16 +8,16 @@
 | 实体 | enum 类 | DB 列 | CHECK 约束 | 状态值 |
 |---|---|---|---|---|
 | `job_instance.instance_status` | `JobInstanceStatus` | V5:52 | ✓ | CREATED / WAITING / READY / RUNNING / PARTIAL_FAILED / SUCCESS / FAILED / CANCELLED / TERMINATED |
-| `pipeline_instance.run_status` | `PipelineRunStatus` | V6:103 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / **COMPENSATING** / TERMINATED |
+| `pipeline_instance.run_status` | `PipelineRunStatus` | V6:103 | ⚠️ 部分 | DB CHECK 6 值 CREATED / RUNNING / SUCCESS / FAILED / **COMPENSATING** / TERMINATED；Java enum 仅实现 3 值 (RUNNING / SUCCESS / FAILED)，待补齐 |
 | `workflow_run.run_status` | `WorkflowRunStatus` | V5:121 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / TERMINATED |
 | `workflow_node_run.node_status` | `WorkflowNodeRunStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / SKIPPED / TERMINATED |
 | `job_task.task_status` | `TaskStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / RETRYING / CANCELLED / TERMINATED |
 | `job_partition.partition_status` | `PartitionStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / TERMINATED |
-| `job_step_instance.step_status` | `JobStepInstanceStatus` | V13 | ✓ | CREATED / WAITING / READY / RUNNING / SUCCESS / FAILED / RETRYING / CANCELLED / TERMINATED |
+| `job_step_instance.step_status` | `StepInstanceStatus` | V13 | ✓ | CREATED / WAITING / READY / RUNNING / SUCCESS / FAILED / RETRYING / CANCELLED / TERMINATED |
 | `outbox_event.publish_status` | `OutboxPublishStatus` | V21 | ✓ | NEW / PUBLISHING / PUBLISHED / FAILED / GIVE_UP |
 | `trigger_outbox_event.publish_status` | `OutboxPublishStatus` | V80 | ✓ | 同上 |
 | `event_outbox_retry.retry_status` | 内部 enum | V21 | ✓ | WAITING / RUNNING / SUCCESS / FAILED / EXHAUSTED / CANCELLED |
-| `trigger_request.request_status` | `TriggerRequestStatus` | V14 | ✓ | PENDING / ACCEPTED / LAUNCHED / FAILED / GIVE_UP |
+| `trigger_request.request_status` | _无 Java enum class，仅 DB CHECK 兜底_ | V5 / V39 / V60 | ⚠️ DB-only | PENDING / PROCESSING / ACCEPTED / DUPLICATE / REJECTED / LAUNCHED / FORWARD_FAILED / GIVE_UP（V60 扩展，含 ADR-010 trigger 异步链路 forward retry 状态） |
 | `compensation_command.command_status` | `CompensationCommandStatus` | V13 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / CANCELLED |
 | `worker_registry.status` | `WorkerRegistryStatus` | V7 | ✓ | ONLINE / DRAINING / OFFLINE / DECOMMISSIONED |
 
@@ -109,16 +109,16 @@ PENDING → ACCEPTED → LAUNCHED
 ```
 batch-common/src/main/java/com/example/batch/common/enums/
   ├─ JobInstanceStatus.java
-  ├─ PipelineRunStatus.java
+  ├─ PipelineRunStatus.java          # 仅 3 值，DB CHECK 6 值，待补齐
   ├─ WorkflowRunStatus.java
   ├─ WorkflowNodeRunStatus.java
   ├─ TaskStatus.java
   ├─ PartitionStatus.java
-  ├─ JobStepInstanceStatus.java
+  ├─ StepInstanceStatus.java         # 注：类名无 "Job" 前缀
   ├─ OutboxPublishStatus.java
-  ├─ TriggerRequestStatus.java
   ├─ CompensationCommandStatus.java
   └─ WorkerRegistryStatus.java
+  # trigger_request.request_status 无 Java enum class，仅靠 V60 DB CHECK 约束兜底
 ```
 
 所有 enum 实现 `DictEnum` 接口（CLAUDE.md §领域数据字典），提供 `code()` / `label()`，统一通过 `DictEnum.fromCode()` 反查。
