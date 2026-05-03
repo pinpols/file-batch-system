@@ -82,17 +82,17 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (existingPartition == null) {
       return null;
     }
-    int updated =
-        jobPartitionMapper.claimPartition(
-            ClaimPartitionParam.builder()
-                .tenantId(tenantId)
-                .id(partitionId)
-                .workerCode(workerCode)
-                .leaseExpireAt(leaseExpireAt)
-                .fromStatus(PartitionStatus.READY.code())
-                .toStatus(PartitionStatus.RUNNING.code())
-                .expectedVersion(existingPartition.getVersion())
-                .build());
+    ClaimPartitionParam claimPartitionParam =
+        ClaimPartitionParam.builder()
+            .tenantId(tenantId)
+            .id(partitionId)
+            .workerCode(workerCode)
+            .leaseExpireAt(leaseExpireAt)
+            .fromStatus(PartitionStatus.READY.code())
+            .toStatus(PartitionStatus.RUNNING.code())
+            .expectedVersion(existingPartition.getVersion())
+            .build();
+    int updated = jobPartitionMapper.claimPartition(claimPartitionParam);
     return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
   }
 
