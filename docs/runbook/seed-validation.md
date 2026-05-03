@@ -47,7 +47,7 @@ docker exec batch-postgres psql -U batch_user -d batch_platform -f /tmp/multi-te
 ADVANCED=1 ./scripts/local/validate-seed-scenarios.sh
 ```
 
-加 5 项 advanced（共 36 PASS / 1 SKIP）。
+加 5 项 advanced（共 36 PASS / 0 SKIP；§9.5 已自动化为 FIXED_RATE 真触发验证，需 ~45-60s 等 PROBE fire 出现）。
 
 ### 1.3 严格 SUCCESS 模式 — 必须 worker 真完成才 PASS
 
@@ -77,7 +77,7 @@ STRICT=1 ADVANCED=1 AWAIT_TIMEOUT=120 ./scripts/local/validate-seed-scenarios.sh
 | 9.2 | Outbox republish API | — | ✅ | POST /internal/outbox/republish → 200 + reset=0 |
 | 9.3 | Compensate API | — | ✅ | POST /internal/compensations → 4xx 业务拒绝 |
 | 9.4 | Console-api 鉴权 | — | ✅ | GET /api/console/job-definitions → 401 (gate 工作) |
-| 9.5 | Trigger cron 真触发 | — | 🟡 SKIP | 时序不确定，建议手动改 schedule_type=FIXED_RATE 验 |
+| 9.5 | Trigger FIXED_RATE 真触发 | — | ✅ | INSERT PROBE FIXED_RATE job (interval=15s) → polling ≤60s 看 `trigger_request(SCHEDULED)` 自增 → 立即 cleanup |
 | 11 | 探针清理 | ✅ | ✅ | sweep `seedval-%` 13 张表 cascade 删 → 零残留 |
 
 ---
