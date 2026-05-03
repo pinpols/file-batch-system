@@ -42,6 +42,17 @@ public interface JobInstanceMapper {
 
   long countSlaViolationCandidates();
 
+  /**
+   * 选 RUNNING 中超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 兜底）。
+   *
+   * <p>JOIN job_definition 拿 timeout_seconds（{@code > 0} 才生效，{@code = 0} 表示无 timeout）。
+   *
+   * <p>与 {@code selectSlaViolationCandidates} 区别：SLA 看 {@code deadline_at /
+   * expected_duration_seconds}（业务 SLA 软告警，不变更状态）；timeout 看 {@code job_definition.timeout_seconds}（硬
+   * fail 终态）。
+   */
+  List<JobInstanceEntity> selectTimedOutCandidates(@Param("limit") int limit);
+
   int markSlaAlerted(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,

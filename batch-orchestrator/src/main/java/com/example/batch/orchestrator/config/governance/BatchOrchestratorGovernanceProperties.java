@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.config.RateLimitProperties;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
+import com.example.batch.orchestrator.config.TimeoutEnforcerProperties;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ public class BatchOrchestratorGovernanceProperties {
   private final FileGovernanceProperties fileGovernance;
   private final BatchMqTopicsProperties mqTopics;
   private final MqRoutingProperties mqRouting;
+  private final TimeoutEnforcerProperties timeout;
 
   public OutboxProperties outbox() {
     return outbox;
@@ -67,5 +69,9 @@ public class BatchOrchestratorGovernanceProperties {
 
   public MqRoutingProperties mqRouting() {
     return mqRouting;
+  }
+
+  public TimeoutEnforcerProperties timeout() {
+    return timeout;
   }
 }

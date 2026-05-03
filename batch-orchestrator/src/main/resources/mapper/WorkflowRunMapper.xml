@@ -90,6 +90,17 @@
           and id = #{id}
     </update>
 
+    <!-- stuck recovery: 选 RUNNING 且 updated_at 早于 stuckBefore 的实例，由 reconciler 判定是否所有
+         node 终态后兜底 finalize（参考 WorkflowRunStuckReconciler）。 -->
+    <select id="selectStuckRunningCandidates" resultMap="WorkflowRunResultMap">
+        select *
+        from batch.workflow_run
+        where run_status = 'RUNNING'
+          and updated_at &lt; #{stuckBefore}
+        order by updated_at asc, id asc
+        limit #{limit}
+    </select>
+
     <!-- P3-3 archive 自动化：选终结态 + finished_at 早于 cutoff 的 workflow_run id，按 id asc 防 missed delete -->
     <select id="selectArchivableIds" resultType="java.lang.Long">
         select id
