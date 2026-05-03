@@ -6,11 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
+import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.HttpClientErrorException;
@@ -34,13 +37,18 @@ class HttpTaskExecutionClientTest {
       props.setReportMaxBackoffMillis(20);
 
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
+      @SuppressWarnings("unchecked")
+      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator =
+          Mockito.mock(ObjectProvider.class);
+      Mockito.when(noopCoordinator.getIfAvailable()).thenReturn(null);
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
               props,
               new BatchSecurityProperties(),
               jsonRestClientBuilder(),
               new MockEnvironment(),
-              registry);
+              registry,
+              noopCoordinator);
 
       TaskExecutionReport report = report(42L);
       client.report(report);
@@ -69,13 +77,18 @@ class HttpTaskExecutionClientTest {
       props.setReportMaxAttempts(5);
 
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
+      @SuppressWarnings("unchecked")
+      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator =
+          Mockito.mock(ObjectProvider.class);
+      Mockito.when(noopCoordinator.getIfAvailable()).thenReturn(null);
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
               props,
               new BatchSecurityProperties(),
               jsonRestClientBuilder(),
               new MockEnvironment(),
-              registry);
+              registry,
+              noopCoordinator);
 
       assertThatThrownBy(() -> client.report(report(7L)))
           .isInstanceOf(HttpClientErrorException.class);

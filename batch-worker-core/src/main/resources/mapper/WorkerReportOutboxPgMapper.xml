@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.core.mapper.WorkerReportOutboxPgMapper">
+
+    <insert id="upsert">
+        INSERT INTO batch.worker_report_outbox (
+            tenant_id, task_id, partition_invocation_id, trace_id, payload_json,
+            publish_status, attempt_count, next_attempt_at, created_at, updated_at)
+        VALUES (
+            #{p.tenantId}, #{p.taskId}, #{p.partitionInvocationId}, #{p.traceId},
+            CAST(#{p.payloadJson} AS jsonb),
+            #{p.publishStatus}, 0, #{p.nextAttemptAt}, #{p.createdAt}, #{p.updatedAt})
+        ON CONFLICT (tenant_id, task_id) DO UPDATE SET
+            partition_invocation_id = EXCLUDED.partition_invocation_id,
+            trace_id = EXCLUDED.trace_id,
+            payload_json = EXCLUDED.payload_json,
+            publish_status = EXCLUDED.publish_status,
+            attempt_count = 0,
+            next_attempt_at = EXCLUDED.next_attempt_at,
+            updated_at = EXCLUDED.updated_at
+    </insert>
+
+    <select id="claimNextReturning" resultType="com.example.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
+        WITH picked AS (
+            SELECT id FROM batch.worker_report_outbox
+            WHERE publish_status = #{statusNew} AND next_attempt_at &lt;= #{nowEpochMillis}
+            ORDER BY id ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE batch.worker_report_outbox AS o
+        SET publish_status = #{statusPublishing}, updated_at = #{nowEpochMillis}
+        FROM picked AS p
+        WHERE o.id = p.id
+        RETURNING o.id, o.payload_json::text AS payload_json
+    </select>
+
+    <select id="selectAttemptCount" resultType="java.lang.Integer">
+        SELECT attempt_count FROM batch.worker_report_outbox WHERE id = #{id}
+    </select>
+
+    <update id="updateGiveUp">
+        UPDATE batch.worker_report_outbox
+        SET publish_status = #{publishStatus}, attempt_count = #{attemptCount}, updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateRetry">
+        UPDATE batch.worker_report_outbox
+        SET attempt_count = #{attemptCount}, next_attempt_at = #{nextAttemptAt}, updated_at = #{updatedAt},
+            publish_status = #{publishStatus}
+        WHERE id = #{id}
+    </update>
+
+    <update id="resetStalePublishing">
+        UPDATE batch.worker_report_outbox
+        SET publish_status = #{statusNew}, updated_at = #{now}
+        WHERE publish_status = #{statusPublishing} AND updated_at &lt; #{cutoff}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM batch.worker_report_outbox WHERE id = #{id}
+    </delete>
+
+    <update id="giveUpRow">
+        UPDATE batch.worker_report_outbox SET publish_status = #{publishStatus}, updated_at = #{now}, attempt_count =
+            CASE WHEN attempt_count &lt; #{maxAttempts} THEN #{maxAttempts} ELSE attempt_count END
+        WHERE id = #{id}
+    </update>
+</mapper>

@@ -22,6 +22,7 @@
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | ~~trigger~~ | **已移除**（2026-04-25 清理 Phase 2 半成品） | — | — | — |
 | `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟢 低 | `BATCH_QUOTA_RUNTIME_STORE` |
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
+| `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；**`SQLITE`** 时需 PVC 指向 `sqlite-path` |
 | ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。
@@ -35,6 +36,7 @@
 | `mq.routing.mode` | — | 无故障场景 | — | 切换需走灰度 SOP（[`mq-topic-routing-rollout.md`](./mq-topic-routing-rollout.md)） |
 | `quota.runtime-store=redis` | 🟡 中 | Redis `DataAccessException` | `catch` → `ResourceCheck.allow()`（**放行**）+ WARN | **限流功能等同关闭**：长期 Redis 故障会让大租户吃掉小租户配额 |
 | `quota.snapshot.enabled` | 🟢 强（局部） | 单租户 snapshot 失败 | per-tenant `catch` → 跳过该租户继续下一个 | 该租户审计数据漏一个周期，下次自然恢复 |
+| `report-outbox.enabled` | — | Outbox 写入失败（磁盘/PG） | `enqueue` 失败 → `report` 继续抛异常（与未开 outbox 相同） | **`PLATFORM_PG`**：依赖 orchestrator 已迁移 V96；**`SQLITE`**：须持久卷 |
 
 > "强 fail-open"=故障时业务完全不受影响；"中 fail-open"=故障时业务继续但行为/语义变化，需运维监控。
 

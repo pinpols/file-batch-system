@@ -192,6 +192,11 @@ public class WorkerTaskLeaseRenewer {
     }
   }
 
+  /** ADR-015：report outbox poller 协调 — 续租熔断 OPEN 时暂停向 orchestrator 重投 REPORT。 */
+  public boolean isRenewCircuitOpen() {
+    return circuitOpen.get();
+  }
+
   private void trackFailure(ActiveTaskLeaseRegistry.ActiveTaskLease lease, String reason) {
     int count =
         consecutiveFailures
