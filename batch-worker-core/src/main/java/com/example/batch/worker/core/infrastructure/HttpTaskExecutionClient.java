@@ -8,6 +8,7 @@ import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
+import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
@@ -33,13 +35,15 @@ import org.springframework.web.client.RestClient;
 /** 调用 orchestrator 内部任务 API，带超时、瞬态失败有限重试及 Micrometer 失败计数。 */
 @Component
 @Slf4j
-public class HttpTaskExecutionClient implements TaskExecutionClient {
+public class HttpTaskExecutionClient
+    implements TaskExecutionClient, OrchestratorReportHttpSubmitter {
 
   private final OrchestratorTaskClientProperties properties;
   private final BatchSecurityProperties securityProperties;
   private final RestClient.Builder builder;
   private final Environment environment;
   private final Optional<MeterRegistry> meterRegistry;
+  private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
   // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
   private volatile RestClient restClient;
 
@@ -48,12 +52,14 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
       BatchSecurityProperties securityProperties,
       RestClient.Builder builder,
       Environment environment,
-      @Autowired(required = false) MeterRegistry meterRegistry) {
+      @Autowired(required = false) MeterRegistry meterRegistry,
+      ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator) {
     this.properties = properties;
     this.securityProperties = securityProperties;
     this.builder = builder;
     this.environment = environment;
     this.meterRegistry = Optional.ofNullable(meterRegistry);
+    this.reportOutboxCoordinator = reportOutboxCoordinator;
   }
 
   /**
@@ -117,13 +123,23 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     long reportStartNanos = System.nanoTime();
     String outcome = "success";
     try {
-      reportInternal(report);
+      submitReportOverHttp(report);
     } catch (RuntimeException rex) {
-      outcome = "failure";
-      throw rex;
+      WorkerReportOutboxCoordinator coordinator = reportOutboxCoordinator.getIfAvailable();
+      if (coordinator != null && coordinator.enqueue(report)) {
+        outcome = "deferred_outbox";
+      } else {
+        outcome = "failure";
+        throw rex;
+      }
     } finally {
       recordReportDuration(report, outcome, System.nanoTime() - reportStartNanos);
     }
+  }
+
+  @Override
+  public void submitReportOverHttp(TaskExecutionReport report) {
+    reportInternal(report);
   }
 
   private void recordReportDuration(

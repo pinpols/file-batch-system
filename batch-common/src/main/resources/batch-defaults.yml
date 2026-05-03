@@ -261,3 +261,18 @@ batch:
     task-client:
       # worker 调用 orchestrator 的 base-url（默认同 orchestrator.base-url）
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
+    # ADR-015：REPORT 失败后写入 outbox、后台重投 orchestrator（默认关）。
+    # storage=PLATFORM_PG（默认）→ 平台库 batch.worker_report_outbox（Flyway V96，由 orchestrator 迁移）； SQLITE → sqlite-path 本地文件。
+    report-outbox:
+      enabled: ${BATCH_WORKER_REPORT_OUTBOX_ENABLED:false}
+      storage: ${BATCH_WORKER_REPORT_OUTBOX_STORAGE:PLATFORM_PG}
+      sqlite-path: ${BATCH_WORKER_REPORT_OUTBOX_SQLITE_PATH:}
+      poll-interval-millis: ${BATCH_WORKER_REPORT_OUTBOX_POLL_INTERVAL_MS:5000}
+      max-publish-attempts: ${BATCH_WORKER_REPORT_OUTBOX_MAX_PUBLISH_ATTEMPTS:48}
+      initial-backoff-millis: ${BATCH_WORKER_REPORT_OUTBOX_INITIAL_BACKOFF_MS:1000}
+      max-backoff-millis: ${BATCH_WORKER_REPORT_OUTBOX_MAX_BACKOFF_MS:300000}
+      jitter-millis: ${BATCH_WORKER_REPORT_OUTBOX_JITTER_MS:500}
+      poll-batch-size: ${BATCH_WORKER_REPORT_OUTBOX_POLL_BATCH_SIZE:8}
+      pause-poll-when-renew-circuit-open: ${BATCH_WORKER_REPORT_OUTBOX_PAUSE_POLL_ON_LEASE_CIRCUIT:true}
+      publishing-stale-recover-after-millis: ${BATCH_WORKER_REPORT_OUTBOX_PUBLISHING_STALE_MS:120000}
+      stale-publishing-recover-interval-millis: ${BATCH_WORKER_REPORT_OUTBOX_STALE_RECOVER_INTERVAL_MS:60000}
