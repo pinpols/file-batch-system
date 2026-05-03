@@ -119,6 +119,11 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       Integer priority,
       String priorityBand,
       ResourceCheck check) {
+    // V89 DEGRADE_PRIORITY: limiter 在 reasonCode 末尾打 _DEGRADED 标记，这里把决策 priority/band 砍到最低，
+    // 让 enrichFairnessScore 给出最低分，WaitingPartitionDispatchScheduler 的 fairness 排序自然把它沉到队尾
+    boolean degraded = check.reasonCode() != null && check.reasonCode().endsWith("_DEGRADED");
+    Integer effectivePriority = degraded ? 1 : priority;
+    String effectiveBand = degraded ? "LOW" : priorityBand;
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
     decision.setDispatchable(false);
     decision.setFailFast(check.failFast());
@@ -126,11 +131,11 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     decision.setReasonMessage(check.reasonMessage());
     decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
     decision.setWorkerGroup(resolveWorkerGroup(request, queue));
-    decision.setPriority(priority);
-    decision.setPriorityBand(priorityBand);
+    decision.setPriority(effectivePriority);
+    decision.setPriorityBand(effectiveBand);
     decision.setPartitionStatus(PartitionStatus.WAITING.code());
     decision.setTaskStatus(TaskStatus.CREATED.code());
-    enrichFairnessScore(request, queue, priority, priorityBand, decision);
+    enrichFairnessScore(request, queue, effectivePriority, effectiveBand, decision);
     return decision;
   }
 
