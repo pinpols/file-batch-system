@@ -147,7 +147,7 @@ ShedLock + 应用层 sharding 协作（**不用** SKIP LOCKED）：
 - `OutboxArchiveServiceTest` — 归档
 - `TaskDispatchOutboxServiceMandatoryTest` — MANDATORY 事务传播
 - `JobTypeOutboxChainIntegrationTest` — 4 worker type × outbox 链路
-- `OutboxRetryBackoffTest`（2026-05-01 加）— 指数退避 + jitter
+- `DefaultScheduleForwarderRetryBackoffTest`（2026-05-01 加）— 指数退避 + jitter
 
 ### 演化时间线（追溯历史决策）
 

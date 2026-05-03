@@ -149,7 +149,7 @@ public enum XxxType implements DictEnum {
 全局安全旁路总开关 **`batch.security.bypass-mode`**（`BatchSecurityProperties#isBypassMode`）。开启后整条安全链（认证 / 脱敏 / 加解密 / 审批 / 渠道校验）放行，仅供本地 / 联调 / E2E。
 
 - **默认**：IDE local=`true`（调试方便）、docker-compose=`false`（贴近生产）、prod profile 强制拒绝 `true`（@PostConstruct 守护）
-- **调用**：业务代码一律 `isBypassMode()`；旧键 `testing-open` / `isTestingOpen()` 已 deprecated，下一 minor 版本移除
+- **调用**：业务代码一律 `isBypassMode()`；旧键 `testing-open` / `isTestingOpen()` 已于 2026-05-01 物理删除（commit `753e6393`），不再接受任何兼容写法
 
 **ADR-010 trigger 异步链路（已固化，无开关）**：trigger fire → 同事务写 `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch。原同步 HTTP 桥（`HttpOrchestratorTriggerAdapter`）已于 2026-05-02 删除，`batch.trigger.async-launch.enabled` 开关同步下线。
 
