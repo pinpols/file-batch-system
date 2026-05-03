@@ -44,7 +44,7 @@ import org.springframework.kafka.listener.MessageListenerContainer;
  * </ul>
  */
 @Slf4j
-public abstract class AbstractTaskConsumer {
+public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
   protected abstract AbstractWorkerLoop workerLoop();
@@ -68,6 +68,20 @@ public abstract class AbstractTaskConsumer {
 
   @Value("${batch.worker.max-concurrent-tasks:8}")
   private int maxConcurrentTasks;
+
+  /**
+   * 当前正在执行的 task 数 = maxConcurrentTasks - 可用许可. semaphore 未初始化 (worker 启动早期) 时返回 0. 由 {@code
+   * DefaultHeartbeatService} 心跳路径读取写入 {@code WorkerRegistration.currentLoad}.
+   */
+  @Override
+  public int currentLoad() {
+    Semaphore local = semaphore;
+    if (local == null) {
+      return 0;
+    }
+    int inFlight = maxConcurrentTasks - local.availablePermits();
+    return Math.max(0, inFlight);
+  }
 
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数

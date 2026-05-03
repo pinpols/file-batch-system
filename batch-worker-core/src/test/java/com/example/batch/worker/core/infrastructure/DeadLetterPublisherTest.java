@@ -49,6 +49,7 @@ class DeadLetterPublisherTest {
     verify(kafkaTemplate).send(eq(BatchTopics.TASK_DEAD_LETTER), valueCaptor.capture());
 
     String sent = valueCaptor.getValue();
+    assertThat(sent).contains("\"envelopeVersion\":1");
     assertThat(sent).contains("originalPayload");
     assertThat(sent).contains("sourceTopic");
     assertThat(sent).contains("workerType");

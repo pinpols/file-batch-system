@@ -32,6 +32,16 @@ public class DeadLetterPublisher {
   /** DLQ 发送限时. 超出即 throw, 让消息留在 source topic 由 Kafka 自动 redeliver. */
   static final long PUBLISH_TIMEOUT_SECONDS = 5L;
 
+  /**
+   * DLQ envelope schema 版本号. 写入字段 {@code envelopeVersion}, 用于未来 schema 演进时 replay 工具兼容旧记录:
+   *
+   * <ul>
+   *   <li>v1 (本次): 基础字段 originalPayload / sourceTopic / workerType / errorMessage / failedAt
+   *   <li>未来 vN: 加字段保持向前兼容; 字段语义变更必须 bump version + replay 工具按 version 分支处理
+   * </ul>
+   */
+  static final int ENVELOPE_VERSION = 1;
+
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final Counter successCounter;
   private final Counter timeoutCounter;
@@ -83,6 +93,8 @@ public class DeadLetterPublisher {
   public void publish(
       String originalPayload, String sourceTopic, String workerType, String errorMessage) {
     Map<String, Object> envelope = new LinkedHashMap<>();
+    // envelopeVersion 放第一位,replay 工具可 fast-path 解析版本后分支处理 (无 version 字段视为 v0)
+    envelope.put("envelopeVersion", ENVELOPE_VERSION);
     envelope.put("originalPayload", originalPayload);
     envelope.put("sourceTopic", sourceTopic);
     envelope.put("workerType", workerType);

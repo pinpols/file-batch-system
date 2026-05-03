@@ -7,8 +7,10 @@ import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Pipeline 阶段执行器的模板方法基类，三条链路（import / export / dispatch）共用的 while 循环骨架封装于此。
@@ -40,8 +42,17 @@ public abstract class AbstractStageExecutor<
         runtimeRepository.toLong(
             context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
+    // P1-7: visited-set 早期检测真正的 cycle (重访同一 stepCode),与数值 guard 双保险。
+    // 数值 guard 是兜底 (恶意配置耗尽循环次数);visited 是直接检测 (一旦重访立即停)。
+    Set<String> visitedStepCodes = new HashSet<>();
     PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
     while (currentStep != null) {
+      if (!visitedStepCodes.add(currentStep.stepCode())) {
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT,
+            "error.workflow.cycle_detected",
+            cycleDetectedMessage() + " (revisit stepCode=" + currentStep.stepCode() + ")");
+      }
       if (guard-- <= 0) {
         throw BizException.of(
             ResultCode.STATE_CONFLICT, "error.workflow.cycle_detected", cycleDetectedMessage());

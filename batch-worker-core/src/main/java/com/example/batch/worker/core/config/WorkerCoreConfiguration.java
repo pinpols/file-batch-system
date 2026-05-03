@@ -7,6 +7,6 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
   OrchestratorWorkerClientProperties.class,
   OrchestratorTaskClientProperties.class,
-  WorkerLeaseProperties.class
+  WorkerExecutionTimeoutProperties.class
 })
 public class WorkerCoreConfiguration {}

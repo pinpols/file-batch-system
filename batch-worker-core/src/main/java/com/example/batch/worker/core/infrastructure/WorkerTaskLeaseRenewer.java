@@ -36,15 +36,24 @@ public class WorkerTaskLeaseRenewer {
 
   private static final String METRIC_CONSECUTIVE = "batch.worker.lease.consecutive_failures";
   private static final String METRIC_FAST_RETRY = "batch.worker.lease.fast_retry";
+  private static final String METRIC_CIRCUIT_OPEN = "batch.worker.lease.circuit.open.total";
 
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
   private final TaskExecutionClient taskExecutionClient;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   // R-4.4 a: 按 taskId 维护连续失败计数器；成功 / remove 时清零
   private final Map<String, AtomicInteger> consecutiveFailures = new ConcurrentHashMap<>();
+  // P1-8: 进程级熔断 — 整轮 100% renew 失败时 OPEN,跳过后续 tick 直到半开探测;orch 恢复任一成功 → CLOSE
+  private final java.util.concurrent.atomic.AtomicBoolean circuitOpen =
+      new java.util.concurrent.atomic.AtomicBoolean(false);
+  private final AtomicInteger ticksSinceOpen = new AtomicInteger(0);
 
   @Value("${batch.worker.lease.consecutive-failure-alert-threshold:3}")
   private int alertThreshold;
+
+  /** 熔断 OPEN 后每 N 个 tick 强制半开探测一次 (默认 5 = ~50s @ renew 周期 10s) */
+  @Value("${batch.worker.lease.circuit-half-open-tick-interval:5}")
+  private int circuitHalfOpenTickInterval;
 
   public WorkerTaskLeaseRenewer(
       ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
@@ -57,6 +66,20 @@ public class WorkerTaskLeaseRenewer {
 
   @Scheduled(fixedDelayString = "${batch.worker.lease.renew-interval-millis:10000}")
   public void renewActiveTaskLeases() {
+    // P1-8 熔断: OPEN 时跳过整 tick (避免持续 hammer 不可达 orch),每 circuitHalfOpenTickInterval
+    // 个 tick 强制半开探测一次,任一 lease 成功即 CLOSE (恢复正常 renew)
+    if (circuitOpen.get()) {
+      int ticks = ticksSinceOpen.incrementAndGet();
+      if (ticks < Math.max(1, circuitHalfOpenTickInterval)) {
+        log.debug(
+            "renew skipped: circuit OPEN (tick {}/{}); orch likely unreachable, awaiting cooldown",
+            ticks,
+            circuitHalfOpenTickInterval);
+        return;
+      }
+      ticksSinceOpen.set(0);
+      log.info("renew circuit half-open probe: attempting renewal");
+    }
     Collection<ActiveTaskLeaseRegistry.ActiveTaskLease> active = activeTaskLeaseRegistry.snapshot();
     // L-5：清理 consecutiveFailures 里已不在活跃 lease 集合的条目，避免
     // "失败达到阈值后任务被 orchestrator 驱逐不再 renew" 路径永驻 AtomicInteger。
@@ -68,8 +91,35 @@ public class WorkerTaskLeaseRenewer {
       }
       consecutiveFailures.keySet().removeIf(taskId -> !activeIds.contains(taskId));
     }
+    if (active.isEmpty()) {
+      return;
+    }
+    int success = 0;
+    int failure = 0;
     for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : active) {
-      attemptRenew(activeTaskLease, false);
+      if (attemptRenew(activeTaskLease, false)) {
+        success++;
+      } else {
+        failure++;
+      }
+    }
+    // 熔断状态机: 全失败 → OPEN; 任一成功 (从 OPEN) → CLOSE
+    if (failure == active.size()) {
+      if (circuitOpen.compareAndSet(false, true)) {
+        log.error(
+            "renew circuit OPENED: all {} renewals failed in this tick; orch likely unreachable —"
+                + " skipping subsequent renew attempts until half-open probe ({} ticks)",
+            failure,
+            circuitHalfOpenTickInterval);
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry != null) {
+          Counter.builder(METRIC_CIRCUIT_OPEN).register(registry).increment();
+        }
+      }
+    } else if (success > 0 && circuitOpen.compareAndSet(true, false)) {
+      log.info(
+          "renew circuit CLOSED: orch reachable again ({} success / {} failure)", success, failure);
+      ticksSinceOpen.set(0);
     }
   }
 
@@ -93,7 +143,10 @@ public class WorkerTaskLeaseRenewer {
     }
   }
 
-  private void attemptRenew(
+  /**
+   * @return true=本次 renew 成功 (用于熔断状态机判定); false=失败或被拒
+   */
+  private boolean attemptRenew(
       ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease, boolean fastRetry) {
     try {
       boolean renewed =
@@ -109,6 +162,7 @@ public class WorkerTaskLeaseRenewer {
             activeTaskLease.getWorkerId(),
             fastRetry);
         trackFailure(activeTaskLease, "rejected");
+        return false;
       } else {
         if (fastRetry && consecutiveFailures.containsKey(activeTaskLease.getTaskId())) {
           // fast-retry 救回了之前失败的续期：记 metric 让运维感知抖动恢复速率
@@ -121,6 +175,7 @@ public class WorkerTaskLeaseRenewer {
           }
         }
         consecutiveFailures.remove(activeTaskLease.getTaskId());
+        return true;
       }
     } catch (Exception exception) {
       log.warn(
@@ -132,6 +187,7 @@ public class WorkerTaskLeaseRenewer {
           exception.getMessage(),
           exception);
       trackFailure(activeTaskLease, exception.getClass().getSimpleName());
+      return false;
     }
   }
 
