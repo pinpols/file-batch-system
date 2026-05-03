@@ -104,6 +104,7 @@ class WorkerRegistryCacheTest {
                         "ONLINE",
                         Instant.now().toEpochMilli(),
                         2,
+                        10,
                         null,
                         null)));
     when(valueOps.get(anyString())).thenReturn(json);
@@ -190,6 +191,6 @@ class WorkerRegistryCacheTest {
 
   private static WorkerRegistryEntity record(Long id, String code) {
     return new WorkerRegistryEntity(
-        id, "t1", code, "EXPORT", null, "report", "ONLINE", Instant.now(), 0, null, null);
+        id, "t1", code, "EXPORT", null, "report", "ONLINE", Instant.now(), 0, 10, null, null);
   }
 }

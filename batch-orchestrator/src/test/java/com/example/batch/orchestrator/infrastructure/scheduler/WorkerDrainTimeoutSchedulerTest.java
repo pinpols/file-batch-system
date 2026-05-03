@@ -87,6 +87,7 @@ class WorkerDrainTimeoutSchedulerTest {
         WorkerRegistryStatus.DRAINING.code(),
         heartbeatAt,
         3,
+        10,
         heartbeatAt.minusSeconds(30),
         drainDeadlineAt);
   }

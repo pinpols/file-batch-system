@@ -11,6 +11,9 @@ import java.time.Instant;
  *
  * <p><b>不要加 Spring Data 注解</b>（{@code @Table @Id @Column}）—— 本表已迁 MyBatis 后由 {@code
  * WorkerRegistryMapper} 接管 CRUD；保留 SDJ 注解会被框架误扫成 Repository。
+ *
+ * <p>V87 (2026-05-03): 加 {@code maxConcurrent} 反压字段，{@code DefaultWorkerSelector} 在 {@code
+ * current_load >= max_concurrent} 时 skip 该 worker。
  */
 public record WorkerRegistryEntity(
     Long id,
@@ -22,6 +25,7 @@ public record WorkerRegistryEntity(
     String status,
     Instant heartbeatAt,
     Integer currentLoad,
+    Integer maxConcurrent,
     Instant drainStartedAt,
     Instant drainDeadlineAt) {
   /** 心跳更新：状态、心跳时间、负载、能力标签。 */
@@ -37,6 +41,7 @@ public record WorkerRegistryEntity(
         status,
         heartbeatAt,
         currentLoad,
+        maxConcurrent,
         drainStartedAt,
         drainDeadlineAt);
   }
@@ -53,6 +58,7 @@ public record WorkerRegistryEntity(
         status,
         heartbeatAt,
         currentLoad,
+        maxConcurrent,
         drainStartedAt,
         drainDeadlineAt);
   }
@@ -70,6 +76,7 @@ public record WorkerRegistryEntity(
         status,
         heartbeatAt,
         currentLoad,
+        maxConcurrent,
         drainStartedAt,
         drainDeadlineAt);
   }
@@ -86,6 +93,7 @@ public record WorkerRegistryEntity(
         "DECOMMISSIONED",
         heartbeatAt,
         currentLoad,
+        maxConcurrent,
         null,
         null);
   }

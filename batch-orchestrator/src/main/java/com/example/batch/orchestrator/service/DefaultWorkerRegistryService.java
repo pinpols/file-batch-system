@@ -69,6 +69,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
               newStatus,
               heartbeatAt,
               newLoad,
+              null, // maxConcurrent: 走 DB DEFAULT 10 (V87)
               null,
               null);
     } else {

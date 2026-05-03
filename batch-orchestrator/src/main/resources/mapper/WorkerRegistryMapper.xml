@@ -66,6 +66,7 @@
             <arg column="status" javaType="java.lang.String"/>
             <arg column="heartbeat_at" javaType="java.time.Instant"/>
             <arg column="current_load" javaType="java.lang.Integer"/>
+            <arg column="max_concurrent" javaType="java.lang.Integer"/>
             <arg column="drain_started_at" javaType="java.time.Instant"/>
             <arg column="drain_deadline_at" javaType="java.time.Instant"/>
         </constructor>
@@ -74,7 +75,7 @@
     <sql id="workerRegistrySelectColumns">
         id, tenant_id, worker_code, worker_group,
         capability_tags::text as capability_tags_text,
-        resource_tag, status, heartbeat_at, current_load,
+        resource_tag, status, heartbeat_at, current_load, max_concurrent,
         drain_started_at, drain_deadline_at
     </sql>
 
@@ -130,7 +131,7 @@
             parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
-            status, heartbeat_at, current_load, drain_started_at, drain_deadline_at,
+            status, heartbeat_at, current_load, max_concurrent, drain_started_at, drain_deadline_at,
             created_at, updated_at
         ) values (
             #{tenantId}, #{workerCode}, #{workerGroup},
@@ -148,6 +149,10 @@
                 <when test="currentLoad != null">#{currentLoad}</when>
                 <otherwise>0</otherwise>
             </choose>,
+            <choose>
+                <when test="maxConcurrent != null">#{maxConcurrent}</when>
+                <otherwise>10</otherwise>
+            </choose>,
             #{drainStartedAt}, #{drainDeadlineAt},
             current_timestamp, current_timestamp
         )
@@ -163,6 +168,7 @@
                status             = #{status},
                heartbeat_at       = #{heartbeatAt},
                current_load       = #{currentLoad},
+               max_concurrent     = coalesce(#{maxConcurrent}, max_concurrent),
                drain_started_at   = #{drainStartedAt},
                drain_deadline_at  = #{drainDeadlineAt},
                updated_at         = current_timestamp

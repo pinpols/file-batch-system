@@ -12,6 +12,8 @@ public class WorkerRegistryEntity {
   private String workerGroup;
   private String status;
   private Instant heartbeatAt;
+  private Integer currentLoad;
+  private Integer maxConcurrent;
   private Instant drainStartedAt;
   private Instant drainDeadlineAt;
 }
