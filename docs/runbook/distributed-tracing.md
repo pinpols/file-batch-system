@@ -42,7 +42,7 @@ http://localhost:16686
 ```
 
 - Service 选 `batch-orchestrator` / `batch-trigger` / `batch-worker-import` 等
-- 按 `trace_id` 字段（业务字段）搜索 → 注意：业务 trace_id 当前**未自动桥接到 OTel TraceContext**（见 ADR-013 follow-up），需用 OTel 自动生成的 traceId（在 span tag 里）
+- 按 **`trace_id`（业务字段）搜索**：已与 OTel traceId 对齐（见下文 §4.3）；也可用 Jaeger UI 自带的 traceId / span tag 搜索
 
 ### 2.2 Tempo + Grafana（端口 3000）
 
