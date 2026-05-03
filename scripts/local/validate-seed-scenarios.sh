@@ -42,6 +42,8 @@
 #   AWAIT_TIMEOUT                            异步链路等待秒数(默认 30)
 #   LOAD_SEED                                1=运行前先 reload 种子(默认 0)
 #   ADVANCED                                 1=跑 §9 advanced 段(默认 0)
+#   STRICT                                   1=§7 改用 default-tenant 严格 SUCCESS 验证(默认 0=ta/tb/tc 仅链路覆盖)
+#   PRE_CLEANUP                              0=跳过跑前 sweep(默认 1=清所有 seedval-* 历史)
 # =========================================================
 set -uo pipefail
 
@@ -57,9 +59,13 @@ PG_DB="${PG_DB:-batch_platform}"
 AWAIT_TIMEOUT="${AWAIT_TIMEOUT:-30}"
 LOAD_SEED="${LOAD_SEED:-0}"
 ADVANCED="${ADVANCED:-0}"
+PRE_CLEANUP="${PRE_CLEANUP:-1}"   # 1=跑前先全清 seedval-* 历史残留(默认)
+STRICT="${STRICT:-0}"             # 1=§7 用 default-tenant 严格 SUCCESS 验证
 
-# 探针标识 — 所有探针 trigger 用此前缀,便于清理 / 与种子区分
-PROBE_TAG="seedval-$(date +%s)"
+# 探针标识 — 默认带时间戳便于日志区分 run, 但清理走 'seedval-%' 全 sweep 不漏历史
+PROBE_TAG="${PROBE_TAG:-seedval-$(date +%s)}"
+# 全 sweep 模式: 跑前 + 跑后 + EXIT trap 都按这个 LIKE 模式清, 保证零残留
+SWEEP_PATTERN="seedval-%"
 
 # 颜色
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -94,6 +100,46 @@ psql_w_first() {
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null \
     | grep -vE "^(INSERT|UPDATE|DELETE|COMMIT|ROLLBACK)" | head -1
 }
+
+# do_cleanup [probe_pattern]
+# 默认 'seedval-%' 全 sweep — 把所有历史 PROBE_TAG 痕迹都清掉
+# 使用 cascade 顺序: 子表 → 父表(避免 FK 违反, 即使没有 FK 也按依赖序删)
+# 8 张表: 11 个 DELETE
+do_cleanup() {
+  local pattern="${1:-$SWEEP_PATTERN}"
+  # 关键 FK: job_instance.trigger_request_id 反向引用 trigger_request
+  # 所以必须先删所有由本 PROBE 关联的 job_instance(双向反查),才能删 trigger_request
+  # 反查 job_instance.id 集合 = 通过 trigger_request_id 联到的(不依赖 related_job_instance_id 是否回填)
+  local probe_instances
+  probe_instances=$(psql_q "SELECT string_agg(DISTINCT id::text, ',') FROM batch.job_instance WHERE trigger_request_id IN (SELECT id FROM batch.trigger_request WHERE request_id LIKE '$pattern')")
+  if [[ -n "$probe_instances" ]]; then
+    # 衍生 cascade(子表先删, 父表后删, 走 FK 安全顺序):
+    psql_q "DELETE FROM batch.pipeline_step_run WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances))" >/dev/null
+    psql_q "DELETE FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances)" >/dev/null
+    psql_q "DELETE FROM batch.file_dispatch_record WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances)) OR file_id IN (SELECT id FROM batch.file_record WHERE source_ref IN (SELECT instance_no FROM batch.job_instance WHERE id IN ($probe_instances)))" >/dev/null
+    psql_q "DELETE FROM batch.file_record WHERE source_ref IN (SELECT instance_no FROM batch.job_instance WHERE id IN ($probe_instances))" >/dev/null
+    psql_q "DELETE FROM batch.workflow_node_run WHERE workflow_run_id IN (SELECT id FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances))" >/dev/null
+    psql_q "DELETE FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances)" >/dev/null
+    psql_q "DELETE FROM batch.job_step_instance WHERE job_instance_id IN ($probe_instances)" >/dev/null
+    psql_q "DELETE FROM batch.job_task WHERE job_instance_id IN ($probe_instances)" >/dev/null
+    psql_q "DELETE FROM batch.job_partition WHERE job_instance_id IN ($probe_instances)" >/dev/null
+    psql_q "DELETE FROM batch.job_execution_log WHERE job_instance_id IN ($probe_instances)" >/dev/null
+    psql_q "DELETE FROM batch.outbox_event WHERE aggregate_id::text IN (SELECT unnest(string_to_array('$probe_instances', ',')))" >/dev/null
+    psql_q "DELETE FROM batch.job_instance WHERE id IN ($probe_instances)" >/dev/null
+  fi
+  # 此时 job_instance 的 FK 已断,trigger_request / outbox 安全删除
+  psql_q "DELETE FROM batch.trigger_outbox_event WHERE request_id LIKE '$pattern'" >/dev/null
+  psql_q "DELETE FROM batch.trigger_request WHERE request_id LIKE '$pattern'" >/dev/null
+  psql_q "DELETE FROM batch.workflow_node WHERE node_code='SEEDVAL_PROBE'" >/dev/null
+}
+
+# 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留垃圾
+on_exit() {
+  local rc=$?
+  do_cleanup "$SWEEP_PATTERN" 2>/dev/null || true
+  exit $rc
+}
+trap on_exit EXIT
 
 # http_post path body [header1] [header2] ...
 # 把 header 当独立参数传,避免 quote 展开陷阱
@@ -134,6 +180,18 @@ if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1" >/de
 else
   result fail "postgres 可达" "$PG_CONTAINER 容器不存在或拒绝连接"
   exit 1
+fi
+
+# ---------- 0.4. PRE_CLEANUP — 跑前清所有 seedval-* 历史残留(避免污染) ----------
+if [[ "$PRE_CLEANUP" == "1" ]]; then
+  pre_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN'")
+  if [[ "$pre_cnt" -gt 0 ]]; then
+    do_cleanup "$SWEEP_PATTERN"
+    after_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN'")
+    result pass "PRE_CLEANUP" "扫 $pre_cnt 行历史 seedval-* trigger_request, 清理后剩 $after_cnt 行"
+  else
+    result pass "PRE_CLEANUP" "无历史残留, 跳过"
+  fi
 fi
 
 # ---------- 0.5. 可选 reload 种子 ----------
@@ -392,47 +450,77 @@ fire_and_await() {
     return 1
   fi
 
-  # 等 job_task 走出 CREATED(worker claim 成功)
-  local task_status=""
+  # 等 instance 推到终态(SUCCESS / FAILED / PARTIAL_FAILED / TERMINATED / CANCELLED)
+  local instance_status=""
   while [[ $elapsed -lt $timeout ]]; do
-    task_status=$(psql_q "SELECT string_agg(DISTINCT task_status, ',') FROM batch.job_task WHERE tenant_id='$tenant' AND job_instance_id=$job_id")
-    if [[ -n "$task_status" && "$task_status" != "CREATED" && "$task_status" != "READY" ]]; then
-      break
-    fi
+    instance_status=$(psql_q "SELECT instance_status FROM batch.job_instance WHERE id=$job_id")
+    case "$instance_status" in
+      SUCCESS|FAILED|PARTIAL_FAILED|TERMINATED|CANCELLED) break ;;
+    esac
     sleep 2; elapsed=$((elapsed+2))
   done
 
-  local instance_status; instance_status=$(psql_q "SELECT instance_status FROM batch.job_instance WHERE id=$job_id")
-  local err; err=$(psql_q "SELECT string_agg(DISTINCT error_code, ',') FROM batch.job_task WHERE job_instance_id=$job_id AND error_code IS NOT NULL")
-  LAST_FIRE_DETAIL="job_id=$job_id instance=$instance_status tasks=$task_status err=${err:-none} (${elapsed}s)"
-  return 0
+  local task_status; task_status=$(psql_q "SELECT string_agg(DISTINCT task_status, ',') FROM batch.job_task WHERE tenant_id='$tenant' AND job_instance_id=$job_id")
+  local err; err=$(psql_q "SELECT string_agg(DISTINCT coalesce(error_code,'') || ':' || coalesce(error_message,''), ' | ') FROM batch.job_task WHERE job_instance_id=$job_id AND error_code IS NOT NULL")
+  LAST_FIRE_DETAIL="job_id=$job_id instance=$instance_status tasks=${task_status:-none} err=${err:-none} (${elapsed}s)"
+  case "$instance_status" in
+    SUCCESS) return 0 ;;                         # 严格 happy
+    FAILED|PARTIAL_FAILED) return 2 ;;           # 终态但失败 — 业务/数据问题, 不算 link 通
+    *) return 3 ;;                               # 仍未到终态 — worker 没消费/卡住
+  esac
 }
 
+# assert_fire label tenant jobCode params [expect=success|terminal|reach_worker]
+# expect 默认 success(严格 happy);也可放宽到 terminal(SUCCESS 或 FAILED 都接受)/reach_worker(只要 instance 创建)
 assert_fire() {
-  local label="$1"; local tenant="$2"; local jobCode="$3"; local params="$4"
-  if fire_and_await "$tenant" "$jobCode" "$params" "$AWAIT_TIMEOUT"; then
-    result pass "$label" "$LAST_FIRE_DETAIL"
-  else
-    result fail "$label" "$LAST_FIRE_DETAIL"
-  fi
+  local label="$1"; local tenant="$2"; local jobCode="$3"; local params="$4"; local expect="${5:-success}"
+  fire_and_await "$tenant" "$jobCode" "$params" "$AWAIT_TIMEOUT"
+  local rc=$?
+  case "$expect" in
+    success)
+      [[ $rc -eq 0 ]] && result pass "$label [SUCCESS]" "$LAST_FIRE_DETAIL" || result fail "$label [需 SUCCESS]" "$LAST_FIRE_DETAIL"
+      ;;
+    terminal)
+      [[ $rc -eq 0 || $rc -eq 2 ]] && result pass "$label [终态]" "$LAST_FIRE_DETAIL" || result fail "$label [未到终态]" "$LAST_FIRE_DETAIL"
+      ;;
+    *)
+      [[ $rc -ne 1 ]] && result pass "$label [link]" "$LAST_FIRE_DETAIL" || result fail "$label [link 断]" "$LAST_FIRE_DETAIL"
+      ;;
+  esac
 }
 
-section "7. Worker 链路覆盖: fire → instance 创建 (各 worker 类型 + workflow_type)"
+if [[ "$STRICT" == "1" ]]; then
+  # ===== STRICT=1: 严格 SUCCESS 模式 — 只用 default-tenant(唯一有 ONLINE worker 的租户)
+  # 限制: ta/tb/tc 在 multi-tenant-seed 里 worker_registry 全 OFFLINE,
+  #       它们的 jobs 永远不会被 worker 选中,严格 SUCCESS 必然 FAIL → 不纳入 STRICT 集
+  # 推荐: AWAIT_TIMEOUT=90 给真 SUCCESS 留时间
+  section "7. Worker 严格 happy [STRICT=1]: fire → instance 推到 SUCCESS"
 
-assert_fire "IMPORT 链路 (tb, XML 模板)" "tb" "TB_IMPORT_TRANSACTION" \
-  '{"templateCode":"IMP-TXN-XML","content":"<txns><txn><txnNo>T001</txnNo><accountNo>A001</accountNo><txnType>DEBIT</txnType><amount>100.00</amount><currencyCode>CNY</currencyCode><txnDate>2026-05-03</txnDate></txn></txns>"}'
+  assert_fire "IMPORT 严格 (default-tenant, JSON 不加密)" "default-tenant" "import_customer_job" \
+    '{"templateCode":"import_customer_json_v1","content":"[{\"customerId\":\"C001\",\"name\":\"smoke\",\"accountType\":\"SAVINGS\",\"accountNo\":\"A001\",\"balance\":100.00,\"openDate\":\"2026-05-03\"}]"}' \
+    success
 
-assert_fire "EXPORT 链路 (tc, risk_alert)" "tc" "TC_EXPORT_RISK_ALERT" '{}'
+  assert_fire "EXPORT 严格 (default-tenant, settlement)" "default-tenant" "export_settlement_job" '{}' success
 
-assert_fire "DISPATCH 链路 (tc, local channel)" "tc" "TC_DISPATCH_REVIEW" \
-  '{"channelCode":"tc_local_archive"}'
+  assert_fire "WORKFLOW PIPELINE 严格 (default-tenant)" "default-tenant" "wf_probe_pipeline" '{}' success
 
-assert_fire "WORKFLOW DAG (ta)" "ta" "TA_WF_SETTLEMENT" '{}'
+  result skip "DISPATCH 严格" "default-tenant 无 DISPATCH job, 跳过(STRICT 限定 default-tenant)"
+else
+  # ===== 默认: reach_worker 模式 — 覆盖广(7 场景含 4 worker × 4 workflow_type),
+  #            只验 ADR-010 链路通 + instance 创建,worker 终态不强求
+  section "7. Worker 链路覆盖 [STRICT=0]: fire → instance 创建即 PASS"
 
-assert_fire "WORKFLOW PIPELINE (tc)" "tc" "TC_WF_RISK_PIPELINE" '{}'
+  assert_fire "IMPORT 链路 (tb, XML 模板)" "tb" "TB_IMPORT_TRANSACTION" \
+    '{"templateCode":"IMP-TXN-XML","content":"<txns><txn><txnNo>T001</txnNo><accountNo>A001</accountNo><txnType>DEBIT</txnType><amount>100.00</amount><currencyCode>CNY</currencyCode><txnDate>2026-05-03</txnDate></txn></txns>"}' \
+    reach_worker
 
-assert_fire "WORKFLOW DAG GATEWAY (probe)" "default-tenant" "wf_probe_gateway" '{}'
-assert_fire "WORKFLOW MIXED (probe + ADR-009 DSL)" "default-tenant" "wf_probe_mixed" '{}'
+  assert_fire "EXPORT 链路 (tc, risk_alert)" "tc" "TC_EXPORT_RISK_ALERT" '{}' reach_worker
+  assert_fire "DISPATCH 链路 (tc, local channel)" "tc" "TC_DISPATCH_REVIEW" '{"channelCode":"tc_local_archive"}' reach_worker
+  assert_fire "WORKFLOW DAG (ta)" "ta" "TA_WF_SETTLEMENT" '{}' reach_worker
+  assert_fire "WORKFLOW PIPELINE (tc)" "tc" "TC_WF_RISK_PIPELINE" '{}' reach_worker
+  assert_fire "WORKFLOW DAG GATEWAY (probe)" "default-tenant" "wf_probe_gateway" '{}' reach_worker
+  assert_fire "WORKFLOW MIXED (probe + ADR-009 DSL)" "default-tenant" "wf_probe_mixed" '{}' reach_worker
+fi
 
 # ---------- 8. 多租户并发隔离实跑 ----------
 section "8. 多租户并发: 同时 fire ta + tb,验证不串"
@@ -540,23 +628,17 @@ if [[ "$ADVANCED" == "1" ]]; then
   result skip "Trigger cron 真触发" "时序不确定,不纳入自动化(改 schedule_type=FIXED_RATE 等待 1 个周期 → 看 trigger_request 自增)"
 fi
 
-# ---------- 11. 清理探针 ----------
-section "11. 清理探针数据"
+# ---------- 11. 清理探针(POST cleanup, 全 seedval-* sweep) ----------
+section "11. 探针清理(post + EXIT trap 双保险)"
 
-# 拓宽清理 — fire_and_await 引入 job_instance/job_task/job_partition 等,按 PROBE_TAG req_id 反查并 cascade
-probe_instances=$(psql_q "SELECT string_agg(related_job_instance_id::text, ',') FROM batch.trigger_request WHERE request_id LIKE '%${PROBE_TAG}%' AND related_job_instance_id IS NOT NULL")
-if [[ -n "$probe_instances" ]]; then
-  psql_q "DELETE FROM batch.job_step_instance WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
-  psql_q "DELETE FROM batch.job_task WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
-  psql_q "DELETE FROM batch.job_partition WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
-  psql_q "DELETE FROM batch.workflow_node_run WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND workflow_run_id IN (SELECT id FROM batch.workflow_run WHERE job_instance_id IN ($probe_instances))" >/dev/null
-  psql_q "DELETE FROM batch.workflow_run WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND job_instance_id IN ($probe_instances)" >/dev/null
-  psql_q "DELETE FROM batch.outbox_event WHERE tenant_id IN ('ta','tb','tc','default-tenant') AND aggregate_id IN ($probe_instances)" >/dev/null
-  psql_q "DELETE FROM batch.job_instance WHERE id IN ($probe_instances)" >/dev/null
+before_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN'")
+do_cleanup "$SWEEP_PATTERN"
+after_cnt=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE request_id LIKE '$SWEEP_PATTERN'")
+if [[ "$after_cnt" == "0" ]]; then
+  result pass "探针清理" "全 sweep 已清 $before_cnt 行(含本次 + 任何历史残留), 13 张表零污染"
+else
+  result fail "探针清理" "残留 $after_cnt 行 trigger_request, 清理逻辑漏"
 fi
-psql_q "DELETE FROM batch.trigger_outbox_event WHERE request_id LIKE '%${PROBE_TAG}%'" >/dev/null
-psql_q "DELETE FROM batch.trigger_request WHERE request_id LIKE '%${PROBE_TAG}%'" >/dev/null
-result pass "探针清理" "job_instance + 4 张子表 + outbox + trigger_request 全部按 PROBE_TAG cascade 清理"
 
 # ---------- 汇总 ----------
 echo ""
