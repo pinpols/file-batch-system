@@ -224,11 +224,14 @@ public final class ImportPreprocessPipeline {
 
   // ── 解压尺寸闸（防 zip bomb / 压缩炸弹）────────────────────────────────
   // 解压后字节同时受两个上限制约，取最小值：
-  //   1) 绝对上限 MAX_DECOMPRESS_BYTES（默认 1 GiB，防单文件过大拖死堆）
+  //   1) 绝对上限 MAX_DECOMPRESS_BYTES（默认 256 MiB，防单文件过大拖死堆）
   //   2) 相对输入的膨胀倍数 MAX_DECOMPRESS_RATIO（默认 50x，典型文本压缩 3-10x，50x 就是异常）
   // 超过即抛 IMPORT_PREPROCESS_DECOMPRESS_TOO_LARGE，文件拒收而不是静默把堆写爆。
+  //
+  // 2026-05-03 ⚠1: 默认从 1 GiB 下调到 256 MiB. 之前 1 GiB × 6 并发 task = 6 GiB 堆压, 真实业务大文件
+  // 需要更大上限可通过 -Dbatch.worker.import.max-decompress-bytes 显式提高.
   private static final long MAX_DECOMPRESS_BYTES =
-      Long.getLong("batch.worker.import.max-decompress-bytes", 1024L * 1024 * 1024);
+      Long.getLong("batch.worker.import.max-decompress-bytes", 256L * 1024 * 1024);
   private static final int MAX_DECOMPRESS_RATIO =
       Integer.getInteger("batch.worker.import.max-decompress-ratio", 50);
 
@@ -411,23 +414,47 @@ public final class ImportPreprocessPipeline {
     long computedCap =
         Math.max((long) input.length * 2L + 1_048_576L, CHARSET_TRANSCODE_MIN_CAP_BYTES);
     long cap = parseLong(stringProp(step, "outputSizeCap"), computedCap);
-    String text = new String(input, fromCs);
-    byte[] output = text.getBytes(toCs);
-    if (output.length > cap) {
+    // ⚠3 (2026-05-03): 之前 new String(input, fromCs) 把整个文件物化为 UTF-16 String, 100 MB 输入 = 200 MB
+    // 中间堆峰 (input byte[] + UTF-16 String) + 100 MB 输出 byte[] = 总 300 MB+ 峰值. 现在改 reader/writer
+    // chunk 转码, 中间 buffer 仅 8 KiB; 输出 BAOS 同时检 cap 触发即抛, 不让超量数据继续累积.
+    java.io.ByteArrayOutputStream out =
+        new java.io.ByteArrayOutputStream(Math.min(input.length, 1 << 16));
+    try (java.io.Reader reader =
+            new java.io.InputStreamReader(new ByteArrayInputStream(input), fromCs);
+        java.io.Writer writer = new java.io.OutputStreamWriter(out, toCs)) {
+      char[] buf = new char[8192];
+      int n;
+      while ((n = reader.read(buf)) > 0) {
+        writer.write(buf, 0, n);
+        // 中途即检查 cap, 避免超量字节先被 transcode 出来再爆
+        if (out.size() > cap) {
+          throw new IllegalArgumentException(
+              "CHARSET_TRANSCODE output exceeds cap: inputBytes="
+                  + input.length
+                  + ", outputBytes>="
+                  + out.size()
+                  + ", cap="
+                  + cap
+                  + " (from="
+                  + fromCs
+                  + ", to="
+                  + toCs
+                  + ")");
+        }
+      }
+      writer.flush();
+    } catch (IOException ex) {
       throw new IllegalArgumentException(
-          "CHARSET_TRANSCODE output exceeds cap: inputBytes="
-              + input.length
-              + ", outputBytes="
-              + output.length
-              + ", cap="
-              + cap
+          "CHARSET_TRANSCODE failed: "
+              + ex.getMessage()
               + " (from="
               + fromCs
               + ", to="
               + toCs
-              + ")");
+              + ")",
+          ex);
     }
-    return output;
+    return out.toByteArray();
   }
 
   private static long parseLong(String raw, long fallback) {

@@ -110,8 +110,16 @@ public class PreprocessStep implements ImportStageStep {
       // 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）。
       // 处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，
       // 在此处透明解密后再进入预处理 pipeline。
+      //
+      // ⚠2 (2026-05-03): 大文件走 spool 路径避免 byte[] 双倍峰值. 之前 cryptoService.decrypt(rawBytes)
+      // 内部 ByteArrayInputStream → readAllBytes(), 100 MB 输入瞬间 200 MB 堆峰. 现在 > spool 阈值且加密时
+      // 走 Path → Path 流式解密, 完成后释放 rawBytes 引用让 GC 回收, 堆峰降为单 100 MB.
       if (!batchSecurityProperties.isBypassMode()) {
-        rawBytes = cryptoService.decrypt(rawBytes);
+        if (rawBytes.length > SPOOL_THRESHOLD_BYTES && cryptoService.isEncryptedContent(rawBytes)) {
+          rawBytes = decryptViaSpool(rawBytes);
+        } else {
+          rawBytes = cryptoService.decrypt(rawBytes);
+        }
       }
       byte[] processed =
           ImportPreprocessPipeline.run(
@@ -266,6 +274,41 @@ public class PreprocessStep implements ImportStageStep {
    * 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
    * {@link ImportPreprocessException} 以对齐主链路异常语义。
    */
+  /**
+   * ⚠2 (2026-05-03): 大文件加密内容走 Path → Path 流式解密. 之前 cryptoService.decrypt(rawBytes) 内部
+   * readAllBytes() 把结果再分配一次 byte[], 100 MB 输入瞬间 200 MB 堆峰. 现在写 temp file 后立刻让 caller GC rawBytes,
+   * 解密结果只占单次 byte[] 大小. 失败按原 IOException 透传成 IllegalStateException, 保持调用方语义.
+   */
+  private byte[] decryptViaSpool(byte[] rawBytes) {
+    Path encrypted = null;
+    Path decrypted = null;
+    try {
+      encrypted = Files.createTempFile("batch-preprocess-enc-", ".raw");
+      decrypted = Files.createTempFile("batch-preprocess-dec-", ".raw");
+      Files.write(
+          encrypted, rawBytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+      cryptoService.decrypt(encrypted, decrypted);
+      return Files.readAllBytes(decrypted);
+    } catch (IOException ex) {
+      throw new IllegalStateException("failed to spool-decrypt large payload", ex);
+    } finally {
+      if (encrypted != null) {
+        try {
+          Files.deleteIfExists(encrypted);
+        } catch (IOException ignored) {
+          // 临时文件清理失败不阻断主路径; OS 会按 /tmp 策略最终回收
+        }
+      }
+      if (decrypted != null) {
+        try {
+          Files.deleteIfExists(decrypted);
+        } catch (IOException ignored) {
+          // 同上
+        }
+      }
+    }
+  }
+
   private void spoolLargePayload(byte[] processed, Charset charset, ImportJobContext context) {
     Path spool;
     try {
