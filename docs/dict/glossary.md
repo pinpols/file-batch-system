@@ -69,6 +69,7 @@
 | **worker-import** | batch-worker-import | 文件导入 worker |
 | **worker-export** | batch-worker-export | 文件导出 worker |
 | **worker-dispatch** | batch-worker-dispatch | 文件分发 worker |
+| **worker-process** | batch-worker-process | 数据加工 worker（WAP 模式 + SQL transform 插件） |
 | **worker-core** | batch-worker-core | Worker 共享框架 |
 | **console-api** | batch-console-api | 控制台 BFF |
 | **common** | batch-common | 跨模块共享代码 |
