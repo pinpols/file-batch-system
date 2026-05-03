@@ -1,10 +1,13 @@
 package com.example.batch.console.config;
 
+import com.example.batch.common.config.BatchPgSessionProperties;
+import com.example.batch.common.config.HikariPgSessionSupport;
 import com.zaxxer.hikari.HikariDataSource;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import javax.sql.DataSource;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -13,6 +16,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 
 /**
@@ -30,7 +34,11 @@ import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 @Configuration
 @ConditionalOnProperty(name = "batch.console.read-replica.enabled", havingValue = "true")
 @EnableConfigurationProperties(ReadReplicaProperties.class)
+@RequiredArgsConstructor
 public class ReadReplicaDataSourceConfiguration {
+
+  private final BatchPgSessionProperties pgSessionProperties;
+  private final Environment environment;
 
   /** 单独暴露 primary HikariPool：让 {@link ReplicaLagMonitor} 等需要"显式走主库"的组件直接注入。 */
   @Bean(name = "consolePrimaryDataSource")
@@ -39,7 +47,7 @@ public class ReadReplicaDataSourceConfiguration {
       throw new IllegalStateException(
           "batch.console.read-replica.enabled=true requires primary.url");
     }
-    return buildPool(props.getPrimary(), "console-primary");
+    return buildPool(props.getPrimary(), "console-primary", pgApplicationName("-primary"));
   }
 
   @Bean(name = "consoleReplicaDataSource")
@@ -48,7 +56,7 @@ public class ReadReplicaDataSourceConfiguration {
       throw new IllegalStateException(
           "batch.console.read-replica.enabled=true requires replica.url");
     }
-    return buildPool(props.getReplica(), "console-replica");
+    return buildPool(props.getReplica(), "console-replica", pgApplicationName("-replica"));
   }
 
   @Bean
@@ -89,7 +97,8 @@ public class ReadReplicaDataSourceConfiguration {
   }
 
   /** 共用 buildPool（DRY 之前 Primary/Replica 两份重复方法）。 */
-  private static HikariDataSource buildPool(ReadReplicaProperties.Pool cfg, String poolName) {
+  private HikariDataSource buildPool(
+      ReadReplicaProperties.Pool cfg, String poolName, String pgApplicationName) {
     HikariDataSource ds = new HikariDataSource();
     ds.setJdbcUrl(cfg.getUrl());
     ds.setUsername(cfg.getUsername());
@@ -105,6 +114,11 @@ public class ReadReplicaDataSourceConfiguration {
       ds.setLeakDetectionThreshold(cfg.getLeakDetectionThresholdMillis());
     }
     ds.setPoolName(poolName);
+    HikariPgSessionSupport.applyPlatform(ds, pgSessionProperties, pgApplicationName);
     return ds;
+  }
+
+  private String pgApplicationName(String suffix) {
+    return environment.getProperty("spring.application.name", "batch-console-api") + suffix;
   }
 }

@@ -1,9 +1,12 @@
 package com.example.batch.worker.exports.config;
 
+import com.example.batch.common.config.BatchPgSessionProperties;
 import com.example.batch.common.config.BusinessDataSourceProperties;
+import com.example.batch.common.config.HikariPgSessionSupport;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
+import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
@@ -12,13 +15,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 /** 业务数据源配置，提供导出任务所需的业务库 MyBatis SqlSession。 */
 @Configuration("exportWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties(BusinessDataSourceProperties.class)
+@RequiredArgsConstructor
 public class BusinessDataSourceConfiguration {
+
+  private final BatchPgSessionProperties pgSessionProperties;
+  private final Environment environment;
 
   @Bean(name = "exportBusinessHikariConfig")
   @ConfigurationProperties("batch.datasource.business.hikari")
@@ -49,6 +57,8 @@ public class BusinessDataSourceConfiguration {
     if (hikariConfig.getLeakDetectionThreshold() <= 0) {
       hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
     }
+    String appName = environment.getProperty("spring.application.name", "batch-worker-export");
+    HikariPgSessionSupport.applyBusiness(hikariConfig, pgSessionProperties, appName + "-business");
     return new HikariDataSource(hikariConfig);
   }
 

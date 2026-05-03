@@ -1,8 +1,11 @@
 package com.example.batch.worker.exports.config;
 
+import com.example.batch.common.config.BatchPgSessionProperties;
+import com.example.batch.common.config.HikariPgSessionSupport;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
+import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
@@ -13,13 +16,18 @@ import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 /** 平台数据源配置，提供导出 Worker 所需的平台库 MyBatis SqlSession（Primary）。 */
 @Configuration
 @EnableConfigurationProperties(DataSourceProperties.class)
+@RequiredArgsConstructor
 public class PlatformDataSourceConfiguration {
+
+  private final BatchPgSessionProperties pgSessionProperties;
+  private final Environment environment;
 
   @Bean(name = "exportPlatformHikariConfig")
   @ConfigurationProperties("spring.datasource.hikari")
@@ -39,6 +47,8 @@ public class PlatformDataSourceConfiguration {
     if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
       hikariConfig.setDriverClassName(driverClassName);
     }
+    String appName = environment.getProperty("spring.application.name", "batch-worker-export");
+    HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, appName + "-platform");
     return new HikariDataSource(hikariConfig);
   }
 

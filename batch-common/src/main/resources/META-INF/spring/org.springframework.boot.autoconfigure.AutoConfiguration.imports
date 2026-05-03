@@ -1,5 +1,6 @@
 com.example.batch.common.logging.HttpRequestMdcAutoConfiguration
 com.example.batch.common.i18n.BatchI18nAutoConfiguration
+com.example.batch.common.config.BatchPgSessionAutoConfiguration
 com.example.batch.common.config.BatchStartupSelfCheckAutoConfiguration
 com.example.batch.common.config.BatchSchedulingAutoConfiguration
 com.example.batch.common.config.BatchJsonAutoConfiguration

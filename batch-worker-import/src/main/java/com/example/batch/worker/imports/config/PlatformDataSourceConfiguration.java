@@ -1,8 +1,11 @@
 package com.example.batch.worker.imports.config;
 
+import com.example.batch.common.config.BatchPgSessionProperties;
+import com.example.batch.common.config.HikariPgSessionSupport;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
+import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
@@ -13,12 +16,17 @@ import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 @Configuration
 @EnableConfigurationProperties(DataSourceProperties.class)
+@RequiredArgsConstructor
 public class PlatformDataSourceConfiguration {
+
+  private final BatchPgSessionProperties pgSessionProperties;
+  private final Environment environment;
 
   @Bean(name = "importPlatformHikariConfig")
   @ConfigurationProperties("spring.datasource.hikari")
@@ -38,6 +46,8 @@ public class PlatformDataSourceConfiguration {
     if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
       hikariConfig.setDriverClassName(driverClassName);
     }
+    String appName = environment.getProperty("spring.application.name", "batch-worker-import");
+    HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, appName + "-platform");
     return new HikariDataSource(hikariConfig);
   }
 

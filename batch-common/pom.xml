@@ -25,6 +25,11 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
         </dependency>
+        <!-- PG 会话命名与超时（BatchPgSessionAutoConfiguration）依赖 HikariDataSource 类型 -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
         <!--
           MyBatis 共享 mapper（如 InformationSchemaMapper）需要 @Param 等注解；optional=true 不传递依赖，
           每个使用方模块（orchestrator / console / trigger / worker-*）已自带 mybatis-spring-boot-starter。
