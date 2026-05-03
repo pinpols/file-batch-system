@@ -105,15 +105,20 @@ public class ActiveTaskLeaseRegistry {
    */
   public boolean awaitDrain(Duration timeout) {
     Duration effective = timeout == null ? Duration.ZERO : timeout;
-    long deadline = System.currentTimeMillis() + Math.max(0L, effective.toMillis());
+    // 用单调钟 (nanoTime) 而非 currentTimeMillis,避免 NTP 时钟回拨期间 remaining 变负 →
+    // 立即 break 误报 timeout=false
+    long deadlineNanos = System.nanoTime() + Math.max(0L, effective.toNanos());
     synchronized (drainMonitor) {
       while (!activeTaskLeases.isEmpty()) {
-        long remaining = deadline - System.currentTimeMillis();
-        if (remaining <= 0L) {
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        if (remainingNanos <= 0L) {
           break;
         }
         try {
-          drainMonitor.wait(remaining);
+          // Object.wait 接受 (millis, nanos) — 拆分纳秒余数避免精度丢失
+          long waitMillis = remainingNanos / 1_000_000L;
+          int waitNanos = (int) (remainingNanos % 1_000_000L);
+          drainMonitor.wait(waitMillis, waitNanos);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
           log.warn("awaitDrain interrupted; remainingLeases={}", activeTaskLeases.size());
