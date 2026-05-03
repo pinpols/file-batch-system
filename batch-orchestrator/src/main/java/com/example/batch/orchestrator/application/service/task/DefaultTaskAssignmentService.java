@@ -109,20 +109,19 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       }
       String invocationId = IdGenerator.newInvocationId();
       Instant invocationStartedAt = Instant.now();
-      int claimed =
-          jobPartitionMapper.claimPartition(
-              ClaimPartitionParam.builder()
-                  .tenantId(tenantId)
-                  .id(current.getJobPartitionId())
-                  .workerCode(workerCode)
-                  .leaseExpireAt(
-                      Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
-                  .fromStatus(PartitionStatus.READY.code())
-                  .toStatus(PartitionStatus.RUNNING.code())
-                  .expectedVersion(partition.getVersion())
-                  .currentInvocationId(invocationId)
-                  .invocationStartedAt(invocationStartedAt)
-                  .build());
+      ClaimPartitionParam claimPartitionParam =
+          ClaimPartitionParam.builder()
+              .tenantId(tenantId)
+              .id(current.getJobPartitionId())
+              .workerCode(workerCode)
+              .leaseExpireAt(Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+              .fromStatus(PartitionStatus.READY.code())
+              .toStatus(PartitionStatus.RUNNING.code())
+              .expectedVersion(partition.getVersion())
+              .currentInvocationId(invocationId)
+              .invocationStartedAt(invocationStartedAt)
+              .build();
+      int claimed = jobPartitionMapper.claimPartition(claimPartitionParam);
       if (claimed <= 0) {
         // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
         // 同理返回 current（READY），不重读 DB。
