@@ -19,6 +19,7 @@ import com.example.batch.orchestrator.application.service.workflow.WorkflowDagSe
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
+import io.micrometer.observation.annotation.Observed;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -59,6 +60,7 @@ public class DefaultLaunchService implements LaunchService {
   private final ObjectProvider<DefaultLaunchService> selfProvider;
 
   @Override
+  @Observed(name = "orch.launch", contextualName = "orch.launch")
   public LaunchResponse launch(LaunchRequest request) {
     LaunchLoadResult loaded = launchValidationService.load(request);
     LaunchResponse duplicateShortCircuit = maybeShortCircuitDuplicate(request, loaded);

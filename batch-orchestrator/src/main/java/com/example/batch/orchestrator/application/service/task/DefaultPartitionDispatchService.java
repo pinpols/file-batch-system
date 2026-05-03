@@ -27,6 +27,7 @@ import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingReques
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import io.micrometer.observation.annotation.Observed;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,6 +89,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   // writeDispatchEvent 使用 MANDATORY（必须在调用方事务内执行）。三者不会分别提交。
   @Override
   @Transactional
+  @Observed(name = "orch.partition.dispatch", contextualName = "orch.partition.dispatch")
   public void dispatch(DispatchContext context) {
     LaunchRequest request = context.request();
     Map<String, Object> effectiveParams = context.effectiveParams();
