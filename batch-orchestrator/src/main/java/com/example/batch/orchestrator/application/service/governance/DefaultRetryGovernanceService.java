@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service.governance;
 
+import com.example.batch.common.enums.DeadLetterErrorClass;
 import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.RetryPolicyType;
@@ -210,6 +211,61 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   @Override
+  public void autoRetryDueDeadLetters() {
+    // V90: 不挂 @Transactional——每条死信走独立 REQUIRES_NEW (replayDeadLetter 内部已注解), 单条失败不影响整批扫描
+    List<DeadLetterTaskEntity> dueRecords =
+        deadLetterTaskMapper.selectDueAutoRetries(governance.retry().getBatchSize());
+    for (DeadLetterTaskEntity record : dueRecords) {
+      String tenantId = record.getTenantId();
+      Long deadLetterId = record.getId();
+      int currentReplayCount = record.getReplayCount() == null ? 0 : record.getReplayCount();
+      int maxReplayCount = record.getMaxReplayCount() == null ? 0 : record.getMaxReplayCount();
+      // 边界保护: scheduler 选出的应满足 replay_count < max_replay_count, 但配置 / 数据漂移可能让 max=0 漏进来
+      if (currentReplayCount >= maxReplayCount) {
+        deadLetterTaskMapper.markGiveUp(tenantId, deadLetterId);
+        log.warn(
+            "dead letter give up (max replay count reached on entry): tenantId={},"
+                + " deadLetterId={}, replayCount={}, maxReplayCount={}",
+            tenantId,
+            deadLetterId,
+            currentReplayCount,
+            maxReplayCount);
+        continue;
+      }
+      try {
+        replayDeadLetter(tenantId, deadLetterId);
+        log.info(
+            "dead letter auto-retry succeeded: tenantId={}, deadLetterId={}," + " attempt={}",
+            tenantId,
+            deadLetterId,
+            currentReplayCount + 1);
+      } catch (Exception ex) {
+        // markReplayFailure 已在 replayDeadLetter 内部被调用; 这里检查是否已用尽预算, 转 GIVE_UP
+        int newReplayCount = currentReplayCount + 1;
+        if (newReplayCount >= maxReplayCount) {
+          deadLetterTaskMapper.markGiveUp(tenantId, deadLetterId);
+          log.warn(
+              "dead letter give up (max replay count exhausted): tenantId={},"
+                  + " deadLetterId={}, replayCount={}, maxReplayCount={}, lastError={}",
+              tenantId,
+              deadLetterId,
+              newReplayCount,
+              maxReplayCount,
+              ex.getMessage());
+        } else {
+          log.info(
+              "dead letter auto-retry failed, will back off: tenantId={},"
+                  + " deadLetterId={}, attempt={}, error={}",
+              tenantId,
+              deadLetterId,
+              newReplayCount,
+              ex.getMessage());
+        }
+      }
+    }
+  }
+
+  @Override
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void retryPartition(String tenantId, Long partitionId, String eventKey) {
     requeuePartition(tenantId, partitionId, eventKey);
@@ -310,13 +366,19 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             deadLetterTaskId,
             exception.getMessage(),
             exception);
+        // V90: 失败时按指数退避算下次自动重放时间; BUSINESS / 已无自动重放预算的记录不安排（next_replay_at=null）
+        Instant nextAuto =
+            shouldScheduleAutoRetry(deadLetterTask, replayCount)
+                ? calculateNextRetryAt(RetryPolicyType.EXPONENTIAL.code(), replayCount)
+                : null;
         deadLetterTaskMapper.markReplayFailure(
             tenantId,
             deadLetterTaskId,
             DeadLetterReplayStatus.FAILED.code(),
             replayCount,
             replayAt,
-            exception.getMessage());
+            exception.getMessage(),
+            nextAuto);
         throw exception;
       }
     } finally {
@@ -479,12 +541,52 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     deadLetterTask.setReplayStatus(DeadLetterReplayStatus.NEW.code());
     deadLetterTask.setReplayCount(0);
     deadLetterTask.setTraceId(jobInstance.getTraceId());
+    // V90: 错误分类 + 自动重放预算
+    DeadLetterErrorClass errorClass = classifyErrorClass(errorCode);
+    deadLetterTask.setErrorClass(errorClass.code());
+    if (errorClass == DeadLetterErrorClass.SYSTEM) {
+      deadLetterTask.setMaxReplayCount(governance.retry().getDefaultMaxRetryCount());
+      // 第 1 次自动重放: now + fixedDelaySeconds（与 retry_schedule FIXED 策略对齐）
+      deadLetterTask.setNextReplayAt(
+          Instant.now().plusSeconds(governance.retry().getFixedDelaySeconds()));
+    } else {
+      // BUSINESS 错误: 自动重放永远不会自愈, 仅人工触发
+      deadLetterTask.setMaxReplayCount(0);
+      deadLetterTask.setNextReplayAt(null);
+    }
     deadLetterTaskMapper.insert(deadLetterTask);
     log.warn(
-        "dead letter created: tenantId={}, partitionId={}, instanceNo={}",
+        "dead letter created: tenantId={}, partitionId={}, instanceNo={}, errorClass={}",
         task.getTenantId(),
         partition.getId(),
-        jobInstance.getInstanceNo());
+        jobInstance.getInstanceNo(),
+        errorClass.code());
+  }
+
+  /**
+   * V90: 错误代码分类。{@link #NON_RETRYABLE_ERROR_CODES} 内的错误是 BUSINESS（硬错，自动重放不会自愈）， 其他归
+   * SYSTEM（瞬态/可恢复，自动重放 走指数退避）。
+   */
+  private static DeadLetterErrorClass classifyErrorClass(String errorCode) {
+    if (errorCode != null && NON_RETRYABLE_ERROR_CODES.contains(errorCode)) {
+      return DeadLetterErrorClass.BUSINESS;
+    }
+    return DeadLetterErrorClass.SYSTEM;
+  }
+
+  /**
+   * V90: 是否还应安排下一次自动重放。null entity（人工 replay 时找不到原 entity）按 SYSTEM 处理；BUSINESS / 即将达到
+   * max_replay_count 时 不再排自动重放（scheduler 后续会把 status 转 GIVE_UP）。
+   */
+  private static boolean shouldScheduleAutoRetry(DeadLetterTaskEntity entity, int newReplayCount) {
+    if (entity == null) {
+      return true;
+    }
+    if (DeadLetterErrorClass.BUSINESS.code().equals(entity.getErrorClass())) {
+      return false;
+    }
+    int max = entity.getMaxReplayCount() == null ? 0 : entity.getMaxReplayCount();
+    return newReplayCount < max;
   }
 
   private String buildDeadLetterReason(String errorCode, String errorMessage) {

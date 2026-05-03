@@ -27,4 +27,10 @@ public interface RetryGovernanceService {
   void reclaimTask(String tenantId, Long taskId, String eventKey);
 
   void replayDeadLetter(String tenantId, Long deadLetterTaskId);
+
+  /**
+   * V90: 扫描到期的 SYSTEM-class 死信记录，自动触发 {@link #replayDeadLetter}。 业务错误（{@code BUSINESS}）不会被这里 pick
+   * up；超过 {@code max_replay_count} 的记录由本方法转 GIVE_UP。
+   */
+  void autoRetryDueDeadLetters();
 }

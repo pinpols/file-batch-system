@@ -13,6 +13,9 @@
         <result column="last_replay_at" property="lastReplayAt"/>
         <result column="last_replay_result" property="lastReplayResult"/>
         <result column="trace_id" property="traceId"/>
+        <result column="max_replay_count" property="maxReplayCount"/>
+        <result column="next_replay_at" property="nextReplayAt"/>
+        <result column="error_class" property="errorClass"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -29,7 +32,10 @@
             replay_count,
             last_replay_at,
             last_replay_result,
-            trace_id
+            trace_id,
+            max_replay_count,
+            next_replay_at,
+            error_class
         ) values (
             #{tenantId},
             #{sourceType},
@@ -40,7 +46,10 @@
             #{replayCount},
             #{lastReplayAt},
             #{lastReplayResult},
-            #{traceId}
+            #{traceId},
+            coalesce(#{maxReplayCount}, 3),
+            #{nextReplayAt},
+            coalesce(#{errorClass}, 'SYSTEM')
         )
     </insert>
 
@@ -66,6 +75,7 @@
             replay_count = #{replayCount},
             last_replay_at = #{lastReplayAt},
             last_replay_result = #{lastReplayResult},
+            next_replay_at = null,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
@@ -77,6 +87,7 @@
             replay_count = #{replayCount},
             last_replay_at = #{lastReplayAt},
             last_replay_result = #{lastReplayResult},
+            next_replay_at = #{nextReplayAt},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
@@ -87,4 +98,26 @@
         where replay_status in
         <foreach collection="statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
     </select>
+
+    <!-- V90: 自动重放调度. error_class=SYSTEM + 已到 next_replay_at + 未达 max_replay_count -->
+    <select id="selectDueAutoRetries" resultMap="DeadLetterTaskResultMap">
+        select *
+        from batch.dead_letter_task
+        where replay_status in ('NEW', 'FAILED')
+          and error_class = 'SYSTEM'
+          and next_replay_at is not null
+          and next_replay_at &lt;= current_timestamp
+          and replay_count &lt; max_replay_count
+        order by next_replay_at asc, id asc
+        limit #{batchSize}
+    </select>
+
+    <update id="markGiveUp">
+        update batch.dead_letter_task
+        set replay_status = 'GIVE_UP',
+            next_replay_at = null,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
 </mapper>
