@@ -213,6 +213,18 @@ batch:
 
   # 业务数据库（import / export / dispatch worker 使用）
   datasource:
+    # PostgreSQL：JDBC ApplicationName + statement / idle-in-transaction 超时（经 Hikari connectionInitSql）
+    # Flyway 与业务共用同一池时，超长迁移可能被 statement-timeout 打断——可临时调高 platform.* 或设 pg-session.enabled=false
+    pg-session:
+      enabled: ${BATCH_PG_SESSION_ENABLED:true}
+      merge-connection-init-sql: ${BATCH_PG_SESSION_MERGE_INIT_SQL:true}
+      platform:
+        statement-timeout: ${BATCH_PG_PLATFORM_STATEMENT_TIMEOUT:15m}
+        idle-in-transaction-timeout: ${BATCH_PG_PLATFORM_IDLE_IN_TX_TIMEOUT:60s}
+      business:
+        statement-timeout: ${BATCH_PG_BUSINESS_STATEMENT_TIMEOUT:30m}
+        # 10m: PROCESS 5-stage WAP COMMIT 步骤可能跑长事务, 比 5m 更宽容 (export 单 task 几分钟仍足够)
+        idle-in-transaction-timeout: ${BATCH_PG_BUSINESS_IDLE_IN_TX_TIMEOUT:10m}
     business:
       # 业务库 JDBC URL（worker 侧使用）
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
