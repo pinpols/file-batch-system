@@ -7,8 +7,11 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
+import com.example.batch.worker.core.support.TaskLeaseRenewItem;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.List;
+import java.util.Map;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.Test;
@@ -48,7 +51,8 @@ class HttpTaskExecutionClientTest {
               jsonRestClientBuilder(),
               new MockEnvironment(),
               registry,
-              noopCoordinator);
+              noopCoordinator,
+              256);
 
       TaskExecutionReport report = report(42L);
       client.report(report);
@@ -88,7 +92,8 @@ class HttpTaskExecutionClientTest {
               jsonRestClientBuilder(),
               new MockEnvironment(),
               registry,
-              noopCoordinator);
+              noopCoordinator,
+              256);
 
       assertThatThrownBy(() -> client.report(report(7L)))
           .isInstanceOf(HttpClientErrorException.class);
@@ -101,6 +106,48 @@ class HttpTaskExecutionClientTest {
                   .counter()
                   .count())
           .isEqualTo(1.0d);
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  @Test
+  void renewLeasesBatchUsesSingleHttpCallForChunk() throws Exception {
+    MockWebServer server = new MockWebServer();
+    try {
+      server.enqueue(
+          new MockResponse()
+              .setResponseCode(200)
+              .setHeader("Content-Type", "application/json")
+              .setBody(
+                  "{\"results\":[{\"taskId\":1,\"renewed\":true},{\"taskId\":2,\"renewed\":false}]}"));
+      server.start();
+
+      OrchestratorTaskClientProperties props = clientProperties(server.getPort());
+      props.setClaimMaxAttempts(2);
+
+      @SuppressWarnings("unchecked")
+      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator =
+          Mockito.mock(ObjectProvider.class);
+      Mockito.when(noopCoordinator.getIfAvailable()).thenReturn(null);
+      HttpTaskExecutionClient client =
+          new HttpTaskExecutionClient(
+              props,
+              new BatchSecurityProperties(),
+              jsonRestClientBuilder(),
+              new MockEnvironment(),
+              null,
+              noopCoordinator,
+              256);
+
+      List<TaskLeaseRenewItem> items =
+          List.of(
+              new TaskLeaseRenewItem("t1", 1L, "w1", null),
+              new TaskLeaseRenewItem("t1", 2L, "w1", "inv"));
+      Map<Long, Boolean> out = client.renewLeasesBatch(items);
+
+      assertThat(out).containsEntry(1L, true).containsEntry(2L, false);
+      assertThat(server.getRequestCount()).isEqualTo(1);
     } finally {
       server.shutdown();
     }

@@ -8,9 +8,15 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
+import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
+import com.example.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
+import com.example.batch.orchestrator.controller.request.TaskLeaseRenewResultPayload;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.annotation.Timed;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -76,6 +82,23 @@ public class TaskControllerApplicationService {
     if (!renewed) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
     }
+  }
+
+  /**
+   * ADR-016: batch renew — one HTTP roundtrip for many tasks; per-item outcome without throwing
+   * (MVP loops existing {@link TaskExecutionService#renewTaskLease}).
+   */
+  public TaskLeaseRenewBatchResponse renewBatch(TaskLeaseRenewBatchRequest request) {
+    List<TaskLeaseRenewItemPayload> items =
+        request == null || request.items() == null ? List.of() : request.items();
+    List<TaskLeaseRenewResultPayload> results = new ArrayList<>(items.size());
+    for (TaskLeaseRenewItemPayload item : items) {
+      boolean renewed =
+          taskExecutionService.renewTaskLease(
+              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
+      results.add(new TaskLeaseRenewResultPayload(item.taskId(), renewed));
+    }
+    return new TaskLeaseRenewBatchResponse(results);
   }
 
   private boolean isClaimedBy(JobTaskEntity task, String workerId) {

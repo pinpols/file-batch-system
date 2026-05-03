@@ -191,4 +191,32 @@ class TaskControllerTest {
                 .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isConflict());
   }
+
+  @Test
+  void shouldReturn200WithPerTaskResultsForRenewBatch() throws Exception {
+    when(taskExecutionService.renewTaskLease("t1", 7L, "w1", null)).thenReturn(true);
+    when(taskExecutionService.renewTaskLease("t1", 8L, "w1", null)).thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/leases/renew-batch")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "items": [
+                        {"tenantId":"t1","taskId":7,"workerId":"w1"},
+                        {"tenantId":"t1","taskId":8,"workerId":"w1"}
+                      ]
+                    }
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.results[0].taskId").value(7))
+        .andExpect(jsonPath("$.results[0].renewed").value(true))
+        .andExpect(jsonPath("$.results[1].taskId").value(8))
+        .andExpect(jsonPath("$.results[1].renewed").value(false));
+
+    verify(taskExecutionService).renewTaskLease("t1", 7L, "w1", null);
+    verify(taskExecutionService).renewTaskLease("t1", 8L, "w1", null);
+  }
 }

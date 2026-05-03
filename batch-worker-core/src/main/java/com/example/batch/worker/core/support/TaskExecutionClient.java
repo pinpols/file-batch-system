@@ -2,6 +2,8 @@ package com.example.batch.worker.core.support;
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface TaskExecutionClient {
@@ -18,6 +20,13 @@ public interface TaskExecutionClient {
   Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId);
 
   boolean renewLease(String tenantId, Long taskId, String workerId, String partitionInvocationId);
+
+  /**
+   * ADR-016: renew many tasks in as few orchestrator HTTP calls as possible. Per-task values mirror
+   * single {@link #renewLease}; on batch transport failure implementations should fall back to
+   * per-task {@link #renewLease}.
+   */
+  Map<Long, Boolean> renewLeasesBatch(List<TaskLeaseRenewItem> items);
 
   void report(TaskExecutionReport report);
 }

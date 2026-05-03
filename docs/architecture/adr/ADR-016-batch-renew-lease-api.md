@@ -1,6 +1,6 @@
 # ADR-016 · Batch Renew Lease API — 减少 worker → orch HTTP 风暴
 
-- **Status**: Proposed (2026-05-03,需单独立项实施 ~2-3 小时)
+- **Status**: Accepted — MVP 已落地 (2026-05-03)
 - **Date**: 2026-05-03
 - **Related**: ADR-014 (CLAIM 幂等) / docs/analysis/worker-vs-industry-2026-05-03.md P2-14
 
@@ -8,7 +8,7 @@
 
 ## 背景
 
-`WorkerTaskLeaseRenewer.renewActiveTaskLeases` 每 10s 周期为每个 in-flight task 单独调一次 orch `/internal/tasks/{taskId}/renew`:
+历史上 `WorkerTaskLeaseRenewer.renewActiveTaskLeases` 曾为每个 in-flight task 单独调 orch `/internal/tasks/{taskId}/renew`（ADR-016 起改为优先 `POST /leases/renew-batch`，仍保留单条兼容）:
 
 ```
 worker N tasks × 10s 周期 = N HTTP req per worker per 10s
@@ -38,23 +38,26 @@ P1-8 (本次已落地) 的熔断减轻了 orch 不可达时的 worker hammer,但
 
 ### orch 端
 
-新 endpoint `POST /internal/tasks/leases/renew-batch`:
+新 endpoint `POST /internal/tasks/leases/renew-batch`（单条 `POST /internal/tasks/{id}/renew` **保留**）。
+
+**Request body**（`partitionInvocationId` 可省略或 `null`，与单条 renew 对齐 ADR-014）:
 
 ```json
-Request:
 {
   "items": [
-    {"tenantId": "tenantA", "taskId": 123, "workerId": "worker-1"},
-    {"tenantId": "tenantA", "taskId": 124, "workerId": "worker-1"},
-    ...
+    {"tenantId": "tenantA", "taskId": 123, "workerId": "worker-1", "partitionInvocationId": "inv-a"},
+    {"tenantId": "tenantA", "taskId": 124, "workerId": "worker-1", "partitionInvocationId": "inv-b"}
   ]
 }
+```
 
-Response:
+**Response body**（顺序与 `items` 一致；MVP 无 `reason` 字段）:
+
+```json
 {
   "results": [
     {"taskId": 123, "renewed": true},
-    {"taskId": 124, "renewed": false, "reason": "already_canceled"}
+    {"taskId": 124, "renewed": false}
   ]
 }
 ```
@@ -71,7 +74,7 @@ Response:
 `TaskExecutionClient` 加方法:
 
 ```java
-Map<Long, Boolean> renewBatch(List<RenewItem> items);
+Map<Long, Boolean> renewLeasesBatch(List<TaskLeaseRenewItem> items);
 ```
 
 `HttpTaskExecutionClient` 实现:批量打包 → 单 HTTP POST → 解析返回 map。
@@ -125,6 +128,13 @@ Map<Long, Boolean> renewBatch(List<RenewItem> items);
 - 老 worker(无 batch 支持)继续用单 endpoint,过渡期共存
 - batch 调用失败时降级 → 逐条 renew(与现有行为一致)
 - 任一 task renew 失败时,熔断状态机判定不变(全失败 → OPEN)
+
+## 实施备注（MVP 已落地）
+
+- Worker：`batch.worker.lease.renew-batch-max-items`（`batch-defaults.yml` / env `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS`，默认 256）控制单次 HTTP 请求条数上限。
+- 指标：`batch.worker.lease.renew.batch.size`（Micrometer DistributionSummary）记录主 tick 活跃租约数。
+- `HttpTaskExecutionClient`：batch 遇 404/400、响应条数与请求不一致、或 5xx/超时重试耗尽 → 自动降级逐条 `renew`。
+- Fast-retry 调度仍为逐条 `renew`。
 
 ## 替代讨论
 

@@ -87,7 +87,8 @@ class WorkerReportOutboxCoordinatorTest {
               jsonRestClientBuilder(),
               new MockEnvironment(),
               null,
-              coordinatorProvider);
+              coordinatorProvider,
+              256);
 
       @SuppressWarnings("unchecked")
       ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);

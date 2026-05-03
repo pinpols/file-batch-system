@@ -23,6 +23,7 @@
 | `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟢 低 | `BATCH_QUOTA_RUNTIME_STORE` |
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
 | `batch.worker.report-outbox.enabled` | import/export/process/dispatch worker | **false** | **false** | 🟡 中 | `BATCH_WORKER_REPORT_OUTBOX_*`：默认 **`storage=PLATFORM_PG`**（平台表 `batch.worker_report_outbox`，Flyway V96）；**`SQLITE`** 时需 PVC 指向 `sqlite-path` |
+| `batch.worker.lease.renew-batch-max-items` | worker（ADR-016） | **256** | **256**（继承 yml） | 🟢 低 | `BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS`：单 `renew-batch` HTTP 最多携带任务数，超出自动拆单 |
 | ~~`batch.trigger.async-launch.enabled`~~ | ~~trigger + orchestrator~~ | **已移除**（2026-05-02 异步路径固化，同步 HTTP 桥删除） | — | — | — |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。

@@ -10,11 +10,15 @@ import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.example.batch.worker.core.support.TaskExecutionClient;
+import com.example.batch.worker.core.support.TaskLeaseRenewItem;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -22,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -44,6 +49,7 @@ public class HttpTaskExecutionClient
   private final Environment environment;
   private final Optional<MeterRegistry> meterRegistry;
   private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
+  private final int renewBatchMaxItems;
   // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
   private volatile RestClient restClient;
 
@@ -53,13 +59,15 @@ public class HttpTaskExecutionClient
       RestClient.Builder builder,
       Environment environment,
       @Autowired(required = false) MeterRegistry meterRegistry,
-      ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator) {
+      ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator,
+      @Value("${batch.worker.lease.renew-batch-max-items:256}") int renewBatchMaxItems) {
     this.properties = properties;
     this.securityProperties = securityProperties;
     this.builder = builder;
     this.environment = environment;
     this.meterRegistry = Optional.ofNullable(meterRegistry);
     this.reportOutboxCoordinator = reportOutboxCoordinator;
+    this.renewBatchMaxItems = Math.max(1, renewBatchMaxItems);
   }
 
   /**
@@ -112,6 +120,108 @@ public class HttpTaskExecutionClient
                     .retrieve()
                     .toBodilessEntity())
         .success();
+  }
+
+  @Override
+  public Map<Long, Boolean> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
+    if (items == null || items.isEmpty()) {
+      return Map.of();
+    }
+    Map<Long, Boolean> out = new LinkedHashMap<>();
+    for (int i = 0; i < items.size(); i += renewBatchMaxItems) {
+      int end = Math.min(i + renewBatchMaxItems, items.size());
+      List<TaskLeaseRenewItem> chunk = items.subList(i, end);
+      out.putAll(renewBatchChunkHttpOrFallback(chunk));
+    }
+    return out;
+  }
+
+  /**
+   * 单 chunk：优先 {@code POST /leases/renew-batch}；404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #renewLease}。
+   */
+  private Map<Long, Boolean> renewBatchChunkHttpOrFallback(List<TaskLeaseRenewItem> chunk) {
+    RetryState state =
+        RetryState.initial(
+            properties.getClaimMaxAttempts(),
+            properties.getClaimInitialBackoffMillis(),
+            properties.getClaimMaxBackoffMillis());
+    while (state.canAttempt()) {
+      try {
+        List<BatchRenewHttpItem> payload = chunk.stream().map(this::toHttpItem).toList();
+        String traceId = currentTraceId();
+        String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+        BatchRenewHttpResponse response =
+            client()
+                .post()
+                .uri("/internal/tasks/leases/renew-batch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, chunk.get(0).tenantId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                .body(new BatchRenewHttpRequest(payload))
+                .retrieve()
+                .body(BatchRenewHttpResponse.class);
+        return mapChunkOrFallback(chunk, response);
+      } catch (HttpClientErrorException ex) {
+        if (ex.getStatusCode() == HttpStatus.NOT_FOUND
+            || ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+          log.debug(
+              "renew-batch not supported or bad request ({}), falling back to single renew",
+              ex.getStatusCode());
+          return fallbackRenewChunk(chunk);
+        }
+        throw ex;
+      } catch (HttpServerErrorException | ResourceAccessException ex) {
+        if (state.isLastAttempt()) {
+          log.warn(
+              "renew-batch transient failure after {} attempts, falling back to single renew: {}",
+              state.max(),
+              ex.getMessage());
+          return fallbackRenewChunk(chunk);
+        }
+        log.warn(
+            "renew-batch transient, retrying: attempt={}/{}, message={}",
+            state.attempt(),
+            state.max(),
+            ex.getMessage());
+        sleepBackoff(state.backoff());
+        state = state.advance();
+      }
+    }
+    return fallbackRenewChunk(chunk);
+  }
+
+  private Map<Long, Boolean> mapChunkOrFallback(
+      List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
+    if (response == null
+        || response.results() == null
+        || response.results().size() != chunk.size()) {
+      log.warn(
+          "renew-batch response mismatch: chunk size {}, response results {}",
+          chunk.size(),
+          response == null || response.results() == null ? null : response.results().size());
+      return fallbackRenewChunk(chunk);
+    }
+    Map<Long, Boolean> m = new LinkedHashMap<>();
+    for (int i = 0; i < chunk.size(); i++) {
+      BatchRenewHttpResult row = response.results().get(i);
+      m.put(chunk.get(i).taskId(), row != null && row.renewed());
+    }
+    return m;
+  }
+
+  private Map<Long, Boolean> fallbackRenewChunk(List<TaskLeaseRenewItem> chunk) {
+    Map<Long, Boolean> m = new LinkedHashMap<>();
+    for (TaskLeaseRenewItem item : chunk) {
+      boolean ok =
+          renewLease(item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
+      m.put(item.taskId(), ok);
+    }
+    return m;
+  }
+
+  private BatchRenewHttpItem toHttpItem(TaskLeaseRenewItem item) {
+    return new BatchRenewHttpItem(
+        item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
   }
 
   @Override
@@ -369,4 +479,13 @@ public class HttpTaskExecutionClient
   }
 
   private record ClaimRequest(String tenantId, String workerId, String partitionInvocationId) {}
+
+  private record BatchRenewHttpRequest(List<BatchRenewHttpItem> items) {}
+
+  private record BatchRenewHttpItem(
+      String tenantId, Long taskId, String workerId, String partitionInvocationId) {}
+
+  private record BatchRenewHttpResponse(List<BatchRenewHttpResult> results) {}
+
+  private record BatchRenewHttpResult(Long taskId, boolean renewed) {}
 }
