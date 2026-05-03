@@ -258,6 +258,8 @@ batch:
     lease:
       # 租约续约间隔（毫秒）：worker 定期刷新租约防止被回收
       renew-interval-millis: ${BATCH_WORKER_LEASE_RENEW_INTERVAL_MILLIS:10000}
+      # ADR-016：单次 renew-batch HTTP 请求最多携带的 task 条数（超出则拆成多请求）
+      renew-batch-max-items: ${BATCH_WORKER_LEASE_RENEW_BATCH_MAX_ITEMS:256}
     task-client:
       # worker 调用 orchestrator 的 base-url（默认同 orchestrator.base-url）
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}

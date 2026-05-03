@@ -1,11 +1,15 @@
 package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.worker.core.support.TaskExecutionClient;
+import com.example.batch.worker.core.support.TaskLeaseRenewItem;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,8 +21,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 定时为所有 in-flight 任务续租：从 {@link ActiveTaskLeaseRegistry#snapshot} 取出当前 活跃租约列表，逐条调 Orchestrator 的
- * {@code renewLease} 接口延长任务心跳超时。
+ * 定时为所有 in-flight 任务续租：从 {@link ActiveTaskLeaseRegistry#snapshot} 取出当前活跃租约列表，按 ADR-016 打包为单次（或可配置
+ * chunk）HTTP {@code renew-batch} 调 Orchestrator；fast-retry 仍逐条 {@code renew}。
  *
  * <p>若 Orchestrator 返回 false（如任务已被取消或超时驱逐），记录 warn 日志； 续租失败不中断执行——任务仍会继续运行并在完成时正常 report， 但
  * Orchestrator 侧可能已将其标记为失活并重新派发（罕见情况）。
@@ -47,6 +51,7 @@ public class WorkerTaskLeaseRenewer {
   private final java.util.concurrent.atomic.AtomicBoolean circuitOpen =
       new java.util.concurrent.atomic.AtomicBoolean(false);
   private final AtomicInteger ticksSinceOpen = new AtomicInteger(0);
+  private volatile DistributionSummary renewBatchSizeSummary;
 
   @Value("${batch.worker.lease.consecutive-failure-alert-threshold:3}")
   private int alertThreshold;
@@ -94,17 +99,39 @@ public class WorkerTaskLeaseRenewer {
     if (active.isEmpty()) {
       return;
     }
+    List<ActiveTaskLeaseRegistry.ActiveTaskLease> leaseList = new ArrayList<>(active);
+    List<TaskLeaseRenewItem> batchItems = new ArrayList<>(leaseList.size());
+    for (ActiveTaskLeaseRegistry.ActiveTaskLease lease : leaseList) {
+      batchItems.add(
+          new TaskLeaseRenewItem(
+              lease.getTenantId(),
+              Long.valueOf(lease.getTaskId()),
+              lease.getWorkerId(),
+              lease.getPartitionInvocationId()));
+    }
+    recordRenewBatchSizeMetric(batchItems.size());
+    Map<Long, Boolean> results = taskExecutionClient.renewLeasesBatch(batchItems);
     int success = 0;
     int failure = 0;
-    for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : active) {
-      if (attemptRenew(activeTaskLease, false)) {
+    for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : leaseList) {
+      long taskIdLong = Long.parseLong(activeTaskLease.getTaskId());
+      boolean renewed = results.getOrDefault(taskIdLong, false);
+      if (renewed) {
         success++;
+        consecutiveFailures.remove(activeTaskLease.getTaskId());
       } else {
         failure++;
+        log.warn(
+            "task lease renew rejected: tenantId={}, taskId={}, workerId={}, fastRetry={}",
+            activeTaskLease.getTenantId(),
+            activeTaskLease.getTaskId(),
+            activeTaskLease.getWorkerId(),
+            false);
+        trackFailure(activeTaskLease, "rejected");
       }
     }
     // 熔断状态机: 全失败 → OPEN; 任一成功 (从 OPEN) → CLOSE
-    if (failure == active.size()) {
+    if (failure == leaseList.size()) {
       if (circuitOpen.compareAndSet(false, true)) {
         log.error(
             "renew circuit OPENED: all {} renewals failed in this tick; orch likely unreachable —"
@@ -195,6 +222,27 @@ public class WorkerTaskLeaseRenewer {
   /** ADR-015：report outbox poller 协调 — 续租熔断 OPEN 时暂停向 orchestrator 重投 REPORT。 */
   public boolean isRenewCircuitOpen() {
     return circuitOpen.get();
+  }
+
+  private void recordRenewBatchSizeMetric(int size) {
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null || size <= 0) {
+      return;
+    }
+    DistributionSummary s = renewBatchSizeSummary;
+    if (s == null) {
+      synchronized (this) {
+        s = renewBatchSizeSummary;
+        if (s == null) {
+          s =
+              DistributionSummary.builder("batch.worker.lease.renew.batch.size")
+                  .description("ADR-016: active leases per renew tick (before HTTP chunking)")
+                  .register(registry);
+          renewBatchSizeSummary = s;
+        }
+      }
+    }
+    s.record(size);
   }
 
   private void trackFailure(ActiveTaskLeaseRegistry.ActiveTaskLease lease, String reason) {
