@@ -54,6 +54,7 @@ public class TaskDispatchExecutor {
     task.setPartitionNo(effective.partitionNo());
     task.setPartitionCount(effective.partitionCount());
     task.setPartitionKey(effective.partitionKey());
+    task.setTimeoutSeconds(effective.timeoutSeconds());
     return workerRuntimeFacade.execute(task);
   }
 }
