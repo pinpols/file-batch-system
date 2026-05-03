@@ -95,8 +95,10 @@
 
 ### 2.2 新增表 schema(必备)
 
+> ℹ️ **状态(2026-05-03)**：本表已落地为 [`V67__create_trigger_runtime_state.sql`](../../db/migration/V67__create_trigger_runtime_state.sql)（设计文档当时假设是 V100，实际版本号比设计提案早）。CHECK 约束最终落地 6 个枚举值，比下面 sketch 多 `MISFIRE_SKIPPED` / `MISFIRE_PENDING`（覆盖 catch-up 跳过 + 待恢复两种 misfire 处理路径）。下面 SQL 仅作设计意图追溯。
+
 ```sql
--- V100__create_trigger_runtime_state.sql
+-- 实际落地：V67__create_trigger_runtime_state.sql（设计稿写的是 V100）
 CREATE TABLE IF NOT EXISTS batch.trigger_runtime_state (
     id                       BIGSERIAL PRIMARY KEY,
     job_definition_id        BIGINT       NOT NULL REFERENCES batch.job_definition(id) ON DELETE CASCADE,
@@ -104,7 +106,7 @@ CREATE TABLE IF NOT EXISTS batch.trigger_runtime_state (
     job_code                 VARCHAR(128) NOT NULL,
     next_fire_time           TIMESTAMPTZ  NOT NULL,
     last_fire_time           TIMESTAMPTZ,
-    last_fire_status         VARCHAR(32),  -- FIRED / FAILED / SKIPPED_DUPLICATE / MISFIRE_CATCH_UP
+    last_fire_status         VARCHAR(32),  -- FIRED / FAILED / SKIPPED_DUPLICATE / MISFIRE_CATCH_UP / MISFIRE_SKIPPED / MISFIRE_PENDING
     -- 调度占位(防 race):某 leader 把这一条推进 wheel 时写自己的 instance_id;
     -- fire 完毕清回 NULL。其他 leader 扫库时跳过 marker != NULL 的行。
     scheduled_fire_marker    VARCHAR(128),
@@ -116,9 +118,9 @@ CREATE TABLE IF NOT EXISTS batch.trigger_runtime_state (
     created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_trigger_runtime_state_job_def UNIQUE (job_definition_id),
-    CONSTRAINT ck_last_fire_status CHECK (
+    CONSTRAINT ck_trigger_runtime_state_last_status CHECK (
         last_fire_status IS NULL OR last_fire_status IN
-        ('FIRED', 'FAILED', 'SKIPPED_DUPLICATE', 'MISFIRE_CATCH_UP')
+        ('FIRED', 'FAILED', 'SKIPPED_DUPLICATE', 'MISFIRE_CATCH_UP', 'MISFIRE_SKIPPED', 'MISFIRE_PENDING')
     )
 );
 

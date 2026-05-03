@@ -1,9 +1,17 @@
 # ADR-009 · Workflow 节点间参数串联 DSL
 
-- **Status**: Proposed
+- **Status**: Accepted（2026-04-26 提案 → 2026-04-30 实现落地）
 - **Date**: 2026-04-26
 - **Supersedes**: —
 - **Related**: V5-P1-1（hardening-backlog）/ V5-P2-9（依赖本 ADR 落地）
+
+> ✅ **当前状态（2026-05-03）**：决策段 + 实施分阶段段为提案时的设计意图，**所有 4 个 stage 均已落地**：
+> - Stage 1：[`V72__add_workflow_node_run_output.sql`](../../../db/migration/V72__add_workflow_node_run_output.sql) ✅；worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String, Object>`）✅
+> - Stage 2：`WorkflowParamResolver` + `WorkflowParamResolverTest` ✅（`batch-orchestrator/.../application/workflow/`）
+> - Stage 3：集成在 `WorkflowNodePayloadBuilder`（设计稿假想集成点 `DefaultSchedulePlanBuilder`，实现选了 payload 装配点更准确）✅
+> - Stage 4：测试 seed `batch-e2e-tests/.../multi-tenant-seed.sql` 已配 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` 演示 ✅
+>
+> Fail-mode 错误码 `error.workflow.param_ref_invalid` 已实现并 i18n 双语落地。下面"决策（提案，待落地）" / "实施分阶段" 段保留作为历史决策追溯。
 
 ## 背景
 
