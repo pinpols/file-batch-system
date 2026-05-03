@@ -229,7 +229,8 @@ class DefaultRetryGovernanceServiceTest {
     assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
         .isInstanceOf(IllegalStateException.class);
     verify(deadLetterTaskMapper)
-        .markReplayFailure(anyString(), anyLong(), anyString(), anyInt(), any(), anyString());
+        .markReplayFailure(
+            anyString(), anyLong(), anyString(), anyInt(), any(), anyString(), any());
   }
 
   // ── dispatchDueRetries — no retries ──────────────────────────────────────

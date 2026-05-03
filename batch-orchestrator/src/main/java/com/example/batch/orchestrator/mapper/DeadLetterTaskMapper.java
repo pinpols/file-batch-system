@@ -34,5 +34,12 @@ public interface DeadLetterTaskMapper {
       @Param("targetStatus") String targetStatus,
       @Param("replayCount") Integer replayCount,
       @Param("lastReplayAt") Instant lastReplayAt,
-      @Param("lastReplayResult") String lastReplayResult);
+      @Param("lastReplayResult") String lastReplayResult,
+      @Param("nextReplayAt") Instant nextReplayAt);
+
+  /** V90: 选出自动重放到期 + 未达上限 + SYSTEM 类的死信记录。 */
+  List<DeadLetterTaskEntity> selectDueAutoRetries(@Param("batchSize") int batchSize);
+
+  /** V90: 自动重放达到 max_replay_count 后，关闭自动重放，转 GIVE_UP（人工仍可触发 /internal/dead-letters/{id}/replay）。 */
+  int markGiveUp(@Param("tenantId") String tenantId, @Param("id") Long id);
 }
