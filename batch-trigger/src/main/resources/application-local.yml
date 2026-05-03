@@ -32,6 +32,8 @@ spring:
     baseline-on-migrate: true
     # 与 orchestrator 一致：baseline-version 恒为 1，勿随最新迁移版本递增。
     baseline-version: 1
+    # 与 orchestrator application-local 对齐：脚本/jar 暂不一致时不阻塞 migrate；生产 profile 仍为默认 true。
+    validate-on-migrate: false
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml

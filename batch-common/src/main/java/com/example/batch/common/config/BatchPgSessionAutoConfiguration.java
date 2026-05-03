@@ -1,12 +1,12 @@
 package com.example.batch.common.config;
 
 import com.zaxxer.hikari.HikariDataSource;
-import javax.sql.DataSource;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 
@@ -23,7 +23,6 @@ import org.springframework.core.env.Environment;
  */
 @AutoConfiguration
 @ConditionalOnClass(HikariDataSource.class)
-@EnableConfigurationProperties(BatchPgSessionProperties.class)
 public class BatchPgSessionAutoConfiguration {
 
   /**
@@ -32,14 +31,20 @@ public class BatchPgSessionAutoConfiguration {
    */
   public static final String BOOT_SINGLE_DATASOURCE_BEAN_NAME = "dataSource";
 
+  /**
+   * 必须为 {@code static}，且工厂<strong>只注入 {@link Environment}</strong>：若在创建 BPP 时注入 {@link
+   * BatchPgSessionProperties}，会在 BPP 注册期过早实例化配置属性 bean，并可能牵连 Flyway 的 converter，触发 {@code
+   * BeanPostProcessorChecker} WARN。绑定延后到首次处理 beanName={@code dataSource} 的 {@link
+   * HikariDataSource}。
+   */
   @Bean
   @ConditionalOnProperty(
       prefix = "batch.datasource.pg-session",
       name = "enabled",
       havingValue = "true",
       matchIfMissing = true)
-  public BeanPostProcessor batchPgSessionBootSingleDataSourceCustomizer(
-      Environment environment, BatchPgSessionProperties pgSessionProperties) {
+  public static BeanPostProcessor batchPgSessionBootSingleDataSourceCustomizer(
+      Environment environment) {
     return new BeanPostProcessor() {
 
       @Override
@@ -50,6 +55,10 @@ public class BatchPgSessionAutoConfiguration {
         if (!BOOT_SINGLE_DATASOURCE_BEAN_NAME.equals(beanName)) {
           return bean;
         }
+        BatchPgSessionProperties pgSessionProperties =
+            Binder.get(environment)
+                .bind("batch.datasource.pg-session", Bindable.of(BatchPgSessionProperties.class))
+                .orElseGet(BatchPgSessionProperties::new);
         String applicationName =
             environment.getProperty("spring.application.name", "batch-application");
         HikariPgSessionSupport.applyPlatform(ds, pgSessionProperties, applicationName);
