@@ -8,7 +8,7 @@
 | 实体 | enum 类 | DB 列 | CHECK 约束 | 状态值 |
 |---|---|---|---|---|
 | `job_instance.instance_status` | `JobInstanceStatus` | V5:52 | ✓ | CREATED / WAITING / READY / RUNNING / PARTIAL_FAILED / SUCCESS / FAILED / CANCELLED / TERMINATED |
-| `pipeline_instance.run_status` | `PipelineRunStatus` | V6:103 | ⚠️ 部分 | DB CHECK 6 值 CREATED / RUNNING / SUCCESS / FAILED / **COMPENSATING** / TERMINATED；Java enum 仅实现 3 值 (RUNNING / SUCCESS / FAILED)，待补齐 |
+| `pipeline_instance.run_status` | `PipelineRunStatus` | V6:103 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / **COMPENSATING** / TERMINATED |
 | `workflow_run.run_status` | `WorkflowRunStatus` | V5:121 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / TERMINATED |
 | `workflow_node_run.node_status` | `WorkflowNodeRunStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / SKIPPED / TERMINATED |
 | `job_task.task_status` | `TaskStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / RETRYING / CANCELLED / TERMINATED |
@@ -109,7 +109,7 @@ PENDING → ACCEPTED → LAUNCHED
 ```
 batch-common/src/main/java/com/example/batch/common/enums/
   ├─ JobInstanceStatus.java
-  ├─ PipelineRunStatus.java          # 仅 3 值，DB CHECK 6 值，待补齐
+  ├─ PipelineRunStatus.java
   ├─ WorkflowRunStatus.java
   ├─ WorkflowNodeRunStatus.java
   ├─ TaskStatus.java
