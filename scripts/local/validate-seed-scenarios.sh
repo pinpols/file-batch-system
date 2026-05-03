@@ -131,6 +131,11 @@ do_cleanup() {
   psql_q "DELETE FROM batch.trigger_outbox_event WHERE request_id LIKE '$pattern'" >/dev/null
   psql_q "DELETE FROM batch.trigger_request WHERE request_id LIKE '$pattern'" >/dev/null
   psql_q "DELETE FROM batch.workflow_node WHERE node_code='SEEDVAL_PROBE'" >/dev/null
+  # STRICT EXPORT 写的 file_record + 我们 seed 的 settlement_batch 一起清(按 PROBE_TAG batch_no)
+  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.settlement_batch WHERE batch_no LIKE '$pattern'" >/dev/null 2>&1 || true
+  psql_q "DELETE FROM batch.file_record WHERE source_ref LIKE '$pattern'" >/dev/null
+  # IMPORT 写的 biz.customer_account 行(SEEDVAL_C* 前缀, IMPORT 真 SUCCESS 后产生)
+  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.customer_account WHERE customer_no LIKE 'SEEDVAL_%'" >/dev/null 2>&1 || true
   # PROBE job_definition (§9.5 FIXED_RATE 真触发探针等);
   # V67 trigger_runtime_state ON DELETE CASCADE 自动清
   psql_q "DELETE FROM batch.job_definition WHERE job_code LIKE '$pattern'" >/dev/null
@@ -500,12 +505,21 @@ if [[ "$STRICT" == "1" ]]; then
   section "7. Worker 严格 happy [STRICT=1]: fire → instance 推到 SUCCESS"
 
   assert_fire "IMPORT 严格 (default-tenant, JSON 不加密)" "default-tenant" "import_customer_job" \
-    '{"templateCode":"import_customer_json_v1","content":"[{\"customerId\":\"C001\",\"name\":\"smoke\",\"accountType\":\"SAVINGS\",\"accountNo\":\"A001\",\"balance\":100.00,\"openDate\":\"2026-05-03\"}]"}' \
+    '{"templateCode":"import_customer_json_v1","content":"[{\"customerNo\":\"SEEDVAL_C001\",\"customerName\":\"smoke probe\",\"customerType\":\"PERSONAL\"}]"}' \
     success
 
-  assert_fire "EXPORT 严格 (default-tenant, settlement)" "default-tenant" "export_settlement_job" '{}' success
+  # EXPORT/WORKFLOW PIPELINE 用 PROBE_TAG 唯一 batch 避免跨 run file_record checksum 冲突
+  PROBE_BATCH_NO="${PROBE_TAG}-BATCH"
+  PROBE_BIZDATE=$(date +%Y-%m-%d)
+  # 先 seed 一个 settlement_batch 行供 EXPORT loadBatch 命中(注意 biz 表在 batch_business DB)
+  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc \
+    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('default-tenant', '$PROBE_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
 
-  assert_fire "WORKFLOW PIPELINE 严格 (default-tenant)" "default-tenant" "wf_probe_pipeline" '{}' success
+  assert_fire "EXPORT 严格 (default-tenant, settlement)" "default-tenant" "export_settlement_job" \
+    "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
+
+  assert_fire "WORKFLOW PIPELINE 严格 (default-tenant)" "default-tenant" "wf_probe_pipeline" \
+    "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
   result skip "DISPATCH 严格" "default-tenant 无 DISPATCH job, 跳过(STRICT 限定 default-tenant)"
 else
