@@ -218,6 +218,9 @@ public class DefaultLaunchService implements LaunchService {
                 loaded.jobDefinition(), request, effectiveParams, traceId))
         // V93 P0-4: 创建时从 jobDefinition 抓 calendarCode 快照, 之后 config 变更不污染历史 instance
         .calendarCode(loaded.jobDefinition().calendarCode())
+        // V94: data_interval 直接透传 LaunchRequest 的字段; trigger 侧已计算好, orchestrator 不再算
+        .dataIntervalStart(request.dataIntervalStart())
+        .dataIntervalEnd(request.dataIntervalEnd())
         .deadlineAt(
             launchParamResolver.resolveDeadlineAt(
                 Instant.now(),

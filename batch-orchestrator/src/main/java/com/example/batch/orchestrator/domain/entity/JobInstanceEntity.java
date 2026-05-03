@@ -45,6 +45,12 @@ public class JobInstanceEntity implements Stateful {
   /** V93 P0-4: 创建时从 job_definition.calendar_code 抓快照, 与 batch_day_instance 关联, 不随 config 变更漂移. */
   private String calendarCode;
 
+  /** V94: data_interval 半开区间起点 (Airflow 风格), 业务 SQL 拼 WHERE update_time >= :start. */
+  private Instant dataIntervalStart;
+
+  /** V94: data_interval 半开区间终点 (Airflow 风格), 业务 SQL 拼 WHERE update_time < :end. */
+  private Instant dataIntervalEnd;
+
   /** 增量模式下本次执行的水位起点(orchestrator 派发时从上次成功实例的 OUT 读出)。 */
   private String highWaterMarkIn;
 

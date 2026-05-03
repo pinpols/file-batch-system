@@ -1,5 +1,7 @@
 package com.example.batch.common.dto;
 
+import java.time.Instant;
+
 /**
  * Worker CLAIM 任务时由 orchestrator 返回的"生效配置快照"。
  *
@@ -66,4 +68,11 @@ public record EffectiveTaskConfig(
      * partition 业务标识(读自 {@code job_partition.partition_key},默认 {@code jobCode:bizDate:partitionNo}
      * 由 orchestrator 生成,业务可在 plan-build 阶段覆盖为机构号 / hash 桶等)。Worker 端按业务字段切分时读它。
      */
-    String partitionKey) {}
+    String partitionKey,
+    /**
+     * V94: data_interval 半开区间起点 (Airflow 风格). null 表示 trigger 没算 / API 没传, worker 业务用 bizDate 兜底退化为
+     * {@code [bizDate.atStartOfDay, bizDate+1.atStartOfDay)}.
+     */
+    Instant dataIntervalStart,
+    /** V94: data_interval 半开区间终点. null 时业务退化为 bizDate+1 天. */
+    Instant dataIntervalEnd) {}

@@ -274,7 +274,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         definition == null ? null : definition.timeoutSeconds(),
         partition == null ? null : partition.getPartitionNo(),
         instance.getExpectedPartitionCount(),
-        partition == null ? null : partition.getPartitionKey());
+        partition == null ? null : partition.getPartitionKey(),
+        // V94: data_interval 透传 — 创建 instance 时已落到 job_instance, claim 时实时读
+        instance.getDataIntervalStart(),
+        instance.getDataIntervalEnd());
   }
 
   private static String resolvePriorityBand(Integer priority) {
