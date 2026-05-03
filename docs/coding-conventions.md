@@ -6,13 +6,16 @@
 
 ## 1. 方法参数约束
 
-| 参数数量 | 要求 |
-|---------|------|
-| ≤ 5     | 允许直接传参 |
-| = 6     | 建议封装；Mapper 公共方法和 Service 公共接口 **必须** 封装 |
-| ≥ 7     | **必须** 封装为参数对象 |
+
+| 参数数量 | 要求                                       |
+| ---- | ---------------------------------------- |
+| ≤ 5  | 允许直接传参                                   |
+| = 6  | 建议封装；Mapper 公共方法和 Service 公共接口 **必须** 封装 |
+| ≥ 7  | **必须** 封装为参数对象                           |
+
 
 **封装类型选择：**
+
 - 私有/内部方法 → `private record`（嵌套在使用类内部）
 - 公共接口 → 独立 `Command` / `Param` / `Context` / `Request` 类
 
@@ -96,6 +99,7 @@ ConsoleFileChannelApplicationService           ← 接口（应用层）
 ```
 
 实际命名示例：
+
 - `TriggerService` → `DefaultTriggerService`
 - `HeartbeatService` → `DefaultHeartbeatService`
 - `WorkerRegistryService` → `DefaultWorkerRegistryService`
@@ -153,21 +157,23 @@ public class BizException extends RuntimeException {
 
 ### 5.2 ResultCode 枚举
 
-| 枚举值 | HTTP 状态码 | 含义 |
-|--------|------------|------|
-| `SUCCESS` | 200 | 成功 |
-| `INVALID_ARGUMENT` | 400 | 参数非法 |
-| `VALIDATION_ERROR` | 400 | 参数校验失败 |
-| `MISSING_IDEMPOTENCY_KEY` | 400 | 缺少幂等键 |
-| `UNAUTHORIZED` | 401 | 未授权 |
-| `FORBIDDEN` | 403 | 禁止访问 |
-| `NOT_FOUND` | 404 | 资源不存在 |
-| `CONFLICT` | 409 | 资源冲突 |
-| `STATE_CONFLICT` | 409 | 状态冲突 |
-| `RATE_LIMITED` | 429 | 请求过于频繁 |
-| `BUSINESS_ERROR` | 422 | 通用业务错误 |
-| `NOT_IMPLEMENTED` | 501 | 未实现 |
-| `SYSTEM_ERROR` | 500 | 系统错误 |
+
+| 枚举值                       | HTTP 状态码 | 含义     |
+| ------------------------- | -------- | ------ |
+| `SUCCESS`                 | 200      | 成功     |
+| `INVALID_ARGUMENT`        | 400      | 参数非法   |
+| `VALIDATION_ERROR`        | 400      | 参数校验失败 |
+| `MISSING_IDEMPOTENCY_KEY` | 400      | 缺少幂等键  |
+| `UNAUTHORIZED`            | 401      | 未授权    |
+| `FORBIDDEN`               | 403      | 禁止访问   |
+| `NOT_FOUND`               | 404      | 资源不存在  |
+| `CONFLICT`                | 409      | 资源冲突   |
+| `STATE_CONFLICT`          | 409      | 状态冲突   |
+| `RATE_LIMITED`            | 429      | 请求过于频繁 |
+| `BUSINESS_ERROR`          | 422      | 通用业务错误 |
+| `NOT_IMPLEMENTED`         | 501      | 未实现    |
+| `SYSTEM_ERROR`            | 500      | 系统错误   |
+
 
 ### 5.3 全局异常处理
 
@@ -216,11 +222,13 @@ public CommonResponse<List<JobDefinitionDto>> listJobs(...) {
 
 ### 7.1 两类删除与 HTTP 方法
 
-| 操作 | HTTP 方法 | 适用场景 |
-|------|----------|---------|
-| 物理删除 | `DELETE /{id}` | 叶子节点，无其他表 FK 引用 |
-| 软删除（禁用/启用） | `PATCH /{id}` | 有运行时 FK 引用的配置实体 |
-| 批量软删除/启用 | `PATCH /batch` | 同上，批量版本 |
+
+| 操作         | HTTP 方法        | 适用场景            |
+| ---------- | -------------- | --------------- |
+| 物理删除       | `DELETE /{id}` | 叶子节点，无其他表 FK 引用 |
+| 软删除（禁用/启用） | `PATCH /{id}`  | 有运行时 FK 引用的配置实体 |
+| 批量软删除/启用   | `PATCH /batch` | 同上，批量版本         |
+
 
 **核心规则：`DELETE` 方法只用于物理删除，绝不用于软删除。**
 
@@ -268,23 +276,27 @@ public CommonResponse<...> delete(
 
 ### 7.6 Mapper XML 标签约定
 
-| 操作 | XML 标签 |
-|------|---------|
-| 物理删除 | `<delete>` |
+
+| 操作              | XML 标签     |
+| --------------- | ---------- |
+| 物理删除            | `<delete>` |
 | 软删除（修改 enabled） | `<update>` |
+
 
 ---
 
 ## 8. 数据传输对象
 
-| 用途 | 类型 | 命名 |
-|------|------|------|
-| API 响应体 | `record` | `XxxDto` / `XxxResponse` |
-| API 请求体 | `class` + `@Data` | `XxxRequest` |
-| 查询参数 | `class` + `@Data` | `XxxQueryRequest` |
-| 内部命令 | `record` | `XxxCommand` |
-| 参数聚合 | `record` | `XxxParam` / `XxxContext` |
-| DB 投影 / 列表行 | `record` | `XxxView`（MyBatis `resultType` / 查询投影） |
+
+| 用途          | 类型                | 命名                                     |
+| ----------- | ----------------- | -------------------------------------- |
+| API 响应体     | `record`          | `XxxDto` / `XxxResponse`               |
+| API 请求体     | `class` + `@Data` | `XxxRequest`                           |
+| 查询参数        | `class` + `@Data` | `XxxQueryRequest`                      |
+| 内部命令        | `record`          | `XxxCommand`                           |
+| 参数聚合        | `record`          | `XxxParam` / `XxxContext`              |
+| DB 投影 / 列表行 | `record`          | `XxxView`（MyBatis `resultType` / 查询投影） |
+
 
 请求类使用 `@Data`（Lombok）以支持 Spring MVC 参数绑定；响应/命令类使用 `record` 以保证不可变性。
 
@@ -294,11 +306,13 @@ Query record 字段数 ≥ 5 时，**内部调用者常常只传 1–3 个字段
 
 **命名约定：**
 
-| 工厂方法签名 | 语义 |
-|-------------|------|
-| `ofTenant(String tenantId, PageRequest page)` | 按租户查全量 |
-| `ofDefinition(Long definitionId, PageRequest page)` | 按定义 ID 查关联记录 |
+
+| 工厂方法签名                                                               | 语义             |
+| -------------------------------------------------------------------- | -------------- |
+| `ofTenant(String tenantId, PageRequest page)`                        | 按租户查全量         |
+| `ofDefinition(Long definitionId, PageRequest page)`                  | 按定义 ID 查关联记录   |
 | `ofDefinition(String tenantId, Long definitionId, PageRequest page)` | 租户 + 定义 ID 双约束 |
+
 
 **实现示例（WorkflowNodeQuery）：**
 
@@ -340,84 +354,100 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 #### 8.2.1 总原则
 
-| 原则 | 说明 |
-|------|------|
-| **包即词汇表** | `entity` / `query` / `command`一眼可读；不要把 API 的 `*Request` / `*Dto` 塞进 `domain`（除非明确是跨层复用的查询契约）。 |
-| **禁止 `*Record` 表映射后缀** | 表行一律 `*Entity`；Java `record` 关键字仍可用于 **非表** 的不可变 DTO。 |
-| **单向依赖** | `command` / `query` → 可依赖 `common`；**避免** `entity` 依赖 `command`；子域模型（`pipeline`）尽量只吃 JDK + `common`。 |
-| **与 §1 参数规约衔接** | 对外 `Command` 若构造字段很多，按 CLAUDE.md：`argc > 6` 须 `@Builder` 且调用方先赋变量再传入；`domain.param` 中 Mapper 单次写入参数同理。 |
+
+| 原则                     | 说明                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| **包即词汇表**              | `entity` / `query` / `command`一眼可读；不要把 API 的 `*Request` / `*Dto` 塞进 `domain`（除非明确是跨层复用的查询契约）。          |
+| **禁止 `*Record` 表映射后缀** | 表行一律 `*Entity`；Java `record` 关键字仍可用于 **非表** 的不可变 DTO。                                                  |
+| **单向依赖**               | `command` / `query` → 可依赖 `common`；**避免** `entity` 依赖 `command`；子域模型（`pipeline`）尽量只吃 JDK + `common`。   |
+| **与 §1 参数规约衔接**        | 对外 `Command` 若构造字段很多，按 CLAUDE.md：`argc > 6` 须 `@Builder` 且调用方先赋变量再传入；`domain.param` 中 Mapper 单次写入参数同理。 |
+
 
 #### 8.2.2 `domain/entity` — 表行映射（MyBatis 主类型）
 
-| 项 | 约定 |
-|----|------|
-| **命名** | `XxxEntity`，与表含义对应，不缩写业务词。 |
-| **形态** | **默认** `class` + `@Data`，运行态大行、多 null 更新、`version` 乐观锁时更合适。 |
+
+| 项          | 约定                                                                                                              |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| **命名**     | `XxxEntity`，与表含义对应，不缩写业务词。                                                                                      |
+| **形态**     | **默认** `class` + `@Data`，运行态大行、多 null 更新、`version` 乐观锁时更合适。                                                     |
 | **Lombok** | 需 MyBatis 无参构造时：`@NoArgsConstructor` + `@AllArgsConstructor`；若加 `@Builder`，三连兜底（与 CLAUDE.md 「Builder 与反射路径」一致）。 |
-| **可变边界** | 仅在编排内核、状态推进路径上允许对 Entity 做「读完—改字段—写回」；不要在 Controller 层持有可变 Entity 横穿多层。 |
-| **可选：不可变** | 少数只读/窄表可用 `record` + XML `resultMap`/`<constructor>`；新代码无必要时优先与大多数字段对齐用 `@Data` class。 |
-| **接口混入** | 实现 `Stateful`、`LocalizedErrorCarrier` 等横切接口时保持类在 `entity` 内，不为此单独开包。 |
+| **可变边界**   | 仅在编排内核、状态推进路径上允许对 Entity 做「读完—改字段—写回」；不要在 Controller 层持有可变 Entity 横穿多层。                                         |
+| **可选：不可变** | 少数只读/窄表可用 `record` + XML `resultMap`/`<constructor>`；新代码无必要时优先与大多数字段对齐用 `@Data` class。                          |
+| **接口混入**   | 实现 `Stateful`、`LocalizedErrorCarrier` 等横切接口时保持类在 `entity` 内，不为此单独开包。                                            |
+
 
 **治理**：`domain` 根下零散的 `*Entity`（如历史遗留）应**迁入** `domain/entity`，保持「表映射只此一包」。
 
 #### 8.2.3 `domain/query` — 列表/分页查询条件
 
-| 项 | 约定 |
-|----|------|
-| **命名** | `XxxQuery`（不叫 `XxxQueryParam` 以免与 `param` 混淆）。 |
-| **形态** | **`record` 优先**：不可变、线程安全、适合拼条件。 |
+
+| 项        | 约定                                                                           |
+| -------- | ---------------------------------------------------------------------------- |
+| **命名**   | `XxxQuery`（不叫 `XxxQueryParam` 以免与 `param` 混淆）。                               |
+| **形态**   | `**record` 优先**：不可变、线程安全、适合拼条件。                                              |
 | **工厂方法** | 字段数 ≥ 5 且常见调用只带少数维度时，**必须**提供 `ofTenant` / `ofDefinition` 等静态工厂（见 **§8.1**）。 |
-| **分页** | 统一携带 `PageRequest`（或模块内等价的分页值对象），命名字段建议 `pageRequest`。 |
+| **分页**   | 统一携带 `PageRequest`（或模块内等价的分页值对象），命名字段建议 `pageRequest`。                       |
+
 
 #### 8.2.4 `domain/command` — 用例级输入（编排 / 触发 / 控制台动作）
 
-| 项 | 约定 |
-|----|------|
-| **命名** | `XxxCommand`，表达一次业务动作（提交补偿、治理任务等）。 |
-| **形态** | **`record` 优先**；字段多、调用方需按需缺省时用 **`@Builder` + record**（Java 16+ record 可用 `@Builder` on record 按项目统一风格，与现有 `CompensationSubmitCommand` 一致）。 |
-| **边界** | 从 Controller / Listener 入参组装为 Command，在 ApplicationService 入口消费；**不**直接下传到 Mapper。 |
+
+| 项      | 约定                                                                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **命名** | `XxxCommand`，表达一次业务动作（提交补偿、治理任务等）。                                                                                                          |
+| **形态** | `**record` 优先**；字段多、调用方需按需缺省时用 `**@Builder` + record**（Java 16+ record 可用 `@Builder` on record 按项目统一风格，与现有 `CompensationSubmitCommand` 一致）。 |
+| **边界** | 从 Controller / Listener 入参组装为 Command，在 ApplicationService 入口消费；**不**直接下传到 Mapper。                                                          |
+
 
 #### 8.2.5 `domain/param` — 单次持久化/领域操作参数束
 
-| 项 | 约定 |
-|----|------|
-| **命名** | `XxxParam`（如 `FinishTaskParam`、`XxxUpsertParam`）。 |
-| **形态** | **`class` + `@Getter` + `private final` + `@Builder`** 为主，便于实现 `LocalizedErrorCarrier` 等接口、且与 MyBatis `@Param` 属性映射习惯一致。 |
-| **与 Command 区别** | **Command** = 用例边界；**Param** = **单次** `update`/`insert`/领域方法参数聚合，字段更贴近 SQL 列或存储过程语义。 |
-| **不可变** | 字段 `final`，无 setter；禁止在 Mapper 调用返回后再改 Param 实例。 |
+
+| 项                | 约定                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **命名**           | `XxxParam`（如 `FinishTaskParam`、`XxxUpsertParam`）。                                                                        |
+| **形态**           | `**class` + `@Getter` + `private final` + `@Builder`** 为主，便于实现 `LocalizedErrorCarrier` 等接口、且与 MyBatis `@Param` 属性映射习惯一致。 |
+| **与 Command 区别** | **Command** = 用例边界；**Param** = **单次** `update`/`insert`/领域方法参数聚合，字段更贴近 SQL 列或存储过程语义。                                     |
+| **不可变**          | 字段 `final`，无 setter；禁止在 Mapper 调用返回后再改 Param 实例。                                                                         |
+
 
 #### 8.2.6 `domain/view` — 只读查询投影（Console 等）
 
-| 项 | 约定 |
-|----|------|
+
+| 项      | 约定                                                                 |
+| ------ | ------------------------------------------------------------------ |
 | **命名** | `XxxView`，按业务场景分子包（如 `view/dashboard`、`view/cluster`、`view/meta`）。 |
-| **形态** | **`record` 优先**；MyBatis `resultType`/Constructor 映射简单。 |
-| **边界** | 不写回业务表；不含业务方法，仅承载展示/报表列。 |
+| **形态** | `**record` 优先**；MyBatis `resultType`/Constructor 映射简单。             |
+| **边界** | 不写回业务表；不含业务方法，仅承载展示/报表列。                                           |
+
 
 #### 8.2.7 Orchestrator 专有子域（可长期保留在 `domain` 下）
 
-| 子包 | 用途 | 形态建议 |
-|------|------|----------|
-| **`pipeline`** | Pipeline 定义、步骤注册、执行上下文 | **定义/配置加载结果**可用 `@Data class`（字段需陆续填充）；**窄元组**（如步骤键、阶段结果）用 `record`。接口 + 实现（`PipelineExecutor`）可同包。 |
-| **`scheduler`** | 资源调度决策、配额策略 | 决策对象多为「多字段、逐步填空」：`@Data class` 更常见；策略枚举/纯函数放 `common` 若跨模块复用。 |
-| **`statemachine`** | 状态迁移表、状态机描述 | **迁移边、小事件**：`record`；**有行为的机**可用 `class`。 |
-| **`value`** | DB 语义包装（如 JSONB 原始串） | **`final class`** + 静态 `of` + 正确 `equals`/`hashCode`，避免与 `String` 混用语义。 |
+
+| 子包                 | 用途                     | 形态建议                                                                                                |
+| ------------------ | ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `**pipeline`**     | Pipeline 定义、步骤注册、执行上下文 | **定义/配置加载结果**可用 `@Data class`（字段需陆续填充）；**窄元组**（如步骤键、阶段结果）用 `record`。接口 + 实现（`PipelineExecutor`）可同包。 |
+| `**scheduler`**    | 资源调度决策、配额策略            | 决策对象多为「多字段、逐步填空」：`@Data class` 更常见；策略枚举/纯函数放 `common` 若跨模块复用。                                       |
+| `**statemachine**` | 状态迁移表、状态机描述            | **迁移边、小事件**：`record`；**有行为的机**可用 `class`。                                                           |
+| `**value`**        | DB 语义包装（如 JSONB 原始串）   | `**final class**` + 静态 `of` + 正确 `equals`/`hashCode`，避免与 `String` 混用语义。                             |
+
 
 #### 8.2.8 Worker 模块 `.../domain`（非多子包时）
 
-| 项 | 约定 |
-|----|------|
-| **命名** | 阶段/步骤结果：`XxxStageResult`、`XxxStepContext` 等，后缀表达生命周期阶段。 |
-| **形态** | **`record` 优先**（Worker 热路径短生命周期对象）。 |
-| **膨胀时** | 再行拆 `domain/step` / `domain/model` 子包，避免单文件堆积。 |
+
+| 项       | 约定                                                      |
+| ------- | ------------------------------------------------------- |
+| **命名**  | 阶段/步骤结果：`XxxStageResult`、`XxxStepContext` 等，后缀表达生命周期阶段。 |
+| **形态**  | `**record` 优先**（Worker 热路径短生命周期对象）。                     |
+| **膨胀时** | 再行拆 `domain/step` / `domain/model` 子包，避免单文件堆积。          |
+
 
 #### 8.2.9 自检清单（PR / 重构）
 
-- [ ] 新业务表映射类是否落在 `domain/entity` 且以 `Entity` 结尾？
-- [ ] `domain/query` 宽表条件是否已有工厂方法，避免调用处一长串 `null`？
-- [ ] Application **Command** 与 Mapper **Param** 是否未混在同一类型里？
-- [ ] `domain/view` 是否保持无写模型逻辑、无对 `entity` 的回写依赖？
-- [ ] 新增 `*Record` **类名**仅用于非持久化语义时，是否避免与「表行」误命名冲突（表行请用 `Entity`）？
+- 新业务表映射类是否落在 `domain/entity` 且以 `Entity` 结尾？
+- `domain/query` 宽表条件是否已有工厂方法，避免调用处一长串 `null`？
+- Application **Command** 与 Mapper **Param** 是否未混在同一类型里？
+- `domain/view` 是否保持无写模型逻辑、无对 `entity` 的回写依赖？
+- 新增 `*Record` **类名**仅用于非持久化语义时，是否避免与「表行」误命名冲突（表行请用 `Entity`）？
 
 ---
 
@@ -425,16 +455,18 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 ### 9.1 技术选型
 
-| 场景 | 技术 | 说明 |
-|------|------|------|
-| 业务表 CRUD / CAS / 复杂 SQL | **MyBatis** | `mapper/*.java` + `resources/mapper/*.xml` |
-| 锁表、极薄支撑查询 | `JdbcTemplate` | 非默认业务持久化手段 |
-| **禁止** | JPA / Hibernate / **Spring Data JDBC** | 不得 `spring-boot-starter-data-jdbc`、`@EnableJdbcRepositories`、`CrudRepository` |
+
+| 场景                      | 技术                                     | 说明                                                                            |
+| ----------------------- | -------------------------------------- | ----------------------------------------------------------------------------- |
+| 业务表 CRUD / CAS / 复杂 SQL | **MyBatis**                            | `mapper/*.java` + `resources/mapper/*.xml`                                    |
+| 锁表、极薄支撑查询               | `JdbcTemplate`                         | 非默认业务持久化手段                                                                    |
+| **禁止**                  | JPA / Hibernate / **Spring Data JDBC** | 不得 `spring-boot-starter-data-jdbc`、`@EnableJdbcRepositories`、`CrudRepository` |
+
 
 ### 9.2 实体与命名
 
-- 表行映射类型放在 `domain/entity`，类名 **`*Entity` 后缀**（与 CLAUDE.md / ADR-001 一致）。
-- 可为不可变 **`record`**（配合 `resultMap` + `<constructor>`）或 **`@Data` class**（可变运行态行）；**禁止**再用 `*Record` 后缀区分「配置态」。
+- 表行映射类型放在 `domain/entity`，类名 `***Entity` 后缀**（与 CLAUDE.md / ADR-001 一致）。
+- 可为不可变 `**record`**（配合 `resultMap` + `<constructor>`）或 `**@Data` class**（可变运行态行）；**禁止**再用 `*Record` 后缀区分「配置态」。
 - **同一表、同一写路径**只能有一个主入口：禁止 **Mapper 写 + 自建 Repository 写** 或历史意义上的 **Repository + Mapper 双写**。
 
 ### 9.3 MyBatis 约定
@@ -539,12 +571,14 @@ public class DefaultTriggerService {
 
 ### 12.3 日志级别约定
 
-| 级别 | 场景 |
-|------|------|
-| `ERROR` | 系统异常、不可恢复错误 |
-| `WARN` | 业务异常、可恢复的告警 |
-| `INFO` | 关键业务事件、状态变更 |
+
+| 级别      | 场景           |
+| ------- | ------------ |
+| `ERROR` | 系统异常、不可恢复错误  |
+| `WARN`  | 业务异常、可恢复的告警  |
+| `INFO`  | 关键业务事件、状态变更  |
 | `DEBUG` | 调试信息（生产环境关闭） |
+
 
 ---
 
@@ -582,18 +616,20 @@ public record ConsoleProperties(
 **决策树**：
 
 1. 运行时改 + 立即生效（不重启）→ **DB 表 + Redis cache**
-2. 改完接受滚动重启 → **`@ConfigurationProperties` + yml**
+2. 改完接受滚动重启 → `**@ConfigurationProperties` + yml**
 3. 跨环境差异化（dev/test/prod 取值不同）→ **环境变量 + yml 占位符** `${VAR:default}`
 4. 秘钥/凭证（不能进 git）→ **环境变量 / k8s Secret / 部署平台注入**
 5. 多机房/多 region 下发不同配置 + 频繁审计 → 等场景真出现再评估配置中心，**当前阶段不引入**
 
 **三层归属边界**：
 
-| 配置去处 | 适合 | 不适合 | 现存例子 |
-|---|---|---|---|
-| `@ConfigurationProperties` + yml | 启动期注入的静态参数：超时、池大小、开关、阈值、重试次数、表达式格式约束 | 频繁变更的业务规则、租户级差异化、秘钥 | `BatchSecurityProperties` / `ReadReplicaProperties` / `MqRoutingProperties`（共 ~62 个） |
-| PostgreSQL 表 + Redis cache | 动态业务规则、多租户 / 多 job 维度差异化、需要审计版本、Console UI 可改 | 启动期就需要的基础设施配置（DB url、Kafka bootstrap）、秘钥 | `tenant_config` / `default_params` / `tenant_quota_policy` / `business_calendar` / `pipeline_step_definition` |
-| 环境变量（`${VAR:default}`） | 跨环境差异化：URL、端口、profile、秘钥、规模参数（pool size） | 业务逻辑规则、多租户参数 | `BATCH_CONSOLE_READ_REPLICA_ENABLED` / `BATCH_SECURITY_BYPASS_MODE` / DB 密码 |
+
+| 配置去处                             | 适合                                            | 不适合                                      | 现存例子                                                                                                          |
+| -------------------------------- | --------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `@ConfigurationProperties` + yml | 启动期注入的静态参数：超时、池大小、开关、阈值、重试次数、表达式格式约束          | 频繁变更的业务规则、租户级差异化、秘钥                      | `BatchSecurityProperties` / `ReadReplicaProperties` / `MqRoutingProperties`（共 ~62 个）                          |
+| PostgreSQL 表 + Redis cache       | 动态业务规则、多租户 / 多 job 维度差异化、需要审计版本、Console UI 可改 | 启动期就需要的基础设施配置（DB url、Kafka bootstrap）、秘钥 | `tenant_config` / `default_params` / `tenant_quota_policy` / `business_calendar` / `pipeline_step_definition` |
+| 环境变量（`${VAR:default}`）           | 跨环境差异化：URL、端口、profile、秘钥、规模参数（pool size）      | 业务逻辑规则、多租户参数                             | `BATCH_CONSOLE_READ_REPLICA_ENABLED` / `BATCH_SECURITY_BYPASS_MODE` / DB 密码                                   |
+
 
 **反模式（PR 评审拒绝）**：
 
@@ -608,21 +644,23 @@ public record ConsoleProperties(
 1. DB 表（权威源）
 2. MyBatis Mapper 读取
 3. 应用内 cache（自建 Redis cache 或 `@Cacheable`）
-4. Console UI / Ops 端点改 DB → 调 `/api/console/ops/cache/evict-*` 触发 Redis pub/sub
+4. Console UI / Ops 端点改 DB → 调 `/api/console/ops/cache/evict-`* 触发 Redis pub/sub
 5. 多实例订阅 channel，本地 cache 失效后下次读重新加载
 
 参考实现：`ConsoleConfigCacheController` / `OrchestratorConfigCacheService`。
 
 **为什么当前不引入配置中心**：
 
-| 配置中心能力 | 当前替代 |
-|---|---|
-| 静态参数运行时改 + 推送 | 静态参数本来就低频改，滚动重启可接受 |
-| 多环境集中管理 | Spring Profile + `.env.*` 三件套 |
-| 配置版本/审计 | git（yml 在仓库；DB 配置变更走 Console 审计） |
-| 灰度/分实例下发 | 当前 worker 同质化，无此需求 |
-| 秘钥集中管理 | k8s Secret / 部署平台环境变量注入 |
-| 动态业务规则 | DB + Redis cache（已落地） |
+
+| 配置中心能力        | 当前替代                             |
+| ------------- | -------------------------------- |
+| 静态参数运行时改 + 推送 | 静态参数本来就低频改，滚动重启可接受               |
+| 多环境集中管理       | Spring Profile + `.env.`* 三件套    |
+| 配置版本/审计       | git（yml 在仓库；DB 配置变更走 Console 审计） |
+| 灰度/分实例下发      | 当前 worker 同质化，无此需求               |
+| 秘钥集中管理        | k8s Secret / 部署平台环境变量注入          |
+| 动态业务规则        | DB + Redis cache（已落地）            |
+
 
 **触发时机**（满足任意 2 项再立项评估，否则不引入）：
 
@@ -672,28 +710,32 @@ assertThat(list).hasSize(3).extracting("jobCode").contains("JOB_A");
 
 ### 15.1 类命名
 
-| 角色 | 命名模式 | 示例 |
-|------|---------|------|
-| 接口 | `XxxService` | `TriggerService` |
-| 默认实现 | `DefaultXxxService` | `DefaultTriggerService` |
-| Controller | `XxxController` | `ConsoleJobController` |
-| MyBatis Mapper | `XxxMapper` | `JobInstanceMapper` |
-| 自研仓储（**非** Spring Data `Repository` 接口） | `XxxRepository` | `FileGovernanceRepository` |
-| 配置类 | `XxxConfiguration` | `ConsoleKafkaConfiguration` |
-| Properties | `XxxProperties` | `WorkerLeaseProperties` |
-| 异常处理器 | `XxxApiExceptionHandler` | `ConsoleApiExceptionHandler` |
+
+| 角色                                      | 命名模式                     | 示例                           |
+| --------------------------------------- | ------------------------ | ---------------------------- |
+| 接口                                      | `XxxService`             | `TriggerService`             |
+| 默认实现                                    | `DefaultXxxService`      | `DefaultTriggerService`      |
+| Controller                              | `XxxController`          | `ConsoleJobController`       |
+| MyBatis Mapper                          | `XxxMapper`              | `JobInstanceMapper`          |
+| 自研仓储（**非** Spring Data `Repository` 接口） | `XxxRepository`          | `FileGovernanceRepository`   |
+| 配置类                                     | `XxxConfiguration`       | `ConsoleKafkaConfiguration`  |
+| Properties                              | `XxxProperties`          | `WorkerLeaseProperties`      |
+| 异常处理器                                   | `XxxApiExceptionHandler` | `ConsoleApiExceptionHandler` |
+
 
 ### 15.2 方法命名
 
-| 操作 | 动词 | 示例 |
-|------|------|------|
-| 查询单个 | `get` / `find` | `getJob()`, `findByCode()` |
-| 查询列表 | `list` / `query` | `listJobs()`, `queryInstances()` |
-| 创建 | `create` | `createJobDefinition()` |
-| 更新 | `update` | `updateJobStatus()` |
-| 删除 | `delete` / `remove` | `deleteJob()` |
-| 统计 | `count` | `countJobDefinitions()` |
-| 校验 | `validate` / `check` | `validateTenant()` |
+
+| 操作   | 动词                   | 示例                               |
+| ---- | -------------------- | -------------------------------- |
+| 查询单个 | `get` / `find`       | `getJob()`, `findByCode()`       |
+| 查询列表 | `list` / `query`     | `listJobs()`, `queryInstances()` |
+| 创建   | `create`             | `createJobDefinition()`          |
+| 更新   | `update`             | `updateJobStatus()`              |
+| 删除   | `delete` / `remove`  | `deleteJob()`                    |
+| 统计   | `count`              | `countJobDefinitions()`          |
+| 校验   | `validate` / `check` | `validateTenant()`               |
+
 
 ---
 
@@ -730,27 +772,31 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 ### 18.1 配置域（Console / 定义态）
 
-| 字段 | 枚举类 | 允许值 |
-|------|-------|--------|
-| `job_definition.job_type` | `JobType` | `GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW` |
-| `job_definition.schedule_type` | — | `CRON` / `FIXED_RATE` / `MANUAL` / `EVENT` / `ONE_TIME` |
-| `job_definition.retry_policy` | `RetryPolicyType` | `NONE` / `FIXED` / `EXPONENTIAL` |
-| `job_definition.catch_up_policy` | `CatchUpPolicyType` | `NONE` / `AUTO` / `MANUAL_APPROVAL` |
-| `workflow_definition.workflow_type` | `WorkflowType` | `DAG` / `PIPELINE` / `MIXED` |
-| `workflow_node.node_type` | `WorkflowNodeType` | `START` / `END` / `TASK` / `GATEWAY` / `FILE_STEP` / `JOB` |
-| `workflow_edge.edge_type` | `WorkflowEdgeType` | `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS` |
-| `file_channel_config.channel_type` | `FileChannelType` | `SFTP` / `API` / `API_PUSH` / `EMAIL` / `NAS` / `OSS` / `LOCAL` |
-| `file_channel_config.auth_type` | `FileChannelAuthType` | `NONE` / `PASSWORD` / `KEY_PAIR` / `TOKEN` / `OAUTH2` / `CUSTOM` |
+
+| 字段                                  | 枚举类                   | 允许值                                                              |
+| ----------------------------------- | --------------------- | ---------------------------------------------------------------- |
+| `job_definition.job_type`           | `JobType`             | `GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW`        |
+| `job_definition.schedule_type`      | —                     | `CRON` / `FIXED_RATE` / `MANUAL` / `EVENT` / `ONE_TIME`          |
+| `job_definition.retry_policy`       | `RetryPolicyType`     | `NONE` / `FIXED` / `EXPONENTIAL`                                 |
+| `job_definition.catch_up_policy`    | `CatchUpPolicyType`   | `NONE` / `AUTO` / `MANUAL_APPROVAL`                              |
+| `workflow_definition.workflow_type` | `WorkflowType`        | `DAG` / `PIPELINE` / `MIXED`                                     |
+| `workflow_node.node_type`           | `WorkflowNodeType`    | `START` / `END` / `TASK` / `GATEWAY` / `FILE_STEP` / `JOB`       |
+| `workflow_edge.edge_type`           | `WorkflowEdgeType`    | `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS`                   |
+| `file_channel_config.channel_type`  | `FileChannelType`     | `SFTP` / `API` / `API_PUSH` / `EMAIL` / `NAS` / `OSS` / `LOCAL`  |
+| `file_channel_config.auth_type`     | `FileChannelAuthType` | `NONE` / `PASSWORD` / `KEY_PAIR` / `TOKEN` / `OAUTH2` / `CUSTOM` |
+
 
 ### 18.2 运行域（Orchestrator / 运行态）
 
-| 字段 | 枚举类 | 允许值 |
-|------|-------|--------|
-| `outbox_event.publish_status` | `OutboxPublishStatus` | `NEW` / `PUBLISHING` / `PUBLISHED` / `FAILED` / `GIVE_UP` |
-| `trigger_request.trigger_type` | `TriggerType` | `API` / `MANUAL` / `EVENT` / `CATCH_UP` / `SCHEDULED` |
-| `job_instance.status` | `JobInstanceStatus` | `CREATED` / `WAITING` / `READY` / `RUNNING` / `PARTIAL_FAILED` / `SUCCESS` / `FAILED` / `CANCELLED` / `TERMINATED` |
-| `workflow_run.status` | `WorkflowRunStatus` | `CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED` |
-| `file_record.status` | `FileStatus` | `RECEIVED` / `PARSING` / `PARSED` / `VALIDATED` / `LOADED` / `GENERATED` / `DISPATCHING` / `DISPATCHED` / `ARCHIVED` / `FAILED` / `DELETED` |
+
+| 字段                             | 枚举类                   | 允许值                                                                                                                                         |
+| ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `outbox_event.publish_status`  | `OutboxPublishStatus` | `NEW` / `PUBLISHING` / `PUBLISHED` / `FAILED` / `GIVE_UP`                                                                                   |
+| `trigger_request.trigger_type` | `TriggerType`         | `API` / `MANUAL` / `EVENT` / `CATCH_UP` / `SCHEDULED`                                                                                       |
+| `job_instance.status`          | `JobInstanceStatus`   | `CREATED` / `WAITING` / `READY` / `RUNNING` / `PARTIAL_FAILED` / `SUCCESS` / `FAILED` / `CANCELLED` / `TERMINATED`                          |
+| `workflow_run.status`          | `WorkflowRunStatus`   | `CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED`                                                                                 |
+| `file_record.status`           | `FileStatus`          | `RECEIVED` / `PARSING` / `PARSED` / `VALIDATED` / `LOADED` / `GENERATED` / `DISPATCHING` / `DISPATCHED` / `ARCHIVED` / `FAILED` / `DELETED` |
+
 
 ---
 
@@ -760,16 +806,19 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 **只注释 WHY，不注释 WHAT。** 代码本身说明做什么；注释说明为什么这样做——隐藏约束、反直觉决策、特定 bug 的绕过方案、业务语义。
 
-| 应写注释 | 不应写注释 |
-|---------|-----------|
-| 算法选择原因（如为何用 AES/GCM） | 重复方法名含义（`// 获取用户` 在 `getUser()` 上） |
-| 状态机转换的业务含义 | 解释自解释变量名 |
-| 看似多余但有原因的代码（防御性写法、幂等保护） | 每个参数的 `@param` 描述（参数名已表达） |
-| 跨事务、跨服务的协议约定 | 枚举/接口成员的字面描述 |
+
+| 应写注释                    | 不应写注释                              |
+| ----------------------- | ---------------------------------- |
+| 算法选择原因（如为何用 AES/GCM）    | 重复方法名含义（`// 获取用户` 在 `getUser()` 上） |
+| 状态机转换的业务含义              | 解释自解释变量名                           |
+| 看似多余但有原因的代码（防御性写法、幂等保护） | 每个参数的 `@param` 描述（参数名已表达）          |
+| 跨事务、跨服务的协议约定            | 枚举/接口成员的字面描述                       |
+
 
 ### 19.2 类级 Javadoc
 
 复杂 Service / Executor / Handler 类必须有类级 Javadoc，说明：
+
 - 该类在链路中的角色与职责边界
 - 状态机或关键流程（必要时附简要流程说明）
 - 与相邻类的协议约定（如事务边界、并发安全假设）
@@ -779,6 +828,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 ### 19.3 方法级注释
 
 以下场景需要在方法内写内联注释或方法级 Javadoc：
+
 - 方法体内存在非显而易见的分支决策（如 half-open 探针放行、bizDate=null 跳过语义）
 - 有顺序约束的多步操作（如"先 deactivate 再 insert"保证单活版本）
 - 魔法常量或限制值的来源（如 `MAX_PROBE_CHANNEL_BATCH = 1000` 防 DB 扫描）
@@ -790,20 +840,22 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 对各模块核心逻辑类（Service / Executor / Handler 实现）的逻辑方法（≥3 行方法体）扫描结果：
 
-| 模块 | 核心类 | 逻辑方法数 | 有注释 | 覆盖率 |
-|------|--------|-----------|--------|--------|
-| batch-common | `BatchObjectCryptoService` | 9 | 6 | 67% |
-| batch-trigger | `DefaultTriggerService` | 13 | 9 | 69% |
-| batch-trigger | `DefaultLaunchAdapterService` | 3 | 3 | 100% |
-| batch-orchestrator | `DefaultTaskOutcomeService` | 35 | 14 | 40% |
-| batch-orchestrator | `DefaultTaskExecutionService` | 1 | 1 | 100%（全 delegate） |
-| batch-worker-core | `DefaultWorkerLifecycleManager` | 3 | 2 | 67% |
-| batch-worker-import | `DefaultImportStageExecutor` | 12 | 6 | 50% |
-| batch-worker-export | `DefaultExportStageExecutor` | 13 | 6 | 46% |
-| batch-worker-dispatch | `DefaultDispatchStageExecutor` | 13 | 7 | 54% |
-| batch-console-api | `DefaultConsoleJobApplicationService` | 0 | 0 | N/A（全 facade） |
-| batch-console-api | `DefaultConsoleConfigApplicationService` | 22 | 10 | 45% |
-| **全局** | | **124** | **64** | **52%** |
+
+| 模块                    | 核心类                                      | 逻辑方法数   | 有注释    | 覆盖率              |
+| --------------------- | ---------------------------------------- | ------- | ------ | ---------------- |
+| batch-common          | `BatchObjectCryptoService`               | 9       | 6      | 67%              |
+| batch-trigger         | `DefaultTriggerService`                  | 13      | 9      | 69%              |
+| batch-trigger         | `DefaultLaunchAdapterService`            | 3       | 3      | 100%             |
+| batch-orchestrator    | `DefaultTaskOutcomeService`              | 35      | 14     | 40%              |
+| batch-orchestrator    | `DefaultTaskExecutionService`            | 1       | 1      | 100%（全 delegate） |
+| batch-worker-core     | `DefaultWorkerLifecycleManager`          | 3       | 2      | 67%              |
+| batch-worker-import   | `DefaultImportStageExecutor`             | 12      | 6      | 50%              |
+| batch-worker-export   | `DefaultExportStageExecutor`             | 13      | 6      | 46%              |
+| batch-worker-dispatch | `DefaultDispatchStageExecutor`           | 13      | 7      | 54%              |
+| batch-console-api     | `DefaultConsoleJobApplicationService`    | 0       | 0      | N/A（全 facade）    |
+| batch-console-api     | `DefaultConsoleConfigApplicationService` | 22      | 10     | 45%              |
+| **全局**                |                                          | **124** | **64** | **52%**          |
+
 
 > 未覆盖的 48% 基本为命名自解释的辅助方法（`resolveXxx` / `toXxx` / `buildXxx` 等），
 > 不应为追求覆盖率而添加无效注释。**52% 是当前合理的目标终态。**
@@ -814,14 +866,16 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 ### 20.1 落地层次
 
-| 层 | 具体约束 | 代码位置 |
-|---|---|---|
-| 项目源码 / 构建 | 根 pom `project.build.sourceEncoding=UTF-8` + `maven-compiler-plugin` 显式 `<encoding>UTF-8</encoding>` | `pom.xml` |
-| 运行时容器 locale | `ENV LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 25 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`） | `docker/Dockerfile.app` |
-| HTTP / i18n | `server.servlet.encoding.charset=UTF-8` + `force=true`；`spring.messages.encoding=UTF-8` | `batch-common/.../batch-defaults.yml` |
-| 导出（系统→外部） | 硬编码 `StandardCharsets.UTF_8`，`file_template_config.target_charset` 仅接受 `UTF-8`，其他拒绝 | `batch-worker-export/.../format/*ExportFormat.java`、`MinioExportStorage`、`RegisterStep` |
-| 导入（外部→系统） | `PreprocessStep.resolveCharset()` 按 `payload.targetCharset → template.charset → UTF-8` 三级降级，解析后全流转均为 UTF-8 | `batch-worker-import/.../PreprocessStep.java`、`ImportPreprocessPipeline`、`ParseStep` |
-| 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`docker-compose.test.yml` |
+
+| 层            | 具体约束                                                                                                                                                                                                                      | 代码位置                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 项目源码 / 构建    | 根 pom `project.build.sourceEncoding=UTF-8` + `maven-compiler-plugin` 显式 `<encoding>UTF-8</encoding>`                                                                                                                      | `pom.xml`                                                                               |
+| 运行时容器 locale | `ENV LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 25 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`）                                                                                                                    | `docker/Dockerfile.app`                                                                 |
+| HTTP / i18n  | `server.servlet.encoding.charset=UTF-8` + `force=true`；`spring.messages.encoding=UTF-8`                                                                                                                                   | `batch-common/.../batch-defaults.yml`                                                   |
+| 导出（系统→外部）    | 硬编码 `StandardCharsets.UTF_8`，`file_template_config.target_charset` 仅接受 `UTF-8`，其他拒绝                                                                                                                                       | `batch-worker-export/.../format/*ExportFormat.java`、`MinioExportStorage`、`RegisterStep` |
+| 导入（外部→系统）    | `PreprocessStep.resolveCharset()` 按 `payload.targetCharset → template.charset → UTF-8` 三级降级，解析后全流转均为 UTF-8                                                                                                                | `batch-worker-import/.../PreprocessStep.java`、`ImportPreprocessPipeline`、`ParseStep`    |
+| 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`docker-compose.test.yml`                                          |
+
 
 ### 20.2 Java 代码风格
 
@@ -842,16 +896,18 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 **默认值分级**（高优先级覆盖低优先级）：
 
-| 层 | 默认 | 场景 |
-|---|---|---|
-| Java 字段 `bypassMode` | `false` | 兜底最安全，防未知 profile 意外放开 |
-| `application-local.yml`（6 个模块） | `true` | IDE 本地跑默认旁路，开发者调试不受安全链拖累 |
-| `docker-compose.app.yml` env | `${BATCH_SECURITY_BYPASS_MODE:-false}` | docker-compose 起容器默认不旁路，环境形态贴近生产；需要旁路时显式设 env 覆盖 |
-| `.env.local` / `.env.test` / `.env.example` | `false` | 跟 compose 对齐 |
-| `.env.prod` | `false` | 生产显式关 |
-| Helm `values.yaml`（生产） | `"false"` | 默认安全 |
-| Helm `examples/values-local-k8s.yaml` | `"true"` | 本地 K8s 演示 |
-| prod profile @PostConstruct | **强制拒绝 `true`** | `BatchSecurityProperties.validateSecuritySettings()` 启动 fail-fast |
+
+| 层                                           | 默认                                     | 场景                                                                |
+| ------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| Java 字段 `bypassMode`                        | `false`                                | 兜底最安全，防未知 profile 意外放开                                            |
+| `application-local.yml`（6 个模块）              | `true`                                 | IDE 本地跑默认旁路，开发者调试不受安全链拖累                                          |
+| `docker-compose.app.yml` env                | `${BATCH_SECURITY_BYPASS_MODE:-false}` | docker-compose 起容器默认不旁路，环境形态贴近生产；需要旁路时显式设 env 覆盖                  |
+| `.env.local` / `.env.test` / `.env.example` | `false`                                | 跟 compose 对齐                                                      |
+| `.env.prod`                                 | `false`                                | 生产显式关                                                             |
+| Helm `values.yaml`（生产）                      | `"false"`                              | 默认安全                                                              |
+| Helm `examples/values-local-k8s.yaml`       | `"true"`                               | 本地 K8s 演示                                                         |
+| prod profile @PostConstruct                 | **强制拒绝 `true`**                        | `BatchSecurityProperties.validateSecuritySettings()` 启动 fail-fast |
+
 
 **调用规范**：业务代码一律 `batchSecurityProperties.isBypassMode()`。旧 `isTestingOpen()` / `setTestingOpen()` / 旧键 `batch.security.testing-open` 已于 2026-05-01 物理删除（`@Deprecated since=2026-04-19, forRemoval=true` 周期到期）。
 
@@ -919,6 +975,7 @@ private ItemStats applyJobDefinitions(List<JobDefinitionSpec> specs, ApplyContex
 ```
 
 **两个工厂：**
+
 - `SpecHandler.upsertable(...)` — insert 和 update 走同一操作（7 种简单类型）
 - `SpecHandler.of(...)` — insert 和 update 行为不同（作业定义、工作流定义、流水线定义）
 
@@ -1018,12 +1075,15 @@ warnIfCasMiss(failUpdated,     "partition markStatus(FAILED)",   partition.getId
 
 ### 22.8 识别需要重构的信号
 
-| 信号 | 应用的模式 |
-|---|---|
-| `if (type == A) handleA(); else if (type == B) handleB()...` ≥ 3 分支 | Map 路由表（§22.1）|
-| 同一"查找→跳过/更新/创建"循环出现 N 次，只有 mapper 调用不同 | SpecHandler + applySpecs（§22.2）|
-| 一个方法传参 ≥ 5 个，且这些参数一起被传给下游 N 个方法 | ApplyContext/Command record（§22.3）|
-| 主干方法有 if-A + if-B + inline-else，else 体 > 10 行 | 命名方法路由（§22.4）|
-| 两个方法前 N 行相同，最后 1-2 行不同 | 委托共享逻辑（§22.5）|
-| 多个 catch 块构造相同结构的失败对象 | failResult 工厂（§22.6）|
-| `if (n <= 0) { log.warn(...) }` 出现 ≥ 3 次 | warnIfXxx 辅助方法（§22.7）|
+
+| 信号                                                                  | 应用的模式                              |
+| ------------------------------------------------------------------- | ---------------------------------- |
+| `if (type == A) handleA(); else if (type == B) handleB()...` ≥ 3 分支 | Map 路由表（§22.1）                     |
+| 同一"查找→跳过/更新/创建"循环出现 N 次，只有 mapper 调用不同                              | SpecHandler + applySpecs（§22.2）    |
+| 一个方法传参 ≥ 5 个，且这些参数一起被传给下游 N 个方法                                     | ApplyContext/Command record（§22.3） |
+| 主干方法有 if-A + if-B + inline-else，else 体 > 10 行                       | 命名方法路由（§22.4）                      |
+| 两个方法前 N 行相同，最后 1-2 行不同                                              | 委托共享逻辑（§22.5）                      |
+| 多个 catch 块构造相同结构的失败对象                                               | failResult 工厂（§22.6）               |
+| `if (n <= 0) { log.warn(...) }` 出现 ≥ 3 次                            | warnIfXxx 辅助方法（§22.7）              |
+
+
