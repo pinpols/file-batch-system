@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.workflow;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import io.micrometer.observation.annotation.Observed;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,6 +52,7 @@ public class WorkflowParamResolver {
    * @param context 当前 workflow_run 上下文(含已完成节点 output 与 workflow 级字段)
    * @return 替换后的对象;原始结构不变
    */
+  @Observed(name = "orch.workflow.param-resolve", contextualName = "orch.workflow.param-resolve")
   public Object resolve(Object params, WorkflowRunContext context) {
     if (params == null) {
       return null;
