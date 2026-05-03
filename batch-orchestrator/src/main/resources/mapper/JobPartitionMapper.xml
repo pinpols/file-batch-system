@@ -15,6 +15,8 @@
         <result column="worker_group" property="workerGroup"/>
         <result column="worker_code" property="workerCode"/>
         <result column="lease_expire_at" property="leaseExpireAt"/>
+        <result column="current_invocation_id" property="currentInvocationId"/>
+        <result column="invocation_started_at" property="invocationStartedAt"/>
         <result column="version" property="version"/>
         <result column="retry_count" property="retryCount"/>
         <result column="business_key" property="businessKey"/>
@@ -109,6 +111,8 @@
             partition_status = #{toStatus},
             lease_expire_at = #{leaseExpireAt},
             started_at = coalesce(started_at, current_timestamp),
+            current_invocation_id = #{currentInvocationId},
+            invocation_started_at = #{invocationStartedAt},
             version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
@@ -124,6 +128,9 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and worker_code = #{workerCode}
+          <if test="expectedInvocationId != null and expectedInvocationId != ''">
+          and current_invocation_id = #{expectedInvocationId}
+          </if>
     </update>
 
     <update id="markRetrying">
@@ -132,6 +139,8 @@
             retry_count = #{retryCount},
             worker_code = null,
             lease_expire_at = null,
+            current_invocation_id = null,
+            invocation_started_at = null,
             finished_at = null,
             version = version + 1,
             updated_at = current_timestamp
@@ -161,6 +170,8 @@
         set partition_status = #{partitionStatus},
             worker_code = case when #{partitionStatus} = #{runningStatus} then worker_code else null end,
             lease_expire_at = case when #{partitionStatus} = #{runningStatus} then lease_expire_at else null end,
+            current_invocation_id = case when #{partitionStatus} = #{runningStatus} then current_invocation_id else null end,
+            invocation_started_at = case when #{partitionStatus} = #{runningStatus} then invocation_started_at else null end,
             finished_at = case
                 when #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at
@@ -232,6 +243,8 @@
         set partition_status = #{readyStatus},
             worker_code = null,
             lease_expire_at = null,
+            current_invocation_id = null,
+            invocation_started_at = null,
             started_at = null,
             finished_at = null,
             version = version + 1,

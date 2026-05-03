@@ -17,7 +17,7 @@ public interface TaskExecutionClient {
    */
   Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId);
 
-  boolean renewLease(String tenantId, Long taskId, String workerId);
+  boolean renewLease(String tenantId, Long taskId, String workerId, String partitionInvocationId);
 
   void report(TaskExecutionReport report);
 }

@@ -153,7 +153,8 @@ public class WorkerTaskLeaseRenewer {
           taskExecutionClient.renewLease(
               activeTaskLease.getTenantId(),
               Long.valueOf(activeTaskLease.getTaskId()),
-              activeTaskLease.getWorkerId());
+              activeTaskLease.getWorkerId(),
+              activeTaskLease.getPartitionInvocationId());
       if (!renewed) {
         log.warn(
             "task lease renew rejected: tenantId={}, taskId={}, workerId={}, fastRetry={}",

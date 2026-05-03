@@ -54,6 +54,7 @@ public class TaskDispatchExecutor {
     task.setPartitionNo(effective.partitionNo());
     task.setPartitionCount(effective.partitionCount());
     task.setPartitionKey(effective.partitionKey());
+    task.setPartitionInvocationId(effective.partitionInvocationId());
     task.setTimeoutSeconds(effective.timeoutSeconds());
     // V94: data_interval 透传给 worker, 业务 SQL 拼时间窗
     task.setDataIntervalStart(effective.dataIntervalStart());

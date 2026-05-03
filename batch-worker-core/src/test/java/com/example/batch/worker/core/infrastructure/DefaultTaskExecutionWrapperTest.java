@@ -97,6 +97,7 @@ class DefaultTaskExecutionWrapperTest {
             1,
             "JOB:2026-05-01:1",
             null,
+            null,
             null);
     when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.of(sample));
 
@@ -124,7 +125,7 @@ class DefaultTaskExecutionWrapperTest {
     assertThat(result.success()).isTrue();
     assertThat(result.taskId()).isEqualTo("1001");
 
-    verify(activeTaskLeaseRegistry).register("1001", "t1", "w1");
+    verify(activeTaskLeaseRegistry).register("1001", "t1", "w1", null);
     verify(activeTaskLeaseRegistry).remove("1001");
     verify(taskExecutionClient).report(any(TaskExecutionReport.class));
   }
@@ -164,7 +165,7 @@ class DefaultTaskExecutionWrapperTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("unexpected");
-    verify(activeTaskLeaseRegistry).register("1003", "t1", "w1");
+    verify(activeTaskLeaseRegistry).register("1003", "t1", "w1", null);
     verify(activeTaskLeaseRegistry).remove("1003");
     verify(taskExecutionClient)
         .report(

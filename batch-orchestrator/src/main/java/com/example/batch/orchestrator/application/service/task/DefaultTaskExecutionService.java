@@ -47,8 +47,10 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
   }
 
   @Override
-  public boolean renewTaskLease(String tenantId, Long taskId, String workerCode) {
-    return taskAssignmentService.renewTaskLease(tenantId, taskId, workerCode);
+  public boolean renewTaskLease(
+      String tenantId, Long taskId, String workerCode, String partitionInvocationId) {
+    return taskAssignmentService.renewTaskLease(
+        tenantId, taskId, workerCode, partitionInvocationId);
   }
 
   @Override

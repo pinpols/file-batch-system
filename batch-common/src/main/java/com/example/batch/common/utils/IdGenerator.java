@@ -24,6 +24,14 @@ public final class IdGenerator {
     return UUID.randomUUID().toString().replace("-", "");
   }
 
+  /**
+   * ADR-014: per-partition CLAIM invocation id (never bridged from OTel — independent stale-worker
+   * guard).
+   */
+  public static String newInvocationId() {
+    return UUID.randomUUID().toString().replace("-", "");
+  }
+
   public static String newBusinessNo(String prefix) {
     return prefix
         + "-"

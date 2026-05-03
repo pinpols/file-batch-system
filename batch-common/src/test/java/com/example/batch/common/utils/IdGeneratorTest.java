@@ -13,6 +13,12 @@ class IdGeneratorTest {
   }
 
   @Test
+  void newInvocationIdShouldBe32HexChars() {
+    String id = IdGenerator.newInvocationId();
+    assertThat(id).hasSize(32).matches("[0-9a-f]+");
+  }
+
+  @Test
   void newBusinessNoShouldStartWithPrefixAndContainDashes() {
     String no = IdGenerator.newBusinessNo("JOB");
     assertThat(no).startsWith("JOB-");

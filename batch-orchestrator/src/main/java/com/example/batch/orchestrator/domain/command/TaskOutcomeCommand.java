@@ -28,7 +28,12 @@ public record TaskOutcomeCommand(
      * workflow_node_run.output,供下游 workflow 节点 $.nodes.&lt;X&gt;.output.&lt;key&gt; DSL 引用。null
      * 等价无产出。
      */
-    Map<String, Object> outputs)
+    Map<String, Object> outputs,
+    /**
+     * ADR-014: optional; non-null must equal {@code job_partition.current_invocation_id} when
+     * partition exists.
+     */
+    String partitionInvocationId)
     implements LocalizedErrorCarrier {
 
   // record 默认 accessor 是 errorMessage() 无 get 前缀;桥接 carrier 契约的 getErrorXxx() bean 命名。

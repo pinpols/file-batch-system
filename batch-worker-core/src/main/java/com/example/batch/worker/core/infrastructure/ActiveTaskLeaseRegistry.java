@@ -41,12 +41,18 @@ public class ActiveTaskLeaseRegistry {
 
   // C-1.1: register/remove 修改状态 → 写锁；snapshot 只读 → 读锁
   public void register(String taskId, String tenantId, String workerId) {
+    register(taskId, tenantId, workerId, null);
+  }
+
+  public void register(
+      String taskId, String tenantId, String workerId, String partitionInvocationId) {
     if (taskId == null || tenantId == null || workerId == null) {
       return;
     }
     shutdownLock.writeLock().lock();
     try {
-      activeTaskLeases.put(taskId, new ActiveTaskLease(taskId, tenantId, workerId));
+      activeTaskLeases.put(
+          taskId, new ActiveTaskLease(taskId, tenantId, workerId, partitionInvocationId));
     } finally {
       shutdownLock.writeLock().unlock();
     }
@@ -142,11 +148,14 @@ public class ActiveTaskLeaseRegistry {
     private final String taskId;
     private final String tenantId;
     private final String workerId;
+    private final String partitionInvocationId;
 
-    public ActiveTaskLease(String taskId, String tenantId, String workerId) {
+    public ActiveTaskLease(
+        String taskId, String tenantId, String workerId, String partitionInvocationId) {
       this.taskId = taskId;
       this.tenantId = tenantId;
       this.workerId = workerId;
+      this.partitionInvocationId = partitionInvocationId;
     }
   }
 }

@@ -1,10 +1,13 @@
 package com.example.batch.orchestrator.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.application.service.task.DefaultTaskOutcomeService;
@@ -12,6 +15,8 @@ import com.example.batch.orchestrator.application.service.task.OrchestratorJobMa
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
+import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
@@ -93,6 +98,41 @@ class DefaultTaskOutcomeServiceTest {
     TaskOutcomeCommand command = TaskOutcomeCommand.builder().taskId(1L).success(true).build();
     var result = service.applyTaskOutcome(command);
     assertThat(result).isNull();
+  }
+
+  /** ADR-014：worker 上报的 invocation 与分区当前值不一致 → CONFLICT，防止过期 worker 推进状态。 */
+  @Test
+  void applyTaskOutcome_partitionInvocationMismatch_throwsBizException() {
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(1L);
+    task.setTenantId("t1");
+    task.setJobInstanceId(10L);
+    task.setJobPartitionId(99L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setAssignedWorkerCode("w1");
+    task.setVersion(1L);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setCurrentInvocationId("inv-db");
+
+    when(jobTaskMapper.selectById("t1", 1L)).thenReturn(task);
+    when(jobPartitionMapper.selectById("t1", 99L)).thenReturn(partition);
+
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder()
+            .tenantId("t1")
+            .taskId(1L)
+            .workerId("w1")
+            .success(true)
+            .partitionInvocationId("inv-stale-worker")
+            .build();
+
+    assertThatThrownBy(() -> service.applyTaskOutcome(command))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getMessageKey())
+                    .isEqualTo("error.task.invocation_mismatch"));
   }
 
   @Test

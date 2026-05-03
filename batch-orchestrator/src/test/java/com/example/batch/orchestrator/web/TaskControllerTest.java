@@ -83,6 +83,7 @@ class TaskControllerTest {
             1,
             "JOB-X:2026-05-01:1",
             null,
+            null,
             null);
     when(taskExecutionService.loadEffectiveConfig("t1", 10L)).thenReturn(config);
 
@@ -169,7 +170,7 @@ class TaskControllerTest {
 
   @Test
   void shouldReturn200WhenRenewSucceeds() throws Exception {
-    when(taskExecutionService.renewTaskLease("t1", 7L, "w1")).thenReturn(true);
+    when(taskExecutionService.renewTaskLease("t1", 7L, "w1", null)).thenReturn(true);
 
     mockMvc
         .perform(
@@ -181,7 +182,7 @@ class TaskControllerTest {
 
   @Test
   void shouldReturn409WhenRenewRejected() throws Exception {
-    when(taskExecutionService.renewTaskLease("t1", 7L, "w1")).thenReturn(false);
+    when(taskExecutionService.renewTaskLease("t1", 7L, "w1", null)).thenReturn(false);
 
     mockMvc
         .perform(

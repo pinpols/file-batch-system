@@ -14,4 +14,9 @@ public class ClaimPartitionParam {
   private final String fromStatus;
   private final String toStatus;
   private final Long expectedVersion;
+
+  /** ADR-014: nullable — lifecycle/internal claims may omit (columns cleared). */
+  private final String currentInvocationId;
+
+  private final Instant invocationStartedAt;
 }

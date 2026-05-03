@@ -16,6 +16,11 @@
 | 008 | [ADR-008-god-class-decomposition.md](./ADR-008-god-class-decomposition.md) | God Class 分解为子服务 + Facade 模式（实例：`DefaultLaunchApplicationService`）|
 | 009 | [ADR-009-workflow-param-dsl.md](./ADR-009-workflow-param-dsl.md) | Workflow 节点间参数串联 DSL（JSONPath-like `$.nodes.X.output.fileId`，分 4 stage 落地，~3 人天） |
 | 010 | [ADR-010-trigger-async-decoupling.md](./ADR-010-trigger-async-decoupling.md) | Trigger → Orchestrator 异步解耦（trigger_outbox + Kafka，复用 ADR-002 模式，~7-8 人天分 7 stage） |
+| 011 | [ADR-011-idempotency-boundary-alignment.md](./ADR-011-idempotency-boundary-alignment.md) | Console / Trigger / Orchestrator 三层幂等责任边界对齐 |
+| 013 | [ADR-013-distributed-tracing.md](./ADR-013-distributed-tracing.md) | Micrometer Observation + OTel 桥接；`ObservedAspect`；种子 `@Observed`；业务 `trace_id` ↔ OTel traceId |
+| 014 | [ADR-014-claim-idempotency.md](./ADR-014-claim-idempotency.md) | Worker CLAIM 幂等（invocation-id 模型，Proposed） |
+| 015 | [ADR-015-worker-side-outbox.md](./ADR-015-worker-side-outbox.md) | Worker 侧本地 outbox（report 重投，Proposed） |
+| 016 | [ADR-016-batch-renew-lease-api.md](./ADR-016-batch-renew-lease-api.md) | Renew lease 批量 API 收敛 HTTP（Proposed） |
 
 ## 写新 ADR 的姿势
 

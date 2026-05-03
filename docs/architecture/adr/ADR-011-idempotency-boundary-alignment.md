@@ -3,7 +3,7 @@
 - **状态**: 已落地(代码已实施,本 ADR 是事后定稿,close hardening-backlog V6-P2-CONSOLE-IDEMPOTENCY)
 - **日期**: 2026-04-30
 - **决策人**: 后端平台团队
-- **关联**: [`docs/analysis/deep-issue-analysis.md` §5.5 / §5.6 / §5.10](../../analysis/deep-issue-analysis.md)
+- **关联**: `[docs/analysis/deep-issue-analysis.md` §5.5 / §5.6 / §5.10](../../analysis/deep-issue-analysis.md)
 - **解决问题**: 三层(console HTTP / trigger service / db 唯一约束)对"幂等"的责任边界不一致,接口契约与实际行为有偏差
 
 ## 背景
@@ -109,13 +109,15 @@ HTTP POST + Idempotency-Key
 
 代码层面已落地(commit ref by file:line):
 
-| 层 | 文件 | 关键实现 |
-|---|---|---|
-| Layer 1 | `batch-console-api/.../ConsoleIdempotencyInterceptor.java` | 全文重写;两阶段占坑 + 4 路 key 绑定 + 失败释放 |
-| Layer 2 | `batch-trigger/.../DefaultTriggerService.java:134-142` | `approvePendingCatchUp` 短路 LAUNCHED |
-| Layer 2 | `batch-trigger/.../DefaultTriggerService.java:60-71` | 类 Javadoc 说明"trigger 层只做尽力去重" |
+
+| 层       | 文件                                                           | 关键实现                                 |
+| ------- | ------------------------------------------------------------ | ------------------------------------ |
+| Layer 1 | `batch-console-api/.../ConsoleIdempotencyInterceptor.java`   | 全文重写;两阶段占坑 + 4 路 key 绑定 + 失败释放       |
+| Layer 2 | `batch-trigger/.../DefaultTriggerService.java:134-142`       | `approvePendingCatchUp` 短路 LAUNCHED  |
+| Layer 2 | `batch-trigger/.../DefaultTriggerService.java:60-71`         | 类 Javadoc 说明"trigger 层只做尽力去重"        |
 | Layer 3 | `db/migration/V37__fix_trigger_request_dedup_constraint.sql` | 删 trigger 层约束 + 注释明示 orchestrator 兜底 |
-| Layer 3 | `db/migration/V*` `uk_job_instance_tenant_dedup` | 事实源唯一约束(更早 migration) |
+| Layer 3 | `db/migration/V`* `uk_job_instance_tenant_dedup`             | 事实源唯一约束(更早 migration)                |
+
 
 ## 不做(明示)
 
@@ -129,3 +131,4 @@ HTTP POST + Idempotency-Key
 - [deep-issue-analysis.md §5.6](../../analysis/deep-issue-analysis.md) — Trigger 补跑审批接口幂等头未真正使用(已闭环)
 - [deep-issue-analysis.md §5.10](../../analysis/deep-issue-analysis.md) — Trigger 去重策略设计漂移(已闭环)
 - [hardening-backlog.md V6-P2-CONSOLE-IDEMPOTENCY](../../analysis/hardening-backlog.md)
+
