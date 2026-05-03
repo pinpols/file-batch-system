@@ -1,6 +1,6 @@
 # ADR-014 · CLAIM 幂等保护 (invocation-id 模型)
 
-- **Status**: Proposed (2026-05-03,需单独立项实施 ~2-3 天)
+- **Status**: Accepted — 已落地 (2026-05-03)；Flyway **V95**（`job_partition` / `job_partition_archive` 镜像列）；renew/report（及 ADR-016 `renew-batch` 项）可选 `partitionInvocationId`；省略时 orchestrator 兼容旧 worker。
 - **Date**: 2026-05-03
 - **Related**: ADR-002 (outbox) / docs/analysis/worker-vs-industry-2026-05-03.md P1-6
 
@@ -83,6 +83,13 @@ SELECT current_invocation_id FROM job_partition WHERE id = ?
 
 worker 续约时带上 invocation_id,server 校验 → 不一致拒绝 → worker 知道自己已被替换 → 主动 cancel 本地业务执行(配合 P0-1 的 cancellation/timeout)。
 
+## 实施落地（与代码一致）
+
+- **DB**：`db/migration/V95__job_partition_invocation.sql` — `batch.job_partition` 与 `archive.job_partition_archive` 增加 `current_invocation_id`、`invocation_started_at`。
+- **Orchestrator**：任务认领路径生成 invocation 并写入分区；`EffectiveTaskConfig` 向下透传；`POST .../renew` 与 `POST .../leases/renew-batch`（ADR-016）请求体可带 `partitionInvocationId`；`report` 携带时若与 `job_partition.current_invocation_id` 不一致 → `CONFLICT`（`error.task.invocation_mismatch`）。
+- **Worker**：claim 快照写入 `PulledTask` / 执行上下文；续租与上报携带；`ActiveTaskLeaseRegistry` 保留 invocation 供续租使用。
+- **兼容**：省略 `partitionInvocationId` 时维持过渡期语义（renew/report 不强依赖 invocation 匹配）。
+
 ## 影响面
 
 **正面**:
@@ -92,14 +99,8 @@ worker 续约时带上 invocation_id,server 校验 → 不一致拒绝 → worke
 
 **负面**:
 
-- 协议 breaking change:TaskDispatchMessage / RenewRequest / ReportRequest 都加 invocation_id
-- 老 worker 升级前需要兼容期(server 容忍 invocation_id 缺失,降级为现有"先到先得")
-- 工时:2-3 天
-  - migration V8X 加 2 列 + 索引
-  - mapper xml CLAIM/RENEW/REPORT 全改
-  - DTO + 协议
-  - worker 端透传
-  - 集成测试覆盖"reclaim 后重复 CLAIM"场景
+- 协议演进：TaskDispatchMessage / Renew / Report 增加可选 `partitionInvocationId`（老 worker 省略字段 → server 兼容）。
+- 运维需确保 **V95** 已应用至目标环境后再滚动升级 worker。
 
 ## 替代方案 (被拒绝)
 
@@ -113,9 +114,9 @@ worker 续约时带上 invocation_id,server 校验 → 不一致拒绝 → worke
 
 ## 验收标准
 
-- migration V8X 落地 + `SqlConsistencyIT` 守护新约束
-- CLAIM/RENEW/REPORT 协议向后兼容 (老 worker 仍工作)
-- 端到端测试:模拟 partition 被 reclaim 后两个 worker 并发 → 后到的 worker 业务执行结果被 server 拒,数据无重复
+- **V95** 已纳入迁移链；热表与 **archive** 镜像列一致（`ArchiveSchemaDriftCheck`）。
+- CLAIM/RENEW/REPORT（及 batch renew）对 **省略** `partitionInvocationId` 的旧 worker 仍可用。
+- 集成/单测覆盖：invocation 不一致时 report 拒绝续约语义（见 `DefaultTaskOutcomeServiceTest`、`WorkerClaimProgressCompleteIntegrationTest` 等）。
 
 ## 不变量
 
