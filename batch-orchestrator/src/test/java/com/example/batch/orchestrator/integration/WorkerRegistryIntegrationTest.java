@@ -135,6 +135,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         WorkerRegistryStatus.ONLINE.code(),
         Instant.now(),
         0,
+        10,
         null,
         null);
   }

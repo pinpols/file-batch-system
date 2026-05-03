@@ -267,6 +267,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         Instant.now(),
         null,
         null,
+        null,
         null);
   }
 }

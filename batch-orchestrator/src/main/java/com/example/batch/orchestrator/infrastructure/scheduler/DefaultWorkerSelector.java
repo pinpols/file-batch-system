@@ -146,6 +146,9 @@ public class DefaultWorkerSelector implements WorkerSelector {
       List<WorkerRegistryEntity> candidates, ResourceQueueEntity queue) {
     return candidates.stream()
         .filter(candidate -> matchesResourceTag(candidate, queue))
+        // V87 反压闸门: current_load >= max_concurrent 的 worker 满载, skip
+        // (默认 max_concurrent=10; 全 group 满则 partition 退化 WAITING)
+        .filter(DefaultWorkerSelector::hasCapacity)
         .min(
             Comparator.comparingInt(
                     (WorkerRegistryEntity r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
@@ -153,6 +156,16 @@ public class DefaultWorkerSelector implements WorkerSelector {
                     WorkerRegistryEntity::heartbeatAt,
                     Comparator.nullsLast(Comparator.reverseOrder())))
         .orElse(null);
+  }
+
+  /** V87 反压: 已 fully loaded 的 worker 不再被选中. NULL max_concurrent (老数据兜底) 视为无上限通过. */
+  private static boolean hasCapacity(WorkerRegistryEntity r) {
+    Integer max = r.maxConcurrent();
+    if (max == null || max <= 0) {
+      return true; // 没配置 = 无上限 (向后兼容)
+    }
+    int current = Optional.ofNullable(r.currentLoad()).orElse(0);
+    return current < max;
   }
 
   private void incrementNoMatchCounter(

@@ -101,6 +101,7 @@ public class WorkerRegistryCache {
               .status(r.status())
               .heartbeatMillis(r.heartbeatAt() == null ? null : r.heartbeatAt().toEpochMilli())
               .currentLoad(r.currentLoad())
+              .maxConcurrent(r.maxConcurrent())
               .drainStartedMillis(
                   r.drainStartedAt() == null ? null : r.drainStartedAt().toEpochMilli())
               .drainDeadlineMillis(
@@ -125,6 +126,7 @@ public class WorkerRegistryCache {
               e.status,
               e.heartbeatMillis == null ? null : Instant.ofEpochMilli(e.heartbeatMillis),
               e.currentLoad,
+              e.maxConcurrent,
               e.drainStartedMillis == null ? null : Instant.ofEpochMilli(e.drainStartedMillis),
               e.drainDeadlineMillis == null ? null : Instant.ofEpochMilli(e.drainDeadlineMillis)));
     }
@@ -143,6 +145,7 @@ public class WorkerRegistryCache {
       String status,
       Long heartbeatMillis,
       Integer currentLoad,
+      Integer maxConcurrent,
       Long drainStartedMillis,
       Long drainDeadlineMillis) {}
 }

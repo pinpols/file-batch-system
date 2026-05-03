@@ -44,6 +44,7 @@ class WorkerControllerTest {
                 "DRAINING",
                 Instant.now(),
                 0,
+                10,
                 Instant.now(),
                 Instant.now()));
 

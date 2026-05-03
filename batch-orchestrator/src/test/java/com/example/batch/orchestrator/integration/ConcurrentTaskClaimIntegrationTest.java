@@ -223,6 +223,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         "ONLINE",
         Instant.now(),
         0,
+        10,
         null,
         null);
   }
