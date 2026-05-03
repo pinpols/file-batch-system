@@ -131,6 +131,9 @@ do_cleanup() {
   psql_q "DELETE FROM batch.trigger_outbox_event WHERE request_id LIKE '$pattern'" >/dev/null
   psql_q "DELETE FROM batch.trigger_request WHERE request_id LIKE '$pattern'" >/dev/null
   psql_q "DELETE FROM batch.workflow_node WHERE node_code='SEEDVAL_PROBE'" >/dev/null
+  # PROBE job_definition (§9.5 FIXED_RATE 真触发探针等);
+  # V67 trigger_runtime_state ON DELETE CASCADE 自动清
+  psql_q "DELETE FROM batch.job_definition WHERE job_code LIKE '$pattern'" >/dev/null
 }
 
 # 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留垃圾
@@ -624,8 +627,45 @@ if [[ "$ADVANCED" == "1" ]]; then
     *) result fail "Console-api 可达性" "HTTP $resp body=$(cat /tmp/resp.body | head -c 60)" ;;
   esac
 
-  # 9.5 Trigger cron 真触发
-  result skip "Trigger cron 真触发" "时序不确定,不纳入自动化(改 schedule_type=FIXED_RATE 等待 1 个周期 → 看 trigger_request 自增)"
+  # 9.5 Trigger FIXED_RATE 真触发(原 SKIP, 现自动验证)
+  # 思路: INSERT 一个 enabled FIXED_RATE job_def (interval=15s) → TriggerReconciler ≤30s 接管 →
+  #       wheel/quartz fire → trigger_request(SCHEDULED) 自增。polling 最多 60s
+  # 上限 = 30s reconciler + 15s 一个 fire 周期 + 缓冲 ≈ 45-60s
+  PROBE_FXR_JOB_CODE="${PROBE_TAG}-fxr"
+  PROBE_FXR_TENANT="default-tenant"
+  fxr_def_id=$(psql_q "INSERT INTO batch.job_definition (
+      tenant_id, job_code, job_name, job_type, biz_type,
+      schedule_type, schedule_expr, timezone, trigger_mode,
+      enabled, created_by
+    ) VALUES (
+      '$PROBE_FXR_TENANT', '$PROBE_FXR_JOB_CODE', 'seedval fixed-rate probe', 'GENERAL', 'TEST',
+      'FIXED_RATE', '15', 'Asia/Shanghai', 'SCHEDULED',
+      true, 'seedval'
+    ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true RETURNING id")
+  if [[ -z "$fxr_def_id" ]]; then
+    result fail "Trigger FIXED_RATE 真触发" "INSERT job_definition 失败,无法验证"
+  else
+    fxr_baseline=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE' AND trigger_type='SCHEDULED'")
+    fxr_start=$(date +%s)
+    fxr_deadline=$(( fxr_start + 60 ))
+    fxr_fired=0
+    while [[ $(date +%s) -lt $fxr_deadline ]]; do
+      fxr_fired=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE' AND trigger_type='SCHEDULED'")
+      if [[ "$fxr_fired" -gt "$fxr_baseline" ]]; then break; fi
+      sleep 5
+    done
+    fxr_elapsed=$(( $(date +%s) - fxr_start ))
+    if [[ "$fxr_fired" -gt "$fxr_baseline" ]]; then
+      result pass "Trigger FIXED_RATE 真触发" "PROBE interval=15s, ${fxr_elapsed}s 内观察到 $fxr_fired 条 SCHEDULED trigger_request (baseline=$fxr_baseline)"
+    else
+      result fail "Trigger FIXED_RATE 真触发" "60s 内 trigger_request 无 SCHEDULED 新增 (baseline=$fxr_baseline), 检查 batch-trigger 日志 + reconciler 周期 (默认 30s)"
+    fi
+    # 立即 disable + 显式删 job_definition (避免 PROBE FIXED_RATE 持续 fire 污染后续 run)
+    # do_cleanup 兜底也会清, 这里 explicit 减少 fire 间隔
+    psql_q "UPDATE batch.job_definition SET enabled=false WHERE id=$fxr_def_id" >/dev/null
+    psql_q "DELETE FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE'" >/dev/null
+    psql_q "DELETE FROM batch.job_definition WHERE id=$fxr_def_id" >/dev/null
+  fi
 fi
 
 # ---------- 11. 清理探针(POST cleanup, 全 seedval-* sweep) ----------
