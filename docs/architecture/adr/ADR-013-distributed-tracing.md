@@ -67,7 +67,7 @@ Spring Boot 4.x + 已加依赖后自动获得：
 - `@Observed` 注解通过 AOP 拦截，自调用（`this.method()`）无效，需走 Spring proxy
 
 **待 follow-up（本 ADR 不做）**：
-- **业务 `trace_id` 字段与 W3C TraceContext 桥接**：进入业务流程时若有 OTel current span，应用 span.getTraceId() 作为 `trace_id` 字段值；反之入参带 `trace_id` 时通过 `Span.fromBuilder().setTraceId()` 注入 OTel context。涉及多模块 cross-cutting 改造，单独 ADR-13.1 或 follow-up commit 处理。
+- ~~**业务 `trace_id` 字段与 W3C TraceContext 桥接**~~ ✅ **2026-05-03 已落地**：新增 `OtelTraceContext.currentTraceIdOrNull()` 工具，`IdGenerator.newTraceId()` 优先取 OTel current span 的 traceId（32 hex chars），无 OTel context 时 fallback UUID。HTTP/Kafka 入口处自动 instrument 已建立 OTel current span，业务字段 `trace_id` 自然与 OTel traceId 一致。反向桥接（业务字段 → 强制 OTel traceId）按 OTel SDK 设计**不做** — OTel TraceContext 应保持 W3C 标准生成机制，外部传入的业务 trace_id 仅作 baggage / log MDC 字段并行存在。
 - **运维 dashboard**：Grafana 已配但未导入 batch 专属 trace dashboard，单独立项。
 - **采样策略动态调整**：当前固定值，生产可考虑 head-based / tail-based 自适应采样。
 
@@ -85,3 +85,4 @@ Spring Boot 4.x + 已加依赖后自动获得：
 | ~2026-04 | batch-common pom 加 micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp |
 | ~2026-04 | batch-defaults.yml 加 management.tracing 配置 |
 | 2026-05-03 | **本 ADR**：补 ObservedAspect bean + 3 个种子 manual span，闭环可用 |
+| 2026-05-03 | **业务 trace_id 桥接**：`OtelTraceContext` + `IdGenerator.newTraceId()` 优先用 OTel current span traceId，业务字段与 OTel timeline 一致 |
