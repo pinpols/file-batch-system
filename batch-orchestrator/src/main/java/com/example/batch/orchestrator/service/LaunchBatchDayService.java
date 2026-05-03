@@ -334,8 +334,13 @@ public class LaunchBatchDayService {
     return cutoffAt.plusSeconds(calendar.slaOffsetMin() * 60L);
   }
 
+  /**
+   * P0-3 (2026-05-03): 之前 SETTLED/FAILED 都返回 true → 任何后续触发会无声把状态拉回 IN_FLIGHT, settled_at 重置. 财务对账
+   * 看到 "已结算的日期重新变 IN_FLIGHT" 会丢锚点. 修正: SETTLED 是终态硬约束, 永不 reopen; 真要重跑必须显式 catch-up 走新批次. FAILED
+   * 仍允许 reopen (因为 settle 自己会驱动 catch-up, 重跑成功就 SETTLED, 这是设计内行为).
+   */
   boolean shouldReopenBatchDay(String dayStatus) {
-    return "FAILED".equalsIgnoreCase(dayStatus) || "SETTLED".equalsIgnoreCase(dayStatus);
+    return "FAILED".equalsIgnoreCase(dayStatus);
   }
 
   boolean isPastBatchDayCutoff(BatchDayInstanceEntity batchDay, String calendarCode) {
@@ -407,12 +412,24 @@ public class LaunchBatchDayService {
     return request != null && TriggerType.CATCH_UP == request.triggerType();
   }
 
+  /**
+   * P0-2 (2026-05-03): 之前仅 EVENT 触发路径生效, SCHEDULED 严重 misfire (drift 几小时) / API 用旧 bizDate 重灌 /
+   * MANUAL 操作员补单 都会绕过 cutoff 检查直接落新 instance, late_count 不增加, day_status 已 SETTLED 还能加 instance,
+   * settle 永远漂移.
+   *
+   * <p>修正: 所有非 RERUN/CATCH_UP 的 triggerType 都跑 cutoff/容忍窗口判断. RERUN 与 CATCH_UP 显式表达 "操作员/系统知情重跑",
+   * 跳过窗口检查; 其余路径 (EVENT/SCHEDULED/API/MANUAL) 都按 batch_day 状态决定走 LATE_ACCEPTED 还是翻 CATCH_UP 路由补跑.
+   */
   LaunchRequest routeLateArrivalIfNeeded(LaunchRequest request, LaunchLoadResult loaded) {
     if (request == null
-        || request.triggerType() != TriggerType.EVENT
         || loaded == null
         || loaded.jobDefinition() == null
         || request.bizDate() == null) {
+      return request;
+    }
+    // RERUN / CATCH_UP 是显式的"操作员/系统知情重跑", 不走 late_arrival 窗口检查
+    TriggerType triggerType = request.triggerType();
+    if (triggerType == TriggerType.RERUN || triggerType == TriggerType.CATCH_UP) {
       return request;
     }
     String calendarCode = LaunchParamResolver.textValue(loaded.jobDefinition().calendarCode());
@@ -457,16 +474,18 @@ public class LaunchBatchDayService {
           request.traceId(),
           routedParams);
     }
-    // late-rejected：先 DB CAS（仅当 trigger_type 仍为 EVENT 时才能翻为 CATCH_UP），
-    // 成功后再同步内存 LaunchRequest / triggerRequest；CAS 未命中说明并发路径已改过状态，
-    // 此时必须以 DB 的最新 trigger_type 为准同步内存，避免内存持续持有过期 EVENT 误导 prepareJobInstance。
+    // late-rejected：先 DB CAS 把当前 trigger_type 翻为 CATCH_UP. P0-2 之前 expected 仅 EVENT,
+    // 现在所有非 RERUN/CATCH_UP/SUBJOB 的 triggerType 都可能进入此路径, expected 用 request 自身的 triggerType code.
+    // CAS 未命中说明并发路径已改过状态, 以 DB 的最新 trigger_type 为准同步内存,
+    // 避免内存持续持有过期 triggerType 误导 prepareJobInstance.
     routedParams.put("catchUpReason", "LATE_ARRIVAL_OR_CLOSED_BATCH_DAY");
+    routedParams.put("originalTriggerType", triggerType.code());
     int casRows =
         jobMappers.triggerRequestMapper.updateTriggerType(
             request.tenantId(),
             request.requestId(),
             TriggerType.CATCH_UP.code(),
-            TriggerType.EVENT.code());
+            triggerType.code());
     if (casRows == 0) {
       TriggerRequestEntity latest =
           jobMappers.triggerRequestMapper.selectByTenantAndRequestId(
