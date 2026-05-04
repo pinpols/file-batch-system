@@ -1,6 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -217,6 +218,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
           "uploaded via SFTP",
           evidence);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
+
       return new DispatchResult(
           false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
     } finally {
@@ -271,6 +274,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       Thread.currentThread().interrupt();
       future.cancel(true);
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
+
       // 其他 disconnect 异常吞掉（原语义）
     }
   }

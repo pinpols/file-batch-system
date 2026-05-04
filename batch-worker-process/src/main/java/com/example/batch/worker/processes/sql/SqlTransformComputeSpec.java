@@ -1,6 +1,7 @@
 package com.example.batch.worker.processes.sql;
 
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
@@ -222,6 +223,8 @@ public record SqlTransformComputeSpec(
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(SqlTransformComputeSpec.class, "catch:Exception", ignored);
+
         return Map.of();
       }
     }

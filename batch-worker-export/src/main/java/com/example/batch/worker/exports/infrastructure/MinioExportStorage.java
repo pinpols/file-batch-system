@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.infrastructure;
 
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.MinioBucketSupport;
 import io.minio.CopyObjectArgs;
 import io.minio.CopySource;
@@ -205,6 +206,8 @@ public class MinioExportStorage {
           StatObjectArgs.builder().bucket(properties.getBucket()).object(objectName).build());
       return true;
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(MinioExportStorage.class, "catch:Exception", ex);
+
       return false;
     }
   }

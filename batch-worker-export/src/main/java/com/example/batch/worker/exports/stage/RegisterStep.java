@@ -1,6 +1,7 @@
 package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.utils.Texts;
@@ -212,6 +213,8 @@ public class RegisterStep implements ExportStageStep {
     try {
       return LocalDate.parse(bizDate);
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(RegisterStep.class, "catch:Exception", ignored);
+
       return null;
     }
   }

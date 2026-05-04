@@ -1,6 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.activation.DataHandler;
@@ -107,6 +108,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
           "sent via SMTP",
           "mailto:" + mailConfig.to());
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(SmtpEmailDispatchChannelAdapter.class, "catch:Exception", ex);
+
       return new DispatchResult(
           false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
     }

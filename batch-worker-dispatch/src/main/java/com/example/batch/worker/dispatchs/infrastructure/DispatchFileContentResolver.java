@@ -1,6 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -96,6 +97,9 @@ public class DispatchFileContentResolver {
           return security;
         }
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(
+            DispatchFileContentResolver.class, "catch:Exception", ignored);
+
         return Map.of();
       }
     }

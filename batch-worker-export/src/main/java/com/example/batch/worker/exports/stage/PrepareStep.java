@@ -1,6 +1,7 @@
 package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -80,6 +81,8 @@ public class PrepareStep implements ExportStageStep {
       context.getAttributes().put("objectName", finalObjectName);
       context.getAttributes().put("tempObjectName", tempObjectName);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(PrepareStep.class, "catch:Exception", ex);
+
       return ExportStageResult.failure(
           stage(),
           "EXPORT_PREPARE_PARSE_FAILED",

@@ -3,6 +3,7 @@ package com.example.batch.worker.processes.sql;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
@@ -15,7 +16,6 @@ import com.example.batch.worker.processes.stage.ProcessRuntimeKeys;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.temporal.TemporalAccessor;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -229,6 +229,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       try {
         row = jdbc.queryForMap(checkSql, params);
       } catch (EmptyResultDataAccessException ex) {
+        SwallowedExceptionLogger.info(
+            SqlTransformComputePlugin.class, "catch:EmptyResultDataAccessException", ex);
+
         metrics.incrementValidationFailed(context.getTenantId(), rule.name());
         return ProcessStageResult.failure(
             ProcessStage.VALIDATE,
@@ -564,15 +567,12 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       try {
         return Integer.parseInt(s);
       } catch (NumberFormatException ignored) {
+        SwallowedExceptionLogger.info(
+            SqlTransformComputePlugin.class, "catch:NumberFormatException", ignored);
+
         return 0;
       }
     }
     return 0;
-  }
-
-  /** 配合 SetUtils-style 的 list 兼容(reserved for future use)。 */
-  @SuppressWarnings("unused")
-  private static List<Object> emptyList() {
-    return List.of();
   }
 }

@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -81,6 +82,8 @@ final class RemoteFilesystemDispatchSupport {
       return finishResult(
           command, externalRequestId, receiptCode, "uploaded via NAS", target.toString());
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+
       return failResult(command, ex);
     }
   }
@@ -164,6 +167,8 @@ final class RemoteFilesystemDispatchSupport {
           "uploaded via OSS",
           "oss://" + bucket + PATH_SEP + objectName);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+
       return failResult(command, ex);
     }
   }
@@ -201,6 +206,8 @@ final class RemoteFilesystemDispatchSupport {
       Files.deleteIfExists(probeFile);
       return new DispatchChannelProbeResult(true, "nas probe ok", probeFile.toString());
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
   }
@@ -232,6 +239,8 @@ final class RemoteFilesystemDispatchSupport {
       return new DispatchChannelProbeResult(
           true, "oss probe ok", "oss://" + bucket + PATH_SEP + objectName);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
   }
@@ -254,6 +263,8 @@ final class RemoteFilesystemDispatchSupport {
       }
       return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
   }
@@ -276,6 +287,8 @@ final class RemoteFilesystemDispatchSupport {
       }
       return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
   }
@@ -308,6 +321,8 @@ final class RemoteFilesystemDispatchSupport {
       return new DispatchChannelProbeResult(
           false, "http probe failed (status=" + status + ")", endpoint);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
   }
@@ -422,6 +437,9 @@ final class RemoteFilesystemDispatchSupport {
     try {
       return Integer.parseInt(String.valueOf(v).trim());
     } catch (NumberFormatException e) {
+      SwallowedExceptionLogger.info(
+          RemoteFilesystemDispatchSupport.class, "catch:NumberFormatException", e);
+
       return defaultValue;
     }
   }
