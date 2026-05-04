@@ -165,7 +165,7 @@ INSERT INTO batch.job_instance (
 ) VALUES
     (4001, 'default-tenant', 2001, 3001, 'import_customer_job', 'IMP-20260322-001', DATE '2026-03-22', 'API', 'RUNNING', 'import_queue', 'import', 3, 'default-tenant:IMP-20260322-001', 1, 3, 1, 0, 'trace-import-001', jsonb_build_object('mode', 'customer_import', 'fileId', 5001), TIMESTAMPTZ '2026-03-22 08:00:12+08', NULL, 'BATCH-IMP-20260322-001', 'ops-user', FALSE, TRUE, NULL, 5001, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:12+08', TIMESTAMPTZ '2026-03-22 08:00:12+08'),
     (4002, 'default-tenant', 2002, 3002, 'export_settlement_job', 'EXP-20260322-001', DATE '2026-03-22', 'SCHEDULED', 'SUCCESS', 'export_queue', 'export', 4, 'default-tenant:EXP-20260322-001', 2, 2, 2, 0, 'trace-export-001', jsonb_build_object('mode', 'settlement_export', 'fileId', 5003), TIMESTAMPTZ '2026-03-22 08:00:22+08', TIMESTAMPTZ '2026-03-22 08:20:22+08', 'BATCH-EXP-20260322-001', 'ops-user', TRUE, FALSE, 'retry validation', 5003, NULL, jsonb_build_object('result', 'success'), TIMESTAMPTZ '2026-03-22 08:00:22+08', TIMESTAMPTZ '2026-03-22 08:20:22+08'),
-    (4003, 'tenant-finance', 2003, 3003, 'finance_recon_workflow', 'WF-20260322-001', DATE '2026-03-22', 'CATCH_UP', 'RUNNING', 'finance_export_queue', 'export', 2, 'tenant-finance:WF-20260322-001', 1, 2, 1, 0, 'trace-workflow-001', jsonb_build_object('mode', 'workflow', 'fileId', 5005), TIMESTAMPTZ '2026-03-22 08:00:32+08', NULL, 'BATCH-WF-20260322-001', 'ops-user', FALSE, FALSE, NULL, 5005, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:32+08', TIMESTAMPTZ '2026-03-22 08:00:32+08'),
+    (4003, 'tenant-finance', 2003, 3003, 'finance_recon_workflow', 'WF-20260322-001', DATE '2026-03-22', 'CATCH_UP', 'FAILED', 'finance_export_queue', 'export', 2, 'tenant-finance:WF-20260322-001', 1, 2, 1, 1, 'trace-workflow-001', jsonb_build_object('mode', 'workflow', 'fileId', 5005), TIMESTAMPTZ '2026-03-22 08:00:32+08', TIMESTAMPTZ '2026-03-22 08:06:00+08', 'BATCH-WF-20260322-001', 'ops-user', FALSE, FALSE, NULL, 5005, NULL, jsonb_build_object('result', 'failed', 'reason', 'seed terminal sample'), TIMESTAMPTZ '2026-03-22 08:00:32+08', TIMESTAMPTZ '2026-03-22 08:06:00+08'),
     (4004, 'default-tenant', 2002, NULL, 'export_settlement_job', 'EXP-20260322-002', DATE '2026-03-22', 'MANUAL', 'WAITING', 'export_queue', 'export', 5, 'default-tenant:EXP-20260322-002', 0, 0, 0, 0, 'trace-export-002', jsonb_build_object('mode', 'manual_export', 'fileId', 5006), NULL, NULL, 'BATCH-EXP-20260322-002', 'admin', FALSE, FALSE, NULL, 5006, 4002, NULL, TIMESTAMPTZ '2026-03-22 08:00:40+08', TIMESTAMPTZ '2026-03-22 08:00:40+08');
 
 INSERT INTO batch.job_partition (
@@ -177,8 +177,8 @@ INSERT INTO batch.job_partition (
     (4102, 'default-tenant', 4001, 2, 'customer', 'FAILED', 'import', 'import-node-1', TIMESTAMPTZ '2026-03-22 07:30:00+08', 1, 'IMP-20260322-001:2', 'default-tenant:IMP-20260322-001:2', jsonb_build_object('fileId', 5001, 'chunk', 2), jsonb_build_object('loaded', 500), TIMESTAMPTZ '2026-03-22 08:00:14+08', TIMESTAMPTZ '2026-03-22 08:05:00+08', TIMESTAMPTZ '2026-03-22 08:00:14+08', TIMESTAMPTZ '2026-03-22 08:05:00+08'),
     (4103, 'default-tenant', 4002, 1, 'settlement', 'SUCCESS', 'export', 'export-node-1', TIMESTAMPTZ '2026-03-22 09:00:00+08', 0, 'EXP-20260322-001:1', 'default-tenant:EXP-20260322-001:1', jsonb_build_object('batchId', 2001), jsonb_build_object('records', 3), TIMESTAMPTZ '2026-03-22 08:00:23+08', TIMESTAMPTZ '2026-03-22 08:20:21+08', TIMESTAMPTZ '2026-03-22 08:00:23+08', TIMESTAMPTZ '2026-03-22 08:20:21+08'),
     (4104, 'default-tenant', 4002, 2, 'settlement', 'SUCCESS', 'export', 'export-node-1', TIMESTAMPTZ '2026-03-22 09:00:00+08', 0, 'EXP-20260322-001:2', 'default-tenant:EXP-20260322-001:2', jsonb_build_object('batchId', 2001), jsonb_build_object('records', 1), TIMESTAMPTZ '2026-03-22 08:00:24+08', TIMESTAMPTZ '2026-03-22 08:20:21+08', TIMESTAMPTZ '2026-03-22 08:00:24+08', TIMESTAMPTZ '2026-03-22 08:20:21+08'),
-    (4105, 'tenant-finance', 4003, 1, 'recon', 'READY', 'export', NULL, NULL, 0, 'WF-20260322-001:1', 'tenant-finance:WF-20260322-001:1', jsonb_build_object('workflow', true), NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:00:33+08'),
-    (4106, 'tenant-finance', 4003, 2, 'recon', 'WAITING', 'export', NULL, NULL, 0, 'WF-20260322-001:2', 'tenant-finance:WF-20260322-001:2', jsonb_build_object('workflow', true), NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:34+08', TIMESTAMPTZ '2026-03-22 08:00:34+08');
+    (4105, 'tenant-finance', 4003, 1, 'recon', 'FAILED', 'export', NULL, NULL, 0, 'WF-20260322-001:1', 'tenant-finance:WF-20260322-001:1', jsonb_build_object('workflow', true), jsonb_build_object('reason', 'seed terminal sample'), NULL, TIMESTAMPTZ '2026-03-22 08:06:00+08', TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:06:00+08'),
+    (4106, 'tenant-finance', 4003, 2, 'recon', 'FAILED', 'export', NULL, NULL, 0, 'WF-20260322-001:2', 'tenant-finance:WF-20260322-001:2', jsonb_build_object('workflow', true), jsonb_build_object('reason', 'seed terminal sample'), NULL, TIMESTAMPTZ '2026-03-22 08:06:00+08', TIMESTAMPTZ '2026-03-22 08:00:34+08', TIMESTAMPTZ '2026-03-22 08:06:00+08');
 
 INSERT INTO batch.job_task (
     id, tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status, assigned_worker_code,
@@ -188,8 +188,8 @@ INSERT INTO batch.job_task (
     (4202, 'default-tenant', 4001, 4102, 'EXECUTION', 1, 'FAILED', 'import-node-1', jsonb_build_object('stage', 'validate'), jsonb_build_object('failedRows', 5), 'IMPORT_VALIDATE_REQUIRED', 'Required fields missing', TIMESTAMPTZ '2026-03-22 08:00:14+08', TIMESTAMPTZ '2026-03-22 08:05:00+08', TIMESTAMPTZ '2026-03-22 08:00:14+08', TIMESTAMPTZ '2026-03-22 08:05:00+08'),
     (4203, 'default-tenant', 4002, 4103, 'EXECUTION', 1, 'SUCCESS', 'export-node-1', jsonb_build_object('stage', 'generate'), jsonb_build_object('rows', 3), NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:23+08', TIMESTAMPTZ '2026-03-22 08:20:20+08', TIMESTAMPTZ '2026-03-22 08:00:23+08', TIMESTAMPTZ '2026-03-22 08:20:20+08'),
     (4204, 'default-tenant', 4002, 4104, 'COMPENSATION', 1, 'SUCCESS', 'export-node-1', jsonb_build_object('stage', 'register'), jsonb_build_object('rows', 1), NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:24+08', TIMESTAMPTZ '2026-03-22 08:20:20+08', TIMESTAMPTZ '2026-03-22 08:00:24+08', TIMESTAMPTZ '2026-03-22 08:20:20+08'),
-    (4205, 'tenant-finance', 4003, 4105, 'EXECUTION', 1, 'READY', 'export-node-1', jsonb_build_object('stage', 'workflow'), NULL, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:00:33+08'),
-    (4206, 'tenant-finance', 4003, 4106, 'REPLAY', 1, 'CREATED', NULL, jsonb_build_object('stage', 'replay'), NULL, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:34+08', TIMESTAMPTZ '2026-03-22 08:00:34+08');
+    (4205, 'tenant-finance', 4003, 4105, 'EXECUTION', 1, 'FAILED', 'export-node-1', jsonb_build_object('stage', 'workflow'), jsonb_build_object('reason', 'seed terminal sample'), 'WORKFLOW_SEED_FAILED', 'Seed workflow terminal sample', NULL, TIMESTAMPTZ '2026-03-22 08:06:00+08', TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:06:00+08'),
+    (4206, 'tenant-finance', 4003, 4106, 'REPLAY', 1, 'FAILED', NULL, jsonb_build_object('stage', 'replay'), jsonb_build_object('reason', 'seed terminal sample'), 'WORKFLOW_SEED_FAILED', 'Seed workflow terminal sample', NULL, TIMESTAMPTZ '2026-03-22 08:06:00+08', TIMESTAMPTZ '2026-03-22 08:00:34+08', TIMESTAMPTZ '2026-03-22 08:06:00+08');
 
 INSERT INTO batch.job_step_instance (
     id, tenant_id, job_instance_id, job_partition_id, job_task_id, step_code, step_type, step_status, retry_count,
@@ -198,21 +198,21 @@ INSERT INTO batch.job_step_instance (
     (4301, 'default-tenant', 4001, 4101, 4201, 'import_validate', 'VALIDATE', 'RUNNING', 0, 5001, jsonb_build_object('rows', 500), NULL, NULL, 0, TIMESTAMPTZ '2026-03-22 08:00:13+08', NULL, TIMESTAMPTZ '2026-03-22 08:00:13+08', TIMESTAMPTZ '2026-03-22 08:00:13+08'),
     (4302, 'default-tenant', 4001, 4102, 4202, 'import_validate', 'VALIDATE', 'FAILED', 1, 5001, jsonb_build_object('rows', 495), 'IMPORT_VALIDATE_REQUIRED', 'Required fields missing', 1, TIMESTAMPTZ '2026-03-22 08:00:14+08', TIMESTAMPTZ '2026-03-22 08:05:00+08', TIMESTAMPTZ '2026-03-22 08:00:14+08', TIMESTAMPTZ '2026-03-22 08:05:00+08'),
     (4303, 'default-tenant', 4002, 4103, 4203, 'export_generate', 'GENERATE', 'SUCCESS', 0, 5003, jsonb_build_object('rows', 3), NULL, NULL, 1, TIMESTAMPTZ '2026-03-22 08:00:23+08', TIMESTAMPTZ '2026-03-22 08:20:20+08', TIMESTAMPTZ '2026-03-22 08:00:23+08', TIMESTAMPTZ '2026-03-22 08:20:20+08'),
-    (4304, 'tenant-finance', 4003, 4105, 4205, 'workflow_recon', 'TASK', 'READY', 0, 5005, NULL, NULL, NULL, 0, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:00:33+08');
+    (4304, 'tenant-finance', 4003, 4105, 4205, 'workflow_recon', 'TASK', 'FAILED', 0, 5005, NULL, 'WORKFLOW_SEED_FAILED', 'Seed workflow terminal sample', 0, NULL, TIMESTAMPTZ '2026-03-22 08:06:00+08', TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:06:00+08');
 
 INSERT INTO batch.workflow_run (
     id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status, current_node_code,
     trace_id, started_at, finished_at, created_at, updated_at
 ) VALUES
-    (4401, 'tenant-finance', 2101, 4003, DATE '2026-03-22', 'RUNNING', 'IMPORT_STEP', 'trace-workflow-001', TIMESTAMPTZ '2026-03-22 08:00:33+08', NULL, TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:00:33+08');
+    (4401, 'tenant-finance', 2101, 4003, DATE '2026-03-22', 'FAILED', 'IMPORT_STEP', 'trace-workflow-001', TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:06:00+08', TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:06:00+08');
 
 INSERT INTO batch.workflow_node_run (
     id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count, error_code, error_message,
     started_at, finished_at, duration_ms
 ) VALUES
     (4501, 4401, 'START', 'START', 1, 'SUCCESS', 0, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:33+08', TIMESTAMPTZ '2026-03-22 08:00:34+08', 1000),
-    (4502, 4401, 'IMPORT_STEP', 'FILE_STEP', 1, 'RUNNING', 0, NULL, NULL, TIMESTAMPTZ '2026-03-22 08:00:34+08', NULL, 0),
-    (4503, 4401, 'EXPORT_STEP', 'TASK', 1, 'READY', 0, NULL, NULL, NULL, NULL, 0);
+    (4502, 4401, 'IMPORT_STEP', 'FILE_STEP', 1, 'FAILED', 0, 'WORKFLOW_SEED_FAILED', 'Seed workflow terminal sample', TIMESTAMPTZ '2026-03-22 08:00:34+08', TIMESTAMPTZ '2026-03-22 08:06:00+08', 326000),
+    (4503, 4401, 'EXPORT_STEP', 'TASK', 1, 'FAILED', 0, 'WORKFLOW_SEED_FAILED', 'Seed workflow terminal sample', NULL, TIMESTAMPTZ '2026-03-22 08:06:00+08', 0);
 
 INSERT INTO batch.pipeline_definition (
     id, tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group, version, enabled, description, created_at, updated_at
