@@ -45,9 +45,10 @@ public final class ConsoleExcelStyles {
   private static final byte[] READ_ONLY_HEADER_RGB = {0x5B, 0x6B, 0x7A};
 
   /** 模板/导出 workbook 4 类辅助 sheet 的统一中文名,所有写入器走这里,避免英中混用。 */
-  public static final String SHEET_NAME_README = "说明";
+  public static final String SHEET_NAME_README = "填写说明";
 
-  public static final String SHEET_NAME_GUIDE = "填写说明";
+  public static final String SHEET_NAME_GUIDE = "字段说明";
+  public static final String SHEET_NAME_FIELD_GUIDE = "字段说明";
   public static final String SHEET_NAME_DICT = "字典";
   public static final String SHEET_NAME_VALIDATION = "校验";
 
@@ -348,6 +349,57 @@ public final class ConsoleExcelStyles {
     sheet.setColumnWidth(1, 12 * 256);
     sheet.setColumnWidth(2, 32 * 256);
     sheet.setColumnWidth(3, 50 * 256);
+  }
+
+  public static void createFieldGuideSheet(
+      Workbook workbook,
+      String dataSheetName,
+      List<String> columns,
+      Map<String, ColumnGuide> guides) {
+    createFieldGuideSheet(workbook, Map.of(dataSheetName, columns), Map.of(dataSheetName, guides));
+  }
+
+  public static void createFieldGuideSheet(
+      Workbook workbook,
+      Map<String, List<String>> sheetColumns,
+      Map<String, Map<String, ColumnGuide>> sheetGuides) {
+    Sheet sheet = workbook.createSheet(SHEET_NAME_FIELD_GUIDE);
+    sheet.createFreezePane(0, 1, 0, 1);
+    CellStyle headerStyle = createHeaderStyle(workbook);
+    List<String> headers =
+        List.of(
+            "sheet_name",
+            "field_name",
+            "required",
+            "editable",
+            "format",
+            "example",
+            "allowed_values",
+            "default_value",
+            "description");
+    writeHeaders(sheet, headers, headerStyle);
+    int rowIndex = 1;
+    for (Map.Entry<String, List<String>> entry : sheetColumns.entrySet()) {
+      String sheetName = entry.getKey();
+      Map<String, ColumnGuide> guides = sheetGuides.getOrDefault(sheetName, Map.of());
+      for (String column : entry.getValue()) {
+        ColumnGuide guide = guides.get(column);
+        Row row = sheet.createRow(rowIndex++);
+        writeCell(row, 0, sheetName);
+        writeCell(row, 1, column);
+        writeCell(row, 2, guide != null && guide.required() ? "是" : "否");
+        writeCell(row, 3, guide != null && guide.readOnly() ? "否" : "是");
+        writeCell(row, 4, guide == null ? "" : guide.formatHint());
+        writeCell(row, 5, guide == null ? "" : guide.example());
+        writeCell(row, 6, guide == null ? "" : String.join(" / ", guide.allowedValues()));
+        writeCell(row, 7, "");
+        writeCell(row, 8, guide == null ? "" : guide.description());
+      }
+    }
+    int[] widths = {20, 32, 12, 12, 18, 36, 44, 18, 60};
+    for (int i = 0; i < widths.length; i++) {
+      sheet.setColumnWidth(i, widths[i] * 256);
+    }
   }
 
   private static CellStyle resolveTemplateHeaderStyle(

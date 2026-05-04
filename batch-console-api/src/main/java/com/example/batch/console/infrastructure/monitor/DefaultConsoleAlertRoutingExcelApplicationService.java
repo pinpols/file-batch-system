@@ -216,6 +216,13 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
   }
 
   @Override
+  protected boolean rowExists(RoutingRow row, String tenantId) {
+    Map<String, Object> existing =
+        alertRoutingConfigMapper.selectByUniqueKey(tenantId, row.routeCode());
+    return existing != null && !existing.isEmpty();
+  }
+
+  @Override
   protected void logChange(
       String tenantId,
       RoutingRow row,

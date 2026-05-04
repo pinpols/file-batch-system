@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -79,11 +80,12 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
     assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
 
     try (Workbook workbook = WorkbookFactory.create(response.getBody().getInputStream())) {
-      assertThat(workbook.getNumberOfSheets()).isEqualTo(4);
+      assertThat(workbook.getNumberOfSheets()).isEqualTo(5);
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("file_channel_config");
-      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("说明");
-      assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("字典");
-      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("校验");
+      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("填写说明");
+      assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("字段说明");
+      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("字典");
+      assertThat(workbook.getSheetAt(4).getSheetName()).isEqualTo("校验");
       XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);
       Row header = sheet.getRow(0);
       assertThat(header.getCell(1).getStringCellValue()).isEqualTo("channel_code");
@@ -120,6 +122,8 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
     assertThat(preview.invalidRows()).isZero();
     assertThat(preview.rows()).hasSize(1);
     assertThat(preview.rows().get(0).channelCode()).isEqualTo("CH1");
+    assertThat(preview.changeSummary().insertRows()).isEqualTo(1);
+    assertThat(preview.changeSummary().updateRows()).isZero();
 
     var applyRequest = new ExcelApplyRequest();
     applyRequest.setReason("bulk maintenance");
@@ -128,7 +132,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
     assertThat(apply.updatedRows()).isZero();
     assertThat(apply.appliedRows()).isEqualTo(1);
 
-    verify(fileChannelConfigMapper).selectByUniqueKey("t1", "CH1");
+    verify(fileChannelConfigMapper, times(2)).selectByUniqueKey("t1", "CH1");
     verify(configChangeLogMapper).insertConfigChangeLog(any());
   }
 

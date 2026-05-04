@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -81,11 +82,13 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
     assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
 
     try (Workbook workbook = WorkbookFactory.create(response.getBody().getInputStream())) {
-      assertThat(workbook.getNumberOfSheets()).isEqualTo(4);
+      assertThat(workbook.getNumberOfSheets()).isEqualTo(6);
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("file_template_config");
-      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("说明");
-      assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("字典");
-      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("校验");
+      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("file_template_json");
+      assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("填写说明");
+      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("字段说明");
+      assertThat(workbook.getSheetAt(4).getSheetName()).isEqualTo("字典");
+      assertThat(workbook.getSheetAt(5).getSheetName()).isEqualTo("校验");
       XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);
       Row header = sheet.getRow(0);
       assertThat(header.getCell(1).getStringCellValue()).isEqualTo("template_code");
@@ -122,6 +125,8 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
     assertThat(preview.invalidRows()).isZero();
     assertThat(preview.rows()).hasSize(1);
     assertThat(preview.rows().get(0).templateCode()).isEqualTo("TPL1");
+    assertThat(preview.changeSummary().insertRows()).isEqualTo(1);
+    assertThat(preview.changeSummary().updateRows()).isZero();
 
     var applyRequest = new ExcelApplyRequest();
     applyRequest.setReason("bulk maintenance");
@@ -130,7 +135,7 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
     assertThat(apply.updatedRows()).isZero();
     assertThat(apply.appliedRows()).isEqualTo(1);
 
-    verify(fileTemplateConfigMapper).selectByUniqueKey("t1", "TPL1", 1);
+    verify(fileTemplateConfigMapper, times(2)).selectByUniqueKey("t1", "TPL1", 1);
     verify(configChangeLogMapper).insertConfigChangeLog(any());
   }
 

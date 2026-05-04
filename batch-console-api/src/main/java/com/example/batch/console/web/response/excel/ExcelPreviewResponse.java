@@ -16,7 +16,8 @@ public record ExcelPreviewResponse<R>(
     int invalidRows,
     List<R> rows,
     List<ExcelRowIssue> issues,
-    String previewWorkbookUrl) {
+    String previewWorkbookUrl,
+    ExcelChangeSummary changeSummary) {
 
   /**
    * 不带 workbook URL 的便捷构造（向后兼容）。
@@ -36,4 +37,29 @@ public record ExcelPreviewResponse<R>(
       List<ExcelRowIssue> issues) {
     this(uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues, null);
   }
+
+  public ExcelPreviewResponse(
+      String uploadToken,
+      String fileName,
+      String sheetName,
+      int totalRows,
+      int validRows,
+      int invalidRows,
+      List<R> rows,
+      List<ExcelRowIssue> issues,
+      String previewWorkbookUrl) {
+    this(
+        uploadToken,
+        fileName,
+        sheetName,
+        totalRows,
+        validRows,
+        invalidRows,
+        rows,
+        issues,
+        previewWorkbookUrl,
+        null);
+  }
+
+  public record ExcelChangeSummary(int insertRows, int updateRows, int upsertRows) {}
 }

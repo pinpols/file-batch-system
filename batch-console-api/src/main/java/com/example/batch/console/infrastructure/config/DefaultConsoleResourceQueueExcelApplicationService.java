@@ -210,6 +210,12 @@ public class DefaultConsoleResourceQueueExcelApplicationService
   }
 
   @Override
+  protected boolean rowExists(QueueRow row, String tenantId) {
+    Map<String, Object> existing = resourceQueueMapper.selectByUniqueKey(tenantId, row.queueCode());
+    return existing != null && !existing.isEmpty();
+  }
+
+  @Override
   protected void logChange(
       String tenantId,
       QueueRow row,
