@@ -214,16 +214,17 @@ public enum XxxType implements DictEnum {
   - `provider.defaultZone()` — 平台默认 `ZoneId`（永远非 null）
   - `provider.resolveOrDefault(preferred)` — 优先 IANA 字符串（如 `business_calendar.timezone`），空/非法时回退到默认
 - **业务覆盖优先级**：`business_calendar.timezone` > `batch_window.timezone` > `batch.timezone.default-zone`。`batch_day_instance.timezone_snapshot` 在创建时从日历抓快照，之后日历改 timezone 不影响历史数据回放。
-- **容器 / JVM 协同**：`docker-compose.yml` + `.env.example` 默认 `TZ=Asia/Shanghai`；`batch-defaults.yml` 加 `spring.jackson.time-zone=${BATCH_TIMEZONE_DEFAULT_ZONE:Asia/Shanghai}` 让 Jackson 序列化 `OffsetDateTime` / `Instant` 时保持一致。
-- **豁免**：`ConsoleQuerySupport.parseFlexibleInstant*`（控制台搜索框的宽松日期解析）保留 `systemDefault()`，容忍用户输入；`QuotaResetPolicy.systemZone()` 已 `@Deprecated`，仅遗留测试使用，新代码改走 provider。
+- **容器 / JVM 协同**：`docker-compose.yml` + `.env.example` 以 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 为唯一时区 env 源（容器 `TZ`/`PGTZ` 默认从该变量插值，仍可显式设 `TZ=` 覆盖）；`batch-defaults.yml` 的 `spring.jackson.time-zone` 与 `batch.timezone.default-zone` 同源；本地 `start-all.sh`/`restart.sh` 会 source 同一份 env 并导出 `TZ`（默认等于 `BATCH_TIMEZONE_DEFAULT_ZONE`）及 `LANG`/`LC_ALL`（默认等于 `BATCH_LOCALE`）。
+- **控制台宽松日期解析**：`ConsoleQuerySupport.parseFlexibleInstant*` 的 naive 字符串须显式传入 `ZoneId`；控制台查询服务传入 `BatchTimezoneProvider.defaultZone()`，与平台默认区一致（禁止在该路径使用 `ZoneId.systemDefault()`）。
 - **守护**：新增 `ZoneId.systemDefault()` 用法必须在业务路径之外且加注释说明原因；否则 PR 评审拒绝。
 
 ## 字符编码
 
 **全系统 UTF-8**：系统内部持有、传输、存储、落盘的字符串一律 UTF-8；**导入**（`PreprocessStep`）是唯一允许读非 UTF-8 源文件的边界，读入后立即转为 UTF-8 内部表示。
 
+- **Spring 基线**：`server.servlet.encoding` / `spring.messages.encoding` 在 `batch-defaults.yml` 固定 UTF-8，与以下 locale env 对齐即可，无需再配单独「charset」环境变量。
 - **代码**：一律 `StandardCharsets.UTF_8` 或 `EncodingUtils.resolve(raw)`，**禁止** `Charset.forName("UTF-8")` / 字面量 `"UTF-8"`
-- **中间件 locale**：`docker-compose.yml` 里 postgres / kafka / minio / redis 四个容器统一从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；postgres 另加 `POSTGRES_INITDB_ARGS=--encoding=UTF8`
+- **中间件 locale**：`docker-compose.yml` 里 postgres / kafka / minio / redis 四个容器统一从 `.env` 的 **`BATCH_LOCALE`**（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；postgres 另加 `POSTGRES_INITDB_ARGS=--encoding=UTF8`
 
 详见 `docs/coding-conventions.md §20`（含 Maven / Dockerfile / Spring Boot / Export / Import 全层落地表）。
 
