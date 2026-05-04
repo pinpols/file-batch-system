@@ -1,5 +1,6 @@
 package com.example.batch.console.support.excel;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -95,6 +96,9 @@ public final class ExcelMapRowReader {
       }
       return value;
     } catch (NumberFormatException exception) {
+      SwallowedExceptionLogger.info(
+          ExcelMapRowReader.class, "catch:NumberFormatException", exception);
+
       issues.add(key + " must be integer");
       return min;
     }
@@ -128,6 +132,9 @@ public final class ExcelMapRowReader {
     try {
       return LocalDate.parse(normalized, ISO_DATE);
     } catch (DateTimeParseException exception) {
+      SwallowedExceptionLogger.info(
+          ExcelMapRowReader.class, "catch:DateTimeParseException", exception);
+
       issues.add(key + " must be date in yyyy-MM-dd format");
       return null;
     }
@@ -143,6 +150,9 @@ public final class ExcelMapRowReader {
       JsonUtils.fromJson(normalized, Object.class);
       return normalized;
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          ExcelMapRowReader.class, "catch:IllegalArgumentException", exception);
+
       issues.add(key + " must be valid JSON");
       return normalized;
     }

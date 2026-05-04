@@ -2,6 +2,7 @@ package com.example.batch.console.support.auth;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import lombok.RequiredArgsConstructor;
@@ -90,6 +91,9 @@ public class ConsoleTenantGuard {
     try {
       return requestMetadataResolver.current();
     } catch (IllegalStateException exception) {
+      SwallowedExceptionLogger.info(
+          ConsoleTenantGuard.class, "catch:IllegalStateException", exception);
+
       return null;
     } catch (ScopeNotActiveException exception) {
       return null;

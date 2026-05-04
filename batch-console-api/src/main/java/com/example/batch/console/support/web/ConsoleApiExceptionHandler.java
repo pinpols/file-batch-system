@@ -8,6 +8,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
 import com.example.batch.common.i18n.BizMessageResolver;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import jakarta.validation.ConstraintViolationException;
@@ -166,6 +167,9 @@ public class ConsoleApiExceptionHandler {
                         : downstream.message()));
       }
     } catch (RuntimeException ignored) {
+      SwallowedExceptionLogger.warn(
+          ConsoleApiExceptionHandler.class, "catch:RuntimeException", ignored);
+
       // 继续执行
     }
     // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），避免前端只看到 500

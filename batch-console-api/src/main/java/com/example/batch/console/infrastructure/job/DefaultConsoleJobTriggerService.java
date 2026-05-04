@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure.job;
 
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.job.ConsoleJobTriggerService;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
@@ -58,6 +59,8 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
     try {
       tenantId = ops.resolveTenant(request.getTenantId());
     } catch (Exception e) {
+      SwallowedExceptionLogger.warn(DefaultConsoleJobTriggerService.class, "catch:Exception", e);
+
       errors.add("tenantId invalid: " + e.getMessage());
       result.put("valid", false);
       result.put("errors", errors);
@@ -76,6 +79,8 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
       try {
         ops.parseBizDate(request.getBizDate());
       } catch (Exception e) {
+        SwallowedExceptionLogger.warn(DefaultConsoleJobTriggerService.class, "catch:Exception", e);
+
         errors.add("bizDate format invalid (expected yyyy-MM-dd)");
       }
     }
@@ -83,6 +88,8 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
       try {
         ops.resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL);
       } catch (Exception e) {
+        SwallowedExceptionLogger.warn(DefaultConsoleJobTriggerService.class, "catch:Exception", e);
+
         errors.add("unsupported triggerType: " + request.getTriggerType());
       }
     }
@@ -124,6 +131,8 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
           entry.put("instanceNo", instanceNo);
         }
       } catch (Exception e) {
+        SwallowedExceptionLogger.warn(DefaultConsoleJobTriggerService.class, "catch:Exception", e);
+
         entry.put("status", "FAILED");
         entry.put("error", e.getMessage());
       }

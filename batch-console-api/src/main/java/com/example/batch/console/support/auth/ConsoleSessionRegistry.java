@@ -1,5 +1,6 @@
 package com.example.batch.console.support.auth;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -136,6 +137,9 @@ public class ConsoleSessionRegistry {
         localMirror.put(key, v);
         return v;
       } catch (NumberFormatException ignored) {
+        SwallowedExceptionLogger.info(
+            ConsoleSessionRegistry.class, "catch:NumberFormatException", ignored);
+
         return 0L;
       }
     } catch (DataAccessException ex) {

@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure.excel;
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumnMetadata.GUIDE_FALSE;
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumnMetadata.GUIDE_TRUE;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Texts;
 import java.util.List;
@@ -36,7 +37,6 @@ public final class WorkflowExcelTextUtils {
    * 注意:原 service 实现是"upper case 后无论 allowed 是否包含都返回 upper",这里保持同义(避免行为漂移)。 真要 strict
    * enforce,validator 层会另外 fail row。
    */
-  @SuppressWarnings("unused")
   static String normalizeEnum(String value, Set<String> allowed) {
     String normalized = normalize(value);
     if (!Texts.hasText(normalized)) {
@@ -53,6 +53,8 @@ public final class WorkflowExcelTextUtils {
     try {
       return Integer.valueOf(normalized);
     } catch (NumberFormatException exception) {
+      SwallowedExceptionLogger.info(
+          WorkflowExcelTextUtils.class, "catch:NumberFormatException", exception);
       return null;
     }
   }

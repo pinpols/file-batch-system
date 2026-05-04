@@ -4,6 +4,7 @@ import com.example.batch.common.enums.AiPromptCategory;
 import com.example.batch.common.enums.AiPromptDecision;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.IdGenerator;
@@ -268,6 +269,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultConsoleAiApplicationService.class, "catch:NoSuchAlgorithmException", exception);
+
       return Integer.toHexString(value.hashCode());
     }
   }

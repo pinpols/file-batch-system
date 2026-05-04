@@ -1,5 +1,6 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
@@ -103,6 +104,8 @@ public class WebhookDispatcher {
         executor.shutdownNow();
       }
     } catch (InterruptedException ex) {
+      SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:InterruptedException", ex);
+
       executor.shutdownNow();
       Thread.currentThread().interrupt();
     }
@@ -197,6 +200,9 @@ public class WebhookDispatcher {
       deliver(subscription, payload, payloadJson);
       return WebhookDeliveryResult.ok();
     } catch (RestClientResponseException ex) {
+      SwallowedExceptionLogger.info(
+          WebhookDispatcher.class, "catch:RestClientResponseException", ex);
+
       return WebhookDeliveryResult.failure(
           ex.getStatusCode().value(), sanitize(ex.getResponseBodyAsString()));
     } catch (Exception ex) {
@@ -273,6 +279,8 @@ public class WebhookDispatcher {
     try {
       Thread.sleep(millis);
     } catch (InterruptedException ex) {
+      SwallowedExceptionLogger.info(WebhookDispatcher.class, "catch:InterruptedException", ex);
+
       Thread.currentThread().interrupt();
     }
   }

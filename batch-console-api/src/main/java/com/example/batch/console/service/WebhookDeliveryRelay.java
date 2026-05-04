@@ -1,5 +1,6 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
@@ -132,6 +133,8 @@ public class WebhookDeliveryRelay {
         executor.shutdownNow();
       }
     } catch (InterruptedException e) {
+      SwallowedExceptionLogger.info(WebhookDeliveryRelay.class, "catch:InterruptedException", e);
+
       executor.shutdownNow();
       Thread.currentThread().interrupt();
     }

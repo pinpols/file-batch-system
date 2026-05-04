@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure.query;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -59,22 +60,29 @@ public final class ConsoleQuerySupport {
     }
   }
 
-  public static Instant parseFlexibleInstant(String value, String fieldName) {
+  /**
+   * 控制台搜索框宽松解析：无 Z/偏移的 {@code yyyy-MM-dd}、{@code yyyy-MM-dd HH:mm:ss} 在 {@code zone} 下转为 {@link
+   * Instant}。 宜传 {@code BatchTimezoneProvider.defaultZone()}，与 {@code batch.timezone.default-zone}
+   * 对齐。
+   */
+  public static Instant parseFlexibleInstant(String value, String fieldName, ZoneId zone) {
     if (value == null || value.isBlank()) {
       return null;
     }
     try {
       return Instant.parse(value);
     } catch (DateTimeParseException ignored) {
+      SwallowedExceptionLogger.info(
+          ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
     }
     try {
-      return LocalDateTime.parse(value.replace(' ', 'T'))
-          .atZone(ZoneId.systemDefault())
-          .toInstant();
+      return LocalDateTime.parse(value.replace(' ', 'T')).atZone(zone).toInstant();
     } catch (DateTimeParseException ignored) {
+      SwallowedExceptionLogger.info(
+          ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
     }
     try {
-      return LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant();
+      return LocalDate.parse(value).atStartOfDay(zone).toInstant();
     } catch (DateTimeParseException exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
@@ -83,16 +91,21 @@ public final class ConsoleQuerySupport {
     }
   }
 
-  public static Instant parseFlexibleInstantEndOfDay(String value, String fieldName) {
+  /**
+   * @see #parseFlexibleInstant(String, String, ZoneId)
+   */
+  public static Instant parseFlexibleInstantEndOfDay(String value, String fieldName, ZoneId zone) {
     if (value == null || value.isBlank()) {
       return null;
     }
     try {
       LocalDate date = LocalDate.parse(value);
-      return date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().minusMillis(1);
+      return date.plusDays(1).atStartOfDay(zone).toInstant().minusMillis(1);
     } catch (DateTimeParseException ignored) {
+      SwallowedExceptionLogger.info(
+          ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
     }
-    return parseFlexibleInstant(value, fieldName);
+    return parseFlexibleInstant(value, fieldName, zone);
   }
 
   public static String firstNonBlank(String first, String second) {

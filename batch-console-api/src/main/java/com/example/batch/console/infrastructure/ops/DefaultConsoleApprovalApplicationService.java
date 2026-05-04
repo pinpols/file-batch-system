@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure.ops;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -125,6 +126,9 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         approve(tenantId, approvalNo, operatorId, reason);
         results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "APPROVED"));
       } catch (Exception ex) {
+        SwallowedExceptionLogger.warn(
+            DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
+
         results.add(
             new ConsoleBatchApprovalResultResponse(
                 approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
@@ -145,6 +149,9 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         reject(tenantId, approvalNo, operatorId, reason);
         results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "REJECTED"));
       } catch (Exception ex) {
+        SwallowedExceptionLogger.warn(
+            DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
+
         results.add(
             new ConsoleBatchApprovalResultResponse(
                 approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
