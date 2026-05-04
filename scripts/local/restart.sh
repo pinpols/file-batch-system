@@ -50,8 +50,17 @@ LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSeri
 # AppCDS：dump/run JVM 开关对齐指纹（须与 start-all.sh 的 CDS_ARCHIVE_STAMP 同步 bump）
 CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v2-native-access}"
 
-# AppCDS：同 start-all.sh，见那里的完整说明（jar SHA-256 + CDS 指纹判重）
+# AppCDS：同 start-all.sh，见那里的完整说明（jar SHA-256 + jar 元数据 + CDS 指纹判重）
 __CDS_FLAG=""
+cds_metadata() {
+  local jar="$1"
+  local jar_hash jar_stat
+  jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
+  jar_stat="$(stat -f '%N:%z:%m' "$jar" 2>/dev/null || stat -c '%n:%s:%Y' "$jar" 2>/dev/null || true)"
+  printf 'jar_sha256=%s\njar_stat=%s\ncds_stamp=%s\nlocal_fast_jvm_opts=%s\njava_opts=%s\n' \
+    "$jar_hash" "$jar_stat" "$CDS_ARCHIVE_STAMP" "$LOCAL_FAST_JVM_OPTS" "${JAVA_OPTS:-}"
+}
+
 warm_cds() {
   __CDS_FLAG=""
   local name="$1" jar="$2"
@@ -62,12 +71,9 @@ warm_cds() {
     return 0
   fi
 
-  local jar_hash
-  jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
-
   local expected_meta
-  expected_meta="$(printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP")"
-  if [[ -f "$archive" && -f "$hash_file" && -n "$jar_hash" \
+  expected_meta="$(cds_metadata "$jar")"
+  if [[ -f "$archive" && -f "$hash_file" && -n "$expected_meta" \
         && "$(cat "$hash_file" 2>/dev/null)" == "$expected_meta" ]]; then
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
     return 0
@@ -78,6 +84,7 @@ warm_cds() {
   rm -f "$archive" "$hash_file"
   java --enable-native-access=ALL-UNNAMED \
     ${LOCAL_FAST_JVM_OPTS} \
+    ${JAVA_OPTS:-} \
     -Dspring.context.exit=onRefresh \
     -Dspring.main.banner-mode=off \
     -Dspring.flyway.enabled=false \
@@ -100,7 +107,7 @@ warm_cds() {
   wait "$pid" 2>/dev/null || true
 
   if [[ -f "$archive" ]]; then
-    printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP" >"$hash_file"
+    cds_metadata "$jar" >"$hash_file"
     echo "  ✓ ${name} CDS 缓存就绪"
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
   else
