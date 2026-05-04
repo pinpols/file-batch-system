@@ -12,6 +12,7 @@ import com.example.batch.common.enums.CalendarDayType;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.CompensationCommandStatus;
 import com.example.batch.common.enums.ConfigLifecycleStatus;
+import com.example.batch.common.enums.DeadLetterErrorClass;
 import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.ErrorSinkType;
@@ -42,6 +43,7 @@ import com.example.batch.common.enums.PipelineRunStatus;
 import com.example.batch.common.enums.PipelineType;
 import com.example.batch.common.enums.PriorityLevel;
 import com.example.batch.common.enums.QueuePriorityPolicy;
+import com.example.batch.common.enums.QuotaExceededStrategy;
 import com.example.batch.common.enums.ResourceQueueType;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.RetryScheduleStatus;
@@ -268,6 +270,8 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("skipAction", SkipAction.class));
     list.add(new EnumReg<>("workflowNodeRunStatus", WorkflowNodeRunStatus.class));
     list.add(new EnumReg<>("deadLetterReplayStatus", DeadLetterReplayStatus.class));
+    list.add(new EnumReg<>("deadLetterErrorClass", DeadLetterErrorClass.class));
+    list.add(new EnumReg<>("quotaExceededStrategy", QuotaExceededStrategy.class));
     list.add(new EnumReg<>("skipThresholdMode", SkipThresholdMode.class));
     // 前端请求的 8 个补充枚举
     list.add(new EnumReg<>("triggerStatus", TriggerStatus.class));

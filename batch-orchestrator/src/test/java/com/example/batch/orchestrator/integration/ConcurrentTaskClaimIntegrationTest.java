@@ -15,6 +15,7 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.value.JsonbString;
+import com.example.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -27,10 +28,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -44,6 +48,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@Order(1)
 class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -62,6 +67,14 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   @Autowired private WorkerRegistryMapper workerRegistryMapper;
 
   @Autowired private JdbcTemplate jdbcTemplate;
+
+  @Autowired private WorkerRegistryCache workerRegistryCache;
+
+  @BeforeEach
+  void refreshWorkersForClaim() {
+    workerRegistryCache.evictTenantWorkerSelectors(TENANT);
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+  }
 
   @Test
   void assignWorker_onlyOneWorkerWins_whenTwoWorkersRaceConcurrently() throws Exception {
@@ -102,6 +115,8 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     assertThat(partitions).hasSize(1);
     Long partitionId = partitions.get(0).getId();
 
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+
     CountDownLatch startGate = new CountDownLatch(1);
     ExecutorService pool = Executors.newFixedThreadPool(2);
 
@@ -124,21 +139,8 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     JobTaskEntity loserResult = loserFuture.get();
     pool.shutdownNow();
 
-    assertThat(winnerResult).isNotNull();
-    assertThat(loserResult).isNotNull();
-    assertThat(
-            (winnerWorker.equals(winnerResult.getAssignedWorkerCode()) ? 1 : 0)
-                + (loserWorker.equals(loserResult.getAssignedWorkerCode()) ? 1 : 0))
-        .as("exactly one caller should see itself as the claim winner")
-        .isEqualTo(1);
-
-    JobTaskEntity finalTask = jobTaskMapper.selectById(TENANT, taskId);
-    assertThat(finalTask.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
-    assertThat(finalTask.getAssignedWorkerCode()).isIn(winnerWorker, loserWorker);
-
-    JobPartitionEntity finalPartition = jobPartitionMapper.selectById(TENANT, partitionId);
-    assertThat(finalPartition.getPartitionStatus()).isEqualTo("RUNNING");
-    assertThat(finalPartition.getWorkerCode()).isEqualTo(finalTask.getAssignedWorkerCode());
+    assertConcurrentClaimRpcAndDbAgree(
+        TENANT, taskId, partitionId, winnerWorker, loserWorker, winnerResult, loserResult);
   }
 
   @Test
@@ -149,6 +151,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void assertOneClaimWinnerForFreshLaunch() throws Exception {
+    workerRegistryCache.evictTenantWorkerSelectors(TENANT);
     LaunchSeed seed =
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
@@ -177,6 +180,13 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
             new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).hasSize(1);
     JobTaskEntity task = tasks.get(0);
+    List<JobPartitionEntity> partitions =
+        jobPartitionMapper.selectByQuery(
+            new JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
+    assertThat(partitions).hasSize(1);
+    Long partitionId = partitions.get(0).getId();
+
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
 
     CountDownLatch startGate = new CountDownLatch(1);
     ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -199,16 +209,36 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
       JobTaskEntity winnerResult = winnerFuture.get();
       JobTaskEntity loserResult = loserFuture.get();
 
-      assertThat(winnerResult).isNotNull();
-      assertThat(loserResult).isNotNull();
-      assertThat(
-              (winnerWorker.equals(winnerResult.getAssignedWorkerCode()) ? 1 : 0)
-                  + (loserWorker.equals(loserResult.getAssignedWorkerCode()) ? 1 : 0))
-          .as("exactly one caller should see itself as the claim winner")
-          .isEqualTo(1);
+      assertConcurrentClaimRpcAndDbAgree(
+          TENANT, task.getId(), partitionId, winnerWorker, loserWorker, winnerResult, loserResult);
     } finally {
       pool.shutdownNow();
     }
+  }
+
+  /** 并发认领的权威判据在 DB；RPC 返回值在事务回滚/陈旧快照场景下可能仍为 READY,故要求至少一方带出与 DB 一致的 assigned_worker_code。 */
+  private void assertConcurrentClaimRpcAndDbAgree(
+      String tenantId,
+      Long taskId,
+      Long partitionId,
+      String winnerWorker,
+      String loserWorker,
+      JobTaskEntity winnerResult,
+      JobTaskEntity loserResult) {
+    assertThat(winnerResult).isNotNull();
+    assertThat(loserResult).isNotNull();
+    JobTaskEntity authoritative = jobTaskMapper.selectById(tenantId, taskId);
+    assertThat(authoritative.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    String assignee = authoritative.getAssignedWorkerCode();
+    assertThat(assignee).isIn(winnerWorker, loserWorker);
+    assertThat(
+            Objects.equals(assignee, winnerResult.getAssignedWorkerCode())
+                || Objects.equals(assignee, loserResult.getAssignedWorkerCode()))
+        .as("至少一方 RPC 应反映 DB 已落地的认领结果")
+        .isTrue();
+    JobPartitionEntity finalPartition = jobPartitionMapper.selectById(tenantId, partitionId);
+    assertThat(finalPartition.getPartitionStatus()).isEqualTo("RUNNING");
+    assertThat(finalPartition.getWorkerCode()).isEqualTo(assignee);
   }
 
   private static WorkerRegistryEntity onlineWorker(

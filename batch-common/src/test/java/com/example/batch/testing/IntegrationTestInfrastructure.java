@@ -38,6 +38,9 @@ final class IntegrationTestInfrastructure {
     registry.add("spring.datasource.username", postgres::getUsername);
     registry.add("spring.datasource.password", postgres::getPassword);
     registry.add("spring.datasource.driver-class-name", postgres::getDriverClassName);
+    // 单 JVM 多 Spring 上下文复用同一 PG 时,Hikari 默认 10 连接 × N 上下文易触达 PG 默认 ~100 上限 (too many clients)。
+    registry.add("spring.datasource.hikari.maximum-pool-size", () -> "20");
+    registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
     registry.add("spring.flyway.enabled", () -> true);
     registry.add("spring.flyway.default-schema", () -> "batch");
     registry.add("spring.flyway.schemas", () -> "batch,quartz");
@@ -71,5 +74,8 @@ final class IntegrationTestInfrastructure {
     registry.add("batch.security.bypass-mode", () -> true);
     registry.add("batch.security.kms.default-key-ref", () -> DEFAULT_KMS_KEY_REF);
     registry.add("batch.security.kms.keys." + DEFAULT_KMS_KEY_REF, () -> DEFAULT_KMS_KEY_MATERIAL);
+    // 单 JVM 长耗时 IT：覆盖 application-test.yml merge 漂移，禁用会与 claim / launch 并发竞态的后台 Bean
+    registry.add("batch.worker.drain.heartbeat-timeout-scheduler-enabled", () -> "false");
+    registry.add("batch.partition-lease.reclaim-scheduler-enabled", () -> "false");
   }
 }

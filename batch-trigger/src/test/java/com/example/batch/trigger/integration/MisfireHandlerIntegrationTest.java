@@ -19,12 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = {
-      "spring.flyway.enabled=false",
-      "spring.quartz.job-store-type=jdbc",
-      "spring.quartz.jdbc.initialize-schema=always"
-    })
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class MisfireHandlerIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired MisfireHandler misfireHandler;

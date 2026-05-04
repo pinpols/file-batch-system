@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -44,6 +45,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@Order(3)
 class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private DefaultScheduleForwarder scheduleForwarder;
@@ -115,16 +117,19 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
     String key2 = "multi-it-002-" + System.nanoTime();
     OutboxEventEntity e1 = buildImportDispatchEvent("t1", key1);
     OutboxEventEntity e2 = buildImportDispatchEvent("t1", key2);
+    // 最高优先级：长 IT 套件 DB 中可能积压大量 NEW 行；selectPending 按 priority desc,id asc + batch limit，
+    // 若优先级过低可能单轮 advance 始终轮不到本用例插入的行。
+    e1.setPriority(10);
+    e2.setPriority(10);
     outboxEventMapper.insert(e1);
     outboxEventMapper.insert(e2);
 
-    scheduleForwarder.advance(new SchedulePlan());
-
     await()
-        .atMost(Duration.ofSeconds(10))
-        .pollInterval(Duration.ofMillis(200))
+        .atMost(Duration.ofSeconds(45))
+        .pollInterval(Duration.ofMillis(250))
         .untilAsserted(
             () -> {
+              scheduleForwarder.advance(new SchedulePlan());
               String s1 =
                   jdbcTemplate.queryForObject(
                       "select publish_status from batch.outbox_event where id = ?",

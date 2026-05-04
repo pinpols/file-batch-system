@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.param.ClaimPartitionParam;
 import com.example.batch.orchestrator.domain.param.CountActiveByGroupParam;
@@ -95,8 +96,10 @@ public interface JobPartitionMapper {
   long countActiveByTenantAndWorkerGroup(CountActiveByGroupParam param);
 
   /**
-   * 启动审计：统计 lease_expire_at 已过期、仍未被 PartitionLeaseReclaimScheduler 回收的 partition 数。 非 0
-   * 说明上轮调度漏跑或异常。
+   * 启动审计：统计 {@link PartitionStatus#READY}/{@link PartitionStatus#RUNNING} 且 lease 已过期、与 {@link
+   * com.example.batch.orchestrator.infrastructure.lease.PartitionLeaseReclaimScheduler} 扫描口径一致的行数。
+   * 终态分区残留的 {@code lease_expire_at} 不计入。
    */
-  long countLeaseExpired();
+  long countLeaseExpired(
+      @Param("readyStatus") String readyStatus, @Param("runningStatus") String runningStatus);
 }

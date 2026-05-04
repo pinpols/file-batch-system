@@ -32,4 +32,11 @@ public class WorkerDrainProperties {
 
   /** Worker 心跳超时扫描间隔。 */
   private long heartbeatCheckIntervalMillis = 30000L;
+
+  /**
+   * 是否装载 {@link
+   * com.example.batch.orchestrator.infrastructure.scheduler.WorkerHeartbeatTimeoutScheduler}。 默认为
+   * true（生产必须开启）；integration profile 通常会关闭以免 seed worker 无续心跳误判离线。
+   */
+  private boolean heartbeatTimeoutSchedulerEnabled = true;
 }

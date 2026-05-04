@@ -1,11 +1,15 @@
 package com.example.batch.orchestrator.domain.param;
 
 import java.time.Instant;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Getter
 @Builder
+@NoArgsConstructor(force = true)
+@AllArgsConstructor
 public class ClaimPartitionParam {
   private final String tenantId;
   private final Long id;

@@ -189,6 +189,45 @@ class WorkerRegistryCacheTest {
     assertThat(result).hasSize(1);
   }
 
+  @Test
+  void cacheMissWithEmptyLoaderShouldDeleteKeyWithoutSet() {
+    props.setEnabled(true);
+    when(valueOps.get(anyString())).thenReturn(null);
+    when(template.delete(anyString())).thenReturn(Boolean.TRUE);
+    AtomicInteger calls = new AtomicInteger();
+    List<WorkerRegistryEntity> result =
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return List.of();
+            });
+    assertThat(calls.get()).isEqualTo(1);
+    assertThat(result).isEmpty();
+    verify(valueOps, never()).set(anyString(), anyString(), any(Duration.class));
+    verify(template).delete(anyString());
+  }
+
+  @Test
+  void cachedEmptyJsonArrayShouldIgnoreAndReload() throws Exception {
+    props.setEnabled(true);
+    when(valueOps.get(anyString())).thenReturn("[]");
+    AtomicInteger calls = new AtomicInteger();
+    List<WorkerRegistryEntity> records = List.of(record(5L, "w-5"));
+    List<WorkerRegistryEntity> result =
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return records;
+            });
+    assertThat(calls.get()).isEqualTo(1);
+    assertThat(result).hasSize(1);
+    verify(valueOps).set(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
+  }
+
   private static WorkerRegistryEntity record(Long id, String code) {
     return new WorkerRegistryEntity(
         id, "t1", code, "EXPORT", null, "report", "ONLINE", Instant.now(), 0, 10, null, null);

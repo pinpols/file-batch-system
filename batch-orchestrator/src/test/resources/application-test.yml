@@ -24,6 +24,8 @@ batch:
     drain:
       # 测试关闭 drain，减少状态机/轮询干扰
       enabled: false
+      # 关闭 WorkerHeartbeatTimeoutScheduler：seed worker 不会在 IT 中续心跳，长 JVM 易被误降级 OFFLINE（assignWorker 短路 READY）
+      heartbeat-timeout-scheduler-enabled: false
   file-governance:
     latency:
       # 测试关闭文件治理（延迟）
@@ -64,6 +66,8 @@ batch:
   partition-lease:
     # 拉长回收扫描周期，降低并发时序干扰
     reclaim-interval-millis: 600000
+    # 关闭租约回收/孤儿扫描定时器：首轮 @Scheduled 仍会在 JVM 启动后很快执行，与 claim 集成测试并发竞态
+    reclaim-scheduler-enabled: false
   resource-scheduler:
     # 拉长扫描周期，避免测试时频繁跑后台任务
     waiting-dispatch-interval-millis: 600000

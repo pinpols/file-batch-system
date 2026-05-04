@@ -11,12 +11,14 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.search.Search;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,6 +81,11 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
             tenantId,
             jobCode,
             jobCode);
+    AtomicBoolean wasLeader =
+        (AtomicBoolean) ReflectionTestUtils.getField(wheelScheduler, "wasLeader");
+    if (wasLeader != null) {
+      wasLeader.set(false);
+    }
   }
 
   @Test
@@ -132,7 +139,7 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void releaseStaleMarkersAlsoWorksStandalone() {
-    // 不依赖 fast-path,独立调 releaseStaleMarkers @Scheduled 入口也能清 stale marker
+    // 不依赖 fast-path,独立调用 doReleaseStaleMarkers 绕开 @SchedulerLock(IT 不测 lock 语义)
     insertState(Instant.now().plusSeconds(60));
     TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
     stateMapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "dead-leader-instance");
@@ -141,7 +148,7 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
             + " id = ?",
         loaded.getId());
 
-    wheelScheduler.releaseStaleMarkers();
+    wheelScheduler.doReleaseStaleMarkers();
 
     TriggerRuntimeStateEntity afterRelease = stateMapper.selectByJobDefinitionId(jobDefId);
     assertThat(afterRelease.getScheduledFireMarker()).isNull();
@@ -207,10 +214,8 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
           loaded.getId());
 
       // 重置 wasLeader 让本次 doSlidingWindow 走 fast-path(模拟新 leader 上任)
-      java.util.concurrent.atomic.AtomicBoolean wasLeader =
-          (java.util.concurrent.atomic.AtomicBoolean)
-              org.springframework.test.util.ReflectionTestUtils.getField(
-                  wheelScheduler, "wasLeader");
+      AtomicBoolean wasLeader =
+          (AtomicBoolean) ReflectionTestUtils.getField(wheelScheduler, "wasLeader");
       if (wasLeader != null) {
         wasLeader.set(false);
       }

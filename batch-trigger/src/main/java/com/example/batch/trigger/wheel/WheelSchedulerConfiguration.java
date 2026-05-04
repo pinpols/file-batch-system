@@ -18,11 +18,6 @@ import org.springframework.context.annotation.Configuration;
 public class WheelSchedulerConfiguration {
 
   @Bean
-  public CronExpressionAdapter cronExpressionAdapter() {
-    return new CronExpressionAdapter();
-  }
-
-  @Bean
   public WheelMetrics wheelMetrics(MeterRegistry meterRegistry) {
     return new WheelMetrics(meterRegistry);
   }

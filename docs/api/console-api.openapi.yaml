@@ -3994,6 +3994,8 @@ paths:
         | `skipAction` | 跳过动作（CONTINUE / FAIL_BATCH / MANUAL_REVIEW）|
         | `workflowNodeRunStatus` | 工作流节点运行状态（READY / RUNNING / SUCCESS / FAILED / SKIPPED）|
         | `deadLetterReplayStatus` | 死信回放状态（NEW / REPLAYING / SUCCESS / FAILED / GIVE_UP）|
+        | `deadLetterErrorClass` | 死信错误分类（BUSINESS / SYSTEM）|
+        | `quotaExceededStrategy` | 租户配额超额策略（REJECT / QUEUE_DEFER / DEGRADE_PRIORITY）|
         | `skipThresholdMode` | 跳过阈值模式（ABSOLUTE / PERCENTAGE）|
       operationId: getMetaEnums
       security:
@@ -7856,6 +7858,8 @@ components:
                 skipAction:         { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 workflowNodeRunStatus: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 deadLetterReplayStatus: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                deadLetterErrorClass: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                quotaExceededStrategy: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 skipThresholdMode:  { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
     CommonResponseObject:
       allOf:
