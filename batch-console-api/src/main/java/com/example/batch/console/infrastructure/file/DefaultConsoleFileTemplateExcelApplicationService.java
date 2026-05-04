@@ -76,6 +76,16 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   private static final String COL_STREAMING_ENABLED = "streaming_enabled";
   private static final String COL_DOWNLOAD_REQUIRES_APPROVAL = "download_requires_approval";
   private static final String GUIDE_ENUM = "枚举";
+  private static final String JSON_SHEET_NAME = "file_template_json";
+  private static final List<String> JSON_COLUMNS =
+      List.of("template_code", "version", "json_field", "json_value");
+  private static final List<String> JSON_FIELDS =
+      List.of(
+          "header_template",
+          "trailer_template",
+          "field_mappings",
+          "validation_rule_set",
+          "query_param_schema");
 
   private static final List<String> COLUMNS =
       List.of(
@@ -363,6 +373,13 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   }
 
   @Override
+  protected boolean rowExists(TemplateRow row, String tenantId) {
+    Map<String, Object> existing =
+        fileTemplateConfigMapper.selectByUniqueKey(tenantId, row.templateCode(), row.version());
+    return existing != null && !existing.isEmpty();
+  }
+
+  @Override
   protected void logChange(
       String tenantId,
       TemplateRow row,
@@ -413,6 +430,40 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   }
 
   @Override
+  protected void createExtraWorkbookSheets(Workbook workbook, List<Map<String, Object>> rows) {
+    Sheet sheet = workbook.createSheet(JSON_SHEET_NAME);
+    sheet.createFreezePane(0, 1, 0, 1);
+    writeHeaders(sheet, JSON_COLUMNS, ConsoleExcelStyles.createHeaderStyle(workbook));
+    addDropdownValidation(
+        sheet, 2, JSON_FIELDS.toArray(String[]::new), "json_field 填写提示", "选择要维护的 JSON 字段。");
+    int rowIndex = 1;
+    for (Map<String, Object> sourceRow : rows) {
+      for (String jsonField : JSON_FIELDS) {
+        Object value = sourceRow.get(jsonField);
+        if (value == null || String.valueOf(value).isBlank()) {
+          continue;
+        }
+        Row row = sheet.createRow(rowIndex++);
+        row.createCell(0).setCellValue(String.valueOf(sourceRow.getOrDefault("template_code", "")));
+        row.createCell(1).setCellValue(String.valueOf(sourceRow.getOrDefault("version", "1")));
+        row.createCell(2).setCellValue(jsonField);
+        row.createCell(3).setCellValue(ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
+      }
+    }
+    if (rows.isEmpty()) {
+      Row row = sheet.createRow(rowIndex);
+      row.createCell(0).setCellValue("TPL_SETTLEMENT_001");
+      row.createCell(1).setCellValue("1");
+      row.createCell(2).setCellValue("field_mappings");
+      row.createCell(3).setCellValue("[{\"source\":\"amount\",\"target\":\"AMOUNT\"}]");
+    }
+    sheet.setColumnWidth(0, 32 * 256);
+    sheet.setColumnWidth(1, 12 * 256);
+    sheet.setColumnWidth(2, 28 * 256);
+    sheet.setColumnWidth(3, 80 * 256);
+  }
+
+  @Override
   protected void createReadmeSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
@@ -423,7 +474,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
       "2. template_code + version 是预览与应用阶段使用的唯一键。",
       "3. 枚举字段与布尔字段已内置下拉值校验。",
       "4. header_template / field_mappings / validation_rule_set / query_param_schema 等 JSON"
-          + " 字段必须保持合法 JSON。",
+          + " 字段必须保持合法 JSON；也可参考 file_template_json Sheet 按行维护。",
       "5. 导入流程：上传 → 预览 → 应用。"
     };
     for (int i = 0; i < lines.length; i++) {

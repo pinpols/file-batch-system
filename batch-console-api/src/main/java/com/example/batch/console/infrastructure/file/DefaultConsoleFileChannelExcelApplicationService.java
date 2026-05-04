@@ -226,6 +226,13 @@ public class DefaultConsoleFileChannelExcelApplicationService
   }
 
   @Override
+  protected boolean rowExists(ChannelRow row, String tenantId) {
+    Map<String, Object> existing =
+        fileChannelConfigMapper.selectByUniqueKey(tenantId, row.channelCode());
+    return existing != null && !existing.isEmpty();
+  }
+
+  @Override
   protected void logChange(
       String tenantId,
       ChannelRow row,

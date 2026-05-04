@@ -22,6 +22,7 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.web.UploadFileGuard;
 import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import com.example.batch.console.web.response.excel.ExcelPreviewResponse;
+import com.example.batch.console.web.response.excel.ExcelPreviewResponse.ExcelChangeSummary;
 import com.example.batch.console.web.response.excel.ExcelQuickImportResponse;
 import com.example.batch.console.web.response.excel.ExcelRowIssue;
 import com.example.batch.console.web.response.excel.ExcelUploadResponse;
@@ -82,11 +83,19 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected abstract void logChange(
       String tenantId, ROW row, String reason, String operatorId, String traceId, String action);
 
+  protected boolean rowExists(ROW row, String tenantId) {
+    return false;
+  }
+
   protected abstract void applyValidations(Sheet sheet);
 
   protected abstract void createReadmeSheet(Workbook workbook);
 
   protected abstract void createDictSheet(Workbook workbook);
+
+  protected void createExtraWorkbookSheets(Workbook workbook, List<Map<String, Object>> rows) {
+    // default no-op
+  }
 
   protected final ResponseEntity<InputStreamResource> doExport(
       String tenantId, List<Map<String, Object>> rows) {
@@ -131,7 +140,8 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
         result.invalidRows(),
         result.rows().stream().map(this::toResponse).toList(),
         result.issues(),
-        previewWorkbookUrl);
+        previewWorkbookUrl,
+        summarizeChanges(session.tenantId(), result.rows()));
   }
 
   public final ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
@@ -257,6 +267,19 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
 
   protected record Validated<R>(
       int totalRows, int validRows, int invalidRows, List<R> rows, List<ExcelRowIssue> issues) {}
+
+  private ExcelChangeSummary summarizeChanges(String tenantId, List<ROW> rows) {
+    int inserts = 0;
+    int updates = 0;
+    for (ROW row : rows) {
+      if (rowExists(row, tenantId)) {
+        updates++;
+      } else {
+        inserts++;
+      }
+    }
+    return new ExcelChangeSummary(inserts, updates, 0);
+  }
 
   protected final Validated<ROW> validateRows(
       ConsoleSingleSheetExcelImportSupport.ParsedSession session) {
@@ -464,7 +487,9 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       }
       applyValidations(dataSheet);
       setWidths(dataSheet, columns());
+      createExtraWorkbookSheets(workbook, rows);
       createReadmeSheet(workbook);
+      ConsoleExcelStyles.createFieldGuideSheet(workbook, sheetName(), columns(), columnGuides());
       createDictSheet(workbook);
       ConsoleExcelStyles.createValidationSheet(workbook);
       workbook.write(out);
@@ -493,6 +518,8 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
             this::applyValidations,
             workbook -> {
               createReadmeSheet(workbook);
+              ConsoleExcelStyles.createFieldGuideSheet(
+                  workbook, sheetName(), columns(), columnGuides());
               createDictSheet(workbook);
               ConsoleExcelStyles.createValidationSheet(workbook);
             },

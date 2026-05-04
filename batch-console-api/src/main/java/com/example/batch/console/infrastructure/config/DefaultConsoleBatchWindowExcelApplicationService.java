@@ -205,6 +205,12 @@ public class DefaultConsoleBatchWindowExcelApplicationService
   }
 
   @Override
+  protected boolean rowExists(WindowRow row, String tenantId) {
+    Map<String, Object> existing = batchWindowMapper.selectByUniqueKey(tenantId, row.windowCode());
+    return existing != null && !existing.isEmpty();
+  }
+
+  @Override
   protected void logChange(
       String tenantId,
       WindowRow row,

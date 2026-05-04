@@ -10682,6 +10682,19 @@ components:
       required: [id, tenantId, templateCode, templateName, templateType, bizType, fileFormatType, charset, targetCharset, withBom, lineSeparator, delimiter, quoteChar, escapeChar, recordLength, headerRows, footerRows, headerTemplate, trailerTemplate, checksumType, compressType, encryptType, namingRule, fieldMappings, validationRuleSet, defaultQueryCode, defaultQuerySql, queryParamSchema, streamingEnabled, pageSize, fetchSize, chunkSize, previewMaskingEnabled, errorLineMaskingEnabled, logMaskingEnabled, contentEncryptionEnabled, encryptionKeyRef, downloadRequiresApproval, maskingRuleSet, enabled, version, description, createdBy, updatedBy, createdAt, updatedAt]
     ConsoleExcelRowIssueResponse:
       $ref: '#/components/schemas/ExcelRowIssue'
+    ExcelChangeSummary:
+      type: object
+      properties:
+        insertRows:
+          type: integer
+          format: int32
+        updateRows:
+          type: integer
+          format: int32
+        upsertRows:
+          type: integer
+          format: int32
+      required: [insertRows, updateRows, upsertRows]
     ConsoleFileTemplateExcelUploadResponse:
       $ref: '#/components/schemas/ExcelUploadResponse'
     ConsoleFileTemplateExcelPreviewResponse:
@@ -10712,6 +10725,8 @@ components:
             $ref: '#/components/schemas/ExcelRowIssue'
         previewWorkbookUrl:
           type: string
+        changeSummary:
+          $ref: '#/components/schemas/ExcelChangeSummary'
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleFileTemplateExcelApplyResponse:
       $ref: '#/components/schemas/ExcelApplyResponse'
@@ -10851,6 +10866,8 @@ components:
             $ref: '#/components/schemas/ExcelRowIssue'
         previewWorkbookUrl:
           type: string
+        changeSummary:
+          $ref: '#/components/schemas/ExcelChangeSummary'
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleAlertRoutingExcelApplyResponse:
       $ref: '#/components/schemas/ExcelApplyResponse'
@@ -10941,6 +10958,8 @@ components:
             $ref: '#/components/schemas/ExcelRowIssue'
         previewWorkbookUrl:
           type: string
+        changeSummary:
+          $ref: '#/components/schemas/ExcelChangeSummary'
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleResourceQueueExcelApplyResponse:
       $ref: '#/components/schemas/ExcelApplyResponse'

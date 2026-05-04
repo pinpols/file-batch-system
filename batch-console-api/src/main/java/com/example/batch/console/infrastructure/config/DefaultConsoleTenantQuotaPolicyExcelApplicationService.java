@@ -175,6 +175,13 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
   }
 
   @Override
+  protected boolean rowExists(PolicyRow row, String tenantId) {
+    Map<String, Object> existing =
+        tenantQuotaPolicyMapper.selectByUniqueKey(tenantId, row.policyCode());
+    return existing != null && !existing.isEmpty();
+  }
+
+  @Override
   protected void logChange(
       String tenantId,
       PolicyRow row,
