@@ -10,12 +10,11 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignment;
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -23,7 +22,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
@@ -49,6 +50,9 @@ import org.springframework.stereotype.Component;
  * </ul>
  *
  * <p>替代原 {@code @Scheduled(fixedDelay)} 方案，通过 {@link ScheduledExecutorService} 自调度实现动态间隔。
+ *
+ * <p>首轮调度延迟到 {@link ApplicationReadyEvent}（Flyway 等初始化完成之后），避免迁移未完成即访问 {@code batch.outbox_event}
+ * 引发瞬时 DDL race。
  */
 @Component
 @RequiredArgsConstructor
@@ -79,13 +83,14 @@ public class OutboxPollScheduler {
   private final OutboxEventMapper outboxEventMapper;
   private final ShardAssignmentProvider shardAssignmentProvider;
 
+  private final AtomicBoolean pollingLoopStarted = new AtomicBoolean(false);
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong currentIntervalMillis = new AtomicLong(0);
 
   private ScheduledExecutorService executor;
 
-  @PostConstruct
-  public void start() {
+  @EventListener(ApplicationReadyEvent.class)
+  public void onApplicationReady(ApplicationReadyEvent ignored) {
     OutboxProperties outbox = governance.outbox();
     // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
     if (outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
@@ -97,13 +102,20 @@ public class OutboxPollScheduler {
               + outbox.getShardTotal()
               + ") 范围内");
     }
-    executor =
-        Executors.newSingleThreadScheduledExecutor(
+    if (!pollingLoopStarted.compareAndSet(false, true)) {
+      return;
+    }
+    ScheduledThreadPoolExecutor scheduledExecutor =
+        new ScheduledThreadPoolExecutor(
+            1,
             r -> {
               Thread t = new Thread(r, "outbox-poll-scheduler");
               t.setDaemon(true);
               return t;
             });
+    scheduledExecutor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+    scheduledExecutor.setRemoveOnCancelPolicy(true);
+    executor = scheduledExecutor;
     long initialDelay = outbox.getMinPollIntervalMillis();
     currentIntervalMillis.set(initialDelay);
     executor.schedule(this::pollAndReschedule, initialDelay, TimeUnit.MILLISECONDS);
@@ -123,7 +135,7 @@ public class OutboxPollScheduler {
     if (executor == null) {
       return;
     }
-    executor.shutdown();
+    executor.shutdownNow();
     try {
       if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
         log.warn("OutboxPollScheduler 未在 30s 内完成关闭，强制中断");

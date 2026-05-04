@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +59,7 @@ import org.springframework.test.context.jdbc.Sql;
 @Sql(scripts = {E2eTestSql.BIZ_SCHEMA})
 @Import(ProcessPipelineE2eIT.ProcessE2eTestConfiguration.class)
 @Tag("e2e")
+@Order(2)
 class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -247,27 +249,31 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   @TestConfiguration
   static class ProcessE2eTestConfiguration {
 
+    /** 具名类型替代匿名内部类，避免 E2E 启动期 CGLIB/Surefire 偶发加载不到 {@code ProcessE2eTestConfiguration$1}。 */
+    static final class E2eStubComputePlugin implements ProcessComputePlugin {
+
+      @Override
+      public String implCode() {
+        return CUSTOM_PLUGIN_CODE;
+      }
+
+      @Override
+      public ProcessStageResult compute(ProcessJobContext context) {
+        Object stepParams =
+            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
+        if (stepParams instanceof Map<?, ?> params) {
+          context.getAttributes().put("processedCount", params.get("processedCount"));
+        }
+        context
+            .getAttributes()
+            .put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, CUSTOM_PLUGIN_WATERMARK);
+        return ProcessStageResult.success(ProcessStage.COMPUTE);
+      }
+    }
+
     @Bean
     ProcessComputePlugin e2eProcessComputePlugin() {
-      return new ProcessComputePlugin() {
-        @Override
-        public String implCode() {
-          return CUSTOM_PLUGIN_CODE;
-        }
-
-        @Override
-        public ProcessStageResult compute(ProcessJobContext context) {
-          Object stepParams =
-              context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
-          if (stepParams instanceof Map<?, ?> params) {
-            context.getAttributes().put("processedCount", params.get("processedCount"));
-          }
-          context
-              .getAttributes()
-              .put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, CUSTOM_PLUGIN_WATERMARK);
-          return ProcessStageResult.success(ProcessStage.COMPUTE);
-        }
-      };
+      return new E2eStubComputePlugin();
     }
   }
 }

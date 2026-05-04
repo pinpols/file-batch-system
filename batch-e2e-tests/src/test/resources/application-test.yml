@@ -1,10 +1,15 @@
 # 与 orchestrator 集成测试对齐：Flyway 使用与 orchestrator 相同的 db/migration（经 testResource 复制）；后台任务尽量静默。
+#
+# E2eShedLockConfiguration 覆盖默认 JDBC ShedLock 自动配置时仍读取 shedlock.auto-create（与 batch-trigger IT 一致）：
+# 启动期兜底建 batch.shedlock，避免仅 init schema、未跑完 Flyway 或本地起嵌入式应用时调度器抢锁失败。
 spring:
   flyway:
     locations: classpath:db/migration
     # platform-init.sql 仅建 schema；迁移由 classpath:db/migration 完整执行。
 
 batch:
+  shedlock:
+    auto-create: true
   sla:
     enabled: false
   scheduler:
@@ -13,6 +18,9 @@ batch:
   worker:
     drain:
       enabled: false
+    execution:
+      daemon-threads: true
+      shutdown-grace-seconds: 1
   file-governance:
     latency:
       enabled: false
@@ -26,6 +34,8 @@ batch:
       enabled: false
   outbox:
     poll-interval-millis: 600000
+    # 与 batch-orchestrator IT 对齐：勿只调大 max 而留默认 min=200ms，否则误配库时 OutboxPollScheduler 仍高频刷 WARN。
+    min-poll-interval-millis: 600000
   retry:
     poll-interval-millis: 600000
   partition-lease:

@@ -7,6 +7,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
@@ -16,7 +19,12 @@ import org.springframework.stereotype.Component;
  *
  * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除脏数据）、 Hash 整体写入、滑动窗口计数器（{@code
  * incrementWithinWindow}，首次写入时设置 TTL）， 以及执行 Lua 脚本（{@code evalLong}）。
+ *
+ * <p>JSON 缓存读写与 Orchestrator 配置 Cache-Aside 一致：Redis 连接类异常（{@link RedisConnectionFailureException}
+ * / {@link RedisSystemException}）时对 {@link #getJson}/{@link #setJson}/{@link #delete}
+ * fail-open——读返回 null、写/删静默跳过， 调用方回落 PG（见 {@link WorkerRegistryCache} 同类策略）。
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OrchestratorRedisSupport {
@@ -29,29 +37,60 @@ public class OrchestratorRedisSupport {
   }
 
   public <T> T getJson(String key, Class<T> type) {
-    String value = redisTemplate.opsForValue().get(key);
+    String value;
+    try {
+      value = redisTemplate.opsForValue().get(key);
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      log.warn(
+          "Redis unavailable for orchestrator cache read (fail-open to DB): key={}, cause={}",
+          key,
+          ex.getMessage());
+      log.debug("Redis orchestrator cache read failure", ex);
+      return null;
+    }
     if (value == null || value.isBlank()) {
       return null;
     }
     try {
       return objectMapper.readValue(value, type);
     } catch (JsonProcessingException exception) {
-      redisTemplate.delete(key);
+      try {
+        redisTemplate.delete(key);
+      } catch (RedisConnectionFailureException | RedisSystemException redisEx) {
+        log.debug(
+            "Redis unavailable while deleting corrupt cache key {}: {}", key, redisEx.getMessage());
+      }
       throw new IllegalStateException("Failed to deserialize redis cache: " + key, exception);
     }
   }
 
   public void setJson(String key, Object value, Duration ttl) {
+    final String json;
     try {
-      String json = objectMapper.writeValueAsString(value);
-      redisTemplate.opsForValue().set(key, json, ttl);
+      json = objectMapper.writeValueAsString(value);
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Failed to serialize redis cache: " + key, exception);
+    }
+    try {
+      redisTemplate.opsForValue().set(key, json, ttl);
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      log.warn(
+          "Redis unavailable for orchestrator cache write (skipped): key={}, cause={}",
+          key,
+          ex.getMessage());
+      log.debug("Redis orchestrator cache write failure", ex);
     }
   }
 
   public void delete(String key) {
-    redisTemplate.delete(key);
+    try {
+      redisTemplate.delete(key);
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      log.debug(
+          "Redis unavailable for orchestrator cache delete (skipped): key={}, cause={}",
+          key,
+          ex.getMessage());
+    }
   }
 
   public void putHashAll(String key, Map<String, String> fields, Duration ttl) {

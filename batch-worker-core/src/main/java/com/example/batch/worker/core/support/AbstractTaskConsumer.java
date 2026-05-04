@@ -462,9 +462,15 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
             || !message.selectedWorkerId().equals(registration.getWorkerId()))) {
       return false;
     }
-    // P2-13 软 tenant 隔离: cfg.tenantId() 声明特定 tenant 时,只接受该 tenant 的消息;
-    // 留出 SHARED_TENANT_WILDCARD ("default-tenant" / 空) 表示通配 — 与 orch 端
-    // shared-tenant-fallback 协议对齐,本地联调 + 共享 worker pool 场景仍可消费所有 tenant.
+    return acceptsConfiguredTenantScope(cfg, message);
+  }
+
+  /**
+   * P2-13 软 tenant 隔离：{@code cfg.tenantId()} 声明特定租户时只接受该租户派发；{@link #SHARED_TENANT_WILDCARD} /
+   * blank 表示通配。子类可覆盖（例如 Import worker E2E 多租户并发）。
+   */
+  protected boolean acceptsConfiguredTenantScope(
+      WorkerConfiguration cfg, TaskDispatchMessage message) {
     String configuredTenant = cfg.tenantId();
     if (configuredTenant != null
         && !configuredTenant.isBlank()
@@ -484,5 +490,5 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
    * 共享 worker pool 通配标识 — cfg.tenantId() 等于此值时, worker 接受所有 tenant 的消息. 与 orch 端 {@code
    * batch.resource-scheduler.shared-tenant-fallback} 配置协议对齐.
    */
-  static final String SHARED_TENANT_WILDCARD = "default-tenant";
+  protected static final String SHARED_TENANT_WILDCARD = "default-tenant";
 }

@@ -38,7 +38,8 @@ class ImportIngressScannerTest {
             "test-topic",
             "test-group",
             null,
-            new ImportWorkerConfiguration.FileProcessing(false, 1000, 1000, 500));
+            new ImportWorkerConfiguration.FileProcessing(false, 1000, 1000, 500),
+            null);
 
     scannerProperties = new ImportScannerProperties();
     scannerProperties.setEnabled(true);

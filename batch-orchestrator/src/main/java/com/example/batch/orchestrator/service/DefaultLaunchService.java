@@ -207,7 +207,7 @@ public class DefaultLaunchService implements LaunchService {
         .workerGroup(loaded.jobDefinition().workerGroup())
         .priority(priority)
         .dedupKey(dedupKey)
-        .runAttempt(nextRunAttempt(request.tenantId(), dedupKey))
+        .runAttempt(nextRunAttempt(request, dedupKey))
         .version(0L)
         .expectedPartitionCount(0)
         .successPartitionCount(0)
@@ -306,14 +306,21 @@ public class DefaultLaunchService implements LaunchService {
   }
 
   /**
-   * 计算下一个 run_attempt：查同一 (tenant_id, dedup_key) 已有 MAX+1，首次触发得 1，RERUN 递增。
+   * 计算下一个 run_attempt：
    *
-   * <p>并发 RERUN 可能两个调用都读到 MAX=N 并尝试写 N+1，其中一条会撞唯一键 (tenant_id, dedup_key, run_attempt) 抛 23505；由
-   * {@link #launch} 的 {@code resolveConcurrentDuplicate} 路径兜底。
+   * <ul>
+   *   <li><b>RERUN</b>：同一 {@code dedup_key} 下 MAX+1（并发两条拿到同一 MAX 时靠 uk 打回一条）。
+   *   <li><b>非 RERUN</b>：固定 {@code 1}。幂等业务键下只允许一条「首次触发」实例；若对 {@code max+1}， 会在「胜者已提交 attempt=1 +
+   *       败者事务仍看不到实例」窗口写出 attempt=2，破坏并发幂等（Dedup E2E）。
+   * </ul>
    */
-  private Integer nextRunAttempt(String tenantId, String dedupKey) {
-    Integer max = jobMappers.jobInstanceMapper.selectMaxRunAttemptByDedupKey(tenantId, dedupKey);
-    return max == null ? 1 : max + 1;
+  private Integer nextRunAttempt(LaunchRequest request, String dedupKey) {
+    if (request.triggerType() == TriggerType.RERUN) {
+      Integer max =
+          jobMappers.jobInstanceMapper.selectMaxRunAttemptByDedupKey(request.tenantId(), dedupKey);
+      return max == null ? 1 : max + 1;
+    }
+    return 1;
   }
 
   private static boolean hasSqlStateInChain(Throwable throwable, String sqlState) {

@@ -17,6 +17,10 @@ mybatis:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 batch:
+  scheduling:
+    # IT 不验证 Spring @Scheduled 线程池的优雅收尾；关闭时立即取消，避免 surefire fork 退出超时。
+    wait-for-tasks-to-complete-on-shutdown: false
+    await-termination-seconds: 1
   sla:
     # 测试关闭 SLA 扫描，避免后台线程影响测试稳定性
     enabled: false

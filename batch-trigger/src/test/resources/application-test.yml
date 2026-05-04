@@ -5,8 +5,23 @@ spring:
   quartz:
     jdbc:
       schema: classpath:db/quartz/tables_postgres_quartz_schema.sql
+    # LocalDataSourceJobStore(JobStoreCMT)+池化连接 autoCommit=true 时行锁路径 rollback 失败(IT 曾刷 StdRowLockSemaphore)。
+    # JobStoreTX 需 Quartz 命名数据源（Spring SchedulerFactoryBean 的 setDataSource 不足以绑定 TX JobStore）。
+    properties:
+      org.quartz.jobStore.class: org.quartz.impl.jdbcjobstore.JobStoreTX
+      org.quartz.jobStore.dataSource: quartzJobstoreDs
+      org.quartz.dataSource.quartzJobstoreDs.driver: org.postgresql.Driver
+      org.quartz.dataSource.quartzJobstoreDs.provider: hikaricp
+      org.quartz.dataSource.quartzJobstoreDs.URL: ${spring.datasource.url}
+      org.quartz.dataSource.quartzJobstoreDs.user: ${spring.datasource.username}
+      org.quartz.dataSource.quartzJobstoreDs.password: ${spring.datasource.password}
+      org.quartz.dataSource.quartzJobstoreDs.maxConnections: 5
 
 # IT 让 ShedLockProviderFactory 自动建 batch.shedlock 表(生产由 docker init 002-batch-shedlock.sql 建)
 batch:
+  scheduling:
+    # IT 不验证 Spring @Scheduled 线程池的优雅收尾；关闭时立即取消，避免 surefire fork 退出超时。
+    wait-for-tasks-to-complete-on-shutdown: false
+    await-termination-seconds: 1
   shedlock:
     auto-create: true

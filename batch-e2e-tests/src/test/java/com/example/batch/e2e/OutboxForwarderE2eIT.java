@@ -42,7 +42,8 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.worker.import.worker-type=IMPORT",
-      "batch.outbox.poll-interval-millis=500"
+      "batch.outbox.poll-interval-millis=500",
+      "batch.outbox.min-poll-interval-millis=500"
     })
 @ActiveProfiles({"test", "e2e"})
 @Sql(

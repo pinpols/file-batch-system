@@ -13,7 +13,9 @@ public record ImportWorkerConfiguration(
     String topic,
     String consumerGroupId,
     List<String> capabilityTags,
-    FileProcessing fileProcessing)
+    FileProcessing fileProcessing,
+    /** 心跳仍用 {@link #tenantId}；仅放宽 Kafka 派发消息的租户白名单（E2E 单 JVM 验多租户）。 */
+    Boolean acceptCrossTenantDispatch)
     implements WorkerConfiguration {
 
   @Override

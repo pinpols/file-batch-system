@@ -93,6 +93,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @MapperScan(
     basePackages = "com.example.batch.worker.core.mapper",
     sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(
+    basePackages = "com.example.batch.worker.processes.mapper.business",
+    sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eProcessApplication {
 
   public static void main(String[] args) {
