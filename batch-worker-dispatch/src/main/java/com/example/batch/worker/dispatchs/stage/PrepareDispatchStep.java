@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -107,6 +108,8 @@ public class PrepareDispatchStep implements DispatchStageStep {
               context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
           fileId);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(PrepareDispatchStep.class, "catch:Exception", ex);
+
       return DispatchStageResult.failure(
           stage(),
           "DISPATCH_PREPARE_PARSE_FAILED",

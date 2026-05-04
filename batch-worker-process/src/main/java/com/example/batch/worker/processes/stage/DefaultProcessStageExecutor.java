@@ -2,6 +2,7 @@ package com.example.batch.worker.processes.stage;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
@@ -135,6 +136,9 @@ public class DefaultProcessStageExecutor
     try {
       return Long.parseLong(String.valueOf(value));
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          DefaultProcessStageExecutor.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }

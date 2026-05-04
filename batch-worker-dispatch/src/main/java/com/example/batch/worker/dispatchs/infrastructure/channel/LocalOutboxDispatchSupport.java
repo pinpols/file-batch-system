@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -78,6 +79,8 @@ final class LocalOutboxDispatchSupport {
           message,
           envelopePath.toString());
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(LocalOutboxDispatchSupport.class, "catch:Exception", ex);
+
       return new DispatchResult(false, null, null, false, false, ex.getMessage(), null);
     }
   }

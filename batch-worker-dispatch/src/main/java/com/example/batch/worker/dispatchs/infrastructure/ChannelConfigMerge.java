@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -108,6 +109,7 @@ public final class ChannelConfigMerge {
             objectMapper.readValue(String.valueOf(cj), new TypeReference<>() {});
         mergeConfigJson(out, parsed);
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(ChannelConfigMerge.class, "catch:Exception", ignored);
       }
     }
     return out;

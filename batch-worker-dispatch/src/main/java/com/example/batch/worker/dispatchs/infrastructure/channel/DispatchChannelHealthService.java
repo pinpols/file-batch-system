@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.SecretMasking;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
@@ -224,6 +225,8 @@ public class DispatchChannelHealthService {
     try {
       return ChannelConfigMerge.merge(rawRow, objectMapper);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(DispatchChannelHealthService.class, "catch:Exception", ex);
+
       return Map.of();
     }
   }

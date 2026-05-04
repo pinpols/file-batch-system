@@ -1,6 +1,7 @@
 package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -91,6 +92,8 @@ public class StoreStep implements ExportStageStep {
 
       return commitStoredObject(context, objectName, tempKey, generatedFile, encryptedPath);
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(StoreStep.class, "catch:Exception", ex);
+
       return ExportStageResult.failure(
           stage(),
           "EXPORT_STORE_FAILED",

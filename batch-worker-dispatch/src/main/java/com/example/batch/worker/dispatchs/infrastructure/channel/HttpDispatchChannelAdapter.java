@@ -1,6 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
@@ -125,6 +126,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
             endpoint);
       }
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
+
       return new DispatchResult(
           false, externalRequestId, receiptCode, false, false, ex.getMessage(), endpoint);
     }

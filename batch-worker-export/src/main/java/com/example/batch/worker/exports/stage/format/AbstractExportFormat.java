@@ -1,5 +1,6 @@
 package com.example.batch.worker.exports.stage.format;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.utils.Texts;
@@ -485,6 +486,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       try {
         return objectMapper.readValue(text, MAP_TYPE);
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+
         return Map.of();
       }
     }
@@ -510,6 +513,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     try {
       return Integer.parseInt(text);
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+
       return null;
     }
   }
@@ -543,6 +548,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       try {
         return QuotePolicy.valueOf(String.valueOf(value).trim().toUpperCase());
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+
         return REQUIRED;
       }
     }
@@ -560,6 +567,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       try {
         return EscapePolicy.valueOf(String.valueOf(value).trim().toUpperCase());
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(AbstractExportFormat.class, "catch:Exception", ignored);
+
         return DOUBLE_QUOTE;
       }
     }

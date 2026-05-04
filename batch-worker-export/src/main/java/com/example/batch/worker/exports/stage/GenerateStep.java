@@ -1,6 +1,7 @@
 package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.utils.Texts;
@@ -121,6 +122,8 @@ public class GenerateStep implements ExportStageStep {
       context.getAttributes().put("fileSizeBytes", Files.size(generatedFile));
       return ExportStageResult.success(stage());
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ex);
+
       deleteQuietly(generatedFile);
       return ExportStageResult.failure(
           stage(),
@@ -188,6 +191,8 @@ public class GenerateStep implements ExportStageStep {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ignored);
+
         return Map.of();
       }
     }
