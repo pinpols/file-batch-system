@@ -1,6 +1,7 @@
 package com.example.batch.trigger.infrastructure.mq;
 
 import com.example.batch.common.dto.LaunchEnvelope;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.application.TriggerEventPublisher;
 import java.nio.charset.StandardCharsets;
@@ -86,11 +87,16 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
           result.getRecordMetadata().offset());
       return PublishResult.ok();
     } catch (TimeoutException ex) {
+      SwallowedExceptionLogger.info(KafkaTriggerEventPublisher.class, "catch:TimeoutException", ex);
+
       return PublishResult.fail("kafka send timeout " + sendTimeoutSeconds + "s");
     } catch (ExecutionException ex) {
       Throwable cause = ex.getCause() == null ? ex : ex.getCause();
       return PublishResult.fail("kafka send: " + cause.getMessage());
     } catch (InterruptedException ex) {
+      SwallowedExceptionLogger.info(
+          KafkaTriggerEventPublisher.class, "catch:InterruptedException", ex);
+
       Thread.currentThread().interrupt();
       return PublishResult.fail("kafka send interrupted");
     }

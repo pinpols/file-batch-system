@@ -5,6 +5,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.ScheduleType;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
@@ -147,6 +148,9 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     try {
       return Duration.parse(trimmed.toUpperCase(Locale.ROOT));
     } catch (RuntimeException ignored) {
+      SwallowedExceptionLogger.warn(
+          DefaultLaunchAdapterService.class, "catch:RuntimeException", ignored);
+
       return null;
     }
   }

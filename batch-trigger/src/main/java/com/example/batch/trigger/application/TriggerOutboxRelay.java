@@ -2,6 +2,7 @@ package com.example.batch.trigger.application;
 
 import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
@@ -148,6 +149,8 @@ public class TriggerOutboxRelay {
         executor.shutdownNow();
       }
     } catch (InterruptedException e) {
+      SwallowedExceptionLogger.info(TriggerOutboxRelay.class, "catch:InterruptedException", e);
+
       executor.shutdownNow();
       Thread.currentThread().interrupt();
     }

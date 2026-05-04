@@ -1,6 +1,7 @@
 package com.example.batch.trigger.wheel;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import com.example.batch.trigger.config.WheelSchedulerProperties;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
@@ -147,6 +148,9 @@ public class WheelTriggerReconciler {
       stateMapper.insertOnReconcile(entity);
       return true;
     } catch (DuplicateKeyException dup) {
+      SwallowedExceptionLogger.info(
+          WheelTriggerReconciler.class, "catch:DuplicateKeyException", dup);
+
       // 并发 reconciler / 其他 leader 已 INSERT,幂等
       return false;
     }

@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import com.example.batch.common.utils.IdGenerator;
@@ -413,6 +414,8 @@ public class HashedWheelTriggerScheduler {
     try {
       host = InetAddress.getLocalHost().getHostName();
     } catch (Exception e) {
+      SwallowedExceptionLogger.warn(HashedWheelTriggerScheduler.class, "catch:Exception", e);
+
       host = "unknown";
     }
     return host + ":" + UUID.randomUUID().toString().substring(0, 8);

@@ -1,5 +1,6 @@
 package com.example.batch.trigger.infrastructure.scheduler;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
@@ -185,6 +186,9 @@ public class TriggerReconciler {
     try {
       return Long.parseLong(expression.trim());
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          TriggerReconciler.class, "catch:NumberFormatException", ignored);
+
       return -1L;
     }
   }
