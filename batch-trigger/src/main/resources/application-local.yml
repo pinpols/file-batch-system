@@ -11,6 +11,12 @@ spring:
     username: batch_user
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      repositories:
+        enabled: false
   quartz:
     job-store-type: jdbc
     jdbc:

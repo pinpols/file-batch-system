@@ -13,6 +13,12 @@ spring:
     driver-class-name: org.postgresql.Driver
   kafka:
     bootstrap-servers: localhost:19092
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      repositories:
+        enabled: false
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml
