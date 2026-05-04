@@ -2,6 +2,7 @@ package com.example.batch.common.service;
 
 import com.example.batch.common.config.BatchKmsProperties;
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -224,6 +225,8 @@ public class BatchObjectCryptoService {
         try {
           inputStream.close();
         } catch (Exception ignored) {
+          SwallowedExceptionLogger.warn(BatchObjectCryptoService.class, "catch:Exception", ignored);
+
           // best-effort: 下游已经抛出 IllegalStateException，关闭失败不再叠加
         }
       }

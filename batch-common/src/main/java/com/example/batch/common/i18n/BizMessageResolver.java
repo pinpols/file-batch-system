@@ -2,6 +2,7 @@ package com.example.batch.common.i18n;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import java.util.Locale;
 import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
@@ -42,6 +43,9 @@ public class BizMessageResolver {
       try {
         return messageSource.getMessage(key, exception.getMessageArgs(), locale);
       } catch (NoSuchMessageException ignored) {
+        SwallowedExceptionLogger.info(
+            BizMessageResolver.class, "catch:NoSuchMessageException", ignored);
+
         // key 配错;继续往下走 fallback 让前端至少有可读消息,避免暴露 raw key。
       }
     }
@@ -69,6 +73,9 @@ public class BizMessageResolver {
     try {
       return messageSource.getMessage(key, null, locale);
     } catch (NoSuchMessageException ignored) {
+      SwallowedExceptionLogger.info(
+          BizMessageResolver.class, "catch:NoSuchMessageException", ignored);
+
       return code.label();
     }
   }

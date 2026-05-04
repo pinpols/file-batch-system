@@ -1,5 +1,6 @@
 package com.example.batch.common.i18n;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,9 @@ public class LocalizedErrorRenderer {
       String rendered = messageSource.getMessage(errorKey, args, locale);
       return (rendered == null || rendered.isBlank()) ? fallback : rendered;
     } catch (NoSuchMessageException ignored) {
+      SwallowedExceptionLogger.info(
+          LocalizedErrorRenderer.class, "catch:NoSuchMessageException", ignored);
+
       return fallback;
     } catch (RuntimeException ex) {
       // v6 hardening: 兜底 IllegalArgumentException 等渲染异常——

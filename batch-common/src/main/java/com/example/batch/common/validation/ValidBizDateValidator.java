@@ -1,5 +1,6 @@
 package com.example.batch.common.validation;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import java.time.LocalDate;
@@ -22,6 +23,9 @@ public class ValidBizDateValidator implements ConstraintValidator<ValidBizDate, 
       LocalDate.parse(value.trim(), FMT);
       return true;
     } catch (DateTimeParseException ex) {
+      SwallowedExceptionLogger.info(
+          ValidBizDateValidator.class, "catch:DateTimeParseException", ex);
+
       return false;
     }
   }
