@@ -1,6 +1,7 @@
 package com.example.batch.console.service;
 
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
@@ -20,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ConsoleClusterDiagnosticService {
 
+  private static final long WORKER_STALE_SECONDS = 120L;
+  private static final long OUTBOX_STALE_SECONDS = 120L;
+
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleClusterDiagnosticMapper diagnosticMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
@@ -31,6 +35,7 @@ public class ConsoleClusterDiagnosticService {
     result.put("shedLock", shedLockStatus(resolved));
     result.put("workers", workerConsistency(resolved));
     result.put("outbox", outboxHealth(resolved));
+    result.put("terminalChildren", terminalChildrenHealth(resolved));
     return result;
   }
 
@@ -63,14 +68,31 @@ public class ConsoleClusterDiagnosticService {
         workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.DRAINING.code());
     long offline =
         workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.OFFLINE.code());
+    long staleOnline =
+        valueOrZero(diagnosticMapper.countStaleOnlineWorkers(resolved, WORKER_STALE_SECONDS));
+    long drainingOverdue = valueOrZero(diagnosticMapper.countDrainingPastDeadlineWorkers(resolved));
+    long decommissionedActive =
+        valueOrZero(diagnosticMapper.countDecommissionedWorkersWithActiveTasks(resolved));
+    long invalidCapabilityTags = valueOrZero(diagnosticMapper.countInvalidCapabilityTags(resolved));
     long running =
         jobInstanceMapper.countByStatuses(resolved, List.of(JobInstanceStatus.RUNNING.code()));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("onlineWorkers", online);
     result.put("drainingWorkers", draining);
     result.put("offlineWorkers", offline);
+    result.put("staleOnlineWorkers", staleOnline);
+    result.put("drainingPastDeadlineWorkers", drainingOverdue);
+    result.put("decommissionedWorkersWithActiveTasks", decommissionedActive);
+    result.put("invalidCapabilityTags", invalidCapabilityTags);
+    result.put("workerGroups", diagnosticMapper.workerGroupCapacity(resolved));
     result.put("runningInstances", running);
-    result.put("healthy", online > 0 || running == 0);
+    result.put(
+        "healthy",
+        (online > 0 || running == 0)
+            && staleOnline == 0
+            && drainingOverdue == 0
+            && decommissionedActive == 0
+            && invalidCapabilityTags == 0);
     return result;
   }
 
@@ -87,10 +109,38 @@ public class ConsoleClusterDiagnosticService {
                 })
             .collect(Collectors.toList());
     long pendingCount = diagnosticMapper.countPendingOutboxEvents(resolved);
+    long activeCount =
+        valueOrZero(
+            diagnosticMapper.countOutboxEventsByStatuses(
+                resolved,
+                List.of(
+                    OutboxPublishStatus.NEW.code(),
+                    OutboxPublishStatus.FAILED.code(),
+                    OutboxPublishStatus.PUBLISHING.code())));
+    long stalePublishing =
+        valueOrZero(
+            diagnosticMapper.countStalePublishingOutboxEvents(
+                resolved, OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STALE_SECONDS));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("pendingEvents", pendingCount);
+    result.put("activeEvents", activeCount);
+    result.put("stalePublishingEvents", stalePublishing);
     result.put("deliveryStats", stats);
-    result.put("healthy", pendingCount < 1000);
+    result.put("healthy", pendingCount < 1000 && stalePublishing == 0);
     return result;
+  }
+
+  public Map<String, Object> terminalChildrenHealth(String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    long terminalInstancesWithActiveChildren =
+        valueOrZero(diagnosticMapper.countTerminalInstancesWithActiveChildren(resolved));
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("terminalInstancesWithActiveChildren", terminalInstancesWithActiveChildren);
+    result.put("healthy", terminalInstancesWithActiveChildren == 0);
+    return result;
+  }
+
+  private static long valueOrZero(Long value) {
+    return value == null ? 0L : value;
   }
 }

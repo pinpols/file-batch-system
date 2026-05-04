@@ -3,6 +3,7 @@ package com.example.batch.console.mapper;
 import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
 import com.example.batch.console.domain.view.cluster.ShedLockView;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -24,4 +25,25 @@ public interface ConsoleClusterDiagnosticMapper {
   List<DeliveryStatusCountView> eventDeliveryStatusCounts(@Param("tenantId") String tenantId);
 
   Long countPendingOutboxEvents(@Param("tenantId") String tenantId);
+
+  Long countOutboxEventsByStatuses(
+      @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
+
+  Long countStalePublishingOutboxEvents(
+      @Param("tenantId") String tenantId,
+      @Param("publishingStatus") String publishingStatus,
+      @Param("timeoutSeconds") long timeoutSeconds);
+
+  Long countStaleOnlineWorkers(
+      @Param("tenantId") String tenantId, @Param("timeoutSeconds") long timeoutSeconds);
+
+  Long countDrainingPastDeadlineWorkers(@Param("tenantId") String tenantId);
+
+  Long countDecommissionedWorkersWithActiveTasks(@Param("tenantId") String tenantId);
+
+  Long countInvalidCapabilityTags(@Param("tenantId") String tenantId);
+
+  Long countTerminalInstancesWithActiveChildren(@Param("tenantId") String tenantId);
+
+  List<Map<String, Object>> workerGroupCapacity(@Param("tenantId") String tenantId);
 }

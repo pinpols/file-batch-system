@@ -44,4 +44,109 @@
          where tenant_id = #{tenantId}
            and publish_status = 'NEW'
     </select>
+
+    <select id="countOutboxEventsByStatuses" resultType="java.lang.Long">
+        select count(1)
+          from batch.outbox_event
+         where tenant_id = #{tenantId}
+           and publish_status in
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
+    </select>
+
+    <select id="countStalePublishingOutboxEvents" resultType="java.lang.Long">
+        select count(1)
+          from batch.outbox_event
+         where tenant_id = #{tenantId}
+           and publish_status = #{publishingStatus}
+           and updated_at &lt; current_timestamp - (#{timeoutSeconds} * interval '1 second')
+    </select>
+
+    <select id="countStaleOnlineWorkers" resultType="java.lang.Long">
+        select count(1)
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and status = 'ONLINE'
+           and (
+             heartbeat_at is null
+             or heartbeat_at &lt; current_timestamp - (#{timeoutSeconds} * interval '1 second')
+           )
+    </select>
+
+    <select id="countDrainingPastDeadlineWorkers" resultType="java.lang.Long">
+        select count(1)
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and status = 'DRAINING'
+           and drain_deadline_at is not null
+           and drain_deadline_at &lt; current_timestamp
+    </select>
+
+    <select id="countDecommissionedWorkersWithActiveTasks" resultType="java.lang.Long">
+        select count(distinct wr.id)
+          from batch.worker_registry wr
+          join batch.job_task jt
+            on jt.tenant_id = wr.tenant_id
+           and jt.assigned_worker_code = wr.worker_code
+         where wr.tenant_id = #{tenantId}
+           and wr.status = 'DECOMMISSIONED'
+           and jt.task_status in ('CREATED', 'READY', 'RUNNING')
+    </select>
+
+    <select id="countInvalidCapabilityTags" resultType="java.lang.Long">
+        select count(1)
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and status in ('ONLINE', 'DRAINING')
+           and capability_tags is not null
+           and (
+             case
+               when jsonb_typeof(capability_tags) = 'array' then exists (
+                 select 1
+                   from jsonb_array_elements(capability_tags) elem
+                  where jsonb_typeof(elem) &lt;&gt; 'string'
+               )
+               else true
+             end
+           )
+    </select>
+
+    <select id="countTerminalInstancesWithActiveChildren" resultType="java.lang.Long">
+        select count(distinct ji.id)
+          from batch.job_instance ji
+         where ji.tenant_id = #{tenantId}
+           and ji.instance_status in ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED')
+           and (
+             exists (
+               select 1
+                 from batch.job_partition p
+                where p.tenant_id = ji.tenant_id
+                  and p.job_instance_id = ji.id
+                  and p.partition_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'RETRYING')
+             )
+             or exists (
+               select 1
+                 from batch.job_task t
+                where t.tenant_id = ji.tenant_id
+                  and t.job_instance_id = ji.id
+                  and t.task_status in ('CREATED', 'READY', 'RUNNING')
+             )
+           )
+    </select>
+
+    <select id="workerGroupCapacity" resultType="map">
+        select worker_group as "workerGroup",
+               count(1) as "totalWorkers",
+               count(*) filter (where status = 'ONLINE') as "onlineWorkers",
+               count(*) filter (where status = 'DRAINING') as "drainingWorkers",
+               count(*) filter (where status = 'OFFLINE') as "offlineWorkers",
+               count(*) filter (where status = 'DECOMMISSIONED') as "decommissionedWorkers",
+               coalesce(sum(current_load) filter (where status = 'ONLINE'), 0) as "currentLoad",
+               coalesce(sum(max_concurrent) filter (where status = 'ONLINE'), 0) as "maxConcurrent"
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+         group by worker_group
+         order by worker_group
+    </select>
 </mapper>

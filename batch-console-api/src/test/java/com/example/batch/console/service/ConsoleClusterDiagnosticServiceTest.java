@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
 import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
@@ -74,6 +75,19 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  void shouldReturnWorkerConsistencyUnhealthyWhenInvariantBroken() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
+        .thenReturn(2L);
+    when(diagnosticMapper.countDecommissionedWorkersWithActiveTasks("tenant-a")).thenReturn(1L);
+
+    Map<String, Object> result = service.workerConsistency("tenant-a");
+
+    assertThat(result.get("decommissionedWorkersWithActiveTasks")).isEqualTo(1L);
+    assertThat(result.get("healthy")).isEqualTo(false);
+  }
+
+  @Test
   void shouldReturnOutboxHealthyWhenPendingLow() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     DeliveryStatusCountView view = deliveryView("SUCCESS", 100L);
@@ -96,6 +110,31 @@ class ConsoleClusterDiagnosticServiceTest {
     Map<String, Object> result = service.outboxHealth("tenant-a");
 
     assertThat(result.get("pendingEvents")).isEqualTo(1500L);
+    assertThat(result.get("healthy")).isEqualTo(false);
+  }
+
+  @Test
+  void shouldReturnOutboxUnhealthyWhenStalePublishingExists() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(10L);
+    when(diagnosticMapper.countStalePublishingOutboxEvents(
+            "tenant-a", OutboxPublishStatus.PUBLISHING.code(), 120L))
+        .thenReturn(1L);
+
+    Map<String, Object> result = service.outboxHealth("tenant-a");
+
+    assertThat(result.get("stalePublishingEvents")).isEqualTo(1L);
+    assertThat(result.get("healthy")).isEqualTo(false);
+  }
+
+  @Test
+  void shouldReportTerminalChildrenInconsistency() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(diagnosticMapper.countTerminalInstancesWithActiveChildren("tenant-a")).thenReturn(2L);
+
+    Map<String, Object> result = service.terminalChildrenHealth("tenant-a");
+
+    assertThat(result.get("terminalInstancesWithActiveChildren")).isEqualTo(2L);
     assertThat(result.get("healthy")).isEqualTo(false);
   }
 
