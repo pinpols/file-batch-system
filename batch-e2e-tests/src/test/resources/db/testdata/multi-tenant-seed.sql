@@ -160,18 +160,18 @@ INSERT INTO batch.worker_registry
   (tenant_id, worker_code, worker_group, capability_tags, resource_tag,
    status, heartbeat_at, current_load, drain_started_at, drain_deadline_at)
 VALUES
-  ('ta', 'worker-ta-import-001', 'IMPORT',   '{"import":true}',            null,
+  ('ta', 'worker-ta-import-001', 'IMPORT',   jsonb_build_array('IMPORT'), null,
    'ONLINE', now(),                        0, null, null),
-  ('ta', 'worker-ta-export-001', 'EXPORT',   '{"export":true}',            null,
+  ('ta', 'worker-ta-export-001', 'EXPORT',   jsonb_build_array('EXPORT'), null,
    'ONLINE', now(),                        0, null, null),
-  ('tb', 'worker-tb-import-001', 'IMPORT',   '{"import":true}',            null,
+  ('tb', 'worker-tb-import-001', 'IMPORT',   jsonb_build_array('IMPORT'), null,
    'ONLINE', now(),                        0, null, null),
-  ('tb', 'worker-tb-export-001', 'EXPORT',   '{"export":true}',            null,
+  ('tb', 'worker-tb-export-001', 'EXPORT',   jsonb_build_array('EXPORT'), null,
    'ONLINE', now(),                        0, null, null),
-  ('tc', 'worker-tc-001',        'DEFAULT',  '{"import":true,"export":true}', null,
+  ('tc', 'worker-tc-001',        'DEFAULT',  jsonb_build_array('IMPORT', 'EXPORT'), null,
    'ONLINE', now(),                        0, null, null),
-  ('tc', 'worker-tc-offline',    'DEFAULT',  '{}',                         null,
-   'ONLINE', now() - interval '10 minutes', 0, null, null)
+  ('tc', 'worker-tc-offline',    'DEFAULT',  '[]'::jsonb,                         null,
+   'OFFLINE', now(),                        0, null, null)
 ON CONFLICT DO NOTHING;
 
 -- ── import template configs ────────────────────────────────────────────────────
