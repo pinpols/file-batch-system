@@ -51,6 +51,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
       "batch.outbox.poll-interval-millis=200",
+      "batch.outbox.min-poll-interval-millis=200",
       "batch.outbox.retry-delay-seconds=0",
       "batch.outbox.max-retry-attempts=2",
       "batch.outbox.circuit-breaker-enabled=false"

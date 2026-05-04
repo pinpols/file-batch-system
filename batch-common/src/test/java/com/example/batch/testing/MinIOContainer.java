@@ -4,6 +4,8 @@ import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
@@ -33,11 +35,7 @@ public final class MinIOContainer extends GenericContainer<MinIOContainer> {
     withEnv("MINIO_ROOT_USER", accessKey);
     withEnv("MINIO_ROOT_PASSWORD", secretKey);
     withCommand("server", "/data", "--console-address", ":9001");
-    waitingFor(
-        Wait.forHttp("/minio/health/ready")
-            .forPort(MINIO_API_PORT)
-            .forStatusCode(200)
-            .withStartupTimeout(Duration.ofMinutes(2)));
+    waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
   }
 
   @Override
@@ -67,13 +65,29 @@ public final class MinIOContainer extends GenericContainer<MinIOContainer> {
   }
 
   public void ensureBucketExists(String bucketName) {
-    try {
-      MinioClient client = client();
-      if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
-        client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
+    Instant deadline = Instant.now().plus(Duration.ofMinutes(2));
+    Exception lastFailure = null;
+    while (Instant.now().isBefore(deadline)) {
+      try {
+        MinioClient client = client();
+        if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
+          client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
+        }
+        return;
+      } catch (Exception exception) {
+        lastFailure = exception;
+        sleepBeforeRetry();
       }
-    } catch (Exception exception) {
-      throw new IllegalStateException("failed to ensure MinIO bucket: " + bucketName, exception);
+    }
+    throw new IllegalStateException("failed to ensure MinIO bucket: " + bucketName, lastFailure);
+  }
+
+  private void sleepBeforeRetry() {
+    try {
+      TimeUnit.MILLISECONDS.sleep(500);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("interrupted while waiting for MinIO readiness", interrupted);
     }
   }
 }

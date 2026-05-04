@@ -26,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +57,10 @@ import org.springframework.test.context.jdbc.Sql;
 @SpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "batch.worker.import.worker-type=IMPORT")
+    properties = {
+      "batch.worker.import.worker-type=IMPORT",
+      "batch.worker.import.accept-cross-tenant-dispatch=true"
+    })
 @ActiveProfiles({"test", "e2e"})
 @Sql(
     scripts = {
@@ -64,6 +68,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
+@Order(4)
 class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
   private static final String T1 = "t1";

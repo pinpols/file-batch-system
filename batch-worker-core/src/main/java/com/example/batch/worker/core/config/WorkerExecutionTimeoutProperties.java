@@ -30,4 +30,16 @@ public class WorkerExecutionTimeoutProperties {
    * metric worker.task.execution.thread.leaked.total).
    */
   private long cancelGraceSeconds = 30L;
+
+  /**
+   * Spring 容器销毁时执行池的 graceful 等待时间 (秒). Worker graceful shutdown 会先等待活跃任务 drain, 这里仅处理残留任务
+   * 和不响应中断的业务线程, 默认保持短等待以避免进程退出被阻塞过久.
+   */
+  private long shutdownGraceSeconds = 5L;
+
+  /**
+   * 执行线程是否使用 daemon 线程. 生产默认 false, 避免 JVM 退出时直接丢弃仍在执行的业务任务; E2E/测试可设为 true, 防止测试 fork
+   * 退出阶段被残留执行线程拖住.
+   */
+  private boolean daemonThreads = false;
 }

@@ -42,10 +42,13 @@ public class TaskExecutionPool {
             runnable -> {
               Thread thread = new Thread(runnable);
               thread.setName("worker-task-exec-" + threadIndex.incrementAndGet());
-              thread.setDaemon(false);
+              thread.setDaemon(properties.isDaemonThreads());
               return thread;
             });
-    log.info("TaskExecutionPool started: poolSize={}", size);
+    log.info(
+        "TaskExecutionPool started: poolSize={}, daemonThreads={}",
+        size,
+        properties.isDaemonThreads());
   }
 
   public <T> Future<T> submit(Callable<T> task) {
@@ -61,9 +64,13 @@ public class TaskExecutionPool {
     delegate.shutdown();
     try {
       // graceful 等执行中 task 结束 (drain 时 listener 已停, 池里只剩残留)
-      if (!delegate.awaitTermination(60, TimeUnit.SECONDS)) {
-        log.warn("TaskExecutionPool forced shutdown after 60s wait");
+      long graceSeconds = Math.max(1L, properties.getShutdownGraceSeconds());
+      if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
+        log.warn("TaskExecutionPool forced shutdown after {}s wait", graceSeconds);
         delegate.shutdownNow();
+        if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
+          log.warn("TaskExecutionPool did not terminate after forced shutdown");
+        }
       }
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();

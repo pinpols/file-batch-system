@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.runtime;
 
+import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
@@ -60,6 +61,15 @@ public class ImportTaskConsumer extends AbstractTaskConsumer {
   @Override
   protected DeadLetterPublisher deadLetterPublisher() {
     return deadLetterPublisher;
+  }
+
+  @Override
+  protected boolean acceptsConfiguredTenantScope(
+      WorkerConfiguration cfg, TaskDispatchMessage message) {
+    if (Boolean.TRUE.equals(configuration.acceptCrossTenantDispatch())) {
+      return true;
+    }
+    return super.acceptsConfiguredTenantScope(cfg, message);
   }
 
   @Override
