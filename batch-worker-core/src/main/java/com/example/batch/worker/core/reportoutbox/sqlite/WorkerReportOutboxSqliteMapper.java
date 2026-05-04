@@ -42,6 +42,11 @@ public interface WorkerReportOutboxSqliteMapper {
       @Param("statusPublishing") String statusPublishing,
       @Param("cutoff") long cutoff);
 
+  long countByStatus(@Param("publishStatus") String publishStatus);
+
+  long countStalePublishing(
+      @Param("statusPublishing") String statusPublishing, @Param("cutoff") long cutoff);
+
   int deleteById(@Param("id") long id);
 
   int giveUpRow(

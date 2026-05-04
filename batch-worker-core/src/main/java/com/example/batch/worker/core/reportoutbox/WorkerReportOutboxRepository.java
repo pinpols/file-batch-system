@@ -130,6 +130,21 @@ public class WorkerReportOutboxRepository {
         STATUS_NEW, now, STATUS_PUBLISHING, updatedAtBeforeExclusive);
   }
 
+  public WorkerReportOutboxStats stats(long staleUpdatedAtBeforeExclusive) {
+    if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
+      return new WorkerReportOutboxStats(
+          pgMapper.countByStatus(STATUS_NEW),
+          pgMapper.countByStatus(STATUS_PUBLISHING),
+          pgMapper.countByStatus(STATUS_GIVE_UP),
+          pgMapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
+    }
+    return new WorkerReportOutboxStats(
+        sqliteMapper.countByStatus(STATUS_NEW),
+        sqliteMapper.countByStatus(STATUS_PUBLISHING),
+        sqliteMapper.countByStatus(STATUS_GIVE_UP),
+        sqliteMapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
+  }
+
   void delete(long id) {
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
       pgMapper.deleteById(id);

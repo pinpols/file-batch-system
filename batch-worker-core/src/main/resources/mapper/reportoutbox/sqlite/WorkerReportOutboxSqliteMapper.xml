@@ -56,6 +56,16 @@
         WHERE publish_status = #{statusPublishing} AND updated_at &lt; #{cutoff}
     </update>
 
+    <select id="countByStatus" resultType="long">
+        SELECT count(*) FROM worker_report_outbox
+        WHERE publish_status = #{publishStatus}
+    </select>
+
+    <select id="countStalePublishing" resultType="long">
+        SELECT count(*) FROM worker_report_outbox
+        WHERE publish_status = #{statusPublishing} AND updated_at &lt; #{cutoff}
+    </select>
+
     <delete id="deleteById">
         DELETE FROM worker_report_outbox WHERE id = #{id}
     </delete>
