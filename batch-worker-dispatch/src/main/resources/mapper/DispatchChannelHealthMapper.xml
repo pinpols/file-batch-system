@@ -111,6 +111,20 @@
            and channel_code = #{channelCode}
     </update>
 
+    <select id="countByHealthStatus" resultType="long">
+        select count(*)
+          from batch.file_channel_health
+         where health_status = #{healthStatus}
+    </select>
+
+    <select id="countProbeOverdue" resultType="long">
+        select count(*)
+          from batch.file_channel_health
+         where health_status &lt;&gt; 'HEALTHY'
+           and next_probe_at is not null
+           and next_probe_at &lt;= #{now}
+    </select>
+
     <insert id="upsertHealth" parameterType="map">
         insert into batch.file_channel_health (
             tenant_id, channel_code, channel_type, health_status, consecutive_failures,
