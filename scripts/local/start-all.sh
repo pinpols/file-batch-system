@@ -27,7 +27,7 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-local}"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
-# 与 docker compose --env-file 对齐：裸 jar 继承 .env 中 BATCH_TIMEZONE_DEFAULT_ZONE（及可选旧键 TZ）；
+# 与 docker compose --env-file 对齐：裸 jar 继承 .env 中 BATCH_TIMEZONE_DEFAULT_ZONE；
 # 未设置时回退 Asia/Shanghai。字符编码/locale 依赖同文件中的 BATCH_LOCALE（默认 C.UTF-8）。
 if [[ -f "$COMPOSE_ENV_FILE" ]]; then
   set -a
@@ -36,10 +36,10 @@ if [[ -f "$COMPOSE_ENV_FILE" ]]; then
   set +a
 fi
 export BATCH_TIMEZONE_DEFAULT_ZONE="${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}"
-export TZ="${TZ:-$BATCH_TIMEZONE_DEFAULT_ZONE}"
+export TZ="$BATCH_TIMEZONE_DEFAULT_ZONE"
 export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
-export LANG="${LANG:-$BATCH_LOCALE}"
-export LC_ALL="${LC_ALL:-$BATCH_LOCALE}"
+export LANG="$BATCH_LOCALE"
+export LC_ALL="$BATCH_LOCALE"
 
 # 本地 dev 启动加速 JVM 参数（6 个模块并发起 Spring Boot fat jar 慢的主因是类扫描+JIT）：
 #   TieredStopAtLevel=1  只做 C1 编译，跳过 C2（启动 -30~50%，稳态吞吐 -20~30%，local 无所谓）

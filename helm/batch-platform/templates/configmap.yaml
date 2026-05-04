@@ -41,6 +41,10 @@ data:
   BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: {{ .Values.consoleApi.realtime.replayMaxEntries | quote }}
   BATCH_CONSOLE_REALTIME_REPLAY_TTL: {{ .Values.consoleApi.realtime.replayTtl | quote }}
   BATCH_TIMEZONE_DEFAULT_ZONE: {{ .Values.batchTimezoneDefaultZone | quote }}
+  TZ: {{ .Values.batchTimezoneDefaultZone | quote }}
+  BATCH_LOCALE: {{ .Values.batchLocale | quote }}
+  LANG: {{ .Values.batchLocale | quote }}
+  LC_ALL: {{ .Values.batchLocale | quote }}
 
   # ── OpenTelemetry ──────────────────────────────────────────────────────────
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.endpoint | quote }}

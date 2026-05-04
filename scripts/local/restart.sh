@@ -33,10 +33,10 @@ if [[ -f "$COMPOSE_ENV_FILE" ]]; then
   set +a
 fi
 export BATCH_TIMEZONE_DEFAULT_ZONE="${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}"
-export TZ="${TZ:-$BATCH_TIMEZONE_DEFAULT_ZONE}"
+export TZ="$BATCH_TIMEZONE_DEFAULT_ZONE"
 export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
-export LANG="${LANG:-$BATCH_LOCALE}"
-export LC_ALL="${LC_ALL:-$BATCH_LOCALE}"
+export LANG="$BATCH_LOCALE"
+export LC_ALL="$BATCH_LOCALE"
 
 LOG_DIR="$ROOT/logs/app"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"

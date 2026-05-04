@@ -51,6 +51,9 @@ security:
 # 注入 ConfigMap 键 BATCH_TIMEZONE_DEFAULT_ZONE（与 batch-defaults / .env.example 一致）
 batchTimezoneDefaultZone: "Asia/Shanghai"
 
+# 注入 ConfigMap 键 BATCH_LOCALE / LANG / LC_ALL（与 compose / .env.example 一致）
+batchLocale: "C.UTF-8"
+
 # ── console-api ────────────────────────────────────────────────────────────────
 
 consoleApi:
