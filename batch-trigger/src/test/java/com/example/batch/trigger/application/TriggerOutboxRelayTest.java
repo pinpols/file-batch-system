@@ -19,6 +19,8 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -45,7 +47,12 @@ class TriggerOutboxRelayTest {
 
   @BeforeEach
   void setUp() throws Throwable {
-    relay = new TriggerOutboxRelay(mapper, publisher, lockingTaskExecutor);
+    relay =
+        new TriggerOutboxRelay(mapper, publisher, lockingTaskExecutor, new SimpleMeterRegistry());
+    when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
+        .thenReturn(0);
+    when(mapper.countByStatuses(any())).thenReturn(0L);
+    when(mapper.countStalePublishing(anyString(), anyLong())).thenReturn(0L);
     // executeWithLock(Task,LockConfiguration) 返回 void → 必须用 doAnswer 而非 when
     doAnswer(
             inv -> {
@@ -63,8 +70,25 @@ class TriggerOutboxRelayTest {
 
     relay.poll();
 
+    verify(mapper).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
     verify(publisher, never()).publish(any(), any(), any(), any());
     verify(mapper, never()).markPublishing(anyLong(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void poll_resetsStalePublishingBeforeSelectingPending() {
+    when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
+        .thenReturn(2);
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
+
+    relay.poll();
+
+    verify(mapper)
+        .resetStalePublishing(
+            eq(OutboxPublishStatus.PUBLISHING.code()),
+            eq(OutboxPublishStatus.FAILED.code()),
+            eq("stale PUBLISHING reset by TriggerOutboxRelay"),
+            anyLong());
   }
 
   @Test
@@ -105,6 +129,28 @@ class TriggerOutboxRelayTest {
             eq(102L),
             eq(OutboxPublishStatus.FAILED.code()),
             eq("kafka broker not reachable"),
+            any(Instant.class));
+    verify(mapper, never()).markPublished(anyLong(), anyString());
+  }
+
+  @Test
+  void poll_publisherFailureAtMaxAttempts_marksGiveUp() throws Exception {
+    setMaxPublishAttempts(relay, 3);
+    TriggerOutboxEventEntity event = buildPendingEvent(107L, validEnvelopePayload());
+    event.setPublishAttempt(2);
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of(event));
+    when(mapper.markPublishing(eq(107L), anyString(), anyString(), anyString())).thenReturn(1);
+    when(publisher.publish(any(), any(), any(), any()))
+        .thenReturn(TriggerEventPublisher.PublishResult.fail("kafka still down"));
+
+    relay.poll();
+
+    verify(mapper)
+        .markFailed(
+            eq(107L),
+            eq(OutboxPublishStatus.GIVE_UP.code()),
+            eq("kafka still down"),
             any(Instant.class));
     verify(mapper, never()).markPublished(anyLong(), anyString());
   }
@@ -202,5 +248,11 @@ class TriggerOutboxRelayTest {
             "trace-1",
             Map.of());
     return JsonUtils.toJson(LaunchEnvelope.of(request, "tenant-a:req-1", Instant.now()));
+  }
+
+  private static void setMaxPublishAttempts(TriggerOutboxRelay relay, int value) throws Exception {
+    Field field = TriggerOutboxRelay.class.getDeclaredField("maxPublishAttempts");
+    field.setAccessible(true);
+    field.setInt(relay, value);
   }
 }

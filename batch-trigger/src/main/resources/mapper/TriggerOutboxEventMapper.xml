@@ -82,6 +82,32 @@
          WHERE id = #{id}
     </update>
 
+    <update id="resetStalePublishing">
+        UPDATE batch.trigger_outbox_event
+           SET publish_status  = #{failedStatus},
+               last_error      = #{lastError,jdbcType=VARCHAR},
+               next_publish_at = CURRENT_TIMESTAMP,
+               updated_at      = CURRENT_TIMESTAMP
+         WHERE publish_status = #{publishingStatus}
+           AND updated_at &lt; CURRENT_TIMESTAMP - (#{timeoutSeconds} * interval '1 second')
+    </update>
+
+    <select id="countByStatuses" resultType="long">
+        SELECT count(1)
+          FROM batch.trigger_outbox_event
+         WHERE publish_status IN
+         <foreach collection="statuses" item="status" open="(" separator="," close=")">
+             #{status}
+         </foreach>
+    </select>
+
+    <select id="countStalePublishing" resultType="long">
+        SELECT count(1)
+          FROM batch.trigger_outbox_event
+         WHERE publish_status = #{publishingStatus}
+           AND updated_at &lt; CURRENT_TIMESTAMP - (#{timeoutSeconds} * interval '1 second')
+    </select>
+
     <select id="selectByTenantAndRequest" resultMap="TriggerOutboxEventResultMap">
         SELECT *
           FROM batch.trigger_outbox_event

@@ -3,7 +3,9 @@ server:
 
 spring:
   main:
-    lazy-initialization: true
+    # 关掉懒加载：TriggerOutboxRelay 等 bean 仅 @PostConstruct 自启、不被其它 bean 强引用，
+    # lazy 模式下可能永不实例化 → ADR-010 trigger_outbox 永远 NEW（与 orchestrator/worker-local 对齐）。
+    lazy-initialization: false
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user
