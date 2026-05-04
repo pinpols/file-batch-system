@@ -243,6 +243,61 @@ groups:
           summary: "Dead letter tasks backlog is growing"
           description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Investigate root cause before running scripts/ops/heal-dead-letters.sh."
 
+      - alert: BatchWorkerStaleOnlinePresent
+        expr: batch_worker_registry_stale_online_count > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "ONLINE workers have stale heartbeats"
+          description: "{{ $value }} ONLINE worker(s) exceeded heartbeat timeout. Check WorkerHeartbeatTimeoutScheduler and worker connectivity."
+
+      - alert: BatchWorkerDrainOverduePresent
+        expr: batch_worker_registry_draining_overdue_count > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "DRAINING workers passed drain deadline"
+          description: "{{ $value }} DRAINING worker(s) are past drain_deadline_at. Check takeover scheduler or run ops drain healing after root-cause review."
+
+      - alert: BatchDecommissionedWorkerActiveClaims
+        expr: batch_worker_registry_decommissioned_active_claims_count > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "DECOMMISSIONED workers still own active tasks"
+          description: "{{ $value }} decommissioned worker(s) still have CREATED/READY/RUNNING task claims. Reclaim affected tasks before scaling further."
+
+      - alert: BatchInvalidWorkerCapabilityTags
+        expr: batch_worker_capability_tags_invalid_count > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "Worker capability_tags contain invalid JSON shapes"
+          description: "{{ $value }} active worker(s) have capability_tags that selector treats as no capability. Fix worker registration payload."
+
+      - alert: BatchTerminalInstanceActiveChildren
+        expr: batch_job_instance_terminal_active_children_count > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: task
+        annotations:
+          summary: "Terminal job instances still have active children"
+          description: "{{ $value }} terminal job_instance(s) still have active partition/task rows. JobInstanceTerminalChildStateReconciler is missing a path or failed."
+
       # ── ADR-010 trigger 异步解耦专项告警 ────────────────────────────────────
       # 异步路径已于 2026-05-02 固化为唯一链路（无开关）. 告警阈值与
       # 验收指标(batch.trigger.outbox.publish.lag p99 < 5s)对齐. 三条告警覆盖:
@@ -263,6 +318,28 @@ groups:
         annotations:
           summary: "Trigger outbox backlog is growing (publish > consume)"
           description: "trigger publish 速率超过 consumer {{ $value | humanize }}/s 持续 10min. orchestrator consumer 可能滞后 / lag 过大. 检查 batch.trigger.outbox.publish.lag 指标 + Kafka consumer group orchestrator-trigger-launch."
+
+      - alert: TriggerOutboxPendingHigh
+        expr: batch_trigger_outbox_pending_events > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox pending backlog is high"
+          description: "{{ $value }} trigger_outbox_event rows are NEW+FAILED. Check Kafka producer and TriggerOutboxRelay logs."
+
+      - alert: TriggerOutboxStalePublishing
+        expr: batch_trigger_outbox_publishing_stale_events > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox rows stuck in PUBLISHING"
+          description: "{{ $value }} trigger_outbox_event rows stayed PUBLISHING past timeout. TriggerOutboxRelay stale reset is not clearing them."
 
       # consumer 端 launch 失败(非 rate_limited)率超过 1/s 持续 5min — 可能是
       # LaunchApplicationService 内部异常 / DB 连接池耗尽 / orchestrator 崩溃风暴.
