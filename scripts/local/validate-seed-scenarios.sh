@@ -21,7 +21,7 @@
 #     (DAG/PIPELINE/GATEWAY/MIXED), 验证 instance 创建,不强制 worker SUCCESS
 #   - 多租并发隔离: ta/tb 同时 fire,验证 tenant_id 不串
 #   - ADVANCED=1: orch /internal/{outbox,compensations} + console 鉴权 (5 项)
-#   - 探针清理: cascade 删 7 张表
+#   - 探针清理: cascade 删运行时子表 + dead_letter / retry_schedule（按 probe instance）
 #
 # 用法:
 #   ./scripts/local/validate-seed-scenarios.sh                # 默认 docker 端口 18081 等
@@ -108,7 +108,7 @@ psql_w_first() {
 # do_cleanup [probe_pattern]
 # 默认 'seedval-%' 全 sweep — 把所有历史 PROBE_TAG 痕迹都清掉
 # 使用 cascade 顺序: 子表 → 父表(避免 FK 违反, 即使没有 FK 也按依赖序删)
-# 8 张表: 11 个 DELETE
+# 含 dead_letter_task / retry_schedule（避免删分区后死信仍指向孤儿 partition）
 do_cleanup() {
   local pattern="${1:-$SWEEP_PATTERN}"
   # 关键 FK: job_instance.trigger_request_id 反向引用 trigger_request
@@ -127,6 +127,9 @@ do_cleanup() {
     psql_q "DELETE FROM batch.workflow_node_run WHERE workflow_run_id IN (SELECT id FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances))" >/dev/null
     psql_q "DELETE FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances)" >/dev/null
     psql_q "DELETE FROM batch.job_step_instance WHERE job_instance_id IN ($probe_instances)" >/dev/null
+    psql_q "DELETE FROM batch.dead_letter_task d WHERE d.source_type='JOB_PARTITION' AND EXISTS (SELECT 1 FROM batch.job_partition p WHERE p.id=d.source_id AND p.job_instance_id IN ($probe_instances))" >/dev/null
+    psql_q "DELETE FROM batch.retry_schedule r WHERE r.related_type='JOB_PARTITION' AND EXISTS (SELECT 1 FROM batch.job_partition p WHERE p.id=r.related_id AND p.job_instance_id IN ($probe_instances))" >/dev/null
+    psql_q "DELETE FROM batch.retry_schedule r WHERE r.related_type='JOB_TASK' AND EXISTS (SELECT 1 FROM batch.job_task t WHERE t.id=r.related_id AND t.job_instance_id IN ($probe_instances))" >/dev/null
     psql_q "DELETE FROM batch.job_task WHERE job_instance_id IN ($probe_instances)" >/dev/null
     psql_q "DELETE FROM batch.job_partition WHERE job_instance_id IN ($probe_instances)" >/dev/null
     psql_q "DELETE FROM batch.job_execution_log WHERE job_instance_id IN ($probe_instances)" >/dev/null
@@ -419,7 +422,7 @@ http_code=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
   -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/launch" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: ${PROBE_TAG}-no-secret" \
-  -d '{"tenantId":"default-tenant","jobCode":"import_customer_job","bizDate":"2026-05-03","triggerType":"API"}' 2>/dev/null)
+  -d '{"tenantId":"default-tenant","jobCode":"import_customer_job","bizDate":"2026-05-03","triggerType":"API","params":{"templateCode":"import_customer_json_v1","content":"[]"}}' 2>/dev/null)
 if [[ "$http_code" == "401" ]]; then
   result pass "缺 X-Internal-Secret → 401" "InternalSecretFilter 拦截"
 elif [[ "$http_code" == "200" ]]; then
