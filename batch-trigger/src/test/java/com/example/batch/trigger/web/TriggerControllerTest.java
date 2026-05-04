@@ -18,15 +18,12 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.service.TriggerService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-@SuppressWarnings("removal")
 class TriggerControllerTest {
 
   private final TriggerService triggerService = mock(TriggerService.class);
@@ -36,9 +33,7 @@ class TriggerControllerTest {
       MockMvcBuilders.standaloneSetup(
               new TriggerController(triggerService, triggerGracefulShutdown))
           .setControllerAdvice(new TriggerApiExceptionHandler())
-          .setMessageConverters(
-              new MappingJackson2HttpMessageConverter(
-                  new ObjectMapper().registerModule(new JavaTimeModule())))
+          .setMessageConverters(new JacksonJsonHttpMessageConverter())
           .build();
 
   @Test
