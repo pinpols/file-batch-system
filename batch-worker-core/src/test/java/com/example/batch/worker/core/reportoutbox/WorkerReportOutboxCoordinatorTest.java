@@ -11,7 +11,6 @@ import com.example.batch.worker.core.infrastructure.HttpTaskExecutionClient;
 import com.example.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
 import com.example.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
 import com.example.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteSessionFactorySupport;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +21,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -32,7 +31,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClient;
 
 /** ADR-015：HTTP REPORT 失败后写入 SQLite outbox，poller 抢占并重投 orchestrator。 */
-@SuppressWarnings("removal")
 class WorkerReportOutboxCoordinatorTest {
 
   @Test
@@ -124,9 +122,10 @@ class WorkerReportOutboxCoordinatorTest {
 
   private static RestClient.Builder jsonRestClientBuilder() {
     return RestClient.builder()
-        .messageConverters(
-            converters ->
-                converters.add(0, new MappingJackson2HttpMessageConverter(new ObjectMapper())));
+        .configureMessageConverters(
+            b ->
+                b.configureMessageConvertersList(
+                    converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
   }
 
   private static TaskExecutionReport report() {

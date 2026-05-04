@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
@@ -87,6 +88,11 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
     try {
       sourceAttributes.putAll(runtimeAttributes);
     } catch (UnsupportedOperationException ignored) {
+      SwallowedExceptionLogger.info(
+          AbstractPipelineStepExecutionAdapter.class,
+          "catch:UnsupportedOperationException",
+          ignored);
+
       // Some unit tests pass immutable maps; production execution contexts are mutable.
     }
   }
@@ -178,6 +184,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
           resultErrorKey(failed),
           resultErrorArgs(failed));
     } catch (Exception exception) {
+      SwallowedExceptionLogger.warn(
+          AbstractPipelineStepExecutionAdapter.class, "catch:Exception", exception);
+
       runtimeRepository.markPipelineFailed(
           pipelineInstanceId, initialStage(), lastSuccessfulStage(attributes));
       if (exception instanceof BizException bizException) {
@@ -273,6 +282,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
         }
       }
     } catch (IllegalArgumentException ignored) {
+      SwallowedExceptionLogger.info(
+          AbstractPipelineStepExecutionAdapter.class, "catch:IllegalArgumentException", ignored);
+
       // 非 JSON / 非对象 payload 不阻断调度，回退到其他 jobCode 来源
     }
     return null;
