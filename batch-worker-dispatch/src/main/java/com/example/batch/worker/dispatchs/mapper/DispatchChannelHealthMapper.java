@@ -33,4 +33,8 @@ public interface DispatchChannelHealthMapper {
 
   /** P2：失败路径后置，按新的 consecutive_failures 重算 next_probe_at（指数退避）。 */
   int recalcBackoff(Map<String, Object> params);
+
+  long countByHealthStatus(@Param("healthStatus") String healthStatus);
+
+  long countProbeOverdue(@Param("now") java.sql.Timestamp now);
 }

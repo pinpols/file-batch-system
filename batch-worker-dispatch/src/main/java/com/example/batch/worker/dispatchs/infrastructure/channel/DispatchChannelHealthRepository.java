@@ -101,6 +101,14 @@ public class DispatchChannelHealthRepository {
     mapper.recalcBackoff(params);
   }
 
+  public long countByHealthStatus(String healthStatus) {
+    return mapper.countByHealthStatus(healthStatus);
+  }
+
+  public long countProbeOverdue(Instant now) {
+    return mapper.countProbeOverdue(toTimestamp(now));
+  }
+
   public void upsertHealth(DispatchChannelHealthSnapshot s) {
     Map<String, Object> params = new HashMap<>();
     params.put(P_TENANT_ID, s.tenantId());
