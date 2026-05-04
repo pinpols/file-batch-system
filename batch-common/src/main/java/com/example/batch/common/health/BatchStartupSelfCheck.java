@@ -1,5 +1,6 @@
 package com.example.batch.common.health;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.mapper.InformationSchemaMapper;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,6 +75,8 @@ public class BatchStartupSelfCheck {
     try {
       fw.validate();
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(BatchStartupSelfCheck.class, "catch:Exception", ex);
+
       problems.add("Flyway 脚本校验失败：" + ex.getMessage());
     }
   }
@@ -95,6 +98,8 @@ public class BatchStartupSelfCheck {
         }
       }
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(BatchStartupSelfCheck.class, "catch:Exception", ex);
+
       problems.add("读取 Flyway 已应用迁移信息失败：" + ex.getMessage());
     }
   }

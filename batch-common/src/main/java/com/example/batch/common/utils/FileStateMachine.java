@@ -3,6 +3,7 @@ package com.example.batch.common.utils;
 import com.example.batch.common.enums.FileStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import java.util.EnumSet;
 import java.util.Map;
 
@@ -75,6 +76,8 @@ public final class FileStateMachine {
       assertTransition(currentStatusCode, nextStatusCode);
       return true;
     } catch (BizException exception) {
+      SwallowedExceptionLogger.info(FileStateMachine.class, "catch:BizException", exception);
+
       return false;
     }
   }

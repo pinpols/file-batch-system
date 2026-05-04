@@ -1,6 +1,7 @@
 package com.example.batch.common.health;
 
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
 import org.springframework.boot.health.contributor.Health;
@@ -30,6 +31,8 @@ public class MinioHealthIndicator implements HealthIndicator {
       boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
       return Health.up().withDetail("bucket", bucket).withDetail("exists", exists).build();
     } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(MinioHealthIndicator.class, "catch:Exception", ex);
+
       return Health.down(ex).withDetail("bucket", bucket).build();
     }
   }

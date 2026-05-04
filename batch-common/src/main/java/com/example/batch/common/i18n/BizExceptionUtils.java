@@ -2,6 +2,7 @@ package com.example.batch.common.i18n;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.Collection;
@@ -70,6 +71,8 @@ public final class BizExceptionUtils {
       Object[] parsed = objectMapper.readValue(argsJson, Object[].class);
       return parsed == null ? new Object[0] : parsed;
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(BizExceptionUtils.class, "catch:Exception", ignored);
+
       return new Object[0];
     }
   }
@@ -96,6 +99,8 @@ public final class BizExceptionUtils {
     try {
       return objectMapper.writeValueAsString(Arrays.asList(args));
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(BizExceptionUtils.class, "catch:Exception", ignored);
+
       return null;
     }
   }
