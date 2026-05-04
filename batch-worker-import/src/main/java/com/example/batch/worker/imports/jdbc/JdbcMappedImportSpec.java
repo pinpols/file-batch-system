@@ -1,6 +1,8 @@
 package com.example.batch.worker.imports.jdbc;
 
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
@@ -79,14 +81,28 @@ public record JdbcMappedImportSpec(
       m.forEach((k, v) -> out.put(String.valueOf(k), v));
       return out;
     }
-    if (raw instanceof String text && Texts.hasText(text)) {
+    String jsonText = extractJsonText(raw);
+    if (jsonText != null && Texts.hasText(jsonText)) {
       try {
-        return objectMapper.readValue(text, Map.class);
+        return objectMapper.readValue(jsonText, Map.class);
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(JdbcMappedImportSpec.class, "catch:Exception", ignored);
+
         return Map.of();
       }
     }
     return Map.of();
+  }
+
+  /**
+   * PG JDBC 对 {@code json}/{@code jsonb} 常映射为 {@code org.postgresql.util.PGobject}；driver 为 {@code
+   * runtime} 依赖，用 {@link PostgresqlJsonbTexts} 反射取 JSON 文本后再解析。
+   */
+  private static String extractJsonText(Object raw) {
+    if (raw instanceof String text) {
+      return text;
+    }
+    return PostgresqlJsonbTexts.tryExtract(raw);
   }
 
   @SuppressWarnings("unchecked")

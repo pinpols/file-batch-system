@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.infrastructure.quality;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.worker.imports.domain.CustomerImportPayload;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +30,8 @@ public class ValidationConfigSupport {
     try {
       return objectMapper.readValue(String.valueOf(value), new TypeReference<>() {});
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(ValidationConfigSupport.class, "catch:Exception", ignored);
+
       return Map.of();
     }
   }

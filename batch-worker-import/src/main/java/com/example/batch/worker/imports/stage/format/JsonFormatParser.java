@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -113,6 +114,8 @@ public class JsonFormatParser implements FormatParser {
               .build();
       support.writeParsedRecord(writeParam);
     } catch (Exception exception) {
+      SwallowedExceptionLogger.warn(JsonFormatParser.class, "catch:Exception", exception);
+
       support.recordParseError(
           context, recordNo, "IMPORT_PARSE_JSON_INVALID", exception.getMessage(), node);
     }

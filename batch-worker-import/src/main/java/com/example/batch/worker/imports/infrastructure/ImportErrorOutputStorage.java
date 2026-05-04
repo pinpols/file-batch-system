@@ -2,6 +2,7 @@ package com.example.batch.worker.imports.infrastructure;
 
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportBadRecord;
@@ -79,6 +80,9 @@ public class ImportErrorOutputStorage {
         try {
           Files.deleteIfExists(spool);
         } catch (IOException ignored) {
+          SwallowedExceptionLogger.warn(
+              ImportErrorOutputStorage.class, "catch:IOException", ignored);
+
           // 临时文件清理失败不阻断主路径; OS 会按 /tmp 策略最终回收
         }
       }

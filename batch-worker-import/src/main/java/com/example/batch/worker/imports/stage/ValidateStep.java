@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -214,6 +215,8 @@ public class ValidateStep implements ImportStageStep {
         try {
           row = objectMapper.readValue(line, MAP_TYPE);
         } catch (Exception exception) {
+          SwallowedExceptionLogger.warn(ValidateStep.class, "catch:Exception", exception);
+
           recordValidationError(
               context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
           if (!recordGovernanceService.withinThreshold(context)) {

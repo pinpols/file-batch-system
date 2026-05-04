@@ -1,5 +1,7 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
@@ -48,6 +50,8 @@ public class ParseSupport {
       try {
         return objectMapper.readValue(text, new TypeReference<List<Object>>() {});
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(ParseSupport.class, "catch:Exception", ignored);
+
         return null;
       }
     }
@@ -74,14 +78,24 @@ public class ParseSupport {
       map.forEach((k, v) -> out.put(String.valueOf(k), v));
       return out;
     }
-    if (value instanceof String text && Texts.hasText(text)) {
+    String text = jsonText(value);
+    if (text != null && Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, new TypeReference<Map<String, Object>>() {});
       } catch (Exception ignored) {
+        SwallowedExceptionLogger.warn(ParseSupport.class, "catch:Exception", ignored);
+
         return Map.of();
       }
     }
     return Map.of();
+  }
+
+  private static String jsonText(Object value) {
+    if (value instanceof String s) {
+      return s;
+    }
+    return PostgresqlJsonbTexts.tryExtract(value);
   }
 
   public int resolveInt(

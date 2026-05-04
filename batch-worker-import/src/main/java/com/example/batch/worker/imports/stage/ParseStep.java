@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.common.utils.Texts;
@@ -452,6 +453,8 @@ public class ParseStep implements ImportStageStep {
     try {
       return Integer.parseInt(String.valueOf(value).trim());
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(ParseStep.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }

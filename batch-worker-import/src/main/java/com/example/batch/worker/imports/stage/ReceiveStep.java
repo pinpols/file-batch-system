@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileRecordParam;
@@ -246,6 +247,8 @@ public class ReceiveStep implements ImportStageStep {
 
       return importPayload;
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(ReceiveStep.class, "catch:Exception", ignored);
+
       return new ImportPayload(
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           null, null, null, null, null, null, null, Map.of());
@@ -312,6 +315,8 @@ public class ReceiveStep implements ImportStageStep {
     try {
       return LocalDate.parse(bizDate);
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(ReceiveStep.class, "catch:Exception", ignored);
+
       return null;
     }
   }

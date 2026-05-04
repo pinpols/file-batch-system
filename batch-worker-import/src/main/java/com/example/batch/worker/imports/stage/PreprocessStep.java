@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.common.utils.Texts;
@@ -160,6 +161,8 @@ public class PreprocessStep implements ImportStageStep {
           fileMetadata);
       return ImportStageResult.success(stage());
     } catch (ImportPreprocessException ex) {
+      SwallowedExceptionLogger.info(PreprocessStep.class, "catch:ImportPreprocessException", ex);
+
       return ImportStageResult.failure(
           stage(),
           ex.errorCode(),
@@ -296,6 +299,8 @@ public class PreprocessStep implements ImportStageStep {
         try {
           Files.deleteIfExists(encrypted);
         } catch (IOException ignored) {
+          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
+
           // 临时文件清理失败不阻断主路径; OS 会按 /tmp 策略最终回收
         }
       }
@@ -303,6 +308,8 @@ public class PreprocessStep implements ImportStageStep {
         try {
           Files.deleteIfExists(decrypted);
         } catch (IOException ignored) {
+          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
+
           // 同上
         }
       }
@@ -390,6 +397,8 @@ public class PreprocessStep implements ImportStageStep {
           .decode(ByteBuffer.wrap(bytes));
       return true;
     } catch (CharacterCodingException e) {
+      SwallowedExceptionLogger.info(PreprocessStep.class, "catch:CharacterCodingException", e);
+
       return false;
     }
   }

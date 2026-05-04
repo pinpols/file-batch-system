@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.postgresql.util.PGobject;
 
 class JdbcMappedImportSpecTest {
 
@@ -41,5 +42,30 @@ class JdbcMappedImportSpecTest {
     assertThatThrownBy(() -> JdbcMappedImportSpec.parse(Map.of(), objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("jdbc_mapped_import spec missing");
+  }
+
+  @Test
+  void shouldParseJdbcMappedImportWhenQueryParamSchemaIsPgJsonObject() throws Exception {
+    Map<String, Object> qps =
+        Map.of(
+            "jdbcMappedImport",
+            Map.of(
+                "schema",
+                "biz",
+                "table",
+                "customer_account",
+                "tenantColumn",
+                "tenant_id",
+                "columnMappings",
+                List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                "conflictColumns",
+                List.of("tenant_id", "customer_no")));
+    PGobject pg = new PGobject();
+    pg.setType("jsonb");
+    pg.setValue(objectMapper.writeValueAsString(qps));
+    Map<String, Object> template = Map.of("query_param_schema", pg);
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(template, objectMapper);
+    assertThat(spec.table()).isEqualTo("customer_account");
+    assertThat(spec.columnMappings()).hasSize(1);
   }
 }
