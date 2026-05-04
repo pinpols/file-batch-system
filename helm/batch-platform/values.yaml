@@ -48,6 +48,9 @@ orchestratorBaseUrl: "http://batch-orchestrator:18082"
 security:
   bypassMode: "false"
 
+# 注入 ConfigMap 键 BATCH_TIMEZONE_DEFAULT_ZONE（与 batch-defaults / .env.example 一致）
+batchTimezoneDefaultZone: "Asia/Shanghai"
+
 # ── console-api ────────────────────────────────────────────────────────────────
 
 consoleApi:
