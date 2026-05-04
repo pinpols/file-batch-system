@@ -54,6 +54,10 @@ bash scripts/local/start-all.sh
 ```
 
 说明：首次使用时先将 `.env.example` 复制为 `.env.local`。启动脚本默认使用 `.env.local`，如需切换环境可先设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。脚本会等待 PostgreSQL、MinIO、Redis 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。默认情况下 `start-all.sh` 不会自动执行 Maven 打包；如需“构建 + 启动”，可使用 `BUILD=1 bash scripts/local/start-all.sh`。
+
+`start-all.sh` / `restart.sh` 会在启动 fat jar 前 **source 同一份 `COMPOSE_ENV_FILE`**：时区以 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 为准（未设置则默认 `Asia/Shanghai`），并导出 **`TZ`**（默认同值，兼容仍在 `.env` 里写 `TZ=` 的旧模板）；**`BATCH_LOCALE`**（默认 `C.UTF-8`）驱动 **`LANG`/`LC_ALL`**，与本机 JVM / 容器一致。
+
+在 **IDE 中直接 Run**（不经过上述脚本）时，请在 Run Configuration 里至少设置 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 与 **`BATCH_LOCALE`**（与同仓库 `.env.local` 一致）；若需 JVM 默认区与之一致，请再设 **`TZ`** 为同一 IANA 值（例如与 `BATCH_TIMEZONE_DEFAULT_ZONE` 均填 `Asia/Shanghai`），或使用 VM options `-Duser.timezone=Asia/Shanghai`。
 如果某些 Java 模块已经在运行，脚本会跳过它们，只补启动未运行或已退出的模块。
 
 查看状态：

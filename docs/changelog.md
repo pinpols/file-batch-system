@@ -6,6 +6,10 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-05-04
+- **CLAUDE.md §时区策略**：控制台 `ConsoleQuerySupport.parseFlexibleInstant*` 与 `BatchTimezoneProvider.defaultZone()` 对齐，删除「可保留 `ZoneId.systemDefault()`」豁免表述；实现上为解析方法增加 `ZoneId` 参数，`ConsoleJobQueryService` / `ConsoleOpsQueryService` 注入 provider 传入默认区。
+- **CLAUDE.md §时区策略 / §字符编码 + 运维样例 env**：`.env.example` 以 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 为唯一时区变量（`docker-compose` 的 `TZ`/`PGTZ` 从该变量插值，兼容显式 `TZ=`）；**`BATCH_LOCALE`** 为进程/中间件 locale 唯一变量；本地 `start-all.sh`/`restart.sh` 导出 `TZ`←`BATCH_TIMEZONE`、`LANG`/`LC_ALL`←`BATCH_LOCALE`；`.env.prod` / `check-env-prod-sync` 白名单同步。
+
 ### 2026-05-03
 - **CLAUDE.md 新增 4 条硬约束 + V82-V85 schema 落地（PG schema 审计 2026-05-03 收尾）**：
   - **§多租隔离**：所有业务表必须含 `tenant_id`，所有 UNIQUE/PRIMARY 约束必须含 `tenant_id`（4 张系统表豁免：`batch_runtime_default_parameter` / `step_registry` / `shedlock` / `biz_table_schema`）。配套 V84/V85 给 `workflow_node` / `workflow_edge` 加 `tenant_id` 列 + 改唯一约束 + 索引；同 PR 同步 entity / mapper.xml / 4 个 production callers / 4 个 test seed。
@@ -174,7 +178,7 @@
   - **控制面职责重划**：console `ConsoleTriggerController` 的 5 条路由 `/api/console/triggers/**` → `/api/console/ops/triggers/**`（list/{jobCode}/register/unregister/pause/resume），定位为 **Ops 救急入口**（DB 与 Quartz 漂移时的强制修复），日常业务走 `toggleEnabled`；控制器 javadoc + OpenAPI tag 加警告："在此注销 enabled=true 的 job 会被下一次 reconcile 重建"。`ConsoleRateLimitFilter.TRIGGER_PATH_PREFIX` 同步更新。
   - 对账周期配置项 `batch.trigger.reconcile-interval-millis`（默认 30000）。
   - 守护：`TriggerReconcilerTest` 6 个 case 覆盖 DB-only / Quartz-only / 对齐 / 禁用 / draining / 畸形 JobKey。
-- **新增 §时区策略 + 全局时区 provider**：`BatchTimezoneProperties` (`batch.timezone.default-zone`，默认 `Asia/Shanghai`) + `BatchTimezoneProvider` bean；业务路径上的 `ZoneId.systemDefault()` 统一替换为 `provider.defaultZone()` / `provider.resolveOrDefault(tz)`，9 处调用点完成迁移（`LaunchBatchDayService` / `LaunchParamResolver` / `CalendarBizDateResolver` / `DefaultLaunchAdapterService` / `DefaultResourceScheduler` / `BatchDayCutoffScheduler`×2 / `QuotaRuntimeStateService`）。`QuotaResetPolicy.systemZone()` 打 `@Deprecated`；`ConsoleQuerySupport` 宽松日期解析作为明确豁免保留。`batch-defaults.yml` 补 `spring.jackson.time-zone`。
+- **新增 §时区策略 + 全局时区 provider**：`BatchTimezoneProperties` (`batch.timezone.default-zone`，默认 `Asia/Shanghai`) + `BatchTimezoneProvider` bean；业务路径上的 `ZoneId.systemDefault()` 统一替换为 `provider.defaultZone()` / `provider.resolveOrDefault(tz)`，9 处调用点完成迁移（`LaunchBatchDayService` / `LaunchParamResolver` / `CalendarBizDateResolver` / `DefaultLaunchAdapterService` / `DefaultResourceScheduler` / `BatchDayCutoffScheduler`×2 / `QuotaRuntimeStateService`）。`ConsoleQuerySupport` 宽松日期解析作为明确豁免保留。`batch-defaults.yml` 补 `spring.jackson.time-zone`。
 - **V62 迁移：重跑语义 + 批次日并发 + 时区快照**（对齐 `docs/analysis/deep-issue-analysis-v3.md` 的五点设计灰色地带）：
   - `job_instance` 新增 `run_attempt INT NOT NULL DEFAULT 1` + `ck_run_attempt >= 1`；唯一键由 `(tenant_id, dedup_key)` 改为 `(tenant_id, dedup_key, run_attempt)`，同一 (job, biz_date) 可持有多次 attempts。
   - `TriggerType` 新增 `RERUN`（重跑触发）；`job_instance` / `trigger_request` 的 `ck_*_trigger_type` CHECK 同步扩展；console `/meta/enums.triggerType` 由反射自动下发不用改 schema。
