@@ -243,8 +243,34 @@ INSERT INTO batch.file_template_config (
     preview_masking_enabled, error_line_masking_enabled, log_masking_enabled, content_encryption_enabled,
     encryption_key_ref, download_requires_approval, masking_rule_set
 ) VALUES
-    (5001, 'default-tenant', 'import_customer_v1', 'Customer Import Template', 'IMPORT', 'CUSTOMER', 'DELIMITED', 'UTF-8', 'UTF-8', FALSE, E'\n', ',', '"', '\\', 0, 1, 0, jsonb_build_object('title', 'customer-import'), NULL, 'SHA-256', 'NONE', 'AES', 'customer-${bizDate}-${version}', jsonb_build_object('customer_no', 'customerNo', 'customer_name', 'customerName'), jsonb_build_object('required', jsonb_build_array('customerNo','customerName')), 'customer_query', 'select * from biz.customer_account where tenant_id = :tenantId', jsonb_build_object('tenantId', 'string'), TRUE, 1000, 1000, 500, TRUE, 1, 'Customer import template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, TRUE, TRUE, TRUE, 'DEFAULT_TEST', FALSE, 'PCI_BASIC'),
-    (5002, 'default-tenant', 'import_customer_json_v1', 'Customer Import JSON Template', 'IMPORT', 'CUSTOMER', 'JSON', 'UTF-8', 'UTF-8', FALSE, E'\n', NULL, NULL, NULL, 0, 0, 0, jsonb_build_object('title', 'customer-import-json'), NULL, 'SHA-256', 'NONE', 'AES', 'customer-json-${bizDate}-${version}', jsonb_build_object('customer_no', 'customerNo', 'customer_name', 'customerName'), jsonb_build_object('required', jsonb_build_array('customerNo','customerName')), 'customer_query_json', 'select * from biz.customer_account where tenant_id = :tenantId', jsonb_build_object('tenantId', 'string'), TRUE, 1000, 1000, 500, TRUE, 1, 'Customer JSON import template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, TRUE, TRUE, FALSE, 'DEFAULT_TEST', FALSE, 'PCI_BASIC'),
+    (5001, 'default-tenant', 'import_customer_v1', 'Customer Import Template', 'IMPORT', 'CUSTOMER', 'DELIMITED', 'UTF-8', 'UTF-8', FALSE, E'\n', ',', '"', '\\', 0, 1, 0, jsonb_build_object('title', 'customer-import'), NULL, 'SHA-256', 'NONE', 'AES', 'customer-${bizDate}-${version}', jsonb_build_object('customer_no', 'customerNo', 'customer_name', 'customerName'), jsonb_build_object('required', jsonb_build_array('customerNo','customerName')), 'customer_query', 'select * from biz.customer_account where tenant_id = :tenantId', jsonb_build_object(
+        'tenantId', 'string',
+        'jdbcMappedImport', jsonb_build_object(
+            'schema', 'biz',
+            'table', 'customer_account',
+            'tenantColumn', 'tenant_id',
+            'columnMappings', jsonb_build_array(
+                jsonb_build_object('from', 'customerNo', 'to', 'customer_no'),
+                jsonb_build_object('from', 'customerName', 'to', 'customer_name'),
+                jsonb_build_object('from', 'customerType', 'to', 'customer_type')
+            ),
+            'conflictColumns', jsonb_build_array('tenant_id', 'customer_no')
+        )
+    ), TRUE, 1000, 1000, 500, TRUE, 1, 'Customer import template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, TRUE, TRUE, TRUE, 'DEFAULT_TEST', FALSE, 'PCI_BASIC'),
+    (5002, 'default-tenant', 'import_customer_json_v1', 'Customer Import JSON Template', 'IMPORT', 'CUSTOMER', 'JSON', 'UTF-8', 'UTF-8', FALSE, E'\n', NULL, NULL, NULL, 0, 0, 0, jsonb_build_object('title', 'customer-import-json'), NULL, 'SHA-256', 'NONE', 'AES', 'customer-json-${bizDate}-${version}', jsonb_build_object('customer_no', 'customerNo', 'customer_name', 'customerName'), jsonb_build_object('required', jsonb_build_array('customerNo','customerName')), 'customer_query_json', 'select * from biz.customer_account where tenant_id = :tenantId', jsonb_build_object(
+        'tenantId', 'string',
+        'jdbcMappedImport', jsonb_build_object(
+            'schema', 'biz',
+            'table', 'customer_account',
+            'tenantColumn', 'tenant_id',
+            'columnMappings', jsonb_build_array(
+                jsonb_build_object('from', 'customerNo', 'to', 'customer_no'),
+                jsonb_build_object('from', 'customerName', 'to', 'customer_name'),
+                jsonb_build_object('from', 'customerType', 'to', 'customer_type')
+            ),
+            'conflictColumns', jsonb_build_array('tenant_id', 'customer_no')
+        )
+    ), TRUE, 1000, 1000, 500, TRUE, 1, 'Customer JSON import template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, TRUE, TRUE, FALSE, 'DEFAULT_TEST', FALSE, 'PCI_BASIC'),
     (5003, 'default-tenant', 'export_settlement_v1', 'Settlement Export Template', 'EXPORT', 'SETTLEMENT', 'DELIMITED', 'UTF-8', 'UTF-8', TRUE, E'\n', ',', '"', '\\', 0, 1, 0, jsonb_build_object('title', 'settlement-export'), jsonb_build_object('title', 'settlement-export-trailer'), 'SHA-256', 'NONE', 'AES', 'settlement-${bizDate}-${version}', jsonb_build_object('settlement_no', 'settlementNo', 'net_amount', 'netAmount'), jsonb_build_object('required', jsonb_build_array('settlementNo')), 'settlement_query', 'select * from biz.settlement_detail where tenant_id = :tenantId and batch_id = :batchId order by id asc', jsonb_build_object('tenantId', 'string', 'batchId', 'long'), TRUE, 1000, 1000, 500, TRUE, 1, 'Settlement export template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, FALSE, TRUE, TRUE, 'DEFAULT_TEST', TRUE, 'PCI_BASIC'),
     (5004, 'tenant-finance', 'export_settlement_xlsx_v1', 'Settlement Export XLSX Template', 'EXPORT', 'SETTLEMENT', 'EXCEL', 'UTF-8', 'UTF-8', TRUE, E'\n', NULL, NULL, NULL, 0, 1, 0, jsonb_build_object('title', 'settlement-xlsx'), jsonb_build_object('title', 'settlement-xlsx-trailer'), 'SHA-256', 'NONE', 'NONE', 'settlement-xlsx-${bizDate}-${version}', jsonb_build_object('settlement_no', 'settlementNo'), jsonb_build_object('required', jsonb_build_array('settlementNo')), 'settlement_query_xlsx', 'select * from biz.settlement_detail where tenant_id = :tenantId and batch_id = :batchId order by id asc', jsonb_build_object('tenantId', 'string', 'batchId', 'long'), TRUE, 1000, 1000, 500, TRUE, 1, 'Settlement XLSX export template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', FALSE, FALSE, FALSE, FALSE, 'DEFAULT_TEST', FALSE, NULL);
 

@@ -187,18 +187,18 @@ INSERT INTO batch.file_template_config
    preview_masking_enabled, download_requires_approval,
    enabled, version, created_by)
 VALUES
-  -- ta 零售: 客户数据 CSV 导入
+  -- ta 零售: 客户数据 CSV 导入 → LOAD 走 jdbcMappedLoad，逻辑列名须与 query_param_schema.jdbcMappedImport 一致（落 biz.customer_account）
   ('ta', 'IMP-CUSTOMER-CSV', 'Customer Import CSV', 'IMPORT', 'CUSTOMER',
    'DELIMITED', 'UTF-8', 'UTF-8', false,
    ',', '"', '"',
    0, 1, 0,
    'SHA-256', 'NONE', 'NONE',
    '[
-     {"name":"customerId","targetColumn":"customer_id","type":"STRING","required":true},
+     {"name":"customerNo","targetColumn":"customer_no","type":"STRING","required":true},
      {"name":"customerName","targetColumn":"customer_name","type":"STRING","required":true},
-     {"name":"phoneNo","targetColumn":"phone_no","type":"STRING","required":true},
-     {"name":"email","targetColumn":"email","type":"STRING","required":false},
-     {"name":"registerDate","targetColumn":"register_date","type":"DATE","required":true,"format":"yyyy-MM-dd"}
+     {"name":"customerType","targetColumn":"customer_type","type":"STRING","required":true},
+     {"name":"phoneNo","targetColumn":"mobile_no","type":"STRING","required":false},
+     {"name":"email","targetColumn":"email","type":"STRING","required":false}
    ]'::jsonb,
    true, 1000, 1000, 500,
    false, null, false, false,
@@ -318,6 +318,33 @@ ON CONFLICT DO NOTHING;
 --   row 按 columnMappings 直接写入业务表，避开硬编码 CustomerImportPayload 转换（见 ParseSupport.java）。
 -- • EXP-* 导出：default_query_sql 声明业务查询（含 :tenantId + :batchNo 占位符；包装层强制按 id 排序所以 SELECT 必须带 id）；
 --   query_param_schema.sqlTemplateExport 告诉 plugin 用 sql_template_export 路径。
+
+-- ta 零售客户 CSV → biz.customer_account（联调共用 demo 表，与 default-tenant import 语义对齐）
+UPDATE batch.file_template_config
+SET query_param_schema =
+        coalesce(query_param_schema, '{}'::jsonb)
+        || jsonb_build_object(
+            'jdbcMappedImport',
+            jsonb_build_object(
+                'schema',
+                'biz',
+                'table',
+                'customer_account',
+                'tenantColumn',
+                'tenant_id',
+                'columnMappings',
+                jsonb_build_array(
+                    jsonb_build_object('from', 'customerNo', 'to', 'customer_no'),
+                    jsonb_build_object('from', 'customerName', 'to', 'customer_name'),
+                    jsonb_build_object('from', 'customerType', 'to', 'customer_type'),
+                    jsonb_build_object('from', 'phoneNo', 'to', 'mobile_no'),
+                    jsonb_build_object('from', 'email', 'to', 'email')
+                ),
+                'conflictColumns',
+                jsonb_build_array('tenant_id', 'customer_no'))),
+    updated_at = now()
+WHERE tenant_id = 'ta'
+  AND template_code = 'IMP-CUSTOMER-CSV';
 
 -- tb 交易流水导入 → biz.transaction
 UPDATE batch.file_template_config

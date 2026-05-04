@@ -7,6 +7,7 @@
 # =========================================================
 #   5. 死信队列积压（replay_status = NEW 超 dlq_warn_count 条）
 #   6. 待重试调度积压（retry_status = WAITING 超 retry_warn_count 条）
+#   7. 业务终态实例下仍有活跃 partition/task 子行
 #
 # 使用方法：
 #   PGHOST=localhost PGPORT=15432 PGDATABASE=batch_platform PGUSER=batch_user \
@@ -63,13 +64,15 @@ check_connectivity() {
 
 # ── 2. Flyway migration history ───────────────────────────────────────────────
 check_flyway() {
+  local flyway_table="${BATCH_SCHEMA}.flyway_schema_history"
   local failed_count
   failed_count="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.flyway_schema_history WHERE success = false" \
+    "SELECT COUNT(*) FROM ${flyway_table} WHERE success = false" \
     2>/dev/null)" || {
     # Flyway table might be in public schema
+    flyway_table="flyway_schema_history"
     failed_count="$(psql_query \
-      "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false" \
+      "SELECT COUNT(*) FROM ${flyway_table} WHERE success = false" \
       2>/dev/null)" || {
       warn "Cannot query flyway_schema_history — skipping Flyway check"
       return
@@ -79,13 +82,13 @@ check_flyway() {
     fail "Flyway: ${failed_count} failed migration(s) in history"
     psql_query \
       "SELECT version, description, installed_on
-         FROM flyway_schema_history
+         FROM ${flyway_table}
         WHERE success = false
         ORDER BY installed_rank DESC
         LIMIT 5" 2>/dev/null || true
   else
     local total
-    total="$(psql_query "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true" 2>/dev/null)" || total="?"
+    total="$(psql_query "SELECT COUNT(*) FROM ${flyway_table} WHERE success = true" 2>/dev/null)" || total="?"
     ok "Flyway: ${total} successful migration(s), 0 failed"
   fi
 }
@@ -142,7 +145,7 @@ check_outbox_backlog() {
   local pending
   pending="$(psql_query \
     "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.outbox_event
-      WHERE published_at IS NULL
+      WHERE publish_status IN ('NEW','FAILED','PUBLISHING')
         AND created_at < NOW() - INTERVAL '${OUTBOX_LAG_SECONDS} seconds'" \
     2>/dev/null)" || { warn "Cannot query outbox_event"; return; }
 
@@ -151,13 +154,23 @@ check_outbox_backlog() {
     psql_query \
       "SELECT event_type, COUNT(*) AS cnt, MIN(created_at) AS oldest
          FROM ${BATCH_SCHEMA}.outbox_event
-        WHERE published_at IS NULL
+        WHERE publish_status IN ('NEW','FAILED','PUBLISHING')
           AND created_at < NOW() - INTERVAL '${OUTBOX_LAG_SECONDS} seconds'
         GROUP BY event_type
         ORDER BY oldest ASC
         LIMIT 10" 2>/dev/null || true
   else
     ok "Outbox backlog: 0 unpublished events older than ${OUTBOX_LAG_SECONDS}s"
+  fi
+
+  local stale_publishing
+  stale_publishing="$(psql_query \
+    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.outbox_event
+      WHERE publish_status = 'PUBLISHING'
+        AND updated_at < NOW() - INTERVAL '${OUTBOX_LAG_SECONDS} seconds'" \
+    2>/dev/null)" || stale_publishing=0
+  if [[ "${stale_publishing}" -gt 0 ]]; then
+    fail "Outbox stale publishing: ${stale_publishing} event(s) stuck in PUBLISHING for >${OUTBOX_LAG_SECONDS}s"
   fi
 }
 
@@ -201,6 +214,55 @@ check_retry_backlog() {
   fi
 }
 
+# ── 8. terminal job instances with active children ───────────────────────────
+check_terminal_instance_active_children() {
+  local inconsistent
+  inconsistent="$(psql_query \
+    "SELECT COUNT(DISTINCT ji.id)
+       FROM ${BATCH_SCHEMA}.job_instance ji
+      WHERE ji.instance_status IN ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')
+        AND (
+          EXISTS (
+            SELECT 1 FROM ${BATCH_SCHEMA}.job_partition p
+             WHERE p.tenant_id = ji.tenant_id
+               AND p.job_instance_id = ji.id
+               AND p.partition_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING')
+          )
+          OR EXISTS (
+            SELECT 1 FROM ${BATCH_SCHEMA}.job_task t
+             WHERE t.tenant_id = ji.tenant_id
+               AND t.job_instance_id = ji.id
+               AND t.task_status IN ('CREATED','READY','RUNNING')
+          )
+        )" 2>/dev/null)" || { warn "Cannot query terminal job child consistency"; return; }
+
+  if [[ "${inconsistent}" -gt 0 ]]; then
+    fail "Terminal consistency: ${inconsistent} terminal job_instance(s) still have active partition/task children"
+    psql_query \
+      "SELECT ji.tenant_id, ji.id, ji.job_code, ji.instance_status, ji.updated_at
+         FROM ${BATCH_SCHEMA}.job_instance ji
+        WHERE ji.instance_status IN ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')
+          AND (
+            EXISTS (
+              SELECT 1 FROM ${BATCH_SCHEMA}.job_partition p
+               WHERE p.tenant_id = ji.tenant_id
+                 AND p.job_instance_id = ji.id
+                 AND p.partition_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING')
+            )
+            OR EXISTS (
+              SELECT 1 FROM ${BATCH_SCHEMA}.job_task t
+               WHERE t.tenant_id = ji.tenant_id
+                 AND t.job_instance_id = ji.id
+                 AND t.task_status IN ('CREATED','READY','RUNNING')
+            )
+          )
+        ORDER BY ji.updated_at ASC
+        LIMIT 10" 2>/dev/null || true
+  else
+    ok "Terminal consistency: no terminal job_instance has active partition/task children"
+  fi
+}
+
 # ── main ──────────────────────────────────────────────────────────────────────
 require_psql
 check_connectivity
@@ -210,6 +272,7 @@ check_stuck_jobs
 check_outbox_backlog
 check_dead_letters
 check_retry_backlog
+check_terminal_instance_active_children
 
 log ""
 if [[ "${failures}" -gt 0 ]]; then

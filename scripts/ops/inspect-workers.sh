@@ -57,10 +57,10 @@ check_connectivity() {
 check_worker_summary() {
   log "Worker registry summary:"
   psql_query \
-    "SELECT worker_status, COUNT(*) AS cnt
+    "SELECT status, COUNT(*) AS cnt
        FROM ${BATCH_SCHEMA}.worker_registry
-      GROUP BY worker_status
-      ORDER BY worker_status" 2>/dev/null \
+      GROUP BY status
+      ORDER BY status" 2>/dev/null \
   | while IFS='|' read -r status cnt; do
       log "  ${status:-?}: ${cnt:-0}"
     done
@@ -71,7 +71,7 @@ check_drain_timeout() {
   local overdue
   overdue="$(psql_query \
     "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.worker_registry
-      WHERE worker_status = 'DRAINING'
+      WHERE status = 'DRAINING'
         AND drain_deadline_at IS NOT NULL
         AND drain_deadline_at < NOW()" \
     2>/dev/null)" || { warn "Cannot query worker_registry drain_deadline_at"; return; }
@@ -82,7 +82,7 @@ check_drain_timeout() {
     psql_query \
       "SELECT worker_code, tenant_id, drain_started_at, drain_deadline_at
          FROM ${BATCH_SCHEMA}.worker_registry
-        WHERE worker_status = 'DRAINING'
+        WHERE status = 'DRAINING'
           AND drain_deadline_at IS NOT NULL
           AND drain_deadline_at < NOW()
         ORDER BY drain_deadline_at ASC" 2>/dev/null \
@@ -93,7 +93,7 @@ check_drain_timeout() {
     local draining_total
     draining_total="$(psql_query \
       "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.worker_registry
-        WHERE worker_status = 'DRAINING'" 2>/dev/null)" || draining_total=0
+        WHERE status = 'DRAINING'" 2>/dev/null)" || draining_total=0
     ok "Drain timeout: 0 overdue (${draining_total} still draining within deadline)"
   fi
 }
@@ -103,20 +103,20 @@ check_stale_heartbeat() {
   local stale
   stale="$(psql_query \
     "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.worker_registry
-      WHERE worker_status = 'ONLINE'
-        AND (last_heartbeat_at IS NULL
-          OR last_heartbeat_at < NOW() - INTERVAL '${STALE_HEARTBEAT_MINUTES} minutes')" \
-    2>/dev/null)" || { warn "Cannot query worker_registry last_heartbeat_at"; return; }
+      WHERE status = 'ONLINE'
+        AND (heartbeat_at IS NULL
+          OR heartbeat_at < NOW() - INTERVAL '${STALE_HEARTBEAT_MINUTES} minutes')" \
+    2>/dev/null)" || { warn "Cannot query worker_registry heartbeat_at"; return; }
 
   if [[ "${stale}" -gt 0 ]]; then
     fail "Stale heartbeat: ${stale} ONLINE worker(s) silent for >${STALE_HEARTBEAT_MINUTES}m"
     psql_query \
-      "SELECT worker_code, tenant_id, worker_type, last_heartbeat_at
+      "SELECT worker_code, tenant_id, worker_group, heartbeat_at
          FROM ${BATCH_SCHEMA}.worker_registry
-        WHERE worker_status = 'ONLINE'
-          AND (last_heartbeat_at IS NULL
-            OR last_heartbeat_at < NOW() - INTERVAL '${STALE_HEARTBEAT_MINUTES} minutes')
-        ORDER BY last_heartbeat_at ASC NULLS FIRST
+        WHERE status = 'ONLINE'
+          AND (heartbeat_at IS NULL
+            OR heartbeat_at < NOW() - INTERVAL '${STALE_HEARTBEAT_MINUTES} minutes')
+        ORDER BY heartbeat_at ASC NULLS FIRST
         LIMIT 10" 2>/dev/null || true
   else
     ok "Stale heartbeat: all ONLINE workers reported within ${STALE_HEARTBEAT_MINUTES}m"
@@ -140,7 +140,7 @@ check_decommissioned_with_tasks() {
          JOIN ${BATCH_SCHEMA}.worker_registry wr
               ON wr.worker_code = ta.worker_code
               AND wr.tenant_id  = ta.tenant_id
-        WHERE wr.worker_status = 'DECOMMISSIONED'
+        WHERE wr.status = 'DECOMMISSIONED'
           AND ta.assignment_status IN ('CLAIMED','RUNNING')" \
       2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via task_assignment"; return; }
   else
@@ -149,7 +149,7 @@ check_decommissioned_with_tasks() {
          JOIN ${BATCH_SCHEMA}.worker_registry wr
               ON wr.worker_code = jt.assigned_worker_code
               AND wr.tenant_id  = jt.tenant_id
-        WHERE wr.worker_status = 'DECOMMISSIONED'
+        WHERE wr.status = 'DECOMMISSIONED'
           AND jt.task_status IN ('RUNNING','READY','CREATED')" \
       2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via job_task"; return; }
   fi

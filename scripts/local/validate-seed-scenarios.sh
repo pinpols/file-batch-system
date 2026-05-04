@@ -43,6 +43,10 @@
 #   LOAD_SEED                                1=运行前先 reload 种子(默认 0)
 #   ADVANCED                                 1=跑 §9 advanced 段(默认 0)
 #   STRICT                                   1=§7 改用 default-tenant 严格 SUCCESS 验证(默认 0=ta/tb/tc 仅链路覆盖)
+#                                            STRICT=1 会先探活四类 worker(import/export/dispatch/process)，端口默认
+#                                            18083–18086（与 start-all.sh 一致）；worker 默认租户均为 default-tenant，勿改成 ta/tb/tc。
+#   BATCH_WORKER_IMPORT_PORT / EXPORT_PORT / DISPATCH_PORT / PROCESS_PORT
+#                                            STRICT 前置探活覆盖（默认 18083 / 18084 / 18085 / 18086）
 #   PRE_CLEANUP                              0=跳过跑前 sweep(默认 1=清所有 seedval-* 历史)
 # =========================================================
 set -uo pipefail
@@ -140,6 +144,8 @@ do_cleanup() {
   # CRON PROBE 在 trigger_runtime_state 留行,不清会一直 fire 污染下次 run
   psql_q "DELETE FROM batch.trigger_runtime_state WHERE job_definition_id IN (SELECT id FROM batch.job_definition WHERE job_code LIKE '$pattern')" >/dev/null
   psql_q "DELETE FROM batch.workflow_node WHERE node_code='SEEDVAL_PROBE'" >/dev/null
+  psql_q "DELETE FROM batch.pipeline_step_definition WHERE pipeline_definition_id IN (SELECT id FROM batch.pipeline_definition WHERE job_code LIKE '$pattern')" >/dev/null
+  psql_q "DELETE FROM batch.pipeline_definition WHERE job_code LIKE '$pattern'" >/dev/null
   # STRICT EXPORT 写的 file_record + 我们 seed 的 settlement_batch 一起清(按 PROBE_TAG batch_no)
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.settlement_batch WHERE batch_no LIKE '$pattern'" >/dev/null 2>&1 || true
   # STRICT DISPATCH PROBE file_record (按 file_code = PROBE_TAG-file)
@@ -148,7 +154,7 @@ do_cleanup() {
   psql_q "DELETE FROM batch.file_record WHERE source_ref LIKE '$pattern' OR file_code LIKE '$pattern'" >/dev/null
   # IMPORT 写的 biz.customer_account 行(SEEDVAL_C* 前缀, IMPORT 真 SUCCESS 后产生)
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.customer_account WHERE customer_no LIKE 'SEEDVAL_%'" >/dev/null 2>&1 || true
-  # PROBE job_definition (§9.5 FIXED_RATE 真触发探针等);
+  # PROBE job_definition (§9.5 CRON 真触发探针等);
   # V67 trigger_runtime_state ON DELETE CASCADE 自动清
   psql_q "DELETE FROM batch.job_definition WHERE job_code LIKE '$pattern'" >/dev/null
 }
@@ -200,6 +206,30 @@ if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1" >/de
 else
   result fail "postgres 可达" "$PG_CONTAINER 容器不存在或拒绝连接"
   exit 1
+fi
+
+# ---------- 0.3. STRICT 前置：四类 worker（默认 default-tenant，端口同 start-all.sh） ----------
+if [[ "$STRICT" == "1" ]]; then
+  section "0.3 STRICT 前置: worker(import/export/dispatch/process) + default-tenant"
+  _W_IMP="${BATCH_WORKER_IMPORT_PORT:-18083}"
+  _W_EXP="${BATCH_WORKER_EXPORT_PORT:-18084}"
+  _W_DISP="${BATCH_WORKER_DISPATCH_PORT:-18085}"
+  _W_PROC="${BATCH_WORKER_PROCESS_PORT:-18086}"
+  _strict_workers_ok=1
+  for _pair in "import:${_W_IMP}" "export:${_W_EXP}" "dispatch:${_W_DISP}" "process:${_W_PROC}"; do
+    _name="${_pair%%:*}"
+    _port="${_pair##*:}"
+    if curl -sf "http://localhost:${_port}/actuator/health" >/dev/null 2>&1; then
+      result pass "worker-${_name} UP" "port ${_port}（与各模块默认 BATCH_WORKER_*_TENANT_ID=default-tenant 一致）"
+    else
+      result fail "worker-${_name} UP" "port ${_port} 无响应 — 请 START_WORKERS=1 bash scripts/local/start-all.sh（勿单独改租户为 ta/tb/tc）"
+      _strict_workers_ok=0
+    fi
+  done
+  if [[ "${_strict_workers_ok:-0}" -eq 0 ]]; then
+    echo -e "\n${RED}STRICT=1 需要四类 JVM worker 在线且默认注册 default-tenant；修正后重跑本脚本。${NC}"
+    exit 1
+  fi
 fi
 
 # ---------- 0.4. PRE_CLEANUP — 跑前清所有 seedval-* 历史残留(避免污染) ----------
@@ -560,8 +590,8 @@ if [[ "$STRICT" == "1" ]]; then
     "{\"fileId\":\"$probe_file_id\",\"channelCode\":\"local_dispatch\"}" success
 
   # ===== PROCESS 严格 =====
-  # seed default-tenant PROCESS job; fire 用 sqlTransformCompute plugin
-  # SQL transform 需要 source/target 表和 SQL — 接受 expect=terminal (SUCCESS 或 FAILED 都算 worker 真执行)
+  # seed default-tenant PROCESS job + pipeline steps; COMPUTE step 走 sqlTransformCompute,
+  # 写入 biz.customer_account 的 SEEDVAL_* probe 行,可被 do_cleanup 清掉。
   PROBE_PROCESS_JOB="${PROBE_TAG}-process"
   psql_q "INSERT INTO batch.job_definition (
       tenant_id, job_code, job_name, job_type, biz_type,
@@ -572,8 +602,60 @@ if [[ "$STRICT" == "1" ]]; then
       'MANUAL', 'Asia/Shanghai', 'SCHEDULED', 'process_queue', 'PROCESS', 'always_open',
       5, true, now(), now()
     ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true" >/dev/null
-  assert_fire "PROCESS 严格 (default-tenant, sqlTransformCompute, terminal)" "default-tenant" "$PROBE_PROCESS_JOB" \
-    "{\"bizDate\":\"$(date +%Y-%m-%d)\",\"batchKey\":\"$PROBE_TAG-batch\",\"processImplCode\":\"sqlTransformCompute\"}" terminal
+  probe_process_pipeline_id=$(psql_w_first "INSERT INTO batch.pipeline_definition (
+      tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
+      version, enabled, description, created_at, updated_at
+    ) VALUES (
+      'default-tenant', '$PROBE_PROCESS_JOB', 'seedval process probe pipeline',
+      'PROCESS', 'TEST', 'PROCESS', 1, true, 'seed validation process probe', now(), now()
+    ) RETURNING id")
+  psql_q "INSERT INTO batch.pipeline_step_definition (
+      pipeline_definition_id, step_code, step_name, stage_code, step_order,
+      impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
+      enabled, created_at, updated_at
+    ) VALUES
+      ($probe_process_pipeline_id, 'PROCESS_PREPARE', 'Prepare', 'PREPARE', 1,
+       'PROCESS_PREPARE', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
+      ($probe_process_pipeline_id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
+       'sqlTransformCompute',
+       jsonb_build_object(
+         'sqlTransformCompute', jsonb_build_object(
+           'sourceSql',
+           'select ' ||
+           quote_literal('default-tenant') || '::text as tenant_id, ' ||
+           quote_literal('SEEDVAL_' || upper(replace('$PROBE_TAG', '-', '_'))) || '::text as customer_no, ' ||
+           quote_literal('Seed Validation Process Probe') || '::text as customer_name, ' ||
+           quote_literal('PERSONAL') || '::text as customer_type, ' ||
+           quote_literal('ACTIVE') || '::text as status',
+           'targetSchema', 'biz',
+           'targetTable', 'customer_account',
+           'writeMode', 'UPSERT',
+           'columns', jsonb_build_array(
+             jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
+             jsonb_build_object('source', 'customer_no', 'target', 'customer_no'),
+             jsonb_build_object('source', 'customer_name', 'target', 'customer_name'),
+             jsonb_build_object('source', 'customer_type', 'target', 'customer_type'),
+             jsonb_build_object('source', 'status', 'target', 'status')
+           ),
+           'conflictColumns', jsonb_build_array('tenant_id', 'customer_no'),
+           'validations', jsonb_build_array(
+             jsonb_build_object(
+               'name', 'staged_one_row',
+               'checkSql', 'select count(*) = 1 as pass, ''expected one staged row'' as message from batch.process_staging where batch_key = :batchKey'
+             )
+           ),
+           'emptyResultPolicy', 'FAIL',
+           'maxStagedRows', 10
+         )
+       ), 600, 'FIXED', 1, true, now(), now()),
+      ($probe_process_pipeline_id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
+       'PROCESS_VALIDATE', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
+      ($probe_process_pipeline_id, 'PROCESS_COMMIT', 'Commit', 'COMMIT', 4,
+       'PROCESS_COMMIT', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
+      ($probe_process_pipeline_id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
+       'PROCESS_FEEDBACK', '{}'::jsonb, 300, 'NONE', 0, true, now(), now())" >/dev/null
+  assert_fire "PROCESS 严格 (default-tenant, sqlTransformCompute)" "default-tenant" "$PROBE_PROCESS_JOB" \
+    "{\"bizDate\":\"$(date +%Y-%m-%d)\",\"batchKey\":\"$PROBE_TAG-batch\"}" success
 else
   # ===== 默认: reach_worker 模式 — 覆盖广(7 场景含 4 worker × 4 workflow_type),
   #            只验 ADR-010 链路通 + instance 创建,worker 终态不强求
@@ -686,7 +768,7 @@ if [[ "$ADVANCED" == "1" ]]; then
 
   # 9.4 Console-api auth gate
   resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
-    "http://localhost:${CONSOLE_PORT}/api/console/job-definitions?tenantId=ta&pageNo=1&pageSize=5" 2>/dev/null)
+    "http://localhost:${CONSOLE_PORT}/api/console/queries/job-definitions?tenantId=ta&pageNo=1&pageSize=5" 2>/dev/null)
   case "$resp" in
     401) result pass "Console-api 鉴权拦截" "HTTP 401(无认证 token,gate 工作)" ;;
     200) result pass "Console-api 可达" "HTTP 200(bypass-mode=true)" ;;
@@ -709,7 +791,7 @@ if [[ "$ADVANCED" == "1" ]]; then
       true, 'seedval'
     ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true RETURNING id")
   if [[ -z "$fxr_def_id" ]]; then
-    result fail "Trigger FIXED_RATE 真触发" "INSERT job_definition 失败,无法验证"
+      result fail "Trigger CRON 真触发" "INSERT job_definition 失败,无法验证"
   else
     fxr_baseline=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE' AND trigger_type='SCHEDULED'")
     fxr_start=$(date +%s)
@@ -727,7 +809,7 @@ if [[ "$ADVANCED" == "1" ]]; then
     else
       result fail "Trigger CRON 真触发" "120s 内 trigger_request 无 SCHEDULED 新增 (baseline=$fxr_baseline), 检查 reconciler 30s + cron 周期 60s"
     fi
-    # 立即 disable + 显式删 job_definition (避免 PROBE FIXED_RATE 持续 fire 污染后续 run)
+    # 立即 disable + 显式删 job_definition (避免 PROBE CRON 持续 fire 污染后续 run)
     # do_cleanup 兜底也会清, 这里 explicit 减少 fire 间隔
     psql_q "UPDATE batch.job_definition SET enabled=false WHERE id=$fxr_def_id" >/dev/null
     psql_q "DELETE FROM batch.trigger_request WHERE tenant_id='$PROBE_FXR_TENANT' AND job_code='$PROBE_FXR_JOB_CODE'" >/dev/null
