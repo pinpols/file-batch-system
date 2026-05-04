@@ -870,11 +870,11 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | 层            | 具体约束                                                                                                                                                                                                                      | 代码位置                                                                                    |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | 项目源码 / 构建    | 根 pom `project.build.sourceEncoding=UTF-8` + `maven-compiler-plugin` 显式 `<encoding>UTF-8</encoding>`                                                                                                                      | `pom.xml`                                                                               |
-| 运行时容器 locale | `ENV LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 25 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`）                                                                                                                    | `docker/Dockerfile.app`                                                                 |
+| 运行时容器 locale | `BATCH_LOCALE=C.UTF-8`，并由部署模板 / 镜像派生 `LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 25 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`）                                                                                     | `docker/Dockerfile.app`、`docker-compose.app.yml`、Helm ConfigMap                         |
 | HTTP / i18n  | `server.servlet.encoding.charset=UTF-8` + `force=true`；`spring.messages.encoding=UTF-8`                                                                                                                                   | `batch-common/.../batch-defaults.yml`                                                   |
 | 导出（系统→外部）    | 硬编码 `StandardCharsets.UTF_8`，`file_template_config.target_charset` 仅接受 `UTF-8`，其他拒绝                                                                                                                                       | `batch-worker-export/.../format/*ExportFormat.java`、`MinioExportStorage`、`RegisterStep` |
 | 导入（外部→系统）    | `PreprocessStep.resolveCharset()` 按 `payload.targetCharset → template.charset → UTF-8` 三级降级，解析后全流转均为 UTF-8                                                                                                                | `batch-worker-import/.../PreprocessStep.java`、`ImportPreprocessPipeline`、`ParseStep`    |
-| 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`docker-compose.test.yml`                                          |
+| 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）派生 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`docker-compose.test.yml`                                          |
 
 
 ### 20.2 Java 代码风格
@@ -1085,5 +1085,4 @@ warnIfCasMiss(failUpdated,     "partition markStatus(FAILED)",   partition.getId
 | 两个方法前 N 行相同，最后 1-2 行不同                                              | 委托共享逻辑（§22.5）                      |
 | 多个 catch 块构造相同结构的失败对象                                               | failResult 工厂（§22.6）               |
 | `if (n <= 0) { log.warn(...) }` 出现 ≥ 3 次                            | warnIfXxx 辅助方法（§22.7）              |
-
 

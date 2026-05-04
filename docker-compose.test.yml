@@ -6,12 +6,21 @@
 # SFTP_HOST_PORT / MOCKSERVER_HOST_PORT 控制，默认 12222 / 11080。
 #
 # 启动：docker compose --profile test up -d
+x-test-runtime-env: &test-runtime-env
+  BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
+  LANG: ${BATCH_LOCALE:-C.UTF-8}
+  LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+
 services:
   sftp:
     profiles: ["test"]
     image: atmoz/sftp:${SFTP_IMAGE_TAG:-alpine}
     container_name: batch-sftp
     restart: unless-stopped
+    environment:
+      <<: *test-runtime-env
     ports:
       - "${SFTP_HOST_PORT:-12222}:22"
     volumes:
@@ -35,6 +44,7 @@ services:
     ports:
       - "${MOCKSERVER_HOST_PORT:-11080}:1080"
     environment:
+      <<: *test-runtime-env
       MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations.json
       MOCKSERVER_LOG_LEVEL: ${MOCKSERVER_LOG_LEVEL:-INFO}
     volumes:

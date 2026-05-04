@@ -1,5 +1,11 @@
 # 宿主机映射由 .env.local / .env.example 控制（如 POSTGRES_PORT=15432、KAFKA_HOST_PORT=19092、
 # MINIO_API_PORT=19000、REDIS_PORT=16379）。容器内端口（5432、9092、9000、6379 等）为服务原生监听，勿与映射混淆。
+x-common-runtime-env: &common-runtime-env
+  LANG: ${BATCH_LOCALE:-C.UTF-8}
+  LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+  BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+
 services:
   postgres:
     image: postgres:${POSTGRES_IMAGE_TAG}
@@ -30,11 +36,8 @@ services:
       # 全栈 UTF-8（见 CLAUDE.md §字符编码）：数据库 initdb 强制 UTF8 编码，
       # 容器 locale 锁 C.UTF-8 防止 psql/日志输出乱码。
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --auth-host=scram-sha-256"
-      LANG: ${BATCH_LOCALE:-C.UTF-8}
-      LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
-      TZ: ${TZ}
-      PGTZ: ${TZ}
+      <<: *common-runtime-env
+      PGTZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
@@ -72,11 +75,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
-      LANG: ${BATCH_LOCALE:-C.UTF-8}
-      LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
-      TZ: ${TZ}
-      PGTZ: ${TZ}
+      <<: *common-runtime-env
+      PGTZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
     ports:
       - "${POSTGRES_REPLICA_PORT:-15433}:5432"
     volumes:
@@ -103,9 +103,7 @@ services:
       - "${KAFKA_HOST_PORT}:9092"
     environment:
       # 全栈 UTF-8：Kafka broker 自身不解析消息字节，locale 只影响日志/JVM file.encoding。
-      LANG: ${BATCH_LOCALE:-C.UTF-8}
-      LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+      <<: *common-runtime-env
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://:29092,PLAINTEXT_HOST://:9092,CONTROLLER://:9093
@@ -136,7 +134,7 @@ services:
       kafka:
         condition: service_healthy
     environment:
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+      <<: *common-runtime-env
       KAFKA_BOOTSTRAP_SERVER: kafka:29092
       KAFKA_TOPICS: ${KAFKA_TOPICS}
       KAFKA_TOPIC_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS}
@@ -162,10 +160,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_PROMETHEUS_AUTH_TYPE: ${MINIO_PROMETHEUS_AUTH_TYPE:-public}
       # 全栈 UTF-8：对象存储是字节流，locale 只影响 mc/控制台输出。
-      LANG: ${BATCH_LOCALE:-C.UTF-8}
-      LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
-      TZ: ${TZ}
+      <<: *common-runtime-env
     ports:
       - "${MINIO_API_PORT}:9000"
       - "${MINIO_CONSOLE_PORT}:9001"
@@ -186,7 +181,7 @@ services:
       minio:
         condition: service_healthy
     environment:
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+      <<: *common-runtime-env
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -206,9 +201,7 @@ services:
       - "${REDIS_PORT:-16379}:6379"
     environment:
       # 全栈 UTF-8：Redis 是 binary-safe，locale 只影响 redis-cli 输出/日志。
-      LANG: ${BATCH_LOCALE:-C.UTF-8}
-      LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+      <<: *common-runtime-env
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data

@@ -2,6 +2,13 @@
 # 宿主机端口由 .env 中
 # CONSOLE_API_PORT / TRIGGER_PORT / ORCHESTRATOR_PORT 及 worker 端口变量映射；容器内仍为 8080–8085。
 # 库地址、Kafka、MinIO 使用 Docker 网络名（postgres:5432、kafka:29092、minio:9000）；15432 仅宿主机映射。
+x-app-runtime-env: &app-runtime-env
+  BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
+  LANG: ${BATCH_LOCALE:-C.UTF-8}
+  LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+
 services:
   console-api:
     profiles: ["apps"]
@@ -14,8 +21,8 @@ services:
     container_name: batch-console-api
     restart: unless-stopped
     environment:
+      <<: *app-runtime-env
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
       BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: ${BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES:-20000}
@@ -85,8 +92,8 @@ services:
     container_name: batch-trigger
     restart: unless-stopped
     environment:
+      <<: *app-runtime-env
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -132,8 +139,8 @@ services:
     container_name: batch-orchestrator
     restart: unless-stopped
     environment:
+      <<: *app-runtime-env
       JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms256m -Xmx768m -XX:MaxMetaspaceSize=256m}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
@@ -183,8 +190,8 @@ services:
     container_name: batch-worker-import
     restart: unless-stopped
     environment:
+      <<: *app-runtime-env
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -239,8 +246,8 @@ services:
     container_name: batch-worker-export
     restart: unless-stopped
     environment:
+      <<: *app-runtime-env
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -295,8 +302,8 @@ services:
     container_name: batch-worker-process
     restart: unless-stopped
     environment:
+      <<: *app-runtime-env
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -351,8 +358,8 @@ services:
     container_name: batch-worker-dispatch
     restart: unless-stopped
     environment:
+      <<: *app-runtime-env
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
-      BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}

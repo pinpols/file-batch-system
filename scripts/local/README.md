@@ -23,7 +23,7 @@
 
 - Docker / Docker Desktop、JDK
 - `start-all.sh` / `stop-all.sh` 默认使用 `.env.local`
-- `start-all.sh` / `restart.sh` 启动 fat jar 前 source `COMPOSE_ENV_FILE`，并默认导出：`BATCH_TIMEZONE_DEFAULT_ZONE`（时区单一配置源）、`TZ`（同值或显式覆盖）、`BATCH_LOCALE` / `LANG` / `LC_ALL`（locale 单一配置源）
+- `start-all.sh` / `restart.sh` 启动 fat jar 前 source `COMPOSE_ENV_FILE`，并默认导出：`BATCH_TIMEZONE_DEFAULT_ZONE`（时区单一配置源）、`TZ`（同值派生）、`BATCH_LOCALE` / `LANG` / `LC_ALL`（locale 单一配置源）
 - `start-all.sh` 默认只启动不打包；如需构建：先 `build-apps.sh` 或 `BUILD=1 start-all.sh`
 
 ## 常见顺序
@@ -40,4 +40,3 @@
 - `[scripts/ops/](../ops/)`：巡检与自愈脚本
 - `[scripts/data/](../data/)`：数据初始化与加载
 - `[scripts/docker/](../docker/)`：Docker 容器操作
-

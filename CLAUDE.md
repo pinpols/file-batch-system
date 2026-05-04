@@ -214,7 +214,7 @@ public enum XxxType implements DictEnum {
   - `provider.defaultZone()` — 平台默认 `ZoneId`（永远非 null）
   - `provider.resolveOrDefault(preferred)` — 优先 IANA 字符串（如 `business_calendar.timezone`），空/非法时回退到默认
 - **业务覆盖优先级**：`business_calendar.timezone` > `batch_window.timezone` > `batch.timezone.default-zone`。`batch_day_instance.timezone_snapshot` 在创建时从日历抓快照，之后日历改 timezone 不影响历史数据回放。
-- **容器 / JVM 协同**：`docker-compose.yml` + `.env.example` 以 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 为唯一时区 env 源（容器 `TZ`/`PGTZ` 默认从该变量插值，仍可显式设 `TZ=` 覆盖）；`batch-defaults.yml` 的 `spring.jackson.time-zone` 与 `batch.timezone.default-zone` 同源；本地 `start-all.sh`/`restart.sh` 会 source 同一份 env 并导出 `TZ`（默认等于 `BATCH_TIMEZONE_DEFAULT_ZONE`）及 `LANG`/`LC_ALL`（默认等于 `BATCH_LOCALE`）。
+- **容器 / JVM 协同**：`docker-compose.yml` + `.env.example` 以 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 为唯一时区 env 源，容器 `TZ`/`PGTZ` 均从该变量派生，避免业务时区和运行时默认时区漂移；`batch-defaults.yml` 的 `spring.jackson.time-zone` 与 `batch.timezone.default-zone` 同源；本地 `start-all.sh`/`restart.sh` 会 source 同一份 env 并导出 `TZ`（等于 `BATCH_TIMEZONE_DEFAULT_ZONE`）及 `LANG`/`LC_ALL`（等于 `BATCH_LOCALE`）。
 - **控制台宽松日期解析**：`ConsoleQuerySupport.parseFlexibleInstant*` 的 naive 字符串须显式传入 `ZoneId`；控制台查询服务传入 `BatchTimezoneProvider.defaultZone()`，与平台默认区一致（禁止在该路径使用 `ZoneId.systemDefault()`）。
 - **守护**：新增 `ZoneId.systemDefault()` 用法必须在业务路径之外且加注释说明原因；否则 PR 评审拒绝。
 
@@ -224,7 +224,7 @@ public enum XxxType implements DictEnum {
 
 - **Spring 基线**：`server.servlet.encoding` / `spring.messages.encoding` 在 `batch-defaults.yml` 固定 UTF-8，与以下 locale env 对齐即可，无需再配单独「charset」环境变量。
 - **代码**：一律 `StandardCharsets.UTF_8` 或 `EncodingUtils.resolve(raw)`，**禁止** `Charset.forName("UTF-8")` / 字面量 `"UTF-8"`
-- **中间件 locale**：`docker-compose.yml` 里 postgres / kafka / minio / redis 四个容器统一从 `.env` 的 **`BATCH_LOCALE`**（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；postgres 另加 `POSTGRES_INITDB_ARGS=--encoding=UTF8`
+- **中间件 / 应用容器 locale**：`docker-compose.yml`、`docker-compose.app.yml`、Helm ConfigMap 统一从 `.env`/values 的 **`BATCH_LOCALE`**（默认 `C.UTF-8`）派生 `LANG` / `LC_ALL`；postgres 另加 `POSTGRES_INITDB_ARGS=--encoding=UTF8`
 
 详见 `docs/coding-conventions.md §20`（含 Maven / Dockerfile / Spring Boot / Export / Import 全层落地表）。
 
