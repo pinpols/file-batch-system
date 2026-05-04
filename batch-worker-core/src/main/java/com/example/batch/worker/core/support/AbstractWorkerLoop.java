@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.support;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
@@ -163,6 +164,8 @@ public abstract class AbstractWorkerLoop {
     try {
       return InetAddress.getLocalHost().getHostName();
     } catch (UnknownHostException ex) {
+      SwallowedExceptionLogger.info(AbstractWorkerLoop.class, "catch:UnknownHostException", ex);
+
       return "localhost";
     }
   }

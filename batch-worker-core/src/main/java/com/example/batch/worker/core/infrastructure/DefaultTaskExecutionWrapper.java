@@ -2,6 +2,7 @@ package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.dto.EffectiveTaskConfig;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import com.example.batch.worker.core.domain.PulledTask;
@@ -357,6 +358,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         return RunModeSupport.resolveCode((Map<String, Object>) payloadMap);
       }
     } catch (RuntimeException ignored) {
+      SwallowedExceptionLogger.warn(
+          DefaultTaskExecutionWrapper.class, "catch:RuntimeException", ignored);
+
       // payload 非合法 JSON 时不设置 run_mode。
     }
     return null;

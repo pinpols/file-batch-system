@@ -8,7 +8,6 @@ import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
@@ -17,13 +16,12 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /** Worker → Orchestrator HTTP 的弹性测试：5xx / I/O 错误有限重试；429 立即失败。 */
-@SuppressWarnings("removal")
 class HttpTaskExecutionClientTest {
 
   @Test
@@ -155,9 +153,10 @@ class HttpTaskExecutionClientTest {
 
   private static RestClient.Builder jsonRestClientBuilder() {
     return RestClient.builder()
-        .messageConverters(
-            converters ->
-                converters.add(0, new MappingJackson2HttpMessageConverter(new ObjectMapper())));
+        .configureMessageConverters(
+            b ->
+                b.configureMessageConvertersList(
+                    converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
   }
 
   private static OrchestratorTaskClientProperties clientProperties(int port) {

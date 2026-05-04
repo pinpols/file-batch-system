@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
@@ -294,6 +295,9 @@ public class HttpTaskExecutionClient
             .toBodilessEntity();
         return;
       } catch (HttpClientErrorException ex) {
+        SwallowedExceptionLogger.info(
+            HttpTaskExecutionClient.class, "catch:HttpClientErrorException", ex);
+
         if (ex.getStatusCode() == HttpStatus.CONFLICT) {
           // 409 STATE_CONFLICT：orchestrator 乐观锁失败，整个事务已回滚，task/partition 仍是 RUNNING，可以重试。
           state = handleRetryableReportFailure("STATE_CONFLICT", "state conflict", state, ex);
@@ -306,6 +310,9 @@ public class HttpTaskExecutionClient
       } catch (HttpServerErrorException ex) {
         state = handleRetryableReportFailure("SERVER_ERROR", "transient failure", state, ex);
       } catch (ResourceAccessException ex) {
+        SwallowedExceptionLogger.info(
+            HttpTaskExecutionClient.class, "catch:ResourceAccessException", ex);
+
         state = handleRetryableReportFailure("IO_TIMEOUT", "I/O failure", state, ex);
       }
     }

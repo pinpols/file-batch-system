@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.reportoutbox;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
 import com.example.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
@@ -88,6 +89,9 @@ public class WorkerReportOutboxCoordinator {
         httpSubmitter.submitReportOverHttp(report);
         repository.delete(row.id());
       } catch (RuntimeException ex) {
+        SwallowedExceptionLogger.warn(
+            WorkerReportOutboxCoordinator.class, "catch:RuntimeException", ex);
+
         repository.recordFailure(row.id(), now, ex);
       }
     }

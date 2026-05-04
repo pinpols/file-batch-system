@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -73,6 +74,8 @@ public class TaskExecutionPool {
         }
       }
     } catch (InterruptedException ex) {
+      SwallowedExceptionLogger.info(TaskExecutionPool.class, "catch:InterruptedException", ex);
+
       Thread.currentThread().interrupt();
       delegate.shutdownNow();
     }

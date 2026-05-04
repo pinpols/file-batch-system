@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.config.WorkerExecutionTimeoutProperties;
@@ -159,6 +160,8 @@ public class WorkerStartupRuntimeAudit {
         issues.add("report outbox has GIVE_UP rows");
       }
     } catch (RuntimeException ex) {
+      SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
+
       put(details, "statsError", ex.getMessage());
       issues.add("report outbox stats query failed");
     }
@@ -182,6 +185,9 @@ public class WorkerStartupRuntimeAudit {
                   unhealthy.add(name);
                 }
               } catch (RuntimeException ex) {
+                SwallowedExceptionLogger.warn(
+                    WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
+
                 put(results, name, auditContributorDetails(false, Map.of(), ex.getMessage()));
                 unhealthy.add(name);
               }
