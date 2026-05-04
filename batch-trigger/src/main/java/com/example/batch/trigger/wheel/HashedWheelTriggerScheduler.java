@@ -169,7 +169,15 @@ public class HashedWheelTriggerScheduler {
       name = "wheel_stale_marker_release",
       lockAtMostFor = "PT3M",
       lockAtLeastFor = "PT30S")
-  public void releaseStaleMarkers() {
+  public void scheduledReleaseStaleMarkers() {
+    doReleaseStaleMarkers();
+  }
+
+  /**
+   * Public 供 IT / 接管路径调用,绕开 {@code @SchedulerLock}(直接调 {@link #scheduledReleaseStaleMarkers} 可能拿不到
+   * lock)。
+   */
+  public void doReleaseStaleMarkers() {
     Instant staleBefore =
         Instant.now().minus(Duration.ofSeconds(props.getStaleMarkerThresholdSeconds()));
     int released = stateMapper.releaseStaleMarkers(staleBefore);
@@ -194,12 +202,7 @@ public class HashedWheelTriggerScheduler {
     inFlightFires.clear();
     tasksScheduled.set(0L);
     // 2) 接管 stale marker(上一任 leader 崩溃前留下的)
-    Instant staleBefore =
-        Instant.now().minus(Duration.ofSeconds(props.getStaleMarkerThresholdSeconds()));
-    int released = stateMapper.releaseStaleMarkers(staleBefore);
-    if (released > 0) {
-      metrics.incrementStaleMarkerReleased(released);
-    }
+    doReleaseStaleMarkers();
     // 3) 立即扫一次"1 分钟"窗口,先把当下要 fire 的捞出来
     scanAndSchedule(Duration.ofMinutes(1));
     metrics.leaderAcquireDuration().record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);

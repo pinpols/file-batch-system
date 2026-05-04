@@ -80,6 +80,22 @@ public final class LaunchIntegrationFixture {
     return new LaunchSeed(jobCode, requestId, dedupKey, workerCode);
   }
 
+  /**
+   * 长 IT 套件单 JVM 中，后台调度可能把仅 seed 一次的 worker_registry 误判为 OFFLINE。 对租户下仍在参与任务认领的 ONLINE/OFFLINE
+   * worker 复位心跳与时间戳对齐 DB，收敛跨用例串扰。（不触碰 DRAINING/DECOMMISSIONED）
+   */
+  public static void refreshAssignableWorkersForTenant(JdbcTemplate jdbc, String tenantId) {
+    jdbc.update(
+        """
+        update batch.worker_registry
+        set heartbeat_at = current_timestamp,
+            status = 'ONLINE'
+        where tenant_id = ?
+          and status in ('ONLINE', 'OFFLINE')
+        """,
+        tenantId);
+  }
+
   /** 与 {@link #prepareLaunchWithWorker} 相同但不插入 Worker 行 —— 用于”无可用容量”的调度场景。 */
   public static LaunchSeed prepareLaunchWithoutWorker(
       JdbcTemplate jdbc,

@@ -39,6 +39,12 @@ public class PartitionLeaseProperties {
   private long reclaimIntervalMillis = 15000L;
 
   /**
+   * 是否装载 {@link com.example.batch.orchestrator.infrastructure.lease.PartitionLeaseReclaimScheduler}
+   * 定时任务。集成测试建议关闭，避免首轮扫描与 claim/launch 主路径并发相互干扰。
+   */
+  private boolean reclaimSchedulerEnabled = true;
+
+  /**
    * 单次 reclaim 扫描的最大处理数量。0 表示不限制（保留旧行为）。 默认 500：在 ShedLock 2 分钟上限内可舒适处理（每次 reclaim 约 2~3 次 SQL，500
    * 行 ~= 30s）。 命中上限会触发 warn，提示业务方 lease 阈值或 worker 容量异常。
    */

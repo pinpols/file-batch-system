@@ -22,6 +22,7 @@ import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -56,6 +57,11 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   @Autowired private JobTaskMapper jobTaskMapper;
 
   @Autowired private JdbcTemplate jdbcTemplate;
+
+  @BeforeEach
+  void refreshWorkersForClaim() {
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+  }
 
   @Test
   void launchThenClaimThenReport_jobInstanceReachesSuccess() {
@@ -94,6 +100,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     JobTaskEntity claimed =
         taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
     assertThat(claimed).isNotNull();
@@ -149,6 +156,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
 
     // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）

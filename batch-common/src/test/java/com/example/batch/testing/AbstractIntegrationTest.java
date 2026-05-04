@@ -35,7 +35,8 @@ public abstract class AbstractIntegrationTest {
           .withUsername(DEFAULT_DB_USER)
           .withPassword(DEFAULT_DB_PASSWORD)
           .withUrlParam("sslmode", "disable")
-          .withInitScript("db/platform-init.sql");
+          .withInitScript("db/platform-init.sql")
+          .withCommand("postgres", "-c", "max_connections=500");
 
   private static final PostgreSQLContainer<?> BUSINESS_POSTGRES =
       new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
@@ -43,7 +44,8 @@ public abstract class AbstractIntegrationTest {
           .withUsername(DEFAULT_DB_USER)
           .withPassword(DEFAULT_DB_PASSWORD)
           .withUrlParam("sslmode", "disable")
-          .withInitScript("db/business-init.sql");
+          .withInitScript("db/business-init.sql")
+          .withCommand("postgres", "-c", "max_connections=500");
 
   private static final KafkaContainer KAFKA =
       new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));

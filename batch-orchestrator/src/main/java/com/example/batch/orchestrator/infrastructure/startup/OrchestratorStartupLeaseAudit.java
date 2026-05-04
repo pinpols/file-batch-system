@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.startup;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -19,8 +20,8 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@code worker_registry} 处于 DRAINING 且 {@code drain_deadline_at < now()} —— 正常情况由 {@code
  *       WorkerDrainTimeoutScheduler} 接管，非 0 说明上次调度挂了/未来得及跑；
- *   <li>{@code job_partition} 处于分配态且 {@code lease_expire_at < now()} —— 正常情况由 {@code
- *       PartitionLeaseReclaimScheduler} 回收，非 0 说明租约没及时释放；
+ *   <li>{@code job_partition} 为 {@code READY}/{@code RUNNING}、仍持有 {@code lease_expire_at} 且早于
+ *       {@code now()} —— 与 {@code PartitionLeaseReclaimScheduler} 扫描口径一致；终态分区残留 lease 不计；
  *   <li>{@code outbox_event} 卡在 PUBLISHING 且 updated_at 超 10 分钟 —— 正常情况由 OutboxPoll {@code
  *       resetStalePublishing} 每轮清 0，非 0 说明轮询本身挂了。
  * </ul>
@@ -43,7 +44,9 @@ public class OrchestratorStartupLeaseAudit {
   public void audit() {
     try {
       long drainingStale = workerRegistryMapper.countDrainingPastDeadline();
-      long leasesExpired = jobPartitionMapper.countLeaseExpired();
+      long leasesExpired =
+          jobPartitionMapper.countLeaseExpired(
+              PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
       long outboxStuck =
           outboxEventMapper.countStalePublishing(
               OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);

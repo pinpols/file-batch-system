@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * enabled=false}（默认）时直通 loader，不调 Redis。
  *
  * <p><b>失效策略</b>：仅靠 TTL（5s 内的轻微 staleness 可接受——派发本就有重试）；不做 pub/sub 主动失效，避免心跳写路径耦合 Redis。worker
- * 状态突变（drain / offline）最多 5s 才被 selector 看到。
+ * 状态突变（drain / offline）最多 5s 才被 selector 看到。<b>空候选列表不写缓存</b>，避免「先查后插 worker」场景长期命中空快照。
  *
  * <p><b>Fail-open</b>：Redis 异常 / 反序列化失败一律 fall through 到 loader（DB），仅记 WARN。 缓存只是优化，不能成为派发的硬依赖。
  */
@@ -53,7 +53,10 @@ public class WorkerRegistryCache {
       String cached = redis.redisTemplate().opsForValue().get(key);
       if (cached != null && !cached.isBlank()) {
         List<Entry> entries = objectMapper.readValue(cached, new TypeReference<List<Entry>>() {});
-        return toRecords(entries);
+        // 绝不命中「空列表」快照：否则 PG 刚插入 ONLINE worker 仍会在 TTL 内被判无候选（派发永久 WAITING）。
+        if (!entries.isEmpty()) {
+          return toRecords(entries);
+        }
       }
     } catch (Exception ex) {
       log.warn(
@@ -64,19 +67,56 @@ public class WorkerRegistryCache {
     }
     List<WorkerRegistryEntity> fresh = loader.get();
     try {
-      String json = objectMapper.writeValueAsString(toEntries(fresh));
-      redis
-          .redisTemplate()
-          .opsForValue()
-          .set(key, json, Duration.ofMillis(properties.getTtlMillis()));
+      if (!fresh.isEmpty()) {
+        String json = objectMapper.writeValueAsString(toEntries(fresh));
+        redis
+            .redisTemplate()
+            .opsForValue()
+            .set(key, json, Duration.ofMillis(properties.getTtlMillis()));
+      } else {
+        redis.redisTemplate().delete(key);
+      }
     } catch (Exception ex) {
       log.debug(
-          "worker cache write failed: tenant={}, group={}: {}",
+          "worker cache write/delete failed: tenant={}, group={}: {}",
           tenantId,
           workerGroup,
           ex.getMessage());
     }
     return fresh;
+  }
+
+  /**
+   * 驱逐单个 selector 缓存键（运维 / IT：插入或刷新 worker_registry 后避免命中陈旧 ONLINE 列表）。
+   *
+   * <p>{@code enabled=false} 时为 no-op。
+   */
+  public void evict(String tenantId, String workerGroup) {
+    if (!properties.isEnabled()) {
+      return;
+    }
+    try {
+      redis.redisTemplate().delete(key(tenantId, workerGroup));
+    } catch (Exception ex) {
+      log.debug(
+          "worker cache evict failed: tenant={}, group={}, cause={}",
+          tenantId,
+          workerGroup,
+          ex.getMessage());
+    }
+  }
+
+  /**
+   * 按租户驱逐集成夹具常用的 worker_group 键位，降低长套件跨用例 Redis 快照干扰。
+   *
+   * <p>覆盖 {@code IMPORT} / {@code DEFAULT} / {@code IT} 以及空白 worker_group 对应的 {@code _} 占位键（与
+   * {@link #key(String, String)} 中空组的规范化规则一致）。
+   */
+  public void evictTenantWorkerSelectors(String tenantId) {
+    evict(tenantId, "IMPORT");
+    evict(tenantId, "DEFAULT");
+    evict(tenantId, "IT");
+    evict(tenantId, "_");
   }
 
   private static String key(String tenantId, String workerGroup) {

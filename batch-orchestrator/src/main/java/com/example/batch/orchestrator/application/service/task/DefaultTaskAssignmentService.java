@@ -98,30 +98,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
     if (current.getJobPartitionId() != null) {
       // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
-      JobPartitionEntity partition =
-          jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
-      if (partition == null) {
-        // 这里回滚而不是抛异常：语义上属于并发/状态漂移（可重试），不应该把 worker 侧认领请求打成”系统故障”。
-        // 返回 current（回滚前的状态，即 READY）而非重读 DB（重读会看到事务内未提交的 RUNNING，
-        // 与最终 DB 实际状态不符，会误导调用方认为认领已成功）。
-        TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-        return current;
-      }
-      String invocationId = IdGenerator.newInvocationId();
-      Instant invocationStartedAt = Instant.now();
-      ClaimPartitionParam claimPartitionParam =
-          ClaimPartitionParam.builder()
-              .tenantId(tenantId)
-              .id(current.getJobPartitionId())
-              .workerCode(workerCode)
-              .leaseExpireAt(Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
-              .fromStatus(PartitionStatus.READY.code())
-              .toStatus(PartitionStatus.RUNNING.code())
-              .expectedVersion(partition.getVersion())
-              .currentInvocationId(invocationId)
-              .invocationStartedAt(invocationStartedAt)
-              .build();
-      int claimed = jobPartitionMapper.claimPartition(claimPartitionParam);
+      int claimed = claimPartitionLeaseForTask(tenantId, current.getJobPartitionId(), workerCode);
       if (claimed <= 0) {
         // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
         // 同理返回 current（READY），不重读 DB。
@@ -290,6 +267,45 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         instance.getDataIntervalStart(),
         instance.getDataIntervalEnd(),
         partition == null ? null : partition.getCurrentInvocationId());
+  }
+
+  /**
+   * task 已 CAS 为 RUNNING 后绑定 partition lease。若首次 claim 仅因 version 漂移失败，重读仍为 READY 时再试一轮， 避免长 IT
+   * 套件中其它流程对 job_partition 的并发 touch 把整条认领事务打回 READY。
+   */
+  private int claimPartitionLeaseForTask(String tenantId, Long partitionId, String workerCode) {
+    JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, partitionId);
+    if (partition == null) {
+      return 0;
+    }
+    int claimed = tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition);
+    if (claimed > 0) {
+      return claimed;
+    }
+    partition = jobPartitionMapper.selectById(tenantId, partitionId);
+    if (partition == null || !PartitionStatus.READY.code().equals(partition.getPartitionStatus())) {
+      return 0;
+    }
+    return tryClaimPartitionLeaseOnce(tenantId, partitionId, workerCode, partition);
+  }
+
+  private int tryClaimPartitionLeaseOnce(
+      String tenantId, Long partitionId, String workerCode, JobPartitionEntity partition) {
+    String invocationId = IdGenerator.newInvocationId();
+    Instant invocationStartedAt = Instant.now();
+    ClaimPartitionParam param =
+        ClaimPartitionParam.builder()
+            .tenantId(tenantId)
+            .id(partitionId)
+            .workerCode(workerCode)
+            .leaseExpireAt(Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+            .fromStatus(PartitionStatus.READY.code())
+            .toStatus(PartitionStatus.RUNNING.code())
+            .expectedVersion(partition.getVersion())
+            .currentInvocationId(invocationId)
+            .invocationStartedAt(invocationStartedAt)
+            .build();
+    return jobPartitionMapper.claimPartition(param);
   }
 
   private static String resolvePriorityBand(Integer priority) {

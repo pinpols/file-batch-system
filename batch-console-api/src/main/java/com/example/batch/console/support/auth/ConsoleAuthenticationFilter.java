@@ -45,6 +45,24 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
+  /**
+   * Spring MVC 异步完成（例如 SSE 的 {@code SseEmitter} / Streaming 等）会再走一轮 {@code DispatcherType.ASYNC}。
+   *
+   * <p>{@link OncePerRequestFilter} 默认跳过 ASYNC 分派，则本轮不会重建 {@link SecurityContextHolder}，而 Spring
+   * Security 6+ 的 {@code AuthorizationFilter} 仍会对 ASYNC 执行校验 → 误判未认证并抛出 {@code
+   * AuthorizationDeniedException}。
+   */
+  @Override
+  protected boolean shouldNotFilterAsyncDispatch() {
+    return false;
+  }
+
+  /** 错误分派与 ASYNC 同理：需要在本过滤器内按同一规则（JWT / SSE ticket / bypass）恢复认证，避免仅 ERROR 轮次匿名访问被拒绝。 */
+  @Override
+  protected boolean shouldNotFilterErrorDispatch() {
+    return false;
+  }
+
   private final ConsoleSecurityProperties properties;
   private final BatchSecurityProperties batchSecurityProperties;
   private final ConsoleJwtService jwtService;

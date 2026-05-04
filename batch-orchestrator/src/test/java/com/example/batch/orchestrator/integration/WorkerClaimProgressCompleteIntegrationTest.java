@@ -16,6 +16,7 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
+import com.example.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -26,6 +27,8 @@ import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,6 +52,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@Order(2)
 class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -65,6 +69,14 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   @Autowired private JobTaskMapper jobTaskMapper;
 
   @Autowired private JdbcTemplate jdbcTemplate;
+
+  @Autowired private WorkerRegistryCache workerRegistryCache;
+
+  @BeforeEach
+  void refreshWorkersForClaim() {
+    workerRegistryCache.evictTenantWorkerSelectors(TENANT);
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+  }
 
   @Test
   void worker_claim_renewLease_reportSuccess_taskAndPartitionAndInstanceReachSuccess() {
@@ -103,6 +115,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     JobPartitionEntity partition = partitions.get(0);
 
     // 2) Worker claims the task
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     JobTaskEntity claimed =
         taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
     assertThat(claimed).isNotNull();
@@ -176,6 +189,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     JobTaskEntity task = tasks.get(0);
 
     // 第一次认领成功
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     JobTaskEntity first =
         taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
     assertThat(first.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
