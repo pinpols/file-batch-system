@@ -6,6 +6,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
@@ -456,6 +457,11 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       JsonUtils.fromJson(text, Object.class);
       return true;
     } catch (IllegalArgumentException ignored) {
+      SwallowedExceptionLogger.info(
+          DefaultConsoleJobDefinitionExcelApplicationService.class,
+          "catch:IllegalArgumentException",
+          ignored);
+
       return false;
     }
   }
@@ -538,6 +544,11 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     try {
       return Integer.valueOf(normalized);
     } catch (NumberFormatException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultConsoleJobDefinitionExcelApplicationService.class,
+          "catch:NumberFormatException",
+          exception);
+
       return null;
     }
   }

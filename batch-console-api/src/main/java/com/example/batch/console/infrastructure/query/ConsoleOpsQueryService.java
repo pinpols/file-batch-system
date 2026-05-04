@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure.query;
 
 import static com.example.batch.console.infrastructure.query.ConsoleQuerySupport.*;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
@@ -68,6 +69,7 @@ public class ConsoleOpsQueryService {
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleOpsQueryMappers opsMappers;
   private final LocalizedErrorRenderer localizedErrorRenderer;
+  private final BatchTimezoneProvider timezoneProvider;
 
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
@@ -80,9 +82,14 @@ public class ConsoleOpsQueryService {
     query.setTraceId(request.getTraceId());
     query.setFromTime(
         parseFlexibleInstant(
-            firstNonBlank(request.getFromTime(), request.getStartTime()), "fromTime"));
+            firstNonBlank(request.getFromTime(), request.getStartTime()),
+            "fromTime",
+            timezoneProvider.defaultZone()));
     query.setToTime(
-        parseFlexibleInstant(firstNonBlank(request.getToTime(), request.getEndTime()), "toTime"));
+        parseFlexibleInstant(
+            firstNonBlank(request.getToTime(), request.getEndTime()),
+            "toTime",
+            timezoneProvider.defaultZone()));
     query.setPageRequest(pageRequest);
     List<Map<String, Object>> rows = opsMappers.auditLogMapper.selectByQuery(query);
     long total = opsMappers.auditLogMapper.countByQuery(query);

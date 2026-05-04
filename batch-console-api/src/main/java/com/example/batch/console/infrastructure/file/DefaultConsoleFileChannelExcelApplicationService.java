@@ -13,6 +13,7 @@ import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -332,6 +333,11 @@ public class DefaultConsoleFileChannelExcelApplicationService
       JsonUtils.fromJson(normalized, Object.class);
       return normalized;
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultConsoleFileChannelExcelApplicationService.class,
+          "catch:IllegalArgumentException",
+          exception);
+
       issues.add(key + " must be valid JSON");
       return normalized;
     }

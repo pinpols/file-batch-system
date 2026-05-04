@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure.query;
 
 import static com.example.batch.console.infrastructure.query.ConsoleQuerySupport.*;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
@@ -37,6 +38,7 @@ public class ConsoleJobQueryService {
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleJobQueryMappers jobMappers;
   private final LocalizedErrorRenderer localizedErrorRenderer;
+  private final BatchTimezoneProvider timezoneProvider;
 
   public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
       JobDefinitionQueryRequest request) {
@@ -67,8 +69,10 @@ public class ConsoleJobQueryService {
             request.getInstanceNo(),
             request.getBizDate(),
             request.getTraceId(),
-            parseFlexibleInstant(request.getStartDate(), "startDate"),
-            parseFlexibleInstantEndOfDay(request.getEndDate(), "endDate"),
+            parseFlexibleInstant(
+                request.getStartDate(), "startDate", timezoneProvider.defaultZone()),
+            parseFlexibleInstantEndOfDay(
+                request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
             request.getSortBy(),
             request.getMinDurationSeconds(),
             pageRequest);

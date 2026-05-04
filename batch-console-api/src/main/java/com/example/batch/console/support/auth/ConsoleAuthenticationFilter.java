@@ -3,6 +3,7 @@ package com.example.batch.console.support.auth;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.support.SseTicketService;
@@ -107,6 +108,9 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
           filterChain.doFilter(request, response);
           return;
         } catch (Exception exception) {
+          SwallowedExceptionLogger.warn(
+              ConsoleAuthenticationFilter.class, "catch:Exception", exception);
+
           responseWriter.write(
               response,
               HttpStatus.UNAUTHORIZED,
@@ -130,6 +134,9 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
                       .collect(Collectors.toCollection(LinkedHashSet::new)));
           setAuthentication(principal, "bypass-mode");
         } catch (IllegalArgumentException exception) {
+          SwallowedExceptionLogger.info(
+              ConsoleAuthenticationFilter.class, "catch:IllegalArgumentException", exception);
+
           responseWriter.write(
               response,
               HttpStatus.FORBIDDEN,

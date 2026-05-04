@@ -1,5 +1,6 @@
 package com.example.batch.console.infrastructure.realtime;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.web.response.ops.ConsoleSseEventResponse;
 import jakarta.annotation.PreDestroy;
@@ -253,6 +254,9 @@ public class ConsoleRealtimeEventHub {
       try {
         subscription.emitter.complete();
       } catch (IllegalStateException ignored) {
+        SwallowedExceptionLogger.info(
+            ConsoleRealtimeEventHub.class, "catch:IllegalStateException", ignored);
+
         // emitter 已完成
       }
     }

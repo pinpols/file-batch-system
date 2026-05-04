@@ -1,5 +1,6 @@
 package com.example.batch.console.support.excel;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import java.util.List;
@@ -54,6 +55,8 @@ public final class SheetValidationHelpers {
     try {
       Integer.parseInt(value);
     } catch (NumberFormatException e) {
+      SwallowedExceptionLogger.info(SheetValidationHelpers.class, "catch:NumberFormatException", e);
+
       ri.add(field + " must be integer");
     }
   }
@@ -70,6 +73,8 @@ public final class SheetValidationHelpers {
     try {
       JsonUtils.fromJson(value, Object.class);
     } catch (Exception e) {
+      SwallowedExceptionLogger.warn(SheetValidationHelpers.class, "catch:Exception", e);
+
       ri.add(field + " must be valid JSON");
     }
   }

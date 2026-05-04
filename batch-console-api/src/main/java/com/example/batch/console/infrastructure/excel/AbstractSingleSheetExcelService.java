@@ -5,6 +5,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeTe
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -344,6 +345,9 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       }
       return value;
     } catch (NumberFormatException e) {
+      SwallowedExceptionLogger.info(
+          AbstractSingleSheetExcelService.class, "catch:NumberFormatException", e);
+
       issues.add(key + " must be integer");
       return defaultValue;
     }
@@ -363,6 +367,9 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       }
       return value;
     } catch (NumberFormatException e) {
+      SwallowedExceptionLogger.info(
+          AbstractSingleSheetExcelService.class, "catch:NumberFormatException", e);
+
       issues.add(key + " must be integer");
       return min;
     }
@@ -424,6 +431,9 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       JsonUtils.fromJson(normalized, Object.class);
       return normalized;
     } catch (IllegalArgumentException e) {
+      SwallowedExceptionLogger.info(
+          AbstractSingleSheetExcelService.class, "catch:IllegalArgumentException", e);
+
       issues.add(key + " must be valid JSON");
       return normalized;
     }

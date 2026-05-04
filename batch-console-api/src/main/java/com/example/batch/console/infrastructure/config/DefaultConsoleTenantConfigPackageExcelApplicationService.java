@@ -5,6 +5,7 @@ import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelW
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
@@ -184,6 +185,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         result.computeIfAbsent(module, k -> new ArrayList<>()).add(implCode);
       }
     } catch (RuntimeException ignored) {
+      SwallowedExceptionLogger.warn(
+          DefaultConsoleTenantConfigPackageExcelApplicationService.class,
+          "catch:RuntimeException",
+          ignored);
+
       // step_registry 表尚未创建 / 查询失败时降级为空，writer 跳过 impl_code 下拉
     }
     return result;
@@ -656,6 +662,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     try {
       return Integer.parseInt(n);
     } catch (NumberFormatException e) {
+      SwallowedExceptionLogger.info(
+          DefaultConsoleTenantConfigPackageExcelApplicationService.class,
+          "catch:NumberFormatException",
+          e);
+
       return null;
     }
   }
