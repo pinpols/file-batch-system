@@ -85,7 +85,8 @@ public class OrchestratorStartupLeaseAudit {
           && leasesExpired == 0
           && outboxStuck == 0) {
         log.info(
-            "启动运行态审计（orchestrator）：terminalActiveChildren={}（将由 JobInstanceTerminalChildStateReconciler 收敛，其余项为 0）",
+            "启动运行态审计（orchestrator）：terminalActiveChildren={}（将由"
+                + " JobInstanceTerminalChildStateReconciler 收敛，其余项为 0）",
             terminalActiveChildren);
         return;
       }
