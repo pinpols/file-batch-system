@@ -90,6 +90,9 @@ spec:
           image: otel/opentelemetry-collector-contrib:{{ .Values.otelCollector.imageTag }}
           imagePullPolicy: IfNotPresent
           args: ["--config=/etc/otelcol/config.yaml"]
+          env:
+            - name: BATCH_TIMEZONE_DEFAULT_ZONE
+              value: {{ .Values.batchTimezoneDefaultZone | quote }}
           ports:
             - name: otlp-grpc
               containerPort: 4317

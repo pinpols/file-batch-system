@@ -40,6 +40,7 @@ data:
   BATCH_SECURITY_BYPASS_MODE: {{ .Values.security.bypassMode | quote }}
   BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: {{ .Values.consoleApi.realtime.replayMaxEntries | quote }}
   BATCH_CONSOLE_REALTIME_REPLAY_TTL: {{ .Values.consoleApi.realtime.replayTtl | quote }}
+  BATCH_TIMEZONE_DEFAULT_ZONE: {{ .Values.batchTimezoneDefaultZone | quote }}
 
   # ── OpenTelemetry ──────────────────────────────────────────────────────────
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.endpoint | quote }}
