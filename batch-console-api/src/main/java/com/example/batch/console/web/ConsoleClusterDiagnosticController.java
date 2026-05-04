@@ -43,4 +43,10 @@ public class ConsoleClusterDiagnosticController {
       @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(diagnosticService.outboxHealth(tenantId));
   }
+
+  @GetMapping("/terminal-children")
+  public CommonResponse<Map<String, Object>> terminalChildrenHealth(
+      @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(diagnosticService.terminalChildrenHealth(tenantId));
+  }
 }
