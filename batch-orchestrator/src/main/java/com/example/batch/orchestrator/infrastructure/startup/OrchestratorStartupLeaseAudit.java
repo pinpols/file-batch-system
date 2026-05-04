@@ -76,6 +76,20 @@ public class OrchestratorStartupLeaseAudit {
         return;
       }
 
+      // 仅存在「终态实例仍有活跃子节点」时常为重启间隙的可自愈状态，由 JobInstanceTerminalChildStateReconciler 收敛；降级为 INFO 减少噪音
+      if (drainingStale == 0
+          && staleOnlineWorkers == 0
+          && decommissionedActiveClaims == 0
+          && invalidCapabilityTags == 0
+          && terminalActiveChildren > 0
+          && leasesExpired == 0
+          && outboxStuck == 0) {
+        log.info(
+            "启动运行态审计（orchestrator）：terminalActiveChildren={}（将由 JobInstanceTerminalChildStateReconciler 收敛，其余项为 0）",
+            terminalActiveChildren);
+        return;
+      }
+
       log.warn(
           "启动运行态审计发现残留（orchestrator）：drainingStale={}, staleOnlineWorkers={},"
               + " decommissionedActiveClaims={}, invalidCapabilityTags={},"

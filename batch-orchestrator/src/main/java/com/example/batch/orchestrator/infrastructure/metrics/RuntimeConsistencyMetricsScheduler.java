@@ -28,7 +28,6 @@ public class RuntimeConsistencyMetricsScheduler {
   private final AtomicLong staleOnlineWorkers = new AtomicLong();
   private final AtomicLong drainingPastDeadlineWorkers = new AtomicLong();
   private final AtomicLong decommissionedWorkersWithActiveTasks = new AtomicLong();
-  private final AtomicLong invalidCapabilityTags = new AtomicLong();
   private final AtomicLong terminalInstancesWithActiveChildren = new AtomicLong();
 
   @PostConstruct
@@ -39,7 +38,8 @@ public class RuntimeConsistencyMetricsScheduler {
     meterRegistry.gauge(
         "batch.worker.registry.decommissioned_active_claims.count",
         decommissionedWorkersWithActiveTasks);
-    meterRegistry.gauge("batch.worker.capability_tags.invalid.count", invalidCapabilityTags);
+    // batch.worker.capability_tags.invalid.count 由 WorkerCapabilityTagsAuditScheduler 独占注册，
+    // 避免 Micrometer “Gauge already registered” 噪声；该指标仍以审计调度结果为准。
     meterRegistry.gauge(
         "batch.job_instance.terminal_active_children.count", terminalInstancesWithActiveChildren);
   }
@@ -64,7 +64,6 @@ public class RuntimeConsistencyMetricsScheduler {
       drainingPastDeadlineWorkers.set(workerRegistryMapper.countDrainingPastDeadline());
       decommissionedWorkersWithActiveTasks.set(
           workerRegistryMapper.countDecommissionedWithActiveTasks());
-      invalidCapabilityTags.set(workerRegistryMapper.countInvalidCapabilityTags());
       terminalInstancesWithActiveChildren.set(
           jobInstanceMapper.countTerminalInstancesWithActiveChildren());
     } catch (RuntimeException ex) {
