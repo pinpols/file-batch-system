@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service.workflow;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -32,6 +33,9 @@ public class WorkflowConditionEvaluator {
           payload = (Map<String, Object>) payloadMap;
         }
       } catch (IllegalArgumentException ignored) {
+        SwallowedExceptionLogger.info(
+            WorkflowConditionEvaluator.class, "catch:IllegalArgumentException", ignored);
+
         payload = Collections.emptyMap();
       }
     }
@@ -295,6 +299,9 @@ public class WorkflowConditionEvaluator {
     try {
       return new BigDecimal(String.valueOf(value));
     } catch (NumberFormatException exception) {
+      SwallowedExceptionLogger.info(
+          WorkflowConditionEvaluator.class, "catch:NumberFormatException", exception);
+
       return null;
     }
   }

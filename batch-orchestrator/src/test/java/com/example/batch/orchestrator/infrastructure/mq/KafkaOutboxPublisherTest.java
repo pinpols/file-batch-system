@@ -144,14 +144,13 @@ class KafkaOutboxPublisherTest {
     return event;
   }
 
-  private static OutboxEventEntity fallbackEvent(
-      @SuppressWarnings("unused") String eventType, String eventKey) {
+  private static OutboxEventEntity fallbackEvent(String eventType, String eventKey) {
     OutboxEventEntity event = new OutboxEventEntity();
     event.setId(101L);
     event.setTenantId("t1");
     event.setAggregateType("AGG_TYPE");
     event.setAggregateId(2L);
-    event.setEventType("CUSTOM_EVENT");
+    event.setEventType(eventType);
     event.setEventKey(eventKey);
     event.setPayloadJson("{\"hello\":\"world\"}");
     event.setPublishAttempt(0);

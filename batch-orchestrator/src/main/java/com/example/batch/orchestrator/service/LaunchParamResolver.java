@@ -5,6 +5,7 @@ import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.time.Instant;
@@ -208,15 +209,18 @@ public class LaunchParamResolver {
     try {
       return Instant.parse(text);
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
     try {
       return LocalDateTime.parse(text).atZone(timezoneProvider.defaultZone()).toInstant();
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
     try {
       LocalDate d = bizDate == null ? LocalDate.now() : bizDate;
       return d.atTime(LocalTime.parse(text)).atZone(timezoneProvider.defaultZone()).toInstant();
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
     return null;
   }
@@ -269,6 +273,9 @@ public class LaunchParamResolver {
       int v = Integer.parseInt(text);
       return v > 0 ? v : null;
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          LaunchParamResolver.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }
@@ -289,6 +296,9 @@ public class LaunchParamResolver {
       long v = Long.parseLong(text);
       return v > 0 ? v : null;
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          LaunchParamResolver.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }

@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -81,6 +82,9 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
     try {
       return Integer.parseInt(String.valueOf(value).trim());
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
+
       return 0;
     }
   }
@@ -95,6 +99,9 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
     try {
       return Long.parseLong(String.valueOf(value).trim());
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
+
       return 0L;
     }
   }

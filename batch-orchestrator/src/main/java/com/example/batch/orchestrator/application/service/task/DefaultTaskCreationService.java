@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service.task;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
@@ -103,6 +104,9 @@ public class DefaultTaskCreationService implements TaskCreationService {
         return value == null ? null : String.valueOf(value);
       }
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultTaskCreationService.class, "catch:IllegalArgumentException", exception);
+
       return null;
     }
     return null;
@@ -120,6 +124,9 @@ public class DefaultTaskCreationService implements TaskCreationService {
         return toPositiveLong(value);
       }
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultTaskCreationService.class, "catch:IllegalArgumentException", exception);
+
       return null;
     }
     return null;
@@ -141,6 +148,9 @@ public class DefaultTaskCreationService implements TaskCreationService {
       long value = Long.parseLong(text);
       return value > 0 ? value : null;
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          DefaultTaskCreationService.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }

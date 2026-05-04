@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.AuditLogConstants;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -72,6 +73,9 @@ public class LaunchBatchDayService {
                 request, jobDefinition, effectiveParams, batchDaySlaDeadlineAt);
         return;
       } catch (OptimisticLockingFailureException conflict) {
+        SwallowedExceptionLogger.info(
+            LaunchBatchDayService.class, "catch:OptimisticLockingFailureException", conflict);
+
         last = conflict;
         logUpsertRetry("cas conflict; will retry", request, attempt);
       } catch (DuplicateKeyException concurrentInsert) {

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import com.example.batch.orchestrator.application.service.governance.DefaultRetryGovernanceService;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -229,6 +230,23 @@ class DefaultRetryGovernanceServiceTest {
     assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
         .isInstanceOf(IllegalStateException.class);
     verify(deadLetterTaskMapper)
+        .markReplayFailure(
+            anyString(), anyLong(), anyString(), anyInt(), any(), anyString(), any());
+  }
+
+  @Test
+  void shouldGiveUpWhenDeadLetterPartitionRowMissing() {
+    DeadLetterTaskEntity dl = deadLetter(1L, "t1", "NEW");
+    when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
+    when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
+        .thenReturn(1);
+    when(jobPartitionMapper.selectById("t1", 100L)).thenReturn(null);
+
+    assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
+        .isInstanceOf(DeadLetterOrphanSourceException.class);
+
+    verify(deadLetterTaskMapper).markGiveUp("t1", 1L);
+    verify(deadLetterTaskMapper, never())
         .markReplayFailure(
             anyString(), anyLong(), anyString(), anyInt(), any(), anyString(), any());
   }

@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
@@ -192,6 +193,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
             return parsed;
           }
         } catch (NumberFormatException ignored) {
+          SwallowedExceptionLogger.info(
+              DefaultSchedulePlanBuilder.class, "catch:NumberFormatException", ignored);
         }
       }
     }

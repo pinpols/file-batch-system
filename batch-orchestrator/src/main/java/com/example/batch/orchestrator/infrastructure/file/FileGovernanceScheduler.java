@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.StorageObjectView;
 import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
@@ -511,6 +512,8 @@ public class FileGovernanceScheduler {
     try {
       return Instant.parse(value);
     } catch (Exception exception) {
+      SwallowedExceptionLogger.warn(FileGovernanceScheduler.class, "catch:Exception", exception);
+
       return null;
     }
   }

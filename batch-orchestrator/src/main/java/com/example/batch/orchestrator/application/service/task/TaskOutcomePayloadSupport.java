@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service.task;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -35,6 +36,9 @@ final class TaskOutcomePayloadSupport {
         return value == null ? null : String.valueOf(value);
       }
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          TaskOutcomePayloadSupport.class, "catch:IllegalArgumentException", exception);
+
       return null;
     }
     return null;
@@ -52,6 +56,9 @@ final class TaskOutcomePayloadSupport {
         return toPositiveLong(value);
       }
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          TaskOutcomePayloadSupport.class, "catch:IllegalArgumentException", exception);
+
       return null;
     }
     return null;
@@ -73,6 +80,9 @@ final class TaskOutcomePayloadSupport {
       long value = Long.parseLong(text);
       return value > 0 ? value : null;
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          TaskOutcomePayloadSupport.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }
