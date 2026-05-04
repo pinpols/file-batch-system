@@ -27,4 +27,6 @@ public interface ProcessStagingMapper {
    * <p>供 Micrometer gauge 观测使用。
    */
   Instant selectMinStagedAt();
+
+  long countOrphansOlderThan(@Param("retentionHours") int retentionHours);
 }
