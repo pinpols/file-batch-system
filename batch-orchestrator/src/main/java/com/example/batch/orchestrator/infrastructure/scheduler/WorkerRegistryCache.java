@@ -50,7 +50,7 @@ public class WorkerRegistryCache {
     }
     String key = key(tenantId, workerGroup);
     try {
-      String cached = redis.redisTemplate().opsForValue().get(key);
+      String cached = redis.getStringCache(key);
       if (cached != null && !cached.isBlank()) {
         List<Entry> entries = objectMapper.readValue(cached, new TypeReference<List<Entry>>() {});
         // 绝不命中「空列表」快照：否则 PG 刚插入 ONLINE worker 仍会在 TTL 内被判无候选（派发永久 WAITING）。
@@ -69,12 +69,9 @@ public class WorkerRegistryCache {
     try {
       if (!fresh.isEmpty()) {
         String json = objectMapper.writeValueAsString(toEntries(fresh));
-        redis
-            .redisTemplate()
-            .opsForValue()
-            .set(key, json, Duration.ofMillis(properties.getTtlMillis()));
+        redis.setStringCache(key, json, Duration.ofMillis(properties.getTtlMillis()));
       } else {
-        redis.redisTemplate().delete(key);
+        redis.evictCache(key);
       }
     } catch (Exception ex) {
       log.debug(
@@ -96,7 +93,7 @@ public class WorkerRegistryCache {
       return;
     }
     try {
-      redis.redisTemplate().delete(key(tenantId, workerGroup));
+      redis.evictCache(key(tenantId, workerGroup));
     } catch (Exception ex) {
       log.debug(
           "worker cache evict failed: tenant={}, group={}, cause={}",

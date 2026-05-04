@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.timeout;
 
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -41,6 +42,7 @@ public class JobInstanceTimeoutEnforcer {
   private final BatchOrchestratorGovernanceProperties governance;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
+  private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
   private final AtomicBoolean running = new AtomicBoolean(false);
 
   @Scheduled(fixedDelayString = "${batch.timeout.poll-interval-millis:60000}")
@@ -73,6 +75,8 @@ public class JobInstanceTimeoutEnforcer {
                 ji.getVersion());
         if (rows > 0) {
           failed++;
+          terminalChildStateReconciler.reconcile(
+              ji.getTenantId(), ji.getId(), JobInstanceStatus.FAILED.code());
           log.warn(
               "job_instance timeout enforced: id={} tenant={} jobCode={} startedAt={} (mark"
                   + " FAILED)",

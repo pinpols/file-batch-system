@@ -34,6 +34,8 @@ import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +61,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class DefaultRetryGovernanceService implements RetryGovernanceService {
+
+  /**
+   * 自动重放调度必须经代理调用 {@link #replayDeadLetter}，否则同类自调用会跳过 {@code REQUIRES_NEW}， Outbox 写入（{@code
+   * MANDATORY}）无事务。纯单测无容器时可为 null，退化为 {@code this}.
+   */
+  @Lazy @Autowired private DefaultRetryGovernanceService replayTransactionalSelf;
 
   /**
    * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff
@@ -212,7 +220,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
   @Override
   public void autoRetryDueDeadLetters() {
-    // V90: 不挂 @Transactional——每条死信走独立 REQUIRES_NEW (replayDeadLetter 内部已注解), 单条失败不影响整批扫描
+    // 不挂 @Transactional：每条死信独立事务。必须通过 replayTransactionalShell() 走代理，
+    // 否则同类自调用会跳过 replayDeadLetter 的 REQUIRES_NEW，Outbox MANDATORY 会失败。
     List<DeadLetterTaskEntity> dueRecords =
         deadLetterTaskMapper.selectDueAutoRetries(governance.retry().getBatchSize());
     for (DeadLetterTaskEntity record : dueRecords) {
@@ -233,7 +242,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         continue;
       }
       try {
-        replayDeadLetter(tenantId, deadLetterId);
+        replayTransactionalShell().replayDeadLetter(tenantId, deadLetterId);
         log.info(
             "dead letter auto-retry succeeded: tenantId={}, deadLetterId={}," + " attempt={}",
             tenantId,
@@ -377,7 +386,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             DeadLetterReplayStatus.FAILED.code(),
             replayCount,
             replayAt,
-            exception.getMessage(),
+            truncateReplayResultSummary(exception),
             nextAuto);
         throw exception;
       }
@@ -610,6 +619,22 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     String code = errorCode == null ? "UNKNOWN" : errorCode;
     String message = errorMessage == null ? "retry exhausted" : errorMessage;
     return code + ": " + message;
+  }
+
+  private DefaultRetryGovernanceService replayTransactionalShell() {
+    return replayTransactionalSelf != null ? replayTransactionalSelf : this;
+  }
+
+  private static String truncateReplayResultSummary(Throwable exception) {
+    if (exception == null) {
+      return "";
+    }
+    String raw = exception.getMessage();
+    if (raw == null || raw.isBlank()) {
+      raw = exception.getClass().getSimpleName();
+    }
+    final int max = 512;
+    return raw.length() <= max ? raw : raw.substring(0, max);
   }
 
   private record RetryPolicyPlan(String retryPolicy, int maxRetryCount) {}

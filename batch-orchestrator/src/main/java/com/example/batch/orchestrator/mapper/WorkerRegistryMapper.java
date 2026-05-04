@@ -67,6 +67,12 @@ public interface WorkerRegistryMapper {
    */
   long countDrainingPastDeadline();
 
+  long countStaleOnline(@Param("timeoutSeconds") long timeoutSeconds);
+
+  long countDecommissionedWithActiveTasks();
+
+  long countInvalidCapabilityTags();
+
   /**
    * Worker 首次注册：插入新行。{@code ON CONFLICT (tenant_id, worker_code) DO NOTHING}：并发同一 workerCode 多次
    * register 只第一行成功，调用方下一次 selectByTenantAndWorkerCode 自然读到已有行。

@@ -30,6 +30,7 @@ public class InstanceManagementApplicationService {
 
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
+  private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
 
   public Map<String, Object> cancel(String tenantId, Long id) {
     return transition(tenantId, id, CANCELLABLE, "CANCELLED");
@@ -93,6 +94,7 @@ public class InstanceManagementApplicationService {
     if (rows == 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
+    terminalChildStateReconciler.reconcile(tenantId, id, targetStatus);
     return Map.of("id", id, "instanceNo", instance.getInstanceNo(), "status", targetStatus);
   }
 }

@@ -291,4 +291,19 @@
           and lease_expire_at is not null
           and lease_expire_at &lt; current_timestamp
     </select>
+
+    <update id="closeNonTerminalPartitionsForTerminalInstance">
+        update batch.job_partition
+        set partition_status = #{targetPartitionStatus},
+            worker_code = null,
+            lease_expire_at = null,
+            current_invocation_id = null,
+            invocation_started_at = null,
+            finished_at = current_timestamp,
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+          and partition_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'RETRYING')
+    </update>
 </mapper>

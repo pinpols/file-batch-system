@@ -49,6 +49,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,43 +86,40 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
-  private final RetryGovernanceService retryGovernanceService;
-  private final StateMachine<Object> stateMachine;
-  private final WorkflowDagService workflowDagService;
-  private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;
-  private final WorkflowTerminalOutboxService workflowTerminalOutboxService;
+  private final DefaultTaskOutcomeCollaborators collaborators;
   // #1-2: CAS 冲突计数器，用于监控并发更新频率
   private final Counter casMissCounter;
 
   @Lazy @Autowired private DefaultTaskOutcomeService self;
 
-  public DefaultTaskOutcomeService(
-      OrchestratorJobMappers jobMappers,
-      OrchestratorWorkflowMappers workflowMappers,
+  @Component
+  public record DefaultTaskOutcomeCollaborators(
       RetryGovernanceService retryGovernanceService,
       StateMachine<Object> stateMachine,
       WorkflowDagService workflowDagService,
       ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
       WorkflowTerminalOutboxService workflowTerminalOutboxService,
-      MeterRegistry meterRegistry) {
+      MeterRegistry meterRegistry,
+      JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler) {}
+
+  public DefaultTaskOutcomeService(
+      OrchestratorJobMappers jobMappers,
+      OrchestratorWorkflowMappers workflowMappers,
+      DefaultTaskOutcomeCollaborators collaborators) {
     this.jobMappers = jobMappers;
     this.workflowMappers = workflowMappers;
-    this.retryGovernanceService = retryGovernanceService;
-    this.stateMachine = stateMachine;
-    this.workflowDagService = workflowDagService;
-    this.workflowNodeDispatchServiceProvider = workflowNodeDispatchServiceProvider;
-    this.workflowTerminalOutboxService = workflowTerminalOutboxService;
+    this.collaborators = collaborators;
     this.casMissCounter =
         Counter.builder("batch.orchestrator.cas.miss")
             .description("CAS miss count during optimistic locking updates")
-            .register(meterRegistry);
+            .register(collaborators.meterRegistry());
   }
 
   // #8-3: 启动时验证 ObjectProvider 可正常解析，将循环依赖暴露在启动阶段而非运行时
   @PostConstruct
   void verifyLazyDependencies() {
     try {
-      workflowNodeDispatchServiceProvider.getIfAvailable();
+      collaborators.workflowNodeDispatchServiceProvider().getIfAvailable();
     } catch (Exception ex) {
       log.error("WorkflowNodeDispatchService 延迟注入解析失败，可能存在循环依赖: {}", ex.getMessage());
       throw new IllegalStateException(
@@ -248,8 +246,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         !command.success()
             && partition != null
             && jobInstance != null
-            && retryGovernanceService.scheduleRetryIfNecessary(
-                task, partition, jobInstance, command.errorCode(), command.errorMessage());
+            && collaborators
+                .retryGovernanceService()
+                .scheduleRetryIfNecessary(
+                    task, partition, jobInstance, command.errorCode(), command.errorMessage());
     int updated =
         jobMappers.jobTaskMapper.finishTask(
             FinishTaskParam.builder()
@@ -439,7 +439,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     String instanceEvent =
         resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
     String instanceStatus =
-        stateMachine
+        collaborators
+            .stateMachine()
             .transition(freshInstance != null ? freshInstance : jobInstance, instanceEvent)
             .toState();
     int progressUpdated =
@@ -460,13 +461,19 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
     }
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
+    if (isTerminalJobInstanceStatus(instanceStatus)) {
+      collaborators
+          .jobInstanceTerminalChildStateReconciler()
+          .reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
+    }
     // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
     if (jobFullyComplete && isTerminalJobInstanceStatus(instanceStatus)) {
       signalParentVirtualTask(jobInstance, instanceStatus, command);
     }
     if (workflowRun != null) {
       String workflowEvent = resolveWorkflowEvent(failedCount, allPartitionsFinished, dagContinues);
-      String workflowStatus = stateMachine.transition(workflowRun, workflowEvent).toState();
+      String workflowStatus =
+          collaborators.stateMachine().transition(workflowRun, workflowEvent).toState();
       Instant workflowFinishedAt = jobFullyComplete ? finishedAt : null;
       // C-2.3: SQL 守护期望前态 {CREATED, RUNNING}，避免与运维 cancel/terminate 抢占造成 TERMINATED 覆写
       int updated =
@@ -487,8 +494,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             workflowRun.getId(),
             workflowStatus);
       } else if (WorkflowTerminalOutboxService.isTerminal(workflowStatus)) {
-        workflowTerminalOutboxService.writeTerminalEvent(
-            workflowRun, workflowStatus, workflowFinishedAt);
+        collaborators
+            .workflowTerminalOutboxService()
+            .writeTerminalEvent(workflowRun, workflowStatus, workflowFinishedAt);
       }
     }
   }
@@ -517,21 +525,25 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task()));
     self.recordNodeRunFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
-        workflowDagService.resolveNextNodes(
-            ctx.workflowRun().getWorkflowDefinitionId(),
-            ctx.currentNodeCode(),
-            ctx.nodeProgress().failedCount() == 0,
-            ctx.task().getTaskPayload());
+        collaborators
+            .workflowDagService()
+            .resolveNextNodes(
+                ctx.workflowRun().getWorkflowDefinitionId(),
+                ctx.currentNodeCode(),
+                ctx.nodeProgress().failedCount() == 0,
+                ctx.task().getTaskPayload());
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (nextNode == null) {
         continue;
       }
       if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
-        if (workflowDagService.isNodeReadyForDispatch(
-            ctx.workflowRun().getId(),
-            ctx.workflowRun().getWorkflowDefinitionId(),
-            nextNode.nodeCode(),
-            ctx.task().getTaskPayload())) {
+        if (collaborators
+            .workflowDagService()
+            .isNodeReadyForDispatch(
+                ctx.workflowRun().getId(),
+                ctx.workflowRun().getWorkflowDefinitionId(),
+                nextNode.nodeCode(),
+                ctx.task().getTaskPayload())) {
           self.recordNodeRunStart(
               ctx.workflowRun().getId(),
               nextNode.nodeCode(),
@@ -554,7 +566,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         }
         continue;
       }
-      workflowNodeDispatchServiceProvider
+      collaborators
+          .workflowNodeDispatchServiceProvider()
           .getObject()
           .dispatchNode(
               ctx.jobInstance(),
@@ -569,10 +582,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // 当前节点 FAILED 时级联将永远无法触发的 SUCCESS-edge 下游写为 SKIPPED；防止 ALL-mode join 因
     // 缺失上游 node_run 行陷入永久死锁（terminalCount/matchedCount 永远到不了 size）。
     if (ctx.nodeProgress().failedCount() > 0) {
-      workflowDagService.cascadeSkipDownstream(
-          ctx.workflowRun().getId(),
-          ctx.workflowRun().getWorkflowDefinitionId(),
-          ctx.currentNodeCode());
+      collaborators
+          .workflowDagService()
+          .cascadeSkipDownstream(
+              ctx.workflowRun().getId(),
+              ctx.workflowRun().getWorkflowDefinitionId(),
+              ctx.currentNodeCode());
     }
   }
 

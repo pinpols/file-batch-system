@@ -2,6 +2,8 @@ package com.example.batch.orchestrator.infrastructure.startup;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.orchestrator.config.WorkerDrainProperties;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -37,13 +39,22 @@ public class OrchestratorStartupLeaseAudit {
   private static final long OUTBOX_STUCK_THRESHOLD_SECONDS = 600L;
 
   private final WorkerRegistryMapper workerRegistryMapper;
+  private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
   private final OutboxEventMapper outboxEventMapper;
+  private final WorkerDrainProperties workerDrainProperties;
 
   @EventListener(ApplicationReadyEvent.class)
   public void audit() {
     try {
       long drainingStale = workerRegistryMapper.countDrainingPastDeadline();
+      long staleOnlineWorkers =
+          workerRegistryMapper.countStaleOnline(
+              (long) workerDrainProperties.getHeartbeatTimeoutSeconds()
+                  + workerDrainProperties.getHeartbeatGraceSeconds());
+      long decommissionedActiveClaims = workerRegistryMapper.countDecommissionedWithActiveTasks();
+      long invalidCapabilityTags = workerRegistryMapper.countInvalidCapabilityTags();
+      long terminalActiveChildren = jobInstanceMapper.countTerminalInstancesWithActiveChildren();
       long leasesExpired =
           jobPartitionMapper.countLeaseExpired(
               PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
@@ -51,16 +62,32 @@ public class OrchestratorStartupLeaseAudit {
           outboxEventMapper.countStalePublishing(
               OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STUCK_THRESHOLD_SECONDS);
 
-      if (drainingStale == 0 && leasesExpired == 0 && outboxStuck == 0) {
-        log.info("启动租约审计通过（orchestrator）：无残留 drain / 过期租约 / 卡死 PUBLISHING");
+      if (drainingStale == 0
+          && staleOnlineWorkers == 0
+          && decommissionedActiveClaims == 0
+          && invalidCapabilityTags == 0
+          && terminalActiveChildren == 0
+          && leasesExpired == 0
+          && outboxStuck == 0) {
+        log.info(
+            "启动运行态审计通过（orchestrator）：无 stale worker / drain overdue / active decommissioned"
+                + " claims / invalid capability_tags / terminal active children / 过期租约 / 卡死"
+                + " PUBLISHING");
         return;
       }
 
       log.warn(
-          "启动租约审计发现残留（orchestrator）：drainingStale={}, leasesExpired={}, outboxStuck={}"
+          "启动运行态审计发现残留（orchestrator）：drainingStale={}, staleOnlineWorkers={},"
+              + " decommissionedActiveClaims={}, invalidCapabilityTags={},"
+              + " terminalActiveChildren={}, leasesExpired={}, outboxStuck={}"
               + "—— 本次审计仅告警，修复交给 WorkerDrainTimeoutScheduler / PartitionLeaseReclaimScheduler"
-              + " / OutboxPollScheduler 的第一轮执行自动完成；如非预期请排查对应调度器状态。",
+              + " / OutboxPollScheduler / JobInstanceTerminalChildStateReconciler 关联路径自动完成；"
+              + "如非预期请排查对应调度器状态。",
           drainingStale,
+          staleOnlineWorkers,
+          decommissionedActiveClaims,
+          invalidCapabilityTags,
+          terminalActiveChildren,
           leasesExpired,
           outboxStuck);
     } catch (RuntimeException ex) {
