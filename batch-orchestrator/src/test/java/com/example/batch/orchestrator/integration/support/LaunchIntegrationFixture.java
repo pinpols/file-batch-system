@@ -71,7 +71,7 @@ public final class LaunchIntegrationFixture {
         """
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
-        ) values (?, ?, ?, '{}'::jsonb, 'ONLINE', now(), 0)
+        ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
         """,
         tenantId,
         workerCode,

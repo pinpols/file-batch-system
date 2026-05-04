@@ -26,7 +26,7 @@ INSERT INTO batch.worker_registry (
     status, heartbeat_at, last_start_at, version, current_load, drain_started_at, drain_deadline_at,
     created_at, updated_at
 ) VALUES
-    (1510, 'default-tenant', 'retired-node', 'dispatch', 'retired-host', '127.0.0.10', '11010', jsonb_build_object('role', 'dispatch', 'state', 'retired'), 'delivery', 'DECOMMISSIONED', TIMESTAMPTZ '2026-03-21 18:00:00+08', TIMESTAMPTZ '2026-03-21 18:00:00+08', 'v1', 0, NULL, NULL, TIMESTAMPTZ '2026-03-21 18:00:00+08', TIMESTAMPTZ '2026-03-21 18:00:00+08')
+    (1510, 'default-tenant', 'retired-node', 'dispatch', 'retired-host', '127.0.0.10', '11010', jsonb_build_array('delivery', 'dispatch-retired'), 'delivery', 'DECOMMISSIONED', current_timestamp, current_timestamp, 'v1', 0, NULL, NULL, current_timestamp, current_timestamp)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.job_definition (

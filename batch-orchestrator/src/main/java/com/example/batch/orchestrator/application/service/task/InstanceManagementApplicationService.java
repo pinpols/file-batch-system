@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.service.task;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -30,7 +31,8 @@ public class InstanceManagementApplicationService {
 
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
-  private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
+  private final JobInstanceTerminalStatusApplicationService
+      jobInstanceTerminalStatusApplicationService;
 
   public Map<String, Object> cancel(String tenantId, Long id) {
     return transition(tenantId, id, CANCELLABLE, "CANCELLED");
@@ -88,13 +90,14 @@ public class InstanceManagementApplicationService {
           "error.common.state_conflict_detail",
           "cannot transition from " + instance.getInstanceStatus() + " to " + targetStatus);
     }
-    int rows =
-        jobInstanceMapper.updateStatus(
+    JobInstanceTerminalStatusCommand cmd =
+        new JobInstanceTerminalStatusCommand(
             tenantId, id, targetStatus, Instant.now(), instance.getVersion());
+    int rows =
+        jobInstanceTerminalStatusApplicationService.updateTerminalStatusAndReconcileChildren(cmd);
     if (rows == 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
-    terminalChildStateReconciler.reconcile(tenantId, id, targetStatus);
     return Map.of("id", id, "instanceNo", instance.getInstanceNo(), "status", targetStatus);
   }
 }
