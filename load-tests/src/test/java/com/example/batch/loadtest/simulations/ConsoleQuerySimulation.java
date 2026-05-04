@@ -5,15 +5,16 @@ import io.gatling.javaapi.core.ChainBuilder;
 import io.gatling.javaapi.core.ScenarioBuilder;
 import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
+import java.time.Duration;
 
 import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
  * Measures the query-side throughput and latency of the console API:
- *   GET /api/console/query/instances        (job instance list)
- *   GET /api/console/query/workers          (worker registry)
- *   GET /api/console/query/alerts           (alert events)
+ *   GET /api/console/queries/instances        (job instance list)
+ *   GET /api/console/queries/workers          (worker registry)
+ *   GET /api/console/queries/alerts           (alert events)
  *   GET /actuator/health                    (health probe baseline)
  *
  * <p>Load profile: constant {@code users.peak} users for {@code duration.seconds}.
@@ -35,8 +36,9 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  */
 public class ConsoleQuerySimulation extends Simulation {
 
-    private static final String AUTH_TOKEN =
-            System.getProperty("console.authToken", "Bearer load-test-token");
+    private static final String AUTH_TOKEN = System.getProperty("console.accessToken") != null
+            ? "Bearer " + System.getProperty("console.accessToken")
+            : System.getProperty("console.authToken", "Bearer load-test-token");
 
     // ── Protocol ───────────────────────────────────────────────────────────────
 
@@ -50,24 +52,26 @@ public class ConsoleQuerySimulation extends Simulation {
 
     private final ChainBuilder queries = exec(
             http("GET /api/console/query/instances")
-                    .get("/api/console/query/instances")
+                    .get("/api/console/queries/instances")
                     .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                    .queryParam("limit", "20")
+                    .queryParam("pageNo", "1")
+                    .queryParam("pageSize", "20")
                     .check(status().is(200))
     )
             .pause(1)
             .exec(
                     http("GET /api/console/query/workers")
-                            .get("/api/console/query/workers")
+                            .get("/api/console/queries/workers")
                             .queryParam("tenantId", GatlingConfig.TENANT_ID)
                             .check(status().is(200))
             )
             .pause(1)
             .exec(
                     http("GET /api/console/query/alerts")
-                            .get("/api/console/query/alerts")
+                            .get("/api/console/queries/alerts")
                             .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                            .queryParam("limit", "10")
+                            .queryParam("pageNo", "1")
+                            .queryParam("pageSize", "10")
                             .check(status().is(200))
             )
             .pause(1)
@@ -90,6 +94,7 @@ public class ConsoleQuerySimulation extends Simulation {
                 )
         )
                 .protocols(httpProtocol)
+                .maxDuration(Duration.ofSeconds(GatlingConfig.DURATION_SECONDS + 30L))
                 .assertions(
                         global().responseTime().percentile(99).lt(GatlingConfig.READ_P99_MS),
                         global().failedRequests().percent().lt(0.1)

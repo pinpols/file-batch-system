@@ -16,6 +16,10 @@ public final class GatlingConfig {
     public static final String CONSOLE_BASE_URL =
             System.getProperty("console.baseUrl", "http://localhost:8080");
 
+    /** Shared secret required by local trigger endpoints. */
+    public static final String INTERNAL_SECRET =
+            System.getProperty("internal.secret", "internal-secret");
+
     // ── Test data ──────────────────────────────────────────────────────────────
 
     /** Tenant ID used in load test requests. */
