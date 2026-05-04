@@ -21,4 +21,9 @@
         SELECT min(staged_at) FROM batch.process_staging
     </select>
 
+    <select id="countOrphansOlderThan" resultType="long">
+        SELECT count(*) FROM batch.process_staging
+        WHERE staged_at &lt; now() - make_interval(hours => #{retentionHours})
+    </select>
+
 </mapper>
