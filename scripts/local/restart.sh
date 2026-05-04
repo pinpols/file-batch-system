@@ -45,9 +45,12 @@ PID_FILE="$ROOT/logs/start-all.pids"
 mkdir -p "$LOG_DIR" "$CDS_DIR"
 
 # 与 start-all.sh 保持一致的本地 dev 启动加速参数（说明见 start-all.sh）
-LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xverify:none}"
+LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC}"
 
-# AppCDS：同 start-all.sh，见那里的完整说明（基于 jar SHA-256 判重，避免 mtime 误伤）
+# AppCDS：dump/run JVM 开关对齐指纹（须与 start-all.sh 的 CDS_ARCHIVE_STAMP 同步 bump）
+CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v2-native-access}"
+
+# AppCDS：同 start-all.sh，见那里的完整说明（jar SHA-256 + CDS 指纹判重）
 __CDS_FLAG=""
 warm_cds() {
   __CDS_FLAG=""
@@ -62,8 +65,10 @@ warm_cds() {
   local jar_hash
   jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
 
+  local expected_meta
+  expected_meta="$(printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP")"
   if [[ -f "$archive" && -f "$hash_file" && -n "$jar_hash" \
-        && "$(cat "$hash_file" 2>/dev/null)" == "$jar_hash" ]]; then
+        && "$(cat "$hash_file" 2>/dev/null)" == "$expected_meta" ]]; then
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
     return 0
   fi
@@ -95,7 +100,7 @@ warm_cds() {
   wait "$pid" 2>/dev/null || true
 
   if [[ -f "$archive" ]]; then
-    echo "$jar_hash" >"$hash_file"
+    printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP" >"$hash_file"
     echo "  ✓ ${name} CDS 缓存就绪"
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
   else

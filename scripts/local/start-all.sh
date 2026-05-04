@@ -44,9 +44,12 @@ export LC_ALL="${LC_ALL:-$BATCH_LOCALE}"
 # 本地 dev 启动加速 JVM 参数（6 个模块并发起 Spring Boot fat jar 慢的主因是类扫描+JIT）：
 #   TieredStopAtLevel=1  只做 C1 编译，跳过 C2（启动 -30~50%，稳态吞吐 -20~30%，local 无所谓）
 #   UseSerialGC          本地负载小，Serial 比 G1 启动开销更低
-#   Xverify:none         跳过字节码校验（Java 25 仍可用，会打 deprecation warn 但工作）
+# （JDK 13+ 已弃用 -Xverify:none / -noverify，默认不再注入，避免告警）
 # 用户可在外部 export LOCAL_FAST_JVM_OPTS="" 禁用；JAVA_OPTS 追加在后面，同 flag 以后者为准。
-LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xverify:none}"
+LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC}"
+
+# AppCDS：dump 与 run 的 JVM 开关必须一致；指纹 bump 后强制重训，避免旧 .jsa 与 --enable-native-access 不匹配
+CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v2-native-access}"
 
 LOG_ROOT="$ROOT/logs"
 DOCKER_LOG_DIR="$LOG_ROOT/docker"
@@ -105,9 +108,11 @@ warm_cds() {
   local jar_hash
   jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
 
-  # archive 存在且 hash 与上次训练时的 jar 一致 —— 直接用
+  local expected_meta
+  expected_meta="$(printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP")"
+  # archive 存在且 jar 指纹 + CDS 训练 JVM 指纹一致 —— 直接用
   if [[ -f "$archive" && -f "$hash_file" && -n "$jar_hash" \
-        && "$(cat "$hash_file" 2>/dev/null)" == "$jar_hash" ]]; then
+        && "$(cat "$hash_file" 2>/dev/null)" == "$expected_meta" ]]; then
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
     return 0
   fi
@@ -139,7 +144,7 @@ warm_cds() {
   wait "$pid" 2>/dev/null || true
 
   if [[ -f "$archive" ]]; then
-    echo "$jar_hash" >"$hash_file"
+    printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP" >"$hash_file"
     echo "  ✓ ${name} CDS 缓存就绪 ($(du -h "$archive" 2>/dev/null | cut -f1))"
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
   else
