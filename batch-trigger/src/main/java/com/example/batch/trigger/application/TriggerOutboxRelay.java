@@ -5,6 +5,8 @@ import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -14,11 +16,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
@@ -44,7 +49,7 @@ import org.springframework.stereotype.Component;
  *   <li>无 Circuit Breaker:trigger 流量小,发布失败靠退避吸收即可
  *   <li>无 Sharding:单 trigger leader 模式(ShedLock 互斥);trigger 不像 orchestrator 需要分片扩容
  *   <li>无自适应轮询:固定间隔(可配),业务量小不必精细化
- *   <li>无 Stale PUBLISHING 重置:退避 + 上限 attempts 兜底,不需要单独清扫(留作 follow-up 优化)
+ *   <li>每轮重置 stale PUBLISHING:避免 relay 在 markPublishing 后崩溃导致行永久卡住
  * </ul>
  */
 @Component
@@ -61,18 +66,34 @@ public class TriggerOutboxRelay {
   private final TriggerOutboxEventMapper mapper;
   private final TriggerEventPublisher publisher;
   private final LockingTaskExecutor lockingTaskExecutor;
+  private final MeterRegistry meterRegistry;
 
   @Value("${batch.trigger.outbox.poll-interval-millis:200}")
-  private long pollIntervalMillis;
+  private long pollIntervalMillis = 200L;
 
   @Value("${batch.trigger.outbox.batch-size:100}")
-  private int batchSize;
+  private int batchSize = 100;
+
+  @Value("${batch.trigger.outbox.publishing-timeout-seconds:120}")
+  private long publishingTimeoutSeconds = 120L;
+
+  @Value("${batch.trigger.outbox.max-publish-attempts:10}")
+  private int maxPublishAttempts = 10;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
+  private final AtomicLong pendingEvents = new AtomicLong();
+  private final AtomicLong stalePublishingEvents = new AtomicLong();
   private ScheduledExecutorService executor;
+  private Counter giveUpCounter;
 
   @PostConstruct
   public void start() {
+    meterRegistry.gauge("batch.trigger.outbox.pending.events", pendingEvents);
+    meterRegistry.gauge("batch.trigger.outbox.publishing.stale.events", stalePublishingEvents);
+    giveUpCounter =
+        Counter.builder("batch.trigger.outbox.give_up.total")
+            .description("trigger_outbox_event rows transitioned to GIVE_UP")
+            .register(meterRegistry);
     executor =
         Executors.newSingleThreadScheduledExecutor(
             r -> {
@@ -87,6 +108,32 @@ public class TriggerOutboxRelay {
         pollIntervalMillis,
         batchSize,
         MAX_BACKOFF_SECONDS);
+  }
+
+  @EventListener(ApplicationReadyEvent.class)
+  public void auditOnReady() {
+    try {
+      long pending =
+          mapper.countByStatuses(
+              List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code()));
+      long stale =
+          mapper.countStalePublishing(
+              OutboxPublishStatus.PUBLISHING.code(), publishingTimeoutSeconds);
+      pendingEvents.set(pending);
+      stalePublishingEvents.set(stale);
+      if (pending == 0 && stale == 0) {
+        log.info("启动运行态审计通过（trigger）：trigger_outbox 无待发积压 / stale PUBLISHING");
+      } else {
+        log.warn(
+            "启动运行态审计发现残留（trigger）：triggerOutboxPending={},"
+                + " triggerOutboxStalePublishing={}—— 本次审计仅告警，修复交给"
+                + " TriggerOutboxRelay 第一轮 stale reset / publish 自动完成。",
+            pending,
+            stale);
+      }
+    } catch (RuntimeException ex) {
+      log.warn("启动运行态审计执行失败（trigger，不影响启动）：{}", ex.getMessage());
+    }
   }
 
   @PreDestroy
@@ -128,6 +175,8 @@ public class TriggerOutboxRelay {
   }
 
   private void pollLocked() {
+    resetStalePublishing();
+    sampleBacklog();
     Instant now = Instant.now();
     List<TriggerOutboxEventEntity> batch =
         mapper.selectPending(
@@ -177,6 +226,9 @@ public class TriggerOutboxRelay {
           OutboxPublishStatus.GIVE_UP.code(),
           truncate("payload deserialize: " + ex.getMessage()),
           Instant.now().plusSeconds(MAX_BACKOFF_SECONDS));
+      if (giveUpCounter != null) {
+        giveUpCounter.increment();
+      }
       return;
     }
     String messageKey = event.getTenantId() + ":" + event.getRequestId();
@@ -185,7 +237,19 @@ public class TriggerOutboxRelay {
     if (result.success()) {
       mapper.markPublished(event.getId(), OutboxPublishStatus.PUBLISHED.code());
     } else {
-      Instant retryAt = Instant.now().plusSeconds(backoffSeconds(event.getPublishAttempt() + 1));
+      int nextAttempt = event.getPublishAttempt() + 1;
+      if (nextAttempt >= Math.max(1, maxPublishAttempts)) {
+        mapper.markFailed(
+            event.getId(),
+            OutboxPublishStatus.GIVE_UP.code(),
+            truncate(result.errorMessage()),
+            Instant.now().plusSeconds(MAX_BACKOFF_SECONDS));
+        if (giveUpCounter != null) {
+          giveUpCounter.increment();
+        }
+        return;
+      }
+      Instant retryAt = Instant.now().plusSeconds(backoffSeconds(nextAttempt));
       mapper.markFailed(
           event.getId(),
           OutboxPublishStatus.FAILED.code(),
@@ -209,6 +273,27 @@ public class TriggerOutboxRelay {
       return null;
     }
     return s.length() <= 2000 ? s : s.substring(0, 2000);
+  }
+
+  private void resetStalePublishing() {
+    int reset =
+        mapper.resetStalePublishing(
+            OutboxPublishStatus.PUBLISHING.code(),
+            OutboxPublishStatus.FAILED.code(),
+            "stale PUBLISHING reset by TriggerOutboxRelay",
+            publishingTimeoutSeconds);
+    if (reset > 0) {
+      log.warn("TriggerOutboxRelay 重置 {} 条滞留 PUBLISHING 为 FAILED", reset);
+    }
+  }
+
+  private void sampleBacklog() {
+    pendingEvents.set(
+        mapper.countByStatuses(
+            List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code())));
+    stalePublishingEvents.set(
+        mapper.countStalePublishing(
+            OutboxPublishStatus.PUBLISHING.code(), publishingTimeoutSeconds));
   }
 
   private LockConfiguration lockConfig() {

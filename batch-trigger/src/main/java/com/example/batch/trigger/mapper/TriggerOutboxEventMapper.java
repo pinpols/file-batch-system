@@ -51,6 +51,18 @@ public interface TriggerOutboxEventMapper {
       @Param("lastError") String lastError,
       @Param("nextPublishAt") Instant nextPublishAt);
 
+  int resetStalePublishing(
+      @Param("publishingStatus") String publishingStatus,
+      @Param("failedStatus") String failedStatus,
+      @Param("lastError") String lastError,
+      @Param("timeoutSeconds") long timeoutSeconds);
+
+  long countByStatuses(@Param("statuses") List<String> statuses);
+
+  long countStalePublishing(
+      @Param("publishingStatus") String publishingStatus,
+      @Param("timeoutSeconds") long timeoutSeconds);
+
   /** 仅供测试 / 运维查询(按 tenant 列出)。 */
   List<TriggerOutboxEventEntity> selectByTenantAndRequest(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
