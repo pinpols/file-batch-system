@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.util.Map;
 import org.springframework.core.annotation.Order;
@@ -72,6 +73,9 @@ public class SizeBasedPartitionCountResolver implements PartitionCountResolver {
     try {
       return Integer.parseInt(String.valueOf(value).trim());
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          SizeBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
+
       return 0;
     }
   }
@@ -86,6 +90,9 @@ public class SizeBasedPartitionCountResolver implements PartitionCountResolver {
     try {
       return Long.parseLong(String.valueOf(value).trim());
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          SizeBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
+
       return 0L;
     }
   }

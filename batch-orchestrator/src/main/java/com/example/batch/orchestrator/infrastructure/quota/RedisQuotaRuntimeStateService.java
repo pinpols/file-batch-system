@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.quota;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.redis.BatchRedisKeys;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
@@ -299,6 +300,9 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     try {
       return Long.parseLong(s);
     } catch (NumberFormatException ex) {
+      SwallowedExceptionLogger.info(
+          RedisQuotaRuntimeStateService.class, "catch:NumberFormatException", ex);
+
       return 0L;
     }
   }

@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.service.workflow;
 
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -74,6 +75,9 @@ public class WorkflowNodePayloadBuilder {
           payload.put("upstreamPayload", payloadObject);
         }
       } catch (IllegalArgumentException exception) {
+        SwallowedExceptionLogger.info(
+            WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", exception);
+
         payload.put("upstreamPayloadRaw", sourcePayload);
       }
     }
@@ -148,6 +152,9 @@ public class WorkflowNodePayloadBuilder {
         }
       }
     } catch (IllegalArgumentException ignored) {
+      SwallowedExceptionLogger.info(
+          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
+
       // 跳过脏 outputSummary
     }
   }
@@ -232,6 +239,9 @@ public class WorkflowNodePayloadBuilder {
         }
       }
     } catch (IllegalArgumentException ignored) {
+      SwallowedExceptionLogger.info(
+          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
+
       // node_params 非 Map 或畸形——静默跳过，不让坏数据阻断派发
     }
   }
@@ -310,6 +320,9 @@ public class WorkflowNodePayloadBuilder {
         return new LinkedHashMap<>((Map<String, Object>) payloadMap);
       }
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", exception);
+
       return Map.of();
     }
     return Map.of();
@@ -326,6 +339,9 @@ public class WorkflowNodePayloadBuilder {
         return new LinkedHashMap<>((Map<String, Object>) map);
       }
     } catch (IllegalArgumentException ignored) {
+      SwallowedExceptionLogger.info(
+          WorkflowNodePayloadBuilder.class, "catch:IllegalArgumentException", ignored);
+
       // 数据库里 output 列异常,不影响派发,按"无产出"语义返回 null
     }
     return null;

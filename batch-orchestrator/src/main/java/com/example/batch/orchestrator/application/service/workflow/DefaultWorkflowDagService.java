@@ -5,6 +5,7 @@ import com.example.batch.common.enums.WorkflowEdgeType;
 import com.example.batch.common.enums.WorkflowJoinMode;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeType;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -306,6 +307,9 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       threshold = Math.min(threshold, Math.max(1, incomingEdgeCount));
       return new JoinRule(joinMode, threshold);
     } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultWorkflowDagService.class, "catch:IllegalArgumentException", exception);
+
       return new JoinRule(WorkflowJoinMode.ALL, Math.max(1, incomingEdgeCount));
     }
   }
@@ -321,6 +325,9 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     try {
       return Integer.parseInt(String.valueOf(value));
     } catch (NumberFormatException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultWorkflowDagService.class, "catch:NumberFormatException", exception);
+
       return 0;
     }
   }

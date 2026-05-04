@@ -10,6 +10,7 @@ import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -82,6 +83,9 @@ public class DefaultLaunchService implements LaunchService {
               .getObject()
               .prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
     } catch (DataIntegrityViolationException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultLaunchService.class, "catch:DataIntegrityViolationException", exception);
+
       // DuplicateKeyException extends DataIntegrityViolationException, covered here.
       return resolveConcurrentDuplicate(request, loaded, exception);
     } catch (RuntimeException exception) {

@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.config;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.orchestrator.infrastructure.sharding.RedisShardAssignmentProvider;
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import com.example.batch.orchestrator.infrastructure.sharding.StaticShardAssignmentProvider;
@@ -58,6 +59,8 @@ public class ShardingConfiguration {
     try {
       return InetAddress.getLocalHost().getHostName();
     } catch (UnknownHostException e) {
+      SwallowedExceptionLogger.info(ShardingConfiguration.class, "catch:UnknownHostException", e);
+
       return "orchestrator-unknown-" + System.nanoTime();
     }
   }

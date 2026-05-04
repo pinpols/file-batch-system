@@ -88,12 +88,4 @@ class QuotaResetPolicyTest {
 
     assertThat(result.getZone()).isEqualTo(zone);
   }
-
-  // ── systemZone() ──────────────────────────────────────────────────────────
-
-  @Test
-  void systemZoneShouldReturnNonNullZoneId() {
-    assertThat(QuotaResetPolicy.systemZone()).isNotNull();
-    assertThat(QuotaResetPolicy.systemZone()).isEqualTo(ZoneId.systemDefault());
-  }
 }

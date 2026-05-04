@@ -5,6 +5,7 @@ import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.kafka.TaskDispatchMessage;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -149,6 +150,9 @@ public class TaskDispatchOutboxService {
         return new LinkedHashMap<>((Map<String, Object>) payloadMap);
       }
     } catch (RuntimeException ignored) {
+      SwallowedExceptionLogger.warn(
+          TaskDispatchOutboxService.class, "catch:RuntimeException", ignored);
+
       // 载荷 JSON 异常时忽略并退回空 Map，仍可为消息打上 run_mode。
     }
     return new LinkedHashMap<>();

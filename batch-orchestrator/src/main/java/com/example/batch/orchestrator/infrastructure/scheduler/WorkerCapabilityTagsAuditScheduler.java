@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -116,6 +117,9 @@ public class WorkerCapabilityTagsAuditScheduler {
       }
       return true;
     } catch (RuntimeException ex) {
+      SwallowedExceptionLogger.warn(
+          WorkerCapabilityTagsAuditScheduler.class, "catch:RuntimeException", ex);
+
       return false;
     }
   }

@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.mybatis;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import java.sql.CallableStatement;
 import java.sql.PreparedStatement;
@@ -60,6 +61,8 @@ public class MapJsonbTypeHandler extends BaseTypeHandler<Map<String, Object>> {
       }
       return null;
     } catch (RuntimeException ex) {
+      SwallowedExceptionLogger.warn(MapJsonbTypeHandler.class, "catch:RuntimeException", ex);
+
       // JSONB 列里出现格式错乱（历史脏数据 / 手工改库）→ 不让单条记录读取打崩整个查询
       return null;
     }

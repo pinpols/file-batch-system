@@ -6,6 +6,7 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -327,6 +328,9 @@ public class WaitingPartitionDispatchScheduler {
         return v == null ? null : String.valueOf(v);
       }
     } catch (IllegalArgumentException ignored) {
+      SwallowedExceptionLogger.info(
+          WaitingPartitionDispatchScheduler.class, "catch:IllegalArgumentException", ignored);
+
       // 畸形 snapshot 不阻断调度
     }
     return null;

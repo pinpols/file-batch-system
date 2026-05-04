@@ -248,6 +248,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             tenantId,
             deadLetterId,
             currentReplayCount + 1);
+      } catch (DeadLetterOrphanSourceException ex) {
+        log.info(
+            "dead letter auto-retry skipped (orphan source, marked GIVE_UP): tenantId={},"
+                + " deadLetterId={}, detail={}",
+            tenantId,
+            deadLetterId,
+            ex.getMessage());
       } catch (Exception ex) {
         // markReplayFailure 已在 replayDeadLetter 内部被调用; 这里检查是否已用尽预算, 转 GIVE_UP
         int newReplayCount = currentReplayCount + 1;
@@ -326,7 +333,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   @Override
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  @Transactional(
+      propagation = Propagation.REQUIRES_NEW,
+      noRollbackFor = DeadLetterOrphanSourceException.class)
   public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
     DeadLetterTaskEntity deadLetterTask =
         deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
@@ -375,6 +384,17 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             deadLetterTaskId,
             exception.getMessage(),
             exception);
+        if (isOrphanPartitionReplayFailure(exception)) {
+          deadLetterTaskMapper.markGiveUp(tenantId, deadLetterTaskId);
+          log.warn(
+              "dead letter give up (partition or job_instance row missing): tenantId={},"
+                  + " deadLetterId={}, sourcePartitionId={}",
+              tenantId,
+              deadLetterTaskId,
+              deadLetterTask.getSourceId());
+          throw new DeadLetterOrphanSourceException(
+              "dead letter source missing for replay: partition or job_instance deleted");
+        }
         // V90: 失败时按指数退避算下次自动重放时间; BUSINESS / 已无自动重放预算的记录不安排（next_replay_at=null）
         Instant nextAuto =
             shouldScheduleAutoRetry(deadLetterTask, replayCount)
@@ -635,6 +655,17 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     }
     final int max = 512;
     return raw.length() <= max ? raw : raw.substring(0, max);
+  }
+
+  /** 分区或作业实例已被清理（如脚本 sweep）但死信行仍在时,requeue 会失败；不应占用自动重放预算反复打 WARN。 */
+  private static boolean isOrphanPartitionReplayFailure(Throwable exception) {
+    if (!(exception instanceof IllegalStateException)) {
+      return false;
+    }
+    String message = exception.getMessage();
+    return message != null
+        && ("retry partition not found".equals(message)
+            || "retry job instance not found".equals(message));
   }
 
   private record RetryPolicyPlan(String retryPolicy, int maxRetryCount) {}

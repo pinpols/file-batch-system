@@ -9,6 +9,7 @@ import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -143,6 +144,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     try {
       workflowMappers.workflowNodeRunMapper.insert(entity);
     } catch (DuplicateKeyException ignored) {
+      SwallowedExceptionLogger.info(
+          DefaultTaskOutcomeService.class, "catch:DuplicateKeyException", ignored);
+
       return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
           workflowRunId, nodeCode);
     }
@@ -166,6 +170,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     try {
       workflowMappers.workflowNodeRunMapper.insert(entity);
     } catch (DuplicateKeyException ignored) {
+      SwallowedExceptionLogger.info(
+          DefaultTaskOutcomeService.class, "catch:DuplicateKeyException", ignored);
+
       return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
           workflowRunId, nodeCode);
     }
@@ -672,6 +679,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       Object value = ((Map<String, Object>) effectiveMap).get("_parentVirtualTaskId");
       return TaskOutcomePayloadSupport.toPositiveLong(value);
     } catch (Exception ignored) {
+      SwallowedExceptionLogger.warn(DefaultTaskOutcomeService.class, "catch:Exception", ignored);
+
       return null;
     }
   }

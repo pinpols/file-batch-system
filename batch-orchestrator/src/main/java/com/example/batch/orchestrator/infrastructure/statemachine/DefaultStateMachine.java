@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.statemachine;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.domain.statemachine.StateTransition;
@@ -74,6 +75,9 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
       Object value = method.invoke(target);
       return value instanceof String status ? status : null;
     } catch (ReflectiveOperationException exception) {
+      SwallowedExceptionLogger.info(
+          DefaultStateMachine.class, "catch:ReflectiveOperationException", exception);
+
       return null;
     }
   }

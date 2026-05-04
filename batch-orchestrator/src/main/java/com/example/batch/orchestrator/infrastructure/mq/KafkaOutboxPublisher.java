@@ -8,6 +8,7 @@ import com.example.batch.common.kafka.BatchEventMessage;
 import com.example.batch.common.kafka.BatchMessageType;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.kafka.TaskDispatchMessage;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -241,6 +242,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
         return JsonUtils.toJson(sanitized);
       }
     } catch (RuntimeException ignored) {
+      SwallowedExceptionLogger.warn(KafkaOutboxPublisher.class, "catch:RuntimeException", ignored);
+
       // payload 不是合法 JSON，原样返回
     }
     return payloadJson;
