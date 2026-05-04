@@ -100,8 +100,8 @@ INSERT INTO batch.job_definition (
     retry_max_count, timeout_seconds, execution_handler, param_schema, default_params, version, enabled, description,
     created_by, updated_by, created_at, updated_at
 ) VALUES
-    (2001, 'default-tenant', 'import_customer_job', 'Customer Import Job', 'IMPORT', 'CUSTOMER', 'MANUAL', NULL, 'Asia/Shanghai', 3, 'import_queue', 'import', 'default-calendar', 'always_open', 'MIXED', FALSE, 'DYNAMIC', 'EXPONENTIAL', 3, 3600, 'com.example.ImportCustomerJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('streamingEnabled', true), 1, TRUE, 'System test import job', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (2002, 'default-tenant', 'export_settlement_job', 'Settlement Export Job', 'EXPORT', 'SETTLEMENT', 'CRON', '0 0/30 * * * ?', 'Asia/Shanghai', 4, 'export_queue', 'export', 'default-calendar', 'always_open', 'SCHEDULED', TRUE, 'STATIC', 'FIXED', 2, 7200, 'com.example.ExportSettlementJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('pageSize', 1000), 1, TRUE, 'System test export job', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2001, 'default-tenant', 'import_customer_job', 'Customer Import Job', 'IMPORT', 'CUSTOMER', 'MANUAL', NULL, 'Asia/Shanghai', 3, 'import_queue', 'import', 'default-calendar', 'always_open', 'MIXED', FALSE, 'DYNAMIC', 'EXPONENTIAL', 3, 3600, 'com.example.ImportCustomerJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('streamingEnabled', true, 'templateCode', 'import_customer_v1'), 1, TRUE, 'System test import job', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (2002, 'default-tenant', 'export_settlement_job', 'Settlement Export Job', 'EXPORT', 'SETTLEMENT', 'MANUAL', NULL, 'Asia/Shanghai', 4, 'export_queue', 'export', 'default-calendar', 'always_open', 'MANUAL', TRUE, 'STATIC', 'FIXED', 2, 7200, 'com.example.ExportSettlementJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('pageSize', 1000, 'templateCode', 'export_settlement_v1'), 1, TRUE, 'System test export job', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (2003, 'tenant-finance', 'finance_recon_workflow', 'Finance Reconciliation Workflow', 'WORKFLOW', 'SETTLEMENT', 'MANUAL', NULL, 'Asia/Shanghai', 2, 'finance_export_queue', 'export', 'finance-calendar', 'night_window', 'MIXED', TRUE, 'AUTO', 'EXPONENTIAL', 3, 5400, 'com.example.FinanceReconWorkflowHandler', jsonb_build_object('type', 'object'), jsonb_build_object('sourcePartitions', jsonb_build_array(1,2)), 1, TRUE, 'Finance workflow job', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08')
 ON CONFLICT (id) DO NOTHING;
 
@@ -272,8 +272,34 @@ INSERT INTO batch.file_template_config (
             'conflictColumns', jsonb_build_array('tenant_id', 'customer_no')
         )
     ), TRUE, 1000, 1000, 500, TRUE, 1, 'Customer JSON import template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, TRUE, TRUE, FALSE, 'DEFAULT_TEST', FALSE, 'PCI_BASIC'),
-    (5003, 'default-tenant', 'export_settlement_v1', 'Settlement Export Template', 'EXPORT', 'SETTLEMENT', 'DELIMITED', 'UTF-8', 'UTF-8', TRUE, E'\n', ',', '"', '\\', 0, 1, 0, jsonb_build_object('title', 'settlement-export'), jsonb_build_object('title', 'settlement-export-trailer'), 'SHA-256', 'NONE', 'AES', 'settlement-${bizDate}-${version}', jsonb_build_object('settlement_no', 'settlementNo', 'net_amount', 'netAmount'), jsonb_build_object('required', jsonb_build_array('settlementNo')), 'settlement_query', 'select * from biz.settlement_detail where tenant_id = :tenantId and batch_id = :batchId order by id asc', jsonb_build_object('tenantId', 'string', 'batchId', 'long'), TRUE, 1000, 1000, 500, TRUE, 1, 'Settlement export template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, FALSE, TRUE, TRUE, 'DEFAULT_TEST', TRUE, 'PCI_BASIC'),
-    (5004, 'tenant-finance', 'export_settlement_xlsx_v1', 'Settlement Export XLSX Template', 'EXPORT', 'SETTLEMENT', 'EXCEL', 'UTF-8', 'UTF-8', TRUE, E'\n', NULL, NULL, NULL, 0, 1, 0, jsonb_build_object('title', 'settlement-xlsx'), jsonb_build_object('title', 'settlement-xlsx-trailer'), 'SHA-256', 'NONE', 'NONE', 'settlement-xlsx-${bizDate}-${version}', jsonb_build_object('settlement_no', 'settlementNo'), jsonb_build_object('required', jsonb_build_array('settlementNo')), 'settlement_query_xlsx', 'select * from biz.settlement_detail where tenant_id = :tenantId and batch_id = :batchId order by id asc', jsonb_build_object('tenantId', 'string', 'batchId', 'long'), TRUE, 1000, 1000, 500, TRUE, 1, 'Settlement XLSX export template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', FALSE, FALSE, FALSE, FALSE, 'DEFAULT_TEST', FALSE, NULL);
+    (5003, 'default-tenant', 'export_settlement_v1', 'Settlement Export Template', 'EXPORT', 'SETTLEMENT', 'DELIMITED', 'UTF-8', 'UTF-8', TRUE, E'\n', ',', '"', '\\', 0, 1, 0, jsonb_build_object('title', 'settlement-export'), jsonb_build_object('title', 'settlement-export-trailer'), 'SHA-256', 'NONE', 'AES', 'settlement-${bizDate}-${version}', jsonb_build_object('settlement_no', 'settlementNo', 'net_amount', 'netAmount'), jsonb_build_object('required', jsonb_build_array('settlementNo')), 'settlement_query', 'select * from biz.settlement_detail where tenant_id = :tenantId and batch_id = :batchId order by id asc', jsonb_build_object(
+        'export_data_ref', 'jdbc_mapped_export',
+        'jdbcMappedExport', jsonb_build_object(
+            'schema', 'biz',
+            'batchTable', 'settlement_batch',
+            'detailTable', 'settlement_detail',
+            'batchNoColumn', 'batch_no',
+            'detailFkColumn', 'batch_id',
+            'batchTenantColumn', 'tenant_id',
+            'batchSelectColumns', jsonb_build_array('id', 'tenant_id', 'batch_no', 'biz_date', 'accounting_period'),
+            'detailOrderByColumn', 'id',
+            'detailSelectColumns', jsonb_build_array('id', 'tenant_id', 'batch_id', 'settlement_no', 'customer_no', 'biz_date', 'gross_amount', 'fee_amount')
+        )
+    ), TRUE, 1000, 1000, 500, TRUE, 1, 'Settlement export template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', TRUE, FALSE, TRUE, TRUE, 'DEFAULT_TEST', TRUE, 'PCI_BASIC'),
+    (5004, 'tenant-finance', 'export_settlement_xlsx_v1', 'Settlement Export XLSX Template', 'EXPORT', 'SETTLEMENT', 'EXCEL', 'UTF-8', 'UTF-8', TRUE, E'\n', NULL, NULL, NULL, 0, 1, 0, jsonb_build_object('title', 'settlement-xlsx'), jsonb_build_object('title', 'settlement-xlsx-trailer'), 'SHA-256', 'NONE', 'NONE', 'settlement-xlsx-${bizDate}-${version}', jsonb_build_object('settlement_no', 'settlementNo'), jsonb_build_object('required', jsonb_build_array('settlementNo')), 'settlement_query_xlsx', 'select * from biz.settlement_detail where tenant_id = :tenantId and batch_id = :batchId order by id asc', jsonb_build_object(
+        'export_data_ref', 'jdbc_mapped_export',
+        'jdbcMappedExport', jsonb_build_object(
+            'schema', 'biz',
+            'batchTable', 'settlement_batch',
+            'detailTable', 'settlement_detail',
+            'batchNoColumn', 'batch_no',
+            'detailFkColumn', 'batch_id',
+            'batchTenantColumn', 'tenant_id',
+            'batchSelectColumns', jsonb_build_array('id', 'tenant_id', 'batch_no', 'biz_date', 'accounting_period'),
+            'detailOrderByColumn', 'id',
+            'detailSelectColumns', jsonb_build_array('id', 'tenant_id', 'batch_id', 'settlement_no', 'customer_no', 'biz_date', 'gross_amount', 'fee_amount')
+        )
+    ), TRUE, 1000, 1000, 500, TRUE, 1, 'Settlement XLSX export template', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08', FALSE, FALSE, FALSE, FALSE, 'DEFAULT_TEST', FALSE, NULL);
 
 INSERT INTO batch.file_channel_config (
     id, tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type, config_json, receipt_policy,
@@ -282,7 +308,7 @@ INSERT INTO batch.file_channel_config (
     (5101, 'default-tenant', 'api_dispatch', 'API Dispatch', 'API', 'http://localhost:8090/api/dispatch', 'TOKEN', jsonb_build_object('target_endpoint', 'http://localhost:8090/api/dispatch', 'headers', jsonb_build_object('X-Tenant-Id', 'default-tenant')), 'SYNC', 30, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (5102, 'default-tenant', 'api_push_dispatch', 'API Push Dispatch', 'API_PUSH', 'http://localhost:8090/api/push', 'TOKEN', jsonb_build_object('target_endpoint', 'http://localhost:8090/api/push', 'api_push_api_key', 'demo-push-key', 'authorization', 'Bearer demo-token', 'receipt_poll_url', 'http://localhost:8090/api/push/receipt'), 'ASYNC', 30, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (5103, 'default-tenant', 'local_dispatch', 'Local Dispatch', 'LOCAL', '/tmp/batch/local-dispatch', 'NONE', jsonb_build_object('target_endpoint', '/tmp/batch/local-dispatch'), 'NONE', 10, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (5104, 'default-tenant', 'nas_dispatch', 'NAS Dispatch', 'NAS', NULL, 'PASSWORD', jsonb_build_object('target_endpoint', '/mnt/nas/batch', 'nas_remote_directory', '/mnt/nas/batch', 'nas_remote_file_name', 'settlement.csv'), 'SYNC', 30, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (5104, 'default-tenant', 'nas_dispatch', 'NAS Dispatch', 'NAS', NULL, 'PASSWORD', jsonb_build_object('target_endpoint', '/tmp/batch/nas-dispatch', 'nas_remote_directory', '/tmp/batch/nas-dispatch', 'nas_remote_file_name', 'settlement.csv'), 'SYNC', 30, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (5105, 'default-tenant', 'oss_dispatch', 'OSS Dispatch', 'OSS', NULL, 'TOKEN', jsonb_build_object('oss_bucket', 'batch-dev', 'oss_object_prefix', 'dispatch/', 'receipt_poll_url', 'http://localhost:19000/receipt'), 'POLLING', 30, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (5106, 'default-tenant', 'sftp_dispatch', 'SFTP Dispatch', 'SFTP', 'sftp.example.com', 'PASSWORD', jsonb_build_object('sftp_host', 'sftp.example.com', 'sftp_port', 22, 'sftp_user', 'batch', 'sftp_password', 'batch-pass', 'sftp_remote_directory', '/inbox', 'sftp_remote_file_name', 'settlement.csv'), 'NONE', 45, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (5107, 'default-tenant', 'email_dispatch', 'Email Dispatch', 'EMAIL', 'ops@example.com', 'PASSWORD', jsonb_build_object('smtp_host', 'smtp.example.com', 'smtp_port', 587, 'smtp_username', 'batch@example.com', 'smtp_password', 'batch-pass', 'smtp_starttls', TRUE, 'mail_from', 'batch@example.com', 'mail_to', 'ops@example.com', 'mail_subject', 'Batch Dispatch'), 'SYNC', 45, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');

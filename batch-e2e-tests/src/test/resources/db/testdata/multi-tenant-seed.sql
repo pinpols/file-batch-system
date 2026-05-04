@@ -10,40 +10,68 @@
 
 INSERT INTO batch.job_definition
   (tenant_id, job_code, job_name, job_type, schedule_type, schedule_expr, trigger_mode, timezone,
-   retry_policy, retry_max_count, created_at, updated_at)
+   retry_policy, retry_max_count, default_params, created_at, updated_at)
 VALUES
-  ('ta', 'TA_IMPORT_CUSTOMER', 'TA Customer Import',    'IMPORT',   'CRON',       '0 2 * * * ?', 'SCHEDULED', 'Asia/Shanghai',
-   'EXPONENTIAL', 3, now(), now()),
+  ('ta', 'TA_IMPORT_CUSTOMER', 'TA Customer Import',    'IMPORT',   'MANUAL',     NULL,          'MANUAL',    'Asia/Shanghai',
+   'EXPONENTIAL', 3, jsonb_build_object('templateCode', 'IMP-CUSTOMER-CSV'), now(), now()),
   ('ta', 'TA_EXPORT_REPORT',   'TA Report Export',      'EXPORT',   'MANUAL',     NULL,           'MANUAL',    'Asia/Shanghai',
-   'FIXED',       2, now(), now()),
-  ('ta', 'TA_DISPATCH_ORDER',  'TA Order Dispatch',     'DISPATCH', 'FIXED_RATE', '300',          'SCHEDULED', 'Asia/Shanghai',
-   'FIXED',       1, now(), now()),
-  ('ta', 'TA_WF_SETTLEMENT',   'TA Settlement Workflow','WORKFLOW', 'CRON',       '0 22 * * * ?', 'SCHEDULED', 'Asia/Shanghai',
-   'EXPONENTIAL', 3, now(), now()),
+   'FIXED',       2, jsonb_build_object('templateCode', 'EXP-ORDER-EXCEL'), now(), now()),
+  ('ta', 'TA_DISPATCH_ORDER',  'TA Order Dispatch',     'DISPATCH', 'MANUAL',     NULL,           'MANUAL',    'Asia/Shanghai',
+   'FIXED',       1, jsonb_build_object(), now(), now()),
+  ('ta', 'TA_WF_SETTLEMENT',   'TA Settlement Workflow','WORKFLOW', 'MANUAL',     NULL,           'MANUAL',    'Asia/Shanghai',
+   'EXPONENTIAL', 3, jsonb_build_object(), now(), now()),
 
 -- ── tenant tb: 金融业务 ────────────────────────────────────────────────────────
 
-  ('tb', 'TB_IMPORT_TRANSACTION', 'TB Transaction Import',  'IMPORT',   'CRON',   '0 1 * * * ?',    'SCHEDULED', 'Asia/Shanghai',
-   'EXPONENTIAL', 3, now(), now()),
-  ('tb', 'TB_EXPORT_STATEMENT',   'TB Statement Export',    'EXPORT',   'CRON',   '0 30 6 * * ?',   'SCHEDULED', 'Asia/Shanghai',
-   'FIXED',       2, now(), now()),
-  ('tb', 'TB_WF_RECONCILE',       'TB Reconcile Workflow',  'WORKFLOW', 'CRON',   '0 0 7 * * ?',    'SCHEDULED', 'Asia/Shanghai',
-   'EXPONENTIAL', 3, now(), now()),
+  ('tb', 'TB_IMPORT_TRANSACTION', 'TB Transaction Import',  'IMPORT',   'MANUAL', NULL,             'MANUAL',    'Asia/Shanghai',
+   'EXPONENTIAL', 3, jsonb_build_object('templateCode', 'IMP-TRANSACTION-CSV'), now(), now()),
+  ('tb', 'TB_EXPORT_STATEMENT',   'TB Statement Export',    'EXPORT',   'MANUAL', NULL,             'MANUAL',    'Asia/Shanghai',
+   'FIXED',       2, jsonb_build_object('templateCode', 'EXP-STATEMENT-EXCEL'), now(), now()),
+  ('tb', 'TB_WF_RECONCILE',       'TB Reconcile Workflow',  'WORKFLOW', 'MANUAL', NULL,             'MANUAL',    'Asia/Shanghai',
+   'EXPONENTIAL', 3, jsonb_build_object(), now(), now()),
 
 -- ── tenant tc: 风控业务 ────────────────────────────────────────────────────────
 
-  ('tc', 'TC_IMPORT_RISK_SCORE',  'TC Risk Score Import',     'IMPORT',   'EVENT',  NULL,           'EVENT',   'Asia/Shanghai',
-   'EXPONENTIAL', 5, now(), now()),
+  ('tc', 'TC_IMPORT_RISK_SCORE',  'TC Risk Score Import',     'IMPORT',   'MANUAL', NULL,           'MANUAL',  'Asia/Shanghai',
+   'EXPONENTIAL', 5, jsonb_build_object('templateCode', 'IMP-RISK-SCORE-JSON'), now(), now()),
   -- 原先是 CRON '0 */30 * * * ?' 每 30min 自动触发，但 default_params 为空，EXPORT worker 每次都
   -- 因 `exportPayload.batchNo=null` 抛 EXPORT_GENERATE_NO_PAYLOAD；作为 demo 改 MANUAL，让前端
   -- /api/console/ops/* 按需带完整 payload 触发，避免后台长期刷无意义失败日志。
   ('tc', 'TC_EXPORT_RISK_ALERT',  'TC Risk Alert Export',     'EXPORT',   'MANUAL', NULL,            'MANUAL',   'Asia/Shanghai',
-   'FIXED',       3, now(), now()),
+   'FIXED',       3, jsonb_build_object('templateCode', 'EXP-RISK-ALERT-JSON'), now(), now()),
   ('tc', 'TC_DISPATCH_REVIEW',    'TC Review Dispatch',       'DISPATCH', 'MANUAL', NULL,           'MANUAL',  'Asia/Shanghai',
-   'NONE',        0, now(), now()),
+   'NONE',        0, jsonb_build_object(), now(), now()),
   ('tc', 'TC_WF_RISK_PIPELINE',   'TC Risk Pipeline Workflow','WORKFLOW', 'EVENT',  NULL,           'EVENT',   'Asia/Shanghai',
-   'EXPONENTIAL', 5, now(), now())
+   'EXPONENTIAL', 5, jsonb_build_object(), now(), now())
 ON CONFLICT DO NOTHING;
+
+UPDATE batch.job_definition
+SET default_params = coalesce(default_params, '{}'::jsonb) || v.params::jsonb,
+    schedule_type = 'MANUAL',
+    schedule_expr = NULL,
+    trigger_mode = 'MANUAL',
+    updated_at = now()
+FROM (VALUES
+    ('ta', 'TA_IMPORT_CUSTOMER', '{"templateCode":"IMP-CUSTOMER-CSV"}'),
+    ('ta', 'TA_EXPORT_REPORT', '{"templateCode":"EXP-ORDER-EXCEL"}'),
+    ('tb', 'TB_IMPORT_TRANSACTION', '{"templateCode":"IMP-TRANSACTION-CSV"}'),
+    ('tb', 'TB_EXPORT_STATEMENT', '{"templateCode":"EXP-STATEMENT-EXCEL"}'),
+    ('tc', 'TC_IMPORT_RISK_SCORE', '{"templateCode":"IMP-RISK-SCORE-JSON"}'),
+    ('tc', 'TC_EXPORT_RISK_ALERT', '{"templateCode":"EXP-RISK-ALERT-JSON"}')
+) AS v(tenant_id, job_code, params)
+WHERE batch.job_definition.tenant_id = v.tenant_id
+  AND batch.job_definition.job_code = v.job_code;
+
+UPDATE batch.job_definition
+SET schedule_type = 'MANUAL',
+    schedule_expr = NULL,
+    trigger_mode = 'MANUAL',
+    updated_at = now()
+WHERE (tenant_id, job_code) IN (
+    ('ta', 'TA_DISPATCH_ORDER'),
+    ('ta', 'TA_WF_SETTLEMENT'),
+    ('tb', 'TB_WF_RECONCILE')
+);
 
 -- ── quota policies ─────────────────────────────────────────────────────────────
 
@@ -401,6 +429,7 @@ SET default_query_sql = 'SELECT id, alert_id, entity_id, alert_type, severity, a
         "columns": ["alert_id", "entity_id", "alert_type", "severity", "alert_date", "description"]
       }
     }'::jsonb,
+    export_data_ref = 'sql_template_export',
     updated_at = now()
 WHERE tenant_id = 'tc' AND template_code = 'EXP-RISK-ALERT-JSON';
 
