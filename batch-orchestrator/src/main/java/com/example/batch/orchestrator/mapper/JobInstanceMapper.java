@@ -68,6 +68,8 @@ public interface JobInstanceMapper {
   /** 统计所有租户的运行中任务总量（WAITING/READY/RUNNING）。 */
   long countActiveAll();
 
+  long countTerminalInstancesWithActiveChildren();
+
   BatchDayInstanceMetrics selectBatchDayMetrics(
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,

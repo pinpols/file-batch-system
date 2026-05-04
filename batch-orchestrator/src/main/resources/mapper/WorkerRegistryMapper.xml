@@ -127,6 +127,43 @@
            and drain_deadline_at &lt; current_timestamp
     </select>
 
+    <select id="countStaleOnline" resultType="long">
+        select count(1)
+          from batch.worker_registry
+         where status = 'ONLINE'
+           and (
+             heartbeat_at is null
+             or heartbeat_at &lt; current_timestamp - (#{timeoutSeconds} * interval '1 second')
+           )
+    </select>
+
+    <select id="countDecommissionedWithActiveTasks" resultType="long">
+        select count(distinct wr.id)
+          from batch.worker_registry wr
+          join batch.job_task jt
+            on jt.tenant_id = wr.tenant_id
+           and jt.assigned_worker_code = wr.worker_code
+         where wr.status = 'DECOMMISSIONED'
+           and jt.task_status in ('CREATED', 'READY', 'RUNNING')
+    </select>
+
+    <select id="countInvalidCapabilityTags" resultType="long">
+        select count(1)
+          from batch.worker_registry
+         where status in ('ONLINE', 'DRAINING')
+           and capability_tags is not null
+           and (
+             case
+               when jsonb_typeof(capability_tags) = 'array' then exists (
+                 select 1
+                   from jsonb_array_elements(capability_tags) elem
+                  where jsonb_typeof(elem) &lt;&gt; 'string'
+               )
+               else true
+             end
+           )
+    </select>
+
     <insert id="insert"
             parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         insert into batch.worker_registry (

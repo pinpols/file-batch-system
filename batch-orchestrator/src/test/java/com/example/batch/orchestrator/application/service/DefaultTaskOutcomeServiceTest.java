@@ -11,6 +11,8 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.application.service.task.DefaultTaskOutcomeService;
+import com.example.batch.orchestrator.application.service.task.DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators;
+import com.example.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -54,6 +56,8 @@ class DefaultTaskOutcomeServiceTest {
   @Mock
   ObjectProvider workflowNodeDispatchServiceProvider;
 
+  @Mock JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler;
+
   private DefaultTaskOutcomeService service;
 
   @BeforeEach
@@ -69,16 +73,16 @@ class DefaultTaskOutcomeServiceTest {
     OrchestratorWorkflowMappers workflowMappers =
         new OrchestratorWorkflowMappers(
             workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    service =
-        new DefaultTaskOutcomeService(
-            jobMappers,
-            workflowMappers,
+    DefaultTaskOutcomeCollaborators collaborators =
+        new DefaultTaskOutcomeCollaborators(
             retryGovernanceService,
             stateMachine,
             workflowDagService,
             workflowNodeDispatchServiceProvider,
             workflowTerminalOutboxService,
-            new SimpleMeterRegistry());
+            new SimpleMeterRegistry(),
+            jobInstanceTerminalChildStateReconciler);
+    service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 
   @Test

@@ -73,4 +73,13 @@ public interface JobTaskMapper {
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("taskPayload") String taskPayload);
+
+  /**
+   * 与 {@link JobPartitionMapper#closeNonTerminalPartitionsForTerminalInstance} 配对：实例终态下仍为非终态的 task
+   * 批量收口。
+   */
+  int closeNonTerminalTasksForTerminalInstance(
+      @Param("tenantId") String tenantId,
+      @Param("jobInstanceId") Long jobInstanceId,
+      @Param("targetTaskStatus") String targetTaskStatus);
 }

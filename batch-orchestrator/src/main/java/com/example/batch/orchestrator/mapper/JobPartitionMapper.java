@@ -102,4 +102,13 @@ public interface JobPartitionMapper {
    */
   long countLeaseExpired(
       @Param("readyStatus") String readyStatus, @Param("runningStatus") String runningStatus);
+
+  /**
+   * 当 {@code job_instance} 已进入终态但子分区仍为非终态（历史并发/缺陷残留）时，批量收口分区状态并清空 lease， 避免 {@code
+   * DefaultPartitionThrottle} 把 READY/RUNNING/RETRYING 计入活跃配额导致泄漏。
+   */
+  int closeNonTerminalPartitionsForTerminalInstance(
+      @Param("tenantId") String tenantId,
+      @Param("jobInstanceId") Long jobInstanceId,
+      @Param("targetPartitionStatus") String targetPartitionStatus);
 }

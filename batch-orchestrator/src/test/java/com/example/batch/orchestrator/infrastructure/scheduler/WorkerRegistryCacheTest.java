@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -21,26 +21,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.QueryTimeoutException;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 class WorkerRegistryCacheTest {
 
   private OrchestratorRedisSupport redis;
-  private StringRedisTemplate template;
-  private ValueOperations<String, String> valueOps;
   private WorkerRegistryCache cache;
   private WorkerSelectorCacheProperties props;
 
   @BeforeEach
   void setUp() {
     redis = mock(OrchestratorRedisSupport.class);
-    template = mock(StringRedisTemplate.class);
-    @SuppressWarnings("unchecked")
-    ValueOperations<String, String> mocked = mock(ValueOperations.class);
-    valueOps = mocked;
-    lenient().when(redis.redisTemplate()).thenReturn(template);
-    lenient().when(template.opsForValue()).thenReturn(valueOps);
     props = new WorkerSelectorCacheProperties();
     cache = new WorkerRegistryCache(redis, new ObjectMapper(), props);
   }
@@ -59,13 +49,13 @@ class WorkerRegistryCacheTest {
             });
     assertThat(result).isEmpty();
     assertThat(calls.get()).isEqualTo(1);
-    verify(redis, never()).redisTemplate();
+    verify(redis, never()).getStringCache(anyString());
   }
 
   @Test
   void cacheMissShouldLoadAndStore() {
     props.setEnabled(true);
-    when(valueOps.get(anyString())).thenReturn(null);
+    when(redis.getStringCache(anyString())).thenReturn(null);
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(1L, "w-1"));
 
@@ -84,7 +74,8 @@ class WorkerRegistryCacheTest {
         .first()
         .extracting(WorkerRegistryEntity::workerCode)
         .isEqualTo("w-1");
-    verify(valueOps).set(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
+    verify(redis)
+        .setStringCache(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
   }
 
   @Test
@@ -107,7 +98,7 @@ class WorkerRegistryCacheTest {
                         10,
                         null,
                         null)));
-    when(valueOps.get(anyString())).thenReturn(json);
+    when(redis.getStringCache(anyString())).thenReturn(json);
     AtomicInteger calls = new AtomicInteger();
 
     List<WorkerRegistryEntity> result =
@@ -128,7 +119,7 @@ class WorkerRegistryCacheTest {
   @Test
   void redisFailureOnReadShouldFallThroughToLoader() {
     props.setEnabled(true);
-    when(valueOps.get(anyString())).thenThrow(new QueryTimeoutException("redis down"));
+    when(redis.getStringCache(anyString())).thenThrow(new QueryTimeoutException("redis down"));
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(2L, "w-2"));
 
@@ -148,10 +139,10 @@ class WorkerRegistryCacheTest {
   @Test
   void redisFailureOnWriteShouldStillReturnFreshResults() {
     props.setEnabled(true);
-    when(valueOps.get(anyString())).thenReturn(null);
-    org.mockito.Mockito.doThrow(new QueryTimeoutException("redis down"))
-        .when(valueOps)
-        .set(anyString(), anyString(), any(Duration.class));
+    when(redis.getStringCache(anyString())).thenReturn(null);
+    doThrow(new QueryTimeoutException("redis down"))
+        .when(redis)
+        .setStringCache(anyString(), anyString(), any(Duration.class));
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(3L, "w-3"));
 
@@ -166,13 +157,13 @@ class WorkerRegistryCacheTest {
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
-    verify(valueOps, times(1)).set(anyString(), anyString(), any(Duration.class));
+    verify(redis, times(1)).setStringCache(anyString(), anyString(), any(Duration.class));
   }
 
   @Test
   void corruptCacheJsonShouldFallThroughToLoader() {
     props.setEnabled(true);
-    when(valueOps.get(anyString())).thenReturn("not-a-json");
+    when(redis.getStringCache(anyString())).thenReturn("not-a-json");
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(4L, "w-4"));
 
@@ -192,8 +183,7 @@ class WorkerRegistryCacheTest {
   @Test
   void cacheMissWithEmptyLoaderShouldDeleteKeyWithoutSet() {
     props.setEnabled(true);
-    when(valueOps.get(anyString())).thenReturn(null);
-    when(template.delete(anyString())).thenReturn(Boolean.TRUE);
+    when(redis.getStringCache(anyString())).thenReturn(null);
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> result =
         cache.getOrLoad(
@@ -205,14 +195,14 @@ class WorkerRegistryCacheTest {
             });
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).isEmpty();
-    verify(valueOps, never()).set(anyString(), anyString(), any(Duration.class));
-    verify(template).delete(anyString());
+    verify(redis, never()).setStringCache(anyString(), anyString(), any(Duration.class));
+    verify(redis).evictCache(anyString());
   }
 
   @Test
   void cachedEmptyJsonArrayShouldIgnoreAndReload() throws Exception {
     props.setEnabled(true);
-    when(valueOps.get(anyString())).thenReturn("[]");
+    when(redis.getStringCache(anyString())).thenReturn("[]");
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> records = List.of(record(5L, "w-5"));
     List<WorkerRegistryEntity> result =
@@ -225,7 +215,8 @@ class WorkerRegistryCacheTest {
             });
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
-    verify(valueOps).set(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
+    verify(redis)
+        .setStringCache(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
   }
 
   private static WorkerRegistryEntity record(Long id, String code) {

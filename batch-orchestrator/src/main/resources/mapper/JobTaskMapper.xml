@@ -203,4 +203,15 @@
         where tenant_id = #{tenantId}
           and id = #{id}
     </update>
+
+    <update id="closeNonTerminalTasksForTerminalInstance">
+        update batch.job_task
+        set task_status = #{targetTaskStatus},
+            finished_at = current_timestamp,
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+          and task_status in ('CREATED', 'READY', 'RUNNING')
+    </update>
 </mapper>

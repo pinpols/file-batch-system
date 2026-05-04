@@ -296,6 +296,28 @@
         where instance_status in ('READY', 'RUNNING')
     </select>
 
+    <select id="countTerminalInstancesWithActiveChildren" resultType="long">
+        select count(distinct ji.id)
+          from batch.job_instance ji
+         where ji.instance_status in ('SUCCESS', 'FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED')
+           and (
+             exists (
+               select 1
+                 from batch.job_partition p
+                where p.tenant_id = ji.tenant_id
+                  and p.job_instance_id = ji.id
+                  and p.partition_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'RETRYING')
+             )
+             or exists (
+               select 1
+                 from batch.job_task t
+                where t.tenant_id = ji.tenant_id
+                  and t.job_instance_id = ji.id
+                  and t.task_status in ('CREATED', 'READY', 'RUNNING')
+             )
+           )
+    </select>
+
     <select id="selectBatchDayMetrics" resultType="com.example.batch.orchestrator.domain.entity.BatchDayInstanceMetrics">
         select
             count(1) as total_count,
