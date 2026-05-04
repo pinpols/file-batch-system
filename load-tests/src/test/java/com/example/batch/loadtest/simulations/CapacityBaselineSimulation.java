@@ -5,6 +5,7 @@ import io.gatling.javaapi.core.ChainBuilder;
 import io.gatling.javaapi.core.ScenarioBuilder;
 import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
@@ -46,8 +47,9 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  */
 public class CapacityBaselineSimulation extends Simulation {
 
-    private static final String AUTH_TOKEN =
-            System.getProperty("console.authToken", "Bearer load-test-token");
+    private static final String AUTH_TOKEN = System.getProperty("console.accessToken") != null
+            ? "Bearer " + System.getProperty("console.accessToken")
+            : System.getProperty("console.authToken", "Bearer load-test-token");
 
     // ── Protocols ──────────────────────────────────────────────────────────────
 
@@ -90,6 +92,7 @@ public class CapacityBaselineSimulation extends Simulation {
             .exec(
                     http("POST /api/triggers/launch")
                             .post("/api/triggers/launch")
+                            .header("X-Internal-Secret", GatlingConfig.INTERNAL_SECRET)
                             .header("Idempotency-Key", "#{idempotencyKey}")
                             .header("X-Request-Id", "#{requestId}")
                             .body(StringBody(launchBody))
@@ -104,15 +107,16 @@ public class CapacityBaselineSimulation extends Simulation {
 
     private final ChainBuilder readPath = exec(
             http("GET /api/console/query/instances")
-                    .get("/api/console/query/instances")
+                    .get("/api/console/queries/instances")
                     .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                    .queryParam("limit", "20")
+                    .queryParam("pageNo", "1")
+                    .queryParam("pageSize", "20")
                     .check(status().is(200))
     )
             .pause(1)
             .exec(
                     http("GET /api/console/query/workers")
-                            .get("/api/console/query/workers")
+                            .get("/api/console/queries/workers")
                             .queryParam("tenantId", GatlingConfig.TENANT_ID)
                             .check(status().is(200))
             )
@@ -157,6 +161,7 @@ public class CapacityBaselineSimulation extends Simulation {
                         ).protocols(consoleHttpProtocol)
                 )
         )
+                .maxDuration(Duration.ofSeconds(STEP_DURATION * 5L + 30L))
                 .assertions(
                         // Write SLO
                         details("POST /api/triggers/launch")

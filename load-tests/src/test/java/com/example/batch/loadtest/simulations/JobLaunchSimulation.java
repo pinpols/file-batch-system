@@ -71,6 +71,7 @@ public class JobLaunchSimulation extends Simulation {
             .exec(
                     http("POST /api/triggers/launch")
                             .post("/api/triggers/launch")
+                            .header("X-Internal-Secret", GatlingConfig.INTERNAL_SECRET)
                             .header("Idempotency-Key", "#{idempotencyKey}")
                             .header("X-Request-Id", "#{requestId}")
                             .header("X-Trace-Id", "#{traceId}")
