@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
@@ -104,6 +105,8 @@ public class DelimitedFormatParser implements FormatParser {
                   .build();
           support.writeParsedRecord(writeParam);
         } catch (Exception exception) {
+          SwallowedExceptionLogger.warn(DelimitedFormatParser.class, "catch:Exception", exception);
+
           support.recordParseError(
               context, recordNo, "IMPORT_PARSE_LINE_INVALID", exception.getMessage(), row);
         }

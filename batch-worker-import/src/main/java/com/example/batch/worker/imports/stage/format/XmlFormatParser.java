@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
@@ -77,6 +78,8 @@ public class XmlFormatParser implements FormatParser {
                 .build();
         support.writeParsedRecord(writeParam);
       } catch (Exception exception) {
+        SwallowedExceptionLogger.warn(XmlFormatParser.class, "catch:Exception", exception);
+
         support.recordParseError(
             context, recordNo, "IMPORT_PARSE_XML_INVALID", exception.getMessage(), element);
       }

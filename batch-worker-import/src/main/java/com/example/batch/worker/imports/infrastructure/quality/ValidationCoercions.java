@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.infrastructure.quality;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -58,6 +59,9 @@ final class ValidationCoercions {
     try {
       return Integer.valueOf(text);
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          ValidationCoercions.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }
@@ -79,6 +83,9 @@ final class ValidationCoercions {
     try {
       return new BigDecimal(text);
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          ValidationCoercions.class, "catch:NumberFormatException", ignored);
+
       return null;
     }
   }

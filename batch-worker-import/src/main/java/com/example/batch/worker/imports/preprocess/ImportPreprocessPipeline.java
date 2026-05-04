@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.preprocess;
 
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportPayload;
@@ -465,6 +466,9 @@ public final class ImportPreprocessPipeline {
       long parsed = Long.parseLong(raw.trim());
       return parsed > 0 ? parsed : fallback;
     } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(
+          ImportPreprocessPipeline.class, "catch:NumberFormatException", ignored);
+
       return fallback;
     }
   }
