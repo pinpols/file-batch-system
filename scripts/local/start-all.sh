@@ -48,7 +48,7 @@ export LC_ALL="$BATCH_LOCALE"
 # 用户可在外部 export LOCAL_FAST_JVM_OPTS="" 禁用；JAVA_OPTS 追加在后面，同 flag 以后者为准。
 LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC}"
 
-# AppCDS：dump 与 run 的 JVM 开关必须一致；指纹 bump 后强制重训，避免旧 .jsa 与 --enable-native-access 不匹配
+# AppCDS：dump 与 run 的 JVM 开关必须一致；指纹变化后强制重训。
 CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v2-native-access}"
 
 LOG_ROOT="$ROOT/logs"
@@ -92,9 +92,17 @@ module_jar() {
 
 # AppCDS：首次 training run 生成 .jsa；后续启动 mmap 复用
 # 训练期禁用外部依赖（Flyway/Quartz/Kafka listener）减少失败面
-# SKIP_CDS=1 可关；jar 内容 hash 变化时自动重训（mvn package 总会 bump mtime
-# 但 jar 字节内容通常不变，用 SHA-256 判等能跨"无改动重打包"复用 .jsa）
+# SKIP_CDS=1 可关；jar 内容 hash / 路径 / mtime / size 或 JVM 指纹变化时自动重训。
 __CDS_FLAG=""
+cds_metadata() {
+  local jar="$1"
+  local jar_hash jar_stat
+  jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
+  jar_stat="$(stat -f '%N:%z:%m' "$jar" 2>/dev/null || stat -c '%n:%s:%Y' "$jar" 2>/dev/null || true)"
+  printf 'jar_sha256=%s\njar_stat=%s\ncds_stamp=%s\nlocal_fast_jvm_opts=%s\njava_opts=%s\n' \
+    "$jar_hash" "$jar_stat" "$CDS_ARCHIVE_STAMP" "$LOCAL_FAST_JVM_OPTS" "${JAVA_OPTS:-}"
+}
+
 warm_cds() {
   __CDS_FLAG=""
   local name="$1" jar="$2"
@@ -105,13 +113,10 @@ warm_cds() {
     return 0
   fi
 
-  local jar_hash
-  jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
-
   local expected_meta
-  expected_meta="$(printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP")"
-  # archive 存在且 jar 指纹 + CDS 训练 JVM 指纹一致 —— 直接用
-  if [[ -f "$archive" && -f "$hash_file" && -n "$jar_hash" \
+  expected_meta="$(cds_metadata "$jar")"
+  # archive 存在且 jar 指纹 + jar 元数据 + CDS 训练 JVM 指纹一致 —— 直接用
+  if [[ -f "$archive" && -f "$hash_file" && -n "$expected_meta" \
         && "$(cat "$hash_file" 2>/dev/null)" == "$expected_meta" ]]; then
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
     return 0
@@ -122,6 +127,7 @@ warm_cds() {
   rm -f "$archive" "$hash_file"
   java --enable-native-access=ALL-UNNAMED \
     ${LOCAL_FAST_JVM_OPTS} \
+    ${JAVA_OPTS:-} \
     -Dspring.context.exit=onRefresh \
     -Dspring.main.banner-mode=off \
     -Dspring.flyway.enabled=false \
@@ -144,7 +150,7 @@ warm_cds() {
   wait "$pid" 2>/dev/null || true
 
   if [[ -f "$archive" ]]; then
-    printf '%s\n%s\n' "$jar_hash" "$CDS_ARCHIVE_STAMP" >"$hash_file"
+    cds_metadata "$jar" >"$hash_file"
     echo "  ✓ ${name} CDS 缓存就绪 ($(du -h "$archive" 2>/dev/null | cut -f1))"
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
   else
