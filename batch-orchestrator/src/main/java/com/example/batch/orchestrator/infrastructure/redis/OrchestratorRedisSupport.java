@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
@@ -37,29 +38,15 @@ public class OrchestratorRedisSupport {
   }
 
   public <T> T getJson(String key, Class<T> type) {
-    String value;
-    try {
-      value = redisTemplate.opsForValue().get(key);
-    } catch (RedisConnectionFailureException | RedisSystemException ex) {
-      log.warn(
-          "Redis unavailable for orchestrator cache read (fail-open to DB): key={}, cause={}",
-          key,
-          ex.getMessage());
-      log.debug("Redis orchestrator cache read failure", ex);
-      return null;
-    }
-    if (value == null || value.isBlank()) {
+    String raw =
+        callRedisOrNull(key, "read (fail-open to DB)", () -> redisTemplate.opsForValue().get(key));
+    if (raw == null || raw.isBlank()) {
       return null;
     }
     try {
-      return objectMapper.readValue(value, type);
+      return objectMapper.readValue(raw, type);
     } catch (JsonProcessingException exception) {
-      try {
-        redisTemplate.delete(key);
-      } catch (RedisConnectionFailureException | RedisSystemException redisEx) {
-        log.debug(
-            "Redis unavailable while deleting corrupt cache key {}: {}", key, redisEx.getMessage());
-      }
+      deleteIgnoringRedisFailure(key, "Redis unavailable while deleting corrupt cache key {}: {}");
       throw new IllegalStateException("Failed to deserialize redis cache: " + key, exception);
     }
   }
@@ -71,25 +58,47 @@ public class OrchestratorRedisSupport {
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Failed to serialize redis cache: " + key, exception);
     }
-    try {
-      redisTemplate.opsForValue().set(key, json, ttl);
-    } catch (RedisConnectionFailureException | RedisSystemException ex) {
-      log.warn(
-          "Redis unavailable for orchestrator cache write (skipped): key={}, cause={}",
-          key,
-          ex.getMessage());
-      log.debug("Redis orchestrator cache write failure", ex);
-    }
+    callRedisOrVoid(key, "write (skipped)", () -> redisTemplate.opsForValue().set(key, json, ttl));
   }
 
   public void delete(String key) {
+    deleteIgnoringRedisFailure(
+        key, "Redis unavailable for orchestrator cache delete (skipped): key={}, cause={}");
+  }
+
+  /** Redis 连接类异常时记录日志并返回 null；正常返回 supplier 结果（可为 null，表示 miss）。 */
+  private <T> T callRedisOrNull(String key, String phase, Supplier<T> supplier) {
+    try {
+      return supplier.get();
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      logRedisFailure(key, phase, ex);
+      return null;
+    }
+  }
+
+  /** Redis 连接类异常时记录日志并吞掉；成功执行 runnable。 */
+  private void callRedisOrVoid(String key, String phase, Runnable action) {
+    try {
+      action.run();
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      logRedisFailure(key, phase, ex);
+    }
+  }
+
+  private void logRedisFailure(String key, String phase, Exception ex) {
+    log.warn(
+        "Redis unavailable for orchestrator cache {}: key={}, cause={}",
+        phase,
+        key,
+        ex.getMessage());
+    log.debug("Redis orchestrator cache failure [{}]: key={}", phase, key, ex);
+  }
+
+  private void deleteIgnoringRedisFailure(String key, String debugFormat) {
     try {
       redisTemplate.delete(key);
     } catch (RedisConnectionFailureException | RedisSystemException ex) {
-      log.debug(
-          "Redis unavailable for orchestrator cache delete (skipped): key={}, cause={}",
-          key,
-          ex.getMessage());
+      log.debug(debugFormat, key, ex.getMessage());
     }
   }
 
