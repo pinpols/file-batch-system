@@ -11,6 +11,7 @@
 |---|---|---|---|
 | 01 | [data-model-ddl.md](./data-model-ddl.md) | 全表 DDL（job_instance / outbox / workflow_* 等核心表）| 改 schema / 排查数据 |
 | 02 | [batch-day-design.md](./batch-day-design.md) | 批次日（business_calendar / batch_day_instance）设计 | 配批次窗口 |
+| 02a | [batch-day-timezone-dst-optimized-design.md](./batch-day-timezone-dst-optimized-design.md) | 批量日、时区、冬夏令时切换的优化收口设计 | 改批量日、cron 时区、DST、前日门闩 |
 | 03 | [file-pipeline-design.md](./file-pipeline-design.md) | 文件处理链路（preprocess / receive / dispatch / publish）| 写新 file step |
 | 04 | [redis-usage-design.md](./redis-usage-design.md) | Redis 使用清单（quota / rate-limit / cache / pub-sub / SSE replay）| 改任何 Redis 相关代码 |
 | 05 | [logging-architecture.md](./logging-architecture.md) | 日志架构（MDC / 结构化 / Loki 分发） | 加日志埋点前 |
