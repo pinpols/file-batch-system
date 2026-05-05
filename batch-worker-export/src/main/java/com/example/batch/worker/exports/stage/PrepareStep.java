@@ -12,7 +12,6 @@ import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.domain.ExportWorkerType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -68,12 +67,21 @@ public class PrepareStep implements ExportStageStep {
           context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
         }
       }
+      String bizDate = resolveBizDate(context, payload);
+      if (!Texts.hasText(bizDate)) {
+        return ExportStageResult.failure(
+            stage(),
+            "EXPORT_PREPARE_BIZ_DATE_MISSING",
+            "error.export.prepare.biz_date_missing",
+            new Object[0],
+            "bizDate is required from orchestrator context or export payload",
+            objectMapper);
+      }
       String fileFormatType = resolveText(templateConfig.get("file_format_type"), "JSON");
       String fileName = resolveFileName(context, payload, templateConfig, fileFormatType);
       String finalObjectName = resolveObjectName(context, payload, fileName);
       String tempObjectName =
-          BatchFileConstants.tempObjectName(
-              context.getTenantId(), resolveBizDate(context, payload), fileName);
+          BatchFileConstants.tempObjectName(context.getTenantId(), bizDate, fileName);
       Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
       context.getAttributes().put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
       context.getAttributes().put("fileName", fileName);
@@ -144,7 +152,7 @@ public class PrepareStep implements ExportStageStep {
     if (Texts.hasText(context.getBizDate())) {
       return context.getBizDate();
     }
-    return LocalDate.now().toString();
+    return null;
   }
 
   private String resolveText(Object value, String fallback) {

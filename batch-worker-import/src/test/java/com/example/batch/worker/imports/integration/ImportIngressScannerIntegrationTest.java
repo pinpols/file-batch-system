@@ -34,7 +34,8 @@ import org.springframework.test.context.TestPropertySource;
       "batch.worker.import.scanner.enabled=true",
       "batch.worker.import.scanner.stability-window-seconds=0",
       "batch.worker.import.scanner.prefix=ingress/",
-      "batch.worker.import.scanner.require-done-file=false"
+      "batch.worker.import.scanner.require-done-file=false",
+      "batch.worker.import.scanner.default-biz-date=2026-05-05"
     })
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 

@@ -116,4 +116,24 @@ class PrepareStepTest {
     assertThat(String.valueOf(ctx.getAttributes().get("fileName"))).isEqualTo("fixed.json");
     assertThat(String.valueOf(ctx.getAttributes().get("objectName"))).isEqualTo("obj.json");
   }
+
+  @Test
+  void execute_failsWhenBizDateMissingFromPayloadAndContext() throws Exception {
+    ObjectMapper objectMapper = new ObjectMapper();
+    PlatformFileRuntimeRepository runtimeRepository = mock(PlatformFileRuntimeRepository.class);
+    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
+
+    ExportPayload payload =
+        new ExportPayload(
+            "FC1", "BIZ", null, "B001", null, null, null, null, Boolean.FALSE, null, Map.of());
+    ExportJobContext ctx = new ExportJobContext();
+    ctx.setTenantId("t1");
+    ctx.setJobCode("JOB_001");
+    ctx.setRawPayload(objectMapper.writeValueAsString(payload));
+
+    var result = step.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_PREPARE_BIZ_DATE_MISSING");
+  }
 }

@@ -15,6 +15,7 @@ public class ImportScannerProperties {
   private long stabilityWindowSeconds = 30L;
   private String sourceType = "SYSTEM";
   private String defaultBizType = "IMPORT_SCAN";
+  private String defaultBizDate = "";
   private final Arrival arrival = new Arrival();
 
   @Data
