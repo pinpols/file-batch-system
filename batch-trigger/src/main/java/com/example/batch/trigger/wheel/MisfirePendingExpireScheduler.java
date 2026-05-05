@@ -1,7 +1,7 @@
 package com.example.batch.trigger.wheel;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -23,7 +23,7 @@ public class MisfirePendingExpireScheduler {
   @SchedulerLock(name = "misfire_pending_expire", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
   public void expirePending() {
     try {
-      int expired = mapper.markExpired(Instant.now());
+      int expired = mapper.markExpired(BatchDateTimeSupport.utcNow());
       if (expired > 0) {
         log.info("misfire pending expired: count={}", expired);
       }

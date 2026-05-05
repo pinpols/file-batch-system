@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.support.WorkerSelfRegistrationService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
@@ -74,9 +75,9 @@ class GracefulKafkaShutdownTest {
   void shouldRecordTimeoutOutcomeWhenLeasesRemainAfterTimeout() {
     leaseRegistry.register("task-1", "t1", "w1"); // 不会被 remove → 必触发 timeout
 
-    long start = System.currentTimeMillis();
+    long start = BatchDateTimeSupport.utcEpochMillis();
     shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
-    long elapsed = System.currentTimeMillis() - start;
+    long elapsed = BatchDateTimeSupport.utcEpochMillis() - start;
 
     // 至少等待了 timeout（1s），实际 1~3s 可接受
     assertThat(elapsed).isGreaterThanOrEqualTo(900);

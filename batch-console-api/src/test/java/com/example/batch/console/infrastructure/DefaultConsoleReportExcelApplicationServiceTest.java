@@ -5,13 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.config.ConsoleConfigApplicationService;
 import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.report.DefaultConsoleReportExcelApplicationService;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
 import com.example.batch.console.web.response.config.ConsoleConfigReleaseResponse;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.List;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -34,7 +37,7 @@ class DefaultConsoleReportExcelApplicationServiceTest {
     Environment environment = mock(Environment.class);
     DefaultConsoleReportExcelApplicationService service =
         new DefaultConsoleReportExcelApplicationService(
-            configService, queryService, properties, builder, environment);
+            configService, queryService, properties, builder, environment, dateTimeSupport());
     when(configService.configReleases(any()))
         .thenReturn(
             List.of(
@@ -48,14 +51,14 @@ class DefaultConsoleReportExcelApplicationServiceTest {
                     1,
                     "{}",
                     "{}",
-                    Instant.now(),
-                    Instant.now(),
+                    BatchDateTimeSupport.utcNow(),
+                    BatchDateTimeSupport.utcNow(),
                     null,
                     null,
                     "u1",
                     "u1",
-                    Instant.now(),
-                    Instant.now())));
+                    BatchDateTimeSupport.utcNow(),
+                    BatchDateTimeSupport.utcNow())));
 
     ResponseEntity<InputStreamResource> response =
         service.exportConfigReleases(new ConfigReleaseQueryRequest());
@@ -66,5 +69,10 @@ class DefaultConsoleReportExcelApplicationServiceTest {
       Row header = workbook.getSheetAt(0).getRow(0);
       assertThat(header.getCell(1).getStringCellValue()).isEqualTo("tenantId");
     }
+  }
+
+  private static BatchDateTimeSupport dateTimeSupport() {
+    return new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 }

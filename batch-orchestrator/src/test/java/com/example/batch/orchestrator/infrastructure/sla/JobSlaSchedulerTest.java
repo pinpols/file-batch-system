@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.AlertEventService;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -93,7 +94,8 @@ class JobSlaSchedulerTest {
 
   @Test
   void shouldSkipCandidateWhenMarkSlaAlertedReturnZero() {
-    JobInstanceEntity candidate = slaCandidate("t1", 1L, Instant.now().minusSeconds(60));
+    JobInstanceEntity candidate =
+        slaCandidate("t1", 1L, BatchDateTimeSupport.utcNow().minusSeconds(60));
     when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
     when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
     when(jobInstanceMapper.markSlaAlerted(anyString(), anyLong(), any())).thenReturn(0);
@@ -106,7 +108,8 @@ class JobSlaSchedulerTest {
 
   @Test
   void shouldLogAndEmitAlertWhenDeadlineExceeded() {
-    JobInstanceEntity candidate = slaCandidate("t1", 2L, Instant.now().minusSeconds(3600));
+    JobInstanceEntity candidate =
+        slaCandidate("t1", 2L, BatchDateTimeSupport.utcNow().minusSeconds(3600));
     when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
     when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
     when(jobInstanceMapper.markSlaAlerted(eq("t1"), eq(2L), any())).thenReturn(1);
@@ -129,7 +132,8 @@ class JobSlaSchedulerTest {
     candidate.setTraceId("trace-003");
     // 无截止时间，但 expectedDurationSeconds 已超出
     candidate.setExpectedDurationSeconds(60);
-    candidate.setStartedAt(Instant.now().minusSeconds(3600)); // started 1h ago, expected 60s
+    candidate.setStartedAt(
+        BatchDateTimeSupport.utcNow().minusSeconds(3600)); // started 1h ago, expected 60s
 
     when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
     when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
@@ -144,8 +148,8 @@ class JobSlaSchedulerTest {
 
   @Test
   void shouldProcessMultipleCandidates() {
-    JobInstanceEntity c1 = slaCandidate("t1", 10L, Instant.now().minusSeconds(100));
-    JobInstanceEntity c2 = slaCandidate("t1", 11L, Instant.now().minusSeconds(200));
+    JobInstanceEntity c1 = slaCandidate("t1", 10L, BatchDateTimeSupport.utcNow().minusSeconds(100));
+    JobInstanceEntity c2 = slaCandidate("t1", 11L, BatchDateTimeSupport.utcNow().minusSeconds(200));
     when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(2L);
     when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(c1, c2));
     when(jobInstanceMapper.markSlaAlerted(anyString(), anyLong(), any())).thenReturn(1);

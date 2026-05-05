@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.AuditLogConstants;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -45,12 +46,13 @@ public class BatchDayOpenScheduler {
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchTimezoneProvider timezoneProvider;
   private final BatchDayTimePolicyResolver timePolicyResolver;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.open-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_open", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
   public void scheduledOpen() {
-    openDueBatchDays(Instant.now());
+    openDueBatchDays(dateTimeSupport.nowInstant());
   }
 
   public void openDueBatchDays(Instant now) {

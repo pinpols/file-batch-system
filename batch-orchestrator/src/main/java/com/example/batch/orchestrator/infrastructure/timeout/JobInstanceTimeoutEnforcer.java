@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.timeout;
 
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
@@ -65,7 +66,7 @@ public class JobInstanceTimeoutEnforcer {
       if (candidates.isEmpty()) {
         return;
       }
-      Instant now = Instant.now();
+      Instant now = BatchDateTimeSupport.utcNow();
       int failed = 0;
       for (JobInstanceEntity ji : candidates) {
         JobInstanceTerminalStatusCommand cmd =

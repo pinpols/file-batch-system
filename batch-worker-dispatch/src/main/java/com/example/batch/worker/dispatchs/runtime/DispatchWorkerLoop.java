@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.runtime;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
@@ -14,8 +15,10 @@ public class DispatchWorkerLoop extends AbstractWorkerLoop {
   private final DispatchWorkerConfiguration configuration;
 
   public DispatchWorkerLoop(
-      WorkerRuntimeFacade workerRuntimeFacade, DispatchWorkerConfiguration configuration) {
-    super(workerRuntimeFacade);
+      WorkerRuntimeFacade workerRuntimeFacade,
+      BatchDateTimeSupport dateTimeSupport,
+      DispatchWorkerConfiguration configuration) {
+    super(workerRuntimeFacade, dateTimeSupport);
     this.configuration = configuration;
   }
 

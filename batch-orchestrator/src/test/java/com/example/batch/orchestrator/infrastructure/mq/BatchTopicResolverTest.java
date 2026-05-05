@@ -3,9 +3,9 @@ package com.example.batch.orchestrator.infrastructure.mq;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.kafka.TaskDispatchMessage;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.config.MqRoutingProperties;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -83,6 +83,6 @@ class BatchTopicResolverTest {
         priorityBand,
         "trace-1",
         "idem-1",
-        Instant.now());
+        BatchDateTimeSupport.utcNow());
   }
 }

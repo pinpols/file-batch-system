@@ -9,9 +9,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -23,6 +26,7 @@ import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.service.LaunchService;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -63,7 +67,9 @@ class BatchDaySettleSchedulerTest {
             configCacheService,
             launchService,
             gracefulShutdown,
-            selfProvider);
+            selfProvider,
+            new BatchDateTimeSupport(
+                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
     // self-proxy 在单测里直接指向 scheduler 自身，绕开 Spring AOP；REQUIRES_NEW 事务语义在单测里不跑也没事
     when(selfProvider.getObject()).thenReturn(scheduler);
   }

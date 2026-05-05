@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import com.example.batch.orchestrator.application.scheduler.PartitionThrottle;
 import com.example.batch.orchestrator.application.scheduler.PriorityScheduler;
@@ -20,6 +21,7 @@ import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingReques
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import java.time.Clock;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -74,7 +76,8 @@ class BatchWindowGateTest {
             configCacheService,
             mock(JobInstanceMapper.class),
             mock(JobPartitionMapper.class),
-            timezoneProvider);
+            timezoneProvider,
+            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
   }
 
   /** in-window：当前时间在窗口内，schedule 不被门禁挡住（allow 路径，可能后续被并发 / worker 等其他门禁挡，但不是 batch_window 挡的）。 */

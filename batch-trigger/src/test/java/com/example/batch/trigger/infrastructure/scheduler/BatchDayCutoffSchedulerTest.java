@@ -10,9 +10,11 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.mapper.BatchDayInstanceMapper;
 import com.example.batch.trigger.support.BatchDayCutoffCandidate;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -35,7 +37,9 @@ class BatchDayCutoffSchedulerTest {
         new BatchDayCutoffScheduler(
             batchDayInstanceMapper,
             triggerGracefulShutdown,
-            new BatchTimezoneProvider(new BatchTimezoneProperties()));
+            new BatchTimezoneProvider(new BatchTimezoneProperties()),
+            new BatchDateTimeSupport(
+                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }
 
   @Test

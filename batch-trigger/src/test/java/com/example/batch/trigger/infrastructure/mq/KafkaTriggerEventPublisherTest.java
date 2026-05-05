@@ -7,10 +7,10 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.trigger.application.TriggerEventPublisher;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -114,7 +114,7 @@ class KafkaTriggerEventPublisherTest {
             requestId,
             "trace-" + requestId,
             Map.of());
-    return LaunchEnvelope.of(request, tenantId + ":" + requestId, Instant.now());
+    return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
   }
 
   private static SendResult<String, String> sendResult(int partition, long offset) {

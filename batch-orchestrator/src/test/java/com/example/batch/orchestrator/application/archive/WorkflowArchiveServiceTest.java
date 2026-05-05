@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.archive.WorkflowArchiveService.ArchiveBatchResult;
 import com.example.batch.orchestrator.config.WorkflowArchiveProperties;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -114,7 +115,7 @@ class WorkflowArchiveServiceTest {
     ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
     verify(mapper, times(1)).selectArchivableIds(cutoffCaptor.capture(), anyInt());
     Instant cutoff = cutoffCaptor.getValue();
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     // cutoff 应大约在 1 天前，允许 5s 误差
     assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5));
     assertThat(cutoff).isAfter(now.minusSeconds(86_400 + 5));

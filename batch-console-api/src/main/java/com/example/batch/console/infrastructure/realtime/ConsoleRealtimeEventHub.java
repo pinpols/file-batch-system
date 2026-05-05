@@ -1,11 +1,11 @@
 package com.example.batch.console.infrastructure.realtime;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.web.response.ops.ConsoleSseEventResponse;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,7 +88,7 @@ public class ConsoleRealtimeEventHub {
             "ready",
             cursor,
             eventSnapshot(subscription, "connected"),
-            Instant.now()));
+            BatchDateTimeSupport.utcNow()));
     replay(subscription);
     return emitter;
   }
@@ -124,7 +124,7 @@ public class ConsoleRealtimeEventHub {
               event.eventType(),
               event.cursor(),
               event.data(),
-              event.emittedAt() != null ? event.emittedAt() : Instant.now()));
+              event.emittedAt() != null ? event.emittedAt() : BatchDateTimeSupport.utcNow()));
     }
   }
 
@@ -160,7 +160,7 @@ public class ConsoleRealtimeEventHub {
             "heartbeat",
             subscription.cursor,
             eventSnapshot(subscription, "alive"),
-            Instant.now()));
+            BatchDateTimeSupport.utcNow()));
   }
 
   private void sendLifecycleEvent(
@@ -210,7 +210,7 @@ public class ConsoleRealtimeEventHub {
               "reset-required",
               subscription.cursor,
               eventSnapshot(subscription, "cursor-not-found"),
-              Instant.now()));
+              BatchDateTimeSupport.utcNow()));
       return;
     }
     for (ConsoleRealtimeStreamEnvelope envelope : replayBatch.events()) {
@@ -224,7 +224,7 @@ public class ConsoleRealtimeEventHub {
                 event.eventType(),
                 event.cursor(),
                 event.data(),
-                event.emittedAt() != null ? event.emittedAt() : Instant.now()));
+                event.emittedAt() != null ? event.emittedAt() : BatchDateTimeSupport.utcNow()));
       }
     }
     realtimeMetrics.recordReplayDelivered(subscription.stream, replayBatch.events().size());
@@ -301,7 +301,7 @@ public class ConsoleRealtimeEventHub {
         envelope.eventType(),
         envelope.cursor(),
         data,
-        envelope.emittedAt() != null ? envelope.emittedAt() : Instant.now());
+        envelope.emittedAt() != null ? envelope.emittedAt() : BatchDateTimeSupport.utcNow());
   }
 
   private static final class Subscription {

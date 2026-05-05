@@ -7,6 +7,7 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.console.application.job.ConsoleJobApprovalService;
@@ -21,7 +22,6 @@ import com.example.batch.console.web.request.ops.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpItemResponse;
 import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpResponse;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -128,7 +128,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         approvalRequest.setRequestId(itemRequestId);
         approvalRequest.setJobCode(jobCode);
         approvalRequest.setBizDate(bizDate);
-        approvalRequest.setScheduledAt(Instant.now().toString());
+        approvalRequest.setScheduledAt(BatchDateTimeSupport.utcNow().toString());
         approvalRequest.setReason(ConsoleTextSanitizer.safeInput(request.getReason(), 512));
         String approvalNo = approveCatchUp(approvalRequest, itemIdempotencyKey);
         items.add(

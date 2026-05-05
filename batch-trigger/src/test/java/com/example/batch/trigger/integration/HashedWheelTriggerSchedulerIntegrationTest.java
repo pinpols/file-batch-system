@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
@@ -97,7 +98,7 @@ class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest
   @Test
   void scanAndScheduleClaimsDueTrigger() {
     // 插入一条 next_fire_time = 现在 + 200ms 的 runtime state
-    Instant fireSoon = Instant.now().plusMillis(200);
+    Instant fireSoon = BatchDateTimeSupport.utcNow().plusMillis(200);
     insertState(fireSoon);
 
     // 主动触发滑动窗口扫库(无需等 60s)
@@ -110,7 +111,7 @@ class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void fireRunsLaunchServiceAndAdvancesNextFireTime() {
-    Instant fireSoon = Instant.now().plusMillis(300);
+    Instant fireSoon = BatchDateTimeSupport.utcNow().plusMillis(300);
     insertState(fireSoon);
 
     wheelScheduler.scanAndSchedule(Duration.ofSeconds(30));
@@ -153,7 +154,7 @@ class HashedWheelTriggerSchedulerIntegrationTest extends AbstractIntegrationTest
    */
   @Test
   void duplicateFireBlockedByLaunchServiceIdempotency() {
-    Instant fireSoon = Instant.now().plusMillis(300);
+    Instant fireSoon = BatchDateTimeSupport.utcNow().plusMillis(300);
     insertState(fireSoon);
 
     // 模拟"另一 leader 已经 fire 过":手工 INSERT 一条 trigger_request,dedupKey 用

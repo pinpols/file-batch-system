@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.infrastructure.lease;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -116,7 +117,8 @@ public class PartitionLeaseReclaimScheduler {
     }
     try {
       Instant olderThan =
-          Instant.now().minusSeconds(governance.partitionLease().getOrphanSweepGraceSeconds());
+          BatchDateTimeSupport.utcNow()
+              .minusSeconds(governance.partitionLease().getOrphanSweepGraceSeconds());
       int batchSize = governance.partitionLease().getOrphanSweepBatchSize();
       List<JobPartitionEntity> orphans =
           jobPartitionMapper.selectOrphanReadyPartitionsWithRunningTask(

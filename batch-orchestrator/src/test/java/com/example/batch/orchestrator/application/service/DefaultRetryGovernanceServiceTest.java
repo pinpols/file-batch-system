@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.RetryScheduleStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import com.example.batch.orchestrator.application.service.governance.DefaultRetryGovernanceService;
@@ -27,7 +28,6 @@ import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -161,7 +161,7 @@ class DefaultRetryGovernanceServiceTest {
     assertThat(schedule.getRetryStatus()).isEqualTo(RetryScheduleStatus.WAITING.code());
     assertThat(schedule.getRetryCount()).isEqualTo(1);
     assertThat(schedule.getLastErrorCode()).isEqualTo("PARSE_ERR");
-    assertThat(schedule.getNextRetryAt()).isAfter(Instant.now().minusSeconds(5));
+    assertThat(schedule.getNextRetryAt()).isAfter(BatchDateTimeSupport.utcNow().minusSeconds(5));
   }
 
   @Test

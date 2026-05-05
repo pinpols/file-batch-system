@@ -4,6 +4,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.service.WebhookDispatcher;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +23,7 @@ class ConsoleWebhookDomainEventListenerTest {
 
   @Test
   void shouldDispatchEvent() {
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     ConsoleRealtimeDomainEvent event =
         ConsoleRealtimeDomainEvent.builder().tenantId("tenant1").stream("job-instance")
             .eventType("JOB_COMPLETED")
@@ -51,7 +52,7 @@ class ConsoleWebhookDomainEventListenerTest {
             .eventType("JOB_COMPLETED")
             .cursor("cursor-1")
             .data("payload")
-            .emittedAt(Instant.now())
+            .emittedAt(BatchDateTimeSupport.utcNow())
             .build();
 
     listener.onDomainEvent(event);

@@ -11,11 +11,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -93,7 +93,7 @@ class WorkerRegistryCacheTest {
                         null,
                         "report",
                         "ONLINE",
-                        Instant.now().toEpochMilli(),
+                        BatchDateTimeSupport.utcNow().toEpochMilli(),
                         2,
                         10,
                         null,
@@ -221,6 +221,17 @@ class WorkerRegistryCacheTest {
 
   private static WorkerRegistryEntity record(Long id, String code) {
     return new WorkerRegistryEntity(
-        id, "t1", code, "EXPORT", null, "report", "ONLINE", Instant.now(), 0, 10, null, null);
+        id,
+        "t1",
+        code,
+        "EXPORT",
+        null,
+        "report",
+        "ONLINE",
+        BatchDateTimeSupport.utcNow(),
+        0,
+        10,
+        null,
+        null);
   }
 }

@@ -3,6 +3,7 @@ package com.example.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.persistence.entity.AlertEventEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.application.monitor.ConsoleAlertApplicationService;
 import com.example.batch.console.mapper.AlertEventMapper;
@@ -11,7 +12,6 @@ import com.example.batch.console.web.request.ops.AlertActionRequest;
 import com.example.batch.console.web.response.ops.ConsoleAlertActionResponse;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
-import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,7 +34,7 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldAckAlert() {
-    String tenantId = "t-alert-ack-" + System.currentTimeMillis();
+    String tenantId = "t-alert-ack-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stalled");
 
     ConsoleAlertActionResponse response =
@@ -48,7 +48,7 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldSilenceAlert() {
-    String tenantId = "t-alert-silence-" + System.currentTimeMillis();
+    String tenantId = "t-alert-silence-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA breach");
 
     ConsoleAlertActionResponse response =
@@ -62,7 +62,7 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldCloseAlert() {
-    String tenantId = "t-alert-close-" + System.currentTimeMillis();
+    String tenantId = "t-alert-close-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlertEvent(tenantId, "DISK_USAGE", "ERROR", "OPEN", "Disk issue");
 
     ConsoleAlertActionResponse response =
@@ -97,8 +97,8 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
         severity,
         title,
         tenantId + ":" + alertType + ":" + System.nanoTime(),
-        Timestamp.from(Instant.now()),
-        Timestamp.from(Instant.now()),
+        Timestamp.from(BatchDateTimeSupport.utcNow()),
+        Timestamp.from(BatchDateTimeSupport.utcNow()),
         status);
     Long id =
         jdbcTemplate.queryForObject(

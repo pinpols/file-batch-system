@@ -1,8 +1,8 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.infrastructure.WorkerStartupAuditContributor;
 import com.example.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ public class DispatchChannelStartupAuditContributor implements WorkerStartupAudi
     }
     long degraded = repository.countByHealthStatus("DEGRADED");
     long unhealthy = repository.countByHealthStatus("UNHEALTHY");
-    long overdue = repository.countProbeOverdue(Instant.now());
+    long overdue = repository.countProbeOverdue(BatchDateTimeSupport.utcNow());
     details.put("degradedChannels", degraded);
     details.put("unhealthyChannels", unhealthy);
     details.put("probeOverdueChannels", overdue);

@@ -8,6 +8,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.setGuid
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHeaders;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.config.ConsoleTenantQuotaPolicyExcelApplicationService;
 import com.example.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService;
@@ -80,9 +81,10 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
+      BatchDateTimeSupport dateTimeSupport,
       TenantQuotaPolicyMapper tenantQuotaPolicyMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
     this.tenantQuotaPolicyMapper = tenantQuotaPolicyMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }

@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.archive;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.SuccessInstanceArchiveProperties;
 import com.example.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
 import java.time.Duration;
@@ -32,7 +33,7 @@ public class SuccessInstanceArchiveService {
     }
     int retention = Math.max(1, properties.getRetentionDays());
     int batchSize = Math.max(1, properties.getBatchSize());
-    Instant cutoff = Instant.now().minus(Duration.ofDays(retention));
+    Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofDays(retention));
     List<Long> ids = archiveMapper.selectArchivableInstanceIds(cutoff, batchSize);
     if (ids.isEmpty()) {
       return ArchiveBatchResult.empty(cutoff);

@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.runtime;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
@@ -19,8 +20,10 @@ public class ImportWorkerLoop extends AbstractWorkerLoop {
   private final ImportWorkerConfiguration configuration;
 
   public ImportWorkerLoop(
-      WorkerRuntimeFacade workerRuntimeFacade, ImportWorkerConfiguration configuration) {
-    super(workerRuntimeFacade);
+      WorkerRuntimeFacade workerRuntimeFacade,
+      BatchDateTimeSupport dateTimeSupport,
+      ImportWorkerConfiguration configuration) {
+    super(workerRuntimeFacade, dateTimeSupport);
     this.configuration = configuration;
   }
 

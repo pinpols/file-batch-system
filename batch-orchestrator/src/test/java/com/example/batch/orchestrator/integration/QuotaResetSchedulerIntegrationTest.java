@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
@@ -9,7 +10,6 @@ import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import com.example.batch.orchestrator.infrastructure.scheduler.QuotaRuntimeResetScheduler;
 import com.example.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -48,7 +48,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void schedulerReconcileResetsExpiredSlidingWindowState() {
-    String ownerCode = "sched-reset-" + System.currentTimeMillis();
+    String ownerCode = "sched-reset-" + BatchDateTimeSupport.utcEpochMillis();
 
     QuotaRuntimeStateEntity expired =
         new QuotaRuntimeStateEntity(
@@ -57,12 +57,12 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
             "JOB",
             ownerCode,
             "SLIDING_WINDOW",
-            Instant.now().minusSeconds(10800),
-            Instant.now().minusSeconds(3600), // expired 1 hour ago
+            BatchDateTimeSupport.utcNow().minusSeconds(10800),
+            BatchDateTimeSupport.utcNow().minusSeconds(3600), // expired 1 hour ago
             7,
             null,
-            Instant.now(),
-            Instant.now(),
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow(),
             null);
     quotaRuntimeStateMapper.insert(expired);
 
@@ -78,7 +78,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
   @Test
   void schedulerReconcileHandlesNoExpiredStatesGracefully() {
     // 数据库中该 owner 的所有状态要么未过期要么不存在
-    String ownerCode = "sched-no-expired-" + System.currentTimeMillis();
+    String ownerCode = "sched-no-expired-" + BatchDateTimeSupport.utcEpochMillis();
 
     // 创建一个尚未过期的状态（窗口在未来过期）
     QuotaRuntimeStateEntity active =
@@ -88,12 +88,12 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
             "JOB",
             ownerCode,
             "SLIDING_WINDOW",
-            Instant.now().minusSeconds(1800),
-            Instant.now().plusSeconds(3600), // still valid
+            BatchDateTimeSupport.utcNow().minusSeconds(1800),
+            BatchDateTimeSupport.utcNow().plusSeconds(3600), // still valid
             3,
             null,
-            Instant.now(),
-            Instant.now(),
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow(),
             null);
     quotaRuntimeStateMapper.insert(active);
 
@@ -109,7 +109,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void evaluateAndReserveWithinWindowHoursAllows() {
-    String ownerCode = "sched-eval-" + System.currentTimeMillis();
+    String ownerCode = "sched-eval-" + BatchDateTimeSupport.utcEpochMillis();
 
     // base=10, burst=5, active=8, requested=1 — within cap
     var result =
@@ -130,7 +130,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void evaluateAndReserveOverBurstBlocks() {
-    String ownerCode = "sched-burst-" + System.currentTimeMillis();
+    String ownerCode = "sched-burst-" + BatchDateTimeSupport.utcEpochMillis();
 
     // base=5, burst=2, active=10, requested=1 → borrowed=6 > burst=2
     var result =

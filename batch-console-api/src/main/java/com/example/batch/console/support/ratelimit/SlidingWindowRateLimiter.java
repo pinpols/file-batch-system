@@ -1,5 +1,6 @@
 package com.example.batch.console.support.ratelimit;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,7 @@ public class SlidingWindowRateLimiter {
   }
 
   private final StringRedisTemplate redisTemplate;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   /**
    * 尝试为指定 key 消费一个令牌。
@@ -61,7 +63,7 @@ public class SlidingWindowRateLimiter {
    * @return {@code true} 表示允许通过，{@code false} 表示超限
    */
   public boolean tryAcquire(String key, int limit) {
-    long now = System.currentTimeMillis();
+    long now = dateTimeSupport.currentEpochMillis();
     long windowStart = now - WINDOW_MILLIS;
     long ttlSeconds = (WINDOW_MILLIS / 1000) + 1;
     String member = UUID.randomUUID().toString();

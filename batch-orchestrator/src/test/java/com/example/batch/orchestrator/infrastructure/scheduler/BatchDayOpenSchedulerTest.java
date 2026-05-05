@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -16,6 +17,7 @@ import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.service.BatchDayTimePolicyResolver;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -47,7 +49,8 @@ class BatchDayOpenSchedulerTest {
             jobExecutionLogMapper,
             gracefulShutdown,
             timezoneProvider,
-            new BatchDayTimePolicyResolver(timezoneProvider));
+            new BatchDayTimePolicyResolver(timezoneProvider),
+            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
   }
 
   @Test

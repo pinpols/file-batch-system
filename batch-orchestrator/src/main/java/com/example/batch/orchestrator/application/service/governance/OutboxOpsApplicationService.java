@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service.governance;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -38,7 +39,7 @@ public class OutboxOpsApplicationService {
    */
   @Transactional
   public Map<String, Integer> cleanup(String tenantId, int retainDays) {
-    Instant cutoff = Instant.now().minus(retainDays, ChronoUnit.DAYS);
+    Instant cutoff = BatchDateTimeSupport.utcNow().minus(retainDays, ChronoUnit.DAYS);
     int published = outboxEventMapper.deletePublishedBefore(tenantId, cutoff);
     int giveUp = outboxEventMapper.deleteGiveUpBefore(tenantId, cutoff);
     return Map.of("published", published, "giveUp", giveUp);

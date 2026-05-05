@@ -1,5 +1,5 @@
 package com.example.batch.securityscan;
-
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -14,7 +14,7 @@ public final class ProcessCommandExecutor {
             return ScanResult.skipped(command, "dry-run");
         }
 
-        Instant start = Instant.now();
+        Instant start = BatchDateTimeSupport.utcNow();
         try {
             Process process = new ProcessBuilder(command.commandLine())
                     .directory(command.workingDirectory().toFile())
@@ -30,16 +30,16 @@ public final class ProcessCommandExecutor {
             }
 
             int exitCode = process.waitFor();
-            Duration duration = Duration.between(start, Instant.now());
+            Duration duration = Duration.between(start, BatchDateTimeSupport.utcNow());
             return exitCode == 0
                     ? ScanResult.success(command, duration)
                     : ScanResult.failed(command, exitCode, duration, "exit code: " + exitCode);
         } catch (IOException e) {
-            Duration duration = Duration.between(start, Instant.now());
+            Duration duration = Duration.between(start, BatchDateTimeSupport.utcNow());
             return ScanResult.failed(command, 127, duration, e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            Duration duration = Duration.between(start, Instant.now());
+            Duration duration = Duration.between(start, BatchDateTimeSupport.utcNow());
             return ScanResult.failed(command, 130, duration, "interrupted");
         }
     }

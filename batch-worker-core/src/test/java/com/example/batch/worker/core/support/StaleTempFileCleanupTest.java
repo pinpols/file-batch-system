@@ -2,11 +2,11 @@ package com.example.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
-import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,15 +32,18 @@ class StaleTempFileCleanupTest {
 
     Path oldBatch = tempDir.resolve("batch-import-old.tmp");
     Files.writeString(oldBatch, "x");
-    Files.setLastModifiedTime(oldBatch, FileTime.from(Instant.now().minus(Duration.ofHours(7))));
+    Files.setLastModifiedTime(
+        oldBatch, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(7))));
 
     Path newBatch = tempDir.resolve("batch-export-new.tmp");
     Files.writeString(newBatch, "y");
-    Files.setLastModifiedTime(newBatch, FileTime.from(Instant.now().minus(Duration.ofHours(1))));
+    Files.setLastModifiedTime(
+        newBatch, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(1))));
 
     Path oldOther = tempDir.resolve("not-batch-old.tmp");
     Files.writeString(oldOther, "z");
-    Files.setLastModifiedTime(oldOther, FileTime.from(Instant.now().minus(Duration.ofHours(10))));
+    Files.setLastModifiedTime(
+        oldOther, FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(10))));
 
     StaleTempFileCleanup cleanup = new StaleTempFileCleanup();
     ReflectionTestUtils.setField(cleanup, "staleTempFileHours", 6L);

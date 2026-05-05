@@ -5,6 +5,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -55,6 +56,7 @@ public class BatchDaySettleScheduler {
   private final LaunchService launchService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final ObjectProvider<BatchDaySettleScheduler> selfProvider;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Scheduled(fixedDelayString = "${batch.batch-day.settle-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_settle", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
@@ -72,7 +74,7 @@ public class BatchDaySettleScheduler {
     if (candidates == null || candidates.isEmpty()) {
       return;
     }
-    Instant now = Instant.now();
+    Instant now = dateTimeSupport.nowInstant();
     BatchDaySettleScheduler self = selfProvider.getObject();
     for (BatchDayInstanceEntity candidate : candidates) {
       if (candidate == null || candidate.id() == null || Boolean.TRUE.equals(candidate.frozen())) {

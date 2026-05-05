@@ -1,6 +1,7 @@
 package com.example.batch.console.service;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
@@ -162,7 +163,7 @@ public class WebhookDeliveryRelay {
   }
 
   private void pollLocked() {
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     List<WebhookDeliveryLogEntity> batch =
         deliveryLogRepository.findEligibleRetries(now, batchSize);
     if (batch.isEmpty()) {
@@ -251,7 +252,8 @@ public class WebhookDeliveryRelay {
       return;
     }
 
-    Instant nextRetryAt = Instant.now().plusSeconds(computeBackoffSeconds(nextAttempt));
+    Instant nextRetryAt =
+        BatchDateTimeSupport.utcNow().plusSeconds(computeBackoffSeconds(nextAttempt));
     deliveryLogRepository.markRetryFailure(
         row.getId(), nextAttempt, result.httpStatus(), result.errorSummary(), nextRetryAt);
     log.debug(
@@ -276,6 +278,6 @@ public class WebhookDeliveryRelay {
 
   private LockConfiguration lockConfig() {
     return new LockConfiguration(
-        Instant.now(), "webhook-delivery-relay", LOCK_AT_MOST, LOCK_AT_LEAST);
+        BatchDateTimeSupport.utcNow(), "webhook-delivery-relay", LOCK_AT_MOST, LOCK_AT_LEAST);
   }
 }

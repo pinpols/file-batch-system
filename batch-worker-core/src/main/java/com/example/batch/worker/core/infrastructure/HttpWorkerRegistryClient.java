@@ -3,11 +3,11 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.OrchestratorWorkerClientProperties;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
@@ -107,7 +107,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         null,
         null,
         registration.getLastHeartbeatAt() == null
-            ? Instant.now()
+            ? BatchDateTimeSupport.utcNow()
             : registration.getLastHeartbeatAt().toInstant(),
         registration.getCapabilityTags(),
         registration.getCurrentLoad());

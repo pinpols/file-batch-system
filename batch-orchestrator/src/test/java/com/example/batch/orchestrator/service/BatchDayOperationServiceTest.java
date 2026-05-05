@@ -8,15 +8,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -41,7 +45,12 @@ class BatchDayOperationServiceTest {
     launchService = mock(LaunchService.class);
     service =
         new BatchDayOperationService(
-            batchDayInstanceMapper, waitingLaunchMapper, jobExecutionLogMapper, launchService);
+            batchDayInstanceMapper,
+            waitingLaunchMapper,
+            jobExecutionLogMapper,
+            launchService,
+            new BatchDateTimeSupport(
+                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }
 
   @Test

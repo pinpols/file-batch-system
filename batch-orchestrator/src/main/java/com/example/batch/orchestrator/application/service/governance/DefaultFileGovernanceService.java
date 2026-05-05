@@ -6,6 +6,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -238,7 +239,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     if (groupFiles.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
     }
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     String action = command.action().trim().toUpperCase();
     String nextState =
         switch (action) {

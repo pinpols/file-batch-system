@@ -2,6 +2,7 @@ package com.example.batch.worker.imports.runtime;
 
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.MinioBucketSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
@@ -112,7 +113,7 @@ public class ImportIngressScanner {
     metadata.put("stabilityWindowSeconds", scannerProperties.getStabilityWindowSeconds());
     metadata.put("etag", snapshot.etag());
     metadata.put("lastModified", snapshot.lastModified());
-    metadata.put("detectedAt", Instant.now().toString());
+    metadata.put("detectedAt", BatchDateTimeSupport.utcNow().toString());
     if (scannerProperties.getArrival().isEnabled()
         && Texts.hasText(scannerProperties.getArrival().getFileGroupCode())
         && Texts.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
@@ -123,12 +124,12 @@ public class ImportIngressScanner {
           "arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
       metadata.put(
           "expectedArrivalTime",
-          Instant.now()
+          BatchDateTimeSupport.utcNow()
               .plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds())
               .toString());
       metadata.put(
           "latestTolerableTime",
-          Instant.now()
+          BatchDateTimeSupport.utcNow()
               .plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds())
               .toString());
       metadata.put("arrivalState", "WAITING_ARRIVAL");
@@ -206,7 +207,7 @@ public class ImportIngressScanner {
     if (scannerProperties.getStabilityWindowSeconds() <= 0) {
       return true;
     }
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     // P2：用 ConcurrentHashMap.compute 原子化 check-and-update，即便 ShedLock
     // 异常过期时也不会有 get+put 之间的 TOCTOU；返回更新后的 state，稳定性判断在外部做
     ObservedObjectState state =

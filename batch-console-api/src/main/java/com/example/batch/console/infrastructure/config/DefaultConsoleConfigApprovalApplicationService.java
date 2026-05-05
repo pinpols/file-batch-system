@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure.config;
 import com.example.batch.common.enums.ConfigLifecycleStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -162,7 +163,7 @@ public class DefaultConsoleConfigApprovalApplicationService
             KEY_NEXT_STATUS,
             ConfigLifecycleStatus.PUBLISHED.code(),
             "publishedAt",
-            Instant.now(),
+            BatchDateTimeSupport.utcNow(),
             "rolledBackAt",
             null,
             "updatedBy",

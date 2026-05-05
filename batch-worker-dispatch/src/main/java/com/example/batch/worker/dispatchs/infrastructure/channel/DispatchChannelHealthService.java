@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.SecretMasking;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
@@ -85,7 +86,7 @@ public class DispatchChannelHealthService {
     if (snapshot.nextProbeAt() == null) {
       return false;
     }
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     if (now.isBefore(snapshot.nextProbeAt())) {
       return false; // 仍在 backoff 窗口
     }
@@ -113,7 +114,7 @@ public class DispatchChannelHealthService {
     if (!channel.isTargetable()) {
       return;
     }
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     if (success) {
       // P2：成功走原子 upsert——HEALTHY + failures=0 + next_probe=now+probeInterval
       DispatchHealthUpsertCommand successCmd =
@@ -195,7 +196,7 @@ public class DispatchChannelHealthService {
         repository.findHealth(channel.tenantId(), channel.channelCode());
     if (snapshot != null
         && snapshot.nextProbeAt() != null
-        && Instant.now().isBefore(snapshot.nextProbeAt())) {
+        && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt())) {
       return new DispatchChannelProbeResult(false, "probe deferred until backoff expires", null);
     }
     DispatchChannelProbeResult result =

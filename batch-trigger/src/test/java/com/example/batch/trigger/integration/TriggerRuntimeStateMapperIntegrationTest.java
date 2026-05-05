@@ -3,6 +3,7 @@ package com.example.batch.trigger.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
@@ -66,7 +67,8 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void insertOnReconcileAndSelect() {
-    TriggerRuntimeStateEntity e = newRuntimeStateEntity(Instant.now().plusSeconds(60));
+    TriggerRuntimeStateEntity e =
+        newRuntimeStateEntity(BatchDateTimeSupport.utcNow().plusSeconds(60));
     int rows = mapper.insertOnReconcile(e);
     assertThat(rows).isEqualTo(1);
     assertThat(e.getId()).isNotNull();
@@ -82,13 +84,13 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void findReadyToScheduleSkipsClaimedRows() {
-    insertWithFireTime(Instant.now().minusSeconds(10)); // due
+    insertWithFireTime(BatchDateTimeSupport.utcNow().minusSeconds(10)); // due
     long otherJobDef = newJobDefinition();
     insertWithFireTimeForJobDef(
-        otherJobDef, Instant.now().plusSeconds(120)); // not due in 60s window
+        otherJobDef, BatchDateTimeSupport.utcNow().plusSeconds(120)); // not due in 60s window
 
     List<TriggerRuntimeStateEntity> due =
-        mapper.findReadyToSchedule(Instant.now().plusSeconds(60), 100);
+        mapper.findReadyToSchedule(BatchDateTimeSupport.utcNow().plusSeconds(60), 100);
 
     assertThat(due).hasSizeGreaterThanOrEqualTo(1);
     assertThat(due.stream().anyMatch(t -> t.getJobCode().equals(jobCode))).isTrue();
@@ -96,7 +98,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void claimForScheduleSucceedsThenSecondClaimFails() {
-    insertWithFireTime(Instant.now().plusSeconds(30));
+    insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
 
     int firstClaim = mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
@@ -113,7 +115,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void claimForScheduleFailsWhenMarkerAlreadySet() {
-    insertWithFireTime(Instant.now().plusSeconds(30));
+    insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
 
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
@@ -125,7 +127,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void advanceAfterFireResetsMarkerAndUpdatesNextFireTime() {
-    Instant origin = Instant.now().plusSeconds(30);
+    Instant origin = BatchDateTimeSupport.utcNow().plusSeconds(30);
     Instant nextNext = origin.plus(Duration.ofMinutes(60));
     insertWithFireTime(origin);
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
@@ -144,14 +146,14 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void advanceAfterFireWithMisfireDeltaIncrementsCount() {
-    insertWithFireTime(Instant.now().plusSeconds(30));
+    insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
     mapper.advanceAfterFire(
         loaded.getId(),
-        Instant.now().plus(Duration.ofMinutes(60)),
-        Instant.now(),
+        BatchDateTimeSupport.utcNow().plus(Duration.ofMinutes(60)),
+        BatchDateTimeSupport.utcNow(),
         "MISFIRE_CATCH_UP",
         1);
 
@@ -162,7 +164,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void releaseStaleMarkersClearsOldOccupations() {
-    insertWithFireTime(Instant.now().plusSeconds(30));
+    insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
@@ -172,7 +174,8 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
             + " id = ?",
         loaded.getId());
 
-    int released = mapper.releaseStaleMarkers(Instant.now().minus(Duration.ofMinutes(5)));
+    int released =
+        mapper.releaseStaleMarkers(BatchDateTimeSupport.utcNow().minus(Duration.ofMinutes(5)));
     assertThat(released).isGreaterThanOrEqualTo(1);
 
     TriggerRuntimeStateEntity afterRelease = mapper.selectByJobDefinitionId(jobDefId);
@@ -182,11 +185,12 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void releaseStaleMarkersDoesNotTouchFreshMarkers() {
-    insertWithFireTime(Instant.now().plusSeconds(30));
+    insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
-    int released = mapper.releaseStaleMarkers(Instant.now().minus(Duration.ofMinutes(5)));
+    int released =
+        mapper.releaseStaleMarkers(BatchDateTimeSupport.utcNow().minus(Duration.ofMinutes(5)));
     // 刚写入的 marker(scheduled_at = 现在)不在 release 范围
     TriggerRuntimeStateEntity afterRelease = mapper.selectByJobDefinitionId(jobDefId);
     assertThat(afterRelease.getScheduledFireMarker()).isEqualTo("leader-A");
@@ -194,11 +198,11 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void rescheduleNextFireTimeClearsMarker() {
-    insertWithFireTime(Instant.now().plusSeconds(30));
+    insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
-    Instant newNext = Instant.now().plus(Duration.ofHours(1));
+    Instant newNext = BatchDateTimeSupport.utcNow().plus(Duration.ofHours(1));
     int rows = mapper.rescheduleNextFireTime(loaded.getId(), newNext);
     assertThat(rows).isEqualTo(1);
 
@@ -209,7 +213,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void deleteByJobDefinitionIdRemovesRow() {
-    insertWithFireTime(Instant.now().plusSeconds(30));
+    insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     int deleted = mapper.deleteByJobDefinitionId(jobDefId);
     assertThat(deleted).isEqualTo(1);
     assertThat(mapper.selectByJobDefinitionId(jobDefId)).isNull();

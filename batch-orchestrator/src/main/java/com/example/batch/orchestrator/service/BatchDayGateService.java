@@ -4,6 +4,7 @@ import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -36,6 +37,7 @@ public class BatchDayGateService {
   private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
   private final TriggerRequestMapper triggerRequestMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   public GateDecision evaluateAndApply(
       LaunchRequest request,
@@ -92,7 +94,7 @@ public class BatchDayGateService {
       String traceId,
       BatchDayInstanceEntity previous,
       String reason) {
-    Instant now = Instant.now();
+    Instant now = dateTimeSupport.nowInstant();
     String payload = buildLaunchPayload(request, effectiveParams);
     waitingLaunchMapper.insert(
         new BatchDayWaitingLaunchEntity(

@@ -1,5 +1,6 @@
 package com.example.batch.worker.processes.cleanup;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -112,7 +113,11 @@ public class ProcessStagingOrphanCleaner {
     try {
       Optional<Instant> oldest = Optional.ofNullable(processStagingMapper.selectMinStagedAt());
       return oldest
-          .map(at -> Math.max(0d, (Instant.now().toEpochMilli() - at.toEpochMilli()) / 1000d))
+          .map(
+              at ->
+                  Math.max(
+                      0d,
+                      (BatchDateTimeSupport.utcNow().toEpochMilli() - at.toEpochMilli()) / 1000d))
           .orElse(0d);
     } catch (RuntimeException ex) {
       log.warn("oldest staging age gauge query failed: {}", ex.getMessage());

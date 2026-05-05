@@ -7,6 +7,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.config.WheelSchedulerProperties;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
@@ -23,6 +24,7 @@ import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -77,6 +79,7 @@ public class HashedWheelTriggerScheduler {
   private final TriggerDefinitionLoader definitionLoader;
   private final CronExpressionAdapter cronAdapter;
   private final BatchTimezoneProvider timezoneProvider;
+  private final BatchDateTimeSupport dateTimeSupport;
   private final WheelMetrics metrics;
   private final CatchUpThrottle catchUpThrottle;
 
@@ -180,7 +183,9 @@ public class HashedWheelTriggerScheduler {
    */
   public void doReleaseStaleMarkers() {
     Instant staleBefore =
-        Instant.now().minus(Duration.ofSeconds(props.getStaleMarkerThresholdSeconds()));
+        dateTimeSupport
+            .nowInstant()
+            .minus(Duration.ofSeconds(props.getStaleMarkerThresholdSeconds()));
     int released = stateMapper.releaseStaleMarkers(staleBefore);
     if (released > 0) {
       metrics.incrementStaleMarkerReleased(released);
@@ -214,7 +219,7 @@ public class HashedWheelTriggerScheduler {
   /** 测试 + 内部都用,public 为了 IT 能直接触发(避免依赖 @Scheduled 60s 周期等)。 */
   public void scanAndSchedule(Duration window) {
     long start = System.nanoTime();
-    Instant horizon = Instant.now().plus(window);
+    Instant horizon = dateTimeSupport.nowInstant().plus(window);
     List<TriggerRuntimeStateEntity> due =
         stateMapper.findReadyToSchedule(horizon, props.getScanBatchSize());
     int pushed = 0;
@@ -240,7 +245,8 @@ public class HashedWheelTriggerScheduler {
       return false; // DB 层去重(其他 leader 已占,或 marker 非空)
     }
     Instant scheduledFireTime = state.getNextFireTime();
-    long delayMillis = Math.max(0L, scheduledFireTime.toEpochMilli() - System.currentTimeMillis());
+    long delayMillis =
+        Math.max(0L, scheduledFireTime.toEpochMilli() - dateTimeSupport.currentEpochMillis());
     Timeout timeout =
         wheel.newTimeout(
             _ -> fire(state, scheduledFireTime, dedupKey), delayMillis, TimeUnit.MILLISECONDS);
@@ -252,7 +258,7 @@ public class HashedWheelTriggerScheduler {
   // ── fire callback ───────────────────────────────────────────
 
   void fire(TriggerRuntimeStateEntity state, Instant scheduledFireTime, String dedupKey) {
-    long actualFireMillis = System.currentTimeMillis();
+    long actualFireMillis = dateTimeSupport.currentEpochMillis();
     metrics.recordFireLag(actualFireMillis - scheduledFireTime.toEpochMilli());
     String groupTag = "tenant:" + state.getTenantId();
     try {
@@ -388,15 +394,13 @@ public class HashedWheelTriggerScheduler {
       long misfireDelta) {
     try {
       TriggerDescriptor descriptor = loadDescriptor(state);
+      ZoneId zoneId = timezoneProvider.resolveOrDefault(descriptor.getTimezone());
       Instant next =
-          cronAdapter.next(
-              descriptor.getScheduleExpression(),
-              timezoneProvider.resolveOrDefault(descriptor.getTimezone()),
-              scheduledFireTime);
+          cronAdapter.next(descriptor.getScheduleExpression(), zoneId, scheduledFireTime);
       if (next == null) {
         log.warn("trigger has no future fire time, leaving stale: job={}", state.getJobCode());
         // next_fire_time 设为遥远未来防止反复扫;实际上业务侧应该 disable
-        next = Instant.now().plus(Duration.ofDays(36500));
+        next = dateTimeSupport.nowInstant().plus(Duration.ofDays(36500));
       }
       stateMapper.advanceAfterFire(
           state.getId(), next, scheduledFireTime, lastFireStatus, misfireDelta);

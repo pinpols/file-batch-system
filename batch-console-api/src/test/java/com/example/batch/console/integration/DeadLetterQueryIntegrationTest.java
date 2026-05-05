@@ -3,6 +3,7 @@ package com.example.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.query.DeadLetterTaskQuery;
@@ -29,7 +30,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
     List<DeadLetterTaskEntity> results =
         deadLetterTaskMapper.selectByQuery(
             new DeadLetterTaskQuery(
-                "no-such-tenant-" + System.currentTimeMillis(),
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(),
                 null,
                 null,
                 null,
@@ -40,7 +41,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryDeadLettersByTenantAndReplayStatus() {
-    String tenantId = "t-dlq-" + System.currentTimeMillis();
+    String tenantId = "t-dlq-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 100L, "NEW", "trace-dlq-001");
     insertDeadLetter(tenantId, "JOB_PARTITION", 101L, "FAILED", "trace-dlq-002");
     insertDeadLetter(tenantId, "JOB_PARTITION", 102L, "SUCCESS", "trace-dlq-003");
@@ -56,7 +57,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryDeadLettersBySourceType() {
-    String tenantId = "t-dlq-type-" + System.currentTimeMillis();
+    String tenantId = "t-dlq-type-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 200L, "NEW", "trace-type-001");
     insertDeadLetter(tenantId, "JOB_PARTITION", 201L, "NEW", "trace-type-002");
 
@@ -70,8 +71,8 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryDeadLettersByTraceId() {
-    String tenantId = "t-dlq-trace-" + System.currentTimeMillis();
-    String uniqueTrace = "unique-trace-dlq-" + System.currentTimeMillis();
+    String tenantId = "t-dlq-trace-" + BatchDateTimeSupport.utcEpochMillis();
+    String uniqueTrace = "unique-trace-dlq-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 300L, "NEW", uniqueTrace);
 
     List<DeadLetterTaskEntity> results =
@@ -84,7 +85,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldReturnAllDeadLettersForTenantWithNoFilter() {
-    String tenantId = "t-dlq-all-" + System.currentTimeMillis();
+    String tenantId = "t-dlq-all-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 400L, "NEW", "trace-all-1");
     insertDeadLetter(tenantId, "JOB_PARTITION", 401L, "FAILED", "trace-all-2");
     insertDeadLetter(tenantId, "JOB_PARTITION", 402L, "SUCCESS", "trace-all-3");

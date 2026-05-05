@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.quota;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.QuotaProperties;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
@@ -129,7 +130,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
         || snap.windowExpiresAt() == null) {
       return 0;
     }
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     QuotaRuntimeStateEntity existing =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, scope, ownerCode);
     if (existing == null) {

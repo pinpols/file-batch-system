@@ -6,6 +6,7 @@ import com.example.batch.common.enums.WorkflowJoinMode;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -236,7 +237,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     row.setRunSeq(1);
     row.setNodeStatus("SKIPPED");
     row.setRetryCount(0);
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     row.setStartedAt(now);
     row.setFinishedAt(now);
     row.setDurationMs(0L);

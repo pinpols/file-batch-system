@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.domain.query.AlertEventQuery;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +31,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     List<AlertEventEntity> results =
         alertEventMapper.selectByQuery(
             new AlertEventQuery(
-                "no-such-tenant-" + System.currentTimeMillis(),
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(),
                 null,
                 null,
                 null,
@@ -42,7 +42,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldPersistAndQueryAlertEventBySeverity() {
-    String tenantId = "t-alert-" + System.currentTimeMillis();
+    String tenantId = "t-alert-" + BatchDateTimeSupport.utcEpochMillis();
     insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "Job SLA exceeded");
     insertAlertEvent(tenantId, "SLA_BREACH", "WARN", "OPEN", "File latency exceeded");
 
@@ -57,7 +57,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldFilterAlertsByStatus() {
-    String tenantId = "t-alert-status-" + System.currentTimeMillis();
+    String tenantId = "t-alert-status-" + BatchDateTimeSupport.utcEpochMillis();
     insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "OPEN", "Disk 85% used");
     insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "CLOSED", "Disk resolved");
 
@@ -71,7 +71,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldFilterAlertsByAlertType() {
-    String tenantId = "t-alert-type-" + System.currentTimeMillis();
+    String tenantId = "t-alert-type-" + BatchDateTimeSupport.utcEpochMillis();
     insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA alert");
     insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stuck alert");
 
@@ -85,7 +85,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldRespectLimit() {
-    String tenantId = "t-alert-limit-" + System.currentTimeMillis();
+    String tenantId = "t-alert-limit-" + BatchDateTimeSupport.utcEpochMillis();
     for (int i = 0; i < 5; i++) {
       insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "Alert " + i);
     }
@@ -113,8 +113,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         severity,
         title,
         tenantId + ":" + alertType + ":" + System.nanoTime(),
-        Timestamp.from(Instant.now()),
-        Timestamp.from(Instant.now()),
+        Timestamp.from(BatchDateTimeSupport.utcNow()),
+        Timestamp.from(BatchDateTimeSupport.utcNow()),
         status);
   }
 }

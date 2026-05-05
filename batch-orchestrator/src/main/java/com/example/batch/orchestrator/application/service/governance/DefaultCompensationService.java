@@ -8,6 +8,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
@@ -26,7 +27,6 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.service.LaunchService;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -148,7 +148,7 @@ public class DefaultCompensationService implements CompensationService {
               .resultSummary(JsonUtils.toJson(result))
               .errorCode(null)
               .errorMessage(null)
-              .finishedAt(Instant.now())
+              .finishedAt(BatchDateTimeSupport.utcNow())
               .build());
       appendCompensationLog(
           new CompensationLogContext(
@@ -165,7 +165,7 @@ public class DefaultCompensationService implements CompensationService {
               .resultSummary(null)
               .errorCode(resolveErrorCode(exception))
               .errorMessage(exception.getMessage())
-              .finishedAt(Instant.now())
+              .finishedAt(BatchDateTimeSupport.utcNow())
               .build());
       appendCompensationLog(
           new CompensationLogContext(

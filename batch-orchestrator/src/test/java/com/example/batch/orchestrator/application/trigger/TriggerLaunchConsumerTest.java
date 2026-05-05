@@ -12,13 +12,13 @@ import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.LaunchApplicationService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -194,7 +194,7 @@ class TriggerLaunchConsumerTest {
             requestId,
             "trace-" + requestId,
             Map.of());
-    return LaunchEnvelope.of(request, tenantId + ":" + requestId, Instant.now());
+    return LaunchEnvelope.of(request, tenantId + ":" + requestId, BatchDateTimeSupport.utcNow());
   }
 
   private static ConsumerRecord<String, String> record(LaunchEnvelope envelope) {

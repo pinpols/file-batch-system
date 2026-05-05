@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.quota;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
@@ -88,7 +89,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       return ResourceCheck.allow();
     }
 
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     QuotaRuntimeStateEntity state =
         loadOrCreate(
             new StateContext(
@@ -151,7 +152,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     if (state == null) {
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
-    state = refreshState(state, policy, Instant.now(), slidingWindowHours, false);
+    state = refreshState(state, policy, BatchDateTimeSupport.utcNow(), slidingWindowHours, false);
     if (state == null) {
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
@@ -174,7 +175,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
    */
   @Override
   public void reconcileExpiredStates(int slidingWindowHours) {
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     List<QuotaRuntimeStateEntity> expired = quotaRuntimeStateMapper.selectExpired(now);
     DatabaseQuotaRuntimeStateService self = selfProvider.getObject();
     for (QuotaRuntimeStateEntity state : expired) {

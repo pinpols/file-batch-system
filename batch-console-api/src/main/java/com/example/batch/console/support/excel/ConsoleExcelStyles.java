@@ -1,7 +1,6 @@
 package com.example.batch.console.support.excel;
 
 import java.io.ByteArrayInputStream;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -55,9 +54,8 @@ public final class ConsoleExcelStyles {
   private ConsoleExcelStyles() {}
 
   public static ResponseEntity<InputStreamResource> excelResponse(
-      byte[] workbookBytes, String fileNamePrefix, String tenantId) {
-    String fileName =
-        fileNamePrefix + "-" + tenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
+      byte[] workbookBytes, String fileNamePrefix, String tenantId, String timestamp) {
+    String fileName = fileNamePrefix + "-" + tenantId + "-" + timestamp + ".xlsx";
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,

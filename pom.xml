@@ -180,6 +180,10 @@
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
                     <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
+                    <excludes>
+                        <!-- Shared composed annotation, not an executable test class. -->
+                        <exclude>**/BatchIntegrationTest.class</exclude>
+                    </excludes>
                     <systemPropertyVariables>
                         <testcontainers.reuse.enable>true</testcontainers.reuse.enable>
                     </systemPropertyVariables>

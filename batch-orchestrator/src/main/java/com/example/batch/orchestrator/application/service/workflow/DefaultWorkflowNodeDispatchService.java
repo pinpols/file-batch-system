@@ -6,6 +6,7 @@ import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
@@ -230,7 +231,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       WorkflowRunEntity workflowRun,
       WorkflowDagService.DagNodeResolution node,
       String sourcePayload) {
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     WorkflowNodeRunEntity runningNode = new WorkflowNodeRunEntity();
     runningNode.setWorkflowRunId(workflowRun.getId());
     runningNode.setNodeCode(node.nodeCode());

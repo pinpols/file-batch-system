@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.util.List;
@@ -21,7 +22,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldInsertAndQueryFileErrorRecord() {
-    Long fileId = 99000L + System.currentTimeMillis() % 1000;
+    Long fileId = 99000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
     jdbcTemplate.update(
         """
@@ -46,7 +47,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldInsertMultipleErrorsForSameFile() {
-    Long fileId = 98000L + System.currentTimeMillis() % 1000;
+    Long fileId = 98000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
     jdbcTemplate.update(
         """
@@ -82,7 +83,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldStoreRawRecordAsJsonb() {
-    Long fileId = 97000L + System.currentTimeMillis() % 1000;
+    Long fileId = 97000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
     String rawJson = "{\"customerNo\":\"C-001\",\"amount\":\"abc\"}";
 
     jdbcTemplate.update(
@@ -109,7 +110,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldIsolateTenantData() {
-    Long fileId = 96000L + System.currentTimeMillis() % 1000;
+    Long fileId = 96000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
     jdbcTemplate.update(
         """
@@ -144,7 +145,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryByErrorStageIndex() {
-    Long fileId = 95000L + System.currentTimeMillis() % 1000;
+    Long fileId = 95000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
     jdbcTemplate.update(
         """

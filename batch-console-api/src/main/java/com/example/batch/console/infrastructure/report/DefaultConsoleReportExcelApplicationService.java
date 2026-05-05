@@ -9,6 +9,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHe
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.config.ConsoleConfigApplicationService;
 import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
@@ -36,7 +37,6 @@ import java.beans.PropertyDescriptor;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.RecordComponent;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -73,6 +73,7 @@ public class DefaultConsoleReportExcelApplicationService
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final RestClient.Builder restClientBuilder;
   private final Environment environment;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
   public ResponseEntity<InputStreamResource> exportConfigReleases(
@@ -213,7 +214,7 @@ public class DefaultConsoleReportExcelApplicationService
       String sheetName, String filePrefix, String title, List<T> rows, Class<T> rowType) {
     byte[] workbookBytes = writeWorkbook(sheetName, title, rows, rowType);
     InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
-    String fileName = filePrefix + "-" + Instant.now().toEpochMilli() + ".xlsx";
+    String fileName = filePrefix + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,

@@ -1,6 +1,6 @@
 package com.example.batch.console.infrastructure.realtime;
 
-import java.time.Instant;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -38,7 +38,7 @@ public class ConsoleRealtimeDomainEventPublisher {
             .cursor(cursorFactory.nextCursor())
             .data(data)
             .summaryRefresh(summaryRefresh)
-            .emittedAt(Instant.now())
+            .emittedAt(BatchDateTimeSupport.utcNow())
             .build();
     applicationEventPublisher.publishEvent(event);
   }

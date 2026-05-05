@@ -4,6 +4,7 @@ import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -194,7 +195,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
           1.0 + (ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * jitterRatio;
       jittered = Math.max((long) (bounded * jitterFactor), 1L);
     }
-    return Instant.now().plusSeconds(jittered);
+    return BatchDateTimeSupport.utcNow().plusSeconds(jittered);
   }
 
   /** 单独持久化 Outbox 发布重试记录，与业务重试计数器分开管理。 */

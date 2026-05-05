@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.config.WorkerExecutionTimeoutProperties;
@@ -146,7 +147,7 @@ public class WorkerStartupRuntimeAudit {
     }
     try {
       long cutoff =
-          System.currentTimeMillis()
+          BatchDateTimeSupport.utcEpochMillis()
               - reportOutboxProperties.getPublishingStaleRecoverAfterMillis();
       WorkerReportOutboxStats stats = repository.stats(cutoff);
       put(details, "newCount", stats.newCount());

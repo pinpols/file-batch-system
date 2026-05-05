@@ -1,6 +1,7 @@
 package com.example.batch.trigger.infrastructure.scheduler;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.mapper.BatchDayInstanceMapper;
 import com.example.batch.trigger.support.BatchDayCutoffCandidate;
@@ -31,6 +32,7 @@ public class BatchDayCutoffScheduler {
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final TriggerGracefulShutdown gracefulShutdown;
   private final BatchTimezoneProvider timezoneProvider;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
@@ -47,14 +49,14 @@ public class BatchDayCutoffScheduler {
     if (candidates == null || candidates.isEmpty()) {
       return;
     }
-    Instant now = Instant.now();
+    Instant now = dateTimeSupport.nowInstant();
     for (BatchDayCutoffCandidate candidate : candidates) {
       if (candidate == null || candidate.getId() == null) {
         continue;
       }
       LocalTime cutoffTime =
           candidate.getCutoffTime() == null ? DEFAULT_CUTOFF_TIME : candidate.getCutoffTime();
-      ZoneId zoneId = resolveZoneId(candidate.getTimezone());
+      ZoneId zoneId = timezoneProvider.resolveOrDefault(candidate.getTimezone());
       LocalTime localTime = now.atZone(zoneId).toLocalTime();
       if (localTime.isBefore(cutoffTime)) {
         continue;
@@ -75,9 +77,5 @@ public class BatchDayCutoffScheduler {
             now);
       }
     }
-  }
-
-  private ZoneId resolveZoneId(String timezone) {
-    return timezoneProvider.resolveOrDefault(timezone);
   }
 }

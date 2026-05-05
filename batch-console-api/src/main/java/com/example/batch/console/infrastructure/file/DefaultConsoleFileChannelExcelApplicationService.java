@@ -14,6 +14,7 @@ import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -121,9 +122,10 @@ public class DefaultConsoleFileChannelExcelApplicationService
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
+      BatchDateTimeSupport dateTimeSupport,
       FileChannelConfigMapper fileChannelConfigMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
     this.fileChannelConfigMapper = fileChannelConfigMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }

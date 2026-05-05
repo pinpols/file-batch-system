@@ -5,6 +5,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.AuditLogConstants;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -36,6 +37,7 @@ public class BatchDayOperationService {
   private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final LaunchService launchService;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Transactional
   public BatchDayOperationResult operate(
@@ -56,7 +58,7 @@ public class BatchDayOperationService {
     if (current == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day.not_found");
     }
-    Instant now = Instant.now();
+    Instant now = dateTimeSupport.nowInstant();
     String operator = Texts.hasText(operatorId) ? operatorId : "UNKNOWN";
     BatchDayInstanceEntity target = transition(current, action, operator, reason, now);
     int rows = batchDayInstanceMapper.updateWithCas(target);

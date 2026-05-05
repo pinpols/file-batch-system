@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.scheduler;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
@@ -15,7 +16,6 @@ import com.example.batch.orchestrator.mapper.ResourceQueueMapper;
 import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +46,7 @@ public class TenantSchedulerSnapshotService {
   public SchedulerSnapshotResponse buildLive(String tenantId) {
     if (!Texts.hasText(tenantId)) {
       return new SchedulerSnapshotResponse(
-          Instant.now(), tenantId, List.of(), List.of(), List.of());
+          BatchDateTimeSupport.utcNow(), tenantId, List.of(), List.of(), List.of());
     }
     long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(tenantId);
     long tenantActivePartitions =
@@ -61,7 +61,8 @@ public class TenantSchedulerSnapshotService {
         buildQuotaSnapshot(tenantId, tenantActiveJobs, tenantActivePartitions);
     List<SchedulerSnapshotResponse.QueueSnapshot> queues = buildQueueSnapshot(tenantId);
     List<SchedulerSnapshotResponse.WorkerLoadSnapshot> workers = buildInstanceSnapshot(tenantId);
-    return new SchedulerSnapshotResponse(Instant.now(), tenantId, policies, queues, workers);
+    return new SchedulerSnapshotResponse(
+        BatchDateTimeSupport.utcNow(), tenantId, policies, queues, workers);
   }
 
   private List<SchedulerSnapshotResponse.PolicySnapshot> buildQuotaSnapshot(

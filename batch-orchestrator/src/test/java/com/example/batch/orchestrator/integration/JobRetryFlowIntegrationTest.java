@@ -6,6 +6,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
@@ -23,7 +24,6 @@ import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -170,7 +170,10 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     List<RetryScheduleEntity> retries =
         retryScheduleMapper.selectByQuery(
             new RetryScheduleQuery(
-                TENANT, RetryScheduleStatus.WAITING.code(), Instant.now().plusSeconds(3600), 100));
+                TENANT,
+                RetryScheduleStatus.WAITING.code(),
+                BatchDateTimeSupport.utcNow().plusSeconds(3600),
+                100));
     boolean retryFound =
         retries.stream()
             .anyMatch(

@@ -12,6 +12,7 @@ import com.example.batch.common.enums.PipelineType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -145,6 +146,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private final ConfigChangeLogMapper configChangeLogMapper;
   private final PipelineDefinitionExcelImportStore importStore;
   private final PipelineExcelWorkbookWriter workbookWriter;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
   public ResponseEntity<InputStreamResource> exportPipelineDefinitions(
@@ -169,7 +171,11 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     }
     byte[] workbookBytes = workbookWriter.writeMaintenanceWorkbook(pipelines, allSteps);
     String fileName =
-        "pipeline-definition-" + resolvedTenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
+        "pipeline-definition-"
+            + resolvedTenantId
+            + "-"
+            + dateTimeSupport.currentFileTimestamp()
+            + ".xlsx";
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,

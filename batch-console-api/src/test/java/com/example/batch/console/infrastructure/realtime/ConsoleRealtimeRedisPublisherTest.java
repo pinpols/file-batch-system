@@ -8,7 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +44,12 @@ class ConsoleRealtimeRedisPublisherTest {
     when(instanceIdProvider.instanceId()).thenReturn("instance-1");
     ConsoleSseEvent event =
         new ConsoleSseEvent(
-            "t1", "job-instance", "JOB_STATUS", "cursor-abc", "payload", Instant.now());
+            "t1",
+            "job-instance",
+            "JOB_STATUS",
+            "cursor-abc",
+            "payload",
+            BatchDateTimeSupport.utcNow());
 
     publisher.publish(event);
 
@@ -66,7 +71,8 @@ class ConsoleRealtimeRedisPublisherTest {
   void publishNullDataSerializesAsEmptyString() {
     when(instanceIdProvider.instanceId()).thenReturn("instance-2");
     ConsoleSseEvent event =
-        new ConsoleSseEvent("t1", "ops", "SUMMARY", "cursor-1", null, Instant.now());
+        new ConsoleSseEvent(
+            "t1", "ops", "SUMMARY", "cursor-1", null, BatchDateTimeSupport.utcNow());
 
     publisher.publish(event);
 

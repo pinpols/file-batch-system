@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -56,7 +57,7 @@ class OutboxPublishCircuitBreakerTest {
 
   @Test
   void shouldDenyWhenRedisReturnsOpenUntilFuture() {
-    long futureMs = System.currentTimeMillis() + 60_000;
+    long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(futureMs);
 
     // First call reads Redis and caches open state
@@ -68,7 +69,7 @@ class OutboxPublishCircuitBreakerTest {
   @Test
   void shouldTransitionToHalfOpenAfterCooldown() {
     // Simulate: breaker was open but cooldown has passed
-    long pastMs = System.currentTimeMillis() - 1000;
+    long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(pastMs);
 
     // First call sees expired openUntilMs from Redis → triggers half-open
@@ -79,7 +80,7 @@ class OutboxPublishCircuitBreakerTest {
 
   @Test
   void onAdvanceResult_shouldResetHalfOpenProbeOnSuccess() {
-    long pastMs = System.currentTimeMillis() - 1000;
+    long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(pastMs);
 
     // Enter half-open
@@ -97,14 +98,14 @@ class OutboxPublishCircuitBreakerTest {
 
   @Test
   void onAdvanceResult_shouldReOpenOnProbeFailure() {
-    long pastMs = System.currentTimeMillis() - 1000;
+    long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(pastMs);
 
     // Enter half-open
     breaker.allowNow();
 
     // Failed probe → advance with failures
-    long futureMs = System.currentTimeMillis() + 60_000;
+    long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
     when(redis.evalLong(any(), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(futureMs);
     breaker.onAdvanceResult(3);

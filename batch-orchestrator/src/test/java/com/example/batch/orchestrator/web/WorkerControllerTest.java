@@ -8,12 +8,12 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.WorkerController;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.service.WorkerRegistryServerService;
-import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -42,11 +42,11 @@ class WorkerControllerTest {
                 null,
                 null,
                 "DRAINING",
-                Instant.now(),
+                BatchDateTimeSupport.utcNow(),
                 0,
                 10,
-                Instant.now(),
-                Instant.now()));
+                BatchDateTimeSupport.utcNow(),
+                BatchDateTimeSupport.utcNow()));
 
     mockMvc
         .perform(

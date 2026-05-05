@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CompletableFuture;
@@ -103,11 +104,11 @@ class DeadLetterPublisherTest {
     CompletableFuture<SendResult<String, String>> stuck = new CompletableFuture<>();
     when(kafkaTemplate.send(anyString(), anyString())).thenReturn(stuck);
 
-    long start = System.currentTimeMillis();
+    long start = BatchDateTimeSupport.utcEpochMillis();
     assertThatThrownBy(() -> publisher.publish("p", "t", "w", "err"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("timeout");
-    long elapsed = System.currentTimeMillis() - start;
+    long elapsed = BatchDateTimeSupport.utcEpochMillis() - start;
 
     // 必须在 5s ~ 10s 之间返回 (超时常量 5s + 调度抖动)
     assertThat(elapsed).isBetween(4500L, 10_000L);

@@ -12,6 +12,7 @@ import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -176,7 +177,7 @@ public class DefaultLaunchService implements LaunchService {
     launchBatchDayService.upsertBatchDayInstance(
         request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
 
-    Instant startedAt = Instant.now();
+    Instant startedAt = BatchDateTimeSupport.utcNow();
     if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
       return prepareWorkflowRunAndNodes(
           request, loaded, effectiveParams, traceId, jobInstance, startedAt);
@@ -239,7 +240,7 @@ public class DefaultLaunchService implements LaunchService {
         .dataIntervalEnd(request.dataIntervalEnd())
         .deadlineAt(
             launchParamResolver.resolveDeadlineAt(
-                Instant.now(),
+                BatchDateTimeSupport.utcNow(),
                 request.bizDate(),
                 loaded.jobDefinition(),
                 effectiveParams,

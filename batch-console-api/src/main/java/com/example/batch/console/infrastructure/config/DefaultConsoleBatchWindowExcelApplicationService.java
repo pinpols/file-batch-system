@@ -12,6 +12,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHe
 import com.example.batch.common.enums.BatchWindowEndStrategy;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.OutOfWindowAction;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.config.ConsoleBatchWindowExcelApplicationService;
 import com.example.batch.console.domain.param.BatchWindowUpsertParam;
@@ -104,9 +105,10 @@ public class DefaultConsoleBatchWindowExcelApplicationService
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
+      BatchDateTimeSupport dateTimeSupport,
       BatchWindowMapper batchWindowMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
     this.batchWindowMapper = batchWindowMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }

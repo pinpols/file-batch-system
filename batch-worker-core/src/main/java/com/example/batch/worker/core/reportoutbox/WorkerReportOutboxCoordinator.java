@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.reportoutbox;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
 import com.example.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
@@ -65,7 +66,7 @@ public class WorkerReportOutboxCoordinator {
         return;
       }
     }
-    long now = System.currentTimeMillis();
+    long now = BatchDateTimeSupport.utcEpochMillis();
     int batch = Math.max(1, props.getPollBatchSize());
     for (int i = 0; i < batch; i++) {
       Optional<WorkerReportOutboxRow> claimed = pollClaimer.claimNext(now);
@@ -101,7 +102,8 @@ public class WorkerReportOutboxCoordinator {
       fixedDelayString =
           "${batch.worker.report-outbox.stale-publishing-recover-interval-millis:60000}")
   public void recoverStalePublishing() {
-    long cutoff = System.currentTimeMillis() - props.getPublishingStaleRecoverAfterMillis();
+    long cutoff =
+        BatchDateTimeSupport.utcEpochMillis() - props.getPublishingStaleRecoverAfterMillis();
     int n = repository.resetStalePublishing(cutoff);
     if (n > 0) {
       log.warn("worker report outbox reset stale PUBLISHING rows: count={}", n);

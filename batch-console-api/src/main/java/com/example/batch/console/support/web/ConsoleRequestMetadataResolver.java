@@ -1,8 +1,8 @@
 package com.example.batch.console.support.web;
 
 import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.RequestScope;
@@ -24,6 +24,7 @@ public class ConsoleRequestMetadataResolver {
 
   public ResponseMeta responseMeta() {
     ConsoleRequestMetadata metadata = current();
-    return new ResponseMeta(metadata.requestId(), metadata.traceId(), Instant.now());
+    return new ResponseMeta(
+        metadata.requestId(), metadata.traceId(), BatchDateTimeSupport.utcNow());
   }
 }

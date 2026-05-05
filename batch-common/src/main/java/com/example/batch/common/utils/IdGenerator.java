@@ -1,6 +1,6 @@
 package com.example.batch.common.utils;
 
-import java.time.Instant;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
@@ -35,7 +35,10 @@ public final class IdGenerator {
   public static String newBusinessNo(String prefix) {
     return prefix
         + "-"
-        + DateTimeFormatter.ISO_INSTANT.format(Instant.now()).replace(":", "").replace("-", "")
+        + DateTimeFormatter.ISO_INSTANT
+            .format(BatchDateTimeSupport.utcNow())
+            .replace(":", "")
+            .replace("-", "")
         + "-"
         + UUID.randomUUID().toString().substring(0, 8);
   }

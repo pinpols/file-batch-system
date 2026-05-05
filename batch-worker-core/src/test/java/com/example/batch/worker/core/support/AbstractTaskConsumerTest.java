@@ -8,7 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.kafka.TaskDispatchMessage;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
@@ -19,6 +22,7 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.reflect.Field;
+import java.time.Clock;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -324,7 +328,7 @@ class AbstractTaskConsumerTest {
         new AbstractTaskConsumer(registry, meterRegistryProvider) {
           @Override
           protected AbstractWorkerLoop workerLoop() {
-            return new AbstractWorkerLoop(runtimeFacade) {
+            return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport()) {
               @Override
               protected WorkerConfiguration workerConfiguration() {
                 return cfg;
@@ -363,6 +367,11 @@ class AbstractTaskConsumerTest {
           }
         };
     return consumer;
+  }
+
+  private static BatchDateTimeSupport dateTimeSupport() {
+    return new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   private WorkerConfiguration workerConfiguration(String workerType, String workerCode) {

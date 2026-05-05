@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -34,7 +35,7 @@ public class OrchestratorGracefulShutdown implements ApplicationListener<Context
 
   public void startDraining(String source) {
     if (draining.compareAndSet(false, true)) {
-      drainingSince = Instant.now();
+      drainingSince = BatchDateTimeSupport.utcNow();
       reason = source;
       log.info("Orchestrator graceful shutdown initiated: draining=true, source={}", source);
     }

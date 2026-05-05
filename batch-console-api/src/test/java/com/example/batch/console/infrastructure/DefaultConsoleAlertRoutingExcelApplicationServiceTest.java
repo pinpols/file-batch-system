@@ -9,6 +9,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.infrastructure.monitor.DefaultConsoleAlertRoutingExcelApplicationService;
 import com.example.batch.console.mapper.AlertRoutingConfigMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
@@ -20,6 +23,7 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.query.AlertRoutingQueryRequest;
 import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.testing.TestExcelFileBuilder;
+import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +56,7 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
             tenantGuard,
             requestMetadataResolver,
             importStore,
+            dateTimeSupport(),
             alertRoutingConfigMapper,
             configChangeLogMapper);
     when(requestMetadataResolver.current())
@@ -59,6 +64,11 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
             new ConsoleRequestMetadata("req-1", "trace-1", "t1", "u1", "idem-1", "127.0.0.1"));
     when(tenantGuard.resolveTenant(any())).thenReturn("t1");
     doNothing().when(tenantGuard).assertTenantAllowed(anyString());
+  }
+
+  private static BatchDateTimeSupport dateTimeSupport() {
+    return new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @Test

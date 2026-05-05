@@ -15,6 +15,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.task.PartitionDispatchService;
@@ -36,6 +37,7 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -108,9 +110,12 @@ class DefaultLaunchServiceTest {
             jobMappers,
             timezoneProvider,
             new BatchDayTimePolicyResolver(timezoneProvider),
-            batchDaySelfProvider);
+            batchDaySelfProvider,
+            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
     when(batchDaySelfProvider.getObject()).thenReturn(launchBatchDayService);
-    launchParamResolver = new LaunchParamResolver(timezoneProvider);
+    launchParamResolver =
+        new LaunchParamResolver(
+            timezoneProvider, new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
     service =
         new DefaultLaunchService(
             launchValidationService,
@@ -197,7 +202,7 @@ class DefaultLaunchServiceTest {
     assertThat(saved.calendarCode()).isEqualTo("BIZ_CAL");
     assertThat(saved.bizDate()).isEqualTo(request.bizDate());
     // day_status 在 first launch 时会根据 cutoff_time 是否已到达自动初始化为 OPEN 或 CUTOFF
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     Instant cutoffAt =
         request
             .bizDate()
@@ -323,7 +328,7 @@ class DefaultLaunchServiceTest {
             30,
             120,
             true);
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     BatchDayInstanceEntity existing =
         new BatchDayInstanceEntity(
             89L,

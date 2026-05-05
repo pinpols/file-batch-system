@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.mq;
 
 import com.example.batch.common.redis.BatchRedisKeys;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -88,7 +89,7 @@ public class OutboxPublishCircuitBreaker {
     if (!outboxProperties.isCircuitBreakerEnabled()) {
       return true;
     }
-    long now = System.currentTimeMillis();
+    long now = BatchDateTimeSupport.utcEpochMillis();
     // T-2：单次 volatile 读取拿到一致的 (openUntilMs, closedCacheExpiresAt) 快照
     CircuitState snapshot = state;
     // 快速路径 1：本地已知熔断开启，且冷却期未结束
@@ -118,7 +119,7 @@ public class OutboxPublishCircuitBreaker {
     if (!outboxProperties.isCircuitBreakerEnabled()) {
       return;
     }
-    long now = System.currentTimeMillis();
+    long now = BatchDateTimeSupport.utcEpochMillis();
     long ttlMillis = Math.max(outboxProperties.getCircuitBreakerCooldownMillis(), 60_000L);
     Long openUntilMs =
         redis.evalLong(

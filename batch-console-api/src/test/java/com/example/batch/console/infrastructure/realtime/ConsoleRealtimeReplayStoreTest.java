@@ -6,11 +6,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.ConsoleRealtimeProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.ListOperations;
@@ -38,7 +38,7 @@ class ConsoleRealtimeReplayStoreTest {
             "cursor-1",
             false,
             JsonUtils.toJson("a"),
-            Instant.now());
+            BatchDateTimeSupport.utcNow());
     ConsoleRealtimeStreamEnvelope second =
         new ConsoleRealtimeStreamEnvelope(
             "console-a",
@@ -48,7 +48,7 @@ class ConsoleRealtimeReplayStoreTest {
             "cursor-2",
             false,
             JsonUtils.toJson("b"),
-            Instant.now());
+            BatchDateTimeSupport.utcNow());
     when(listOperations.range("batch:console:realtime:buffer:t1:alerts", 0, -1))
         .thenReturn(List.of(JsonUtils.toJson(first), JsonUtils.toJson(second)));
 
@@ -75,7 +75,7 @@ class ConsoleRealtimeReplayStoreTest {
             "cursor-1",
             false,
             JsonUtils.toJson("a"),
-            Instant.now()));
+            BatchDateTimeSupport.utcNow()));
 
     // append() 使用单个管线化的低层回调（rPush + lTrim + expire），而非 opsForList()/expire()
     verify(redisTemplate).executePipelined(any(RedisCallback.class));

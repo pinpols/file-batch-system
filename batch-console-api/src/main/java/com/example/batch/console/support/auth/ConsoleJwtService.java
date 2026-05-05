@@ -2,6 +2,7 @@ package com.example.batch.console.support.auth;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleSecurityProperties;
@@ -100,7 +101,7 @@ public class ConsoleJwtService {
     if (!Texts.hasText(tenantId)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
     }
-    Instant issuedAt = Instant.now();
+    Instant issuedAt = BatchDateTimeSupport.utcNow();
     Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
     JwtClaimsSet claims =
         JwtClaimsSet.builder()

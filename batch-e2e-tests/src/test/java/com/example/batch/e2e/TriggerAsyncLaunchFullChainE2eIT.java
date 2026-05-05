@@ -8,13 +8,13 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.e2e.apps.E2eOrchestratorApplication;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -80,7 +80,8 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
             seed.requestId(),
             "tr-fullchain",
             params);
-    LaunchEnvelope envelope = LaunchEnvelope.of(launchRequest, seed.dedupKey(), Instant.now());
+    LaunchEnvelope envelope =
+        LaunchEnvelope.of(launchRequest, seed.dedupKey(), BatchDateTimeSupport.utcNow());
     String payload = JsonUtils.toJson(envelope);
     String key = TENANT + ":" + seed.requestId();
 
@@ -122,7 +123,8 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
             seed.requestId(),
             "tr-dup",
             Map.of("fileFormatType", "JSON"));
-    LaunchEnvelope envelope = LaunchEnvelope.of(launchRequest, seed.dedupKey(), Instant.now());
+    LaunchEnvelope envelope =
+        LaunchEnvelope.of(launchRequest, seed.dedupKey(), BatchDateTimeSupport.utcNow());
     String payload = JsonUtils.toJson(envelope);
     String key = TENANT + ":" + seed.requestId();
 

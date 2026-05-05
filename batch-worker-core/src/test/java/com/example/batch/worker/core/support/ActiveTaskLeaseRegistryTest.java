@@ -2,6 +2,7 @@ package com.example.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
@@ -99,9 +100,9 @@ class ActiveTaskLeaseRegistryTest {
   void awaitDrain_shouldReturnFalseOnTimeout() {
     registry.register("task-1", "t1", "w1");
 
-    long start = System.currentTimeMillis();
+    long start = BatchDateTimeSupport.utcEpochMillis();
     boolean drained = registry.awaitDrain(Duration.ofMillis(200));
-    long elapsed = System.currentTimeMillis() - start;
+    long elapsed = BatchDateTimeSupport.utcEpochMillis() - start;
 
     assertThat(drained).isFalse();
     assertThat(elapsed).isGreaterThanOrEqualTo(150);

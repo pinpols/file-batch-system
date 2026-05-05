@@ -6,6 +6,7 @@ import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelW
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
@@ -52,7 +53,6 @@ import com.example.batch.console.web.response.config.TenantConfigPackageExcelPre
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -126,6 +126,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   // Validator 不再硬拦业务 schema 漂移（真正的错交给 LoadStep 运行时抛）。
   private final BizTableSchemaQueryMapper bizTableSchemaQueryMapper;
   private final TenantConfigPackageRowProjections rowProjections;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   private ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
@@ -157,7 +158,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     byte[] bytes =
         workbookWriter.buildExportWorkbook(
             List.of(jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges));
-    String fileName = "tenant-config-package-" + tid + "-" + Instant.now().toEpochMilli() + ".xlsx";
+    String fileName =
+        "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
   }
 
@@ -275,7 +277,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       return new PackageExcelSession(
           fileName,
           tenantId,
-          Instant.now(),
+          dateTimeSupport.nowInstant(),
           parseSheet(wb, JOB_SHEET, JOB_COLUMNS, tenantId),
           parseSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId),
           parseSheet(wb, ROUTING_SHEET, ROUTING_COLUMNS, tenantId),

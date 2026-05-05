@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.mq;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
@@ -293,7 +294,7 @@ public class OutboxPollScheduler {
         assignment.shardTotal() > 1
             ? "outbox_poll_shard_" + assignment.shardIndex()
             : "outbox_poll";
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     return new LockConfiguration(now, lockName, LOCK_AT_MOST, LOCK_AT_LEAST);
   }
 }

@@ -9,6 +9,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -23,7 +24,6 @@ import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import com.example.batch.trigger.support.CalendarHolidayRule;
 import com.example.batch.trigger.support.TriggerCalendarConfig;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -224,11 +224,12 @@ public class DefaultTriggerService implements TriggerService {
     entity.setTenantId(r.tenantId());
     entity.setRequestId(r.requestId());
     entity.setTopic("batch.trigger.launch.v1");
-    entity.setPayload(JsonUtils.toJson(LaunchEnvelope.of(r, dedupKey, Instant.now())));
+    entity.setPayload(
+        JsonUtils.toJson(LaunchEnvelope.of(r, dedupKey, BatchDateTimeSupport.utcNow())));
     entity.setPublishStatus(OutboxPublishStatus.NEW.code());
     entity.setPublishAttempt(0);
     entity.setTraceId(r.traceId());
-    entity.setNextPublishAt(Instant.now());
+    entity.setNextPublishAt(BatchDateTimeSupport.utcNow());
     return entity;
   }
 

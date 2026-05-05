@@ -9,6 +9,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.infrastructure.excel.JobDefinitionExcelWorkbookWriter;
 import com.example.batch.console.infrastructure.job.DefaultConsoleJobDefinitionExcelApplicationService;
@@ -24,6 +27,7 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.request.job.JobDefinitionExcelApplyRequest;
 import java.io.ByteArrayOutputStream;
+import java.time.Clock;
 import java.util.List;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -63,12 +67,18 @@ class DefaultConsoleJobDefinitionExcelApplicationServiceTest {
             resourceQueueMapper,
             batchWindowMapper,
             businessCalendarMapper,
-            new JobDefinitionExcelWorkbookWriter());
+            new JobDefinitionExcelWorkbookWriter(),
+            dateTimeSupport());
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-1", "trace-1", "t1", "u1", "idem-1", "127.0.0.1"));
     when(tenantGuard.resolveTenant(any())).thenReturn("t1");
     doNothing().when(tenantGuard).assertTenantAllowed(anyString());
+  }
+
+  private static BatchDateTimeSupport dateTimeSupport() {
+    return new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @Test
@@ -102,7 +112,7 @@ class DefaultConsoleJobDefinitionExcelApplicationServiceTest {
     try (Workbook workbook = WorkbookFactory.create(response.getBody().getInputStream())) {
       assertThat(workbook.getNumberOfSheets()).isEqualTo(4);
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("job_definition");
-      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("说明");
+      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("填写说明");
       assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("字典");
       assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("校验");
       XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);

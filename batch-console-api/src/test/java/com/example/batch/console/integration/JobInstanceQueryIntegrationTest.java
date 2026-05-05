@@ -3,6 +3,7 @@ package com.example.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.domain.entity.JobInstanceEntity;
 import com.example.batch.console.domain.query.JobInstanceQuery;
@@ -29,7 +30,9 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldReturnEmptyWhenNoJobInstancesExist() {
     JobInstanceQuery query =
-        JobInstanceQuery.builder().tenantId("no-such-tenant-" + System.currentTimeMillis()).build();
+        JobInstanceQuery.builder()
+            .tenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis())
+            .build();
     List<JobInstanceEntity> results = jobInstanceMapper.selectByQuery(query);
 
     assertThat(results).isEmpty();
@@ -37,15 +40,27 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryJobInstancesByStatus() {
-    String tenantId = "t-job-query-" + System.currentTimeMillis();
-    String jobCode = "TEST_JOB_" + System.currentTimeMillis();
+    String tenantId = "t-job-query-" + BatchDateTimeSupport.utcEpochMillis();
+    String jobCode = "TEST_JOB_" + BatchDateTimeSupport.utcEpochMillis();
 
     insertJobInstance(
-        tenantId, jobCode, "RUNNING", "INST-001-" + System.currentTimeMillis(), "trace-001");
+        tenantId,
+        jobCode,
+        "RUNNING",
+        "INST-001-" + BatchDateTimeSupport.utcEpochMillis(),
+        "trace-001");
     insertJobInstance(
-        tenantId, jobCode, "SUCCESS", "INST-002-" + System.currentTimeMillis(), "trace-002");
+        tenantId,
+        jobCode,
+        "SUCCESS",
+        "INST-002-" + BatchDateTimeSupport.utcEpochMillis(),
+        "trace-002");
     insertJobInstance(
-        tenantId, jobCode, "FAILED", "INST-003-" + System.currentTimeMillis(), "trace-003");
+        tenantId,
+        jobCode,
+        "FAILED",
+        "INST-003-" + BatchDateTimeSupport.utcEpochMillis(),
+        "trace-003");
 
     JobInstanceQuery query =
         JobInstanceQuery.builder().tenantId(tenantId).instanceStatus("RUNNING").build();
@@ -57,14 +72,22 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryJobInstancesByJobCode() {
-    String tenantId = "t-job-code-" + System.currentTimeMillis();
-    String jobCodeA = "JOB_A_" + System.currentTimeMillis();
-    String jobCodeB = "JOB_B_" + System.currentTimeMillis();
+    String tenantId = "t-job-code-" + BatchDateTimeSupport.utcEpochMillis();
+    String jobCodeA = "JOB_A_" + BatchDateTimeSupport.utcEpochMillis();
+    String jobCodeB = "JOB_B_" + BatchDateTimeSupport.utcEpochMillis();
 
     insertJobInstance(
-        tenantId, jobCodeA, "SUCCESS", "INST-A1-" + System.currentTimeMillis(), "trace-a1");
+        tenantId,
+        jobCodeA,
+        "SUCCESS",
+        "INST-A1-" + BatchDateTimeSupport.utcEpochMillis(),
+        "trace-a1");
     insertJobInstance(
-        tenantId, jobCodeB, "SUCCESS", "INST-B1-" + System.currentTimeMillis(), "trace-b1");
+        tenantId,
+        jobCodeB,
+        "SUCCESS",
+        "INST-B1-" + BatchDateTimeSupport.utcEpochMillis(),
+        "trace-b1");
 
     JobInstanceQuery query =
         JobInstanceQuery.builder().tenantId(tenantId).jobCode(jobCodeA).build();
@@ -76,11 +99,15 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryJobInstancesByTraceId() {
-    String tenantId = "t-trace-" + System.currentTimeMillis();
-    String traceId = "trace-unique-" + System.currentTimeMillis();
+    String tenantId = "t-trace-" + BatchDateTimeSupport.utcEpochMillis();
+    String traceId = "trace-unique-" + BatchDateTimeSupport.utcEpochMillis();
 
     insertJobInstance(
-        tenantId, "TEST_JOB", "RUNNING", "INST-T1-" + System.currentTimeMillis(), traceId);
+        tenantId,
+        "TEST_JOB",
+        "RUNNING",
+        "INST-T1-" + BatchDateTimeSupport.utcEpochMillis(),
+        traceId);
 
     JobInstanceQuery query = JobInstanceQuery.builder().tenantId(tenantId).traceId(traceId).build();
     List<JobInstanceEntity> results = jobInstanceMapper.selectByQuery(query);
@@ -91,14 +118,14 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldRespectPageLimit() {
-    String tenantId = "t-page-" + System.currentTimeMillis();
+    String tenantId = "t-page-" + BatchDateTimeSupport.utcEpochMillis();
 
     for (int i = 0; i < 5; i++) {
       insertJobInstance(
           tenantId,
           "TEST_JOB",
           "SUCCESS",
-          "INST-PAGE-" + i + "-" + System.currentTimeMillis(),
+          "INST-PAGE-" + i + "-" + BatchDateTimeSupport.utcEpochMillis(),
           "trace-page-" + i);
     }
 

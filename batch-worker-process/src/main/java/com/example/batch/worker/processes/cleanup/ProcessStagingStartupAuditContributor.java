@@ -1,5 +1,6 @@
 package com.example.batch.worker.processes.cleanup;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.infrastructure.WorkerStartupAuditContributor;
 import com.example.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import java.time.Instant;
@@ -32,7 +33,7 @@ public class ProcessStagingStartupAuditContributor implements WorkerStartupAudit
     long oldestAgeSeconds =
         oldest == null
             ? 0
-            : Math.max(0, (System.currentTimeMillis() - oldest.toEpochMilli()) / 1000);
+            : Math.max(0, (BatchDateTimeSupport.utcEpochMillis() - oldest.toEpochMilli()) / 1000);
     long orphanRows = processStagingMapper.countOrphansOlderThan(retentionHours);
     details.put("oldestAgeSeconds", oldestAgeSeconds);
     details.put("orphanRowsPastRetention", orphanRows);

@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerLifecycleManager;
 import com.example.batch.worker.core.support.WorkerSelfRegistrationService;
@@ -27,6 +28,7 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
   private final WorkerSelfRegistrationService workerRegistryService;
   private final WorkerRuntimeState workerRuntimeState;
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
   public WorkerRegistration start(WorkerRegistration registration) {
@@ -36,8 +38,9 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
     }
     activeRegistration.setStatus(WorkerRegistryStatus.ONLINE.code());
     activeRegistration.setActive(Boolean.TRUE);
-    activeRegistration.setRegisteredAt(OffsetDateTime.now());
-    activeRegistration.setLastHeartbeatAt(OffsetDateTime.now());
+    OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
+    activeRegistration.setRegisteredAt(now);
+    activeRegistration.setLastHeartbeatAt(now);
     activeRegistration = workerRegistryService.register(activeRegistration);
     workerRuntimeState.put(activeRegistration);
     log.info(

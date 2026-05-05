@@ -10,12 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,7 +38,7 @@ class ConsoleOutboxRealtimeControllerTest {
             new ConsoleResponseFactory(requestMetadataResolver), new BatchSecurityProperties());
 
     when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(tenantGuard.resolveTenant(anyString()))
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))

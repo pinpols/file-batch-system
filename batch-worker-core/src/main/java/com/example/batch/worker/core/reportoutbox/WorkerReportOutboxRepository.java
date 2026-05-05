@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.reportoutbox;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
@@ -77,7 +78,7 @@ public class WorkerReportOutboxRepository {
       throw new IllegalArgumentException(
           "report.taskId and report.tenantId are required for outbox");
     }
-    long now = System.currentTimeMillis();
+    long now = BatchDateTimeSupport.utcEpochMillis();
     String payload = JsonUtils.toJson(report);
     String invocationId =
         report.getPartitionInvocationId() == null ? null : report.getPartitionInvocationId();
@@ -121,7 +122,7 @@ public class WorkerReportOutboxRepository {
   }
 
   int resetStalePublishing(long updatedAtBeforeExclusive) {
-    long now = System.currentTimeMillis();
+    long now = BatchDateTimeSupport.utcEpochMillis();
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
       return pgMapper.resetStalePublishing(
           STATUS_NEW, now, STATUS_PUBLISHING, updatedAtBeforeExclusive);
@@ -198,7 +199,7 @@ public class WorkerReportOutboxRepository {
   }
 
   void markGiveUp(long id, String reason) {
-    long now = System.currentTimeMillis();
+    long now = BatchDateTimeSupport.utcEpochMillis();
     int maxAttempts = props.getMaxPublishAttempts();
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
       pgMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);

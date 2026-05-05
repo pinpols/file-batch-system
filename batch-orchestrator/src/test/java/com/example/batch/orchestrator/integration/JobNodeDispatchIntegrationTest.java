@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.task.TaskOutcomeService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -13,7 +14,6 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -304,7 +304,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     // 模拟 Worker 拾取子任务：转为 RUNNING
     jdbcTemplate.update(
         "update batch.job_task set task_status = 'RUNNING', started_at = ? where id = ?",
-        Timestamp.from(Instant.now()),
+        Timestamp.from(BatchDateTimeSupport.utcNow()),
         childTaskId);
 
     // 模拟子任务成功完成
@@ -385,7 +385,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
     jdbcTemplate.update(
         "update batch.job_task set task_status = 'RUNNING', started_at = ? where id = ?",
-        Timestamp.from(Instant.now()),
+        Timestamp.from(BatchDateTimeSupport.utcNow()),
         childTaskId);
 
     TaskOutcomeCommand childFailureOutcome =

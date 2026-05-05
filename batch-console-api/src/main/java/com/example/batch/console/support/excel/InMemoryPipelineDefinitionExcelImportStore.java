@@ -1,6 +1,6 @@
 package com.example.batch.console.support.excel;
 
-import java.time.Instant;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,7 +23,11 @@ public class InMemoryPipelineDefinitionExcelImportStore
     sessions.put(
         uploadToken,
         new ExcelImportSession(
-            fileName, tenantId, Instant.now(), List.copyOf(pipelineRows), List.copyOf(stepRows)));
+            fileName,
+            tenantId,
+            BatchDateTimeSupport.utcNow(),
+            List.copyOf(pipelineRows),
+            List.copyOf(stepRows)));
     return uploadToken;
   }
 

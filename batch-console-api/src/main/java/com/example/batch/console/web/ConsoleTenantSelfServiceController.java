@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleSystemParameterService;
@@ -40,6 +41,7 @@ public class ConsoleTenantSelfServiceController {
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleTenantGuard tenantGuard;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   /** 查看当前租户配额策略。 */
   @GetMapping("/quota")
@@ -73,7 +75,7 @@ public class ConsoleTenantSelfServiceController {
       @RequestParam("tenantId") String tenantId,
       @Valid @RequestBody QuotaChangeRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    String requestKey = "tenant.quota-request." + System.currentTimeMillis();
+    String requestKey = "tenant.quota-request." + dateTimeSupport.currentEpochMillis();
     String requestValue =
         String.format(
             "{\"field\":\"%s\",\"requestedValue\":%d,\"reason\":\"%s\",\"operator\":\"%s\"}",

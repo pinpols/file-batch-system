@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -11,7 +12,6 @@ import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.domain.ExportWorkerType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -186,7 +186,7 @@ public class PrepareStep implements ExportStageStep {
         firstNonBlank(
             stringHint(hints, KEY_SNAPSHOT_TS),
             stringMeta(meta, KEY_SNAPSHOT_TS),
-            Instant.now().toString()));
+            BatchDateTimeSupport.utcNow().toString()));
     snap.put(
         KEY_SOURCE_PARTITIONS,
         mergePartitions(hints.get(KEY_SOURCE_PARTITIONS), meta.get(KEY_SOURCE_PARTITIONS)));

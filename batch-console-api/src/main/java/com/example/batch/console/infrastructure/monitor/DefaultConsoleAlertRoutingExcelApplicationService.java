@@ -11,6 +11,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHe
 
 import com.example.batch.common.enums.AlertSeverity;
 import com.example.batch.common.enums.DictEnum;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.monitor.ConsoleAlertRoutingExcelApplicationService;
 import com.example.batch.console.domain.param.AlertRoutingConfigUpsertParam;
@@ -101,9 +102,10 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
+      BatchDateTimeSupport dateTimeSupport,
       AlertRoutingConfigMapper alertRoutingConfigMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
     this.alertRoutingConfigMapper = alertRoutingConfigMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }

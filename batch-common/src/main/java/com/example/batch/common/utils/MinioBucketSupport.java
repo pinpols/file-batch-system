@@ -1,5 +1,6 @@
 package com.example.batch.common.utils;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -35,7 +36,7 @@ public final class MinioBucketSupport {
       return true;
     } catch (Exception ex) {
       String key = cacheKey(componentName, bucket);
-      long now = System.currentTimeMillis();
+      long now = BatchDateTimeSupport.utcEpochMillis();
       AtomicLong lastLoggedAt =
           LAST_FAILURE_LOG_AT.computeIfAbsent(key, ignored -> new AtomicLong(0L));
       long previous = lastLoggedAt.get();

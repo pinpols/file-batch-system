@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateEntity;
 import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
@@ -296,12 +297,12 @@ class DatabaseQuotaRuntimeStateServiceTest {
             "JOB",
             "job-cal",
             "CALENDAR_DAY",
-            Instant.now().minusSeconds(3600),
-            Instant.now().plusSeconds(82800),
+            BatchDateTimeSupport.utcNow().minusSeconds(3600),
+            BatchDateTimeSupport.utcNow().plusSeconds(82800),
             1,
             null,
-            Instant.now(),
-            Instant.now(),
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow(),
             null);
     // 窗口仍然有效（远未到期）
 
@@ -392,12 +393,12 @@ class DatabaseQuotaRuntimeStateServiceTest {
             "JOB",
             "job-sw",
             "SLIDING_WINDOW",
-            Instant.now().minusSeconds(7200),
-            Instant.now().minusSeconds(3600),
+            BatchDateTimeSupport.utcNow().minusSeconds(7200),
+            BatchDateTimeSupport.utcNow().minusSeconds(3600),
             5,
             null,
-            Instant.now(),
-            Instant.now(),
+            BatchDateTimeSupport.utcNow(),
+            BatchDateTimeSupport.utcNow(),
             null); // already expired
 
     when(quotaRuntimeStateMapper.selectExpired(any(Instant.class))).thenReturn(List.of(expired));

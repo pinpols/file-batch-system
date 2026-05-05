@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.support;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
@@ -41,14 +42,17 @@ import org.springframework.context.event.EventListener;
 public abstract class AbstractWorkerLoop {
 
   private final WorkerRuntimeFacade workerRuntimeFacade;
+  private final BatchDateTimeSupport dateTimeSupport;
   private final AtomicBoolean started = new AtomicBoolean(false);
   private volatile WorkerRegistration registration;
 
   @Value("${batch.worker.registry.fail-fast-on-startup:true}")
   private boolean failFastOnStartup;
 
-  protected AbstractWorkerLoop(WorkerRuntimeFacade workerRuntimeFacade) {
+  protected AbstractWorkerLoop(
+      WorkerRuntimeFacade workerRuntimeFacade, BatchDateTimeSupport dateTimeSupport) {
     this.workerRuntimeFacade = workerRuntimeFacade;
+    this.dateTimeSupport = dateTimeSupport;
   }
 
   /** Worker 配置（topic、tenantId、workerType 等）。 */
@@ -121,8 +125,9 @@ public abstract class AbstractWorkerLoop {
       workerRegistration.setHost(resolveHostName());
       workerRegistration.setPort(workerPort());
       workerRegistration.setActive(Boolean.TRUE);
-      workerRegistration.setRegisteredAt(OffsetDateTime.now());
-      workerRegistration.setLastHeartbeatAt(OffsetDateTime.now());
+      OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
+      workerRegistration.setRegisteredAt(now);
+      workerRegistration.setLastHeartbeatAt(now);
       workerRegistration.setCapabilityTags(cfg.capabilityTags());
       registration = workerRuntimeFacade.start(workerRegistration);
       started.set(true);

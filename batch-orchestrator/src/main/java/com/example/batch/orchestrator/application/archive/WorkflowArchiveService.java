@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.archive;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.WorkflowArchiveProperties;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Duration;
@@ -36,7 +37,7 @@ public class WorkflowArchiveService {
     }
     int retention = Math.max(1, properties.getRetentionDays());
     int batchSize = Math.max(1, properties.getBatchSize());
-    Instant cutoff = Instant.now().minus(Duration.ofDays(retention));
+    Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofDays(retention));
     List<Long> ids = workflowRunMapper.selectArchivableIds(cutoff, batchSize);
     if (ids.isEmpty()) {
       return ArchiveBatchResult.empty(cutoff);

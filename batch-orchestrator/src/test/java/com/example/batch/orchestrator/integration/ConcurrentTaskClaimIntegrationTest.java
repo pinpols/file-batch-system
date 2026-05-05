@@ -6,6 +6,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -24,7 +25,6 @@ import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -251,7 +251,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         new JsonbString("{}"),
         null,
         "ONLINE",
-        Instant.now(),
+        BatchDateTimeSupport.utcNow(),
         0,
         10,
         null,

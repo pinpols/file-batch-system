@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.StorageObjectView;
 import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
@@ -149,7 +150,7 @@ public class FileGovernanceScheduler {
     long waitingGroups = 0L;
     long triggeredGroups = 0L;
     long timeoutGroups = 0L;
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     for (Map.Entry<ArrivalGroupKey, List<Map<String, Object>>> entry : grouped.entrySet()) {
       ArrivalGroupDecision decision = evaluateArrivalGroup(entry.getKey(), entry.getValue(), now);
       if (decision == null || decision.state() == null) {
@@ -173,7 +174,8 @@ public class FileGovernanceScheduler {
       return;
     }
     Instant cutoff =
-        Instant.now().minus(properties.getArchive().getRetentionDays(), ChronoUnit.DAYS);
+        BatchDateTimeSupport.utcNow()
+            .minus(properties.getArchive().getRetentionDays(), ChronoUnit.DAYS);
     List<Map<String, Object>> files =
         fileGovernanceRepository.selectArchivedFilesForCleanup(
             cutoff, properties.getArchive().getCleanupBatchSize());
@@ -213,7 +215,7 @@ public class FileGovernanceScheduler {
         minioGovernanceStorage.removeObject(storagePath);
       }
       Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
-      cleanupMetadata.put("cleanupAt", Instant.now().toString());
+      cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
       cleanupMetadata.put("cleanupReason", "ARCHIVE_RETENTION_EXPIRED");
       fileGovernanceRepository.updateFileStatus(tenantId, fileId, "DELETED", cleanupMetadata);
       Map<String, Object> auditDetail = new LinkedHashMap<>();

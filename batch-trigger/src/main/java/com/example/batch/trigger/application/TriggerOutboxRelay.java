@@ -4,6 +4,7 @@ import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
@@ -180,7 +181,7 @@ public class TriggerOutboxRelay {
   private void pollLocked() {
     resetStalePublishing();
     sampleBacklog();
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     List<TriggerOutboxEventEntity> batch =
         mapper.selectPending(
             now, batchSize, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
@@ -228,7 +229,7 @@ public class TriggerOutboxRelay {
           event.getId(),
           OutboxPublishStatus.GIVE_UP.code(),
           truncate("payload deserialize: " + ex.getMessage()),
-          Instant.now().plusSeconds(MAX_BACKOFF_SECONDS));
+          BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS));
       if (giveUpCounter != null) {
         giveUpCounter.increment();
       }
@@ -246,13 +247,13 @@ public class TriggerOutboxRelay {
             event.getId(),
             OutboxPublishStatus.GIVE_UP.code(),
             truncate(result.errorMessage()),
-            Instant.now().plusSeconds(MAX_BACKOFF_SECONDS));
+            BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS));
         if (giveUpCounter != null) {
           giveUpCounter.increment();
         }
         return;
       }
-      Instant retryAt = Instant.now().plusSeconds(backoffSeconds(nextAttempt));
+      Instant retryAt = BatchDateTimeSupport.utcNow().plusSeconds(backoffSeconds(nextAttempt));
       mapper.markFailed(
           event.getId(),
           OutboxPublishStatus.FAILED.code(),
@@ -301,6 +302,6 @@ public class TriggerOutboxRelay {
 
   private LockConfiguration lockConfig() {
     return new LockConfiguration(
-        Instant.now(), "trigger_outbox_relay", LOCK_AT_MOST, LOCK_AT_LEAST);
+        BatchDateTimeSupport.utcNow(), "trigger_outbox_relay", LOCK_AT_MOST, LOCK_AT_LEAST);
   }
 }

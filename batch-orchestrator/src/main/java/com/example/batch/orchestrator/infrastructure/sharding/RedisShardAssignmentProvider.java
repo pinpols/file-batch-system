@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.sharding;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -57,7 +58,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   @Scheduled(fixedDelayString = "${batch.outbox.sharding.heartbeat-interval-ms:5000}")
   public void heartbeat() {
     try {
-      redis.opsForZSet().add(MEMBERS_KEY, memberId, System.currentTimeMillis());
+      redis.opsForZSet().add(MEMBERS_KEY, memberId, BatchDateTimeSupport.utcEpochMillis());
     } catch (RuntimeException ex) {
       log.warn("Shard coordinator heartbeat failed: member={}, err={}", memberId, ex.toString());
     }
@@ -75,7 +76,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   @Override
   public ShardAssignment current() {
     try {
-      long cutoff = System.currentTimeMillis() - memberTtl.toMillis();
+      long cutoff = BatchDateTimeSupport.utcEpochMillis() - memberTtl.toMillis();
       // 清死成员
       redis.opsForZSet().removeRangeByScore(MEMBERS_KEY, 0, cutoff);
       // 取活成员（按 score 升序 = 按心跳时间升序，但我们要确定性顺序，所以 toArray 后字典序排）

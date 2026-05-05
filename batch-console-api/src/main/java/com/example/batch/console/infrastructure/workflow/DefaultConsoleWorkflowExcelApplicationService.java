@@ -4,6 +4,7 @@ import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumn
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -45,7 +46,6 @@ import com.example.batch.console.web.response.workflow.ConsoleWorkflowExcelUploa
 import com.example.batch.console.web.response.workflow.ConsoleWorkflowNodeExcelRowResponse;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -80,6 +80,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
   private final WorkflowExcelWorkbookWriter workbookWriter;
   private final WorkflowExcelSheetParser sheetParser;
   private final WorkflowExcelRowValidator rowValidator;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
   public ResponseEntity<InputStreamResource> exportWorkflowExcel(
@@ -99,7 +100,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
     byte[] workbookBytes = workbookWriter.writeMaintenanceWorkbook(tenantId, definitions);
     InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
     String fileName =
-        "workflow-maintenance-" + tenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
+        "workflow-maintenance-" + tenantId + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
