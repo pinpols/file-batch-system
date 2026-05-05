@@ -6,7 +6,8 @@
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, calendarCode, calendarName, timezone,
          holidayRollRule, catchUpPolicy, catchUpMaxDays, cutoffTime,
-         lateArrivalToleranceMin, slaOffsetMin, dayRolloverPolicy, enabled)
+         lateArrivalToleranceMin, slaOffsetMin, dayRolloverPolicy, dstGapPolicy,
+         dstOverlapPolicy, enabled)
       列名按 V3 + V32 DDL。
     -->
     <resultMap id="businessCalendarMap"
@@ -24,6 +25,8 @@
             <arg column="late_arrival_tolerance_min" javaType="java.lang.Integer"/>
             <arg column="sla_offset_min" javaType="java.lang.Integer"/>
             <arg column="day_rollover_policy" javaType="java.lang.String"/>
+            <arg column="dst_gap_policy" javaType="java.lang.String"/>
+            <arg column="dst_overlap_policy" javaType="java.lang.String"/>
             <arg column="enabled" javaType="java.lang.Boolean"/>
         </constructor>
     </resultMap>
@@ -31,7 +34,8 @@
     <sql id="columns">
         id, tenant_id, calendar_code, calendar_name, timezone,
         holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
-        late_arrival_tolerance_min, sla_offset_min, day_rollover_policy, enabled
+        late_arrival_tolerance_min, sla_offset_min, day_rollover_policy,
+        dst_gap_policy, dst_overlap_policy, enabled
     </sql>
 
     <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="businessCalendarMap">
@@ -70,7 +74,8 @@
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
             holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
-            late_arrival_tolerance_min, sla_offset_min, day_rollover_policy, enabled
+            late_arrival_tolerance_min, sla_offset_min, day_rollover_policy,
+            dst_gap_policy, dst_overlap_policy, enabled
         ) values (
             #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
             <choose>
@@ -93,6 +98,14 @@
                 <otherwise>'ALLOW_OVERLAP'</otherwise>
             </choose>,
             <choose>
+                <when test="dstGapPolicy != null">#{dstGapPolicy}</when>
+                <otherwise>'RUN_AT_NEXT_VALID_TIME'</otherwise>
+            </choose>,
+            <choose>
+                <when test="dstOverlapPolicy != null">#{dstOverlapPolicy}</when>
+                <otherwise>'RUN_ONCE_EARLIER_OFFSET'</otherwise>
+            </choose>,
+            <choose>
                 <when test="enabled != null">#{enabled}</when>
                 <otherwise>true</otherwise>
             </choose>
@@ -111,6 +124,8 @@
                late_arrival_tolerance_min = #{lateArrivalToleranceMin},
                sla_offset_min = #{slaOffsetMin},
                day_rollover_policy = #{dayRolloverPolicy},
+               dst_gap_policy = #{dstGapPolicy},
+               dst_overlap_policy = #{dstOverlapPolicy},
                enabled = #{enabled},
                updated_at = current_timestamp
          where id = #{id}

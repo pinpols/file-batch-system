@@ -11,6 +11,7 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.service.BatchDayTimePolicyResolver;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -43,6 +44,7 @@ public class BatchDayOpenScheduler {
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchTimezoneProvider timezoneProvider;
+  private final BatchDayTimePolicyResolver timePolicyResolver;
 
   @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.open-scan-interval-millis:60000}")
@@ -84,7 +86,7 @@ public class BatchDayOpenScheduler {
     if (existing != null) {
       return;
     }
-    Instant cutoffAt = bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
+    Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
     Instant slaDeadlineAt = resolveSlaDeadlineAt(calendar, cutoffAt);
     BatchDayInstanceEntity toInsert =
         new BatchDayInstanceEntity(
@@ -100,6 +102,7 @@ public class BatchDayOpenScheduler {
             0,
             0,
             zoneId.getId(),
+            timePolicyResolver.snapshot(calendar),
             0L,
             now,
             now);

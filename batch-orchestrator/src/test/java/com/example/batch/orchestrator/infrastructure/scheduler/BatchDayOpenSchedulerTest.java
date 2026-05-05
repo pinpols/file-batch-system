@@ -15,6 +15,7 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.service.BatchDayTimePolicyResolver;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -37,13 +38,16 @@ class BatchDayOpenSchedulerTest {
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+    BatchTimezoneProvider timezoneProvider =
+        new BatchTimezoneProvider(new BatchTimezoneProperties());
     scheduler =
         new BatchDayOpenScheduler(
             businessCalendarMapper,
             batchDayInstanceMapper,
             jobExecutionLogMapper,
             gracefulShutdown,
-            new BatchTimezoneProvider(new BatchTimezoneProperties()));
+            timezoneProvider,
+            new BatchDayTimePolicyResolver(timezoneProvider));
   }
 
   @Test

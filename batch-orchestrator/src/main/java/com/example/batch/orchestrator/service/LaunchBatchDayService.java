@@ -19,8 +19,6 @@ import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
@@ -49,6 +47,7 @@ public class LaunchBatchDayService {
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorJobMappers jobMappers;
   private final BatchTimezoneProvider timezoneProvider;
+  private final BatchDayTimePolicyResolver timePolicyResolver;
   private final ObjectProvider<LaunchBatchDayService> selfProvider;
 
   /**
@@ -131,6 +130,7 @@ public class LaunchBatchDayService {
     Instant now = Instant.now();
     Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
     String timezoneSnapshot = resolveCalendarTimezone(request.tenantId(), calendarCode);
+    String dstPolicySnapshot = resolveDstPolicySnapshot(request.tenantId(), calendarCode);
     String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
     boolean hasOperator = Texts.hasText(operatorId);
     return new BatchDayUpsertContext(
@@ -138,6 +138,7 @@ public class LaunchBatchDayService {
         now,
         cutoffAt,
         timezoneSnapshot,
+        dstPolicySnapshot,
         hasOperator ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM,
         hasOperator
             ? AuditLogConstants.OPERATOR_TYPE_REQUEST
@@ -165,6 +166,7 @@ public class LaunchBatchDayService {
             ctx.lateAccepted() ? 1 : 0,
             ctx.catchUpLaunch() ? 1 : 0,
             ctx.timezoneSnapshot(),
+            ctx.dstPolicySnapshot(),
             // version=0 让 mapper.xml 默认值生效（非 null 才走显式赋值）；version=null 也可，xml 兜 0
             0L,
             ctx.now(),
@@ -292,6 +294,7 @@ public class LaunchBatchDayService {
       Instant now,
       Instant cutoffAt,
       String timezoneSnapshot,
+      String dstPolicySnapshot,
       String auditOperatorId,
       String auditOperatorType,
       boolean catchUpLaunch,
@@ -306,10 +309,7 @@ public class LaunchBatchDayService {
     if (calendar == null) {
       return null;
     }
-    LocalTime cutoffTime =
-        calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
-    ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
-    return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
+    return timePolicyResolver.resolveCutoffAt(calendar, bizDate);
   }
 
   /**
@@ -325,16 +325,19 @@ public class LaunchBatchDayService {
     return timezoneProvider.defaultZone().getId();
   }
 
+  String resolveDstPolicySnapshot(String tenantId, String calendarCode) {
+    BusinessCalendarEntity calendar =
+        configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
+    return timePolicyResolver.snapshot(calendar);
+  }
+
   Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
     BusinessCalendarEntity calendar =
         configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
     if (!hasValidSlaOffset(calendar)) {
       return null;
     }
-    LocalTime cutoffTime =
-        calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
-    ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
-    Instant cutoffAt = bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
+    Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
     return cutoffAt.plusSeconds(calendar.slaOffsetMin() * 60L);
   }
 

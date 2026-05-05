@@ -106,6 +106,7 @@ class DefaultLaunchServiceTest {
             jobExecutionLogMapper,
             jobMappers,
             timezoneProvider,
+            new BatchDayTimePolicyResolver(timezoneProvider),
             batchDaySelfProvider);
     when(batchDaySelfProvider.getObject()).thenReturn(launchBatchDayService);
     launchParamResolver = new LaunchParamResolver(timezoneProvider);
