@@ -23,6 +23,8 @@
         <result column="priority" property="priority"/>
         <result column="dedup_key" property="dedupKey"/>
         <result column="run_attempt" property="runAttempt"/>
+        <result column="job_definition_version" property="jobDefinitionVersion"/>
+        <result column="rerun_policy_snapshot" property="rerunPolicySnapshot"/>
         <result column="version" property="version"/>
         <result column="expected_partition_count" property="expectedPartitionCount"/>
         <result column="success_partition_count" property="successPartitionCount"/>
@@ -97,6 +99,8 @@
             priority,
             dedup_key,
             run_attempt,
+            job_definition_version,
+            rerun_policy_snapshot,
             version,
             expected_partition_count,
             success_partition_count,
@@ -133,6 +137,8 @@
             #{priority},
             #{dedupKey},
             #{runAttempt},
+            #{jobDefinitionVersion},
+            #{rerunPolicySnapshot,jdbcType=VARCHAR}::jsonb,
             #{version},
             #{expectedPartitionCount},
             #{successPartitionCount},

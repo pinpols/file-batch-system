@@ -13,6 +13,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.IdGenerator;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.task.PartitionDispatchService;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -23,6 +24,7 @@ import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoad
 import io.micrometer.observation.annotation.Observed;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -197,6 +199,7 @@ public class DefaultLaunchService implements LaunchService {
     Integer priority =
         loaded.jobDefinition().priority() == null ? 5 : loaded.jobDefinition().priority();
     String highWaterMarkIn = resolveHighWaterMarkIn(request.tenantId(), loaded);
+    Integer runAttempt = nextRunAttempt(request, dedupKey);
     return JobInstanceEntity.builder()
         .tenantId(request.tenantId())
         .jobDefinitionId(loaded.jobDefinition().id())
@@ -217,7 +220,10 @@ public class DefaultLaunchService implements LaunchService {
         .workerGroup(loaded.jobDefinition().workerGroup())
         .priority(priority)
         .dedupKey(dedupKey)
-        .runAttempt(nextRunAttempt(request, dedupKey))
+        .runAttempt(runAttempt)
+        .jobDefinitionVersion(loaded.jobDefinition().version())
+        .rerunPolicySnapshot(
+            buildRerunPolicySnapshot(request, effectiveParams, parentInstanceId, runAttempt))
         .version(0L)
         .expectedPartitionCount(0)
         .successPartitionCount(0)
@@ -243,6 +249,25 @@ public class DefaultLaunchService implements LaunchService {
                 loaded.jobDefinition(), effectiveParams))
         .highWaterMarkIn(highWaterMarkIn)
         .build();
+  }
+
+  private String buildRerunPolicySnapshot(
+      LaunchRequest request,
+      Map<String, Object> effectiveParams,
+      Long parentInstanceId,
+      Integer runAttempt) {
+    Map<String, Object> snapshot = new LinkedHashMap<>();
+    snapshot.put(
+        "triggerType", request.triggerType() == null ? null : request.triggerType().code());
+    snapshot.put("runAttempt", runAttempt);
+    snapshot.put("parentInstanceId", parentInstanceId);
+    snapshot.put(
+        "rerunFlag", launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams));
+    snapshot.put("rerunReason", launchParamResolver.resolveRerunReason(effectiveParams));
+    snapshot.put("retryFlag", launchParamResolver.resolveRetryFlag(effectiveParams));
+    snapshot.put("resultIsolation", "NEW_JOB_INSTANCE_PER_RUN_ATTEMPT");
+    snapshot.put("configVersionPolicy", "SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE");
+    return JsonUtils.toJson(snapshot);
   }
 
   /**

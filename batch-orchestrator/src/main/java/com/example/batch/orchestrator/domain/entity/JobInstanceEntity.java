@@ -35,6 +35,8 @@ public class JobInstanceEntity implements Stateful {
   private Integer priority;
   private String dedupKey;
   private Integer runAttempt;
+  private Integer jobDefinitionVersion;
+  private String rerunPolicySnapshot;
   private Long version;
   private Integer expectedPartitionCount;
   private Integer successPartitionCount;

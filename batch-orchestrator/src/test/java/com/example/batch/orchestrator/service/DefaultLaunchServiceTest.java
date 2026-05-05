@@ -15,6 +15,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.task.PartitionDispatchService;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -179,6 +180,15 @@ class DefaultLaunchServiceTest {
     ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
+    assertThat(jobCaptor.getValue().getJobDefinitionVersion()).isEqualTo(jobDefinition.version());
+    Map<?, ?> rerunPolicy =
+        JsonUtils.fromJson(jobCaptor.getValue().getRerunPolicySnapshot(), Map.class);
+    assertThat(rerunPolicy.get("resultIsolation")).isEqualTo("NEW_JOB_INSTANCE_PER_RUN_ATTEMPT");
+    assertThat(rerunPolicy.get("configVersionPolicy"))
+        .isEqualTo("SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE");
+    Map<?, ?> paramsSnapshot =
+        JsonUtils.fromJson(jobCaptor.getValue().getParamsSnapshot(), Map.class);
+    assertThat(paramsSnapshot.get("jobDefinitionVersion")).isEqualTo(jobDefinition.version());
     ArgumentCaptor<BatchDayInstanceEntity> captor =
         ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).insert(captor.capture());
