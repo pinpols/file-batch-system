@@ -50,6 +50,13 @@
          order by id desc
     </select>
 
+    <select id="selectByEnabled" resultMap="businessCalendarMap">
+        select <include refid="columns"/>
+          from batch.business_calendar
+         where enabled = #{enabled}
+         order by tenant_id, calendar_code
+    </select>
+
     <select id="selectById" resultMap="businessCalendarMap">
         select <include refid="columns"/>
           from batch.business_calendar
