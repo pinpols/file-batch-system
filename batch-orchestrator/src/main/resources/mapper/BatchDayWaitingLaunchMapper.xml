@@ -70,4 +70,26 @@
          order by id asc
          limit #{limit}
     </select>
+
+    <select id="selectWaitingByCalendarBizDate" resultMap="BatchDayWaitingLaunchMap">
+        select <include refid="columns"/>
+          from batch.batch_day_waiting_launch
+         where wait_status = 'WAITING'
+           and tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date = #{bizDate}
+         order by id asc
+         limit #{limit}
+    </select>
+
+    <update id="markReleased">
+        update batch.batch_day_waiting_launch
+           set wait_status = 'RELEASED',
+               released_at = current_timestamp,
+               released_by = #{releasedBy},
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId}
+           and request_id = #{requestId}
+           and wait_status = 'WAITING'
+    </update>
 </mapper>

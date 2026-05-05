@@ -62,7 +62,8 @@ public class BatchDayCutoffScheduler {
       if (candidate == null
           || candidate.tenantId() == null
           || candidate.calendarCode() == null
-          || candidate.bizDate() == null) {
+          || candidate.bizDate() == null
+          || Boolean.TRUE.equals(candidate.frozen())) {
         continue;
       }
       Instant cutoffAt = candidate.cutoffAt();

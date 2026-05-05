@@ -75,7 +75,7 @@ public class BatchDaySettleScheduler {
     Instant now = Instant.now();
     BatchDaySettleScheduler self = selfProvider.getObject();
     for (BatchDayInstanceEntity candidate : candidates) {
-      if (candidate == null || candidate.id() == null) {
+      if (candidate == null || candidate.id() == null || Boolean.TRUE.equals(candidate.frozen())) {
         continue;
       }
       try {

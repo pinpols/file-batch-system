@@ -5,7 +5,8 @@
       BatchDayInstanceEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, calendarCode, bizDate, dayStatus, openAt, cutoffAt, settledAt,
-         slaDeadlineAt, lateCount, catchupCount, timezoneSnapshot, version, createdAt, updatedAt)
+         slaDeadlineAt, lateCount, catchupCount, timezoneSnapshot, frozen, operationReason,
+         operatedBy, operatedAt, version, createdAt, updatedAt)
       列名按 V32 + V62 DDL。
     -->
     <resultMap id="batchDayInstanceMap"
@@ -23,6 +24,10 @@
             <arg column="late_count" javaType="java.lang.Integer"/>
             <arg column="catchup_count" javaType="java.lang.Integer"/>
             <arg column="timezone_snapshot" javaType="java.lang.String"/>
+            <arg column="frozen" javaType="java.lang.Boolean"/>
+            <arg column="operation_reason" javaType="java.lang.String"/>
+            <arg column="operated_by" javaType="java.lang.String"/>
+            <arg column="operated_at" javaType="java.time.Instant"/>
             <arg column="version" javaType="java.lang.Long"/>
             <arg column="created_at" javaType="java.time.Instant"/>
             <arg column="updated_at" javaType="java.time.Instant"/>
@@ -35,6 +40,7 @@
             tenant_id, calendar_code, biz_date, day_status,
             open_at, cutoff_at, settled_at, sla_deadline_at,
             late_count, catchup_count, timezone_snapshot,
+            frozen, operation_reason, operated_by, operated_at,
             version, created_at, updated_at
         ) values (
             #{tenantId}, #{calendarCode}, #{bizDate},
@@ -59,6 +65,11 @@
                 <when test="timezoneSnapshot != null">#{timezoneSnapshot}</when>
                 <otherwise>'UTC'</otherwise>
             </choose>,
+            <choose>
+                <when test="frozen != null">#{frozen}</when>
+                <otherwise>false</otherwise>
+            </choose>,
+            #{operationReason}, #{operatedBy}, #{operatedAt},
             <choose>
                 <when test="version != null">#{version}</when>
                 <otherwise>0</otherwise>
@@ -86,6 +97,10 @@
                late_count          = #{lateCount},
                catchup_count       = #{catchupCount},
                timezone_snapshot   = #{timezoneSnapshot},
+               frozen              = #{frozen},
+               operation_reason    = #{operationReason},
+               operated_by         = #{operatedBy},
+               operated_at         = #{operatedAt},
                updated_at          = current_timestamp,
                version             = version + 1
          where id = #{id}
