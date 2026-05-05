@@ -57,6 +57,7 @@ public class DefaultLaunchService implements LaunchService {
   private final OrchestratorWorkflowMappers workflowMappers;
   private final WorkflowDagService workflowDagService;
   private final LaunchBatchDayService launchBatchDayService;
+  private final BatchDayGateService batchDayGateService;
   private final LaunchParamResolver launchParamResolver;
   private final ObjectProvider<DefaultLaunchService> selfProvider;
 
@@ -74,6 +75,11 @@ public class DefaultLaunchService implements LaunchService {
     Map<String, Object> effectiveParams =
         launchParamResolver.mergeLaunchParams(
             loaded.jobDefinition(), routedRequest.triggerType(), routedRequest.params());
+    BatchDayGateService.GateDecision gateDecision =
+        batchDayGateService.evaluateAndApply(routedRequest, loaded, effectiveParams, traceId);
+    if (!gateDecision.allowed()) {
+      return LaunchResponse.skipped(traceId);
+    }
 
     // T1：先把 instance/workflow 落库并提交，避免 T2 执行期间持有更长时间锁。
     PreparedLaunch prepared;

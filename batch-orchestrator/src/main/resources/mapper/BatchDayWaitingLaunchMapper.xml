@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper">
+    <resultMap id="BatchDayWaitingLaunchMap"
+               type="com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="trigger_type" javaType="java.lang.String"/>
+            <arg column="wait_reason" javaType="java.lang.String"/>
+            <arg column="launch_payload_text" javaType="java.lang.String"/>
+            <arg column="wait_status" javaType="java.lang.String"/>
+            <arg column="released_at" javaType="java.time.Instant"/>
+            <arg column="released_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, calendar_code, job_code, biz_date, request_id, trace_id, trigger_type,
+        wait_reason, launch_payload::text as launch_payload_text, wait_status, released_at,
+        released_by, created_at, updated_at
+    </sql>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity">
+        insert into batch.batch_day_waiting_launch (
+            tenant_id, calendar_code, job_code, biz_date, request_id, trace_id, trigger_type,
+            wait_reason, launch_payload, wait_status, released_at, released_by, created_at, updated_at
+        ) values (
+            #{tenantId}, #{calendarCode}, #{jobCode}, #{bizDate}, #{requestId}, #{traceId}, #{triggerType},
+            #{waitReason}, cast(#{launchPayload} as jsonb),
+            <choose>
+                <when test="waitStatus != null">#{waitStatus}</when>
+                <otherwise>'WAITING'</otherwise>
+            </choose>,
+            #{releasedAt}, #{releasedBy},
+            <choose>
+                <when test="createdAt != null">#{createdAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>,
+            <choose>
+                <when test="updatedAt != null">#{updatedAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>
+        )
+        on conflict (tenant_id, request_id) do nothing
+    </insert>
+
+    <select id="selectByTenantAndRequestId" resultMap="BatchDayWaitingLaunchMap">
+        select <include refid="columns"/>
+          from batch.batch_day_waiting_launch
+         where tenant_id = #{tenantId}
+           and request_id = #{requestId}
+    </select>
+
+    <select id="selectWaiting" resultMap="BatchDayWaitingLaunchMap">
+        select <include refid="columns"/>
+          from batch.batch_day_waiting_launch
+         where wait_status = 'WAITING'
+        <if test="tenantId != null and tenantId != ''">
+           and tenant_id = #{tenantId}
+        </if>
+         order by id asc
+         limit #{limit}
+    </select>
+</mapper>

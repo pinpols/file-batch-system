@@ -14,4 +14,35 @@ public record BusinessCalendarEntity(
     LocalTime cutoffTime,
     Integer lateArrivalToleranceMin,
     Integer slaOffsetMin,
-    Boolean enabled) {}
+    String dayRolloverPolicy,
+    Boolean enabled) {
+
+  public BusinessCalendarEntity(
+      Long id,
+      String tenantId,
+      String calendarCode,
+      String calendarName,
+      String timezone,
+      String holidayRollRule,
+      String catchUpPolicy,
+      Integer catchUpMaxDays,
+      LocalTime cutoffTime,
+      Integer lateArrivalToleranceMin,
+      Integer slaOffsetMin,
+      Boolean enabled) {
+    this(
+        id,
+        tenantId,
+        calendarCode,
+        calendarName,
+        timezone,
+        holidayRollRule,
+        catchUpPolicy,
+        catchUpMaxDays,
+        cutoffTime,
+        lateArrivalToleranceMin,
+        slaOffsetMin,
+        "ALLOW_OVERLAP",
+        enabled);
+  }
+}

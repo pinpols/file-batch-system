@@ -8,7 +8,7 @@
          scheduleType, scheduleExpr, timezone, workerGroup, queueCode, calendarCode,
          windowCode, triggerMode, dagEnabled, shardStrategy, retryPolicy, retryMaxCount,
          timeoutSeconds, executionHandler, paramSchema, priority, defaultParams,
-         version, enabled, description, executionMode, watermarkField)
+         version, enabled, description, executionMode, watermarkField, previousDayDependencyScope)
 
       param_schema / default_params 是 JSONB；读路径通过 ::text 转字符串再走 MapJsonbTypeHandler。
     -->
@@ -47,6 +47,7 @@
             <arg column="description" javaType="java.lang.String"/>
             <arg column="execution_mode" javaType="java.lang.String"/>
             <arg column="watermark_field" javaType="java.lang.String"/>
+            <arg column="previous_day_dependency_scope" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -58,7 +59,7 @@
         param_schema::text AS param_schema_text,
         priority,
         default_params::text AS default_params_text,
-        version, enabled, description, execution_mode, watermark_field
+        version, enabled, description, execution_mode, watermark_field, previous_day_dependency_scope
     </sql>
 
     <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="jobDefinitionMap">
@@ -93,7 +94,7 @@
             schedule_type, schedule_expr, timezone, worker_group, queue_code, calendar_code,
             window_code, trigger_mode, dag_enabled, shard_strategy, retry_policy, retry_max_count,
             timeout_seconds, execution_handler, param_schema, priority, default_params,
-            version, enabled, description, execution_mode, watermark_field
+            version, enabled, description, execution_mode, watermark_field, previous_day_dependency_scope
         ) values (
             #{tenantId}, #{jobCode}, #{jobName}, #{jobType}, #{bizType},
             #{scheduleType}, #{scheduleExpr}, #{timezone}, #{workerGroup}, #{queueCode},
@@ -128,7 +129,11 @@
                 <when test="enabled != null">#{enabled}</when>
                 <otherwise>true</otherwise>
             </choose>,
-            #{description}, #{executionMode}, #{watermarkField}
+            #{description}, #{executionMode}, #{watermarkField},
+            <choose>
+                <when test="previousDayDependencyScope != null">#{previousDayDependencyScope}</when>
+                <otherwise>'INHERIT'</otherwise>
+            </choose>
         )
     </insert>
 
@@ -172,6 +177,7 @@
                description = #{description},
                execution_mode = #{executionMode},
                watermark_field = #{watermarkField},
+               previous_day_dependency_scope = #{previousDayDependencyScope},
                updated_at = current_timestamp
          where id = #{id}
     </update>
