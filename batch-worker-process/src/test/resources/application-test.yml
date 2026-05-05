@@ -10,6 +10,9 @@ batch:
     wait-for-tasks-to-complete-on-shutdown: false
     await-termination-seconds: 1
   worker:
+    registry:
+      # 该配置测试只验证 YAML 绑定，不依赖真实 orchestrator；避免 ApplicationReady 时连本地 18082 注册。
+      fail-fast-on-startup: false
     process:
       staging-cleanup:
         enabled: false
