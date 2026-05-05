@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.runtime;
 
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.MinioBucketSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
@@ -101,6 +102,10 @@ public class ImportIngressScanner {
         snapshot.objectName().contains("/")
             ? snapshot.objectName().substring(snapshot.objectName().lastIndexOf('/') + 1)
             : snapshot.objectName();
+    LocalDate bizDate = resolveScannerBizDate(snapshot.objectName());
+    if (bizDate == null) {
+      return;
+    }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("scanner", "minio-import");
     metadata.put("doneRequired", scannerProperties.isRequireDoneFile());
@@ -151,7 +156,7 @@ public class ImportIngressScanner {
                 .storagePath(snapshot.objectName())
                 .storageBucket(minioStorageProperties.getBucket())
                 .fileVersion(null)
-                .bizDate(LocalDate.now())
+                .bizDate(bizDate)
                 .sourceType(scannerProperties.getSourceType())
                 .sourceRef(snapshot.objectName())
                 .fileStatus("RECEIVED")
@@ -223,6 +228,26 @@ public class ImportIngressScanner {
         .firstObservedAt()
         .plusSeconds(scannerProperties.getStabilityWindowSeconds())
         .isBefore(now);
+  }
+
+  private LocalDate resolveScannerBizDate(String objectName) {
+    if (!Texts.hasText(scannerProperties.getDefaultBizDate())) {
+      log.warn(
+          "import ingress scanner skipped object without explicit defaultBizDate: objectName={}",
+          objectName);
+      return null;
+    }
+    try {
+      return LocalDate.parse(scannerProperties.getDefaultBizDate().trim());
+    } catch (Exception invalid) {
+      SwallowedExceptionLogger.warn(ImportIngressScanner.class, "catch:Exception", invalid);
+      log.warn(
+          "import ingress scanner skipped object with invalid defaultBizDate: objectName={},"
+              + " defaultBizDate={}",
+          objectName,
+          scannerProperties.getDefaultBizDate());
+      return null;
+    }
   }
 
   private Map<String, ObjectSnapshot> listSnapshots() {
