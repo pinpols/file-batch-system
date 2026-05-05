@@ -18,6 +18,8 @@ public interface BusinessCalendarMapper {
   List<BusinessCalendarEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
+  List<BusinessCalendarEntity> selectByEnabled(@Param("enabled") Boolean enabled);
+
   BusinessCalendarEntity selectById(@Param("id") Long id);
 
   int insert(BusinessCalendarEntity record);

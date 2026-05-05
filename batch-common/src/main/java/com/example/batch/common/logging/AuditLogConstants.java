@@ -21,6 +21,7 @@ public final class AuditLogConstants {
   public static final String OPERATOR_TYPE_REQUEST = "REQUEST";
 
   public static final String OPERATOR_ID_SYSTEM_SLA_SCHEDULER = "SYSTEM_SLA_SCHEDULER";
+  public static final String OPERATOR_ID_SYSTEM_BATCH_DAY_OPEN = "SYSTEM_BATCH_DAY_OPEN";
   public static final String OPERATOR_ID_SYSTEM_BATCH_DAY_CUTOFF = "SYSTEM_BATCH_DAY_CUTOFF";
   public static final String OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE = "SYSTEM_BATCH_DAY_SETTLE";
 
