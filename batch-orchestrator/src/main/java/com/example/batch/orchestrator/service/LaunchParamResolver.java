@@ -164,6 +164,7 @@ public class LaunchParamResolver {
       String traceId) {
     Map<String, Object> snapshot = new LinkedHashMap<>();
     snapshot.put("jobDefinitionId", jobDefinition == null ? null : jobDefinition.id());
+    snapshot.put("jobDefinitionVersion", jobDefinition == null ? null : jobDefinition.version());
     snapshot.put("jobCode", request.jobCode());
     snapshot.put(
         "triggerType", request.triggerType() == null ? null : request.triggerType().code());
