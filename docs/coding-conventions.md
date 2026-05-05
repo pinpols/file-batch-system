@@ -860,11 +860,52 @@ batch-console-api       ← 控制台 BFF（面向前端）
 > 未覆盖的 48% 基本为命名自解释的辅助方法（`resolveXxx` / `toXxx` / `buildXxx` 等），
 > 不应为追求覆盖率而添加无效注释。**52% 是当前合理的目标终态。**
 
-## 20. 字符编码
+## 20. 日期时间、时区与字符编码
+
+### 20.1 日期时间与时区
+
+**契约：技术时间用 `Instant`，业务/批量日期用 `LocalDate`，所有时区转换必须显式。** 新代码优先依赖 `BatchDateTimeSupport`，不要直接调用 JVM 默认时区或静态 now 方法。
+
+统一入口：
+
+- `BatchDateTimeSupport`：`batch-common/src/main/java/com/example/batch/common/time/BatchDateTimeSupport.java`
+- `BatchTimezoneProvider`：`batch-common/src/main/java/com/example/batch/common/config/BatchTimezoneProvider.java`
+
+类型选择规则：
+
+| 场景 | 推荐类型 | 获取方式 |
+| --- | --- | --- |
+| 事件发生时间 | `Instant` | `BatchDateTimeSupport.nowInstant()` |
+| 创建/更新时间 | `Instant` | `BatchDateTimeSupport.nowInstant()` |
+| 锁/租约/超时 | `Instant` | `BatchDateTimeSupport.instantAfter(...)` / `instantAfterSeconds(...)` |
+| Webhook/JWT/消息时间 | `Instant` | `BatchDateTimeSupport.nowInstant()` |
+| 批量日 | `LocalDate` | `BatchDateTimeSupport.currentBatchDate()`；调度触发链路优先使用 `CalendarBizDateResolver` / 后续 `BusinessDateService` |
+| 业务日期 | `LocalDate` | `BatchDateTimeSupport.currentBusinessDate()`；需要节假日/顺延时走 `BusinessCalendarService` |
+| Cron 触发计算 | `ZonedDateTime` / `Instant` | 使用作业 `timezone` 或日历时区解析出的 `scheduleZoneId`，结果落库和消息传输转 `Instant` |
+| 展示给用户 | `ZonedDateTime` / `String` | `BatchDateTimeSupport.toZonedDateTime(...)` / `formatForDisplay(...)`，时区来自用户、租户或平台默认 |
+| 文件名可读时间 | `String` | `BatchDateTimeSupport.formatForFileTimestamp(...)` / `currentFileTimestamp()` |
+
+代码规则：
+
+- **禁止** 业务代码直接使用 `Instant.now()`、`LocalDate.now()`、`LocalDateTime.now()`、`ZonedDateTime.now()`、`OffsetDateTime.now()`。
+- **禁止** 业务代码直接使用 `ZoneId.systemDefault()`；平台默认时区只能从 `BatchTimezoneProvider.defaultZone()` 或 `BatchDateTimeSupport.defaultBusinessZone()` 取得。
+- 数据库、消息、审计、锁、租约、超时、JWT、Webhook、Outbox 等技术时间字段统一使用 `Instant`。
+- `LocalDateTime` 只能表示“外部输入的无时区本地时间”，转为技术时间前必须调用 `BatchDateTimeSupport.interpretLocalDateTimeInDefaultZone(...)` 或显式传入 `ZoneId`。
+- `LocalDate` 只承载业务日期或批量日，不承载时间点语义；不要把 `LocalDate` 当成 UTC 零点持久化。
+- Cron / fixed-rate 计算必须使用作业配置时区或业务日历时区，缺省时走平台默认业务时区；计算出的 fire time、data interval 起止统一用 `Instant` 传递。
+- 用户展示和文件名格式化必须先明确时区，再格式化；禁止依赖 Jackson、JVM default timezone 或操作系统 locale 的隐式格式。
+
+批量日补充约定：
+
+- 批量日由业务日历的 `cutoff_time`、时区、节假日规则共同决定；不是简单的自然日。
+- 日切后应先打开或确认新批量日实例，再允许新批量日作业进入运行链路。
+- 是否要求第二天等待前一天完成，必须作为显式批量日门禁策略表达；不能依赖调度时间或自然日隐式推断。
+
+### 20.2 字符编码
 
 **契约：全系统 UTF-8**。系统内部持有、传输、存储、落盘的字符串一律 UTF-8；仅"读取外部推过来的非 UTF-8 源文件"这一个导入边界允许 GBK / ISO-8859-1 等，读入时立即转为 UTF-8 内部表示。
 
-### 20.1 落地层次
+### 20.3 落地层次
 
 
 | 层            | 具体约束                                                                                                                                                                                                                      | 代码位置                                                                                    |
@@ -877,7 +918,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）派生 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`docker-compose.test.yml`                                          |
 
 
-### 20.2 Java 代码风格
+### 20.4 Java 代码风格
 
 - **禁止** `Charset.forName("UTF-8")` / 字符串字面量 `"UTF-8"`（字符串易拼错、无法静态校验）
 - 需要 `Charset` 对象 → `StandardCharsets.UTF_8`
@@ -1085,4 +1126,3 @@ warnIfCasMiss(failUpdated,     "partition markStatus(FAILED)",   partition.getId
 | 两个方法前 N 行相同，最后 1-2 行不同                                              | 委托共享逻辑（§22.5）                      |
 | 多个 catch 块构造相同结构的失败对象                                               | failResult 工厂（§22.6）               |
 | `if (n <= 0) { log.warn(...) }` 出现 ≥ 3 次                            | warnIfXxx 辅助方法（§22.7）              |
-
