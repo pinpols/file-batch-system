@@ -176,6 +176,19 @@ timezone_snapshot
 要达到文档目标，需要补齐“批量日驱动 + 策略门闩 + 人工治理 + 版本治理”。
 ```
 
+### 4.1 2026-05-05 实施回填
+
+本轮 7 步已落到分支 `codex/batch-day-lifecycle-closure`，并按阶段提交。当前状态从“设计缺口”更新为：
+
+| 能力 | 实施状态 | 已落代码 / DDL | 仍待补齐 |
+|---|---|---|---|
+| 批量日主动打开 | 已完成后端能力 | `BatchDayOpenScheduler`；创建时落 `cutoff_at / sla_deadline_at / timezone_snapshot / dst_policy_snapshot` | Console 视图仍需接入“已打开但未触发作业”的查询展示 |
+| 前一批量日门闩 | 已完成后端能力 | V100 `day_rollover_policy`、`previous_day_dependency_scope`、`batch_day_waiting_launch`；`BatchDayGateService` 支持 `ALLOW / WAIT / REJECT` | 细粒度 `SAME_JOB / SAME_JOB_GROUP` 仍未完全展开，目前非 `INHERIT` 按等待前一批量日处理 |
+| 批量日人工治理 | 部分完成 | V101 扩展 `SKIPPED / MANUAL_RELEASED`、`frozen`、操作快照字段；`BatchDayOperationService` 支持 `FREEZE / RELEASE / SKIP / REOPEN / CLOSE`；审计写 `job_execution_log` | 未新增独立 `batch_day_operation_audit` 表；未暴露 Console REST API；权限点、高风险审批、操作历史 UI 未接入 |
+| DST 策略显式化 | 部分完成 | V102 `dst_gap_policy / dst_overlap_policy / dst_policy_snapshot`；`BatchDayTimePolicyResolver` 统一处理 cutoff gap / overlap | trigger cron 本地计划审计字段、Console DST 调整展示未做；`RUN_TWICE` 对 cutoff 降级为一次语义 |
+| worker bizDate 兜底 | 已完成核心收口 | export `PrepareStep` 缺 `bizDate` 失败；import scanner 要求显式 `defaultBizDate`；生产 worker 路径不再用 `LocalDate.now()` 推断业务日 | import scanner 的显式日期仍是配置项，后续建议改为从文件命名规则或上游到达事件解析 |
+| 补跑版本治理 | 部分完成 | V103 `job_definition_version`、`rerun_policy_snapshot`；`run_attempt` 已保证 RERUN 新建实例不覆盖历史；`params_snapshot` 增加 job definition version | 补跑请求层 `resultPolicy / configVersionPolicy` 尚未成为显式 API 参数；结果产物版本/生效版本和核心账务审批未统一平台化 |
+
 ## 5. 补齐能力的实施设计
 
 ### 5.1 数据模型增量
@@ -876,6 +889,8 @@ misfireCount
 
 ### Phase 1：文档与守护测试
 
+状态：已完成。提交 `955c993a`。
+
 ```text
 1. 将本文作为批量日/时区/DST 的主设计入口；
 2. 给 CalendarBizDateResolver 增加跨时区、DST gap、DST overlap 单测；
@@ -885,6 +900,8 @@ misfireCount
 
 ### Phase 2：批量日主动打开
 
+状态：后端能力已完成。提交 `4a4167b2`。Console 展示仍待接入。
+
 ```text
 1. 新增 BatchDayOpenScheduler；
 2. 创建时落 cutoff_at / sla_deadline_at / timezone_snapshot；
@@ -893,6 +910,8 @@ misfireCount
 ```
 
 ### Phase 3：前一批量日门闩
+
+状态：后端能力已完成。提交 `98d57be2`。
 
 ```text
 1. 增加 day_rollover_policy；
@@ -904,6 +923,8 @@ misfireCount
 
 ### Phase 4：批量日人工治理
 
+状态：服务层与状态字段已完成，API / 权限 / 审批 / Console 未接入。提交 `072d2802`。
+
 ```text
 1. 增加 batch_day_operation_audit；
 2. 扩展 batch_day_instance 状态和治理字段；
@@ -914,6 +935,8 @@ misfireCount
 
 ### Phase 5：DST 策略显式化
 
+状态：cutoff 侧 DST 策略已显式化，trigger cron 审计字段和 Console 展示未接入。提交 `f34b2828`。
+
 ```text
 1. 固化默认 DST 策略；
 2. 必要时增加 dst_gap_policy / dst_overlap_policy；
@@ -923,6 +946,8 @@ misfireCount
 
 ### Phase 6：worker 兜底收口
 
+状态：已完成核心生产路径收口。提交 `94f969a5`。
+
 ```text
 1. 禁止生产路径 worker 用本机日期补 bizDate；
 2. 缺少 bizDate 直接失败或进入配置错误；
@@ -930,6 +955,8 @@ misfireCount
 ```
 
 ### Phase 7：补跑版本治理
+
+状态：实例级追溯已完成，补跑 API 策略参数与结果生效版本治理未接入。提交 `cc69a768`。
 
 ```text
 1. 补跑请求显式 resultPolicy / configVersionPolicy；
@@ -940,22 +967,41 @@ misfireCount
 
 ## 13. 验收矩阵
 
-| 场景 | 输入 | 预期 |
-|---|---|---|
-| 上海 cutoff 前 | `2026-05-05 05:30 Asia/Shanghai`, cutoff `06:00` | `bizDate=2026-05-04` |
-| 上海 cutoff 后 | `2026-05-05 06:30 Asia/Shanghai`, cutoff `06:00` | `bizDate=2026-05-05` |
-| 纽约 DST gap cron | `America/New_York`, cron `02:30`，夏令时开始日 | 默认顺延到下一个合法本地时间 |
-| 纽约 DST overlap cron | `America/New_York`, cron `01:30`，冬令时切回日 | 日批默认只生成一次 |
-| cutoff 落入 DST gap | `cutoff_time=02:30` | 默认顺延，写入实际 `cutoff_at` |
-| 前日未结清，ALLOW | 前一日 `IN_FLIGHT` | 当前作业允许启动 |
-| 前日未结清，WAIT | 前一日 `IN_FLIGHT` | 当前启动进入等待，不创建运行中任务 |
-| 前日未结清，REJECT | 前一日 `IN_FLIGHT` | 拒绝并写审计 |
-| 批量日跳过 | `skipBatchDay`，原因 `HOLIDAY` | `day_status=SKIPPED`，后续门闩允许放行 |
-| 批量日冻结 | `freezeBatchDay` | 普通触发被拒绝或进入等待，catch-up/rerun 需显式允许 |
-| 人工释放 | 前一日 `FAILED`，人工 release | 前一日 `MANUAL_RELEASED`，等待触发可释放 |
-| 批量日重开 | `FAILED` 批量日显式 reopen | 状态回到 `IN_FLIGHT`，写审计和审批 |
-| 补跑结果版本 | 同一 job/bizDate 补跑 | 生成新 runAttempt，不覆盖历史结果 |
-| worker 缺 bizDate | payload/context 都无 `bizDate` | 生产路径失败，不用本机日期兜底 |
+本轮按代码和针对性测试做验收，状态含义：
+
+```text
+通过：当前后端代码和测试已覆盖主要预期；
+部分通过：核心服务/状态已完成，但 API、Console、审批或更细策略未闭环；
+未通过：仍停留在设计目标，当前实现不能满足。
+```
+
+| 场景 | 输入 | 预期 | 当前状态 | 依据 / 说明 |
+|---|---|---|---|---|
+| 上海 cutoff 前 | `2026-05-05 05:30 Asia/Shanghai`, cutoff `06:00` | `bizDate=2026-05-04` | 通过 | `BatchDayOpenSchedulerTest#shouldOpenPreviousBizDateBeforeCutoff` |
+| 上海 cutoff 后 | `2026-05-05 06:30 Asia/Shanghai`, cutoff `06:00` | `bizDate=2026-05-05` | 通过 | `BatchDayOpenSchedulerTest#shouldOpenCurrentBizDateAfterCutoff` |
+| 纽约 DST gap cron | `America/New_York`, cron `02:30`，夏令时开始日 | 默认顺延到下一个合法本地时间 | 部分通过 | cutoff 侧由 `BatchDayTimePolicyResolverTest#shouldMoveGapCutoffToNextValidInstantByDefault` 覆盖；trigger cron fire 审计字段未落 |
+| 纽约 DST overlap cron | `America/New_York`, cron `01:30`，冬令时切回日 | 日批默认只生成一次 | 部分通过 | cutoff overlap 侧由 `BatchDayTimePolicyResolverTest#shouldUseLaterOffsetWhenOverlapPolicyRequiresIt` 覆盖；cron 日批去重仍依赖现有 trigger / dedup 机制，未新增本地计划审计 |
+| cutoff 落入 DST gap | `cutoff_time=02:30` | 默认顺延，写入实际 `cutoff_at` | 通过 | V102 + `BatchDayTimePolicyResolver`；gap 默认写入 transition instant |
+| 前日未结清，ALLOW | 前一日 `IN_FLIGHT` | 当前作业允许启动 | 通过 | `BatchDayGateServiceTest#shouldAllowWhenCalendarAllowsOverlap` |
+| 前日未结清，WAIT | 前一日 `IN_FLIGHT` | 当前启动进入等待，不创建运行中任务 | 通过 | `BatchDayGateServiceTest#shouldWaitWhenPreviousDayIsNotClosed`；写入 `batch_day_waiting_launch`，`trigger_request=WAITING` |
+| 前日未结清，REJECT | 前一日 `IN_FLIGHT` | 拒绝并写审计 | 通过 | `BatchDayGateServiceTest#shouldRejectWhenCalendarRejectsOpenPreviousDay` |
+| 批量日跳过 | `skipBatchDay`，原因 `HOLIDAY` | `day_status=SKIPPED`，后续门闩允许放行 | 通过 | `BatchDayOperationServiceTest#shouldSkipNonTerminalBatchDay`；gate 已把 `SKIPPED` 视为可放行 |
+| 批量日冻结 | `freezeBatchDay` | 普通触发被拒绝或进入等待，catch-up/rerun 需显式允许 | 部分通过 | `BatchDayOperationServiceTest#shouldFreezeOpenBatchDay`；cutoff / settle 调度会跳过 frozen；launch gate 尚未按 frozen 拒绝普通触发，catch-up/rerun 显式允许策略未做 |
+| 人工释放 | 前一日 `FAILED`，人工 release | 前一日 `MANUAL_RELEASED`，等待触发可释放 | 通过 | `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesForNextBizDate`；release 后触发等待队列重放 |
+| 批量日重开 | `FAILED` 批量日显式 reopen | 状态回到 `IN_FLIGHT`，写审计和审批 | 部分通过 | 服务层可 `REOPEN -> IN_FLIGHT` 并写审计；审批和 Console/API 未接入 |
+| 补跑结果版本 | 同一 job/bizDate 补跑 | 生成新 runAttempt，不覆盖历史结果 | 通过 | V62 已有 `(tenant_id, dedup_key, run_attempt)` 唯一约束；`DefaultLaunchService` 的 RERUN `max+1` 语义；V103 增加 `rerun_policy_snapshot` |
+| worker 缺 bizDate | payload/context 都无 `bizDate` | 生产路径失败，不用本机日期兜底 | 通过 | `PrepareStepTest#execute_failsWhenBizDateMissingFromPayloadAndContext`；worker 路径 grep 已无 `LocalDate.now()` 推断 `bizDate` |
+
+本轮验收结论：
+
+```text
+14 项验收中：
+- 10 项通过；
+- 4 项部分通过；
+- 0 项完全未通过。
+
+部分通过项集中在 Console/API/审批/trigger 审计字段，不影响后端核心批量日生命周期闭环，但仍不是完整产品化闭环。
+```
 
 ## 14. 最终收口
 
