@@ -11,10 +11,15 @@
         mvn gatling:test -Dsimulation=JobLaunchSimulation
         mvn gatling:test -Dsimulation=ConsoleQuerySimulation
         mvn gatling:test -Dsimulation=CapacityBaselineSimulation
+        mvn gatling:test -Dsimulation=SchedulingSnapshotUnderLoadSimulation
+        mvn gatling:test -Dsimulation=SchedulingBacklogUnderLoadSimulation
+        mvn gatling:test -Dsimulation=LaunchPipelineCompletionSimulation
+        mvn gatling:test -Dsimulation=WorkerTaskLifecycleSimulation
 
       目标环境参数（可通过 -D 或各环境 profile 覆盖）：
         -Dtrigger.baseUrl=http://localhost:8081
         -Dconsole.baseUrl=http://localhost:8080
+        -Dorchestrator.baseUrl=http://localhost:18082
         -DjobCode=E2E_IMPORT_123456
         -DtenantId=t1
         -Dusers.peak=50
