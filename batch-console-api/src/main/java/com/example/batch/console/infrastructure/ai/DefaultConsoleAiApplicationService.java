@@ -5,6 +5,7 @@ import com.example.batch.common.enums.AiPromptDecision;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.IdGenerator;
@@ -24,7 +25,6 @@ import io.micrometer.common.util.StringUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import lombok.Builder;
@@ -196,7 +196,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         hash(context.result().response()),
         preview(context.result().response(), 512),
         context.result().refusalReason(),
-        Instant.now());
+        BatchDateTimeSupport.utcNow());
   }
 
   private String buildPrompt(

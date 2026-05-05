@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.trigger;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -62,7 +63,7 @@ public class TriggerRequestLaunchReconciler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    Instant olderThan = Instant.now().minusSeconds(Math.max(minAgeSeconds, 0));
+    Instant olderThan = BatchDateTimeSupport.utcNow().minusSeconds(Math.max(minAgeSeconds, 0));
     List<TriggerRequestLaunchReconcileRow> rows;
     try {
       rows =

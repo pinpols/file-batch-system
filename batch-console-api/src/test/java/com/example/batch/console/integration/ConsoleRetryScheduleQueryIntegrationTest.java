@@ -3,13 +3,13 @@ package com.example.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.domain.entity.RetryScheduleEntity;
 import com.example.batch.console.domain.query.RetryScheduleQuery;
 import com.example.batch.console.mapper.RetryScheduleMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +31,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
     List<RetryScheduleEntity> results =
         retryScheduleMapper.selectByQuery(
             new RetryScheduleQuery(
-                "no-such-tenant-" + System.currentTimeMillis(),
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(),
                 null,
                 null,
                 null,
@@ -42,7 +42,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryRetrySchedulesByStatus() {
-    String tenantId = "t-retry-" + System.currentTimeMillis();
+    String tenantId = "t-retry-" + BatchDateTimeSupport.utcEpochMillis();
     insertRetrySchedule(tenantId, "JOB_PARTITION", 100L, "FIXED", "WAITING", 1);
     insertRetrySchedule(tenantId, "JOB_PARTITION", 101L, "FIXED", "SUCCESS", 2);
     insertRetrySchedule(tenantId, "JOB_PARTITION", 102L, "FIXED", "FAILED", 1);
@@ -57,7 +57,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryRetrySchedulesByRetryPolicy() {
-    String tenantId = "t-retry-policy-" + System.currentTimeMillis();
+    String tenantId = "t-retry-policy-" + BatchDateTimeSupport.utcEpochMillis();
     insertRetrySchedule(tenantId, "JOB_PARTITION", 200L, "FIXED", "WAITING", 1);
     insertRetrySchedule(tenantId, "JOB_PARTITION", 201L, "EXPONENTIAL", "WAITING", 1);
 
@@ -71,7 +71,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldQueryRetrySchedulesByRelatedType() {
-    String tenantId = "t-retry-type-" + System.currentTimeMillis();
+    String tenantId = "t-retry-type-" + BatchDateTimeSupport.utcEpochMillis();
     insertRetrySchedule(tenantId, "JOB_PARTITION", 300L, "FIXED", "WAITING", 1);
     insertRetrySchedule(tenantId, "JOB_PARTITION", 301L, "FIXED", "WAITING", 1);
 
@@ -106,7 +106,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
         relatedId,
         retryPolicy,
         retryCount,
-        Timestamp.from(Instant.now().plusSeconds(60)),
+        Timestamp.from(BatchDateTimeSupport.utcNow().plusSeconds(60)),
         retryStatus,
         tenantId + ":" + relatedId + ":" + retryCount + ":" + System.nanoTime());
   }

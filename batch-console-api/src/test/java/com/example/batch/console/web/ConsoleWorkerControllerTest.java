@@ -13,12 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.ops.ConsoleWorkerApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.ops.ConsoleWorkerRegistryResponse;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,7 +40,7 @@ class ConsoleWorkerControllerTest {
         new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
     when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -74,7 +74,17 @@ class ConsoleWorkerControllerTest {
     when(applicationService.drain(anyString(), any(), anyString()))
         .thenReturn(
             new ConsoleWorkerRegistryResponse(
-                1L, "t1", "w1", "group-a", null, null, "DRAINING", Instant.now(), 0, null, null));
+                1L,
+                "t1",
+                "w1",
+                "group-a",
+                null,
+                null,
+                "DRAINING",
+                BatchDateTimeSupport.utcNow(),
+                0,
+                null,
+                null));
 
     mockMvc
         .perform(

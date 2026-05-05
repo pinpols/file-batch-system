@@ -6,6 +6,8 @@ import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -19,7 +21,11 @@ class LaunchParamResolverTest {
 
   @BeforeEach
   void setUp() {
-    resolver = new LaunchParamResolver(new BatchTimezoneProvider(new BatchTimezoneProperties()));
+    BatchTimezoneProvider timezoneProvider =
+        new BatchTimezoneProvider(new BatchTimezoneProperties());
+    resolver =
+        new LaunchParamResolver(
+            timezoneProvider, new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
   }
 
   @Test

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
 import com.example.batch.orchestrator.infrastructure.quota.RedisQuotaRuntimeStateService;
@@ -181,8 +182,8 @@ class RedisQuotaRuntimeStateServiceTest {
   void shouldReadPeakBorrowedFromHash() {
     Map<Object, Object> entries = new HashMap<>();
     entries.put("peakBorrowedCount", "4");
-    entries.put("windowStartedAt", String.valueOf(System.currentTimeMillis() - 60_000));
-    entries.put("windowExpiresAt", String.valueOf(System.currentTimeMillis() + 60_000));
+    entries.put("windowStartedAt", String.valueOf(BatchDateTimeSupport.utcEpochMillis() - 60_000));
+    entries.put("windowExpiresAt", String.valueOf(BatchDateTimeSupport.utcEpochMillis() + 60_000));
     when(redis.entries(anyString())).thenReturn(entries);
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
         service.describe(
@@ -199,8 +200,8 @@ class RedisQuotaRuntimeStateServiceTest {
   void shouldReturnZeroSnapshotWhenWindowExpired() {
     Map<Object, Object> entries = new HashMap<>();
     entries.put("peakBorrowedCount", "8");
-    entries.put("windowStartedAt", String.valueOf(System.currentTimeMillis() - 120_000));
-    entries.put("windowExpiresAt", String.valueOf(System.currentTimeMillis() - 60_000));
+    entries.put("windowStartedAt", String.valueOf(BatchDateTimeSupport.utcEpochMillis() - 120_000));
+    entries.put("windowExpiresAt", String.valueOf(BatchDateTimeSupport.utcEpochMillis() - 60_000));
     when(redis.entries(anyString())).thenReturn(entries);
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
         service.describe(

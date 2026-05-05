@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
@@ -66,14 +67,14 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     rs.setJobDefinitionId(jobDefId);
     rs.setTenantId(tenantId);
     rs.setJobCode(jobCode);
-    rs.setNextFireTime(Instant.now().plusSeconds(60));
+    rs.setNextFireTime(BatchDateTimeSupport.utcNow().plusSeconds(60));
     runtimeStateMapper.insertOnReconcile(rs);
     runtimeStateId = rs.getId();
   }
 
   @Test
   void insertPendingThenSelectStatus() {
-    Instant scheduled = Instant.now().minusSeconds(120);
+    Instant scheduled = BatchDateTimeSupport.utcNow().minusSeconds(120);
     TriggerMisfirePendingEntity e = newPending(scheduled);
     int rows = mapper.insertPending(e);
     assertThat(rows).isEqualTo(1);
@@ -82,12 +83,13 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     TriggerMisfirePendingEntity loaded = mapper.selectById(e.getId());
     assertThat(loaded.getStatus()).isEqualTo("PENDING");
     assertThat(loaded.getScheduledFireTime()).isEqualTo(scheduled);
-    assertThat(loaded.getExpiresAt()).isAfter(Instant.now().plus(Duration.ofDays(6)));
+    assertThat(loaded.getExpiresAt())
+        .isAfter(BatchDateTimeSupport.utcNow().plus(Duration.ofDays(6)));
   }
 
   @Test
   void insertPendingDuplicateThrowsOnUniqueConstraint() {
-    Instant scheduled = Instant.now().minusSeconds(120);
+    Instant scheduled = BatchDateTimeSupport.utcNow().minusSeconds(120);
     mapper.insertPending(newPending(scheduled));
 
     assertThatThrownBy(() -> mapper.insertPending(newPending(scheduled)))
@@ -96,9 +98,9 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void selectPendingByTenantOnlyReturnsPending() {
-    Instant fireA = Instant.now().minusSeconds(180);
-    Instant fireB = Instant.now().minusSeconds(120);
-    Instant fireC = Instant.now().minusSeconds(60);
+    Instant fireA = BatchDateTimeSupport.utcNow().minusSeconds(180);
+    Instant fireB = BatchDateTimeSupport.utcNow().minusSeconds(120);
+    Instant fireC = BatchDateTimeSupport.utcNow().minusSeconds(60);
     TriggerMisfirePendingEntity a = newPending(fireA);
     mapper.insertPending(a);
     TriggerMisfirePendingEntity b = newPending(fireB);
@@ -116,7 +118,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void approveOnlyAffectsPendingRows() {
-    TriggerMisfirePendingEntity e = newPending(Instant.now().minusSeconds(60));
+    TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
     int rows = mapper.approve(e.getId(), "ops-user");
@@ -134,7 +136,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void rejectOnlyAffectsPendingRows() {
-    TriggerMisfirePendingEntity e = newPending(Instant.now().minusSeconds(60));
+    TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
     int rows = mapper.reject(e.getId(), "ops-user", "duplicate launch");
@@ -146,7 +148,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void linkCatchUpRequestSetsRequestId() {
-    TriggerMisfirePendingEntity e = newPending(Instant.now().minusSeconds(60));
+    TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
     mapper.approve(e.getId(), "ops-user");
 
@@ -157,7 +159,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   void markExpiredFlipsOverduePendingRows() {
-    TriggerMisfirePendingEntity e = newPending(Instant.now().minusSeconds(60));
+    TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
     // 把 expires_at 改成 1 小时前
@@ -166,14 +168,14 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
             + " ?",
         e.getId());
 
-    int expired = mapper.markExpired(Instant.now());
+    int expired = mapper.markExpired(BatchDateTimeSupport.utcNow());
     assertThat(expired).isGreaterThanOrEqualTo(1);
     assertThat(mapper.selectById(e.getId()).getStatus()).isEqualTo("EXPIRED");
   }
 
   @Test
   void markExpiredDoesNotTouchAlreadyApproved() {
-    TriggerMisfirePendingEntity e = newPending(Instant.now().minusSeconds(60));
+    TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
     mapper.approve(e.getId(), "ops-user");
 
@@ -182,7 +184,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
             + " ?",
         e.getId());
 
-    mapper.markExpired(Instant.now());
+    mapper.markExpired(BatchDateTimeSupport.utcNow());
     assertThat(mapper.selectById(e.getId()).getStatus()).isEqualTo("APPROVED"); // 不变
   }
 

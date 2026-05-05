@@ -4,6 +4,7 @@ import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import io.minio.MinioClient;
@@ -24,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -202,7 +202,8 @@ final class RemoteFilesystemDispatchSupport {
       }
       String probeName = BatchFileConstants.newHealthProbeName();
       Path probeFile = directory.resolve(probeName);
-      Files.writeString(probeFile, "probe@" + Instant.now(), StandardCharsets.UTF_8);
+      Files.writeString(
+          probeFile, "probe@" + BatchDateTimeSupport.utcNow(), StandardCharsets.UTF_8);
       Files.deleteIfExists(probeFile);
       return new DispatchChannelProbeResult(true, "nas probe ok", probeFile.toString());
     } catch (Exception ex) {
@@ -225,7 +226,7 @@ final class RemoteFilesystemDispatchSupport {
       }
       String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
       String objectName = normalizeObjectName(prefix, BatchFileConstants.newHealthProbeName());
-      byte[] payload = ("probe@" + Instant.now()).getBytes(StandardCharsets.UTF_8);
+      byte[] payload = ("probe@" + BatchDateTimeSupport.utcNow()).getBytes(StandardCharsets.UTF_8);
       client.putObject(
           PutObjectArgs.builder().bucket(bucket).object(objectName).stream(
                   new ByteArrayInputStream(payload), payload.length, MINIO_PART_SIZE)

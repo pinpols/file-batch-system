@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.support.auth.ConsoleJwtService;
 import com.example.batch.console.support.auth.ConsoleLoginService;
@@ -17,7 +18,6 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
 import com.example.batch.console.web.response.auth.ConsoleAuthProfileResponse;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -149,8 +149,8 @@ class ConsoleAuthApplicationServiceTest {
     return new ConsoleAuthTokenResponse(
         "jwt-token",
         "Bearer",
-        Instant.now(),
-        Instant.now().plusSeconds(3600),
+        BatchDateTimeSupport.utcNow(),
+        BatchDateTimeSupport.utcNow().plusSeconds(3600),
         "admin",
         "t1",
         Set.of("ROLE_ADMIN"));

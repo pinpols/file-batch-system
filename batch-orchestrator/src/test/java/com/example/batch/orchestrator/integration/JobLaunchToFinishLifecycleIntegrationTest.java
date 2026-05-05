@@ -111,14 +111,14 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     TaskOutcomeCommand successOutcome =
         TaskOutcomeCommand.builder()
             .tenantId(TENANT)
-            .taskId(task.getId())
+            .taskId(claimed.getId())
             .success(true)
             .resultSummary("{\"status\":\"processed ok\"}")
             .build();
     taskExecutionService.applyTaskOutcome(successOutcome);
 
     // 4) Verify final task status
-    JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
+    JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, claimed.getId());
     assertThat(finishedTask.getTaskStatus()).isEqualTo(TaskStatus.SUCCESS.code());
 
     // 5) Verify job_instance reaches SUCCESS
@@ -157,19 +157,24 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     JobTaskEntity task = tasks.get(0);
 
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    JobTaskEntity claimed =
+        taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    assertThat(claimed).isNotNull();
+    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
 
     // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）
     TaskOutcomeCommand failureOutcome =
         TaskOutcomeCommand.builder()
             .tenantId(TENANT)
-            .taskId(task.getId())
+            .taskId(claimed.getId())
+            .success(false)
             .errorCode("TEST_FAILURE")
             .errorMessage("simulated error")
             .build();
     taskExecutionService.applyTaskOutcome(failureOutcome);
 
-    JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
+    JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, claimed.getId());
     assertThat(finishedTask.getTaskStatus()).isEqualTo(TaskStatus.FAILED.code());
 
     JobInstanceEntity finishedInstance = jobInstanceMapper.selectById(TENANT, jobInstance.getId());

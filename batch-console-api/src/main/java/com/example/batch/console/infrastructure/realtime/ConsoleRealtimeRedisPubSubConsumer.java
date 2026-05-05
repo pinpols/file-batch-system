@@ -1,10 +1,10 @@
 package com.example.batch.console.infrastructure.realtime;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -121,7 +121,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
               envelope.dataJson() == null || envelope.dataJson().isBlank()
                   ? null
                   : JsonUtils.fromJson(envelope.dataJson(), Object.class),
-              envelope.emittedAt() == null ? Instant.now() : envelope.emittedAt()));
+              envelope.emittedAt() == null ? BatchDateTimeSupport.utcNow() : envelope.emittedAt()));
     } catch (Exception exception) {
       realtimeMetrics.recordPubSubHandleFailure(envelope.stream(), envelope.eventType());
       log.warn(

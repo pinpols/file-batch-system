@@ -3,12 +3,12 @@ package com.example.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.RetryScheduleStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import com.example.batch.orchestrator.domain.query.RetryScheduleQuery;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,15 +38,16 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldFindDueRetrySchedulesViaSelectByQuery() {
-    String dedupKey = "t1:due-test:" + System.currentTimeMillis();
+    String dedupKey = "t1:due-test:" + BatchDateTimeSupport.utcEpochMillis();
     RetryScheduleEntity entity = waitingRetry("t1", 200L, "FIXED", 1, 3);
     entity.setDedupKey(dedupKey);
-    entity.setNextRetryAt(Instant.now().minusSeconds(60)); // already due
+    entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(60)); // already due
     retryScheduleMapper.insert(entity);
 
     List<RetryScheduleEntity> due =
         retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery("t1", RetryScheduleStatus.WAITING.code(), Instant.now(), 100));
+            new RetryScheduleQuery(
+                "t1", RetryScheduleStatus.WAITING.code(), BatchDateTimeSupport.utcNow(), 100));
 
     assertThat(due).isNotEmpty();
     boolean found = due.stream().anyMatch(r -> dedupKey.equals(r.getDedupKey()));
@@ -55,15 +56,16 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldNotReturnFutureSchedulesAsDue() {
-    String dedupKey = "t1:future-test:" + System.currentTimeMillis();
+    String dedupKey = "t1:future-test:" + BatchDateTimeSupport.utcEpochMillis();
     RetryScheduleEntity entity = waitingRetry("t1", 300L, "FIXED", 1, 3);
     entity.setDedupKey(dedupKey);
-    entity.setNextRetryAt(Instant.now().plusSeconds(3600)); // not yet due
+    entity.setNextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(3600)); // not yet due
     retryScheduleMapper.insert(entity);
 
     List<RetryScheduleEntity> due =
         retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery("t1", RetryScheduleStatus.WAITING.code(), Instant.now(), 100));
+            new RetryScheduleQuery(
+                "t1", RetryScheduleStatus.WAITING.code(), BatchDateTimeSupport.utcNow(), 100));
 
     boolean found = due.stream().anyMatch(r -> dedupKey.equals(r.getDedupKey()));
     assertThat(found).isFalse();
@@ -72,8 +74,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldMarkRetryScheduleAsRunning() {
     RetryScheduleEntity entity = waitingRetry("t1", 400L, "FIXED", 2, 3);
-    entity.setDedupKey("t1:mark-running:" + System.currentTimeMillis());
-    entity.setNextRetryAt(Instant.now().minusSeconds(10));
+    entity.setDedupKey("t1:mark-running:" + BatchDateTimeSupport.utcEpochMillis());
+    entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
 
     int updated =
@@ -86,8 +88,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldNotMarkRunningIfStatusAlreadyRunning() {
     RetryScheduleEntity entity = waitingRetry("t1", 500L, "FIXED", 2, 3);
-    entity.setDedupKey("t1:no-double-run:" + System.currentTimeMillis());
-    entity.setNextRetryAt(Instant.now().minusSeconds(10));
+    entity.setDedupKey("t1:no-double-run:" + BatchDateTimeSupport.utcEpochMillis());
+    entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
 
     retryScheduleMapper.markRunning(
@@ -103,8 +105,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldMarkRetryScheduleAsSuccess() {
     RetryScheduleEntity entity = waitingRetry("t1", 600L, "FIXED", 1, 3);
-    entity.setDedupKey("t1:mark-success:" + System.currentTimeMillis());
-    entity.setNextRetryAt(Instant.now().minusSeconds(10));
+    entity.setDedupKey("t1:mark-success:" + BatchDateTimeSupport.utcEpochMillis());
+    entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
     retryScheduleMapper.markRunning(
         entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
@@ -120,8 +122,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldMarkRetryScheduleAsFailed() {
     RetryScheduleEntity entity = waitingRetry("t1", 700L, "FIXED", 1, 3);
-    entity.setDedupKey("t1:mark-failed:" + System.currentTimeMillis());
-    entity.setNextRetryAt(Instant.now().minusSeconds(10));
+    entity.setDedupKey("t1:mark-failed:" + BatchDateTimeSupport.utcEpochMillis());
+    entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
     retryScheduleMapper.markRunning(
         entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
@@ -132,7 +134,7 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
             .retryStatus(RetryScheduleStatus.FAILED.code())
             .lastErrorCode("DISPATCH_FAILED")
             .lastErrorMessage("connection refused")
-            .nextRetryAt(Instant.now().plusSeconds(120))
+            .nextRetryAt(BatchDateTimeSupport.utcNow().plusSeconds(120))
             .build();
     int updated = retryScheduleMapper.markFailed(markFailedParam);
 
@@ -153,7 +155,7 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     e.setRetryPolicy(retryPolicy);
     e.setRetryCount(retryCount);
     e.setMaxRetryCount(maxRetryCount);
-    e.setNextRetryAt(Instant.now().minusSeconds(30));
+    e.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(30));
     e.setRetryStatus(RetryScheduleStatus.WAITING.code());
     e.setDedupKey(tenantId + ":" + relatedId + ":" + retryCount);
     return e;

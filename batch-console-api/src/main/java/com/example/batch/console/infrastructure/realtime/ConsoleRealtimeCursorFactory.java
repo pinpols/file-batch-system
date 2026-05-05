@@ -1,13 +1,17 @@
 package com.example.batch.console.infrastructure.realtime;
 
-import java.time.Instant;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class ConsoleRealtimeCursorFactory {
 
+  private final BatchDateTimeSupport dateTimeSupport;
+
   public String nextCursor() {
-    return Instant.now().toEpochMilli() + "-" + UUID.randomUUID();
+    return dateTimeSupport.currentEpochMillis() + "-" + UUID.randomUUID();
   }
 }

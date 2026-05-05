@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.logging.AuditLogConstants;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -36,6 +37,7 @@ public class BatchDayCutoffScheduler {
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchDayTimePolicyResolver timePolicyResolver;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
@@ -48,7 +50,7 @@ public class BatchDayCutoffScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    Instant now = Instant.now();
+    Instant now = dateTimeSupport.nowInstant();
     List<String> tracked = List.of("OPEN");
 
     List<BatchDayInstanceEntity> candidates = batchDayInstanceMapper.selectByDayStatusIn(tracked);

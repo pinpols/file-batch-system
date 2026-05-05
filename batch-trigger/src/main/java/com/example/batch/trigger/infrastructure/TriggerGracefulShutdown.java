@@ -1,5 +1,6 @@
 package com.example.batch.trigger.infrastructure;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -41,7 +42,7 @@ public class TriggerGracefulShutdown implements ApplicationListener<ContextClose
 
   public void startDraining(String source) throws SchedulerException {
     if (draining.compareAndSet(false, true)) {
-      drainingSince = Instant.now();
+      drainingSince = BatchDateTimeSupport.utcNow();
       reason = source;
       log.info("Trigger graceful shutdown — switching scheduler to standby, source={}", source);
       scheduler.standby();

@@ -9,9 +9,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
+import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -32,12 +36,22 @@ class ConsoleOpsSummaryRealtimeStreamTest {
   void setUp() {
     stream =
         new ConsoleOpsSummaryRealtimeStream(
-            opsApplicationService, realtimeEventHub, redisPublisher, cursorFactory, tenantGuard);
+            opsApplicationService,
+            realtimeEventHub,
+            redisPublisher,
+            cursorFactory,
+            tenantGuard,
+            dateTimeSupport());
     when(tenantGuard.resolveTenant(anyString()))
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(cursorFactory.nextCursor()).thenReturn("cursor-1");
     when(realtimeEventHub.subscribe(anyString(), anyString(), isNull(), isNull(), isNull()))
         .thenReturn(new SseEmitter());
+  }
+
+  private static BatchDateTimeSupport dateTimeSupport() {
+    return new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @Test

@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
@@ -13,7 +14,6 @@ import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -180,7 +180,7 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
             .formatted(tenantId, idempotencyKey));
     e.setPublishStatus(OutboxPublishStatus.NEW.code());
     e.setPublishAttempt(0);
-    e.setNextPublishAt(Instant.now());
+    e.setNextPublishAt(BatchDateTimeSupport.utcNow());
     e.setTraceId("trace-outbox-dispatch");
     return e;
   }

@@ -12,6 +12,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHe
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.QueuePriorityPolicy;
 import com.example.batch.common.enums.ResourceQueueType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.config.ConsoleResourceQueueExcelApplicationService;
 import com.example.batch.console.domain.param.ResourceQueueUpsertParam;
@@ -101,9 +102,10 @@ public class DefaultConsoleResourceQueueExcelApplicationService
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
+      BatchDateTimeSupport dateTimeSupport,
       ResourceQueueMapper resourceQueueMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
     this.resourceQueueMapper = resourceQueueMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }

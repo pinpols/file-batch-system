@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -41,7 +42,7 @@ public class WorkerDrainTimeoutScheduler {
     if (!workerDrainProperties.isEnabled()) {
       return;
     }
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     List<WorkerRegistryEntity> draining =
         workerRegistryMapper.selectByStatus(WorkerRegistryStatus.DRAINING.code());
     for (WorkerRegistryEntity worker : draining) {

@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -95,7 +96,7 @@ public class WorkflowRunManagementApplicationService {
             .errorCode(null)
             .errorMessage(null)
             .durationMs(nodeRun.getDurationMs())
-            .finishedAt(Instant.now())
+            .finishedAt(BatchDateTimeSupport.utcNow())
             .build());
     advanceDownstreamAfterSkip(run, nodeCode);
     return Map.of("id", id, "nodeCode", nodeCode, "nodeStatus", "SKIPPED");
@@ -103,7 +104,7 @@ public class WorkflowRunManagementApplicationService {
 
   /** 把 run 切到 TERMINATED：SQL 期望前态守护 + 同事务发 outbox 终态事件。 */
   private Map<String, Object> flipToTerminated(WorkflowRunEntity run, Set<String> expectedFrom) {
-    Instant finishedAt = Instant.now();
+    Instant finishedAt = BatchDateTimeSupport.utcNow();
     int updated =
         workflowRunMapper.updateStatus(
             UpdateWorkflowRunStatusParam.builder()

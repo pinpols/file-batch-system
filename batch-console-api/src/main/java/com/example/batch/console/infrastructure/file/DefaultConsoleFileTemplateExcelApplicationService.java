@@ -14,6 +14,7 @@ import com.example.batch.common.enums.FileCompressType;
 import com.example.batch.common.enums.FileEncryptType;
 import com.example.batch.common.enums.FileTemplateFormat;
 import com.example.batch.common.enums.FileTemplateType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.file.ConsoleFileTemplateExcelApplicationService;
 import com.example.batch.console.domain.param.FileTemplateConfigUpsertParam;
@@ -250,9 +251,10 @@ public class DefaultConsoleFileTemplateExcelApplicationService
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
+      BatchDateTimeSupport dateTimeSupport,
       FileTemplateConfigMapper fileTemplateConfigMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
     this.fileTemplateConfigMapper = fileTemplateConfigMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }

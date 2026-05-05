@@ -9,6 +9,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
@@ -27,6 +30,7 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.query.WorkflowDefinitionQueryRequest;
 import com.example.batch.console.web.request.workflow.WorkflowExcelApplyRequest;
 import java.io.ByteArrayOutputStream;
+import java.time.Clock;
 import java.util.List;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -67,12 +71,18 @@ class DefaultConsoleWorkflowExcelApplicationServiceTest {
             importStore,
             new WorkflowExcelWorkbookWriter(workflowNodeMapper, workflowEdgeMapper),
             new WorkflowExcelSheetParser(),
-            new WorkflowExcelRowValidator());
+            new WorkflowExcelRowValidator(),
+            dateTimeSupport());
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-1", "trace-1", "t1", "u1", "idem-1", "127.0.0.1"));
     when(tenantGuard.resolveTenant(any())).thenReturn("t1");
     doNothing().when(tenantGuard).assertTenantAllowed(anyString());
+  }
+
+  private static BatchDateTimeSupport dateTimeSupport() {
+    return new BatchDateTimeSupport(
+        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @Test
@@ -122,7 +132,7 @@ class DefaultConsoleWorkflowExcelApplicationServiceTest {
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("workflow_definition");
       assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("workflow_node");
       assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("workflow_edge");
-      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("说明");
+      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("填写说明");
       assertThat(workbook.getSheetAt(4).getSheetName()).isEqualTo("字典");
       assertThat(workbook.getSheetAt(5).getSheetName()).isEqualTo("校验");
       XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);

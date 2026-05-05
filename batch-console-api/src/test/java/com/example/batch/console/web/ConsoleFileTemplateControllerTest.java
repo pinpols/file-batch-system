@@ -16,11 +16,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.file.ConsoleFileTemplateApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ class ConsoleFileTemplateControllerTest {
         new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
     when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();

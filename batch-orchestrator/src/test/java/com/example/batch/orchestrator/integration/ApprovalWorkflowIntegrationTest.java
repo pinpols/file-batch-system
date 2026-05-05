@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -189,7 +190,8 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   void shouldThrowWhenGettingNonExistentApproval() {
     assertThatThrownBy(
             () ->
-                approvalWorkflowService.get("t1", "apr-nonexistent-" + System.currentTimeMillis()))
+                approvalWorkflowService.get(
+                    "t1", "apr-nonexistent-" + BatchDateTimeSupport.utcEpochMillis()))
         .isInstanceOf(IllegalStateException.class);
   }
 

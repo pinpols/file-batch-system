@@ -1,6 +1,6 @@
 package com.example.batch.console.support.excel;
 
-import java.time.Instant;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -15,7 +15,9 @@ public class InMemoryJobDefinitionExcelImportStore implements JobDefinitionExcel
   @Override
   public String save(String fileName, String tenantId, List<JobDefinitionRow> rows) {
     String token = UUID.randomUUID().toString();
-    sessions.put(token, new JobDefinitionExcelSession(fileName, tenantId, Instant.now(), rows));
+    sessions.put(
+        token,
+        new JobDefinitionExcelSession(fileName, tenantId, BatchDateTimeSupport.utcNow(), rows));
     return token;
   }
 

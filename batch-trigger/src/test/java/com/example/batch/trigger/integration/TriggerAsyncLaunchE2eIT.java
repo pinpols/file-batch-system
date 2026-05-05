@@ -9,6 +9,7 @@ import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
@@ -199,11 +200,11 @@ class TriggerAsyncLaunchE2eIT extends AbstractIntegrationTest {
                     "tr-recover",
                     Map.of()),
                 "idem-recover-" + requestId,
-                Instant.now())));
+                BatchDateTimeSupport.utcNow())));
     orphan.setPublishStatus(OutboxPublishStatus.NEW.code());
     orphan.setPublishAttempt(0);
     orphan.setTraceId("tr-recover");
-    orphan.setNextPublishAt(Instant.now());
+    orphan.setNextPublishAt(BatchDateTimeSupport.utcNow());
     outboxMapper.insert(orphan);
 
     // relay 主线程已经在 daemon 跑,会自动扫到该行;断言它推进到 PUBLISHED
@@ -240,7 +241,7 @@ class TriggerAsyncLaunchE2eIT extends AbstractIntegrationTest {
     bad.setPublishStatus(OutboxPublishStatus.NEW.code());
     bad.setPublishAttempt(0);
     bad.setTraceId("tr-corrupt");
-    bad.setNextPublishAt(Instant.now());
+    bad.setNextPublishAt(BatchDateTimeSupport.utcNow());
     outboxMapper.insert(bad);
 
     await()
@@ -293,8 +294,8 @@ class TriggerAsyncLaunchE2eIT extends AbstractIntegrationTest {
 
   /** 轮询消费 topic,直到找到带指定 requestId 的消息为止;超时抛失败。 */
   private ConsumerRecord<String, String> pollUntilFound(String requestId, Duration timeout) {
-    Instant deadline = Instant.now().plus(timeout);
-    while (Instant.now().isBefore(deadline)) {
+    Instant deadline = BatchDateTimeSupport.utcNow().plus(timeout);
+    while (BatchDateTimeSupport.utcNow().isBefore(deadline)) {
       ConsumerRecords<String, String> records = kafkaConsumer.poll(Duration.ofMillis(500));
       for (ConsumerRecord<String, String> r : records) {
         if (r.value() != null && r.value().contains(requestId)) {

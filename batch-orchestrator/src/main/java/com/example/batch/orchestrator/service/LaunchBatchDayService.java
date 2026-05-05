@@ -6,6 +6,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -49,6 +50,7 @@ public class LaunchBatchDayService {
   private final BatchTimezoneProvider timezoneProvider;
   private final BatchDayTimePolicyResolver timePolicyResolver;
   private final ObjectProvider<LaunchBatchDayService> selfProvider;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   /**
    * 批次日 upsert 入口：内部以 REQUIRES_NEW 事务逐次尝试；遇到 @Version 乐观锁冲突时 （{@link
@@ -127,7 +129,7 @@ public class LaunchBatchDayService {
 
   private BatchDayUpsertContext buildUpsertContext(
       LaunchRequest request, String calendarCode, Map<String, Object> effectiveParams) {
-    Instant now = Instant.now();
+    Instant now = dateTimeSupport.nowInstant();
     Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
     String timezoneSnapshot = resolveCalendarTimezone(request.tenantId(), calendarCode);
     String dstPolicySnapshot = resolveDstPolicySnapshot(request.tenantId(), calendarCode);
@@ -358,7 +360,7 @@ public class LaunchBatchDayService {
     if (cutoffAt == null) {
       cutoffAt = resolveBatchDayCutoffAt(batchDay.tenantId(), calendarCode, batchDay.bizDate());
     }
-    return cutoffAt != null && !Instant.now().isBefore(cutoffAt);
+    return cutoffAt != null && !dateTimeSupport.nowInstant().isBefore(cutoffAt);
   }
 
   boolean isWithinLateArrivalTolerance(BatchDayInstanceEntity batchDay, String calendarCode) {
@@ -375,7 +377,7 @@ public class LaunchBatchDayService {
     Instant cutoffCloseAt =
         cutoffAt.plusSeconds(
             Math.max(0, resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode)) * 60L);
-    return !Instant.now().isAfter(cutoffCloseAt);
+    return !dateTimeSupport.nowInstant().isAfter(cutoffCloseAt);
   }
 
   Integer resolveLateArrivalToleranceMin(String tenantId, String calendarCode) {

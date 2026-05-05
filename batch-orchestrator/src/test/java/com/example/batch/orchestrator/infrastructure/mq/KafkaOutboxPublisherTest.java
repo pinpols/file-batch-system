@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.config.MqRoutingProperties;
 import com.example.batch.orchestrator.config.OutboxProperties;
@@ -16,7 +17,6 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
-import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -139,7 +139,7 @@ class KafkaOutboxPublisherTest {
         """
             .formatted(eventKey));
     event.setPublishAttempt(0);
-    event.setNextPublishAt(Instant.now());
+    event.setNextPublishAt(BatchDateTimeSupport.utcNow());
     event.setTraceId("trace-it-test");
     return event;
   }
@@ -154,7 +154,7 @@ class KafkaOutboxPublisherTest {
     event.setEventKey(eventKey);
     event.setPayloadJson("{\"hello\":\"world\"}");
     event.setPublishAttempt(0);
-    event.setNextPublishAt(Instant.now());
+    event.setNextPublishAt(BatchDateTimeSupport.utcNow());
     event.setTraceId("trace-fallback");
     return event;
   }

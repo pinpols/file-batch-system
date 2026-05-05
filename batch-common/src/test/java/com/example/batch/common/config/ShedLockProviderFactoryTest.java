@@ -2,9 +2,9 @@ package com.example.batch.common.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
-import java.time.Instant;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
@@ -45,7 +45,10 @@ class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
         lockProvider
             .lock(
                 new LockConfiguration(
-                    Instant.now(), "factory-auto-create", Duration.ofSeconds(30), Duration.ZERO))
+                    BatchDateTimeSupport.utcNow(),
+                    "factory-auto-create",
+                    Duration.ofSeconds(30),
+                    Duration.ZERO))
             .orElseThrow();
     simpleLock.unlock();
   }

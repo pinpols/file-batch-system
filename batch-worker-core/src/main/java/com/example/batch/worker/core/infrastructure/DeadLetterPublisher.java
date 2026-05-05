@@ -1,12 +1,12 @@
 package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -99,7 +99,7 @@ public class DeadLetterPublisher {
     envelope.put("sourceTopic", sourceTopic);
     envelope.put("workerType", workerType);
     envelope.put("errorMessage", truncate(errorMessage, 2000));
-    envelope.put("failedAt", Instant.now().toString());
+    envelope.put("failedAt", BatchDateTimeSupport.utcNow().toString());
     String value = JsonUtils.toJson(envelope);
 
     long startNanos = System.nanoTime();

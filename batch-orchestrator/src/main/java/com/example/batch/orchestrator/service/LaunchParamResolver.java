@@ -6,6 +6,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import java.time.Instant;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 public class LaunchParamResolver {
 
   private final BatchTimezoneProvider timezoneProvider;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   Map<String, Object> mergeLaunchParams(
       JobDefinitionEntity jobDefinition,
@@ -200,7 +202,7 @@ public class LaunchParamResolver {
       return ldt.atZone(timezoneProvider.defaultZone()).toInstant();
     }
     if (value instanceof LocalTime lt) {
-      LocalDate d = bizDate == null ? LocalDate.now() : bizDate;
+      LocalDate d = resolveDateOrTodayInDefaultZone(bizDate);
       return d.atTime(lt).atZone(timezoneProvider.defaultZone()).toInstant();
     }
     String text = String.valueOf(value).trim();
@@ -218,12 +220,16 @@ public class LaunchParamResolver {
       SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
     try {
-      LocalDate d = bizDate == null ? LocalDate.now() : bizDate;
+      LocalDate d = resolveDateOrTodayInDefaultZone(bizDate);
       return d.atTime(LocalTime.parse(text)).atZone(timezoneProvider.defaultZone()).toInstant();
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
     return null;
+  }
+
+  private LocalDate resolveDateOrTodayInDefaultZone(LocalDate bizDate) {
+    return bizDate == null ? dateTimeSupport.todayInDefaultBusinessZone() : bizDate;
   }
 
   Instant earliest(Instant... candidates) {

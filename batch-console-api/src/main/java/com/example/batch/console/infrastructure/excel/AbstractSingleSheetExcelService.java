@@ -6,6 +6,7 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeTe
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -51,14 +52,17 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected final ConsoleTenantGuard tenantGuard;
   protected final ConsoleRequestMetadataResolver requestMetadataResolver;
   protected final ExcelImportStore importStore;
+  protected final BatchDateTimeSupport dateTimeSupport;
 
   protected AbstractSingleSheetExcelService(
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
-      ExcelImportStore importStore) {
+      ExcelImportStore importStore,
+      BatchDateTimeSupport dateTimeSupport) {
     this.tenantGuard = tenantGuard;
     this.requestMetadataResolver = requestMetadataResolver;
     this.importStore = importStore;
+    this.dateTimeSupport = dateTimeSupport;
   }
 
   protected abstract String sheetName();
@@ -100,7 +104,8 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected final ResponseEntity<InputStreamResource> doExport(
       String tenantId, List<Map<String, Object>> rows) {
     byte[] bytes = writeWorkbook(rows);
-    return ConsoleExcelStyles.excelResponse(bytes, sheetName(), tenantId);
+    return ConsoleExcelStyles.excelResponse(
+        bytes, sheetName(), tenantId, dateTimeSupport.currentFileTimestamp());
   }
 
   public final ResponseEntity<InputStreamResource> downloadTemplate() {

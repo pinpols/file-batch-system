@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.support;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,7 +39,7 @@ public class StaleTempFileCleanup {
 
   void cleanStaleTempFiles() {
     long hours = Math.max(0L, staleTempFileHours);
-    Instant cutoff = Instant.now().minus(Duration.ofHours(hours));
+    Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofHours(hours));
     Path tempDir = Path.of(System.getProperty("java.io.tmpdir"));
     int cleaned = 0;
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {

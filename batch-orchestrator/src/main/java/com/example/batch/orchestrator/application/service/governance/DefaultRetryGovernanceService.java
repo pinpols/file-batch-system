@@ -10,6 +10,7 @@ import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
@@ -179,7 +180,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             new RetryScheduleQuery(
                 null,
                 RetryScheduleStatus.WAITING.code(),
-                Instant.now(),
+                BatchDateTimeSupport.utcNow(),
                 governance.retry().getBatchSize()));
     for (RetryScheduleEntity retrySchedule : dueRetries) {
       if (retryScheduleMapper.markRunning(
@@ -211,7 +212,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 .retryStatus(RetryScheduleStatus.FAILED.code())
                 .lastErrorCode("RETRY_DISPATCH_FAILED")
                 .lastErrorMessage(exception.getMessage())
-                .nextRetryAt(Instant.now())
+                .nextRetryAt(BatchDateTimeSupport.utcNow())
                 .build();
         retryScheduleMapper.markFailed(markFailedParam);
       }
@@ -362,7 +363,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           <= 0) {
         throw new IllegalStateException("dead letter task replay conflict");
       }
-      Instant replayAt = Instant.now();
+      Instant replayAt = BatchDateTimeSupport.utcNow();
       int replayCount = Optional.ofNullable(deadLetterTask.getReplayCount()).orElse(0) + 1;
       try {
         if (!"JOB_PARTITION".equals(deadLetterTask.getSourceType())) {
@@ -553,7 +554,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       delaySeconds = candidate;
     }
     delaySeconds = applyJitter(delaySeconds);
-    return Instant.now().plusSeconds(delaySeconds);
+    return BatchDateTimeSupport.utcNow().plusSeconds(delaySeconds);
   }
 
   /**
@@ -594,7 +595,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       deadLetterTask.setMaxReplayCount(governance.retry().getDefaultMaxRetryCount());
       // 第 1 次自动重放: now + fixedDelaySeconds（与 retry_schedule FIXED 策略对齐）
       deadLetterTask.setNextReplayAt(
-          Instant.now().plusSeconds(governance.retry().getFixedDelaySeconds()));
+          BatchDateTimeSupport.utcNow().plusSeconds(governance.retry().getFixedDelaySeconds()));
     } else {
       // BUSINESS 错误: 自动重放永远不会自愈, 仅人工触发
       deadLetterTask.setMaxReplayCount(0);

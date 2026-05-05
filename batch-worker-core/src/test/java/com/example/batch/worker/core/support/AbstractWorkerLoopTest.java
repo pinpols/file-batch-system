@@ -9,9 +9,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerRegistration;
+import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +37,7 @@ class AbstractWorkerLoopTest {
   @Mock private WorkerRuntimeFacade workerRuntimeFacade;
 
   private TestWorkerLoop loop;
+  private BatchDateTimeSupport dateTimeSupport;
 
   @BeforeEach
   void setUp() {
@@ -41,7 +46,10 @@ class AbstractWorkerLoopTest {
     registration.setTenantId("t1");
     when(workerRuntimeFacade.start(any())).thenReturn(registration);
 
-    loop = new TestWorkerLoop(workerRuntimeFacade);
+    BatchTimezoneProvider timezoneProvider =
+        new BatchTimezoneProvider(new BatchTimezoneProperties());
+    dateTimeSupport = new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider);
+    loop = new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport);
   }
 
   @Test
@@ -100,7 +108,7 @@ class AbstractWorkerLoopTest {
   @Test
   void doHeartbeat_doesNotFailBeforeStart() {
     // 创建一个尚未调用 start() 的 loop
-    TestWorkerLoop freshLoop = new TestWorkerLoop(workerRuntimeFacade);
+    TestWorkerLoop freshLoop = new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport);
     // 对未启动的 loop 调用 doHeartbeat 应内部触发 ensureStarted
     // 行为：ensureStarted() 返回有效注册信息，随后心跳正常执行
     freshLoop.doHeartbeat();
@@ -127,7 +135,7 @@ class AbstractWorkerLoopTest {
 
   @Test
   void shutdown_isNoOp_whenNeverStarted() {
-    TestWorkerLoop freshLoop = new TestWorkerLoop(workerRuntimeFacade);
+    TestWorkerLoop freshLoop = new TestWorkerLoop(workerRuntimeFacade, dateTimeSupport);
     freshLoop.shutdown();
 
     verify(workerRuntimeFacade, never()).shutdown(any());
@@ -147,8 +155,8 @@ class AbstractWorkerLoopTest {
 
   private static class TestWorkerLoop extends AbstractWorkerLoop {
 
-    TestWorkerLoop(WorkerRuntimeFacade facade) {
-      super(facade);
+    TestWorkerLoop(WorkerRuntimeFacade facade, BatchDateTimeSupport dateTimeSupport) {
+      super(facade, dateTimeSupport);
     }
 
     @Override

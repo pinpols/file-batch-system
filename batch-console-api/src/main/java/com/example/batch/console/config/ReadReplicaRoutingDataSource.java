@@ -1,5 +1,6 @@
 package com.example.batch.console.config;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -71,7 +72,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     if (RoutingHints.isForcePrimary()) {
       return Route.PRIMARY;
     }
-    if (System.currentTimeMillis() < quarantineUntilMillis) {
+    if (BatchDateTimeSupport.utcEpochMillis() < quarantineUntilMillis) {
       // quarantine 期内静默走主库；失败计数仍保留以便观察恢复时是否再次失败
       return Route.PRIMARY;
     }
@@ -111,7 +112,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     incrementCounter(METRIC_FAILURE, "type", classify(ex));
     int failures = consecutiveFailures.incrementAndGet();
     if (failures >= failureThreshold) {
-      quarantineUntilMillis = System.currentTimeMillis() + quarantineMillis;
+      quarantineUntilMillis = BatchDateTimeSupport.utcEpochMillis() + quarantineMillis;
       quarantineEverEntered = true;
       log.warn(
           "replica entered quarantine for {}ms after {} consecutive failures",
@@ -153,7 +154,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
   /** 当前是否处于 quarantine 状态（用于测试/监控查询）。 */
   public boolean isReplicaQuarantined() {
-    return System.currentTimeMillis() < quarantineUntilMillis;
+    return BatchDateTimeSupport.utcEpochMillis() < quarantineUntilMillis;
   }
 
   /** 当前连续失败计数（用于测试）。 */

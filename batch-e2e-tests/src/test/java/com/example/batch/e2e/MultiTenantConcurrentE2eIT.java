@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
@@ -16,7 +17,6 @@ import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -523,7 +523,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         tenantId,
         workerCode,
         CodeNormalizer.toUpperOrNull(workerGroup),
-        Timestamp.from(Instant.now()));
+        Timestamp.from(BatchDateTimeSupport.utcNow()));
   }
 
   private void awaitWorkerOnline(String tenantId, String workerCode, String workerGroup) {

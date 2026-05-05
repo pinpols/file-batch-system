@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.entity.ApiKeyEntity;
 import com.example.batch.console.mapper.ConsoleApiKeyMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
@@ -77,7 +78,7 @@ class ConsoleApiKeyServiceTest {
         .thenReturn(Optional.empty())
         .thenReturn(Optional.of(created));
 
-    Instant expiresAt = Instant.now().plusSeconds(86400);
+    Instant expiresAt = BatchDateTimeSupport.utcNow().plusSeconds(86400);
     ConsoleApiKeyService.CreateResult result =
         service.create("t1", "new-key", "read", expiresAt, "admin");
 
@@ -100,7 +101,8 @@ class ConsoleApiKeyServiceTest {
     existing.setKeyName("dup-key");
     when(repository.findByTenantAndName("t1", "dup-key")).thenReturn(Optional.of(existing));
 
-    assertThatThrownBy(() -> service.create("t1", "dup-key", "read", Instant.now(), "admin"))
+    assertThatThrownBy(
+            () -> service.create("t1", "dup-key", "read", BatchDateTimeSupport.utcNow(), "admin"))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("name_exists");
   }

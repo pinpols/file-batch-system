@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -57,7 +58,7 @@ class WorkerDrainTimeoutSchedulerTest {
 
   @Test
   void shouldTakeOverOnlyExpiredDrainingWorkers() {
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     WorkerRegistryEntity expired =
         worker("t1", "worker-expired", now.minusSeconds(120), now.minusSeconds(1));
     WorkerRegistryEntity future =

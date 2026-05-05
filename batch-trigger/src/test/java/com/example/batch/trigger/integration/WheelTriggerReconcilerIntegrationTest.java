@@ -3,6 +3,7 @@ package com.example.batch.trigger.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
@@ -52,7 +53,7 @@ class WheelTriggerReconcilerIntegrationTest extends AbstractIntegrationTest {
     TriggerRuntimeStateEntity state = stateMapper.selectByJobDefinitionId(jobDefId);
     assertThat(state).isNotNull();
     assertThat(state.getTenantId()).isEqualTo(tenantId);
-    assertThat(state.getNextFireTime()).isAfter(Instant.now());
+    assertThat(state.getNextFireTime()).isAfter(BatchDateTimeSupport.utcNow());
     assertThat(state.getMisfireCount()).isZero();
   }
 

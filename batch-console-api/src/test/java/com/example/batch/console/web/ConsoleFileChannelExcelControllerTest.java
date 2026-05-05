@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.file.ConsoleFileChannelExcelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -16,7 +17,6 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.excel.ConsoleFileChannelExcelController;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
@@ -39,7 +39,7 @@ class ConsoleFileChannelExcelControllerTest {
     ConsoleApiExceptionHandler exceptionHandler =
         new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
     when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
     mockMvc =

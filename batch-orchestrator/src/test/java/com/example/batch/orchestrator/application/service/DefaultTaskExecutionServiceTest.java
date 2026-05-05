@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.task.DefaultTaskExecutionService;
 import com.example.batch.orchestrator.application.service.task.TaskAssignmentService;
 import com.example.batch.orchestrator.application.service.task.TaskCreationService;
@@ -107,7 +108,7 @@ class DefaultTaskExecutionServiceTest {
 
   @Test
   void markRunning_delegatesToAssignmentService() {
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     JobTaskEntity task = new JobTaskEntity();
     when(taskAssignmentService.markRunning("t1", 1L, now)).thenReturn(task);
 

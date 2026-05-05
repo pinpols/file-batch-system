@@ -3,6 +3,7 @@ package com.example.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.domain.query.ApprovalCommandQuery;
 import com.example.batch.console.mapper.ApprovalCommandMapper;
@@ -24,14 +25,14 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldReturnEmptyWhenNoApprovalsExist() {
     ApprovalCommandQuery query = new ApprovalCommandQuery();
-    query.setTenantId("no-such-tenant-" + System.currentTimeMillis());
+    query.setTenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis());
     query.setPageRequest(new PageRequest(1, 10));
     assertThat(approvalCommandMapper.selectByQuery(query)).isEmpty();
   }
 
   @Test
   void shouldQueryApprovalsByStatusAndCount() {
-    String tenantId = "t-approval-" + System.currentTimeMillis();
+    String tenantId = "t-approval-" + BatchDateTimeSupport.utcEpochMillis();
     insertApproval(tenantId, "apr-1", "COMPENSATION", "COMPENSATION", "PENDING");
     insertApproval(tenantId, "apr-2", "DOWNLOAD", "DOWNLOAD", "EXECUTED");
 

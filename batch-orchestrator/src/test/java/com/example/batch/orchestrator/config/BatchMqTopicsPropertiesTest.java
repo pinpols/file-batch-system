@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-class BatchMqTopicsPropertiesTest {
+public class BatchMqTopicsPropertiesTest {
 
   @Test
   void resolveDispatchTopic_returnsProcessTopicForProcessWorkerType() {

@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.service;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
@@ -123,7 +124,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       return null;
     }
     String newStatus = resolveIncomingStatus(null, status, registry.status());
-    registry = registry.withStatus(newStatus, Instant.now());
+    registry = registry.withStatus(newStatus, BatchDateTimeSupport.utcNow());
     return persist(registry);
   }
 
@@ -133,7 +134,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
    * 漂移直接进入 DB 的 heartbeat_at 列。心跳路径走 mybatis xml 直接 current_timestamp，二者口径一致。
    */
   private Instant firstHeartbeat() {
-    return Instant.now();
+    return BatchDateTimeSupport.utcNow();
   }
 
   /**

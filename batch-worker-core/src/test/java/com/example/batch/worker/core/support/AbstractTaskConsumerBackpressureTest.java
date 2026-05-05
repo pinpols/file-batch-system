@@ -8,7 +8,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.kafka.TaskDispatchMessage;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
@@ -16,6 +19,7 @@ import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,10 +36,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 class AbstractTaskConsumerBackpressureTest {
 
   private ExecutorService pool;
+  private BatchDateTimeSupport dateTimeSupport;
 
   @BeforeEach
   void setUp() {
     pool = Executors.newFixedThreadPool(2);
+    dateTimeSupport =
+        new BatchDateTimeSupport(
+            Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @AfterEach
@@ -70,7 +78,7 @@ class AbstractTaskConsumerBackpressureTest {
         new AbstractTaskConsumer(registry, meterRegistryProvider) {
           @Override
           protected AbstractWorkerLoop workerLoop() {
-            return new AbstractWorkerLoop(runtimeFacade) {
+            return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport) {
               @Override
               protected WorkerConfiguration workerConfiguration() {
                 return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.model.WorkerRouteModel;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -14,7 +15,6 @@ import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingReques
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -165,7 +165,7 @@ class DefaultWorkerSelectorTest {
         capabilityTags,
         resourceTag,
         WorkerRegistryStatus.ONLINE.code(),
-        Instant.now(),
+        BatchDateTimeSupport.utcNow(),
         0,
         10,
         null,

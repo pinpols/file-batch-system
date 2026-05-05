@@ -1,11 +1,11 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -51,7 +51,7 @@ final class LocalOutboxDispatchSupport {
       Map<String, Object> envelope = new LinkedHashMap<>();
       envelope.put("tenantId", command.tenantId());
       envelope.put("traceId", command.traceId());
-      envelope.put("dispatchedAt", Instant.now().toString());
+      envelope.put("dispatchedAt", BatchDateTimeSupport.utcNow().toString());
       envelope.put("channelType", channelConfig.get("channel_type"));
       envelope.put("dispatchTarget", command.payload().dispatchTarget());
       envelope.put("externalRequestId", externalRequestId);

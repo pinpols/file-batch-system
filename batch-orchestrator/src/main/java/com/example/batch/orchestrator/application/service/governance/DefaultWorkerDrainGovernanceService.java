@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.service.governance;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -57,7 +58,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
         timeoutSeconds != null && timeoutSeconds > 0
             ? timeoutSeconds
             : workerDrainProperties.getDefaultTimeoutSeconds();
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     registry =
         registry.withDrain(
             WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);

@@ -1,10 +1,10 @@
 package com.example.batch.console.infrastructure.realtime;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import jakarta.annotation.PreDestroy;
-import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,6 +36,7 @@ public class ConsoleOpsSummaryRealtimeStream {
   private final ConsoleRealtimeRedisPublisher redisPublisher;
   private final ConsoleRealtimeCursorFactory cursorFactory;
   private final ConsoleTenantGuard tenantGuard;
+  private final BatchDateTimeSupport dateTimeSupport;
   private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes =
       new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, CachedSummary> summaryCache = new ConcurrentHashMap<>();
@@ -120,7 +121,12 @@ public class ConsoleOpsSummaryRealtimeStream {
     }
     ConsoleSseEvent event =
         new ConsoleSseEvent(
-            tenantId, STREAM, EVENT_TYPE, cursorFactory.nextCursor(), summary, Instant.now());
+            tenantId,
+            STREAM,
+            EVENT_TYPE,
+            cursorFactory.nextCursor(),
+            summary,
+            dateTimeSupport.nowInstant());
     realtimeEventHub.publish(event);
     redisPublisher.publish(event);
   }
@@ -130,7 +136,7 @@ public class ConsoleOpsSummaryRealtimeStream {
   }
 
   private ConsoleOpsSummaryResponse loadSummary(String tenantId, boolean forceRefresh) {
-    long now = System.currentTimeMillis();
+    long now = dateTimeSupport.currentEpochMillis();
     CachedSummary cached = summaryCache.get(tenantId);
     if (!forceRefresh
         && cached != null

@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.domain.entity;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
 
 /**
@@ -60,7 +61,7 @@ public record QuotaRuntimeStateEntity(
         peakBorrowedCount,
         lastResetAt,
         createdAt,
-        Instant.now(),
+        BatchDateTimeSupport.utcNow(),
         version);
   }
 }

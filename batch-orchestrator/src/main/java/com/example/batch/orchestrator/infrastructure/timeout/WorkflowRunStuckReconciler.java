@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.infrastructure.timeout;
 
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
@@ -78,7 +79,7 @@ public class WorkflowRunStuckReconciler {
       // 让 task outcome 有充分时间正常 propagate；阈值过短可能误判正常长跑 workflow）
       Duration threshold =
           Duration.ofSeconds(governance.timeout().getWorkflowStuckThresholdSeconds());
-      Instant stuckBefore = Instant.now().minus(threshold);
+      Instant stuckBefore = BatchDateTimeSupport.utcNow().minus(threshold);
       int batchSize = Math.max(1, governance.timeout().getBatchSize());
       List<WorkflowRunEntity> candidates =
           workflowRunMapper.selectStuckRunningCandidates(stuckBefore, batchSize);
@@ -147,7 +148,7 @@ public class WorkflowRunStuckReconciler {
             .id(wr.getId())
             .runStatus(targetStatus)
             .currentNodeCode(wr.getCurrentNodeCode())
-            .finishedAt(Instant.now())
+            .finishedAt(BatchDateTimeSupport.utcNow())
             .expectedStatuses(EXPECTED_RUNNING)
             .build();
     int rows = workflowRunMapper.updateStatus(param);

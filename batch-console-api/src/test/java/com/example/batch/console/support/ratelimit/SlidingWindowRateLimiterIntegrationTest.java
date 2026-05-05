@@ -2,7 +2,11 @@ package com.example.batch.console.support.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
+import java.time.Clock;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,7 +29,11 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
     factory.afterPropertiesSet();
     StringRedisTemplate template = new StringRedisTemplate(factory);
     template.afterPropertiesSet();
-    rateLimiter = new SlidingWindowRateLimiter(template);
+    rateLimiter =
+        new SlidingWindowRateLimiter(
+            template,
+            new BatchDateTimeSupport(
+                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }
 
   @Test

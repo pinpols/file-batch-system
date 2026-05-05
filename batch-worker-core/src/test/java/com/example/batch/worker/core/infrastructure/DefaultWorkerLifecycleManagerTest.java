@@ -4,8 +4,12 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerSelfRegistrationService;
+import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +38,11 @@ class DefaultWorkerLifecycleManagerTest {
 
     DefaultWorkerLifecycleManager manager =
         new DefaultWorkerLifecycleManager(
-            workerRegistryService, workerRuntimeState, activeTaskLeaseRegistry);
+            workerRegistryService,
+            workerRuntimeState,
+            activeTaskLeaseRegistry,
+            new BatchDateTimeSupport(
+                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
 
     manager.shutdown("worker-1");
 

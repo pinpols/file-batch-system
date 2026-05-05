@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -55,7 +56,7 @@ class CronExpressionAdapterTest {
 
   @Test
   void invalidExpressionThrowsIAE() {
-    assertThatThrownBy(() -> adapter.next("invalid", SHANGHAI, Instant.now()))
+    assertThatThrownBy(() -> adapter.next("invalid", SHANGHAI, BatchDateTimeSupport.utcNow()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("invalid cron expression");
   }
@@ -77,7 +78,7 @@ class CronExpressionAdapterTest {
   @Test
   void evictRemovesFromCache() {
     String expr = "0 0 * * * ?";
-    adapter.next(expr, SHANGHAI, Instant.now()); // 进缓存
+    adapter.next(expr, SHANGHAI, BatchDateTimeSupport.utcNow()); // 进缓存
     assertThatCode(() -> adapter.evict(expr)).doesNotThrowAnyException();
   }
 

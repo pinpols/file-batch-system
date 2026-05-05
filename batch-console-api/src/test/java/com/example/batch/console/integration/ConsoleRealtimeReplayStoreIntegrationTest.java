@@ -2,13 +2,13 @@ package com.example.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.config.ConsoleRealtimeProperties;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeMetrics;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeReplayStore;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeReplayStore.ReplayBatch;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeStreamEnvelope;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,6 +108,13 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
   private static ConsoleRealtimeStreamEnvelope envelope(
       String tenantId, String stream, String cursor, String eventType) {
     return new ConsoleRealtimeStreamEnvelope(
-        "instance-1", tenantId, stream, eventType, cursor, false, "{}", Instant.now());
+        "instance-1",
+        tenantId,
+        stream,
+        eventType,
+        cursor,
+        false,
+        "{}",
+        BatchDateTimeSupport.utcNow());
   }
 }

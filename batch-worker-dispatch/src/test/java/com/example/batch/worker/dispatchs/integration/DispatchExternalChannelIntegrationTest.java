@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.dispatchs.BatchWorkerDispatchApplication;
@@ -210,8 +211,8 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   }
 
   private static Message[] waitForMessages(int expectedCount) throws InterruptedException {
-    long deadline = System.currentTimeMillis() + MAIL_WAIT_TIMEOUT_MILLIS;
-    while (System.currentTimeMillis() < deadline) {
+    long deadline = BatchDateTimeSupport.utcEpochMillis() + MAIL_WAIT_TIMEOUT_MILLIS;
+    while (BatchDateTimeSupport.utcEpochMillis() < deadline) {
       Message[] messages = GREEN_MAIL.getReceivedMessages();
       if (messages.length >= expectedCount) {
         return messages;

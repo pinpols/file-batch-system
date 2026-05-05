@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.archive.SuccessInstanceArchiveService.ArchiveBatchResult;
 import com.example.batch.orchestrator.config.SuccessInstanceArchiveProperties;
 import com.example.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
@@ -119,7 +120,7 @@ class SuccessInstanceArchiveServiceTest {
         org.mockito.ArgumentCaptor.forClass(Instant.class);
     verify(mapper).selectArchivableInstanceIds(cutoffCaptor.capture(), anyInt());
     Instant cutoff = cutoffCaptor.getValue();
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     assertThat(cutoff).isBefore(now.minusSeconds(86_400 - 5));
     assertThat(cutoff).isAfter(now.minusSeconds(86_400 + 5));
   }

@@ -7,6 +7,7 @@ import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.domain.entity.ApprovalCommandEntity;
 import com.example.batch.console.domain.entity.ConsoleAiAuditLogEntity;
@@ -404,7 +405,7 @@ public class ConsoleOpsQueryService {
       String tenantId, String calendarCode, LocalDate bizDate, Map<String, Object> row) {
     Instant cutoffAt = instantValue(row, "cutoffAt");
     Instant slaDeadlineAt = instantValue(row, "slaDeadlineAt");
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     Long timeUntilCutoffSeconds =
         cutoffAt == null ? null : ChronoUnit.SECONDS.between(now, cutoffAt);
     Instant lateArrivalWindowClosesAt =
@@ -468,7 +469,7 @@ public class ConsoleOpsQueryService {
     if (slaDeadlineAt == null) {
       return "NO_SLA";
     }
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     if (settledAt != null) {
       return settledAt.isAfter(slaDeadlineAt) ? "SLA_BREACH" : "ON_TIME";
     }

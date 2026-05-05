@@ -3,6 +3,7 @@ package com.example.batch.trigger.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
@@ -91,7 +92,7 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
   @Test
   void slidingWindowTriggersFastPathOnFirstCallAndReleasesStaleMarkers() {
     // 1) 准备一个 stale marker(模拟"上一任 leader 崩溃前留下的占位")
-    insertState(Instant.now().plusSeconds(60));
+    insertState(BatchDateTimeSupport.utcNow().plusSeconds(60));
     TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
     // 手工 claim + 把 scheduled_at 改到 stale 之前(threshold=2s,设 10s 前)
     stateMapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "dead-leader-instance");
@@ -124,7 +125,7 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void secondSlidingWindowCallDoesNotRetriggerFastPath() {
-    insertState(Instant.now().plusSeconds(60));
+    insertState(BatchDateTimeSupport.utcNow().plusSeconds(60));
 
     wheelScheduler.doSlidingWindow(); // 第 1 次 — 触发 fast-path
     double afterFirstAcquire = leaderAcquireCount();
@@ -140,7 +141,7 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
   @Test
   void releaseStaleMarkersAlsoWorksStandalone() {
     // 不依赖 fast-path,独立调用 doReleaseStaleMarkers 绕开 @SchedulerLock(IT 不测 lock 语义)
-    insertState(Instant.now().plusSeconds(60));
+    insertState(BatchDateTimeSupport.utcNow().plusSeconds(60));
     TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
     stateMapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "dead-leader-instance");
     jdbcTemplate.update(
@@ -194,7 +195,7 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
    */
   @Test
   void failoverLoop100TimesNoDoubleOrMissedFire() {
-    insertState(Instant.now().plusSeconds(60));
+    insertState(BatchDateTimeSupport.utcNow().plusSeconds(60));
     TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
 
     double leaderAcquireBaseline = leaderAcquireCount();

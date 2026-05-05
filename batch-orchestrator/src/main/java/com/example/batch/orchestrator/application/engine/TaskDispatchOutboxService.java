@@ -6,6 +6,7 @@ import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -13,7 +14,6 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -101,7 +101,7 @@ public class TaskDispatchOutboxService {
             resolvePriorityBand(jobInstance.getPriority()),
             traceId,
             idempotencyKey,
-            Instant.now());
+            BatchDateTimeSupport.utcNow());
 
     OutboxEventEntity event = new OutboxEventEntity();
     event.setTenantId(task.getTenantId());

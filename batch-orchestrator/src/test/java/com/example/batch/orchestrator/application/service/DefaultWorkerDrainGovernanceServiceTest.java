@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.DefaultWorkerDrainGovernanceService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
@@ -21,7 +22,6 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,7 +69,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
   void shouldThrowWhenWorkerAlreadyDecommissionedOnStartDrain() {
     WorkerRegistryEntity registry =
         onlineWorker("t1", "w1")
-            .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), Instant.now());
+            .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
 
     assertThatThrownBy(() -> service.startDrain("t1", "w1", null)).isInstanceOf(BizException.class);
@@ -117,7 +117,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldMarkDecommissionedAndTakeoverTasksOnForceOffline() {
     WorkerRegistryEntity registry = onlineWorker("t1", "w1");
-    WorkerRegistryEntity decommissioned = registry.withDecommissioned(Instant.now());
+    WorkerRegistryEntity decommissioned =
+        registry.withDecommissioned(BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
@@ -138,7 +139,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldCompleteForceOfflineEvenWhenNoActiveTasks() {
     WorkerRegistryEntity registry = onlineWorker("t1", "w1");
-    WorkerRegistryEntity decommissioned = registry.withDecommissioned(Instant.now());
+    WorkerRegistryEntity decommissioned =
+        registry.withDecommissioned(BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
@@ -210,9 +212,9 @@ class DefaultWorkerDrainGovernanceServiceTest {
         onlineWorker("t1", "w1")
             .withDrain(
                 WorkerRegistryStatus.DRAINING.code(),
-                Instant.now().minusSeconds(600),
-                Instant.now().minusSeconds(100),
-                Instant.now().minusSeconds(600));
+                BatchDateTimeSupport.utcNow().minusSeconds(600),
+                BatchDateTimeSupport.utcNow().minusSeconds(100),
+                BatchDateTimeSupport.utcNow().minusSeconds(600));
 
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
@@ -228,8 +230,10 @@ class DefaultWorkerDrainGovernanceServiceTest {
   @Test
   void shouldContinueTakeoverWhenOneTaskRetryFails() {
     WorkerRegistryEntity registry =
-        onlineWorker("t1", "w1").withStatus(WorkerRegistryStatus.DRAINING.code(), Instant.now());
-    WorkerRegistryEntity decommissioned = registry.withDecommissioned(Instant.now());
+        onlineWorker("t1", "w1")
+            .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity decommissioned =
+        registry.withDecommissioned(BatchDateTimeSupport.utcNow());
     when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
         .thenReturn(registry)
         .thenReturn(registry)
@@ -264,7 +268,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         null,
         null,
         WorkerRegistryStatus.ONLINE.code(),
-        Instant.now(),
+        BatchDateTimeSupport.utcNow(),
         null,
         null,
         null,

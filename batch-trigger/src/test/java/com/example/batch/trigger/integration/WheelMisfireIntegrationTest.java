@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
@@ -74,7 +75,7 @@ class WheelMisfireIntegrationTest extends AbstractIntegrationTest {
   @Test
   void misfireWithPolicyNoneSkipsAndAdvances() {
     jobDefId = insertJobDefinition("NONE");
-    Instant longAgo = Instant.now().minusSeconds(30); // 比 threshold(2s) 远超
+    Instant longAgo = BatchDateTimeSupport.utcNow().minusSeconds(30); // 比 threshold(2s) 远超
     insertState(longAgo);
 
     wheelScheduler.scanAndSchedule(Duration.ofSeconds(60));
@@ -100,7 +101,7 @@ class WheelMisfireIntegrationTest extends AbstractIntegrationTest {
   @Test
   void misfireWithPolicyAutoFiresCatchUp() {
     jobDefId = insertJobDefinition("AUTO");
-    Instant longAgo = Instant.now().minusSeconds(30);
+    Instant longAgo = BatchDateTimeSupport.utcNow().minusSeconds(30);
     insertState(longAgo);
 
     wheelScheduler.scanAndSchedule(Duration.ofSeconds(60));
@@ -136,7 +137,7 @@ class WheelMisfireIntegrationTest extends AbstractIntegrationTest {
   @Test
   void misfireWithPolicyManualApprovalEnqueuesPending() {
     jobDefId = insertJobDefinition("MANUAL_APPROVAL");
-    Instant longAgo = Instant.now().minusSeconds(30);
+    Instant longAgo = BatchDateTimeSupport.utcNow().minusSeconds(30);
     insertState(longAgo);
 
     wheelScheduler.scanAndSchedule(Duration.ofSeconds(60));

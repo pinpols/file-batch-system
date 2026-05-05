@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
@@ -65,8 +66,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     private String storageBucket;
     private final String storagePath;
     private final String metadataJson;
-    private Instant createdAt = Instant.now();
-    private Instant updatedAt = Instant.now();
+    private Instant createdAt = BatchDateTimeSupport.utcNow();
+    private Instant updatedAt = BatchDateTimeSupport.utcNow();
 
     private FileRecordSpec(
         String tenantId,
@@ -140,7 +141,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     // collectLatencyMetrics() scopes queries to reconcile.default-tenant-id (see
     // FileGovernanceScheduler).
     String latencyTenantId = "default-tenant";
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     String suffix = suffix();
     insertFileRecord(
         new FileRecordSpec(
@@ -180,8 +181,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                     objectName,
                     "{}")
                 .storageBucket(minioBucket())
-                .createdAt(Instant.now().minusSeconds(9L * 24L * 3600L))
-                .updatedAt(Instant.now().minusSeconds(9L * 24L * 3600L)));
+                .createdAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L))
+                .updatedAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L)));
 
     fileGovernanceScheduler.cleanupArchivedFiles();
 
@@ -263,7 +264,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
           "latestTolerableTime": "%s"
         }
         """
-            .formatted(groupCode, requiredSet, Instant.now().plusSeconds(3600));
+            .formatted(groupCode, requiredSet, BatchDateTimeSupport.utcNow().plusSeconds(3600));
 
     insertFileRecord(
         new FileRecordSpec(
@@ -274,8 +275,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                 "LOCAL",
                 "incoming/" + groupCode + "/file-a.csv",
                 metadata)
-            .createdAt(Instant.now())
-            .updatedAt(Instant.now()));
+            .createdAt(BatchDateTimeSupport.utcNow())
+            .updatedAt(BatchDateTimeSupport.utcNow()));
     insertFileRecord(
         new FileRecordSpec(
                 TENANT_ID,
@@ -285,8 +286,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                 "LOCAL",
                 "incoming/" + groupCode + "/file-b.csv",
                 metadata)
-            .createdAt(Instant.now())
-            .updatedAt(Instant.now()));
+            .createdAt(BatchDateTimeSupport.utcNow())
+            .updatedAt(BatchDateTimeSupport.utcNow()));
 
     fileGovernanceScheduler.manageFileArrivalGroups();
 

@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.value.JsonbString;
@@ -40,7 +41,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
     WorkerRegistryEntity worker = onlineWorker("t1", "worker-it-drain", "DEFAULT");
     worker = workerRegistryMapper.saveLikeSdj(worker);
 
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     worker = worker.withDrain(WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(300), now);
     workerRegistryMapper.saveLikeSdj(worker);
 
@@ -56,7 +57,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
     WorkerRegistryEntity worker = onlineWorker("t1", "worker-it-decom", "DEFAULT");
     worker = workerRegistryMapper.saveLikeSdj(worker);
 
-    worker = worker.withDecommissioned(Instant.now());
+    worker = worker.withDecommissioned(BatchDateTimeSupport.utcNow());
     workerRegistryMapper.saveLikeSdj(worker);
 
     WorkerRegistryEntity found =
@@ -68,12 +69,12 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldFindWorkersByStatusAndGroup() {
-    String uniqueGroup = "GROUP-IT-" + System.currentTimeMillis();
+    String uniqueGroup = "GROUP-IT-" + BatchDateTimeSupport.utcEpochMillis();
     WorkerRegistryEntity w1 = onlineWorker("t1", "w-grp-1-" + uniqueGroup, uniqueGroup);
     WorkerRegistryEntity w2 = onlineWorker("t1", "w-grp-2-" + uniqueGroup, uniqueGroup);
     WorkerRegistryEntity w3 =
         onlineWorker("t1", "w-offline-" + uniqueGroup, uniqueGroup)
-            .withStatus(WorkerRegistryStatus.OFFLINE.code(), Instant.now());
+            .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
     workerRegistryMapper.saveLikeSdj(w1);
     workerRegistryMapper.saveLikeSdj(w2);
     workerRegistryMapper.saveLikeSdj(w3);
@@ -88,7 +89,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldCountActiveWorkersByGroup() {
-    String uniqueGroup = "CNT-" + System.currentTimeMillis();
+    String uniqueGroup = "CNT-" + BatchDateTimeSupport.utcEpochMillis();
     WorkerRegistryEntity w1 = onlineWorker("t1", "cnt-w1-" + uniqueGroup, uniqueGroup);
     WorkerRegistryEntity w2 = onlineWorker("t1", "cnt-w2-" + uniqueGroup, uniqueGroup);
     workerRegistryMapper.saveLikeSdj(w1);
@@ -103,14 +104,15 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldFindDrainingWorkers() {
-    Instant pastDeadline = Instant.now().minusSeconds(10);
+    Instant pastDeadline = BatchDateTimeSupport.utcNow().minusSeconds(10);
     WorkerRegistryEntity draining =
-        onlineWorker("t1", "worker-draining-search-" + System.currentTimeMillis(), "DEFAULT")
+        onlineWorker(
+                "t1", "worker-draining-search-" + BatchDateTimeSupport.utcEpochMillis(), "DEFAULT")
             .withDrain(
                 WorkerRegistryStatus.DRAINING.code(),
-                Instant.now().minusSeconds(60),
+                BatchDateTimeSupport.utcNow().minusSeconds(60),
                 pastDeadline,
-                Instant.now());
+                BatchDateTimeSupport.utcNow());
     workerRegistryMapper.saveLikeSdj(draining);
 
     List<WorkerRegistryEntity> drainingWorkers =
@@ -133,7 +135,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         new JsonbString("{}"),
         null,
         WorkerRegistryStatus.ONLINE.code(),
-        Instant.now(),
+        BatchDateTimeSupport.utcNow(),
         0,
         10,
         null,

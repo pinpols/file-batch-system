@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
@@ -18,7 +19,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Timestamp;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -124,7 +124,7 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
         where tenant_id = ? and id = ?
         """,
         WORKER_CODE,
-        Timestamp.from(Instant.now().minusSeconds(600)),
+        Timestamp.from(BatchDateTimeSupport.utcNow().minusSeconds(600)),
         TENANT,
         taskId);
 

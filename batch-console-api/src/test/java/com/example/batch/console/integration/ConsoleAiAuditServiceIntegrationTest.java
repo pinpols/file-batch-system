@@ -2,6 +2,7 @@ package com.example.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.domain.command.AiAuditCommand;
 import com.example.batch.console.domain.entity.ConsoleAiAuditLogEntity;
@@ -9,7 +10,6 @@ import com.example.batch.console.domain.query.ConsoleAiAuditLogQuery;
 import com.example.batch.console.mapper.ConsoleAiAuditLogMapper;
 import com.example.batch.console.support.ConsoleAiAuditService;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +42,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
             "hash-resp-001",
             "3 jobs failed",
             null,
-            Instant.now());
+            BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
 
@@ -81,7 +81,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
             null,
             null,
             "blocked_keyword:password",
-            Instant.now());
+            BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
 
@@ -98,7 +98,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldReturnMultipleEntriesForSameSession() {
-    String sessionId = "session-multi-" + System.currentTimeMillis();
+    String sessionId = "session-multi-" + BatchDateTimeSupport.utcEpochMillis();
 
     for (int i = 1; i <= 3; i++) {
       auditService.record(
@@ -116,7 +116,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
               null,
               "result " + i,
               null,
-              Instant.now()));
+              BatchDateTimeSupport.utcNow()));
     }
 
     ConsoleAiAuditLogQuery query =
@@ -130,7 +130,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     ConsoleAiAuditLogQuery query =
         ConsoleAiAuditLogQuery.builder()
             .tenantId("t1")
-            .sessionId("no-such-session-" + System.currentTimeMillis())
+            .sessionId("no-such-session-" + BatchDateTimeSupport.utcEpochMillis())
             .build();
     List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).isEmpty();

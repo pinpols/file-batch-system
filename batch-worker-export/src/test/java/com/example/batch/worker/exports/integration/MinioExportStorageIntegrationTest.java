@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
@@ -80,7 +81,8 @@ class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldReturnFalseForNonExistentObject() {
     assertThat(
-            storage.objectExists("export/no-such-object-" + System.currentTimeMillis() + ".json"))
+            storage.objectExists(
+                "export/no-such-object-" + BatchDateTimeSupport.utcEpochMillis() + ".json"))
         .isFalse();
   }
 

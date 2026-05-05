@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.RetryScheduleStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eStatusLogger;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
@@ -154,7 +155,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
     OutboxEventEntity entity = new OutboxEventEntity();
     entity.setTenantId(tenantId);
     entity.setAggregateType("E2E_TEST");
-    entity.setAggregateId(System.currentTimeMillis());
+    entity.setAggregateId(BatchDateTimeSupport.utcEpochMillis());
     entity.setEventType("E2E_TEST_EVENT");
     entity.setEventKey(eventKey);
     entity.setPayloadJson("{\"test\":true}");

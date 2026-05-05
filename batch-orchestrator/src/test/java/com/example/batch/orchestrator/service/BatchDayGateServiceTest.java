@@ -8,10 +8,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -21,6 +24,7 @@ import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -51,7 +55,9 @@ class BatchDayGateServiceTest {
             batchDayInstanceMapper,
             waitingLaunchMapper,
             triggerRequestMapper,
-            jobExecutionLogMapper);
+            jobExecutionLogMapper,
+            new BatchDateTimeSupport(
+                Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
   }
 
   @Test

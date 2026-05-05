@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,7 +30,7 @@ public class DispatchChannelCircuitBreaker {
     if (until == null) {
       return true;
     }
-    if (Instant.now().isBefore(until)) {
+    if (BatchDateTimeSupport.utcNow().isBefore(until)) {
       return false;
     }
     openUntil.remove(key);
@@ -48,14 +49,14 @@ public class DispatchChannelCircuitBreaker {
     }
     int n = failures.computeIfAbsent(key, k -> new AtomicInteger()).incrementAndGet();
     if (n >= properties.getFailureThreshold()) {
-      openUntil.put(key, Instant.now().plusMillis(properties.getCooldownMillis()));
+      openUntil.put(key, BatchDateTimeSupport.utcNow().plusMillis(properties.getCooldownMillis()));
       failures.remove(key);
     }
   }
 
   /** 返回当前处于熔断（冷却期未结束）状态的渠道数量。 */
   public int currentOpenCircuits() {
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     return (int) openUntil.entrySet().stream().filter(e -> now.isBefore(e.getValue())).count();
   }
 }

@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.sla;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.governance.AlertEventService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -68,7 +69,7 @@ public class JobSlaScheduler {
     violationCount.set(jobInstanceMapper.countSlaViolationCandidates());
     List<JobInstanceEntity> candidates =
         jobInstanceMapper.selectSlaViolationCandidates(governance.sla().getBatchSize());
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     for (JobInstanceEntity candidate : candidates) {
       if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
         continue;

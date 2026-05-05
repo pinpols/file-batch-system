@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.scheduling.ResourceCheck;
@@ -28,7 +29,7 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void slidingWindowAllowsBurstWhenWithinLimit() {
-    String owner = "redis-sw-allow-" + System.currentTimeMillis();
+    String owner = "redis-sw-allow-" + BatchDateTimeSupport.utcEpochMillis();
     ResourceCheck result =
         quotaRuntimeStateService.evaluateAndReserve(reservation(owner, "SLIDING_WINDOW", 5, 10, 7));
     assertThat(result.allowed()).isTrue();
@@ -44,7 +45,7 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void slidingWindowBlocksWhenBorrowedExceedsBurst() {
-    String owner = "redis-sw-block-" + System.currentTimeMillis();
+    String owner = "redis-sw-block-" + BatchDateTimeSupport.utcEpochMillis();
     ResourceCheck result =
         quotaRuntimeStateService.evaluateAndReserve(reservation(owner, "SLIDING_WINDOW", 5, 3, 8));
     assertThat(result.allowed()).isFalse();
@@ -54,7 +55,7 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void peakBorrowedIsMonotonicWithinWindow() {
-    String owner = "redis-peak-" + System.currentTimeMillis();
+    String owner = "redis-peak-" + BatchDateTimeSupport.utcEpochMillis();
     quotaRuntimeStateService.evaluateAndReserve(reservation(owner, "SLIDING_WINDOW", 5, 10, 9));
     QuotaRuntimeStateService.QuotaRuntimeSnapshot afterHigh =
         quotaRuntimeStateService.describe(describe(owner, "SLIDING_WINDOW", 10));
@@ -70,7 +71,7 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void calendarDayBindsWindowToCalendarBoundary() {
-    String owner = "redis-cal-" + System.currentTimeMillis();
+    String owner = "redis-cal-" + BatchDateTimeSupport.utcEpochMillis();
     quotaRuntimeStateService.evaluateAndReserve(reservation(owner, "CALENDAR_DAY", 5, 10, 7));
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
         quotaRuntimeStateService.describe(describe(owner, "CALENDAR_DAY", 10));
@@ -95,7 +96,8 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   void describeReturnsDefaultSnapshotForUnknownOwner() {
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
         quotaRuntimeStateService.describe(
-            describe("unknown-owner-" + System.currentTimeMillis(), "SLIDING_WINDOW", 5));
+            describe(
+                "unknown-owner-" + BatchDateTimeSupport.utcEpochMillis(), "SLIDING_WINDOW", 5));
     assertThat(snap.peakBorrowedCount()).isZero();
     assertThat(snap.remainingBurst()).isEqualTo(5);
   }

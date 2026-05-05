@@ -1,8 +1,8 @@
 package com.example.batch.orchestrator.infrastructure.redis;
 
 import com.example.batch.common.redis.BatchRedisKeys;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,7 +41,8 @@ public class RedisShedLockProvider implements LockProvider {
   public Optional<SimpleLock> lock(LockConfiguration lockConfiguration) {
     String key = BatchRedisKeys.shedLock(environment, lockConfiguration.getName());
     String token = UUID.randomUUID().toString();
-    Duration ttl = Duration.between(Instant.now(), lockConfiguration.getLockAtMostUntil());
+    Duration ttl =
+        Duration.between(BatchDateTimeSupport.utcNow(), lockConfiguration.getLockAtMostUntil());
     if (ttl.isNegative() || ttl.isZero()) {
       ttl = Duration.ofSeconds(1);
     }

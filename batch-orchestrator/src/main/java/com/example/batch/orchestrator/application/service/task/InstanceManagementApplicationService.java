@@ -2,13 +2,13 @@ package com.example.batch.orchestrator.application.service.task;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -92,7 +92,7 @@ public class InstanceManagementApplicationService {
     }
     JobInstanceTerminalStatusCommand cmd =
         new JobInstanceTerminalStatusCommand(
-            tenantId, id, targetStatus, Instant.now(), instance.getVersion());
+            tenantId, id, targetStatus, BatchDateTimeSupport.utcNow(), instance.getVersion());
     int rows =
         jobInstanceTerminalStatusApplicationService.updateTerminalStatusAndReconcileChildren(cmd);
     if (rows == 0) {

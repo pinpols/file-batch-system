@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.quota;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.redis.BatchRedisKeys;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
@@ -161,7 +162,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       return ResourceCheck.allow();
     }
 
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     long nowMillis = now.toEpochMilli();
     long calendarStartMillis = 0L;
     long calendarEndMillis = 0L;
@@ -260,7 +261,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
 
-    long nowMillis = Instant.now().toEpochMilli();
+    long nowMillis = BatchDateTimeSupport.utcNow().toEpochMilli();
     long winEndMillis = parseLong(asString(entries.get("windowExpiresAt")));
     long winStartMillis = parseLong(asString(entries.get("windowStartedAt")));
     long lastResetMillis = parseLong(asString(entries.get("lastResetAt")));

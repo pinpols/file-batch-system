@@ -8,6 +8,7 @@ import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
@@ -27,7 +28,6 @@ import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingDecisi
 import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -250,7 +250,7 @@ public class WaitingPartitionDispatchScheduler {
                   .id(jobInstance.getId())
                   .instanceStatus(JobInstanceStatus.RUNNING.code())
                   .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
-                  .startedAt(Instant.now())
+                  .startedAt(BatchDateTimeSupport.utcNow())
                   .expectedVersion(jobInstance.getVersion())
                   .build());
       if (updated > 0) {
@@ -268,7 +268,7 @@ public class WaitingPartitionDispatchScheduler {
           workflowRun.getId(),
           WorkflowRunStatus.RUNNING.code(),
           workflowRun.getCurrentNodeCode(),
-          Instant.now());
+          BatchDateTimeSupport.utcNow());
     }
     log.info(
         "waiting partition released: tenantId={}, partitionId={},"

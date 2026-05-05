@@ -2,6 +2,7 @@ package com.example.batch.console.service;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
@@ -129,7 +130,7 @@ public class WebhookDispatcher {
             normalizeEventType(eventType),
             stream,
             cursor,
-            emittedAt == null ? Instant.now() : emittedAt,
+            emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
             data);
     String payloadJson = JsonUtils.toJson(payload);
     for (WebhookSubscriptionEntity subscription : subscriptions) {
@@ -167,7 +168,7 @@ public class WebhookDispatcher {
       // ADR §5.11: 仅 EXHAUSTED 行设 next_retry_at,relay 据此扫描接力重投;
       // FAILED 行属本轮 burst 中间态,不需要 relay 介入。
       Instant nextRetryAt =
-          exhausted ? Instant.now().plusSeconds(INITIAL_RELAY_DELAY_SECONDS) : null;
+          exhausted ? BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS) : null;
       WebhookDeliveryLogInsertParam failureLog =
           WebhookDeliveryLogInsertParam.builder()
               .tenantId(payload.tenantId())

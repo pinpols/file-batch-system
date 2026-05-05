@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.application.ai.ConsoleAiApplicationService;
 import com.example.batch.console.application.config.ConsoleConfigApplicationService;
@@ -29,7 +30,6 @@ import com.example.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -191,7 +191,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
                 null,
                 null,
                 "DRAINING",
-                Instant.now(),
+                BatchDateTimeSupport.utcNow(),
                 0,
                 null,
                 null));

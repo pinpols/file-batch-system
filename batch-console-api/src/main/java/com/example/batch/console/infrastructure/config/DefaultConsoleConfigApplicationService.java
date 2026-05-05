@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure.config;
 import com.example.batch.common.enums.ConfigLifecycleStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -284,9 +285,13 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             "nextStatus",
             nextStatus,
             "publishedAt",
-            ConfigLifecycleStatus.PUBLISHED.code().equals(nextStatus) ? Instant.now() : null,
+            ConfigLifecycleStatus.PUBLISHED.code().equals(nextStatus)
+                ? BatchDateTimeSupport.utcNow()
+                : null,
             "rolledBackAt",
-            ConfigLifecycleStatus.ROLLED_BACK.code().equals(nextStatus) ? Instant.now() : null,
+            ConfigLifecycleStatus.ROLLED_BACK.code().equals(nextStatus)
+                ? BatchDateTimeSupport.utcNow()
+                : null,
             "updatedBy",
             ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64));
     configReleaseMapper.updateConfigReleaseStatus(params);

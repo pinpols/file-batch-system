@@ -24,9 +24,7 @@ public class TenantActionRateLimiter {
 
   private final BatchOrchestratorGovernanceProperties governance;
   private final TokenBucketRateLimiter limiter;
-
-  // 更方便测试；当前未注入自定义 clock，直接使用系统时间
-  private final Clock clock = Clock.systemDefaultZone();
+  private final Clock clock;
 
   public boolean tryConsume(String tenantId, RateLimitAction action) {
     if (!governance.rateLimit().isEnabled()) {

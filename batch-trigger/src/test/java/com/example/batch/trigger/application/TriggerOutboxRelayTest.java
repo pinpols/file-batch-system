@@ -17,6 +17,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -231,9 +232,9 @@ class TriggerOutboxRelayTest {
     event.setPublishStatus(OutboxPublishStatus.NEW.code());
     event.setPublishAttempt(0);
     event.setTraceId("trace-1");
-    event.setNextPublishAt(Instant.now());
-    event.setCreatedAt(Instant.now());
-    event.setUpdatedAt(Instant.now());
+    event.setNextPublishAt(BatchDateTimeSupport.utcNow());
+    event.setCreatedAt(BatchDateTimeSupport.utcNow());
+    event.setUpdatedAt(BatchDateTimeSupport.utcNow());
     return event;
   }
 
@@ -247,7 +248,8 @@ class TriggerOutboxRelayTest {
             "req-1",
             "trace-1",
             Map.of());
-    return JsonUtils.toJson(LaunchEnvelope.of(request, "tenant-a:req-1", Instant.now()));
+    return JsonUtils.toJson(
+        LaunchEnvelope.of(request, "tenant-a:req-1", BatchDateTimeSupport.utcNow()));
   }
 
   private static void setMaxPublishAttempts(TriggerOutboxRelay relay, int value) throws Exception {

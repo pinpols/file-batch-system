@@ -1,5 +1,6 @@
 package com.example.batch.console.support.excel;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,8 @@ public class InMemoryExcelImportStore implements ExcelImportStore {
     String uploadToken = UUID.randomUUID().toString().replace("-", "");
     sessions.put(
         uploadToken,
-        new ExcelImportSession(fileName, tenantId, sheetName, Instant.now(), List.copyOf(rows)));
+        new ExcelImportSession(
+            fileName, tenantId, sheetName, BatchDateTimeSupport.utcNow(), List.copyOf(rows)));
     return uploadToken;
   }
 

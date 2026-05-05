@@ -7,6 +7,7 @@ import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
@@ -112,7 +113,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 MarkRunningParam.withDefaultStatuses()
                     .tenantId(tenantId)
                     .id(stepInstance.getId())
-                    .startedAt(Instant.now())
+                    .startedAt(BatchDateTimeSupport.utcNow())
                     .expectedVersion(stepInstance.getVersion())
                     .build())
             <= 0) {
@@ -143,7 +144,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 .id(current.getJobPartitionId())
                 .workerCode(workerCode)
                 .leaseExpireAt(
-                    Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+                    BatchDateTimeSupport.utcNow()
+                        .plusSeconds(partitionLeaseProperties.getExpireSeconds()))
                 .expectedInvocationId(expectedInvocation)
                 .build())
         > 0;
@@ -292,13 +294,15 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   private int tryClaimPartitionLeaseOnce(
       String tenantId, Long partitionId, String workerCode, JobPartitionEntity partition) {
     String invocationId = IdGenerator.newInvocationId();
-    Instant invocationStartedAt = Instant.now();
+    Instant invocationStartedAt = BatchDateTimeSupport.utcNow();
     ClaimPartitionParam param =
         ClaimPartitionParam.builder()
             .tenantId(tenantId)
             .id(partitionId)
             .workerCode(workerCode)
-            .leaseExpireAt(Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+            .leaseExpireAt(
+                BatchDateTimeSupport.utcNow()
+                    .plusSeconds(partitionLeaseProperties.getExpireSeconds()))
             .fromStatus(PartitionStatus.READY.code())
             .toStatus(PartitionStatus.RUNNING.code())
             .expectedVersion(partition.getVersion())

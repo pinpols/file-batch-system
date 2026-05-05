@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
@@ -15,7 +16,6 @@ import com.example.batch.testing.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -64,7 +64,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.OUTBOX_EVENT);
 
     try (KafkaConsumer<String, String> consumer =
-        buildConsumer("fallback-test-" + System.currentTimeMillis())) {
+        buildConsumer("fallback-test-" + BatchDateTimeSupport.utcEpochMillis())) {
       consumer.subscribe(List.of(BatchTopics.OUTBOX_EVENT));
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
@@ -100,7 +100,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_IMPORT + ".t1");
 
     try (KafkaConsumer<String, String> consumer =
-        buildConsumer("import-test-" + System.currentTimeMillis())) {
+        buildConsumer("import-test-" + BatchDateTimeSupport.utcEpochMillis())) {
       consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT + ".t1"));
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
@@ -136,7 +136,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_EXPORT + ".t1");
 
     try (KafkaConsumer<String, String> consumer =
-        buildConsumer("export-test-" + System.currentTimeMillis())) {
+        buildConsumer("export-test-" + BatchDateTimeSupport.utcEpochMillis())) {
       consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_EXPORT + ".t1"));
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
@@ -189,7 +189,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             .formatted(eventType, eventKey));
     e.setPublishStatus(OutboxPublishStatus.NEW.code());
     e.setPublishAttempt(0);
-    e.setNextPublishAt(Instant.now());
+    e.setNextPublishAt(BatchDateTimeSupport.utcNow());
     e.setTraceId("trace-it-test");
     return e;
   }

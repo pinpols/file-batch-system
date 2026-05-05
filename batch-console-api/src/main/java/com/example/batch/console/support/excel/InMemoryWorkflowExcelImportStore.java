@@ -1,6 +1,6 @@
 package com.example.batch.console.support.excel;
 
-import java.time.Instant;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,7 +22,8 @@ public class InMemoryWorkflowExcelImportStore implements WorkflowExcelImportStor
     String token = UUID.randomUUID().toString();
     sessions.put(
         token,
-        new WorkflowExcelSession(fileName, tenantId, Instant.now(), definitions, nodes, edges));
+        new WorkflowExcelSession(
+            fileName, tenantId, BatchDateTimeSupport.utcNow(), definitions, nodes, edges));
     return token;
   }
 

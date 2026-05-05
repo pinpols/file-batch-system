@@ -13,6 +13,7 @@ import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.HolidayRollRule;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -112,6 +113,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   private final ConfigChangeLogMapper configChangeLogMapper;
   private final BusinessCalendarExcelImportStore importStore;
   private final BusinessCalendarExcelWorkbookWriter workbookWriter;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
   public ResponseEntity<InputStreamResource> exportBusinessCalendars(String tenantId) {
@@ -131,7 +133,11 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     byte[] workbookBytes = workbookWriter.writeMaintenanceWorkbook(calendars, allHolidays);
     InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
     String fileName =
-        "business-calendar-" + resolvedTenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
+        "business-calendar-"
+            + resolvedTenantId
+            + "-"
+            + dateTimeSupport.currentFileTimestamp()
+            + ".xlsx";
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,

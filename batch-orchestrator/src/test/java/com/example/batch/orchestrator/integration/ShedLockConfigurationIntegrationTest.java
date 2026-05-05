@@ -2,11 +2,11 @@ package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.infrastructure.redis.RedisShedLockProvider;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -64,7 +64,10 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
               Optional<SimpleLock> lock =
                   lockProvider.lock(
                       new LockConfiguration(
-                          Instant.now(), lockName, Duration.ofSeconds(5), Duration.ZERO));
+                          BatchDateTimeSupport.utcNow(),
+                          lockName,
+                          Duration.ofSeconds(5),
+                          Duration.ZERO));
               if (lock.isPresent()) {
                 successCount.incrementAndGet();
               }
@@ -86,7 +89,8 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
     String lockName = "it-lock-reacquire-after-expiry";
     Optional<SimpleLock> first =
         lockProvider.lock(
-            new LockConfiguration(Instant.now(), lockName, Duration.ofMillis(800), Duration.ZERO));
+            new LockConfiguration(
+                BatchDateTimeSupport.utcNow(), lockName, Duration.ofMillis(800), Duration.ZERO));
     assertThat(first).isPresent();
 
     // 不主动解锁；依赖 lockAtMostFor 到期自动释放。
@@ -94,7 +98,8 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
     Optional<SimpleLock> second =
         lockProvider.lock(
-            new LockConfiguration(Instant.now(), lockName, Duration.ofSeconds(2), Duration.ZERO));
+            new LockConfiguration(
+                BatchDateTimeSupport.utcNow(), lockName, Duration.ofSeconds(2), Duration.ZERO));
     assertThat(second).isPresent();
     second.ifPresent(SimpleLock::unlock);
   }

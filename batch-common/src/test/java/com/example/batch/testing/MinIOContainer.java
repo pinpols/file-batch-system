@@ -1,5 +1,6 @@
 package com.example.batch.testing;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -65,9 +66,9 @@ public final class MinIOContainer extends GenericContainer<MinIOContainer> {
   }
 
   public void ensureBucketExists(String bucketName) {
-    Instant deadline = Instant.now().plus(Duration.ofMinutes(2));
+    Instant deadline = BatchDateTimeSupport.utcNow().plus(Duration.ofMinutes(2));
     Exception lastFailure = null;
-    while (Instant.now().isBefore(deadline)) {
+    while (BatchDateTimeSupport.utcNow().isBefore(deadline)) {
       try {
         MinioClient client = client();
         if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {

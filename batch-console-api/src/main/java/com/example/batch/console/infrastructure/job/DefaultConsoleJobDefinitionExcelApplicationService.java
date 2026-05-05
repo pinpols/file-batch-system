@@ -7,6 +7,7 @@ import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
@@ -125,6 +126,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   private final BatchWindowMapper batchWindowMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
   private final JobDefinitionExcelWorkbookWriter workbookWriter;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
   public ResponseEntity<InputStreamResource> exportJobDefinitions(
@@ -145,7 +147,11 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     byte[] workbookBytes = workbookWriter.writeMaintenanceWorkbook(rows);
     InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
     String fileName =
-        "job-definition-maintenance-" + tenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
+        "job-definition-maintenance-"
+            + tenantId
+            + "-"
+            + dateTimeSupport.currentFileTimestamp()
+            + ".xlsx";
     return ResponseEntity.ok()
         .header(
             HttpHeaders.CONTENT_DISPOSITION,

@@ -11,6 +11,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
@@ -236,7 +237,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (command.workerId() != null && !command.workerId().equals(task.getAssignedWorkerCode())) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.worker.not_owner");
     }
-    Instant finishedAt = Instant.now();
+    Instant finishedAt = BatchDateTimeSupport.utcNow();
     JobPartitionEntity partition =
         jobMappers.jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId());
     if (task.getJobPartitionId() != null && Texts.hasText(command.partitionInvocationId())) {

@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.model.WorkerRouteModel;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import com.example.batch.orchestrator.application.scheduler.PartitionThrottle;
@@ -23,7 +24,6 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -70,6 +70,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
   private final BatchTimezoneProvider timezoneProvider;
+  private final BatchDateTimeSupport dateTimeSupport;
 
   /** 资源调度统一收口在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
   @Override
@@ -162,7 +163,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       return true;
     }
     ZoneId zoneId = timezoneProvider.resolveOrDefault(window.timezone());
-    LocalTime now = ZonedDateTime.now(zoneId).toLocalTime();
+    LocalTime now = dateTimeSupport.nowInstant().atZone(zoneId).toLocalTime();
     LocalTime start = window.startTime();
     LocalTime end = window.endTime();
     if (start.equals(end)) {

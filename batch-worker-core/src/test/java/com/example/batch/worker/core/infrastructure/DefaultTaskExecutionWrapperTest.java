@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
@@ -244,9 +245,9 @@ class DefaultTaskExecutionWrapperTest {
               return StepExecutionResponse.successResponse();
             });
 
-    long start = System.currentTimeMillis();
+    long start = BatchDateTimeSupport.utcEpochMillis();
     WorkerExecutionResult result = wrapper.execute(task);
-    long elapsed = System.currentTimeMillis() - start;
+    long elapsed = BatchDateTimeSupport.utcEpochMillis() - start;
 
     assertThat(elapsed).isBetween(900L, 5_000L); // 1s 超时 + 一点 overhead
     assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();

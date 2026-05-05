@@ -3,6 +3,7 @@ package com.example.batch.trigger.wheel;
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.trigger.config.WheelSchedulerProperties;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
@@ -95,7 +96,7 @@ public class WheelTriggerReconciler {
         continue;
       }
       if (hasScheduleDrift(existing, d)) {
-        Instant next = computeNext(d, Instant.now());
+        Instant next = computeNext(d, BatchDateTimeSupport.utcNow());
         if (next != null) {
           stateMapper.rescheduleNextFireTime(existing.getId(), next);
           updated++;
@@ -133,7 +134,7 @@ public class WheelTriggerReconciler {
   }
 
   private boolean insertRuntimeState(TriggerDescriptor d) {
-    Instant next = computeNext(d, Instant.now());
+    Instant next = computeNext(d, BatchDateTimeSupport.utcNow());
     if (next == null) {
       log.warn(
           "trigger has no future fire time, skip INSERT runtime_state: jobCode={}", d.getJobCode());
@@ -161,7 +162,8 @@ public class WheelTriggerReconciler {
       return false; // 表达式无效,跳过 drift 检查(下个 reconcile 等运维修)
     }
     // 用 desc 当前 cron + 时区,从 last_fire_time(或 now)计算 next,与 DB 现存对比
-    Instant baseline = state.getLastFireTime() != null ? state.getLastFireTime() : Instant.now();
+    Instant baseline =
+        state.getLastFireTime() != null ? state.getLastFireTime() : BatchDateTimeSupport.utcNow();
     Instant expectedNext = computeNext(d, baseline);
     if (expectedNext == null) {
       return false;

@@ -1,5 +1,6 @@
 package com.example.batch.worker.processes.runtime;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
@@ -14,8 +15,10 @@ public class ProcessWorkerLoop extends AbstractWorkerLoop {
   private final ProcessWorkerConfiguration configuration;
 
   public ProcessWorkerLoop(
-      WorkerRuntimeFacade workerRuntimeFacade, ProcessWorkerConfiguration configuration) {
-    super(workerRuntimeFacade);
+      WorkerRuntimeFacade workerRuntimeFacade,
+      BatchDateTimeSupport dateTimeSupport,
+      ProcessWorkerConfiguration configuration) {
+    super(workerRuntimeFacade, dateTimeSupport);
     this.configuration = configuration;
   }
 

@@ -1,12 +1,12 @@
 package com.example.batch.orchestrator.application.service.task;
 
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +37,7 @@ final class TaskOutcomeSummaryBuilder {
     summary.put("errorCode", command == null ? null : command.errorCode());
     summary.put("errorMessage", command == null ? null : command.errorMessage());
     summary.put("taskPayload", task == null ? null : task.getTaskPayload());
-    summary.put("recordedAt", Instant.now().toString());
+    summary.put("recordedAt", BatchDateTimeSupport.utcNow().toString());
     return JsonUtils.toJson(summary);
   }
 
@@ -52,7 +52,7 @@ final class TaskOutcomeSummaryBuilder {
     summary.put("failedPartitions", countByStatus(partitions, PartitionStatus.FAILED.code()));
     summary.put("lastErrorCode", command == null ? null : command.errorCode());
     summary.put("lastErrorMessage", command == null ? null : command.errorMessage());
-    summary.put("updatedAt", Instant.now().toString());
+    summary.put("updatedAt", BatchDateTimeSupport.utcNow().toString());
     return JsonUtils.toJson(summary);
   }
 
