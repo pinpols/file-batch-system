@@ -6,7 +6,7 @@
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, calendarCode, calendarName, timezone,
          holidayRollRule, catchUpPolicy, catchUpMaxDays, cutoffTime,
-         lateArrivalToleranceMin, slaOffsetMin, enabled)
+         lateArrivalToleranceMin, slaOffsetMin, dayRolloverPolicy, enabled)
       列名按 V3 + V32 DDL。
     -->
     <resultMap id="businessCalendarMap"
@@ -23,6 +23,7 @@
             <arg column="cutoff_time" javaType="java.time.LocalTime"/>
             <arg column="late_arrival_tolerance_min" javaType="java.lang.Integer"/>
             <arg column="sla_offset_min" javaType="java.lang.Integer"/>
+            <arg column="day_rollover_policy" javaType="java.lang.String"/>
             <arg column="enabled" javaType="java.lang.Boolean"/>
         </constructor>
     </resultMap>
@@ -30,7 +31,7 @@
     <sql id="columns">
         id, tenant_id, calendar_code, calendar_name, timezone,
         holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
-        late_arrival_tolerance_min, sla_offset_min, enabled
+        late_arrival_tolerance_min, sla_offset_min, day_rollover_policy, enabled
     </sql>
 
     <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="businessCalendarMap">
@@ -69,7 +70,7 @@
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
             holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
-            late_arrival_tolerance_min, sla_offset_min, enabled
+            late_arrival_tolerance_min, sla_offset_min, day_rollover_policy, enabled
         ) values (
             #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
             <choose>
@@ -88,6 +89,10 @@
             #{lateArrivalToleranceMin},
             #{slaOffsetMin},
             <choose>
+                <when test="dayRolloverPolicy != null">#{dayRolloverPolicy}</when>
+                <otherwise>'ALLOW_OVERLAP'</otherwise>
+            </choose>,
+            <choose>
                 <when test="enabled != null">#{enabled}</when>
                 <otherwise>true</otherwise>
             </choose>
@@ -105,6 +110,7 @@
                cutoff_time = #{cutoffTime},
                late_arrival_tolerance_min = #{lateArrivalToleranceMin},
                sla_offset_min = #{slaOffsetMin},
+               day_rollover_policy = #{dayRolloverPolicy},
                enabled = #{enabled},
                updated_at = current_timestamp
          where id = #{id}

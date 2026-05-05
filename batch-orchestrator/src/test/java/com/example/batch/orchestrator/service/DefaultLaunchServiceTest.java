@@ -60,6 +60,7 @@ class DefaultLaunchServiceTest {
   private OrchestratorConfigCacheService configCacheService;
   private BatchDayInstanceMapper batchDayInstanceMapper;
   private JobExecutionLogMapper jobExecutionLogMapper;
+  private BatchDayGateService batchDayGateService;
   private LaunchBatchDayService launchBatchDayService;
   private LaunchParamResolver launchParamResolver;
 
@@ -93,6 +94,7 @@ class DefaultLaunchServiceTest {
     configCacheService = mock(OrchestratorConfigCacheService.class);
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
+    batchDayGateService = mock(BatchDayGateService.class);
     selfProvider = mock(ObjectProvider.class);
     batchDaySelfProvider = mock(ObjectProvider.class);
     BatchTimezoneProvider timezoneProvider =
@@ -115,9 +117,13 @@ class DefaultLaunchServiceTest {
             workflowMappers,
             workflowDagService,
             launchBatchDayService,
+            batchDayGateService,
             launchParamResolver,
             selfProvider);
     when(selfProvider.getObject()).thenReturn(service);
+    when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
+        .thenReturn(
+            new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));
   }
 
   @Test
