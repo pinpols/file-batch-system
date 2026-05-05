@@ -1,6 +1,5 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
-import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
@@ -10,10 +9,9 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.service.BatchDayTimePolicyResolver;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +35,7 @@ public class BatchDayCutoffScheduler {
   private final OrchestratorConfigCacheService configCacheService;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-  private final BatchTimezoneProvider timezoneProvider;
+  private final BatchDayTimePolicyResolver timePolicyResolver;
 
   @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
@@ -102,10 +100,7 @@ public class BatchDayCutoffScheduler {
     if (calendar == null) {
       return null;
     }
-    LocalTime cutoffTime =
-        calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
-    ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
-    return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
+    return timePolicyResolver.resolveCutoffAt(calendar, bizDate);
   }
 
   private void appendAuditLog(
