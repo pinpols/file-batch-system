@@ -13,6 +13,7 @@
 | 05 | [release-gate.md](./release-gate.md) | PR / CI / staging 三道门禁规则 + smoke 清单 | 上线 / 评 PR |
 | 06 | [realtime-sse-verification.md](./realtime-sse-verification.md) | 实时 SSE 推送链路验证 SOP | console 实时栏目验收 |
 | 07 | [load-test-report.md](./load-test-report.md) | 单实例 orchestrator 拐点压测报告（8 req/s）+ 生产容量推算 | 容量规划 |
+| 08 | [load-test-dimensions.md](./load-test-dimensions.md) | 压测维度矩阵：调度快照 / 端到尾完成 / 与指标分工 | 扩展 Gatling 场景前必读 |
 
 ## 角色路径
 
@@ -20,7 +21,7 @@
 |---|---|
 | 新加测试 | 01 → 02 → 03 |
 | Review PR | 05 |
-| 容量 / 性能 | 07 → [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) |
+| 容量 / 性能 | 07 → 08 → [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) |
 | 写新 E2E | 04 → [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
 
 ## 与其他子目录的分工
