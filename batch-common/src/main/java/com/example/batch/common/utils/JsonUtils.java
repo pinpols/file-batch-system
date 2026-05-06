@@ -1,6 +1,7 @@
 package com.example.batch.common.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -48,6 +49,18 @@ public final class JsonUtils {
   public static <T> T fromJson(String json, Class<T> type) {
     try {
       return MAPPER.readValue(json, type);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("Failed to parse JSON", ex);
+    }
+  }
+
+  /**
+   * 宽容反序列化（泛型版）：用于 {@code List<Foo>} / {@code Map<String, Foo>} 之类参数化类型。 调用方传入 {@link
+   * TypeReference}。
+   */
+  public static <T> T fromJson(String json, TypeReference<T> typeRef) {
+    try {
+      return MAPPER.readValue(json, typeRef);
     } catch (JsonProcessingException ex) {
       throw new IllegalArgumentException("Failed to parse JSON", ex);
     }
