@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.DisasterDayOverrideMapper">
+
+    <resultMap id="DisasterOverrideResultMap"
+               type="com.example.batch.orchestrator.domain.entity.DisasterDayOverrideEntity">
+        <constructor>
+            <idArg  column="id"             javaType="java.lang.Long"/>
+            <arg    column="tenant_id"      javaType="java.lang.String"/>
+            <arg    column="calendar_code"  javaType="java.lang.String"/>
+            <arg    column="biz_date"       javaType="java.time.LocalDate"/>
+            <arg    column="action"         javaType="java.lang.String"/>
+            <arg    column="reason"         javaType="java.lang.String"/>
+            <arg    column="approved_by"    javaType="java.lang.String"/>
+            <arg    column="approved_at"    javaType="java.time.Instant"/>
+            <arg    column="effective_at"   javaType="java.time.Instant"/>
+            <arg    column="ttl_until"      javaType="java.time.Instant"/>
+            <arg    column="created_at"     javaType="java.time.Instant"/>
+            <arg    column="updated_at"     javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+            parameterType="com.example.batch.orchestrator.domain.entity.DisasterDayOverrideEntity">
+        insert into batch.disaster_day_override (
+            tenant_id, calendar_code, biz_date, action, reason,
+            approved_by, approved_at, effective_at, ttl_until
+        ) values (
+            #{tenantId}, #{calendarCode}, #{bizDate}, #{action}, #{reason},
+            #{approvedBy}, #{approvedAt}, #{effectiveAt}, #{ttlUntil}
+        )
+    </insert>
+
+    <select id="selectActiveByCalendarBizDate" resultMap="DisasterOverrideResultMap">
+        select *
+        from batch.disaster_day_override
+        where tenant_id = #{tenantId}
+          and calendar_code = #{calendarCode}
+          and biz_date = #{bizDate}
+          and effective_at &lt;= #{now}
+          and ttl_until &gt; #{now}
+        order by id desc
+        limit 1
+    </select>
+
+</mapper>

@@ -12,9 +12,13 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import com.example.batch.orchestrator.domain.entity.CalendarDependencyEntity;
+import com.example.batch.orchestrator.domain.entity.DisasterDayOverrideEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
+import com.example.batch.orchestrator.mapper.CalendarDependencyMapper;
+import com.example.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.service.BatchDayTimePolicyResolver;
 import com.example.batch.orchestrator.service.CutoffScheduleResolver;
@@ -33,6 +37,8 @@ class BatchDayOpenSchedulerTest {
   private BatchDayInstanceMapper batchDayInstanceMapper;
   private JobExecutionLogMapper jobExecutionLogMapper;
   private OrchestratorGracefulShutdown gracefulShutdown;
+  private CalendarDependencyMapper calendarDependencyMapper;
+  private DisasterDayOverrideMapper disasterDayOverrideMapper;
   private BatchDayOpenScheduler scheduler;
 
   @BeforeEach
@@ -41,6 +47,8 @@ class BatchDayOpenSchedulerTest {
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+    calendarDependencyMapper = mock(CalendarDependencyMapper.class);
+    disasterDayOverrideMapper = mock(DisasterDayOverrideMapper.class);
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
     scheduler =
@@ -51,7 +59,9 @@ class BatchDayOpenSchedulerTest {
             gracefulShutdown,
             timezoneProvider,
             new BatchDayTimePolicyResolver(timezoneProvider, new CutoffScheduleResolver()),
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
+            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+            calendarDependencyMapper,
+            disasterDayOverrideMapper);
   }
 
   @Test
@@ -93,6 +103,139 @@ class BatchDayOpenSchedulerTest {
     verify(batchDayInstanceMapper).insert(captor.capture());
     assertThat(captor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, 5, 4));
     assertThat(captor.getValue().cutoffAt()).isEqualTo(Instant.parse("2026-05-04T22:00:00Z"));
+  }
+
+  @Test
+  void shouldDeferOpenWhenUpstreamCalendarNotSettled() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+        .thenReturn(null);
+    when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL"))
+        .thenReturn(
+            List.of(
+                CalendarDependencyEntity.builder()
+                    .id(1L)
+                    .tenantId("t1")
+                    .upstreamCode("CAL_CN")
+                    .downstreamCode("CAL")
+                    .rule("WAIT_SETTLED")
+                    .enabled(true)
+                    .build()));
+    BatchDayInstanceEntity upstreamRunning =
+        BatchDayInstanceEntity.builder()
+            .id(99L)
+            .tenantId("t1")
+            .calendarCode("CAL_CN")
+            .bizDate(LocalDate.of(2026, 5, 5))
+            .dayStatus("IN_FLIGHT")
+            .build();
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL_CN", LocalDate.of(2026, 5, 5)))
+        .thenReturn(upstreamRunning);
+
+    scheduler.openDueBatchDays(now);
+
+    verify(batchDayInstanceMapper, never()).insert(any());
+  }
+
+  @Test
+  void shouldOpenWhenUpstreamCalendarSettled() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+        .thenReturn(null);
+    when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL"))
+        .thenReturn(
+            List.of(
+                CalendarDependencyEntity.builder()
+                    .id(1L)
+                    .tenantId("t1")
+                    .upstreamCode("CAL_CN")
+                    .downstreamCode("CAL")
+                    .rule("WAIT_SETTLED")
+                    .enabled(true)
+                    .build()));
+    BatchDayInstanceEntity upstreamSettled =
+        BatchDayInstanceEntity.builder()
+            .id(99L)
+            .tenantId("t1")
+            .calendarCode("CAL_CN")
+            .bizDate(LocalDate.of(2026, 5, 5))
+            .dayStatus("SETTLED")
+            .build();
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL_CN", LocalDate.of(2026, 5, 5)))
+        .thenReturn(upstreamSettled);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    verify(batchDayInstanceMapper).insert(any());
+  }
+
+  @Test
+  void shouldWriteSkippedDayWhenDisasterOverrideSkip() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+        .thenReturn(null);
+    when(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, 5, 5), now))
+        .thenReturn(
+            DisasterDayOverrideEntity.builder()
+                .id(1L)
+                .tenantId("t1")
+                .calendarCode("CAL")
+                .bizDate(LocalDate.of(2026, 5, 5))
+                .action("SKIP")
+                .reason("typhoon shutdown")
+                .approvedBy("ops-1")
+                .approvedAt(now)
+                .effectiveAt(now)
+                .ttlUntil(now.plusSeconds(86400))
+                .build());
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
+    verify(batchDayInstanceMapper).insert(captor.capture());
+    assertThat(captor.getValue().dayStatus()).isEqualTo("SKIPPED");
+    assertThat(captor.getValue().operationReason()).contains("DISASTER_DAY_SKIP");
+    assertThat(captor.getValue().operatedBy()).isEqualTo("ops-1");
+  }
+
+  @Test
+  void shouldDeferOpenWhenDisasterOverrideDefer() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, 5, 5)))
+        .thenReturn(null);
+    when(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, 5, 5), now))
+        .thenReturn(
+            DisasterDayOverrideEntity.builder()
+                .id(2L)
+                .tenantId("t1")
+                .calendarCode("CAL")
+                .bizDate(LocalDate.of(2026, 5, 5))
+                .action("DEFER_TO_NEXT_BIZDAY")
+                .reason("system maintenance")
+                .approvedBy("ops-2")
+                .approvedAt(now)
+                .effectiveAt(now)
+                .ttlUntil(now.plusSeconds(86400))
+                .build());
+
+    scheduler.openDueBatchDays(now);
+
+    verify(batchDayInstanceMapper, never()).insert(any());
   }
 
   @Test

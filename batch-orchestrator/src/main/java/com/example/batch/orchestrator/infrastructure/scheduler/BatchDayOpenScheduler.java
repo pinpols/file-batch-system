@@ -7,10 +7,14 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import com.example.batch.orchestrator.domain.entity.CalendarDependencyEntity;
+import com.example.batch.orchestrator.domain.entity.DisasterDayOverrideEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
+import com.example.batch.orchestrator.mapper.CalendarDependencyMapper;
+import com.example.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.service.BatchDayTimePolicyResolver;
 import java.time.Instant;
@@ -47,6 +51,10 @@ public class BatchDayOpenScheduler {
   private final BatchTimezoneProvider timezoneProvider;
   private final BatchDayTimePolicyResolver timePolicyResolver;
   private final BatchDateTimeSupport dateTimeSupport;
+  // ADR-023 Stage 3: 跨 calendar 串联依赖检查
+  private final CalendarDependencyMapper calendarDependencyMapper;
+  // ADR-023 Stage 4: 灾难日热切换检查
+  private final DisasterDayOverrideMapper disasterDayOverrideMapper;
 
   @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.open-scan-interval-millis:60000}")
@@ -88,6 +96,26 @@ public class BatchDayOpenScheduler {
     if (existing != null) {
       return;
     }
+    // ADR-023 Stage 4: disaster_day_override 优先级最高 — 命中即按 action 处理后退出
+    DisasterDayOverrideEntity disaster =
+        disasterDayOverrideMapper.selectActiveByCalendarBizDate(
+            calendar.tenantId(), calendar.calendarCode(), bizDate, now);
+    if (disaster != null) {
+      handleDisasterOverride(calendar, bizDate, disaster, now);
+      return;
+    }
+    // ADR-023 Stage 3: 跨 calendar 串联 — 上游未达期望状态则推迟
+    String dependencyBlockReason = checkCalendarDependencies(calendar, bizDate);
+    if (dependencyBlockReason != null) {
+      log.info(
+          "batch day deferred by upstream calendar: tenantId={}, calendarCode={}, bizDate={},"
+              + " reason={}",
+          calendar.tenantId(),
+          calendar.calendarCode(),
+          bizDate,
+          dependencyBlockReason);
+      return;
+    }
     Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
     Instant slaDeadlineAt = resolveSlaDeadlineAt(calendar, cutoffAt);
     BatchDayInstanceEntity toInsert =
@@ -119,6 +147,104 @@ public class BatchDayOpenScheduler {
         calendar.calendarCode(),
         bizDate,
         cutoffAt);
+  }
+
+  /**
+   * ADR-023 Stage 3 — 检查 downstream calendar 的所有 dependency。返回非 null 表示 upstream 未达期望状态，应推迟开 day；返回
+   * null 表示 通过。
+   */
+  private String checkCalendarDependencies(BusinessCalendarEntity calendar, LocalDate bizDate) {
+    List<CalendarDependencyEntity> deps =
+        calendarDependencyMapper.selectEnabledByDownstream(
+            calendar.tenantId(), calendar.calendarCode());
+    if (deps == null || deps.isEmpty()) {
+      return null;
+    }
+    for (CalendarDependencyEntity dep : deps) {
+      if (dep == null || !Boolean.TRUE.equals(dep.enabled())) continue;
+      String rule = dep.rule() == null ? CalendarDependencyEntity.RULE_WAIT_SETTLED : dep.rule();
+      if (CalendarDependencyEntity.RULE_SAME_DAY_PARALLEL.equals(rule)) {
+        // v1 占位：不阻塞
+        continue;
+      }
+      BatchDayInstanceEntity upstream =
+          batchDayInstanceMapper.selectByTenantCalendarBizDate(
+              calendar.tenantId(), dep.upstreamCode(), bizDate);
+      if (upstream == null) {
+        return "BLOCKED_BY_UPSTREAM_CALENDAR:upstream=" + dep.upstreamCode() + ":missing";
+      }
+      if (CalendarDependencyEntity.RULE_WAIT_SETTLED.equals(rule)
+          && !"SETTLED".equalsIgnoreCase(upstream.dayStatus())) {
+        return "BLOCKED_BY_UPSTREAM_CALENDAR:upstream="
+            + dep.upstreamCode()
+            + ":status="
+            + upstream.dayStatus();
+      }
+      if (CalendarDependencyEntity.RULE_WAIT_CUTOFF.equals(rule)) {
+        if (upstream.cutoffAt() == null
+            || dateTimeSupport.nowInstant().isBefore(upstream.cutoffAt())) {
+          return "BLOCKED_BY_UPSTREAM_CALENDAR:upstream=" + dep.upstreamCode() + ":cutoff_pending";
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * ADR-023 Stage 4 — 处理灾难日 override：SKIP 直接落 SKIPPED 状态行；DEFER_TO_NEXT_BIZDAY 仅记日志（依赖次日自然推进，TTL
+   * 期内不会重开同 bizDate）。
+   */
+  private void handleDisasterOverride(
+      BusinessCalendarEntity calendar,
+      LocalDate bizDate,
+      DisasterDayOverrideEntity disaster,
+      Instant now) {
+    if (DisasterDayOverrideEntity.ACTION_SKIP.equals(disaster.action())) {
+      Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
+      BatchDayInstanceEntity skipped =
+          BatchDayInstanceEntity.builder()
+              .tenantId(calendar.tenantId())
+              .calendarCode(calendar.calendarCode())
+              .bizDate(bizDate)
+              .dayStatus("SKIPPED")
+              .openAt(now)
+              .cutoffAt(cutoffAt)
+              .settledAt(now)
+              .lateCount(0)
+              .catchupCount(0)
+              .timezoneSnapshot(timezoneProvider.resolveOrDefault(calendar.timezone()).getId())
+              .dstPolicySnapshot(timePolicyResolver.snapshot(calendar))
+              .frozen(false)
+              .operationReason("DISASTER_DAY_SKIP:" + disaster.reason())
+              .operatedBy(disaster.approvedBy())
+              .operatedAt(now)
+              .version(0L)
+              .createdAt(now)
+              .updatedAt(now)
+              .build();
+      int rows = batchDayInstanceMapper.insert(skipped);
+      if (rows > 0) {
+        appendAuditLog(skipped, now);
+        log.warn(
+            "batch day disaster SKIP: tenantId={}, calendarCode={}, bizDate={}, approvedBy={},"
+                + " reason={}",
+            calendar.tenantId(),
+            calendar.calendarCode(),
+            bizDate,
+            disaster.approvedBy(),
+            disaster.reason());
+      }
+      return;
+    }
+    // DEFER_TO_NEXT_BIZDAY：本轮不开，等次日 scheduler 自然推进；只记日志便于排障。
+    log.info(
+        "batch day disaster DEFER: tenantId={}, calendarCode={}, bizDate={}, ttlUntil={},"
+            + " approvedBy={}",
+        calendar.tenantId(),
+        calendar.calendarCode(),
+        bizDate,
+        disaster.ttlUntil(),
+        disaster.approvedBy());
   }
 
   private Instant resolveSlaDeadlineAt(BusinessCalendarEntity calendar, Instant cutoffAt) {

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.CalendarDependencyMapper">
+
+    <resultMap id="CalendarDependencyResultMap"
+               type="com.example.batch.orchestrator.domain.entity.CalendarDependencyEntity">
+        <constructor>
+            <idArg  column="id"              javaType="java.lang.Long"/>
+            <arg    column="tenant_id"       javaType="java.lang.String"/>
+            <arg    column="upstream_code"   javaType="java.lang.String"/>
+            <arg    column="downstream_code" javaType="java.lang.String"/>
+            <arg    column="rule"            javaType="java.lang.String"/>
+            <arg    column="enabled"         javaType="java.lang.Boolean"/>
+            <arg    column="description"     javaType="java.lang.String"/>
+            <arg    column="created_at"      javaType="java.time.Instant"/>
+            <arg    column="updated_at"      javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+            parameterType="com.example.batch.orchestrator.domain.entity.CalendarDependencyEntity">
+        insert into batch.calendar_dependency (
+            tenant_id, upstream_code, downstream_code, rule, enabled, description
+        ) values (
+            #{tenantId}, #{upstreamCode}, #{downstreamCode},
+            <choose>
+                <when test="rule != null">#{rule}</when>
+                <otherwise>'WAIT_SETTLED'</otherwise>
+            </choose>,
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>,
+            #{description}
+        )
+    </insert>
+
+    <select id="selectEnabledByDownstream" resultMap="CalendarDependencyResultMap">
+        select *
+        from batch.calendar_dependency
+        where tenant_id = #{tenantId}
+          and downstream_code = #{downstreamCode}
+          and enabled = true
+        order by id asc
+    </select>
+
+    <select id="selectAllByTenant" resultMap="CalendarDependencyResultMap">
+        select *
+        from batch.calendar_dependency
+        where tenant_id = #{tenantId}
+        order by id asc
+    </select>
+
+</mapper>
