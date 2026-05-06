@@ -100,4 +100,13 @@
         limit 1
     </select>
 
+    <select id="listVersionsByBusinessKey" resultMap="ResultVersionResultMap">
+        select *
+        from batch.result_version
+        where tenant_id    = #{tenantId}
+          and business_key = #{businessKey}
+        order by version_no desc
+        limit #{limit}
+    </select>
+
 </mapper>
