@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayReplayEntryMapper">
+
+    <resultMap id="ReplayEntryResultMap"
+               type="com.example.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity">
+        <constructor>
+            <idArg  column="id"                  javaType="java.lang.Long"/>
+            <arg    column="session_id"          javaType="java.lang.Long"/>
+            <arg    column="tenant_id"           javaType="java.lang.String"/>
+            <arg    column="job_code"            javaType="java.lang.String"/>
+            <arg    column="source_instance_id"  javaType="java.lang.Long"/>
+            <arg    column="rerun_instance_id"   javaType="java.lang.Long"/>
+            <arg    column="status"              javaType="java.lang.String"/>
+            <arg    column="failure_reason"      javaType="java.lang.String"/>
+            <arg    column="started_at"          javaType="java.time.Instant"/>
+            <arg    column="finished_at"         javaType="java.time.Instant"/>
+            <arg    column="result_version_id"   javaType="java.lang.Long"/>
+            <arg    column="created_at"          javaType="java.time.Instant"/>
+            <arg    column="updated_at"          javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity">
+        insert into batch.batch_day_replay_entry (
+            session_id, tenant_id, job_code, source_instance_id, rerun_instance_id,
+            status, failure_reason, started_at, finished_at, result_version_id,
+            created_at, updated_at
+        ) values (
+            #{sessionId}, #{tenantId}, #{jobCode}, #{sourceInstanceId}, #{rerunInstanceId},
+            #{status}, #{failureReason}, #{startedAt}, #{finishedAt}, #{resultVersionId},
+            #{createdAt}, #{updatedAt}
+        )
+        on conflict (session_id, tenant_id, job_code) do nothing
+    </insert>
+
+    <insert id="insertBatch" parameterType="java.util.List">
+        insert into batch.batch_day_replay_entry (
+            session_id, tenant_id, job_code, source_instance_id, rerun_instance_id,
+            status, failure_reason, started_at, finished_at, result_version_id,
+            created_at, updated_at
+        ) values
+        <foreach collection="records" item="r" separator=",">
+            (
+                #{r.sessionId}, #{r.tenantId}, #{r.jobCode}, #{r.sourceInstanceId}, #{r.rerunInstanceId},
+                #{r.status}, #{r.failureReason}, #{r.startedAt}, #{r.finishedAt}, #{r.resultVersionId},
+                #{r.createdAt}, #{r.updatedAt}
+            )
+        </foreach>
+        on conflict (session_id, tenant_id, job_code) do nothing
+    </insert>
+
+    <select id="selectBySessionId" resultMap="ReplayEntryResultMap">
+        select * from batch.batch_day_replay_entry
+        where session_id = #{sessionId}
+        order by id asc
+    </select>
+
+    <select id="selectBySessionAndStatus" resultMap="ReplayEntryResultMap">
+        select * from batch.batch_day_replay_entry
+        where session_id = #{sessionId} and status = #{status}
+        order by id asc
+        limit #{limit}
+    </select>
+
+    <select id="selectByRerunInstanceId" resultMap="ReplayEntryResultMap">
+        select * from batch.batch_day_replay_entry
+        where tenant_id = #{tenantId} and rerun_instance_id = #{rerunInstanceId}
+        limit 1
+    </select>
+
+    <update id="updateStatus">
+        update batch.batch_day_replay_entry
+        set status            = #{toStatus},
+            rerun_instance_id = coalesce(#{rerunInstanceId}, rerun_instance_id),
+            result_version_id = coalesce(#{resultVersionId}, result_version_id),
+            failure_reason    = coalesce(#{failureReason}, failure_reason),
+            started_at        = coalesce(#{startedAt}, started_at),
+            finished_at       = coalesce(#{finishedAt}, finished_at),
+            updated_at        = #{now}
+        where id = #{id}
+    </update>
+
+    <select id="countBySessionAndStatus" resultType="java.lang.Long">
+        select count(1) from batch.batch_day_replay_entry
+        where session_id = #{sessionId} and status = #{status}
+    </select>
+
+</mapper>

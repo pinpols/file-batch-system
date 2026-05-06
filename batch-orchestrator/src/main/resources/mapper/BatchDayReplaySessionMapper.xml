@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayReplaySessionMapper">
+
+    <resultMap id="ReplaySessionResultMap"
+               type="com.example.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity">
+        <constructor>
+            <idArg  column="id"                     javaType="java.lang.Long"/>
+            <arg    column="tenant_id"              javaType="java.lang.String"/>
+            <arg    column="calendar_code"          javaType="java.lang.String"/>
+            <arg    column="biz_date"               javaType="java.time.LocalDate"/>
+            <arg    column="scope"                  javaType="java.lang.String"/>
+            <arg    column="scope_payload"          javaType="java.lang.String"/>
+            <arg    column="result_policy"          javaType="java.lang.String"/>
+            <arg    column="config_version_policy"  javaType="java.lang.String"/>
+            <arg    column="config_version"         javaType="java.lang.Integer"/>
+            <arg    column="reason"                 javaType="java.lang.String"/>
+            <arg    column="approval_id"            javaType="java.lang.Long"/>
+            <arg    column="status"                 javaType="java.lang.String"/>
+            <arg    column="total_count"            javaType="java.lang.Integer"/>
+            <arg    column="succeeded_count"        javaType="java.lang.Integer"/>
+            <arg    column="failed_count"           javaType="java.lang.Integer"/>
+            <arg    column="in_flight_count"        javaType="java.lang.Integer"/>
+            <arg    column="requested_by"           javaType="java.lang.String"/>
+            <arg    column="approved_by"            javaType="java.lang.String"/>
+            <arg    column="started_at"             javaType="java.time.Instant"/>
+            <arg    column="completed_at"           javaType="java.time.Instant"/>
+            <arg    column="trace_id"               javaType="java.lang.String"/>
+            <arg    column="created_at"             javaType="java.time.Instant"/>
+            <arg    column="updated_at"             javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity">
+        insert into batch.batch_day_replay_session (
+            tenant_id, calendar_code, biz_date, scope, scope_payload,
+            result_policy, config_version_policy, config_version, reason, approval_id,
+            status, total_count, succeeded_count, failed_count, in_flight_count,
+            requested_by, approved_by, started_at, completed_at, trace_id,
+            created_at, updated_at
+        ) values (
+            #{tenantId}, #{calendarCode}, #{bizDate}, #{scope},
+            #{scopePayload,jdbcType=VARCHAR}::jsonb,
+            #{resultPolicy}, #{configVersionPolicy}, #{configVersion}, #{reason}, #{approvalId},
+            #{status}, #{totalCount}, #{succeededCount}, #{failedCount}, #{inFlightCount},
+            #{requestedBy}, #{approvedBy}, #{startedAt}, #{completedAt}, #{traceId},
+            #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="ReplaySessionResultMap">
+        select * from batch.batch_day_replay_session
+        where tenant_id = #{tenantId} and id = #{id}
+    </select>
+
+    <select id="selectActiveByCalendarBizDate" resultMap="ReplaySessionResultMap">
+        select * from batch.batch_day_replay_session
+        where tenant_id = #{tenantId}
+          and calendar_code = #{calendarCode}
+          and biz_date = #{bizDate}
+          and status in ('PENDING_APPROVAL', 'RUNNING')
+        limit 1
+    </select>
+
+    <update id="updateStatus">
+        update batch.batch_day_replay_session
+        set status     = #{toStatus},
+            started_at = coalesce(#{startedAt}, started_at),
+            completed_at = coalesce(#{completedAt}, completed_at),
+            approved_by = coalesce(#{approvedBy}, approved_by),
+            updated_at = #{now}
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and status in
+          <foreach collection="expectedStatuses" item="s" open="(" separator="," close=")">
+              #{s}
+          </foreach>
+    </update>
+
+    <update id="updateCounts">
+        update batch.batch_day_replay_session
+        set succeeded_count = #{succeededCount},
+            failed_count    = #{failedCount},
+            in_flight_count = #{inFlightCount},
+            total_count     = #{totalCount},
+            updated_at      = #{now}
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <select id="selectByStatus" resultMap="ReplaySessionResultMap">
+        select * from batch.batch_day_replay_session
+        where status = #{status}
+        order by created_at asc, id asc
+        limit #{limit}
+    </select>
+
+</mapper>
