@@ -24,7 +24,7 @@
 | 016 | [ADR-016-batch-renew-lease-api.md](./ADR-016-batch-renew-lease-api.md)                   | Renew lease 批量 API 收敛 HTTP（Accepted，MVP）                                                      |
 | 017 | [ADR-017-result-version-model.md](./ADR-017-result-version-model.md)                     | 结果版本（result_version）主模型：重跑产物多版本归属、EFFECTIVE 单版裁决、GC 策略（Proposed）                              |
 | 018 | [ADR-018-cross-batch-day-dag-dependency.md](./ADR-018-cross-batch-day-dag-dependency.md) | 跨批量日 DAG 依赖（pipe 模型）：workflow_node 声明 cross_day_dependencies，复用 ADR-017 解版本路由（Proposed）       |
-| 019 | [ADR-019-cross-domain-rate-limit.md](./ADR-019-cross-domain-rate-limit.md)               | 跨业务域限流：business_domain 一等模型 + 域级 quota + 父子借调（Proposed）                                       |
+| 019 | [ADR-019-cross-domain-rate-limit.md](./ADR-019-cross-domain-rate-limit.md)               | 跨业务域限流：business_domain 一等模型 + 域级 quota + 父子借调（Accepted；实施前置触发条件已明确，未触发不开工）                       |
 | 020 | [ADR-020-batch-day-replay.md](./ADR-020-batch-day-replay.md)                             | 批量日维度重放：batch_day_replay_session 聚合 + scope/policy 分发 + 接审批（Proposed，依赖 ADR-017）              |
 
 
