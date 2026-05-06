@@ -8539,11 +8539,38 @@ components:
         bizDate:
           type: string
           format: date
+        targetId:
+          type: integer
+          format: int64
+          description: '可选: job_instance.id 直查; 与 targetInstanceNo 二选一'
         targetInstanceNo:
           type: string
+        batchNo:
+          type: string
+        relatedFileId:
+          type: integer
+          format: int64
         reason:
           type: string
-      required: [tenantId, jobCode, bizDate, targetInstanceNo, reason]
+        operatorId:
+          type: string
+        approvalId:
+          type: string
+        strategy:
+          type: string
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+          description: '§5.5 补跑结果版本策略, 默认 CREATE_NEW_VERSION'
+        configVersionPolicy:
+          type: string
+          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
+          description: '§5.5 补跑配置版本策略, 默认 USE_ORIGINAL_CONFIG'
+        configVersion:
+          type: integer
+          minimum: 1
+          description: '仅当 configVersionPolicy=USE_SPECIFIED_VERSION 时必填; 其他策略下忽略'
+      required: [tenantId, jobCode, bizDate, reason]
     DeadLetterReplayRequest:
       type: object
       properties:
