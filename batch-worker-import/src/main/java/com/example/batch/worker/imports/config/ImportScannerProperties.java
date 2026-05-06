@@ -15,7 +15,21 @@ public class ImportScannerProperties {
   private long stabilityWindowSeconds = 30L;
   private String sourceType = "SYSTEM";
   private String defaultBizType = "IMPORT_SCAN";
+
+  /**
+   * 文件名/对象名解析 bizDate 的正则；必须包含命名捕获组 {@code (?<bizDate>...)}，匹配到的 token 用 {@code yyyyMMdd} 解析。
+   *
+   * <p>例如 {@code "(?<bizDate>\\d{8})"} 可从 {@code import-20260505-orders.csv} 抽出 {@code 2026-05-05}。
+   * 留空表示不启用，scanner 退化到 {@link #defaultBizDate}。
+   */
+  private String bizDatePattern = "";
+
+  /**
+   * {@link #bizDatePattern} 不命中时的兜底业务日（{@code yyyy-MM-dd}）。空 / 非法 → scanner
+   * 跳过该对象（不再静默使用机器当前自然日，避免日切前后误归档）。
+   */
   private String defaultBizDate = "";
+
   private final Arrival arrival = new Arrival();
 
   @Data
