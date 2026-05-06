@@ -1117,6 +1117,27 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 | 设计 | 结果版本 "生效" 裁决 | 设计层（Accepted，主链路已落） | [ADR-017](../architecture/adr/ADR-017-result-version-model.md) — `result_version` 主模型 + EFFECTIVE 单版索引 + payload INLINE/EXTERNAL/FILE_RECORD + retention scheduler。Stage 1-5 已落 V108，Stage 6 console UI 待接入 |
 | 设计 | late arrival 跳批/等待/人工策略闭环细化 | **决策：v1 不做**（类 ADR-019 gating 模式） | 当前 `routeLateArrivalIfNeeded` 已 binary 完整闭环：容差内 LATE_ACCEPTED + WARN alert；容差外自动翻 CATCH_UP + ERROR alert + audit log + DB CAS。SKIP_SILENT / WAIT_MANUAL_RELEASE / job 级 tolerance override 等"细化策略"会引入 4 枚举值 + 1 张表 + 3 API，但目前 backlog 无具体客户诉求。**触发条件**（满足任一才动）：(1) ≥2 个生产工单为"超容差但希望人工决定"；(2) 出现"已知会迟到、不希望刷屏 ERROR alert"的特殊业务（SKIP_SILENT 才有意义）；(3) 合规要求 late arrival 必须独立审计表（`batch_day_late_arrival` 才必要）。未触发期间不开 ADR、不排期 |
 
+#### 14.3.3 新增设计储备（2026-05-06，类 ADR-019 gating 模式）
+
+按"金融日终批 + SaaS 多租 + 监管合规"三轴对照业界（IBM TWS / BMC Control-M / Airflow / 银行核心 EOD）补 8 份 ADR，全部 Accepted，按各自触发条件 gating：
+
+| ADR | 主题 | 优先级 / 触发条件 | 估算 |
+|---|---|---|---|
+| [012](../architecture/adr/ADR-012-failure-taxonomy.md) | 失败分类（INFRA / DATA_QUALITY / BUSINESS_RULE / CONFIG / UPSTREAM_DELAY / TIMEOUT / UNKNOWN） | 建议 P1 直接做（便宜高收益） | ~3-5 人天 |
+| [021](../architecture/adr/ADR-021-data-quality-reconciliation.md) | 数据对账闭环（行/表/跨表/跨日 4 类规则）+ 接 ADR-017 EFFECTIVE gate | 金融场景必做 | ~16-18 人天 |
+| [022](../architecture/adr/ADR-022-forensic-audit-bundle.md) | Forensic 一键取证：7 年配置历史 + OSS 对象锁 | 受监管行业必做 | ~19-21 人天 |
+| [023](../architecture/adr/ADR-023-multi-calendar-coordination.md) | 多日历联动 + 半天工作日 + 灾难日热切换 | 跨境业务必做 | ~13 人天 |
+| [024](../architecture/adr/ADR-024-archive-tiering.md) | archive 表 PG 月分区 + OSS Parquet + DuckDB 冷查询 | 数据量阈值（5 亿行 / 500GB / 5 年保留）触发 | ~23 人天 |
+| [025](../architecture/adr/ADR-025-workflow-static-validator.md) | Workflow enable 时 15 项静态校验 | 建议 P2 直接做（便宜高收益） | ~5 人天 |
+| [026](../architecture/adr/ADR-026-dry-run-mode.md) | dry_run 一等字段 + DryRunGuard + DRY_RUN result_version + SUCCESS_DRY_RUN 终态 | 大版本 / 灾备演练触发 | ~17 人天 |
+| [027](../architecture/adr/ADR-027-resource-affinity.md) | worker label / taint / job affinity_json（K8s 风格） | 多机房 / 异构硬件 / 合规隔离触发 | ~18 人天 |
+
+**建议优先级**：
+- **必做 3 项（成本低）**：ADR-012 失败分类、ADR-025 Workflow 静态校验、ADR-021 数据对账（金融场景）；
+- **看场景 2 项**：ADR-022 Forensic（受监管）、ADR-023 多日历（跨境）；
+- **预留架构 1 项**：ADR-024 archive 分层（schema 不定死，数据量到了再实施）；
+- **暂不做 4 项**：ADR-026 dry-run、ADR-027 affinity、ADR-019 cross-domain rate-limit、late arrival 细化。
+
 ### 14.4 守护与回归
 
 下次改动批量日 / 时区 / DST / trigger 路径必须跑：
