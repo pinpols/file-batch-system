@@ -1,7 +1,7 @@
 # ADR-019 · 跨业务域限流（business_domain 主模型）
 
-- **Status**: Proposed
-- **Date**: 2026-05-06
+- **Status**: Accepted（实施前置：见 §"实施触发条件"，未触发期间不开工）
+- **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
 - **Related**: §14.3.2（设计层缺口）/ `docs/runbook/quota-runbook.md` / `docs/runbook/rate-limit-runbook.md` / `docs/architecture/scalability-assessment.md`
 
@@ -163,10 +163,30 @@ ResourceQuota.check   ──── 通过 → DISPATCH
 - 性能：domain check P99 < 5ms（Redis 主路径）；DB fallback < 30ms；
 - 守护：`DomainHierarchyValidator` 启动期 cycle / orphan check fail-fast。
 
-## 开放问题
+## 开放问题（已收口）
 
-1. **借调的会计模型**：借出域是否需要"还时计入历史"以做配额回放？倾向 audit log 记录，配额表只存当前；
-2. **跨租户域**：同一业务域跨多租户共享额度（例如 SaaS 场景）—— 不在本 ADR 范围，保留扩展点 `cross_tenant_pool_id` 列；
-3. **优先级穿透**：高优先级 job 是否可以无视域限流？倾向新增 `priority_breakthrough_threshold`（如 priority ≥ 9 时绕过 SOFT 限流），细节后续 ADR；
-4. **观测 vs 强制**：阶段 1 是否先做"观测模式"（计数但不阻塞）？倾向开关三态：`OFF / OBSERVE / ENFORCE`，默认 OBSERVE，运维确认无误再切 ENFORCE；
-5. **必要性触发条件**：当前 backlog 没有具体客户投诉。需要先收集"哪些客户多域共存"的实例化案例，触发实施 — 否则按本 ADR 优先级排在 4 个里**最低**。
+| # | 问题 | 决策 |
+|---|---|---|
+| 1 | 借调的会计模型 | 运行态配额表只存"当前用量 + borrowed_from_domain 标记"；借调进入/归还各写一行 `domain_quota_audit`（schema 同 `batch_day_operation_audit` 风格）。配额表本身不留历史，需要"配额回放"时由 audit log + alert event 重建 |
+| 2 | 跨租户域 | **不在本 ADR**。`business_domain.cross_tenant_pool_id` 列预留为 NULL；跨租户额度池实施需新建 ADR，不能在本 ADR 阶段 1-6 内偷偷做 |
+| 3 | 优先级穿透 | 启用：当 `priority ≥ priority_breakthrough_threshold`（默认 9）时跳过 DomainQuota 软限流（rate_limit_per_min）；硬限流（max_active / max_pending）仍生效，避免极端优先级请求把后端打垮。阈值由 `domain_quota_policy.priority_breakthrough_threshold` 列承载，NULL 时视为不允许穿透 |
+| 4 | 观测 vs 强制 | 三态开关 `batch.quota.domain.mode = OFF / OBSERVE / ENFORCE`：<br>- `OFF`（默认）：所有 domain 逻辑短路<br>- `OBSERVE`：执行 check 写 metric / alert event，但**不**阻塞 launch<br>- `ENFORCE`：完整生效（REJECT / QUEUE / borrow）<br>启用后必须先 OBSERVE ≥ 7 天，确认 metric 与策略对齐再切 ENFORCE |
+| 5 | 实施触发条件 | 见下文「实施触发条件」明确门槛 |
+
+### 实施触发条件
+
+满足以下**任一**条件才进入 Stage 1 排期；未触发前 ADR 仍 Accepted、可作为参考蓝图但不开工：
+
+1. **客户实例**：≥ 2 个生产租户出现"同租户多业务域共存且互相挤占配额"的实际工单 / SLO 影响事件；
+2. **多域 SaaS 部署诉求**：单部署需要承载 ≥ 3 个业务域，且"一域一租户"的运维成本已被产品 / 运维侧明确反对；
+3. **量化阀值**：`fairShareGroup` metric 显示某 fairShare group 的 `pending_jobs` p95 ≥ 80% 容量持续 14 天，且根因是跨域挤占（非单域 burst）；
+4. **审计 / 合规**：交易 + 风控 + 合规等强制隔离类业务域同租户共存，且监管要求"配额可独立审计 / 申报"。
+
+触发后由架构 owner 把 Stage 1 排期、补 `domain_quota_audit` 表 schema 细节，并在本 ADR 末尾追加「实施记录」段落。
+
+### 不会做（以及原因）
+
+- ❌ 不在 ADR-019 范围里偷塞跨批量日 / 跨工作流配额联动 —— 那是 ADR-018 / 后续工作
+- ❌ 不引入跨租户共享池（保留扩展点但不实现）
+- ❌ 不动 `worker_group` 物理隔离语义（Worker 池仍按 group 分配）
+- ❌ 不破坏现有 (tenant, queue, jobCode) 配额：`domain_code` NULL 的 job_definition 行为零变化
