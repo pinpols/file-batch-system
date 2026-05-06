@@ -250,6 +250,7 @@ public class DefaultLaunchService implements LaunchService {
                 loaded.jobDefinition(), effectiveParams))
         .highWaterMarkIn(highWaterMarkIn)
         .replaySessionId(request.replaySessionId())
+        .dryRun(request.dryRun())
         .build();
   }
 
@@ -331,6 +332,7 @@ public class DefaultLaunchService implements LaunchService {
     workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
     workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
     workflowRun.setTraceId(traceId);
+    workflowRun.setDryRun(request.dryRun());
     workflowMappers.workflowRunMapper.insert(workflowRun);
 
     WorkflowNodeRunEntity startNodeRun = new WorkflowNodeRunEntity();

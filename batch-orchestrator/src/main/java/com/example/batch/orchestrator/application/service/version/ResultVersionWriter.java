@@ -39,6 +39,7 @@ public class ResultVersionWriter {
 
   static final String STATUS_EFFECTIVE = "EFFECTIVE";
   static final String STATUS_PENDING = "PENDING";
+  static final String STATUS_DRY_RUN = "DRY_RUN";
   static final String PROMOTION_AUTO_LATEST = "AUTO_LATEST";
   static final String PROMOTION_MANUAL_APPROVAL = "MANUAL_APPROVAL";
   static final String PAYLOAD_STORAGE_INLINE_JSON = "INLINE_JSON";
@@ -77,7 +78,12 @@ public class ResultVersionWriter {
     Instant now = dateTimeSupport.nowInstant();
     String status;
     Instant effectiveAt;
-    if (PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy)) {
+    boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
+    if (dryRun) {
+      // ADR-026 dry-run：不进 EFFECTIVE 链，落 DRY_RUN 状态供运维核对，不超越也不影响实盘版本
+      status = STATUS_DRY_RUN;
+      effectiveAt = null;
+    } else if (PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy)) {
       status = STATUS_PENDING;
       effectiveAt = null;
     } else {

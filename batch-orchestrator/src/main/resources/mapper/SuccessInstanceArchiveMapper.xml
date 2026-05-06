@@ -63,7 +63,8 @@
             data_interval_end,
             job_definition_version,
             rerun_policy_snapshot,
-            replay_session_id
+            replay_session_id,
+            dry_run
         )
         select
             id,

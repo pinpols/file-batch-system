@@ -32,6 +32,7 @@
             <arg column="version" javaType="java.lang.Long"/>
             <arg column="created_at" javaType="java.time.Instant"/>
             <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="dry_run" javaType="java.lang.Boolean"/>
         </constructor>
     </resultMap>
 
@@ -42,7 +43,7 @@
             open_at, cutoff_at, settled_at, sla_deadline_at,
             late_count, catchup_count, timezone_snapshot, dst_policy_snapshot,
             frozen, operation_reason, operated_by, operated_at,
-            version, created_at, updated_at
+            version, created_at, updated_at, dry_run
         ) values (
             #{tenantId}, #{calendarCode}, #{bizDate},
             <choose>
@@ -86,6 +87,10 @@
             <choose>
                 <when test="updatedAt != null">#{updatedAt}</when>
                 <otherwise>current_timestamp</otherwise>
+            </choose>,
+            <choose>
+                <when test="dryRun != null">#{dryRun}</when>
+                <otherwise>false</otherwise>
             </choose>
         )
         on conflict (tenant_id, calendar_code, biz_date) do nothing
