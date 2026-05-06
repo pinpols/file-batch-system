@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import java.util.Map;
+import lombok.Builder;
 
+@Builder
 public record JobDefinitionEntity(
     Long id,
     String tenantId,

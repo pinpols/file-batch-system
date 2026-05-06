@@ -9,6 +9,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.BatchDayManualOperation;
 import com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
@@ -40,27 +41,24 @@ public class BatchDayOperationService {
   private final BatchDateTimeSupport dateTimeSupport;
 
   @Transactional
-  public BatchDayOperationResult operate(
-      String tenantId,
-      String calendarCode,
-      LocalDate bizDate,
-      BatchDayOperation action,
-      String operatorId,
-      String reason) {
-    if (!Texts.hasText(tenantId)
-        || !Texts.hasText(calendarCode)
-        || bizDate == null
-        || action == null) {
+  public BatchDayOperationResult operate(BatchDayOperateCommand command) {
+    if (command == null
+        || !Texts.hasText(command.tenantId())
+        || !Texts.hasText(command.calendarCode())
+        || command.bizDate() == null
+        || command.action() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day.operation.invalid");
     }
     BatchDayInstanceEntity current =
-        batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
+        batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            command.tenantId(), command.calendarCode(), command.bizDate());
     if (current == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day.not_found");
     }
     Instant now = dateTimeSupport.nowInstant();
-    String operator = Texts.hasText(operatorId) ? operatorId : "UNKNOWN";
-    BatchDayInstanceEntity target = transition(current, action, operator, reason, now);
+    String operator = Texts.hasText(command.operatorId()) ? command.operatorId() : "UNKNOWN";
+    BatchDayInstanceEntity target =
+        transition(current, command.action(), operator, command.reason(), now);
     int rows = batchDayInstanceMapper.updateWithCas(target);
     if (rows == 0) {
       throw new OptimisticLockingFailureException(
@@ -69,9 +67,11 @@ public class BatchDayOperationService {
               + ", version="
               + current.version());
     }
-    appendAuditLog(current, target, action, operator, reason, now);
+    appendAuditLog(current, target, command.action(), operator, command.reason(), now);
     int released =
-        action == BatchDayOperation.RELEASE ? releaseWaitingLaunches(target, operator) : 0;
+        command.action() == BatchDayOperation.RELEASE
+            ? releaseWaitingLaunches(target, operator)
+            : 0;
     return new BatchDayOperationResult(target, released);
   }
 
@@ -82,31 +82,39 @@ public class BatchDayOperationService {
       String reason,
       Instant now) {
     String status = normalize(current.dayStatus());
-    return switch (action) {
-      case FREEZE -> {
-        requireNotTerminal(status, action);
-        yield current.withManualOperation(
-            status, true, reason, operator, now, current.settledAt(), now);
-      }
-      case RELEASE ->
-          current.withManualOperation("MANUAL_RELEASED", false, reason, operator, now, now, now);
-      case SKIP -> {
-        requireNotTerminal(status, action);
-        yield current.withManualOperation("SKIPPED", false, reason, operator, now, now, now);
-      }
-      case REOPEN -> {
-        if (!TERMINAL_STATUSES.contains(status)) {
-          throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day.reopen_state_invalid");
-        }
-        yield current.withManualOperation("IN_FLIGHT", false, reason, operator, now, null, now);
-      }
-      case CLOSE -> {
-        if ("SETTLED".equals(status)) {
-          throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day.close_state_invalid");
-        }
-        yield current.withManualOperation("SETTLED", false, reason, operator, now, now, now);
-      }
-    };
+    BatchDayManualOperation.BatchDayManualOperationBuilder base =
+        BatchDayManualOperation.builder()
+            .operationReason(reason)
+            .operatedBy(operator)
+            .operatedAt(now)
+            .updatedAt(now);
+    BatchDayManualOperation op =
+        switch (action) {
+          case FREEZE -> {
+            requireNotTerminal(status, action);
+            yield base.dayStatus(status).frozen(true).settledAt(current.settledAt()).build();
+          }
+          case RELEASE -> base.dayStatus("MANUAL_RELEASED").frozen(false).settledAt(now).build();
+          case SKIP -> {
+            requireNotTerminal(status, action);
+            yield base.dayStatus("SKIPPED").frozen(false).settledAt(now).build();
+          }
+          case REOPEN -> {
+            if (!TERMINAL_STATUSES.contains(status)) {
+              throw BizException.of(
+                  ResultCode.STATE_CONFLICT, "error.batch_day.reopen_state_invalid");
+            }
+            yield base.dayStatus("IN_FLIGHT").frozen(false).settledAt(null).build();
+          }
+          case CLOSE -> {
+            if ("SETTLED".equals(status)) {
+              throw BizException.of(
+                  ResultCode.STATE_CONFLICT, "error.batch_day.close_state_invalid");
+            }
+            yield base.dayStatus("SETTLED").frozen(false).settledAt(now).build();
+          }
+        };
+    return current.withManualOperation(op);
   }
 
   private void requireNotTerminal(String status, BatchDayOperation action) {
@@ -151,14 +159,15 @@ public class BatchDayOperationService {
     }
     Map<String, Object> payload = JsonUtils.fromJson(entity.launchPayload(), Map.class);
     String triggerType = stringValue(payload.get("triggerType"));
-    return new LaunchRequest(
-        stringValue(payload.get("tenantId")),
-        stringValue(payload.get("jobCode")),
-        LocalDate.parse(stringValue(payload.get("bizDate"))),
-        TriggerType.valueOf(triggerType),
-        stringValue(payload.get("requestId")),
-        stringValue(payload.get("traceId")),
-        (Map<String, Object>) payload.getOrDefault("params", Map.of()));
+    return LaunchRequest.builder()
+        .tenantId(stringValue(payload.get("tenantId")))
+        .jobCode(stringValue(payload.get("jobCode")))
+        .bizDate(LocalDate.parse(stringValue(payload.get("bizDate"))))
+        .triggerType(TriggerType.valueOf(triggerType))
+        .requestId(stringValue(payload.get("requestId")))
+        .traceId(stringValue(payload.get("traceId")))
+        .params((Map<String, Object>) payload.getOrDefault("params", Map.of()))
+        .build();
   }
 
   private void appendAuditLog(

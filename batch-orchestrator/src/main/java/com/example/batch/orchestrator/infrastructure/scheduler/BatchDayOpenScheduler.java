@@ -91,23 +91,23 @@ public class BatchDayOpenScheduler {
     Instant cutoffAt = timePolicyResolver.resolveCutoffAt(calendar, bizDate);
     Instant slaDeadlineAt = resolveSlaDeadlineAt(calendar, cutoffAt);
     BatchDayInstanceEntity toInsert =
-        new BatchDayInstanceEntity(
-            null,
-            calendar.tenantId(),
-            calendar.calendarCode(),
-            bizDate,
-            "OPEN",
-            now,
-            cutoffAt,
-            null,
-            slaDeadlineAt,
-            0,
-            0,
-            zoneId.getId(),
-            timePolicyResolver.snapshot(calendar),
-            0L,
-            now,
-            now);
+        BatchDayInstanceEntity.builder()
+            .tenantId(calendar.tenantId())
+            .calendarCode(calendar.calendarCode())
+            .bizDate(bizDate)
+            .dayStatus("OPEN")
+            .openAt(now)
+            .cutoffAt(cutoffAt)
+            .slaDeadlineAt(slaDeadlineAt)
+            .lateCount(0)
+            .catchupCount(0)
+            .timezoneSnapshot(zoneId.getId())
+            .dstPolicySnapshot(timePolicyResolver.snapshot(calendar))
+            .frozen(false)
+            .version(0L)
+            .createdAt(now)
+            .updatedAt(now)
+            .build();
     int rows = batchDayInstanceMapper.insert(toInsert);
     if (rows <= 0) {
       return;

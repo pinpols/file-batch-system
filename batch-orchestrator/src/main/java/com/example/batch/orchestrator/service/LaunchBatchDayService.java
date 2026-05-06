@@ -135,18 +135,20 @@ public class LaunchBatchDayService {
     String dstPolicySnapshot = resolveDstPolicySnapshot(request.tenantId(), calendarCode);
     String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
     boolean hasOperator = Texts.hasText(operatorId);
-    return new BatchDayUpsertContext(
-        calendarCode,
-        now,
-        cutoffAt,
-        timezoneSnapshot,
-        dstPolicySnapshot,
-        hasOperator ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM,
-        hasOperator
-            ? AuditLogConstants.OPERATOR_TYPE_REQUEST
-            : AuditLogConstants.OPERATOR_TYPE_SYSTEM,
-        isCatchUpLaunch(request),
-        isLateAccepted(effectiveParams));
+    return BatchDayUpsertContext.builder()
+        .calendarCode(calendarCode)
+        .now(now)
+        .cutoffAt(cutoffAt)
+        .timezoneSnapshot(timezoneSnapshot)
+        .dstPolicySnapshot(dstPolicySnapshot)
+        .auditOperatorId(hasOperator ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM)
+        .auditOperatorType(
+            hasOperator
+                ? AuditLogConstants.OPERATOR_TYPE_REQUEST
+                : AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+        .catchUpLaunch(isCatchUpLaunch(request))
+        .lateAccepted(isLateAccepted(effectiveParams))
+        .build();
   }
 
   private void insertNewBatchDay(
@@ -154,25 +156,26 @@ public class LaunchBatchDayService {
     boolean pastCutoff = ctx.cutoffAt() != null && !ctx.now().isBefore(ctx.cutoffAt());
     String dayStatus = resolveCreateDayStatus(ctx, pastCutoff);
     String reasonCode = resolveCreateReasonCode(ctx, pastCutoff);
-    batchDayInstanceMapper.insert(
-        new BatchDayInstanceEntity(
-            null,
-            request.tenantId(),
-            ctx.calendarCode(),
-            request.bizDate(),
-            dayStatus,
-            ctx.now(),
-            ctx.cutoffAt(),
-            null,
-            batchDaySlaDeadlineAt,
-            ctx.lateAccepted() ? 1 : 0,
-            ctx.catchUpLaunch() ? 1 : 0,
-            ctx.timezoneSnapshot(),
-            ctx.dstPolicySnapshot(),
-            // version=0 让 mapper.xml 默认值生效（非 null 才走显式赋值）；version=null 也可，xml 兜 0
-            0L,
-            ctx.now(),
-            ctx.now()));
+    BatchDayInstanceEntity newDay =
+        BatchDayInstanceEntity.builder()
+            .tenantId(request.tenantId())
+            .calendarCode(ctx.calendarCode())
+            .bizDate(request.bizDate())
+            .dayStatus(dayStatus)
+            .openAt(ctx.now())
+            .cutoffAt(ctx.cutoffAt())
+            .slaDeadlineAt(batchDaySlaDeadlineAt)
+            .lateCount(ctx.lateAccepted() ? 1 : 0)
+            .catchupCount(ctx.catchUpLaunch() ? 1 : 0)
+            .timezoneSnapshot(ctx.timezoneSnapshot())
+            .dstPolicySnapshot(ctx.dstPolicySnapshot())
+            .frozen(false)
+            // version=0 让 mapper.xml 默认值生效（非 null 才走显式赋值）；null 也可，xml 兜 0
+            .version(0L)
+            .createdAt(ctx.now())
+            .updatedAt(ctx.now())
+            .build();
+    batchDayInstanceMapper.insert(newDay);
     appendBatchDayAuditLog(
         BatchDayAuditLogParam.builder()
             .tenantId(request.tenantId())
@@ -291,6 +294,7 @@ public class LaunchBatchDayService {
     return ctx.catchUpLaunch() ? "CATCH_UP_REOPEN" : "BATCH_DAY_REOPENED";
   }
 
+  @Builder
   private record BatchDayUpsertContext(
       String calendarCode,
       Instant now,
@@ -474,14 +478,15 @@ public class LaunchBatchDayService {
       routedParams.put(
           "lateArrivalToleranceMin",
           resolveLateArrivalToleranceMin(request.tenantId(), calendarCode));
-      return new LaunchRequest(
-          request.tenantId(),
-          request.jobCode(),
-          request.bizDate(),
-          TriggerType.EVENT,
-          request.requestId(),
-          request.traceId(),
-          routedParams);
+      return LaunchRequest.builder()
+          .tenantId(request.tenantId())
+          .jobCode(request.jobCode())
+          .bizDate(request.bizDate())
+          .triggerType(TriggerType.EVENT)
+          .requestId(request.requestId())
+          .traceId(request.traceId())
+          .params(routedParams)
+          .build();
     }
     // late-rejected：先 DB CAS 把当前 trigger_type 翻为 CATCH_UP. P0-2 之前 expected 仅 EVENT,
     // 现在所有非 RERUN/CATCH_UP/SUBJOB 的 triggerType 都可能进入此路径, expected 用 request 自身的 triggerType code.
@@ -506,24 +511,26 @@ public class LaunchBatchDayService {
       if (!TriggerType.CATCH_UP.code().equals(latest.getTriggerType())) {
         return request;
       }
-      return new LaunchRequest(
-          request.tenantId(),
-          request.jobCode(),
-          request.bizDate(),
-          TriggerType.CATCH_UP,
-          request.requestId(),
-          request.traceId(),
-          routedParams);
+      return LaunchRequest.builder()
+          .tenantId(request.tenantId())
+          .jobCode(request.jobCode())
+          .bizDate(request.bizDate())
+          .triggerType(TriggerType.CATCH_UP)
+          .requestId(request.requestId())
+          .traceId(request.traceId())
+          .params(routedParams)
+          .build();
     }
     loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
-    return new LaunchRequest(
-        request.tenantId(),
-        request.jobCode(),
-        request.bizDate(),
-        TriggerType.CATCH_UP,
-        request.requestId(),
-        request.traceId(),
-        routedParams);
+    return LaunchRequest.builder()
+        .tenantId(request.tenantId())
+        .jobCode(request.jobCode())
+        .bizDate(request.bizDate())
+        .triggerType(TriggerType.CATCH_UP)
+        .requestId(request.requestId())
+        .traceId(request.traceId())
+        .params(routedParams)
+        .build();
   }
 
   @Builder

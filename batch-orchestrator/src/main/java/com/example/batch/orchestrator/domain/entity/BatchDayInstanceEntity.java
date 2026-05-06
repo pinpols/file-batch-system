@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.Builder;
 
 /**
  * 批次日实例投影（MyBatis 通过 {@code resultMap+constructor} 映射；不可变 record）。
@@ -16,6 +17,7 @@ import java.time.LocalDate;
  * <p><b>不要加 Spring Data 注解</b>（{@code @Table @Id @Version @Column}）—— 本表已迁 MyBatis 后由 {@code
  * BatchDayInstanceMapper} 接管 CRUD + 乐观锁；保留 SDJ 注解会被框架误扫成 Repository。
  */
+@Builder(toBuilder = true)
 public record BatchDayInstanceEntity(
     Long id,
     String tenantId,
@@ -353,34 +355,15 @@ public record BatchDayInstanceEntity(
         updatedAt);
   }
 
-  public BatchDayInstanceEntity withManualOperation(
-      String dayStatus,
-      Boolean frozen,
-      String operationReason,
-      String operatedBy,
-      Instant operatedAt,
-      Instant settledAt,
-      Instant updatedAt) {
-    return new BatchDayInstanceEntity(
-        id,
-        tenantId,
-        calendarCode,
-        bizDate,
-        dayStatus,
-        openAt,
-        cutoffAt,
-        settledAt,
-        slaDeadlineAt,
-        lateCount,
-        catchupCount,
-        timezoneSnapshot,
-        dstPolicySnapshot,
-        frozen,
-        operationReason,
-        operatedBy,
-        operatedAt,
-        version,
-        createdAt,
-        updatedAt);
+  public BatchDayInstanceEntity withManualOperation(BatchDayManualOperation op) {
+    return toBuilder()
+        .dayStatus(op.dayStatus())
+        .frozen(op.frozen())
+        .operationReason(op.operationReason())
+        .operatedBy(op.operatedBy())
+        .operatedAt(op.operatedAt())
+        .settledAt(op.settledAt())
+        .updatedAt(op.updatedAt())
+        .build();
   }
 }
