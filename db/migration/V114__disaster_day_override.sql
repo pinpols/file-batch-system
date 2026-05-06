@@ -44,10 +44,13 @@ CREATE TABLE IF NOT EXISTS batch.disaster_day_override (
         CHECK (ttl_until > effective_at)
 );
 
--- 同 (tenant, calendar, biz_date) 在未过期 ttl 期内至多一条 active
+-- 同 (tenant, calendar, biz_date) 至多一条 — 应用层负责"过期失效"语义。
+-- 注：原写法 `WHERE ttl_until > CURRENT_TIMESTAMP` 在 PG 被拒（"functions in
+-- index predicate must be marked IMMUTABLE"），CURRENT_TIMESTAMP 是 STABLE 不能进
+-- partial index predicate。disaster override 是"每业务日至多 1 条"语义，去掉
+-- partial 过滤后约束等价（同一业务日不会同时有多个 override 互相竞争）。
 CREATE UNIQUE INDEX IF NOT EXISTS uk_disaster_active
-    ON batch.disaster_day_override (tenant_id, calendar_code, biz_date)
-    WHERE ttl_until > CURRENT_TIMESTAMP;
+    ON batch.disaster_day_override (tenant_id, calendar_code, biz_date);
 
 CREATE INDEX IF NOT EXISTS idx_disaster_lookup
     ON batch.disaster_day_override (tenant_id, calendar_code, biz_date, ttl_until);
