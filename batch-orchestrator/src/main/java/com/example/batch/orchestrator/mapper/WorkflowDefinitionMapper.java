@@ -22,6 +22,9 @@ public interface WorkflowDefinitionMapper {
 
   WorkflowDefinitionEntity selectById(@Param("id") Long id);
 
+  /** ADR-025 reconciler：跨租户列出 enabled=true 全量。 */
+  List<WorkflowDefinitionEntity> selectAllEnabled(@Param("limit") int limit);
+
   int insert(WorkflowDefinitionEntity record);
 
   int update(WorkflowDefinitionEntity record);

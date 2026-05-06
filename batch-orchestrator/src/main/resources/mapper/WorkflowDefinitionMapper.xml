@@ -48,6 +48,14 @@
          where id = #{id}
     </select>
 
+    <select id="selectAllEnabled" resultMap="workflowDefinitionMap">
+        select <include refid="columns"/>
+          from batch.workflow_definition
+         where enabled = true
+         order by id asc
+         limit #{limit}
+    </select>
+
     <insert id="insert"
             parameterType="com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity"
             useGeneratedKeys="true" keyProperty="id">
