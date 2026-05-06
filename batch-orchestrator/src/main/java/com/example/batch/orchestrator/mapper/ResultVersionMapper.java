@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.ResultVersionEntity;
 import java.time.Instant;
+import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -42,4 +43,10 @@ public interface ResultVersionMapper {
   /** 查 (tenant_id, business_key) 的当前 EFFECTIVE 行；找不到返回 null。 */
   ResultVersionEntity selectEffective(
       @Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
+
+  /** 列出某 business_key 的所有版本（按 version_no 倒序）；用于 console 列表 + ops 排查。 */
+  List<ResultVersionEntity> listVersionsByBusinessKey(
+      @Param("tenantId") String tenantId,
+      @Param("businessKey") String businessKey,
+      @Param("limit") int limit);
 }
