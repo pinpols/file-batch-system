@@ -31,6 +31,9 @@ public class SchedulePlan {
   private int shardTotal = 1;
   private int shardIndex = 0;
 
+  /** ADR-026 dry-run 演练标记；从父 job_instance.dry_run 透传到本次派发的 partition / task。 */
+  private boolean dryRun;
+
   @Data
   public static class PartitionPlan {
 

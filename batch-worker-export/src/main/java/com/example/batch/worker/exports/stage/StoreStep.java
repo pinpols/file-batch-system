@@ -3,6 +3,7 @@ package com.example.batch.worker.exports.stage;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.exports.domain.ExportJobContext;
@@ -39,6 +40,10 @@ public class StoreStep implements ExportStageStep {
 
   @Override
   public ExportStageResult execute(ExportJobContext context) {
+    // ADR-026: 演练模式下不上传 MinIO/SFTP，仅落 SHA + 占位 objectName 让下游 stage 链路完整跑完
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return executeDryRun(context);
+    }
     Object generatedFilePath =
         context == null ? null : context.getAttributes().get("generatedFilePath");
     if (!(generatedFilePath instanceof String pathText) || !Texts.hasText(pathText)) {
@@ -208,6 +213,28 @@ public class StoreStep implements ExportStageStep {
     Files.deleteIfExists(generatedFile);
     if (encryptedPath != null) {
       Files.deleteIfExists(encryptedPath);
+    }
+    return ExportStageResult.success(stage());
+  }
+
+  /** ADR-026 dry-run：本地计算 sha256，不上传，让 attributes 完整给下游验收。 */
+  private ExportStageResult executeDryRun(ExportJobContext context) {
+    Object generatedFilePath =
+        context == null ? null : context.getAttributes().get("generatedFilePath");
+    if (generatedFilePath instanceof String pathText && Texts.hasText(pathText)) {
+      try {
+        Path generatedFile = Path.of(pathText);
+        if (Files.exists(generatedFile)) {
+          context.getAttributes().put("checksumType", "SHA-256");
+          context.getAttributes().put("checksumValue", sha256Hex(generatedFile));
+        }
+      } catch (Exception ignored) {
+        SwallowedExceptionLogger.info(StoreStep.class, "catch:dry_run_sha_failure", ignored);
+      }
+    }
+    if (context != null) {
+      context.getAttributes().put("objectName", "dry-run/no-upload");
+      context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
     }
     return ExportStageResult.success(stage());
   }

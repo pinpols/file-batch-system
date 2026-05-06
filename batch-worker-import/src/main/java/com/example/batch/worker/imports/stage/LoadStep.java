@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.stage;
 import com.example.batch.common.plugin.ImportLoadContext;
 import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -67,6 +68,11 @@ public class LoadStep implements ImportStageStep {
 
   @Override
   public ImportStageResult execute(ImportJobContext context) {
+    // ADR-026: 演练模式不写目标存储；以 validated path 行数为预估让 PROCESS / FEEDBACK 拿到完整 attribute
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      long expected = estimateDryRunLoadedCount(context);
+      return markLoaded(context, expected);
+    }
     String validatedRecordsPath =
         stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
     if (Texts.hasText(validatedRecordsPath)) {
@@ -372,5 +378,29 @@ public class LoadStep implements ImportStageStep {
       return null;
     }
     return Path.of(text);
+  }
+
+  /**
+   * ADR-026 dry-run：预估"如果实盘会落多少行"以填 successCount/loadedCount。 数 validated NDJSON 行数；缺失时 fallback 到
+   * 0。
+   */
+  private long estimateDryRunLoadedCount(ImportJobContext context) {
+    if (context == null) {
+      return 0L;
+    }
+    String validatedPath =
+        stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
+    if (!Texts.hasText(validatedPath)) {
+      return 0L;
+    }
+    Path path = Path.of(validatedPath);
+    if (!Files.exists(path)) {
+      return 0L;
+    }
+    try (var stream = Files.lines(path, StandardCharsets.UTF_8)) {
+      return stream.filter(Texts::hasText).count();
+    } catch (Exception ignored) {
+      return 0L;
+    }
   }
 }

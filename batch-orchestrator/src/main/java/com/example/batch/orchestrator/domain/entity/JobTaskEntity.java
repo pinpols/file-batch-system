@@ -34,6 +34,9 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
   /** ADR-012 task 级失败分类（V111）。worker REPORT 失败时上报，FailureClass 取值。 */
   private String failureClass;
 
+  /** ADR-026 dry-run 演练标记；从父 job_partition.dry_run 透传。 */
+  private Boolean dryRun;
+
   @Override
   public String getStatus() {
     return taskStatus;

@@ -145,6 +145,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                 request.jobCode(),
                 request.bizDate().toString(),
                 effectiveParams));
+    plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
     if (decision.isFailFast()) {
       throw BizException.of(
@@ -272,6 +273,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             context.creation().execution().request(),
             context.creation().execution().jobInstance(),
             context.creation().execution().effectiveParams()));
+    task.setDryRun(Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
     return task;
   }
 
@@ -366,6 +368,10 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       if (jobCode != null && !jobCode.isBlank()) {
         payload.put("jobCode", jobCode);
       }
+    }
+    // ADR-026: 把 dry_run 注入 task payload，worker 端通过 PipelineRuntimeKeys.DRY_RUN 读取
+    if (jobInstance != null && Boolean.TRUE.equals(jobInstance.getDryRun())) {
+      payload.put("dryRun", true);
     }
     return payload;
   }

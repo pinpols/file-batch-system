@@ -138,10 +138,15 @@ public class WorkflowRunStuckReconciler {
   }
 
   private boolean applyFinalize(WorkflowRunEntity wr, FinalizeAction action) {
-    String targetStatus =
-        action == FinalizeAction.SUCCESS
-            ? WorkflowRunStatus.SUCCESS.code()
-            : WorkflowRunStatus.FAILED.code();
+    boolean dryRun = Boolean.TRUE.equals(wr.getDryRun());
+    String targetStatus;
+    if (action == FinalizeAction.SUCCESS) {
+      targetStatus =
+          dryRun ? WorkflowRunStatus.SUCCESS_DRY_RUN.code() : WorkflowRunStatus.SUCCESS.code();
+    } else {
+      targetStatus =
+          dryRun ? WorkflowRunStatus.FAILED_DRY_RUN.code() : WorkflowRunStatus.FAILED.code();
+    }
     UpdateWorkflowRunStatusParam param =
         UpdateWorkflowRunStatusParam.builder()
             .tenantId(wr.getTenantId())

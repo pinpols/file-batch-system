@@ -27,6 +27,7 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
         <result column="failure_class" property="failureClass"/>
+        <result column="dry_run" property="dryRun"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobTaskEntity"
@@ -47,7 +48,8 @@
             error_args,
             priority,
             started_at,
-            finished_at
+            finished_at,
+            dry_run
         ) values (
             #{tenantId},
             #{jobInstanceId},
@@ -64,7 +66,11 @@
             #{errorArgs,jdbcType=VARCHAR}::jsonb,
             coalesce(#{priority}, 5),
             #{startedAt},
-            #{finishedAt}
+            #{finishedAt},
+            <choose>
+                <when test="dryRun != null">#{dryRun}</when>
+                <otherwise>false</otherwise>
+            </choose>
         )
     </insert>
 

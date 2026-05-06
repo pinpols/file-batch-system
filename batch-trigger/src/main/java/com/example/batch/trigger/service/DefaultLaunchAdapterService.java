@@ -55,6 +55,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         .params(request.getParams())
         .dataIntervalStart(request.getDataIntervalStart())
         .dataIntervalEnd(request.getDataIntervalEnd())
+        .dryRun(Boolean.TRUE.equals(request.getDryRun()))
         .build();
   }
 

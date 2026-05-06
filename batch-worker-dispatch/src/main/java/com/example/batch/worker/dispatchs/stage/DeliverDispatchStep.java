@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -104,14 +105,22 @@ public class DeliverDispatchStep implements DispatchStageStep {
       fileDispatchRepository.incrementAttempt(
           context.getTenantId(), fileId, dispatchPayload.channelCode());
     }
+    // ADR-026: 演练模式下不真发外部投递，伪造一个"成功 + dry-run"的 DispatchResult，
+    // 让后续 markSent / file_dispatch_record 状态推进按演练通道走。
+    DryRunGuard guard = DryRunGuard.fromAttributes(context.getAttributes());
     DispatchResult dispatchResult =
-        dispatchChannelGateway.dispatch(
-            new DispatchCommand(
-                context.getTenantId(),
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                fileRecord,
-                channelConfig,
-                dispatchPayload));
+        guard.callOrSkip(
+            "dispatch.deliver",
+            () ->
+                dispatchChannelGateway.dispatch(
+                    new DispatchCommand(
+                        context.getTenantId(),
+                        String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
+                        fileRecord,
+                        channelConfig,
+                        dispatchPayload)),
+            DispatchResult.success(
+                "DRY_RUN", "DRY_RUN_RECEIPT_" + dispatchPayload.channelCode(), false));
     context.getAttributes().put("dispatchResult", dispatchResult);
     context.getAttributes().put("externalRequestId", dispatchResult.externalRequestId());
     context.getAttributes().put("receiptCode", dispatchResult.receiptCode());

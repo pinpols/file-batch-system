@@ -34,7 +34,9 @@ public class WorkflowTerminalOutboxService {
   public static boolean isTerminal(String runStatus) {
     return WorkflowRunStatus.SUCCESS.code().equals(runStatus)
         || WorkflowRunStatus.FAILED.code().equals(runStatus)
-        || WorkflowRunStatus.TERMINATED.code().equals(runStatus);
+        || WorkflowRunStatus.TERMINATED.code().equals(runStatus)
+        || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(runStatus)
+        || WorkflowRunStatus.FAILED_DRY_RUN.code().equals(runStatus);
   }
 
   // D-2: MANDATORY 强制 outbox 写入必须在调用方事务内执行，无事务时直接抛异常。

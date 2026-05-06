@@ -1,5 +1,6 @@
 package com.example.batch.common.service;
 
+import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,6 +41,25 @@ public interface DryRunGuard {
   /** 工厂：返回永远跳过 + 打日志的 guard（演练 instance 注入）。 */
   static DryRunGuard skipAll() {
     return DryRunGuards.SKIP_ALL;
+  }
+
+  /**
+   * 从 step plugin attributes Map 解析 dry-run 标记并返回对应 guard。 attributes 里 {@code dryRun=true} →
+   * {@link #skipAll()}; 否则 {@link #passThrough()}。
+   *
+   * <p>worker SDK 入口 (AbstractPipelineStepExecutionAdapter) 已把 task payload 里的 {@code dryRun} 注入
+   * attributes；step plugin 直接调用 {@code DryRunGuard.fromAttributes(attributes)} 即可。
+   */
+  static DryRunGuard fromAttributes(Map<String, Object> attributes) {
+    if (attributes == null) {
+      return passThrough();
+    }
+    Object value = attributes.get("dryRun");
+    boolean dryRun =
+        value instanceof Boolean b
+            ? b
+            : value != null && "true".equalsIgnoreCase(String.valueOf(value));
+    return dryRun ? skipAll() : passThrough();
   }
 
   @Slf4j
