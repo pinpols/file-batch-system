@@ -71,6 +71,7 @@ public class TaskControllerApplicationService {
             .highWaterMarkOut(request.getHighWaterMarkOut())
             .outputs(request.getOutputs())
             .partitionInvocationId(request.getPartitionInvocationId())
+            .failureClass(request.isSuccess() ? null : request.getFailureClass())
             .build();
     taskExecutionService.applyTaskOutcome(command);
   }

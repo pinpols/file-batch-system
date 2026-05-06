@@ -17,6 +17,7 @@ import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.ErrorSinkType;
 import com.example.batch.common.enums.ExecutionMode;
+import com.example.batch.common.enums.FailureClass;
 import com.example.batch.common.enums.FileAuditOperationType;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
@@ -282,6 +283,7 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("workflowDefinitionStatus", WorkflowDefinitionStatus.class));
     list.add(new EnumReg<>("tenantConfigInitAction", TenantConfigInitAction.class));
     list.add(new EnumReg<>("triggerResourceType", TriggerResourceType.class));
+    list.add(new EnumReg<>("failureClass", FailureClass.class));
     REGISTRATIONS = List.copyOf(list);
   }
 }

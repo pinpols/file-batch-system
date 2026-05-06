@@ -21,6 +21,9 @@ public class UpdateTaskStatusParam implements LocalizedErrorCarrier {
   /** i18n 占位符参数 JSON 数组,V77+ 写入 job_task.error_args。 */
   private final String errorArgs;
 
+  /** ADR-012 失败分类（V111）。FAILED 终态时填。 */
+  private final String failureClass;
+
   private final String terminalStatus1;
   private final String terminalStatus2;
   private final String terminalStatus3;

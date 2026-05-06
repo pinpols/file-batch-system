@@ -26,6 +26,7 @@
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <result column="failure_class" property="failureClass"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobTaskEntity"
@@ -124,6 +125,7 @@
             error_message = #{errorMessage},
             error_key = #{errorKey},
             error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
+            failure_class = #{failureClass,jdbcType=VARCHAR},
             finished_at = case
                 when #{taskStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at
@@ -143,6 +145,7 @@
             error_message = #{errorMessage},
             error_key = #{errorKey},
             error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
+            failure_class = #{failureClass,jdbcType=VARCHAR},
             finished_at = current_timestamp,
             version = version + 1,
             updated_at = current_timestamp
@@ -174,6 +177,7 @@
             error_message = null,
             error_key = null,
             error_args = null,
+            failure_class = null,
             result_summary = null,
             started_at = null,
             finished_at = null,
