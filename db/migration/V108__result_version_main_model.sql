@@ -181,7 +181,12 @@ SELECT
     COALESCE(ls.finished_at, ls.created_at)                               AS effective_at,
     'INLINE_JSON'                                                         AS payload_storage,
     CASE
-        WHEN ls.result_summary IS NULL OR length(ls.result_summary) = 0
+        -- PG length() 不接受 jsonb：原写法 length(ls.result_summary) 直接报
+        -- "function length(jsonb) does not exist" 让 V108 整个 migration 失败。
+        -- 用 IS NULL + 与空对象 / 空数组的 jsonb 比较替代（语义等价：空 jsonb → 用 {}）。
+        WHEN ls.result_summary IS NULL
+             OR ls.result_summary = '{}'::jsonb
+             OR ls.result_summary = '[]'::jsonb
             THEN '{}'::jsonb
         ELSE jsonb_build_object('legacy_summary', ls.result_summary)
     END                                                                   AS payload_json,
