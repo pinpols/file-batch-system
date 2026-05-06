@@ -31,7 +31,9 @@ public record LaunchRequest(
     String traceId,
     Map<String, Object> params,
     Instant dataIntervalStart,
-    Instant dataIntervalEnd) {
+    Instant dataIntervalEnd,
+    /** ADR-020 batch_day_replay_session.id 透传标签；NULL = 非 replay 创建。 */
+    Long replaySessionId) {
 
   /** 简洁兜底构造器: 不带 interval 的旧调用方 (RERUN / 历史路径) 直接传 7 参. */
   public LaunchRequest(
@@ -42,6 +44,30 @@ public record LaunchRequest(
       String requestId,
       String traceId,
       Map<String, Object> params) {
-    this(tenantId, jobCode, bizDate, triggerType, requestId, traceId, params, null, null);
+    this(tenantId, jobCode, bizDate, triggerType, requestId, traceId, params, null, null, null);
+  }
+
+  /** 9 参兼容构造：仅带 data interval，replay_session_id 默认 null。 */
+  public LaunchRequest(
+      String tenantId,
+      String jobCode,
+      LocalDate bizDate,
+      TriggerType triggerType,
+      String requestId,
+      String traceId,
+      Map<String, Object> params,
+      Instant dataIntervalStart,
+      Instant dataIntervalEnd) {
+    this(
+        tenantId,
+        jobCode,
+        bizDate,
+        triggerType,
+        requestId,
+        traceId,
+        params,
+        dataIntervalStart,
+        dataIntervalEnd,
+        null);
   }
 }

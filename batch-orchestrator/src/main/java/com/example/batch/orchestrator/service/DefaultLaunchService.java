@@ -249,6 +249,7 @@ public class DefaultLaunchService implements LaunchService {
             launchParamResolver.resolveExpectedDurationSeconds(
                 loaded.jobDefinition(), effectiveParams))
         .highWaterMarkIn(highWaterMarkIn)
+        .replaySessionId(request.replaySessionId())
         .build();
   }
 

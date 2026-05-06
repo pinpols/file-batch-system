@@ -88,13 +88,15 @@ public class DefaultCompensationService implements CompensationService {
       CompensationLaunchTarget target,
       Map<String, Object> params,
       String traceId,
-      String commandNo) {
+      String commandNo,
+      Long replaySessionId) {
     private static CompensationLaunchRequest of(
         CompensationLaunchTarget target,
         Map<String, Object> params,
         String traceId,
-        String commandNo) {
-      return new CompensationLaunchRequest(target, params, traceId, commandNo);
+        String commandNo,
+        Long replaySessionId) {
+      return new CompensationLaunchRequest(target, params, traceId, commandNo, replaySessionId);
     }
   }
 
@@ -257,7 +259,8 @@ public class DefaultCompensationService implements CompensationService {
                     TriggerType.CATCH_UP),
                 params,
                 traceId,
-                commandNo));
+                commandNo,
+                command.replaySessionId()));
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? sourceInstance.getId() : launched.getId());
@@ -370,7 +373,8 @@ public class DefaultCompensationService implements CompensationService {
                     command.tenantId(), command.jobCode(), command.bizDate(), TriggerType.CATCH_UP),
                 params,
                 traceId,
-                commandNo));
+                commandNo,
+                command.replaySessionId()));
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? null : launched.getId());
@@ -423,6 +427,7 @@ public class DefaultCompensationService implements CompensationService {
             .requestId(requestId)
             .traceId(request.traceId())
             .params(request.params())
+            .replaySessionId(request.replaySessionId())
             .build();
     return launchServiceProvider.getObject().launch(launchRequest);
   }

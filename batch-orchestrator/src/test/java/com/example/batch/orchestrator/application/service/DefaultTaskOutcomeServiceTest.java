@@ -11,6 +11,7 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
+import com.example.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import com.example.batch.orchestrator.application.service.task.DefaultTaskOutcomeService;
 import com.example.batch.orchestrator.application.service.task.DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators;
 import com.example.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
@@ -84,7 +85,8 @@ class DefaultTaskOutcomeServiceTest {
             workflowTerminalOutboxService,
             new SimpleMeterRegistry(),
             jobInstanceTerminalChildStateReconciler,
-            mock(ResultVersionWriter.class));
+            mock(ResultVersionWriter.class),
+            mock(BatchDayReplayTerminalReconciler.class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 
