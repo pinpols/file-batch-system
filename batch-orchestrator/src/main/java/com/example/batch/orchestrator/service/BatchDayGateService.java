@@ -96,23 +96,22 @@ public class BatchDayGateService {
       String reason) {
     Instant now = dateTimeSupport.nowInstant();
     String payload = buildLaunchPayload(request, effectiveParams);
-    waitingLaunchMapper.insert(
-        new BatchDayWaitingLaunchEntity(
-            null,
-            request.tenantId(),
-            previous.calendarCode(),
-            request.jobCode(),
-            request.bizDate(),
-            request.requestId(),
-            traceId,
-            request.triggerType() == null ? null : request.triggerType().code(),
-            reason,
-            payload,
-            BatchStatusConstants.WAITING,
-            null,
-            null,
-            now,
-            now));
+    BatchDayWaitingLaunchEntity waiting =
+        BatchDayWaitingLaunchEntity.builder()
+            .tenantId(request.tenantId())
+            .calendarCode(previous.calendarCode())
+            .jobCode(request.jobCode())
+            .bizDate(request.bizDate())
+            .requestId(request.requestId())
+            .traceId(traceId)
+            .triggerType(request.triggerType() == null ? null : request.triggerType().code())
+            .waitReason(reason)
+            .launchPayload(payload)
+            .waitStatus(BatchStatusConstants.WAITING)
+            .createdAt(now)
+            .updatedAt(now)
+            .build();
+    waitingLaunchMapper.insert(waiting);
     triggerRequestMapper.updateAcceptance(
         request.tenantId(), request.requestId(), BatchStatusConstants.WAITING, null);
     appendAuditLog(request, previous, "BATCH_DAY_GATE_WAIT", reason, traceId);

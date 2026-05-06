@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import java.time.LocalTime;
+import lombok.Builder;
 
+@Builder
 public record BusinessCalendarEntity(
     Long id,
     String tenantId,

@@ -2,7 +2,9 @@ package com.example.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.Builder;
 
+@Builder
 public record BatchDayWaitingLaunchEntity(
     Long id,
     String tenantId,
