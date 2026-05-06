@@ -68,6 +68,9 @@ public class JobInstanceEntity implements Stateful {
   private Instant createdAt;
   private Instant updatedAt;
 
+  /** ADR-020 batch_day_replay_session.id 反查标签；NULL = 非 replay 创建。 */
+  private Long replaySessionId;
+
   @Override
   public String getStatus() {
     return instanceStatus;

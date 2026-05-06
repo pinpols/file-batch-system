@@ -44,6 +44,7 @@
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <result column="replay_session_id" property="replaySessionId"/>
     </resultMap>
 
     <select id="selectByInstanceNo" resultMap="JobInstanceResultMap">
@@ -115,7 +116,8 @@
             result_summary,
             deadline_at,
             expected_duration_seconds,
-            sla_alerted_at
+            sla_alerted_at,
+            replay_session_id
         ) values (
             #{tenantId},
             #{jobDefinitionId},
@@ -153,7 +155,8 @@
             #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{deadlineAt},
             #{expectedDurationSeconds},
-            #{slaAlertedAt}
+            #{slaAlertedAt},
+            #{replaySessionId}
         )
     </insert>
 
