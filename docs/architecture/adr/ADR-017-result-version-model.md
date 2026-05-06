@@ -1,7 +1,7 @@
 # ADR-017 · 结果版本（result_version）主模型
 
-- **Status**: Proposed
-- **Date**: 2026-05-06
+- **Status**: Accepted（Stage 1-5 已落 V108 + Writer / Query / Promote / Retention；Stage 6 console UI 待接入）
+- **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
 - **Related**: ADR-009（workflow 节点 output 上报机制）/ ADR-018（跨批量日 DAG 依赖，依赖本 ADR 取上游 EFFECTIVE 版本）/ ADR-020（批量日维度重放，依赖本 ADR 做版本路由）/ §14.3.2（设计层缺口）
 
@@ -168,9 +168,29 @@ batch.result-version.retention.scan-cron         = "0 30 3 * * *"
 - E2E：跨重跑场景下游 SQL 拿到的 payload 始终对应 EFFECTIVE 版本
 - 守护：`ResultVersionEffectivenessInvariantTest` 强制断言"同 business_key 至多 1 行 EFFECTIVE"
 
-## 开放问题
+## 开放问题（已收口）
 
-1. **细粒度（partition 级版本）**：是否需要 partition-level result_version？目前先做 job-level，partition 留 placeholder（business_key 的 `:p={partitionKey}` 后缀做扩展点）；
-2. **跨 job 引用**：jobA 消费 jobB 输出时，怎么显式指定要哪个版本？倾向 ADR-018（跨批量日依赖）里给 workflow_node 加 `consume_version_strategy ∈ {EFFECTIVE_ONLY, LATEST_INCLUDING_PENDING, SPECIFIC_VERSION}`；
-3. **payload 大小阈值**：1 MB 的 INLINE→EXTERNAL 切换点是否合适？需要看真实负载分布，先按 1 MB 起，再调；
-4. **跨租户**：现阶段每个 tenant 各自隔离 business_key，未来跨租户共享场景（例如平台级聚合）暂不在本 ADR 范围。
+| # | 问题 | 决策 |
+|---|---|---|
+| 1 | 分区级版本 | **v1 只做 job 级**。`business_key` 末尾 `:p={partitionKey}` 后缀作为扩展点保留，partition-level 版本由后续 ADR 触发实施（需要时）。当前所有 worker 仍按 job-level 上报 outputs |
+| 2 | 跨 job 引用 | 由 [ADR-018](./ADR-018-cross-batch-day-dag-dependency.md) 收口：`workflow_node.cross_day_dependencies` 隐含使用 `EFFECTIVE_ONLY` 语义；ADR-018 §决策已注明，本 ADR 不再单独定义 `consume_version_strategy` |
+| 3 | payload 大小阈值 | **默认 1 MB INLINE_JSON 切 EXTERNAL_REF**；可由 `batch.result-version.payload-inline-threshold-bytes` 覆盖（默认 `1048576`）。worker 上报 outputs 时若 serialize 超阈值，writer 自动落 OSS 并写 payload_ref；用户可显式 `payload_storage` 强制指定 |
+| 4 | 跨租户共享 | **不在范围**。`business_key` 始终租户内唯一，`tenant_id` 是 result_version 的 PK 一部分。跨租户聚合（SaaS 平台级）需新建 ADR；本 ADR 不预留特殊列 |
+
+### 不会做（以及原因）
+
+- ❌ **不在 result_version 表里嵌入业务原始数据** —— `payload_json` 只放 outputs map（worker 上报的 fileId / counts / refs），不复制业务表正文；正文留在 `file_record` / 业务结果表
+- ❌ **不让 worker 直写 result_version** —— 单一状态主机原则（不变量 #5）；worker 只上报 outputs，orchestrator 终态阶段统一 commit
+- ❌ **不为 PARTIAL_FAILED 写 EFFECTIVE 版本** —— PARTIAL 表示部分 partition 未覆盖，promote 后下游消费会读到不完整数据；只 SUCCESS 才能 EFFECTIVE，PARTIAL 走 ops 走 manual approval（promotion_policy=MANUAL_APPROVAL）
+- ❌ **不支持版本号倒退** —— version_no 单调递增；rollback 走 OUTPUTS_ONLY replay session（ADR-020）创建反向 EFFECTIVE 切换，不动旧行号
+- ❌ **不在 v1 做版本 diff API** —— 多个版本之间字段差异由消费侧自己 diff；平台只保证版本元数据 + payload 完整可读
+
+### 实施记录
+
+| Stage | 状态 | commit |
+|---|---|---|
+| 1. schema (V108) + archive 镜像 + history backfill | ✓ | `6debd194` |
+| 2. ResultVersionWriter + terminal hook | ✓ | `ebf314b1` |
+| 3. ResultVersionQueryService + EFFECTIVE 缓存 + 读路径 | ✓ | `010b50c6` |
+| 4-5. promote / reject + retention scheduler | ✓ | `172074e2` |
+| 6. console-api 版本列表 / promote / archive UI | ☐ | pending |

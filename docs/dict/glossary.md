@@ -50,6 +50,12 @@
 | **shedlock** | 分布式锁（基于 Redis）。多实例同时持有时只允许一个执行调度任务。 | [`../runbook/ha-elastic-scaling.md`](../runbook/ha-elastic-scaling.md) |
 | **bypass_mode** | 全链路安全旁路总开关（`batch.security.bypass-mode`）。仅本地 / 联调；prod 禁用。 | [`../coding-conventions.md`](../coding-conventions.md) §21 |
 | **idempotency_key** | 幂等键。客户端在写接口的 `Idempotency-Key` header，相同值 N 次调用 = 1 次执行。 | [`../api/console-api-protocol.md`](../api/console-api-protocol.md) |
+| **result_version** | 结果版本主模型。同一 `(tenant, business_key)` 多次重跑产生的产物各自一行，状态 PENDING/EFFECTIVE/SUPERSEDED/ARCHIVED；EFFECTIVE 唯一，下游 SQL 统一查它。 | [`../architecture/adr/ADR-017-result-version-model.md`](../architecture/adr/ADR-017-result-version-model.md) |
+| **cross_day_dependency** | 跨批量日 DAG 依赖。`workflow_node.cross_day_dependencies` JSONB 声明上游 (jobCode, bizDateOffset/Range)；启动前由 resolver 查 `result_version` EFFECTIVE 解析；缺则 `WAITING_DEPENDENCY` 等。 | [`../architecture/adr/ADR-018-cross-batch-day-dag-dependency.md`](../architecture/adr/ADR-018-cross-batch-day-dag-dependency.md) |
+| **business_domain** | 业务域。同租户内多业务（交易/风控/合规）的可选额外配额维度，启用后参与限流决策链；支持父子借调。当前 Accepted 但实施 gated。 | [`../architecture/adr/ADR-019-cross-domain-rate-limit.md`](../architecture/adr/ADR-019-cross-domain-rate-limit.md) |
+| **batch_day_replay_session** | 批量日维度重放聚合。同 (tenant, calendar, bizDate) 至多 1 个 active session；scope ∈ ALL/ALL_FAILED/SUBSET_JOB_CODES/OUTPUTS_ONLY；接审批 + 重跑透传 result_policy。 | [`../architecture/adr/ADR-020-batch-day-replay.md`](../architecture/adr/ADR-020-batch-day-replay.md) |
+| **batch_day_operation_audit** | 批量日治理操作审计独立表。FREEZE/RELEASE/SKIP/REOPEN/CLOSE 等高风险动作每次写一行，与 `job_execution_log` 双写但独立检索维度。 | V105 migration |
+| **fire_sequence** | trigger 本地计划计数。同一 (schedule_timezone, scheduled_local_date, scheduled_local_time) 连续触发递增；DST overlap 第二次触发 = 2，正常 = 1。 | V104 migration |
 
 ## 多租户 / 安全
 
