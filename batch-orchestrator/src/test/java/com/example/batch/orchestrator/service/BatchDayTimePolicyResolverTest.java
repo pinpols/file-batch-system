@@ -15,7 +15,8 @@ import org.junit.jupiter.api.Test;
 class BatchDayTimePolicyResolverTest {
 
   private final BatchDayTimePolicyResolver resolver =
-      new BatchDayTimePolicyResolver(new BatchTimezoneProvider(new BatchTimezoneProperties()));
+      new BatchDayTimePolicyResolver(
+          new BatchTimezoneProvider(new BatchTimezoneProperties()), new CutoffScheduleResolver());
 
   @Test
   void shouldMoveGapCutoffToNextValidInstantByDefault() {

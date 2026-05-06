@@ -17,6 +17,7 @@ import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.service.BatchDayTimePolicyResolver;
+import com.example.batch.orchestrator.service.CutoffScheduleResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -49,7 +50,7 @@ class BatchDayOpenSchedulerTest {
             jobExecutionLogMapper,
             gracefulShutdown,
             timezoneProvider,
-            new BatchDayTimePolicyResolver(timezoneProvider),
+            new BatchDayTimePolicyResolver(timezoneProvider, new CutoffScheduleResolver()),
             new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
   }
 

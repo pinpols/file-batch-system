@@ -109,7 +109,9 @@ class DefaultLaunchServiceTest {
             jobExecutionLogMapper,
             jobMappers,
             timezoneProvider,
-            new BatchDayTimePolicyResolver(timezoneProvider),
+            new BatchDayTimePolicyResolver(
+                timezoneProvider,
+                new com.example.batch.orchestrator.service.CutoffScheduleResolver()),
             batchDaySelfProvider,
             new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
             mock(

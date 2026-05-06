@@ -27,6 +27,8 @@
             <arg column="day_rollover_policy" javaType="java.lang.String"/>
             <arg column="dst_gap_policy" javaType="java.lang.String"/>
             <arg column="dst_overlap_policy" javaType="java.lang.String"/>
+            <arg column="group_code" javaType="java.lang.String"/>
+            <arg column="cutoff_schedule" javaType="java.lang.String"/>
             <arg column="enabled" javaType="java.lang.Boolean"/>
         </constructor>
     </resultMap>
@@ -35,7 +37,7 @@
         id, tenant_id, calendar_code, calendar_name, timezone,
         holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
         late_arrival_tolerance_min, sla_offset_min, day_rollover_policy,
-        dst_gap_policy, dst_overlap_policy, enabled
+        dst_gap_policy, dst_overlap_policy, group_code, cutoff_schedule, enabled
     </sql>
 
     <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="businessCalendarMap">
@@ -75,7 +77,7 @@
             tenant_id, calendar_code, calendar_name, timezone,
             holiday_roll_rule, catch_up_policy, catch_up_max_days, cutoff_time,
             late_arrival_tolerance_min, sla_offset_min, day_rollover_policy,
-            dst_gap_policy, dst_overlap_policy, enabled
+            dst_gap_policy, dst_overlap_policy, group_code, cutoff_schedule, enabled
         ) values (
             #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
             <choose>
@@ -105,6 +107,8 @@
                 <when test="dstOverlapPolicy != null">#{dstOverlapPolicy}</when>
                 <otherwise>'RUN_ONCE_EARLIER_OFFSET'</otherwise>
             </choose>,
+            #{groupCode},
+            #{cutoffSchedule,jdbcType=VARCHAR}::jsonb,
             <choose>
                 <when test="enabled != null">#{enabled}</when>
                 <otherwise>true</otherwise>
@@ -126,6 +130,8 @@
                day_rollover_policy = #{dayRolloverPolicy},
                dst_gap_policy = #{dstGapPolicy},
                dst_overlap_policy = #{dstOverlapPolicy},
+               group_code = #{groupCode},
+               cutoff_schedule = #{cutoffSchedule,jdbcType=VARCHAR}::jsonb,
                enabled = #{enabled},
                updated_at = current_timestamp
          where id = #{id}
