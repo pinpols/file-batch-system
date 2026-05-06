@@ -34,7 +34,8 @@ class JobInstanceStatusTest {
   }
 
   @Test
-  void shouldContainNineValues() {
-    assertThat(JobInstanceStatus.values()).hasSize(9);
+  void shouldContainElevenValues() {
+    // 9 业务终态 + ADR-026 dry-run 2 个终态 (SUCCESS_DRY_RUN / FAILED_DRY_RUN)
+    assertThat(JobInstanceStatus.values()).hasSize(11);
   }
 }
