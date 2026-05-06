@@ -872,6 +872,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleBatchDayCatchUpResponse'
+  /api/console/forensic/export:
+    post:
+      tags: [Forensic]
+      summary: ADR-022 v0.1 Forensic export bundle (sync)
+      description: |-
+        转发到 orchestrator `POST /internal/forensic/export`。同步生成 ZIP bundle
+        含 manifest.json + job-instances.json + batch-day-operation-audits.json，
+        SHA-256 attestation。v0.1 落本地 fs；v0.2 才接 OSS / 对象锁 / *_history。
+        仅 ROLE_ADMIN。
+      operationId: requestForensicExport
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForensicExportRequest'
+      responses:
+        '200':
+          description: Export bundle metadata (status / sha256 / fileSize / storagePath)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
+  /api/console/forensic/export/{exportId}/download:
+    get:
+      tags: [Forensic]
+      summary: Download forensic export bundle
+      operationId: downloadForensicExport
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bundle zip
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
   /api/console/batch-days/operate:
     post:
       tags: [BatchDays]
@@ -8506,6 +8555,31 @@ components:
           type: string
           maxLength: 512
       required: [calendarCode]
+    ForensicExportRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        bizDateFrom:
+          type: string
+          format: date
+        bizDateTo:
+          type: string
+          format: date
+        jobCodes:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            maxLength: 128
+        exportFormat:
+          type: string
+          enum: [BUNDLE, JSON, CSV]
+          description: 'BUNDLE 默认（zip 含 manifest + 多个 json 文件）'
+        requestedBy:
+          type: string
+          maxLength: 128
+      required: [bizDateFrom, bizDateTo]
     BatchDayOperateRequest:
       type: object
       properties:

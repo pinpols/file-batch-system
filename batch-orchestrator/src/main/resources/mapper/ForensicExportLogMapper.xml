@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.ForensicExportLogMapper">
+
+    <resultMap id="ForensicExportLogMap"
+               type="com.example.batch.orchestrator.domain.entity.ForensicExportLogEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="export_id" javaType="java.lang.String"/>
+            <arg column="biz_date_from" javaType="java.time.LocalDate"/>
+            <arg column="biz_date_to" javaType="java.time.LocalDate"/>
+            <arg column="job_codes_text" javaType="java.lang.String"/>
+            <arg column="scope_text" javaType="java.lang.String"/>
+            <arg column="export_format" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="file_size_bytes" javaType="java.lang.Long"/>
+            <arg column="sha256" javaType="java.lang.String"/>
+            <arg column="row_counts_text" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="requested_by" javaType="java.lang.String"/>
+            <arg column="requested_at" javaType="java.time.Instant"/>
+            <arg column="completed_at" javaType="java.time.Instant"/>
+            <arg column="retention_until" javaType="java.time.LocalDate"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, export_id, biz_date_from, biz_date_to,
+        job_codes::text as job_codes_text,
+        scope::text as scope_text,
+        export_format, status, storage_path, file_size_bytes, sha256,
+        row_counts::text as row_counts_text,
+        error_message, requested_by, requested_at, completed_at, retention_until, trace_id
+    </sql>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.ForensicExportLogEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.forensic_export_log (
+            tenant_id, export_id, biz_date_from, biz_date_to,
+            job_codes, scope, export_format, status,
+            storage_path, file_size_bytes, sha256, row_counts, error_message,
+            requested_by, requested_at, completed_at, retention_until, trace_id
+        ) values (
+            #{tenantId}, #{exportId}, #{bizDateFrom}, #{bizDateTo},
+            <choose>
+                <when test="jobCodesJson != null">cast(#{jobCodesJson} as jsonb)</when>
+                <otherwise>null</otherwise>
+            </choose>,
+            cast(#{scopeJson} as jsonb),
+            #{exportFormat}, #{status},
+            #{storagePath}, #{fileSizeBytes}, #{sha256},
+            <choose>
+                <when test="rowCountsJson != null">cast(#{rowCountsJson} as jsonb)</when>
+                <otherwise>null</otherwise>
+            </choose>,
+            #{errorMessage},
+            #{requestedBy},
+            <choose>
+                <when test="requestedAt != null">#{requestedAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>,
+            #{completedAt}, #{retentionUntil}, #{traceId}
+        )
+    </insert>
+
+    <select id="selectByExportId" resultMap="ForensicExportLogMap">
+        select <include refid="columns"/>
+          from batch.forensic_export_log
+         where tenant_id = #{tenantId}
+           and export_id = #{exportId}
+    </select>
+
+    <select id="selectByTenant" resultMap="ForensicExportLogMap">
+        select <include refid="columns"/>
+          from batch.forensic_export_log
+         where tenant_id = #{tenantId}
+         order by requested_at desc, id desc
+         limit #{limit}
+    </select>
+
+    <update id="markCompleted">
+        update batch.forensic_export_log
+           set status = 'COMPLETED',
+               storage_path = #{storagePath},
+               file_size_bytes = #{fileSizeBytes},
+               sha256 = #{sha256},
+               row_counts = cast(#{rowCountsJson} as jsonb),
+               completed_at = #{completedAt}
+         where tenant_id = #{tenantId}
+           and export_id = #{exportId}
+    </update>
+
+    <update id="markFailed">
+        update batch.forensic_export_log
+           set status = 'FAILED',
+               error_message = #{errorMessage},
+               completed_at = #{completedAt}
+         where tenant_id = #{tenantId}
+           and export_id = #{exportId}
+    </update>
+
+</mapper>

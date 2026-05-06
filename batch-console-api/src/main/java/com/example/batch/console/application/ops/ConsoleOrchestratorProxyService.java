@@ -63,4 +63,24 @@ public interface ConsoleOrchestratorProxyService {
       String action,
       String operatorId,
       String reason);
+
+  /**
+   * ADR-022 v0.1 转发 forensic 取证导出请求 — 同步生成 bundle，返回 exportId / sha256 / size / 路径。
+   *
+   * @return key=exportId / status / storagePath / fileSizeBytes / sha256
+   */
+  Map<String, Object> requestForensicExport(
+      String tenantId,
+      java.time.LocalDate bizDateFrom,
+      java.time.LocalDate bizDateTo,
+      java.util.List<String> jobCodes,
+      String exportFormat,
+      String requestedBy);
+
+  /**
+   * ADR-022 v0.1 转发 forensic 下载请求 — 返回 zip 字节流（content-type=application/octet-stream）。
+   *
+   * <p>orchestrator 内部接口已经把 sha256 放在 `X-Forensic-Sha256` header；console 透传给前端。
+   */
+  byte[] downloadForensicExport(String tenantId, String exportId);
 }

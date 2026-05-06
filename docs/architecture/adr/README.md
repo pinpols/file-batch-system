@@ -18,7 +18,7 @@
 | 009 | [ADR-009-workflow-param-dsl.md](./ADR-009-workflow-param-dsl.md)                         | Workflow 节点间参数串联 DSL（JSONPath-like `$.nodes.X.output.fileId`，分 4 stage 落地，~3 人天）              |
 | 010 | [ADR-010-trigger-async-decoupling.md](./ADR-010-trigger-async-decoupling.md)             | Trigger → Orchestrator 异步解耦（trigger_outbox + Kafka，复用 ADR-002 模式，~7-8 人天分 7 stage）            |
 | 011 | [ADR-011-idempotency-boundary-alignment.md](./ADR-011-idempotency-boundary-alignment.md) | Console / Trigger / Orchestrator 三层幂等责任边界对齐                                                   |
-| 012 | [ADR-012-failure-taxonomy.md](./ADR-012-failure-taxonomy.md)                             | 失败分类一等公民：FailureClass 6 enum + 按 class 派发 retry / escalate / RERUN（Accepted，建议 P1，~3-5 人天）          |
+| 012 | [ADR-012-failure-taxonomy.md](./ADR-012-failure-taxonomy.md)                             | 失败分类一等公民：FailureClass 7 enum + 按 class 派发 retry / escalate / RERUN（Accepted，**第 1 阶段必做 / P0**，不越界，~3-5 人天）       |
 | 013 | [ADR-013-distributed-tracing.md](./ADR-013-distributed-tracing.md)                       | Micrometer Observation + OTel 桥接；`ObservedAspect`；种子 `@Observed`；业务 `trace_id` ↔ OTel traceId |
 | 014 | [ADR-014-claim-idempotency.md](./ADR-014-claim-idempotency.md)                           | Worker CLAIM 幂等（invocation-id，**V95 已落地**）                                                    |
 | 015 | [ADR-015-worker-side-outbox.md](./ADR-015-worker-side-outbox.md)                         | Worker REPORT outbox（PG/SQLite、SKIP LOCKED、熔断协同；Accepted）                                     |
@@ -27,13 +27,25 @@
 | 018 | [ADR-018-cross-batch-day-dag-dependency.md](./ADR-018-cross-batch-day-dag-dependency.md) | 跨批量日 DAG 依赖（pipe 模型）：workflow_node 声明 cross_day_dependencies，复用 ADR-017 解版本路由（Accepted；Stage 2-4 已落 V109 + WAITING_DEPENDENCY + Resolver；Stage 5-7 排期中） |
 | 019 | [ADR-019-cross-domain-rate-limit.md](./ADR-019-cross-domain-rate-limit.md)               | 跨业务域限流：business_domain 一等模型 + 域级 quota + 父子借调（Accepted；实施前置触发条件已明确，未触发不开工）                       |
 | 020 | [ADR-020-batch-day-replay.md](./ADR-020-batch-day-replay.md)                             | 批量日维度重放：batch_day_replay_session 聚合 + scope/policy 分发 + 接审批（Accepted；Stage 2 schema V110 已落，依赖 ADR-017） |
-| 021 | [ADR-021-data-quality-reconciliation.md](./ADR-021-data-quality-reconciliation.md)       | 数据对账闭环：`data_quality_rule` + `data_quality_check` + 4 类规则（行/表/跨表/跨日）+ 接 ADR-017 EFFECTIVE gate（Accepted，金融场景必做）       |
-| 022 | [ADR-022-forensic-audit-bundle.md](./ADR-022-forensic-audit-bundle.md)                   | Forensic 一键取证：配置类 *_history 影子表 + ForensicExportService + OSS 7 年保留 + 对象锁（Accepted，受监管必做）                          |
-| 023 | [ADR-023-multi-calendar-coordination.md](./ADR-023-multi-calendar-coordination.md)       | 多日历联动 + 半天工作日：calendar_dependency + cutoff_schedule JSONB + calendar_group 共享假日 + disaster_day_override（Accepted，跨境必做）   |
-| 024 | [ADR-024-archive-tiering.md](./ADR-024-archive-tiering.md)                               | 冷热数据分层 + 长保留：archive 表 PG 月分区 + DETACH 后写 OSS Parquet + DuckDB 冷查询（Accepted，数据量阈值触发）                                |
-| 025 | [ADR-025-workflow-static-validator.md](./ADR-025-workflow-static-validator.md)           | Workflow 静态校验：enable 时跑 15 项 V1-V15 检查（拓扑 / DSL / 跨日依赖 / GATEWAY 一致性）（Accepted，建议 P2，~5 人天）                          |
-| 026 | [ADR-026-dry-run-mode.md](./ADR-026-dry-run-mode.md)                                     | 演练 / Dry-run 模式：dry_run 一等字段贯穿全链 + DryRunGuard SDK + DRY_RUN result_version + SUCCESS_DRY_RUN 终态（Accepted，gated）           |
-| 027 | [ADR-027-resource-affinity.md](./ADR-027-resource-affinity.md)                           | 资源亲和性 / 地理调度：worker_label + worker_taint + job affinity_json（K8s 风格 required/preferred/anti）（Accepted，多机房/异构必做）       |
+| 021 | [ADR-021-data-quality-reconciliation.md](./ADR-021-data-quality-reconciliation.md)       | 数据对账闭环：`data_quality_rule` + `data_quality_check` + 4 类规则（行/表/跨表/跨日）+ 接 ADR-017 EFFECTIVE gate（Accepted，**第 2 阶段 / P0-P1 应做但收敛边界**：只做批量交付对账，不做数据治理平台）   |
+| 022 | [ADR-022-forensic-audit-bundle.md](./ADR-022-forensic-audit-bundle.md)                   | Forensic 一键取证（Accepted；**v0.1 已落 2026-05-07**：V116 + 同步 bundle + SHA-256 attestation + Console / Orchestrator API，主链路无影响；v0.2 *_history + OSS 对象锁 + 7 年保留 gated） |
+| 023 | [ADR-023-multi-calendar-coordination.md](./ADR-023-multi-calendar-coordination.md)       | 多日历联动 + 半天工作日：calendar_dependency + cutoff_schedule JSONB + calendar_group 共享假日 + disaster_day_override（Accepted，**第 1 阶段必做 / P0-P1**，调度核心能力）              |
+| 024 | [ADR-024-archive-tiering.md](./ADR-024-archive-tiering.md)                               | 冷热数据分层 + 长保留：archive 表 PG 月分区 + DETACH 后写 OSS Parquet + DuckDB 冷查询（Accepted，**第 3 阶段 / P2 暂缓**，数据量阈值触发，绝不做完整数据湖）                  |
+| 025 | [ADR-025-workflow-static-validator.md](./ADR-025-workflow-static-validator.md)           | Workflow 静态校验：enable 时跑 15 项 V1-V15 检查（拓扑 / DSL / 跨日依赖 / GATEWAY 一致性）（Accepted，**第 1 阶段必做 / P0**，便宜高收益，~5 人天，建议第一个落地）              |
+| 026 | [ADR-026-dry-run-mode.md](./ADR-026-dry-run-mode.md)                                     | 演练 / Dry-run 模式：dry_run 一等字段贯穿全链 + DryRunGuard SDK + DRY_RUN result_version + SUCCESS_DRY_RUN 终态（Accepted，**第 2 阶段 / P1-P2 轻量版**：L1/L2/L3 配置/计划/Explain，FULL_SIMULATION 不做） |
+| 027 | [ADR-027-resource-affinity.md](./ADR-027-resource-affinity.md)                           | 资源亲和性 / 地理调度：worker_label + worker_taint + job affinity_json（K8s 风格 required/preferred/anti）（Accepted，**第 3 阶段 / P2-P3 暂缓**，最高越界风险，绝不重做 K8s scheduler）   |
+
+### 优先级 + 范围边界纪律
+
+> ADR-012 / 021..027 的"做不做 / 什么时候做 / 边界在哪"决策档：[`docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+>
+> 系统定位一句话：**"批量运行控制面 + 文件 / 任务交付闭环"，不扩张为"企业数据治理 + 容器资源编排 + 合规审计平台"**。
+
+| 阶段 | ADR | 越界风险 |
+|---|---|---|
+| **第 1 阶段必做（P0）** | 025 静态校验 / 012 失败分类 / 023 多日历 | 无 |
+| **第 2 阶段应做但收敛** | 021 数据对账 / 026 dry-run / 022 Forensic | 中（021/026 高，022 低） |
+| **第 3 阶段暂缓** | 024 冷热分层 / 027 资源亲和 | 027 最高 |
 
 
 ## 写新 ADR 的姿势

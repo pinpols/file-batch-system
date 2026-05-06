@@ -1,9 +1,23 @@
 # ADR-022 · Forensic 一键取证（Forensic Audit Bundle）
 
-- **Status**: Accepted（实施 gated — 见"实施触发条件"）
-- **Date**: 2026-05-06
+- **Status**: Accepted（**v0.1 已落 2026-05-07**，主链路无影响；v0.2 *_history + OSS 对象锁按触发条件）
+- **Date**: 2026-05-06（v0.1: 2026-05-07）
 - **Supersedes**: —
-- **Related**: ADR-011（idempotency）/ ADR-013（distributed tracing）/ §14.3.2
+- **Related**: ADR-011（idempotency）/ ADR-013（distributed tracing）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **本 ADR 的边界红线：只做"按 bizDate 一键导出批次取证包"，不扩张为"合规调查平台 / 日志湖 / SIEM"。**
+>
+> **判定提问**：「这次取证要回答的问题，能不能靠"一个 bizDate 范围 + 一个 tenantId"圈出来？」是 → 属本 ADR；不是（要跨系统全量调查 / 要追责法律证据保全） → 不属本 ADR。
+
+| ✅ 做（运行取证包） | ❌ 不做（避免做成合规调查平台） |
+|---|---|
+| 配置类 *_history 影子表（calendar / window / quota / approval / workflow definition） | 完整合规调查工作流 / 法律证据保全系统 |
+| `POST /api/console/forensic/export {tenantId, bizDate}` → bundle zip | 接 Splunk / SIEM 实时流（forensic 是"按需 pull"，不是"持续 push"） |
+| 7 年 OSS 对象锁（compliance mode）+ sha256 attestation | 跨系统统一日志平台 / 日志湖 |
+| manifest.json + 9 类运行证据（job-definition / instance / steps / partitions / files / retries / state-transitions / audit / log-index） | v1 不做交互式历史浏览 UI（浏览成本高，console 现有表够 pull） |
+| 配置回放：(table, target_id, point_in_time) 重建当时行内容 | 为运行态表加 *_history（job_instance / partition / task 已有 status 流转 audit） |
 
 ## 背景
 
@@ -122,17 +136,39 @@ archive_storage = OSS / S3 bucket "batch-forensic-{tenant}"
 
 ## 实施分阶段
 
-| Stage | 范围 | 估算 |
-|---|---|---|
-| 1 | history 表 schema + MyBatis interceptor | 3 天 |
-| 2 | 已有 *_history 接入 7 张配置表 | 3 天 |
-| 3 | ForensicExportService + JSON / CSV 序列化 | 3 天 |
-| 4 | OSS 集成 + 对象锁配置 | 2 天 |
-| 5 | Console export API + 异步进度 | 2 天 |
-| 6 | trace 长保留：OTel exporter 写 OSS（按 bizDate 分目录） | 3 天 |
-| 7 | 守护测试 + 监管复盘演练 | 3 天 |
+### v0.1 已落（2026-05-07，~5-7 人天压缩到本轮）
 
-总 ~19-21 人天。
+| Stage | 范围 | 状态 | commit / artifact |
+|---|---|---|---|
+| v0.1-A | V116 `forensic_export_log` 元数据表 + Entity + Mapper + xml | ✓ | V116 + `ForensicExportLogEntity` + `ForensicExportLogMapper` |
+| v0.1-B | `ForensicExportService` 同步打包：job_instances + batch_day_operation_audits + manifest，SHA-256 attestation | ✓ | `application/service/forensic/ForensicExportService` |
+| v0.1-C | Orchestrator `POST /internal/forensic/export` + `GET /export/{id}/download` | ✓ | `controller/ForensicExportController` |
+| v0.1-D | Console `POST /api/console/forensic/export` + download；`ConsoleOrchestratorProxyService` 转发；OpenAPI + protocol changelog 同步 | ✓ | `web/ConsoleForensicController` + proxy |
+
+**v0.1 边界**：
+
+- ✓ 落本地 fs（`batch.forensic.storage-dir`，默认 `${java.io.tmpdir}/batch-forensic`），单次 row cap 100k
+- ✓ SHA-256 attestation 入库 + 下载 header
+- ✗ *_history 影子表（v0.2）
+- ✗ OSS 对象锁 / 7 年保留（v0.2）
+- ✗ 异步生成 / 大 bizDate 范围分块（v0.2）
+- ✗ 配置 point-in-time 重建（依赖 v0.2 *_history）
+- ✗ trace 长保留 OTel exporter（v0.3）
+
+**主链路影响 = 0**：本服务仅由运维 ops 通过 console 主动 pull，不在 trigger / orchestrator launch / worker claim / report 调用。
+
+### v0.2 / v0.3 排期（按需触发）
+
+| Stage | 范围 | 估算 | 触发条件 |
+|---|---|---|---|
+| 1 | 7 张 *_history 影子表 schema + MyBatis interceptor | 3 天 | 监管复盘需要"某时刻 calendar 是怎样" |
+| 2 | *_history 接入 + point-in-time 重建 SPI | 3 天 | 同上 |
+| 3 | OSS 集成 + 对象锁 compliance 模式 + sha256 attestation 落 OSS | 2 天 | 7 年保留要求 |
+| 4 | 异步生成（大范围）+ 进度查询 endpoint | 2 天 | bizDate 范围 ≥ 30 天 / 单次行数 > row cap |
+| 5 | OTel exporter 写 OSS parquet（trace 30 天 → 7 年） | 3 天 | trace 长保留合同要求 |
+| 6 | 守护测试 + 监管复盘演练 + sha256 校验工具 | 3 天 | 季度复盘流程化 |
+
+v0.2/v0.3 总 ~16 人天（不含 v0.1）。
 
 ## 替代方案
 

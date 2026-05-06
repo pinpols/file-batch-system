@@ -190,6 +190,49 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     return response;
   }
 
+  @Override
+  public Map<String, Object> requestForensicExport(
+      String tenantId,
+      java.time.LocalDate bizDateFrom,
+      java.time.LocalDate bizDateTo,
+      java.util.List<String> jobCodes,
+      String exportFormat,
+      String requestedBy) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    RestClient client =
+        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    Map<String, Object> body = new java.util.LinkedHashMap<>();
+    body.put("tenantId", resolved);
+    body.put("bizDateFrom", bizDateFrom == null ? null : bizDateFrom.toString());
+    body.put("bizDateTo", bizDateTo == null ? null : bizDateTo.toString());
+    body.put("jobCodes", jobCodes);
+    body.put("exportFormat", exportFormat);
+    body.put("requestedBy", requestedBy);
+    return client
+        .post()
+        .uri("/internal/forensic/export")
+        .body(body)
+        .retrieve()
+        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+  }
+
+  @Override
+  public byte[] downloadForensicExport(String tenantId, String exportId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    RestClient client =
+        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    return client
+        .get()
+        .uri(
+            uriBuilder ->
+                uriBuilder
+                    .path("/internal/forensic/export/{exportId}/download")
+                    .queryParam("tenantId", resolved)
+                    .build(exportId))
+        .retrieve()
+        .body(byte[].class);
+  }
+
   private void publishRefresh(String tenantId) {
     domainEventPublisher.publishChanged(tenantId, "workflow-runs", "workflow-run-updated");
     domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
