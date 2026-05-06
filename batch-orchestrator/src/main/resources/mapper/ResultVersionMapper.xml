@@ -109,4 +109,53 @@
         limit #{limit}
     </select>
 
+    <select id="selectById" resultMap="ResultVersionResultMap">
+        select *
+        from batch.result_version
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <update id="promoteToEffective">
+        update batch.result_version
+        set status         = 'EFFECTIVE',
+            effective_at   = #{effectiveAt},
+            updated_at     = #{effectiveAt}
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and status = 'PENDING'
+    </update>
+
+    <update id="rejectPending">
+        update batch.result_version
+        set status         = 'ARCHIVED',
+            deactivated_at = #{deactivatedAt},
+            updated_at     = #{deactivatedAt}
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and status = 'PENDING'
+    </update>
+
+    <update id="archiveSuperseded">
+        update batch.result_version
+        set status      = 'ARCHIVED',
+            updated_at  = #{now}
+            <if test="clearPayload">
+            , payload_json = null
+            </if>
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and status = 'SUPERSEDED'
+    </update>
+
+    <select id="selectSupersededOlderThan" resultMap="ResultVersionResultMap">
+        select *
+        from batch.result_version
+        where status = 'SUPERSEDED'
+          and deactivated_at is not null
+          and deactivated_at &lt; #{cutoff}
+        order by deactivated_at asc, id asc
+        limit #{limit}
+    </select>
+
 </mapper>

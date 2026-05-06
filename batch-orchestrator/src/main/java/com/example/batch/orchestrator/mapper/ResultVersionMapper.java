@@ -49,4 +49,30 @@ public interface ResultVersionMapper {
       @Param("tenantId") String tenantId,
       @Param("businessKey") String businessKey,
       @Param("limit") int limit);
+
+  /** 按 (tenantId, id) 反查；console / promote 入口用。 */
+  ResultVersionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /** PENDING → EFFECTIVE：CAS 到 EFFECTIVE，写 effective_at。 */
+  int promoteToEffective(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("effectiveAt") Instant effectiveAt);
+
+  /** PENDING → ARCHIVED 拒绝路径；不影响其它版本。 */
+  int rejectPending(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("deactivatedAt") Instant deactivatedAt);
+
+  /** SUPERSEDED → ARCHIVED 由 retention scheduler 推进；可选清空 payload_json。 */
+  int archiveSuperseded(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("now") Instant now,
+      @Param("clearPayload") boolean clearPayload);
+
+  /** 找出所有 status='SUPERSEDED' 且 deactivated_at 早于 cutoff 的版本，scheduler 用。 */
+  List<ResultVersionEntity> selectSupersededOlderThan(
+      @Param("cutoff") Instant cutoff, @Param("limit") int limit);
 }
