@@ -30,7 +30,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ArchiveSchemaDriftCheck {
 
-  /** V71 创建的 14 张归档对照表 — 跟 db/migration/V71__create_archive_cold_tables.sql 一一对应。 */
+  /**
+   * 归档对照表清单 — V71 起步 14 张 + 后续 ADR 增量加表（如 V108 新增 result_version）。
+   *
+   * <p>每加一张归档表必须同步在这里登记，否则 archive 列差异不被守护。
+   */
   static final List<String> ARCHIVED_TABLES =
       List.of(
           "outbox_event",
@@ -46,7 +50,9 @@ public class ArchiveSchemaDriftCheck {
           "workflow_run",
           "workflow_node_run",
           "job_execution_log",
-          "compensation_command");
+          "compensation_command",
+          // V108 (ADR-017) — result_version 主模型；archive 镜像由 LIKE INCLUDING ALL 创建
+          "result_version");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
