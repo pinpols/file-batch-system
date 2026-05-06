@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.BatchDayOperationAuditMapper">
+
+    <resultMap id="BatchDayOperationAuditMap"
+               type="com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="operation_type" javaType="java.lang.String"/>
+            <arg column="from_status" javaType="java.lang.String"/>
+            <arg column="to_status" javaType="java.lang.String"/>
+            <arg column="from_frozen" javaType="java.lang.Boolean"/>
+            <arg column="to_frozen" javaType="java.lang.Boolean"/>
+            <arg column="operator_id" javaType="java.lang.String"/>
+            <arg column="operator_type" javaType="java.lang.String"/>
+            <arg column="reason_code" javaType="java.lang.String"/>
+            <arg column="comment" javaType="java.lang.String"/>
+            <arg column="approval_id" javaType="java.lang.Long"/>
+            <arg column="request_payload_text" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, calendar_code, biz_date, operation_type, from_status, to_status,
+        from_frozen, to_frozen, operator_id, operator_type, reason_code, comment,
+        approval_id, request_payload::text as request_payload_text, trace_id, created_at
+    </sql>
+
+    <insert id="insert"
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.batch_day_operation_audit (
+            tenant_id, calendar_code, biz_date, operation_type,
+            from_status, to_status, from_frozen, to_frozen,
+            operator_id, operator_type, reason_code, comment,
+            approval_id, request_payload, trace_id, created_at
+        ) values (
+            #{tenantId}, #{calendarCode}, #{bizDate}, #{operationType},
+            #{fromStatus}, #{toStatus}, #{fromFrozen}, #{toFrozen},
+            #{operatorId}, #{operatorType}, #{reasonCode}, #{comment},
+            #{approvalId},
+            <choose>
+                <when test="requestPayload != null">cast(#{requestPayload} as jsonb)</when>
+                <otherwise>null</otherwise>
+            </choose>,
+            #{traceId},
+            <choose>
+                <when test="createdAt != null">#{createdAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <select id="selectByCalendarBizDate" resultMap="BatchDayOperationAuditMap">
+        select <include refid="columns"/>
+          from batch.batch_day_operation_audit
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date = #{bizDate}
+         order by created_at desc, id desc
+         limit #{limit}
+    </select>
+
+</mapper>

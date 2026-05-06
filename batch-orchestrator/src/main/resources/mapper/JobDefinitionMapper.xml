@@ -48,6 +48,7 @@
             <arg column="execution_mode" javaType="java.lang.String"/>
             <arg column="watermark_field" javaType="java.lang.String"/>
             <arg column="previous_day_dependency_scope" javaType="java.lang.String"/>
+            <arg column="job_group_code" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -59,7 +60,8 @@
         param_schema::text AS param_schema_text,
         priority,
         default_params::text AS default_params_text,
-        version, enabled, description, execution_mode, watermark_field, previous_day_dependency_scope
+        version, enabled, description, execution_mode, watermark_field,
+        previous_day_dependency_scope, job_group_code
     </sql>
 
     <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="jobDefinitionMap">
@@ -94,7 +96,8 @@
             schedule_type, schedule_expr, timezone, worker_group, queue_code, calendar_code,
             window_code, trigger_mode, dag_enabled, shard_strategy, retry_policy, retry_max_count,
             timeout_seconds, execution_handler, param_schema, priority, default_params,
-            version, enabled, description, execution_mode, watermark_field, previous_day_dependency_scope
+            version, enabled, description, execution_mode, watermark_field,
+            previous_day_dependency_scope, job_group_code
         ) values (
             #{tenantId}, #{jobCode}, #{jobName}, #{jobType}, #{bizType},
             #{scheduleType}, #{scheduleExpr}, #{timezone}, #{workerGroup}, #{queueCode},
@@ -133,7 +136,8 @@
             <choose>
                 <when test="previousDayDependencyScope != null">#{previousDayDependencyScope}</when>
                 <otherwise>'INHERIT'</otherwise>
-            </choose>
+            </choose>,
+            #{jobGroupCode}
         )
     </insert>
 
@@ -178,6 +182,7 @@
                execution_mode = #{executionMode},
                watermark_field = #{watermarkField},
                previous_day_dependency_scope = #{previousDayDependencyScope},
+               job_group_code = #{jobGroupCode},
                updated_at = current_timestamp
          where id = #{id}
     </update>

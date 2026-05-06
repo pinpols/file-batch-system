@@ -246,6 +246,7 @@ public class DefaultCompensationService implements CompensationService {
     params.put("rerunFlag", true);
     params.put("retryFlag", false);
     params.put("reason", command.reason());
+    applyRerunPolicyParams(params, command);
     LaunchResponse response =
         launchCompensation(
             CompensationLaunchRequest.of(
@@ -361,6 +362,7 @@ public class DefaultCompensationService implements CompensationService {
     params.put("rerunFlag", true);
     params.put("retryFlag", false);
     params.put("reason", command.reason());
+    applyRerunPolicyParams(params, command);
     LaunchResponse response =
         launchCompensation(
             CompensationLaunchRequest.of(
@@ -610,5 +612,22 @@ public class DefaultCompensationService implements CompensationService {
 
   private Long firstNonNull(Long left, Long right) {
     return left != null ? left : right;
+  }
+
+  /**
+   * 把 RerunRequest 暴露的 §5.5 策略字段透传到 LaunchRequest.params。 DefaultLaunchService 在
+   * buildRerunPolicySnapshot 时会读取这些键并写到 job_instance.rerun_policy_snapshot。
+   */
+  private void applyRerunPolicyParams(
+      Map<String, Object> params, CompensationSubmitCommand command) {
+    if (Texts.hasText(command.resultPolicy())) {
+      params.put("_rerunResultPolicy", command.resultPolicy());
+    }
+    if (Texts.hasText(command.configVersionPolicy())) {
+      params.put("_rerunConfigVersionPolicy", command.configVersionPolicy());
+    }
+    if (command.configVersion() != null) {
+      params.put("_rerunConfigVersion", command.configVersion());
+    }
   }
 }

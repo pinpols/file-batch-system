@@ -16,8 +16,10 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import com.example.batch.orchestrator.mapper.BatchDayOperationAuditMapper;
 import com.example.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import java.time.Clock;
@@ -34,6 +36,7 @@ class BatchDayOperationServiceTest {
   private BatchDayInstanceMapper batchDayInstanceMapper;
   private BatchDayWaitingLaunchMapper waitingLaunchMapper;
   private JobExecutionLogMapper jobExecutionLogMapper;
+  private BatchDayOperationAuditMapper batchDayOperationAuditMapper;
   private LaunchService launchService;
   private BatchDayOperationService service;
 
@@ -42,12 +45,14 @@ class BatchDayOperationServiceTest {
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     waitingLaunchMapper = mock(BatchDayWaitingLaunchMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
+    batchDayOperationAuditMapper = mock(BatchDayOperationAuditMapper.class);
     launchService = mock(LaunchService.class);
     service =
         new BatchDayOperationService(
             batchDayInstanceMapper,
             waitingLaunchMapper,
             jobExecutionLogMapper,
+            batchDayOperationAuditMapper,
             launchService,
             new BatchDateTimeSupport(
                 Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())));
@@ -76,6 +81,17 @@ class BatchDayOperationServiceTest {
     assertThat(result.batchDay().frozen()).isTrue();
     assertThat(result.releasedLaunchCount()).isZero();
     verify(jobExecutionLogMapper).insert(any());
+    ArgumentCaptor<BatchDayOperationAuditEntity> auditCaptor =
+        ArgumentCaptor.forClass(BatchDayOperationAuditEntity.class);
+    verify(batchDayOperationAuditMapper).insert(auditCaptor.capture());
+    BatchDayOperationAuditEntity recorded = auditCaptor.getValue();
+    assertThat(recorded.operationType()).isEqualTo("BATCH_DAY_FREEZE");
+    assertThat(recorded.fromStatus()).isEqualTo("OPEN");
+    assertThat(recorded.toStatus()).isEqualTo("OPEN");
+    assertThat(recorded.fromFrozen()).isFalse();
+    assertThat(recorded.toFrozen()).isTrue();
+    assertThat(recorded.operatorId()).isEqualTo("ops");
+    assertThat(recorded.reasonCode()).isEqualTo("manual hold");
   }
 
   @Test

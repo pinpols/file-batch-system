@@ -33,7 +33,8 @@ public record JobDefinitionEntity(
     String description,
     String executionMode,
     String watermarkField,
-    String previousDayDependencyScope) {
+    String previousDayDependencyScope,
+    String jobGroupCode) {
 
   public JobDefinitionEntity(
       Long id,
@@ -93,6 +94,71 @@ public record JobDefinitionEntity(
         description,
         executionMode,
         watermarkField,
-        "INHERIT");
+        "INHERIT",
+        null);
+  }
+
+  /** 兼容旧测试与持久层映射:30-arg 形式(无 jobGroupCode)。 */
+  public JobDefinitionEntity(
+      Long id,
+      String tenantId,
+      String jobCode,
+      String jobName,
+      String jobType,
+      String bizType,
+      String scheduleType,
+      String scheduleExpr,
+      String timezone,
+      String workerGroup,
+      String queueCode,
+      String calendarCode,
+      String windowCode,
+      String triggerMode,
+      Boolean dagEnabled,
+      String shardStrategy,
+      String retryPolicy,
+      Integer retryMaxCount,
+      Integer timeoutSeconds,
+      String executionHandler,
+      Map<String, Object> paramSchema,
+      Integer priority,
+      Map<String, Object> defaultParams,
+      Integer version,
+      Boolean enabled,
+      String description,
+      String executionMode,
+      String watermarkField,
+      String previousDayDependencyScope) {
+    this(
+        id,
+        tenantId,
+        jobCode,
+        jobName,
+        jobType,
+        bizType,
+        scheduleType,
+        scheduleExpr,
+        timezone,
+        workerGroup,
+        queueCode,
+        calendarCode,
+        windowCode,
+        triggerMode,
+        dagEnabled,
+        shardStrategy,
+        retryPolicy,
+        retryMaxCount,
+        timeoutSeconds,
+        executionHandler,
+        paramSchema,
+        priority,
+        defaultParams,
+        version,
+        enabled,
+        description,
+        executionMode,
+        watermarkField,
+        previousDayDependencyScope,
+        null);
   }
 }

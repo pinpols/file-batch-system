@@ -17,14 +17,23 @@ import java.time.zone.ZoneRules;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BatchDayTimePolicyResolver {
 
   public static final String DEFAULT_GAP_POLICY = "RUN_AT_NEXT_VALID_TIME";
   public static final String DEFAULT_OVERLAP_POLICY = "RUN_ONCE_EARLIER_OFFSET";
+
+  /**
+   * cutoff 是批量日唯一边界,模型不支持双 cutoff;若 calendar 配 {@code RUN_TWICE} 由 cutoff 路径降级到 {@code
+   * RUN_ONCE_EARLIER_OFFSET},并显式 warn,便于排障 + 提示运维改配置。 详见
+   * docs/design/batch-day-timezone-dst-optimized-design.md §8.3。
+   */
+  public static final String OVERLAP_POLICY_RUN_TWICE = "RUN_TWICE";
 
   private final BatchTimezoneProvider timezoneProvider;
 
@@ -35,19 +44,38 @@ public class BatchDayTimePolicyResolver {
     ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
+    String overlapPolicy = effectiveCutoffOverlapPolicy(calendar);
     return resolveLocalBoundary(
         bizDate.plusDays(1),
         cutoffTime,
         zoneId,
         normalize(calendar.dstGapPolicy(), DEFAULT_GAP_POLICY),
-        normalize(calendar.dstOverlapPolicy(), DEFAULT_OVERLAP_POLICY));
+        overlapPolicy);
   }
 
   public String snapshot(BusinessCalendarEntity calendar) {
     String gap = normalize(calendar == null ? null : calendar.dstGapPolicy(), DEFAULT_GAP_POLICY);
-    String overlap =
-        normalize(calendar == null ? null : calendar.dstOverlapPolicy(), DEFAULT_OVERLAP_POLICY);
+    String overlap = effectiveCutoffOverlapPolicy(calendar);
     return "gap=" + gap + ";overlap=" + overlap;
+  }
+
+  /**
+   * cutoff 路径的实际 overlap 策略:RUN_TWICE 不被支持(cutoff 是批量日唯一边界),按 RUN_ONCE_EARLIER_OFFSET 降级并 warn
+   * 一次,snapshot 也写降级后的值,避免 audit 与实际行为不一致。
+   */
+  private String effectiveCutoffOverlapPolicy(BusinessCalendarEntity calendar) {
+    String configured =
+        normalize(calendar == null ? null : calendar.dstOverlapPolicy(), DEFAULT_OVERLAP_POLICY);
+    if (OVERLAP_POLICY_RUN_TWICE.equals(configured)) {
+      log.warn(
+          "calendar dst_overlap_policy=RUN_TWICE is not supported for cutoff;"
+              + " degrading to {} for tenant={} calendar={}",
+          DEFAULT_OVERLAP_POLICY,
+          calendar == null ? null : calendar.tenantId(),
+          calendar == null ? null : calendar.calendarCode());
+      return DEFAULT_OVERLAP_POLICY;
+    }
+    return configured;
   }
 
   private Instant resolveLocalBoundary(

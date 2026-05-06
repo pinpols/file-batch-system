@@ -118,6 +118,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
             ? "JOB"
             : "BATCH";
     String tenantId = ops.resolveTenant(request.getTenantId());
+    validateRerunPolicy(request);
     String result =
         ops.submitCompensation(
             CompensationPayload.builder()
@@ -134,10 +135,27 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
                 .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
                 .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
                 .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
+                .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), 64))
+                .configVersionPolicy(
+                    ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
+                .configVersion(request.getConfigVersion())
                 .build(),
             idempotencyKey);
     ops.publishRefresh(tenantId);
     return result;
+  }
+
+  /**
+   * 跨字段校验：USE_SPECIFIED_VERSION 必须配 configVersion；其余 policy 不带 version。 单字段合法值由
+   * RerunRequest.@Pattern / @Positive 守住。
+   */
+  private void validateRerunPolicy(RerunRequest request) {
+    if ("USE_SPECIFIED_VERSION".equals(request.getConfigVersionPolicy())
+        && request.getConfigVersion() == null) {
+      throw com.example.batch.common.exception.BizException.of(
+          com.example.batch.common.enums.ResultCode.INVALID_ARGUMENT,
+          "error.rerun.config_version_required");
+    }
   }
 
   @Override

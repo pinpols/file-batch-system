@@ -2,6 +2,8 @@ package com.example.batch.trigger.mapper;
 
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -49,7 +51,11 @@ public interface TriggerRuntimeStateMapper {
       @Param("nextFireTime") Instant nextFireTime,
       @Param("lastFireTime") Instant lastFireTime,
       @Param("lastFireStatus") String lastFireStatus,
-      @Param("misfireDelta") long misfireDelta);
+      @Param("misfireDelta") long misfireDelta,
+      @Param("scheduleTimezone") String scheduleTimezone,
+      @Param("scheduledLocalDate") LocalDate scheduledLocalDate,
+      @Param("scheduledLocalTime") LocalTime scheduledLocalTime,
+      @Param("fireSequence") Integer fireSequence);
 
   /**
    * 周期(每 2 min)清理超 5 min 未释放的 marker,避免 leader 崩溃后 trigger 永久卡住。
@@ -80,6 +86,11 @@ public interface TriggerRuntimeStateMapper {
    */
   List<TriggerRuntimeStateEntity> selectAllJobDefinitionIds();
 
-  /** schedule_expr 修改时:重新计算的 next_fire_time 直接写回,清掉 marker。 */
-  int rescheduleNextFireTime(@Param("id") Long id, @Param("nextFireTime") Instant nextFireTime);
+  /** schedule_expr 修改时:重新计算的 next_fire_time 直接写回,清掉 marker;同步本地计划审计字段。 */
+  int rescheduleNextFireTime(
+      @Param("id") Long id,
+      @Param("nextFireTime") Instant nextFireTime,
+      @Param("scheduleTimezone") String scheduleTimezone,
+      @Param("scheduledLocalDate") LocalDate scheduledLocalDate,
+      @Param("scheduledLocalTime") LocalTime scheduledLocalTime);
 }
