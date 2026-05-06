@@ -149,6 +149,7 @@ public class ChildJobLaunchSupport {
     virtualPartition.setRetryCount(0);
     virtualPartition.setBusinessKey(refJobCode + ":" + node.nodeCode());
     virtualPartition.setIdempotencyKey(idempotencyKey);
+    virtualPartition.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     jobMappers.jobPartitionMapper.insert(virtualPartition);
     return virtualPartition;
   }
@@ -175,6 +176,7 @@ public class ChildJobLaunchSupport {
     virtualTaskTemplate.setTaskStatus(TaskStatus.RUNNING.code());
     virtualTaskTemplate.setVersion(0L);
     virtualTaskTemplate.setTaskPayload(taskPayload);
+    virtualTaskTemplate.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     return taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
   }
 

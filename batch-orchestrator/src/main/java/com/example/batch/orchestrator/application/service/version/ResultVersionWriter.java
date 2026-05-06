@@ -131,7 +131,8 @@ public class ResultVersionWriter {
 
   private boolean isSuccessTerminal(String instanceStatus) {
     return JobInstanceStatus.SUCCESS.code().equals(instanceStatus)
-        || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus);
+        || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus)
+        || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(instanceStatus);
   }
 
   /**

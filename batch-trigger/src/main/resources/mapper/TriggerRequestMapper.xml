@@ -15,6 +15,7 @@
         <result column="forward_retry_count" property="forwardRetryCount"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <result column="dry_run" property="dryRun"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="TriggerRequestResultMap">
@@ -57,7 +58,8 @@
             biz_date,
             dedup_key,
             request_status,
-            trace_id
+            trace_id,
+            dry_run
         ) values (
             #{tenantId},
             #{requestId},
@@ -66,7 +68,11 @@
             #{bizDate},
             #{dedupKey},
             #{requestStatus},
-            #{traceId}
+            #{traceId},
+            <choose>
+                <when test="dryRun != null">#{dryRun}</when>
+                <otherwise>false</otherwise>
+            </choose>
         )
     </insert>
 

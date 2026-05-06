@@ -37,6 +37,9 @@ public class JobPartitionEntity implements Stateful {
   private Instant createdAt;
   private Instant updatedAt;
 
+  /** ADR-026 dry-run 演练标记；从父 job_instance.dry_run 透传。 */
+  private Boolean dryRun;
+
   @Override
   public String getStatus() {
     return partitionStatus;

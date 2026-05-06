@@ -68,6 +68,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
       // 不同 job_instance 的分区互相冲突（partitionKey 仅作业务分片键，不作全局唯一约束）
       partitionEntity.setIdempotencyKey(jobInstanceId + ":" + partitionPlan.getPartitionNo());
       partitionEntity.setInputSnapshot(buildInputSnapshot(plan, partitionPlan, jobInstanceId));
+      partitionEntity.setDryRun(plan.isDryRun());
       jobPartitionMapper.insert(partitionEntity);
       partitionEntities.add(partitionEntity);
     }

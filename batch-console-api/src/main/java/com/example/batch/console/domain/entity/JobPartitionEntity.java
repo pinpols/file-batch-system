@@ -19,4 +19,7 @@ public class JobPartitionEntity {
   private Instant leaseExpireAt;
   private Instant startedAt;
   private Instant finishedAt;
+
+  /** ADR-026 dry-run 演练标记。 */
+  private Boolean dryRun;
 }

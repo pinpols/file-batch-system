@@ -20,4 +20,7 @@ public class TriggerRequestEntity {
   private int forwardRetryCount;
   private Instant createdAt;
   private Instant updatedAt;
+
+  /** ADR-026 dry-run 演练标记；trigger 入口染色，落到 LaunchRequest.dryRun 透传到主链路。 */
+  private Boolean dryRun;
 }

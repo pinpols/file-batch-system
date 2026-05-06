@@ -32,4 +32,7 @@ public class TriggerLaunchRequest {
   private Instant dataIntervalStart;
 
   private Instant dataIntervalEnd;
+
+  /** ADR-026 dry-run 演练模式；true = 不副作用（不写业务表 / 不发外部 IO / 不进 EFFECTIVE 链）。null/false 默认实盘。 */
+  private Boolean dryRun;
 }

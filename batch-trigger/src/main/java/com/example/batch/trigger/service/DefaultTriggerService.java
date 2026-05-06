@@ -243,6 +243,7 @@ public class DefaultTriggerService implements TriggerService {
     entity.setDedupKey(dedupKey);
     entity.setRequestStatus("PENDING");
     entity.setTraceId(r.traceId());
+    entity.setDryRun(r.dryRun());
     return entity;
   }
 
@@ -262,6 +263,7 @@ public class DefaultTriggerService implements TriggerService {
     entity.setDedupKey(dedupKey);
     entity.setRequestStatus("ACCEPTED");
     entity.setTraceId(launchRequest.traceId());
+    entity.setDryRun(launchRequest.dryRun());
     triggerRequestMapper.insert(entity);
     return new LaunchResponse(entity.getRequestId(), entity.getTraceId());
   }

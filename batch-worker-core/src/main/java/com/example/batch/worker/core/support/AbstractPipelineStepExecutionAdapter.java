@@ -151,6 +151,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
     attributes.put(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID, pipelineDefinitionId);
     attributes.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
     attributes.put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, pipelineSteps);
+    // ADR-026: dry-run 标记从 task payload (orchestrator 写) 提取到 attributes,
+    // step plugin 调用 DryRunGuard.fromAttributes(attributes) 拿 guard 包副作用。
+    attributes.putIfAbsent(PipelineRuntimeKeys.DRY_RUN, resolveDryRunFromPayload(attributes));
     attributes.putIfAbsent(PipelineRuntimeKeys.JOB_CODE, request.jobCode());
     attributes.putIfAbsent("stepCode", request.stepCode());
     attributes.putIfAbsent(PipelineRuntimeKeys.FILE_ID, fileId);
@@ -288,6 +291,44 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
       // 非 JSON / 非对象 payload 不阻断调度，回退到其他 jobCode 来源
     }
     return null;
+  }
+
+  /**
+   * ADR-026: 从 attributes 顶层或 payload JSON 抽 dryRun。orchestrator 把 dryRun 塞 task
+   * payload；少量旧调用方可能直接塞 attributes 顶层 — 都兼容。
+   */
+  @SuppressWarnings("unchecked")
+  private boolean resolveDryRunFromPayload(Map<String, Object> attributes) {
+    if (attributes == null) {
+      return false;
+    }
+    Object direct = attributes.get(PipelineRuntimeKeys.DRY_RUN);
+    if (direct instanceof Boolean b) {
+      return b;
+    }
+    if (direct != null && "true".equalsIgnoreCase(String.valueOf(direct))) {
+      return true;
+    }
+    Object raw = attributes.get("payload");
+    if (!(raw instanceof String payload) || payload.isBlank()) {
+      return false;
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(payload, Object.class);
+      if (parsed instanceof Map<?, ?> map) {
+        Object v = ((Map<String, Object>) map).get(PipelineRuntimeKeys.DRY_RUN);
+        if (v instanceof Boolean b) {
+          return b;
+        }
+        return v != null && "true".equalsIgnoreCase(String.valueOf(v));
+      }
+    } catch (IllegalArgumentException ignored) {
+      SwallowedExceptionLogger.info(
+          AbstractPipelineStepExecutionAdapter.class,
+          "catch:dry_run_payload_parse_failure",
+          ignored);
+    }
+    return false;
   }
 
   protected String resolveText(Map<String, Object> attributes, String... keys) {

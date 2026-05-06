@@ -27,6 +27,7 @@
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <result column="dry_run" property="dryRun"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="JobPartitionResultMap">
@@ -72,7 +73,8 @@
             business_key,
             idempotency_key,
             input_snapshot,
-            output_summary
+            output_summary,
+            dry_run
         ) values (
             #{tenantId},
             #{jobInstanceId},
@@ -86,7 +88,11 @@
             #{businessKey},
             #{idempotencyKey},
             #{inputSnapshot,jdbcType=VARCHAR}::jsonb,
-            #{outputSummary,jdbcType=VARCHAR}::jsonb
+            #{outputSummary,jdbcType=VARCHAR}::jsonb,
+            <choose>
+                <when test="dryRun != null">#{dryRun}</when>
+                <otherwise>false</otherwise>
+            </choose>
         )
     </insert>
 

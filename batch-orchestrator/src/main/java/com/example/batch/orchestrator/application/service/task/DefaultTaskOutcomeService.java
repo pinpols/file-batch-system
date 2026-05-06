@@ -456,7 +456,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       jobInstance.setInstanceStatus(freshInstance.getInstanceStatus());
     }
     String instanceEvent =
-        resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
+        resolveInstanceEvent(
+            successCount,
+            failedCount,
+            allPartitionsFinished,
+            dagContinues,
+            isDryRun(freshInstance != null ? freshInstance : jobInstance));
     String instanceStatus =
         collaborators
             .stateMachine()
@@ -527,7 +532,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       signalParentVirtualTask(jobInstance, instanceStatus, command);
     }
     if (workflowRun != null) {
-      String workflowEvent = resolveWorkflowEvent(failedCount, allPartitionsFinished, dagContinues);
+      String workflowEvent =
+          resolveWorkflowEvent(
+              failedCount,
+              allPartitionsFinished,
+              dagContinues,
+              Boolean.TRUE.equals(workflowRun.getDryRun()));
       String workflowStatus =
           collaborators.stateMachine().transition(workflowRun, workflowEvent).toState();
       Instant workflowFinishedAt = jobFullyComplete ? finishedAt : null;
@@ -740,7 +750,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         || JobInstanceStatus.FAILED.code().equals(status)
         || JobInstanceStatus.PARTIAL_FAILED.code().equals(status)
         || JobInstanceStatus.CANCELLED.code().equals(status)
-        || JobInstanceStatus.TERMINATED.code().equals(status);
+        || JobInstanceStatus.TERMINATED.code().equals(status)
+        || JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(status)
+        || JobInstanceStatus.FAILED_DRY_RUN.code().equals(status);
   }
 
   private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
@@ -872,7 +884,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   private String resolveInstanceEvent(
-      long successCount, long failedCount, boolean allPartitionsFinished, boolean dagContinues) {
+      long successCount,
+      long failedCount,
+      boolean allPartitionsFinished,
+      boolean dagContinues,
+      boolean dryRun) {
     if (!allPartitionsFinished) {
       return JobInstanceStatus.RUNNING.code();
     }
@@ -880,24 +896,34 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       return JobInstanceStatus.RUNNING.code();
     }
     if (failedCount > 0 && successCount > 0) {
-      return JobInstanceStatus.PARTIAL_FAILED.code();
+      // ADR-026: dry-run 走 PARTIAL_FAILED 同等语义但终态用 FAILED_DRY_RUN（不再 ALERT 实盘失败告警）
+      return dryRun
+          ? JobInstanceStatus.FAILED_DRY_RUN.code()
+          : JobInstanceStatus.PARTIAL_FAILED.code();
     }
     if (failedCount > 0) {
-      return JobInstanceStatus.FAILED.code();
+      return dryRun ? JobInstanceStatus.FAILED_DRY_RUN.code() : JobInstanceStatus.FAILED.code();
     }
-    return JobInstanceStatus.SUCCESS.code();
+    return dryRun ? JobInstanceStatus.SUCCESS_DRY_RUN.code() : JobInstanceStatus.SUCCESS.code();
+  }
+
+  private static boolean isDryRun(JobInstanceEntity instance) {
+    return instance != null && Boolean.TRUE.equals(instance.getDryRun());
   }
 
   /** workflow_run 只允许进入 workflow 语义状态，不复用 job_instance 的 PARTIAL_FAILED 等口径。 */
   private String resolveWorkflowEvent(
-      long failedCount, boolean allPartitionsFinished, boolean dagContinues) {
+      long failedCount, boolean allPartitionsFinished, boolean dagContinues, boolean dryRun) {
     if (!allPartitionsFinished) {
       return WorkflowRunStatus.RUNNING.code();
     }
     if (dagContinues) {
       return WorkflowRunStatus.RUNNING.code();
     }
-    return failedCount > 0 ? WorkflowRunStatus.FAILED.code() : WorkflowRunStatus.SUCCESS.code();
+    if (failedCount > 0) {
+      return dryRun ? WorkflowRunStatus.FAILED_DRY_RUN.code() : WorkflowRunStatus.FAILED.code();
+    }
+    return dryRun ? WorkflowRunStatus.SUCCESS_DRY_RUN.code() : WorkflowRunStatus.SUCCESS.code();
   }
 
   private String resolveWorkflowCurrentNode(
@@ -914,7 +940,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private boolean isWorkflowTerminal(String workflowStatus) {
     return WorkflowRunStatus.SUCCESS.code().equals(workflowStatus)
         || WorkflowRunStatus.FAILED.code().equals(workflowStatus)
-        || WorkflowRunStatus.TERMINATED.code().equals(workflowStatus);
+        || WorkflowRunStatus.TERMINATED.code().equals(workflowStatus)
+        || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(workflowStatus)
+        || WorkflowRunStatus.FAILED_DRY_RUN.code().equals(workflowStatus);
   }
 
   private int nextRunSeq(Long workflowRunId, String nodeCode) {

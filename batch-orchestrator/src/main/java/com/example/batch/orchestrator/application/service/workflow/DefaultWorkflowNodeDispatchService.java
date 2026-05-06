@@ -259,6 +259,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (plan == null || plan.getPartitions() == null || plan.getPartitions().isEmpty()) {
       return 0;
     }
+    plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     plan.setWindowCode(
         workflowNode.getWindowCode() == null || workflowNode.getWindowCode().isBlank()
             ? plan.getWindowCode()
@@ -312,6 +313,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       // DefaultSchedulePlanBuilder 读 job_definition)
       task.setPriority(plan.getPriority());
       task.setTaskPayload(taskPayload);
+      task.setDryRun(plan.isDryRun());
       taskExecutionServiceProvider.getObject().createTask(task);
       if (decision.isDispatchable()
           && partitionLifecycleService.releaseForDispatch(

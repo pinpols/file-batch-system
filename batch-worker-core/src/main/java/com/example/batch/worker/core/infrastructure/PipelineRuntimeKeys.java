@@ -33,6 +33,14 @@ public final class PipelineRuntimeKeys {
   public static final String PIPELINE_NEXT_STEP_CODE = "pipelineNextStepCode";
   public static final String PIPELINE_NEXT_STAGE_CODE = "pipelineNextStageCode";
   public static final String JOB_INSTANCE_ID = "jobInstanceId";
+
+  /**
+   * ADR-026 dry-run 演练标记。orchestrator 在 task payload 里塞 {@code dryRun=true}，worker SDK 抽到
+   * attributes， step plugin 通过 {@link com.example.batch.common.service.DryRunGuard#fromAttributes}
+   * 拉取 guard 包裹副作用。
+   */
+  public static final String DRY_RUN = "dryRun";
+
   public static final String FILE_ID = "fileId";
   public static final String FILE_RECORD = "fileRecord";
   public static final String TEMPLATE_CONFIG = "templateConfig";

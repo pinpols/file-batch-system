@@ -8,4 +8,12 @@ public record DispatchResult(
     boolean acknowledged,
     boolean receiptPending,
     String message,
-    String evidenceRef) {}
+    String evidenceRef) {
+
+  /** ADR-026 dry-run 演练成功 stub，不调外部 channel。 */
+  public static DispatchResult success(
+      String externalRequestId, String receiptCode, boolean acknowledged) {
+    return new DispatchResult(
+        true, externalRequestId, receiptCode, acknowledged, false, "dry-run", null);
+  }
+}
