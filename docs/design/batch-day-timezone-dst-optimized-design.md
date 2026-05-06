@@ -1113,7 +1113,7 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 | P2 | Console 批量日视图：已打开未触发、阻塞原因、DST 调整、操作历史 | 非后端 | 数据源齐备（`batch_day_instance` 全字段 + V105 独立审计表 + V104 trigger 本地计划） |
 | 设计 | 跨业务域 / 核心链路联动限流 | 设计层（Accepted，实施 gated） | [ADR-019](../architecture/adr/ADR-019-cross-domain-rate-limit.md) — `business_domain` 主模型 + 域级 quota + 父子借调 + 三态开关；实施触发条件已明确，未触发期间不开工 |
 | 设计 | 跨批量日 DAG 依赖 | 设计层 | workflow 主模型扩展，超出本文范围 |
-| 设计 | 批量日维度重放治理 | 设计层 | dead letter / replay 重放主模型扩展 |
+| 设计 | 批量日维度重放治理 | 设计层（Accepted，已开工） | [ADR-020](../architecture/adr/ADR-020-batch-day-replay.md) — `batch_day_replay_session` 聚合 + 4 种 scope (ALL/ALL_FAILED/SUBSET_JOB_CODES/OUTPUTS_ONLY) + 接审批 + 同 (tenant,calendar,bizDate) 唯一 active session 不变量。Stage 2 schema 已落 V110，dispatcher / approval / OUTPUTS_ONLY promote 按 Stage 3-8 推进 |
 | 设计 | 结果版本 "生效" 裁决 | 设计层（§5.5） | 结果版本主模型仍需在业务结果表归属，不应强塞 `job_instance` |
 | 设计 | late arrival 跳批/等待/人工策略闭环细化 | 设计层 | 当前已能转跳批 + alert event 通知；细化策略待业务诉求触发 |
 

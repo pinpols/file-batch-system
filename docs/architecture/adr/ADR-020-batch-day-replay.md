@@ -1,7 +1,7 @@
 # ADR-020 · 批量日维度重放（batch_day_replay_session）
 
-- **Status**: Proposed
-- **Date**: 2026-05-06
+- **Status**: Accepted（Stage 2 schema 已落 V110；后续 Stage 3-8 按本 ADR 排期）
+- **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
 - **Related**: ADR-017（result_version，本 ADR 强依赖；版本路由全部走它）/ ADR-018（跨日 DAG，重放下游联动）/ §14.3.2（设计层缺口）/ `RerunRequest`（已有单 instance 重跑入口）
 
@@ -193,10 +193,37 @@ ADR-018 的 `WAITING_DEPENDENCY` 节点会因为上游 EFFECTIVE 切换被 recon
 - E2E：监管复盘场景（ALL scope + MANUAL_CONFIRM_EFFECTIVE policy）跑通，下游 ADR-018 节点正确唤醒
 - 守护：`ReplaySessionUniquenessInvariantTest` 强制断言唯一 active session
 
-## 开放问题
+## 开放问题（已收口）
 
-1. **失败 entry 的重试**：是否在 session 内提供"重试单个 entry"的能力？倾向 v2 — v1 直接靠手动单 instance rerun 兜底；
-2. **跨日 replay**：当一次操作要重放连续多日（5/1 ~ 5/4）时，是否支持"批量 session"或者"replay-of-replays"？倾向 console 层面循环创建 4 个 session（保持 session 单日语义清晰）；
-3. **并发上限**：session 内 dispatcher 同时跑多少 entry？倾向 `batch.replay.dispatch.parallelism=10`，可配；
-4. **回滚**：promote 错版本如何回滚？倾向用一个反向 OUTPUTS_ONLY session 把旧版本切回 EFFECTIVE，避免特设回滚 API；
-5. **大批 instance**：当日 instance 数 > 10000 时，session 创建期一次性写 entries 是否扛得住？倾向分块 INSERT + outbox 异步建索引，细节落地阶段决定。
+| # | 问题 | 决策 |
+|---|---|---|
+| 1 | 失败 entry 的重试 | **v1 不做 session 内重试**。失败 entry 留 FAILED 终态，运维按需对该 entry 的 `source_instance_id` 走单 instance `RerunRequest`（不挂 session）。v2 再考虑 session 内 retry-failed-entries API；现在做会让"session 进度"语义和"entry 历史"耦合 |
+| 2 | 跨日 replay | **不支持单 session 跨日**。Console 循环创建 N 个单日 session（保持 session 一对一 (tenant, calendarCode, bizDate) 不变量）。前端可加"跨日重放向导"批量提交，但持久层每日仍独立 session |
+| 3 | 并发上限 | `batch.replay.dispatch.parallelism = 10`（默认，可配）；上限 50 防 dispatcher 把 worker 池打爆。同时套 `batch.replay.dispatch.rate-limit-per-min = 60`（默认）做令牌桶节流 |
+| 4 | 回滚 | **不特设 rollback API**。误 promote 走"反向 OUTPUTS_ONLY session"把旧版本切回 EFFECTIVE — 走同样的审批 + 审计链；rollback 本身可被审计 / 重放 |
+| 5 | 大批 instance | session 创建按 `batch.replay.session.entry-batch-insert-size = 500` 分块 INSERT；entry 数 > `entry-async-threshold`（默认 5000）时 status=PENDING 派 outbox 事件让 reconciler 异步建剩余 entries。session 在 entry 全建完前 status 暂为 `PENDING_APPROVAL`（PENDING_APPROVAL 期不需要 entry 全建好，approval 时 lazy 校验）|
+
+### 不会做（以及原因）
+
+- ❌ **不支持 session 内 entry 级 retry / cancel** —— v1 整 session 是原子审批单元，单 entry 失败不重启 session
+- ❌ **不让 session 跨 (tenant, calendarCode, bizDate) 唯一性** —— 不变量 #1 是基线，跨日重放就开多个 session
+- ❌ **不暴露"force-cancel running entry"API** —— 已 RUNNING 的 instance 让它跑完按结果回填，session cancel 只停未派发的 entries（不变量 #6）
+- ❌ **不允许直接 SQL 改 result_version.status 实现"快速 promote"** —— 必走 ADR-017 promotion API + 本 ADR 的 OUTPUTS_ONLY session
+- ❌ **不在 v1 做 session 间链式编排**（"replay session A 完成后自动起 session B"）—— 需要时由 console / 外部编排器拉起
+
+### 实施触发条件
+
+ADR-020 已经在 §14.3.2 列为后端缺口，**触发条件已满足**（监管复盘 / 上游补数都是已知场景），按下方排期推进。Stage 1（ADR-017 落地）已开工（参见 commit `172074e2` 等），Stage 2 schema 已在 V110 落地。
+
+### 不变量再确认（与 V110 schema 对齐）
+
+V110 落地的约束已守护本 ADR 的 5 条不变量：
+
+| 不变量 | 守护方式 |
+|---|---|
+| 1. 同 (tenant, calendarCode, bizDate) 至多 1 个 active session | `uk_replay_session_active` partial unique index `WHERE status IN ('PENDING_APPROVAL', 'RUNNING')` |
+| 2. entry result_policy 与 session 一致 | entry 不存 result_policy，dispatcher 永远从 session 读，物理上无法漂移 |
+| 3. OUTPUTS_ONLY 不创建新 instance | dispatcher 路由分支 + service-level guard，IT 必须覆盖 |
+| 4. 终态 session 不可重新激活 | service `submit / approve / cancel` 校验 status；DB 通过 `ck_replay_session_status` + 应用层一起守 |
+| 5. result_version 写入必走 ADR-017 主模型 | 入口收敛在 worker output → ADR-017 promote 链；session 自身不持有写入能力 |
+| 6. cancel 只停未派发 entries | dispatcher 进入 RUNNING 前 check entry / session status，已 RUNNING 自然按结果回填 |
