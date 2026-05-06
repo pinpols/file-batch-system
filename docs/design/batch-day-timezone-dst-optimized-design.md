@@ -1125,7 +1125,7 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 |---|---|---|---|
 | [012](../architecture/adr/ADR-012-failure-taxonomy.md) | 失败分类（INFRA / DATA_QUALITY / BUSINESS_RULE / CONFIG / UPSTREAM_DELAY / TIMEOUT / UNKNOWN） | 建议 P1 直接做（便宜高收益） | ~3-5 人天 |
 | [021](../architecture/adr/ADR-021-data-quality-reconciliation.md) | 数据对账闭环（行/表/跨表/跨日 4 类规则）+ 接 ADR-017 EFFECTIVE gate | 金融场景必做 | ~16-18 人天 |
-| [022](../architecture/adr/ADR-022-forensic-audit-bundle.md) | Forensic 一键取证：7 年配置历史 + OSS 对象锁 | 受监管行业必做 | ~19-21 人天 |
+| [022](../architecture/adr/ADR-022-forensic-audit-bundle.md) | Forensic 一键取证（**v0.1 已落 2026-05-07**：V116 + 同步 bundle + SHA-256 + 主链路无影响；v0.2 *_history + OSS 对象锁 gated） | 受监管行业必做 | v0.1 ~5-7 人天已落 / v0.2 ~16 人天 gated |
 | [023](../architecture/adr/ADR-023-multi-calendar-coordination.md) | 多日历联动 + 半天工作日 + 灾难日热切换 | 跨境业务必做 | ~13 人天 |
 | [024](../architecture/adr/ADR-024-archive-tiering.md) | archive 表 PG 月分区 + OSS Parquet + DuckDB 冷查询 | 数据量阈值（5 亿行 / 500GB / 5 年保留）触发 | ~23 人天 |
 | [025](../architecture/adr/ADR-025-workflow-static-validator.md) | Workflow enable 时 15 项静态校验 | 建议 P2 直接做（便宜高收益） | ~5 人天 |
