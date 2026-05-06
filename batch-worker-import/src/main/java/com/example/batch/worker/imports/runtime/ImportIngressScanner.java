@@ -17,6 +17,7 @@ import io.minio.messages.Item;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -24,6 +25,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -232,10 +236,16 @@ public class ImportIngressScanner {
   }
 
   private LocalDate resolveScannerBizDate(String objectName) {
+    LocalDate fromName = parseBizDateFromObjectName(objectName);
+    if (fromName != null) {
+      return fromName;
+    }
     if (!Texts.hasText(scannerProperties.getDefaultBizDate())) {
       log.warn(
-          "import ingress scanner skipped object without explicit defaultBizDate: objectName={}",
-          objectName);
+          "import ingress scanner skipped object without bizDatePattern match and no"
+              + " defaultBizDate: objectName={}, bizDatePattern={}",
+          objectName,
+          scannerProperties.getBizDatePattern());
       return null;
     }
     try {
@@ -249,6 +259,53 @@ public class ImportIngressScanner {
           scannerProperties.getDefaultBizDate());
       return null;
     }
+  }
+
+  private LocalDate parseBizDateFromObjectName(String objectName) {
+    String pattern = scannerProperties.getBizDatePattern();
+    if (!Texts.hasText(pattern) || objectName == null) {
+      return null;
+    }
+    try {
+      Matcher matcher = Pattern.compile(pattern.trim()).matcher(objectName);
+      if (!matcher.find()) {
+        return null;
+      }
+      String token = extractBizDateToken(matcher);
+      if (token == null || token.isBlank()) {
+        return null;
+      }
+      return LocalDate.parse(token, DateTimeFormatter.BASIC_ISO_DATE);
+    } catch (PatternSyntaxException invalidPattern) {
+      SwallowedExceptionLogger.warn(
+          ImportIngressScanner.class, "catch:PatternSyntaxException", invalidPattern);
+      log.warn(
+          "import ingress scanner bizDatePattern is not valid regex: pattern={}, objectName={}",
+          pattern,
+          objectName);
+      return null;
+    } catch (Exception invalid) {
+      SwallowedExceptionLogger.warn(ImportIngressScanner.class, "catch:Exception", invalid);
+      log.warn(
+          "import ingress scanner failed to parse bizDate from objectName: pattern={},"
+              + " objectName={}",
+          pattern,
+          objectName);
+      return null;
+    }
+  }
+
+  private String extractBizDateToken(Matcher matcher) {
+    try {
+      String named = matcher.group("bizDate");
+      if (named != null) {
+        return named;
+      }
+    } catch (IllegalArgumentException namedGroupAbsent) {
+      SwallowedExceptionLogger.info(
+          ImportIngressScanner.class, "catch:IllegalArgumentException", namedGroupAbsent);
+    }
+    return matcher.groupCount() >= 1 ? matcher.group(1) : matcher.group();
   }
 
   private Map<String, ObjectSnapshot> listSnapshots() {

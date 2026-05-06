@@ -21,6 +21,7 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BatchDaySettleScheduler {
 
-  private static final List<String> TRACKED_STATUSES = List.of("CUTOFF", "IN_FLIGHT");
+  private static final List<String> TRACKED_STATUSES = List.of("CUTOFF", "IN_FLIGHT", "SETTLING");
+  private static final String STATUS_SETTLING = "SETTLING";
+  private static final String STATUS_IN_FLIGHT = "IN_FLIGHT";
 
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final JobInstanceMapper jobInstanceMapper;
@@ -96,52 +99,114 @@ public class BatchDaySettleScheduler {
   }
 
   /**
-   * 单个候选的结算事务：REQUIRES_NEW 保证和循环解耦——某一条 CAS 冲突不影响其他候选。
+   * 单个候选的结算入口：根据当前状态分派 —— SETTLING 直接走 finalize（重入幂等）； CUTOFF / IN_FLIGHT 先 claim 再 finalize。
+   *
+   * <p>每一阶段都是独立 REQUIRES_NEW 短事务：claim（tx1）一旦提交，运维就能看到 SETTLING 状态；finalize（tx2） 即使崩溃，下一轮扫描会重新
+   * finalize SETTLING 行（重读 metrics 后决定终态或回 IN_FLIGHT）。
    *
    * <p>必须是 {@code public}，且通过 self-proxy 调用才能被 Spring AOP 织入事务。
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void settleOne(BatchDayInstanceEntity candidate, Instant now) {
+    BatchDaySettleScheduler self = selfProvider.getObject();
+    if (STATUS_SETTLING.equals(candidate.dayStatus())) {
+      self.finalizeSettling(
+          candidate.tenantId(), candidate.calendarCode(), candidate.bizDate(), now);
+      return;
+    }
+    if (!self.claimSettling(candidate, now)) {
+      return;
+    }
+    self.finalizeSettling(candidate.tenantId(), candidate.calendarCode(), candidate.bizDate(), now);
+  }
+
+  /**
+   * tx1：根据 metrics 判定 settle 入口动作。
+   *
+   * <ul>
+   *   <li>active>0 且当前不是 IN_FLIGHT → 推进到 IN_FLIGHT，返回 false（无需 finalize）。
+   *   <li>total<=0 → 返回 false（没东西好结算）。
+   *   <li>否则 CAS 到 SETTLING，返回 true 让 finalize 接力。
+   * </ul>
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public boolean claimSettling(BatchDayInstanceEntity candidate, Instant now) {
     BatchDayInstanceMetrics metrics =
         jobInstanceMapper.selectBatchDayMetrics(
             candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
+    if (metrics == null) {
+      return false;
+    }
+    long activeCount = value(metrics.getActiveCount());
+    long totalCount = value(metrics.getTotalCount());
+    if (activeCount > 0) {
+      if (!STATUS_IN_FLIGHT.equals(candidate.dayStatus())) {
+        BatchDayInstanceEntity to = candidate.withDayStatus(STATUS_IN_FLIGHT, now);
+        casUpdate(to);
+        appendBatchDayAuditLog(candidate, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES");
+      }
+      return false;
+    }
+    if (totalCount <= 0L) {
+      return false;
+    }
+    BatchDayInstanceEntity claimed = candidate.withDayStatus(STATUS_SETTLING, now);
+    casUpdate(claimed);
+    appendBatchDayAuditLog(candidate, claimed, "BATCH_DAY_SETTLING_CLAIMED");
+    return true;
+  }
+
+  /**
+   * tx2：从 SETTLING 落到终态（SETTLED / FAILED）；并发期间 active 又起来则回 IN_FLIGHT。 入口重读 DB 拿到 tx1 之后的 version 与
+   * dayStatus，进程在 tx2 之前崩溃时下一轮重做也走同一路径。
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void finalizeSettling(
+      String tenantId, String calendarCode, LocalDate bizDate, Instant now) {
+    BatchDayInstanceEntity claimed =
+        batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
+    if (claimed == null || !STATUS_SETTLING.equals(claimed.dayStatus())) {
+      return;
+    }
+    BatchDayInstanceMetrics metrics =
+        jobInstanceMapper.selectBatchDayMetrics(tenantId, calendarCode, bizDate);
     if (metrics == null) {
       return;
     }
     long activeCount = value(metrics.getActiveCount());
     long failedCount = value(metrics.getFailedCount());
     long totalCount = value(metrics.getTotalCount());
-    if (activeCount > 0) {
-      if (!"IN_FLIGHT".equals(candidate.dayStatus())) {
-        BatchDayInstanceEntity to = candidate.withDayStatus("IN_FLIGHT", now);
-        casUpdate(to);
-        appendBatchDayAuditLog(candidate, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES");
-      }
+    if (activeCount > 0L) {
+      BatchDayInstanceEntity to = claimed.withDayStatus(STATUS_IN_FLIGHT, now);
+      casUpdate(to);
+      appendBatchDayAuditLog(claimed, to, "SETTLING_REVERTED_TO_IN_FLIGHT");
       return;
     }
     if (totalCount <= 0L) {
+      BatchDayInstanceEntity to = claimed.withDayStatus("CUTOFF", now);
+      casUpdate(to);
+      appendBatchDayAuditLog(claimed, to, "SETTLING_REVERTED_TO_CUTOFF");
       return;
     }
     if (failedCount > 0L) {
-      BatchDayInstanceEntity to = candidate.withSettled("FAILED", now, now);
+      BatchDayInstanceEntity to = claimed.withSettled("FAILED", now, now);
       casUpdate(to);
-      appendBatchDayAuditLog(candidate, to, "BATCH_DAY_FAILED");
-      driveCatchUp(candidate, now);
+      appendBatchDayAuditLog(claimed, to, "BATCH_DAY_FAILED");
+      driveCatchUp(claimed, now);
       log.info(
           "batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
-          candidate.tenantId(),
-          candidate.calendarCode(),
-          candidate.bizDate());
+          claimed.tenantId(),
+          claimed.calendarCode(),
+          claimed.bizDate());
       return;
     }
-    BatchDayInstanceEntity to = candidate.withSettled("SETTLED", now, now);
+    BatchDayInstanceEntity to = claimed.withSettled("SETTLED", now, now);
     casUpdate(to);
-    appendBatchDayAuditLog(candidate, to, "BATCH_DAY_SETTLED");
+    appendBatchDayAuditLog(claimed, to, "BATCH_DAY_SETTLED");
     log.info(
         "batch day settled as SETTLED: tenantId={}, calendarCode={}, bizDate={}",
-        candidate.tenantId(),
-        candidate.calendarCode(),
-        candidate.bizDate());
+        claimed.tenantId(),
+        claimed.calendarCode(),
+        claimed.bizDate());
   }
 
   private long value(Long value) {
@@ -197,14 +262,15 @@ public class BatchDaySettleScheduler {
       }
       if ("AUTO".equalsIgnoreCase(calendar.catchUpPolicy()) && isLaunchable(request)) {
         LaunchRequest launchRequest =
-            new LaunchRequest(
-                request.getTenantId(),
-                request.getJobCode(),
-                request.getBizDate(),
-                TriggerType.CATCH_UP,
-                request.getRequestId(),
-                request.getTraceId(),
-                buildCatchUpParams(batchDay, candidate, calendar, now));
+            LaunchRequest.builder()
+                .tenantId(request.getTenantId())
+                .jobCode(request.getJobCode())
+                .bizDate(request.getBizDate())
+                .triggerType(TriggerType.CATCH_UP)
+                .requestId(request.getRequestId())
+                .traceId(request.getTraceId())
+                .params(buildCatchUpParams(batchDay, candidate, calendar, now))
+                .build();
         LaunchResponse response = launchService.launch(launchRequest);
         log.info(
             "batch day catch-up launched: tenantId={}, calendarCode={}, bizDate={},"
