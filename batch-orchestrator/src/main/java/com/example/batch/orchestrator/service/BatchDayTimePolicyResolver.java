@@ -36,14 +36,18 @@ public class BatchDayTimePolicyResolver {
   public static final String OVERLAP_POLICY_RUN_TWICE = "RUN_TWICE";
 
   private final BatchTimezoneProvider timezoneProvider;
+  private final CutoffScheduleResolver cutoffScheduleResolver;
 
   public Instant resolveCutoffAt(BusinessCalendarEntity calendar, LocalDate bizDate) {
     if (calendar == null || bizDate == null) {
       return null;
     }
     ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
-    LocalTime cutoffTime =
+    LocalTime baseCutoff =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
+    // ADR-023 §决策：cutoff_schedule JSONB 优先于单值 cutoff_time
+    LocalTime cutoffTime =
+        cutoffScheduleResolver.resolveCutoffTime(calendar.cutoffSchedule(), bizDate, baseCutoff);
     String overlapPolicy = effectiveCutoffOverlapPolicy(calendar);
     return resolveLocalBoundary(
         bizDate.plusDays(1),
