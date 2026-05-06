@@ -131,7 +131,7 @@ timezone_snapshot
 
 ## 4. 当前能力缺口复核
 
-本节按 [`batch-day-capability-design.md`](./batch-day-capability-design.md) 的能力项，对照当前 DDL / 代码后重新标注。状态含义：
+本节按 [`batch-day-capability-design.md`](./batch-day-capability-design.md) 的能力项，对照当前 DDL / 代码后重新标注（已合并 2026-05-05 落地）。状态含义：
 
 ```text
 已具备：当前主链路已有表、服务、API 或调度器支撑；
@@ -139,41 +139,46 @@ timezone_snapshot
 未具备：目前主要停留在设计态，未形成可用运行能力。
 ```
 
+「主要缺口」列已对齐当前后端实现：
+- 后端尾巴显式标注，关联到 §14.3 优先级；
+- 非后端（Console 视图 / REST API / 审批 UI）显式标 "(非后端)"，跟踪入口在 §4.1 / §14.3。
+
 | 能力 | 当前状态 | 当前依据 | 主要缺口 |
 |---|---|---|---|
-| 调度初始化为 `trigger_runtime_state.next_fire_time` | 已具备 | `trigger_runtime_state.next_fire_time`、wheel reconciler | 缺本地计划时间审计字段 |
+| 调度初始化为 `trigger_runtime_state.next_fire_time` | 已具备 | `trigger_runtime_state.next_fire_time`、wheel reconciler | 缺本地计划时间审计字段（`schedule_timezone / scheduled_local_*`，§14.3 P0） |
 | 触发后创建 `job_instance / workflow_run / partition / task` | 已具备 | `DefaultLaunchService` 主链路 | 无 |
-| `bizDate` 按 `timezone + cutoff_time` 计算 | 已具备 | `CalendarBizDateResolver`、`business_calendar.timezone/cutoff_time` | DST 策略未显式化 |
-| `batch_day_instance` 建模 | 已具备 | V32 / V62，含 `timezone_snapshot`、`version` | 状态集偏少 |
-| launch 时 upsert 批量日 | 已具备 | `LaunchBatchDayService` | 不是日切主动创建 |
-| 批量日主动打开 | 未具备 | 未见 `BatchDayOpenScheduler` | 日切后无法先看到“当天批量日已打开” |
-| 批量日 cutoff | 已具备 | `BatchDayCutoffScheduler` | DST gap/overlap 裁决未封装 |
-| 批量日 settle | 已具备 | `BatchDaySettleScheduler` | 无 `SETTLING`，失败后治理策略不完整 |
+| `bizDate` 按 `timezone + cutoff_time` 计算 | 已具备 | `CalendarBizDateResolver`、`business_calendar.timezone/cutoff_time`；DST 策略由 V102 + `BatchDayTimePolicyResolver` 显式化 | 无 |
+| `batch_day_instance` 建模 | 已具备 | V32 / V62 / V101 / V102，含 `timezone_snapshot`、`dst_policy_snapshot`、治理字段、`version` | 缺 `SETTLING` 中间态 |
+| launch 时 upsert 批量日 | 已具备 | `LaunchBatchDayService` | 无（已与日切主动打开形成双入口） |
+| 批量日主动打开 | 已具备 | `BatchDayOpenScheduler` 主动 upsert，落 `cutoff_at / sla_deadline_at / timezone_snapshot / dst_policy_snapshot` | Console "已打开未触发作业"视图未接入（非后端） |
+| 批量日 cutoff | 已具备 | `BatchDayCutoffScheduler` + `BatchDayTimePolicyResolver` 处理 gap / overlap，跳过 frozen | 无 |
+| 批量日 settle | 已具备 | `BatchDaySettleScheduler` | 无 `SETTLING` 中间态；失败治理仍依赖 reopen / catch-up 链 |
 | late arrival | 部分具备 | `late_arrival_tolerance_min`、`late_count`、`routeLateArrivalIfNeeded` | 缺按策略转跳批/等待/人工处理的闭环 |
-| catch-up 补跑 | 部分具备 | `CATCH_UP`、审批、批量日补跑 API | 粒度/结果覆盖/配置版本策略不足 |
-| 前一批量日门闩 | 未具备 | 未见 `day_rollover_policy` / `BatchDayGateService` | 核心日批无法平台级等待前一天 |
-| calendar 级跨日策略 | 未具备 | 无 `day_rollover_policy` | 缺 `ALLOW_OVERLAP / WAIT_PREVIOUS_DAY / REJECT_IF_PREVIOUS_OPEN` |
-| job 级跨日覆盖 | 未具备 | 无 `previous_day_dependency_scope` | 缺 `SAME_JOB / SAME_CALENDAR` 等 |
-| 批量日跳批 | 未具备 | `batch_day_instance` 状态无 `SKIPPED` | 缺跳批 API、审计、依赖影响策略 |
-| 批量日冻结 / 关闭 | 未具备 | 状态无 `FROZEN/CLOSED` | 缺阻止新实例启动的治理动作 |
-| 人工释放等待 | 未具备 | 无 `MANUAL_RELEASED` 或 gate release 表 | WAIT 场景无法人工放行 |
-| 批量日重开 | 部分具备 | `LaunchBatchDayService.withReopened` 仅内部 reopen FAILED | 缺显式 API、审批、审计和状态 |
+| catch-up 补跑 | 部分具备 | `CATCH_UP`、审批、批量日补跑 API；V103 `rerun_policy_snapshot` | 补跑请求层 `resultPolicy / configVersionPolicy` 显式入参未落（API 层 + 后端校验） |
+| 前一批量日门闩 | 已具备 | V100 + `BatchDayGateService` + `batch_day_waiting_launch` + `BatchDayWaitingReleaseScheduler` | gate 对 `FROZEN` 批量日的 `REJECT` 路径未做（后端，§14.3 P0） |
+| calendar 级跨日策略 | 已具备 | V100 `day_rollover_policy`（`ALLOW_OVERLAP / WAIT_PREVIOUS_DAY / REJECT_IF_PREVIOUS_OPEN`） | 无 |
+| job 级跨日覆盖 | 部分具备 | V100 `previous_day_dependency_scope`（`INHERIT / NONE / SAME_CALENDAR / CUSTOM_CHAIN`） | `SAME_JOB / SAME_JOB_GROUP` 细粒度真正区分未落（后端，§14.3 P1） |
+| 批量日跳批 | 已具备 | V101 `SKIPPED` + `skip_reason / skip_comment`；`BatchDayOperationService.skipBatchDay`；gate 视为可放行 | 独立 `batch_day_operation_audit` 表未落（后端，§14.3 P1） |
+| 批量日冻结 / 关闭 | 已具备 | V101 `frozen_at / frozen_by / closed_at` 字段；`freeze / unfreeze / close` 操作；cutoff/settle 跳过 frozen | launch gate 的 `FROZEN -> REJECT` 未接（后端，§14.3 P0） |
+| 人工释放等待 | 已具备 | V101 `MANUAL_RELEASED` + `BatchDayOperationService.releaseBatchDay` + 等待表重放 | 无 |
+| 批量日重开 | 已具备 | `BatchDayOperationService.reopenBatchDay` 服务层完成，写 `job_execution_log` | Console REST API、审批、操作历史 UI（非后端） |
 | DAG / workflow 依赖 | 部分具备 | workflow DAG、node skip 已有 | 缺跨批量日、跨日历依赖 |
 | 文件批量治理 | 部分具备 | 文件导入/导出/分发、治理表和 Console API 已有 | 文件到达等待、晚到策略、文件组等待未完全批量日化 |
-| 幂等与重入 | 部分具备 | `idempotency_record`、`run_attempt`、`RERUN`、分区幂等键 | 缺策略化 `REJECT_DUPLICATE / CREATE_NEW_VERSION / ALLOW_PARALLEL` |
-| 结果版本 | 未具备 | 未见结果版本主模型 | 补跑后“哪版有效”无平台统一裁决 |
-| 配置版本治理 | 部分具备 | 有配置表、审计、部分审批 | 运行实例未系统绑定 config version |
+| 幂等与重入 | 部分具备 | `idempotency_record`、`run_attempt`、`RERUN`、分区幂等键；V103 `params_snapshot` 含 job definition version | 缺策略化 `REJECT_DUPLICATE / CREATE_NEW_VERSION / ALLOW_PARALLEL`（后端） |
+| 结果版本 | 未具备 | — | 补跑后"哪版生效"仍无平台统一裁决（后端，设计已写入 §5.5） |
+| 配置版本治理 | 已具备 | V103 `job_definition_version` + `job_instance.rerun_policy_snapshot`；`params_snapshot` 含 version | 无 |
 | SLA 与告警 | 部分具备 | `sla_deadline_at`、timeout、告警基础 | 缺批量日未结算 SLA 告警闭环 |
 | 资源限流 | 部分具备 | queue/quota/worker group 已有 | 缺按业务域、核心链路、跨日门闩联动限流 |
 | 死信与补偿 | 部分具备 | dead letter、compensation、replay 基础 | 缺按批量日维度重放治理 |
-| 观测与审计 | 部分具备 | 批量日查询、窗口查询、audit log | 缺阻塞原因、人工释放、跳批、冻结等视图 |
-| 权限与审批 | 部分具备 | console 鉴权、审批命令基础 | 缺批量日高风险权限点和审批流 |
+| 观测与审计 | 部分具备 | 批量日查询、窗口查询、audit log；治理操作写 `job_execution_log` | 阻塞原因 / 人工释放 / 跳批 / 冻结等 Console 视图（非后端） |
+| 权限与审批 | 部分具备 | console 鉴权、审批命令基础 | `batch_day.skip / freeze / release / reopen / close` 权限点和审批流（API + 后端校验） |
 
-结论：
+结论（更新后）：
 
 ```text
-当前是“触发驱动 + 批量日投影”的运行平台；
-要达到文档目标，需要补齐“批量日驱动 + 策略门闩 + 人工治理 + 版本治理”。
+本轮"批量日驱动"主链后端能力已闭合：主动打开、前日门闩、人工治理、DST 策略、worker bizDate 收口、补跑配置版本快照六大块。
+后端剩余债务：trigger 本地计划审计字段（P0）、launch gate 对 FROZEN 拒绝路径（P0）、SAME_JOB / SAME_JOB_GROUP 细粒度（P1）、SETTLING 中间态、结果版本生效裁决、跨业务域限流、SLA 闭环、批量日维度重放治理、跨批量日 DAG 依赖、late arrival 策略闭环、独立 batch_day_operation_audit 表。
+非后端尾巴：Console 视图 / REST API / 审批 / 操作历史 UI 见 §14.3 P1/P2。
 ```
 
 ### 4.1 2026-05-05 实施回填
@@ -1005,6 +1010,8 @@ misfireCount
 
 ## 14. 最终收口
 
+### 14.1 平台分工口径
+
 最终平台口径：
 
 ```text
@@ -1014,3 +1021,94 @@ batch_day_instance 保存历史解释所需快照；
 worker 只执行，不解释业务日期；
 console 只展示和发起人工操作，不参与时间裁决。
 ```
+
+任何后续修改都必须保留这一分层。trigger 不得反向裁决 `bizDate`；worker 不得用本机时钟推断业务日；console 不得在前端做"跨日合法性"判断。
+
+### 14.2 本轮已落交付物
+
+DDL 迁移：
+
+| 文件 | 内容 |
+|---|---|
+| `V100__batch_day_gate_policy.sql` | `business_calendar.day_rollover_policy` / `job_definition.previous_day_dependency_scope` / `batch_day_waiting_launch` |
+| `V101__batch_day_operation_governance.sql` | `batch_day_instance` 治理字段（`blocked_reason / manual_release_* / skip_* / frozen_* / closed_*`）、状态扩展 `SKIPPED / MANUAL_RELEASED` |
+| `V102__batch_day_dst_policy.sql` | `business_calendar.dst_gap_policy / dst_overlap_policy`、`batch_day_instance.dst_policy_snapshot` |
+| `V103__job_instance_rerun_config_snapshot.sql` | `job_definition_version`、`job_instance.rerun_policy_snapshot`、`params_snapshot` 增加 job definition version |
+
+服务与调度器：
+
+| 类 | 职责 |
+|---|---|
+| `BatchDayOpenScheduler` | 日切前主动打开批量日，落 `cutoff_at / sla_deadline_at / timezone_snapshot / dst_policy_snapshot` |
+| `BatchDayGateService` | launch 前裁决 `ALLOW / WAIT / REJECT`，写 `batch_day_waiting_launch` 与审计 |
+| `BatchDayOperationService` | `FREEZE / RELEASE / SKIP / REOPEN / CLOSE` 等人工治理动作，写 `job_execution_log` |
+| `BatchDayTimePolicyResolver` | 统一处理 cutoff 在 DST gap / overlap 下的裁决 |
+| `BatchDayCutoffScheduler` | 已存在；本轮接入 `BatchDayTimePolicyResolver`，并跳过 frozen 批量日 |
+| `BatchDayWaitingLaunchMapper` | 等待队列读写，前一日放行后由 gate 触发重放 |
+
+worker 路径整改：
+
+```text
+worker-export PrepareStep：缺 bizDate 时 fail-fast，禁止 LocalDate.now() 兜底
+worker-import scanner：要求显式 defaultBizDate
+全 worker 路径：业务日 grep 已无 LocalDate.now() 推断
+```
+
+提交对照（按 §12 阶段）：
+
+```text
+Phase 1 文档 / 守护测试         955c993a
+Phase 2 批量日主动打开          4a4167b2
+Phase 3 前一批量日门闩          98d57be2
+Phase 4 批量日人工治理          072d2802
+Phase 5 DST 策略显式化          f34b2828
+Phase 6 worker 兜底收口         94f969a5
+Phase 7 补跑版本治理            cc69a768
+本轮文档 codify                2965ddb1 / 8fa25050
+```
+
+### 14.3 残留缺口与下一步
+
+按 §13 验收矩阵的"部分通过"项，以及 §4.1 的实施回填，下一阶段需要继续推进的点：
+
+| 优先级 | 缺口 | 落地建议 |
+|---|---|---|
+| P0 | trigger cron 本地计划审计字段（`schedule_timezone / scheduled_local_date / scheduled_local_time / fire_sequence`） | 新建迁移 + `TriggerRuntimeStateEntity` + cron 计算路径回写；DST overlap 下的日批去重以本地计划为唯一键 |
+| P0 | launch gate 对 `FROZEN` 批量日的拒绝路径 | `BatchDayGateService` 增加 `FROZEN -> REJECT`，catch-up / RERUN 走显式允许参数 |
+| P1 | 批量日治理 Console REST API + 权限点 | 暴露 `POST /api/console/jobs/batch-days/{bizDate}/{action}`，落 §5.4 权限点和高风险审批 |
+| P1 | `batch_day_operation_audit` 独立表 | 当前审计写 `job_execution_log` 复用，长期建议落独立表以支持运维查询和审批关联 |
+| P1 | `previous_day_dependency_scope` 细粒度（`SAME_JOB / SAME_JOB_GROUP`） | 当前非 `INHERIT` 统一按等待前一批量日处理；待业务出现差异化诉求时再展开 |
+| P1 | 补跑请求 `resultPolicy / configVersionPolicy` 显式 API | 把 §5.5 的两类策略提到 `RerunRequest`，Console 暴露选择 |
+| P2 | Console 批量日视图：已打开未触发、阻塞原因、DST 调整、操作历史 | 前端类型重新生成 + `monitor / scheduler` 页面接入 |
+| P2 | import scanner `defaultBizDate` 改为来源化 | 由文件命名规则或上游到达事件派生，配置项作为兜底 |
+| P2 | `RUN_TWICE` 真正用于 cutoff | 当前降级为 `RUN_ONCE_EARLIER_OFFSET` 并报警；如有业务诉求再展开 |
+
+### 14.4 守护与回归
+
+下次改动批量日 / 时区 / DST 路径必须跑：
+
+```text
+BatchDayOpenSchedulerTest
+BatchDayGateServiceTest
+BatchDayOperationServiceTest
+BatchDayTimePolicyResolverTest
+BatchDayCutoffSchedulerTest
+PrepareStepTest（worker-export bizDate 兜底）
+CalendarBizDateResolverTest（cutoff 跨时区）
+```
+
+回归监控：
+
+```text
+trigger 触发到 launch 的耗时（gate 引入了等待表写路径）
+batch_day_waiting_launch 积压量（释放调度器是否落后）
+batch_day_instance.day_status 分布（FROZEN / SKIPPED / MANUAL_RELEASED 的占比异常波动）
+DST 切换日的 cutoff_at / next_fire_time 漂移（gap / overlap 处理是否符合策略）
+```
+
+### 14.5 文档维护
+
+- 本文是批量日 / 时区 / DST 的**主设计入口**，[`batch-day-design.md`](./batch-day-design.md) / [`batch-day-capability-design.md`](./batch-day-capability-design.md) / [`timezone-and-dst-design.md`](./timezone-and-dst-design.md) 是其下游材料
+- 后续相关 schema 变化（含归档表对齐）必须同步更新本文 §5 / §13 / §14.2 / §14.3
+- 新增 `batch_day.*` 状态、policy 取值、API 必须同步 `docs/dict/glossary.md`、`docs/api/console-api.openapi.yaml`、`docs/api/console-api-protocol.md`
+- CLAUDE.md 时区策略章节、`docs/coding-conventions.md §20`、`docs/runbook/feature-switches.md` 需保持与本文 §2 / §8 一致
