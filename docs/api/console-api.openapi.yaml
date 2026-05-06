@@ -872,6 +872,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleBatchDayCatchUpResponse'
+  /api/console/batch-days/operate:
+    post:
+      tags: [BatchDays]
+      summary: Operate on a batch_day_instance (FREEZE / RELEASE / SKIP / REOPEN / CLOSE)
+      description: |-
+        转发到 orchestrator 内部接口 `POST /internal/batch-days/operate`，由
+        `BatchDayOperationService` 执行状态机推进。同事务双写 `job_execution_log`
+        + `batch_day_operation_audit`（V105）。RELEASE 触发 `batch_day_waiting_launch`
+        重放。需要 ROLE_ADMIN；建议高风险动作（REOPEN / CLOSE）后续接审批流。
+      operationId: operateBatchDay
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDayOperateRequest'
+      responses:
+        '200':
+          description: Operate result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
   /api/console/jobs/batch-trigger:
     post:
       tags: [Jobs]
@@ -8480,6 +8505,28 @@ components:
           type: string
           maxLength: 512
       required: [calendarCode]
+    BatchDayOperateRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        calendarCode:
+          type: string
+          maxLength: 128
+        bizDate:
+          type: string
+          format: date
+        action:
+          type: string
+          enum: [FREEZE, RELEASE, SKIP, REOPEN, CLOSE]
+          description: '批量日治理动作；状态机由 BatchDayOperationService 推进'
+        operatorId:
+          type: string
+          maxLength: 128
+        reason:
+          type: string
+          maxLength: 1024
+      required: [calendarCode, bizDate, action]
     CompensationCommandRequest:
       type: object
       properties:

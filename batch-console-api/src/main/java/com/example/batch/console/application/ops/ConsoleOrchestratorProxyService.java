@@ -49,4 +49,18 @@ public interface ConsoleOrchestratorProxyService {
    * @return key=requested / reset 的统计（reset 可能小于 requested，因有些 id 不在 FAILED/GIVE_UP）
    */
   Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids);
+
+  /**
+   * 转发批量日治理动作：FREEZE / RELEASE / SKIP / REOPEN / CLOSE。 状态机由 orchestrator 的
+   * BatchDayOperationService 推进，同事务双写 `job_execution_log` + `batch_day_operation_audit`。
+   *
+   * @return key=batchDayId / dayStatus / frozen / releasedLaunchCount
+   */
+  Map<String, Object> batchDayOperate(
+      String tenantId,
+      String calendarCode,
+      java.time.LocalDate bizDate,
+      String action,
+      String operatorId,
+      String reason);
 }
