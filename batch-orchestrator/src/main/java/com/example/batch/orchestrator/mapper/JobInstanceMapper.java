@@ -153,4 +153,15 @@ public interface JobInstanceMapper {
       @Param("tenantId") String tenantId,
       @Param("jobGroupCode") String jobGroupCode,
       @Param("bizDate") java.time.LocalDate bizDate);
+
+  /**
+   * ADR-022 v0.1 forensic 取证：按 (tenantId, bizDate 范围, 可选 jobCodes) 拉取所有 instance。 仅 forensic
+   * 路径用，不在主链路。
+   */
+  List<JobInstanceEntity> selectForensicByBizDateRange(
+      @Param("tenantId") String tenantId,
+      @Param("bizDateFrom") java.time.LocalDate bizDateFrom,
+      @Param("bizDateTo") java.time.LocalDate bizDateTo,
+      @Param("jobCodes") List<String> jobCodes,
+      @Param("limit") int limit);
 }
