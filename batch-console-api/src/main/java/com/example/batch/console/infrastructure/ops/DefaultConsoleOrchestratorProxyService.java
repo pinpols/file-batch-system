@@ -161,6 +161,35 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         .body(new ParameterizedTypeReference<Map<String, Integer>>() {});
   }
 
+  @Override
+  public Map<String, Object> batchDayOperate(
+      String tenantId,
+      String calendarCode,
+      java.time.LocalDate bizDate,
+      String action,
+      String operatorId,
+      String reason) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    RestClient client =
+        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    Map<String, Object> body = new java.util.LinkedHashMap<>();
+    body.put("tenantId", resolved);
+    body.put("calendarCode", calendarCode);
+    body.put("bizDate", bizDate == null ? null : bizDate.toString());
+    body.put("action", action);
+    body.put("operatorId", operatorId);
+    body.put("reason", reason);
+    Map<String, Object> response =
+        client
+            .post()
+            .uri("/internal/batch-days/operate")
+            .body(body)
+            .retrieve()
+            .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+    publishRefresh(resolved);
+    return response;
+  }
+
   private void publishRefresh(String tenantId) {
     domainEventPublisher.publishChanged(tenantId, "workflow-runs", "workflow-run-updated");
     domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
