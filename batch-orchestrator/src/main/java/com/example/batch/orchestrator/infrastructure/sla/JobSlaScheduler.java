@@ -51,10 +51,12 @@ public class JobSlaScheduler {
   private final AlertEventService alertEventService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final AtomicLong violationCount = new AtomicLong();
+  private final AtomicLong escalationCount = new AtomicLong();
 
   @PostConstruct
   void initializeMeters() {
     meterRegistry.gauge("batch.job.sla.violation.count", violationCount);
+    meterRegistry.gauge("batch.job.sla.escalation.count", escalationCount);
   }
 
   @Scheduled(fixedDelayString = "${batch.sla.poll-interval-millis:30000}")
@@ -134,6 +136,60 @@ public class JobSlaScheduler {
         BatchMdc.remove(StructuredLogField.TENANT_ID);
       }
     }
+    scanEscalations(now);
+  }
+
+  /**
+   * 升级再触发：首次告警后 instance 仍非终态、sla_alerted_at 早于 {@code now - escalationDelay} 的实例 → 以 ERROR 级再发一条
+   * {@code JOB_SLA_VIOLATION_ESCALATED}。alert_event 表按 fingerprint 去重（{@code tenant + alertType +
+   * resourceKey}），重复扫描会 merge 到同一行而非刷屏；本地不写 execution log，避免日志爆炸。
+   */
+  private void scanEscalations(Instant now) {
+    long delaySeconds = governance.sla().getEscalationDelaySeconds();
+    if (delaySeconds <= 0L) {
+      escalationCount.set(0L);
+      return;
+    }
+    Instant escalationBefore = now.minusSeconds(delaySeconds);
+    escalationCount.set(jobInstanceMapper.countSlaEscalationCandidates(escalationBefore));
+    List<JobInstanceEntity> escalations =
+        jobInstanceMapper.selectSlaEscalationCandidates(
+            escalationBefore, governance.sla().getBatchSize());
+    if (escalations == null || escalations.isEmpty()) {
+      return;
+    }
+    String severity = governance.sla().getEscalationSeverity();
+    String resolvedSeverity = severity == null || severity.isBlank() ? "ERROR" : severity;
+    for (JobInstanceEntity candidate : escalations) {
+      if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
+        continue;
+      }
+      Map<String, Object> extra = buildEscalationExtra(candidate, now, delaySeconds);
+      AlertEmitRequest emitRequest =
+          AlertEmitRequest.builder()
+              .tenantId(candidate.getTenantId())
+              .serviceName("batch-orchestrator")
+              .alertType("JOB_SLA_VIOLATION_ESCALATED")
+              .severity(resolvedSeverity)
+              .title("job SLA still violating after escalation window")
+              .detailJson(JsonUtils.toJson(extra))
+              .resourceKey(String.valueOf(candidate.getId()))
+              .traceId(candidate.getTraceId())
+              .build();
+      alertEventService.emit(emitRequest);
+    }
+  }
+
+  private Map<String, Object> buildEscalationExtra(
+      JobInstanceEntity candidate, Instant now, long delaySeconds) {
+    Map<String, Object> extra = new LinkedHashMap<>(buildExtra(candidate, now));
+    extra.put("escalationDelaySeconds", delaySeconds);
+    extra.put("slaAlertedAt", candidate.getSlaAlertedAt());
+    if (candidate.getSlaAlertedAt() != null) {
+      extra.put(
+          "alertedElapsedSeconds", Duration.between(candidate.getSlaAlertedAt(), now).getSeconds());
+    }
+    return extra;
   }
 
   private String buildMessage(JobInstanceEntity candidate, Instant now) {

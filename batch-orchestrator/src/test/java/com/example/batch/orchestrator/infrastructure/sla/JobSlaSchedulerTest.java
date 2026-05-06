@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.sla;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -26,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /** 单元测试：{@link JobSlaScheduler#scanViolations()} 各路径。 */
 class JobSlaSchedulerTest {
@@ -159,6 +161,39 @@ class JobSlaSchedulerTest {
 
     verify(jobExecutionLogMapper, times(4)).insert(any());
     verify(alertEventService, times(2)).emit(any());
+  }
+
+  @Test
+  void shouldEmitEscalatedAlertForLongRunningAlertedInstance() {
+    properties.setEscalationDelaySeconds(300L);
+    properties.setEscalationSeverity("ERROR");
+    when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);
+    when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of());
+
+    JobInstanceEntity stale = slaCandidate("t1", 99L, BatchDateTimeSupport.utcNow());
+    stale.setSlaAlertedAt(BatchDateTimeSupport.utcNow().minusSeconds(900));
+    when(jobInstanceMapper.countSlaEscalationCandidates(any())).thenReturn(1L);
+    when(jobInstanceMapper.selectSlaEscalationCandidates(any(), anyInt()))
+        .thenReturn(List.of(stale));
+
+    scheduler.scanViolations();
+
+    ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    verify(alertEventService).emit(captor.capture());
+    assertThat(captor.getValue().alertType()).isEqualTo("JOB_SLA_VIOLATION_ESCALATED");
+    assertThat(captor.getValue().severity()).isEqualTo("ERROR");
+  }
+
+  @Test
+  void shouldSkipEscalationWhenDelayIsZero() {
+    properties.setEscalationDelaySeconds(0L);
+    when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);
+    when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of());
+
+    scheduler.scanViolations();
+
+    verify(jobInstanceMapper, never()).selectSlaEscalationCandidates(any(), anyInt());
+    verify(alertEventService, never()).emit(any());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

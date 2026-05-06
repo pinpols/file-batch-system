@@ -43,6 +43,16 @@ public interface JobInstanceMapper {
   long countSlaViolationCandidates();
 
   /**
+   * 选 sla_alerted_at 早于 {@code escalationBefore} 且 instance_status 仍非终态（WAITING/READY/RUNNING）的实例。
+   * 用于升级再触发：首次告警后跑了一段时间还没结束就转为 ERROR 级再发一次。
+   */
+  List<JobInstanceEntity> selectSlaEscalationCandidates(
+      @Param("escalationBefore") Instant escalationBefore, @Param("limit") int limit);
+
+  /** 升级候选总数（gauge 用）。 */
+  long countSlaEscalationCandidates(@Param("escalationBefore") Instant escalationBefore);
+
+  /**
    * 选 RUNNING 中超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 兜底）。
    *
    * <p>JOIN job_definition 拿 timeout_seconds（{@code > 0} 才生效，{@code = 0} 表示无 timeout）。
@@ -105,4 +115,25 @@ public interface JobInstanceMapper {
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("highWaterMarkOut") String highWaterMarkOut);
+
+  /**
+   * 同一 (tenantId, jobCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的 SAME_JOB
+   * scope 用此 判断"前一日同 job 是否已完结"。
+   *
+   * <p>非终态: CREATED / WAITING / READY / RUNNING / PARTIAL_FAILED。 终态(允许放行): SUCCESS / FAILED /
+   * CANCELLED / TERMINATED — 失败状态由调用方决定是否仍允许放行(与 batch_day_instance.day_status 同语义)。
+   */
+  int countNonTerminalByJobCodeAndBizDate(
+      @Param("tenantId") String tenantId,
+      @Param("jobCode") String jobCode,
+      @Param("bizDate") java.time.LocalDate bizDate);
+
+  /**
+   * 同一 (tenantId, jobGroupCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的
+   * SAME_JOB_GROUP scope 用此判断"前一日同组是否全部完结"。 通过 JOIN job_definition.job_group_code 收敛同组 jobCode。
+   */
+  int countNonTerminalByJobGroupAndBizDate(
+      @Param("tenantId") String tenantId,
+      @Param("jobGroupCode") String jobGroupCode,
+      @Param("bizDate") java.time.LocalDate bizDate);
 }

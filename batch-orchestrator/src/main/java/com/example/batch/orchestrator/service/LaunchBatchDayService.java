@@ -9,7 +9,9 @@ import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.service.governance.AlertEventService;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -51,6 +53,7 @@ public class LaunchBatchDayService {
   private final BatchDayTimePolicyResolver timePolicyResolver;
   private final ObjectProvider<LaunchBatchDayService> selfProvider;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final AlertEventService alertEventService;
 
   /**
    * 批次日 upsert 入口：内部以 REQUIRES_NEW 事务逐次尝试；遇到 @Version 乐观锁冲突时 （{@link
@@ -478,6 +481,7 @@ public class LaunchBatchDayService {
       routedParams.put(
           "lateArrivalToleranceMin",
           resolveLateArrivalToleranceMin(request.tenantId(), calendarCode));
+      emitLateArrivalAlert(request, calendarCode, batchDay, "BATCH_DAY_LATE_ACCEPTED", "WARN");
       return LaunchRequest.builder()
           .tenantId(request.tenantId())
           .jobCode(request.jobCode())
@@ -494,6 +498,7 @@ public class LaunchBatchDayService {
     // 避免内存持续持有过期 triggerType 误导 prepareJobInstance.
     routedParams.put("catchUpReason", "LATE_ARRIVAL_OR_CLOSED_BATCH_DAY");
     routedParams.put("originalTriggerType", triggerType.code());
+    emitLateArrivalAlert(request, calendarCode, batchDay, "BATCH_DAY_LATE_REJECTED", "ERROR");
     int casRows =
         jobMappers.triggerRequestMapper.updateTriggerType(
             request.tenantId(),
@@ -547,6 +552,44 @@ public class LaunchBatchDayService {
       Integer lateCount,
       Integer catchupCount,
       Instant cutoffAt) {}
+
+  private void emitLateArrivalAlert(
+      LaunchRequest request,
+      String calendarCode,
+      BatchDayInstanceEntity batchDay,
+      String alertType,
+      String severity) {
+    Map<String, Object> detail = new LinkedHashMap<>();
+    detail.put("tenantId", request.tenantId());
+    detail.put("jobCode", request.jobCode());
+    detail.put("bizDate", request.bizDate() == null ? null : request.bizDate().toString());
+    detail.put("requestId", request.requestId());
+    detail.put("triggerType", request.triggerType() == null ? null : request.triggerType().code());
+    detail.put("calendarCode", calendarCode);
+    detail.put("batchDayStatus", batchDay == null ? null : batchDay.dayStatus());
+    detail.put(
+        "batchDayCutoffAt",
+        batchDay == null || batchDay.cutoffAt() == null ? null : batchDay.cutoffAt().toString());
+    String resourceKey =
+        request.tenantId()
+            + ":"
+            + (Texts.hasText(calendarCode) ? calendarCode + ":" : "")
+            + request.jobCode()
+            + ":"
+            + (request.bizDate() == null ? "" : request.bizDate());
+    AlertEmitRequest emitRequest =
+        AlertEmitRequest.builder()
+            .tenantId(request.tenantId())
+            .serviceName("batch-orchestrator")
+            .alertType(alertType)
+            .severity(severity)
+            .title("batch day late arrival: " + alertType)
+            .detailJson(JsonUtils.toJson(detail))
+            .resourceKey(resourceKey)
+            .traceId(request.traceId())
+            .build();
+    alertEventService.emit(emitRequest);
+  }
 
   private void appendBatchDayAuditLog(BatchDayAuditLogParam p) {
     JobExecutionLogEntity logEntity = new JobExecutionLogEntity();
