@@ -13,6 +13,8 @@
 | 05 | [project-assessment-2026-04-30.md](./project-assessment-2026-04-30.md) | 项目工程深度评估快照 v2（2026-04-30）:24h 演进 delta + 实地 grep 复评 + P1 ops 缺口锁定 | **当前权威**,看"项目今天整体水准"一页式判断 |
 | 06 | [positional-args-cleanup-plan.md](./positional-args-cleanup-plan.md) | V6-P2-POSITIONAL-ARGS 治理方案（2026-05-01）：49 处位置参数构造臃肿全清，分 6 批 PR 落地 | 接手该治理 / review 范围与提交策略 |
 | 07 | [batch-system-timezone-consistency-check.md](./batch-system-timezone-consistency-check.md) | 批量系统统一时区检查与设计建议（2026-05-05）：现状审计 + 与 design/timezone-and-dst-design 的差距 | 改时区相关代码前的现状参照 |
+| 08 | [adr-012-021-027-priority-scope-2026-05-06.md](./adr-012-021-027-priority-scope-2026-05-06.md) | ADR 设计储备的"做不做 / 什么时候做 / 边界在哪"决策档（2026-05-06）：8 ADR 优先级 + 范围边界纪律 | 启动 ADR 实施前 / 担心 scope 拽偏时 |
+| 09 | [system-scope-boundary-audit-2026-05-06.md](./system-scope-boundary-audit-2026-05-06.md) | 已落地代码的越界审计（2026-05-06）：4 处中度模糊点（telemetry / SqlTransform / AI chat / ResourceTag）+ 5 条 CI 哨兵建议 | 担心系统拽偏成"企业数据治理 + K8s 调度器" / review 越界风险时 |
 
 ## 工作循环
 
