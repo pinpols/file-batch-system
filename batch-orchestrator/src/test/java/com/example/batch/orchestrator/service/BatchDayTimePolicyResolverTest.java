@@ -48,6 +48,19 @@ class BatchDayTimePolicyResolverTest {
     assertThat(cutoffAt).isEqualTo(Instant.parse("2026-11-01T06:30:00Z"));
   }
 
+  @Test
+  void shouldDegradeRunTwiceToEarlierOffsetForCutoffAndReflectInSnapshot() {
+    BusinessCalendarEntity calendar =
+        calendar("America/New_York", LocalTime.of(1, 30), null, "RUN_TWICE");
+
+    // RUN_TWICE 不支持用于 cutoff, 必须降级到 RUN_ONCE_EARLIER_OFFSET
+    Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, 10, 31));
+
+    assertThat(cutoffAt).isEqualTo(Instant.parse("2026-11-01T05:30:00Z"));
+    assertThat(resolver.snapshot(calendar))
+        .isEqualTo("gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET");
+  }
+
   private BusinessCalendarEntity calendar(
       String timezone, LocalTime cutoffTime, String gapPolicy, String overlapPolicy) {
     return new BusinessCalendarEntity(

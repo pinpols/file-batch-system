@@ -9,6 +9,8 @@ import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.support.TriggerDescriptor;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,13 +100,17 @@ public class WheelTriggerReconciler {
       if (hasScheduleDrift(existing, d)) {
         Instant next = computeNext(d, BatchDateTimeSupport.utcNow());
         if (next != null) {
-          stateMapper.rescheduleNextFireTime(existing.getId(), next);
+          ZoneId zone = timezoneProvider.resolveOrDefault(d.getTimezone());
+          ZonedDateTime zdt = next.atZone(zone);
+          stateMapper.rescheduleNextFireTime(
+              existing.getId(), next, zone.getId(), zdt.toLocalDate(), zdt.toLocalTime());
           updated++;
           log.info(
-              "wheel reschedule due to drift: jobDefId={} jobCode={} newNextFireTime={}",
+              "wheel reschedule due to drift: jobDefId={} jobCode={} newNextFireTime={} zone={}",
               d.getJobDefinitionId(),
               d.getJobCode(),
-              next);
+              next,
+              zone.getId());
         }
       }
     }
@@ -140,11 +146,17 @@ public class WheelTriggerReconciler {
           "trigger has no future fire time, skip INSERT runtime_state: jobCode={}", d.getJobCode());
       return false;
     }
+    ZoneId zone = timezoneProvider.resolveOrDefault(d.getTimezone());
+    ZonedDateTime zdt = next.atZone(zone);
     TriggerRuntimeStateEntity entity = new TriggerRuntimeStateEntity();
     entity.setJobDefinitionId(d.getJobDefinitionId());
     entity.setTenantId(d.getTenantId());
     entity.setJobCode(d.getJobCode());
     entity.setNextFireTime(next);
+    entity.setScheduleTimezone(zone.getId());
+    entity.setScheduledLocalDate(zdt.toLocalDate());
+    entity.setScheduledLocalTime(zdt.toLocalTime());
+    entity.setFireSequence(1);
     try {
       stateMapper.insertOnReconcile(entity);
       return true;

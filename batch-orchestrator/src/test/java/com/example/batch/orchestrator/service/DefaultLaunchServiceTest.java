@@ -111,7 +111,10 @@ class DefaultLaunchServiceTest {
             timezoneProvider,
             new BatchDayTimePolicyResolver(timezoneProvider),
             batchDaySelfProvider,
-            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
+            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+            mock(
+                com.example.batch.orchestrator.application.service.governance.AlertEventService
+                    .class));
     when(batchDaySelfProvider.getObject()).thenReturn(launchBatchDayService);
     launchParamResolver =
         new LaunchParamResolver(

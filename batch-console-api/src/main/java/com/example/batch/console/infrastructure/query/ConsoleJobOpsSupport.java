@@ -399,6 +399,15 @@ public class ConsoleJobOpsSupport {
     private final String strategy;
     private final String traceId;
 
+    /** §5.5 — 补跑结果版本策略（CREATE_NEW_VERSION / KEEP_BOTH / MANUAL_CONFIRM_EFFECTIVE）。 */
+    private final String resultPolicy;
+
+    /** §5.5 — 补跑配置版本策略（USE_ORIGINAL_CONFIG / USE_LATEST_CONFIG / USE_SPECIFIED_VERSION）。 */
+    private final String configVersionPolicy;
+
+    /** USE_SPECIFIED_VERSION 时使用的具体 job_definition_version。 */
+    private final Integer configVersion;
+
     CompensationPayload withTraceId(String currentTraceId) {
       return toBuilder().traceId(currentTraceId).build();
     }

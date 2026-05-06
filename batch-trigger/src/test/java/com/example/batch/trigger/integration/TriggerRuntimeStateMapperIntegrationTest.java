@@ -133,7 +133,17 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
-    int rows = mapper.advanceAfterFire(loaded.getId(), nextNext, origin, "FIRED", 0);
+    int rows =
+        mapper.advanceAfterFire(
+            loaded.getId(),
+            nextNext,
+            origin,
+            "FIRED",
+            0,
+            "Asia/Shanghai",
+            nextNext.atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate(),
+            nextNext.atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalTime(),
+            1);
     assertThat(rows).isEqualTo(1);
 
     TriggerRuntimeStateEntity advanced = mapper.selectByJobDefinitionId(jobDefId);
@@ -142,6 +152,8 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     assertThat(advanced.getLastFireStatus()).isEqualTo("FIRED");
     assertThat(advanced.getScheduledFireMarker()).isNull();
     assertThat(advanced.getMisfireCount()).isZero();
+    assertThat(advanced.getScheduleTimezone()).isEqualTo("Asia/Shanghai");
+    assertThat(advanced.getFireSequence()).isEqualTo(1);
   }
 
   @Test
@@ -150,11 +162,16 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
+    Instant next = BatchDateTimeSupport.utcNow().plus(Duration.ofMinutes(60));
     mapper.advanceAfterFire(
         loaded.getId(),
-        BatchDateTimeSupport.utcNow().plus(Duration.ofMinutes(60)),
+        next,
         BatchDateTimeSupport.utcNow(),
         "MISFIRE_CATCH_UP",
+        1,
+        "Asia/Shanghai",
+        next.atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate(),
+        next.atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalTime(),
         1);
 
     TriggerRuntimeStateEntity advanced = mapper.selectByJobDefinitionId(jobDefId);
@@ -203,12 +220,20 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
     Instant newNext = BatchDateTimeSupport.utcNow().plus(Duration.ofHours(1));
-    int rows = mapper.rescheduleNextFireTime(loaded.getId(), newNext);
+    int rows =
+        mapper.rescheduleNextFireTime(
+            loaded.getId(),
+            newNext,
+            "Asia/Shanghai",
+            newNext.atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate(),
+            newNext.atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalTime());
     assertThat(rows).isEqualTo(1);
 
     TriggerRuntimeStateEntity afterReschedule = mapper.selectByJobDefinitionId(jobDefId);
     assertThat(afterReschedule.getNextFireTime()).isEqualTo(newNext);
     assertThat(afterReschedule.getScheduledFireMarker()).isNull();
+    assertThat(afterReschedule.getScheduleTimezone()).isEqualTo("Asia/Shanghai");
+    assertThat(afterReschedule.getFireSequence()).isEqualTo(1);
   }
 
   @Test

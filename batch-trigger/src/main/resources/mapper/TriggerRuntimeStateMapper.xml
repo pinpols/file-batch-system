@@ -15,6 +15,10 @@
         <result column="scheduled_at" property="scheduledAt"/>
         <result column="misfire_count" property="misfireCount"/>
         <result column="version" property="version"/>
+        <result column="schedule_timezone" property="scheduleTimezone"/>
+        <result column="scheduled_local_date" property="scheduledLocalDate"/>
+        <result column="scheduled_local_time" property="scheduledLocalTime"/>
+        <result column="fire_sequence" property="fireSequence"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -57,6 +61,10 @@
                last_fire_time = #{lastFireTime},
                last_fire_status = #{lastFireStatus},
                misfire_count = misfire_count + #{misfireDelta},
+               schedule_timezone = #{scheduleTimezone},
+               scheduled_local_date = #{scheduledLocalDate},
+               scheduled_local_time = #{scheduledLocalTime},
+               fire_sequence = #{fireSequence},
                scheduled_fire_marker = null,
                scheduled_at = null,
                version = version + 1,
@@ -83,10 +91,18 @@
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.trigger_runtime_state (
             job_definition_id, tenant_id, job_code, next_fire_time,
-            misfire_count, version, created_at, updated_at
+            misfire_count, version,
+            schedule_timezone, scheduled_local_date, scheduled_local_time, fire_sequence,
+            created_at, updated_at
         ) values (
             #{jobDefinitionId}, #{tenantId}, #{jobCode}, #{nextFireTime},
-            0, 1, now(), now()
+            0, 1,
+            #{scheduleTimezone}, #{scheduledLocalDate}, #{scheduledLocalTime},
+            <choose>
+                <when test="fireSequence != null">#{fireSequence}</when>
+                <otherwise>1</otherwise>
+            </choose>,
+            now(), now()
         )
     </insert>
 
@@ -120,6 +136,10 @@
     <update id="rescheduleNextFireTime">
         update batch.trigger_runtime_state
            set next_fire_time = #{nextFireTime},
+               schedule_timezone = #{scheduleTimezone},
+               scheduled_local_date = #{scheduledLocalDate},
+               scheduled_local_time = #{scheduledLocalTime},
+               fire_sequence = 1,
                scheduled_fire_marker = null,
                scheduled_at = null,
                version = version + 1,

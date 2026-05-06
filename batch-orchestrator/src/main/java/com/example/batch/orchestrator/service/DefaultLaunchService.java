@@ -266,9 +266,30 @@ public class DefaultLaunchService implements LaunchService {
         "rerunFlag", launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams));
     snapshot.put("rerunReason", launchParamResolver.resolveRerunReason(effectiveParams));
     snapshot.put("retryFlag", launchParamResolver.resolveRetryFlag(effectiveParams));
+    // §5.5 — 用户显式策略 > 平台默认。effectiveParams 由 DefaultCompensationService 注入。
     snapshot.put("resultIsolation", "NEW_JOB_INSTANCE_PER_RUN_ATTEMPT");
-    snapshot.put("configVersionPolicy", "SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE");
+    snapshot.put(
+        "resultPolicy",
+        firstNonBlank(
+            stringValue(effectiveParams.get("_rerunResultPolicy")), "CREATE_NEW_VERSION"));
+    snapshot.put(
+        "configVersionPolicy",
+        firstNonBlank(
+            stringValue(effectiveParams.get("_rerunConfigVersionPolicy")),
+            "SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE"));
+    Object specifiedVersion = effectiveParams.get("_rerunConfigVersion");
+    if (specifiedVersion != null) {
+      snapshot.put("configVersion", specifiedVersion);
+    }
     return JsonUtils.toJson(snapshot);
+  }
+
+  private static String stringValue(Object value) {
+    return value == null ? null : String.valueOf(value);
+  }
+
+  private static String firstNonBlank(String preferred, String fallback) {
+    return (preferred != null && !preferred.isBlank()) ? preferred : fallback;
   }
 
   /**

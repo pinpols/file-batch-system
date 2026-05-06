@@ -39,6 +39,9 @@ public class CompensationController {
             .approvalId(request.approvalId())
             .strategy(request.strategy())
             .traceId(request.traceId())
+            .resultPolicy(request.resultPolicy())
+            .configVersionPolicy(request.configVersionPolicy())
+            .configVersion(request.configVersion())
             .build();
     String compensationNo = compensationService.submit(command);
     return new CompensationResponse(compensationNo);
@@ -58,7 +61,10 @@ public class CompensationController {
       String operatorId,
       String approvalId,
       String strategy,
-      String traceId) {}
+      String traceId,
+      String resultPolicy,
+      String configVersionPolicy,
+      Integer configVersion) {}
 
   public record CompensationResponse(String commandNo) {}
 }

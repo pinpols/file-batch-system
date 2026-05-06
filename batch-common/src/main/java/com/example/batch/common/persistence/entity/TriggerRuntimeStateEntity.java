@@ -1,6 +1,8 @@
 package com.example.batch.common.persistence.entity;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import lombok.Data;
 
 /**
@@ -42,6 +44,21 @@ public class TriggerRuntimeStateEntity {
 
   /** 乐观锁;UPDATE 时 WHERE id=? AND version=?。 */
   private Integer version;
+
+  /** cron 解释 next_fire_time 时使用的 IANA ZoneId 快照(V104)。 */
+  private String scheduleTimezone;
+
+  /** next_fire_time 在 scheduleTimezone 下的 LocalDate(V104,DST 排障审计)。 */
+  private LocalDate scheduledLocalDate;
+
+  /** next_fire_time 在 scheduleTimezone 下的 LocalTime(V104,DST 排障审计)。 */
+  private LocalTime scheduledLocalTime;
+
+  /**
+   * 同一本地计划时间的连续 fire 计数(V104)。 DST overlap 第二次触发为 2,正常为 1。 提供给日批 / 高频 fire identity
+   * 区分;fire_sequence 升 1 触发于 advanceAfterFire 检测到本地时间未变。
+   */
+  private Integer fireSequence;
 
   private Instant createdAt;
   private Instant updatedAt;

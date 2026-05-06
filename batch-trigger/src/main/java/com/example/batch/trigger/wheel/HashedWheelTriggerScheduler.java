@@ -24,8 +24,12 @@ import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -402,8 +406,27 @@ public class HashedWheelTriggerScheduler {
         // next_fire_time 设为遥远未来防止反复扫;实际上业务侧应该 disable
         next = dateTimeSupport.nowInstant().plus(Duration.ofDays(36500));
       }
+      ZonedDateTime nextLocal = next.atZone(zoneId);
+      LocalDate nextDate = nextLocal.toLocalDate();
+      LocalTime nextTime = nextLocal.toLocalTime();
+      // DST overlap: 同一本地 date+time 连续触发 → fire_sequence 累加, 否则重置 1。
+      // 用 schedule_timezone 比较防 zone 漂移期间误判。
+      int fireSequence =
+          (Objects.equals(state.getScheduleTimezone(), zoneId.getId())
+                  && Objects.equals(state.getScheduledLocalDate(), nextDate)
+                  && Objects.equals(state.getScheduledLocalTime(), nextTime))
+              ? Math.max(1, state.getFireSequence() == null ? 1 : state.getFireSequence()) + 1
+              : 1;
       stateMapper.advanceAfterFire(
-          state.getId(), next, scheduledFireTime, lastFireStatus, misfireDelta);
+          state.getId(),
+          next,
+          scheduledFireTime,
+          lastFireStatus,
+          misfireDelta,
+          zoneId.getId(),
+          nextDate,
+          nextTime,
+          fireSequence);
     } catch (Exception e) {
       log.warn("advanceAfterFire failed for job={}: {}", state.getJobCode(), e.getMessage());
     }

@@ -10,9 +10,11 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BatchDayManualOperation;
+import com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import com.example.batch.orchestrator.mapper.BatchDayOperationAuditMapper;
 import com.example.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import java.time.Instant;
@@ -37,6 +39,7 @@ public class BatchDayOperationService {
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
+  private final BatchDayOperationAuditMapper batchDayOperationAuditMapper;
   private final LaunchService launchService;
   private final BatchDateTimeSupport dateTimeSupport;
 
@@ -68,11 +71,47 @@ public class BatchDayOperationService {
               + current.version());
     }
     appendAuditLog(current, target, command.action(), operator, command.reason(), now);
+    insertOperationAudit(command, current, target, operator, now);
     int released =
         command.action() == BatchDayOperation.RELEASE
             ? releaseWaitingLaunches(target, operator)
             : 0;
     return new BatchDayOperationResult(target, released);
+  }
+
+  private void insertOperationAudit(
+      BatchDayOperateCommand command,
+      BatchDayInstanceEntity from,
+      BatchDayInstanceEntity to,
+      String operator,
+      Instant now) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("tenantId", command.tenantId());
+    payload.put("calendarCode", command.calendarCode());
+    payload.put("bizDate", command.bizDate() == null ? null : command.bizDate().toString());
+    payload.put("action", command.action().name());
+    payload.put("reason", command.reason());
+    payload.put("operatorId", operator);
+    BatchDayOperationAuditEntity audit =
+        BatchDayOperationAuditEntity.builder()
+            .tenantId(from.tenantId())
+            .calendarCode(from.calendarCode())
+            .bizDate(from.bizDate())
+            .operationType("BATCH_DAY_" + command.action().name())
+            .fromStatus(from.dayStatus())
+            .toStatus(to.dayStatus())
+            .fromFrozen(from.frozen())
+            .toFrozen(to.frozen())
+            .operatorId(operator)
+            .operatorType(AuditLogConstants.OPERATOR_TYPE_REQUEST)
+            .reasonCode(command.reason())
+            .comment(null)
+            .approvalId(null)
+            .requestPayload(JsonUtils.toJson(payload))
+            .traceId(null)
+            .createdAt(now)
+            .build();
+    batchDayOperationAuditMapper.insert(audit);
   }
 
   private BatchDayInstanceEntity transition(
