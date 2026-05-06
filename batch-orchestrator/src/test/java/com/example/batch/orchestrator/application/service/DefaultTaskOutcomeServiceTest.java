@@ -31,6 +31,7 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import com.example.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,7 +87,8 @@ class DefaultTaskOutcomeServiceTest {
             new SimpleMeterRegistry(),
             jobInstanceTerminalChildStateReconciler,
             mock(ResultVersionWriter.class),
-            mock(BatchDayReplayTerminalReconciler.class));
+            mock(BatchDayReplayTerminalReconciler.class),
+            mock(FailureClassifier.class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 

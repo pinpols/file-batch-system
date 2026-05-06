@@ -20,4 +20,8 @@ public interface WorkflowNodeRunMapper {
   int updateStatus(UpdateNodeRunStatusParam param);
 
   List<WorkflowNodeRunEntity> selectByWorkflowRunId(@Param("workflowRunId") Long workflowRunId);
+
+  /** ADR-018 Stage 5/7：扫 WAITING_DEPENDENCY 节点供 reconciler 重试 / 超时治理。 */
+  List<WorkflowNodeRunEntity> selectByNodeStatus(
+      @Param("nodeStatus") String nodeStatus, @Param("limit") int limit);
 }

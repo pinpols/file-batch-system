@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,7 @@ import com.example.batch.orchestrator.application.service.task.ChildJobLaunchSup
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
+import com.example.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver;
 import com.example.batch.orchestrator.application.service.workflow.DefaultWorkflowNodeDispatchService;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -81,7 +83,8 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
             resourceScheduler,
             taskExecutionServiceProvider,
             payloadBuilder,
-            childJobLaunchSupport);
+            childJobLaunchSupport,
+            mock(CrossDayDependencyResolver.class));
   }
 
   @Test

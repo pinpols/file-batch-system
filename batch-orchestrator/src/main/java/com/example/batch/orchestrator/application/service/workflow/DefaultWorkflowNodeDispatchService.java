@@ -7,6 +7,7 @@ import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
@@ -17,6 +18,7 @@ import com.example.batch.orchestrator.application.service.task.ChildJobLaunchSup
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
+import com.example.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -27,7 +29,9 @@ import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,6 +75,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   // P2-4 god-class-decomposition: JOB 节点子作业拉起全套(virtual partition/task + 写 trigger_request +
   // 构造 child LaunchRequest + WORKFLOW_INTERNAL_PAYLOAD_KEYS) 抽到 collaborator
   private final ChildJobLaunchSupport childJobLaunchSupport;
+  // ADR-018 跨批量日依赖解析；NULL（无依赖）跳过；REQUIRED 缺失 → WAITING_DEPENDENCY；解析失败 → FAILED
+  private final CrossDayDependencyResolver crossDayDependencyResolver;
 
   @Lazy @Autowired private DefaultWorkflowNodeDispatchService self;
 
@@ -106,14 +112,129 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (isNodeAlreadyActivated(workflowRun.getId(), node.nodeCode())) {
       return 0;
     }
+    // ADR-018 §决策 §解析时机 — 跨批量日依赖解析；REQUIRED 缺失 → WAITING_DEPENDENCY；解析失败 → 节点 FAIL
+    CrossDayDependencyOutcome outcome =
+        evaluateCrossDayDependencies(jobInstance, workflowRun, workflowNode, node, sourcePayload);
+    if (outcome.halt()) {
+      return 0;
+    }
+    String effectivePayload = outcome.effectivePayload();
     if (isGatewayNode(workflowNode.getNodeType())) {
-      return dispatchGatewayNode(jobInstance, workflowRun, node, sourcePayload);
+      return dispatchGatewayNode(jobInstance, workflowRun, node, effectivePayload);
     }
     if (isJobNode(workflowNode.getNodeType())) {
       return childJobLaunchSupport.dispatchJobNode(
-          jobInstance, workflowRun, node, workflowNode, sourcePayload, traceId);
+          jobInstance, workflowRun, node, workflowNode, effectivePayload, traceId);
     }
-    return dispatchTaskNode(jobInstance, workflowRun, node, workflowNode, sourcePayload, traceId);
+    return dispatchTaskNode(
+        jobInstance, workflowRun, node, workflowNode, effectivePayload, traceId);
+  }
+
+  /**
+   * ADR-018 解析钩子。WAITING / FAILED 时写 {@link WorkflowNodeRunStatus#WAITING_DEPENDENCY} 或 {@link
+   * WorkflowNodeRunStatus#FAILED} 节点 run，并 short-circuit dispatchNode 返回 0；RESOLVED 时把 resolved map
+   * 注入 source payload 的 {@code crossDay} 字段（沿用 ADR-009 DSL 引用）。
+   */
+  private CrossDayDependencyOutcome evaluateCrossDayDependencies(
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun,
+      WorkflowNodeEntity workflowNode,
+      WorkflowDagService.DagNodeResolution node,
+      String sourcePayload) {
+    String jsonSpec = workflowNode.getCrossDayDependencies();
+    if (jsonSpec == null || jsonSpec.isBlank()) {
+      return CrossDayDependencyOutcome.proceed(sourcePayload);
+    }
+    ResolutionResult result =
+        crossDayDependencyResolver.resolve(
+            jobInstance.getTenantId(), jobInstance.getBizDate(), jsonSpec);
+    if (result.isResolved()) {
+      return CrossDayDependencyOutcome.proceed(
+          mergeCrossDayPayload(sourcePayload, result.getResolved()));
+    }
+    if (result.isWaiting()) {
+      writeWaitingDependencyNodeRun(workflowRun.getId(), node, result.getWaitingReasons());
+      log.info(
+          "workflow_node WAITING_DEPENDENCY: tenantId={}, workflowRunId={}, nodeCode={},"
+              + " reasons={}",
+          jobInstance.getTenantId(),
+          workflowRun.getId(),
+          node.nodeCode(),
+          result.getWaitingReasons());
+      return CrossDayDependencyOutcome.halted();
+    }
+    // FAILED — fail-fast，节点直接失败
+    writeFailedNodeRun(workflowRun.getId(), node, result.getFailureCode());
+    log.warn(
+        "workflow_node cross-day dep FAILED: tenantId={}, workflowRunId={}, nodeCode={},"
+            + " failureCode={}",
+        jobInstance.getTenantId(),
+        workflowRun.getId(),
+        node.nodeCode(),
+        result.getFailureCode());
+    return CrossDayDependencyOutcome.halted();
+  }
+
+  /** 把 resolver 返回的 alias map 合并到 sourcePayload 的 {@code crossDay} 字段下，供 ADR-009 DSL 引用。 */
+  private String mergeCrossDayPayload(String sourcePayload, Map<String, Object> crossDay) {
+    if (crossDay == null || crossDay.isEmpty()) {
+      return sourcePayload;
+    }
+    Map<String, Object> base =
+        sourcePayload == null || sourcePayload.isBlank()
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(JsonUtils.fromJson(sourcePayload, Map.class));
+    base.put("crossDay", crossDay);
+    return JsonUtils.toJson(base);
+  }
+
+  private void writeWaitingDependencyNodeRun(
+      Long workflowRunId, WorkflowDagService.DagNodeResolution node, List<String> waitingReasons) {
+    WorkflowNodeRunEntity waiting = new WorkflowNodeRunEntity();
+    waiting.setWorkflowRunId(workflowRunId);
+    waiting.setNodeCode(node.nodeCode());
+    waiting.setNodeType(node.nodeType());
+    waiting.setRunSeq(nextRunSeq(workflowRunId, node.nodeCode()));
+    waiting.setNodeStatus(WorkflowNodeRunStatus.WAITING_DEPENDENCY.code());
+    waiting.setRetryCount(0);
+    waiting.setDurationMs(0L);
+    waiting.setErrorCode("CROSS_DAY_DEP_WAITING");
+    waiting.setErrorMessage(String.join("; ", waitingReasons == null ? List.of() : waitingReasons));
+    // ADR-018 Stage 7: 显式记录等待起点，reconciler 计算超时窗口
+    waiting.setStartedAt(BatchDateTimeSupport.utcNow());
+    workflowMappers.workflowNodeRunMapper.insert(waiting);
+  }
+
+  private void writeFailedNodeRun(
+      Long workflowRunId, WorkflowDagService.DagNodeResolution node, String failureCode) {
+    WorkflowNodeRunEntity failed = new WorkflowNodeRunEntity();
+    failed.setWorkflowRunId(workflowRunId);
+    failed.setNodeCode(node.nodeCode());
+    failed.setNodeType(node.nodeType());
+    failed.setRunSeq(nextRunSeq(workflowRunId, node.nodeCode()));
+    failed.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
+    failed.setRetryCount(0);
+    failed.setDurationMs(0L);
+    failed.setErrorCode(failureCode);
+    failed.setErrorMessage("cross-day dependency resolve failed");
+    failed.setFinishedAt(Instant.now());
+    workflowMappers.workflowNodeRunMapper.insert(failed);
+  }
+
+  /**
+   * 跨日依赖解析的三态结果包装。RESOLVED / WAITING / FAILED 由 caller 决定是否继续 dispatch。
+   *
+   * <p>{@code halt} 字段：true 表示"调用方该 short circuit 返回 0"（WAITING / FAILED）；false 表示 dispatch 应继续，使用
+   * {@code effectivePayload}（合并了 cross-day map 的 payload）。
+   */
+  private record CrossDayDependencyOutcome(boolean halt, String effectivePayload) {
+    static CrossDayDependencyOutcome proceed(String payload) {
+      return new CrossDayDependencyOutcome(false, payload);
+    }
+
+    static CrossDayDependencyOutcome halted() {
+      return new CrossDayDependencyOutcome(true, null);
+    }
   }
 
   private int dispatchTaskNode(

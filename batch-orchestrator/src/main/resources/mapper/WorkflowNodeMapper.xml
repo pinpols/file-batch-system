@@ -18,6 +18,8 @@
         <result column="retry_max_count" property="retryMaxCount"/>
         <result column="timeout_seconds" property="timeoutSeconds"/>
         <result column="node_params" property="nodeParams"/>
+        <result column="cross_day_dependencies" property="crossDayDependencies"/>
+        <result column="cross_day_dependency_timeout_seconds" property="crossDayDependencyTimeoutSeconds"/>
         <result column="enabled" property="enabled"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>

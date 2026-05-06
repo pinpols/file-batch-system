@@ -92,4 +92,12 @@
         where workflow_run_id = #{workflowRunId}
         order by run_seq asc
     </select>
+
+    <select id="selectByNodeStatus" resultMap="WorkflowNodeRunResultMap">
+        select *
+        from batch.workflow_node_run
+        where node_status = #{nodeStatus}
+        order by id asc
+        limit #{limit}
+    </select>
 </mapper>
