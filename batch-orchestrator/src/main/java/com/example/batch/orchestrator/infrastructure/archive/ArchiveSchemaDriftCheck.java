@@ -52,7 +52,10 @@ public class ArchiveSchemaDriftCheck {
           "job_execution_log",
           "compensation_command",
           // V108 (ADR-017) — result_version 主模型；archive 镜像由 LIKE INCLUDING ALL 创建
-          "result_version");
+          "result_version",
+          // V110 (ADR-020) — batch_day_replay 聚合 + 子项；archive 镜像同样 LIKE INCLUDING ALL
+          "batch_day_replay_session",
+          "batch_day_replay_entry");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
