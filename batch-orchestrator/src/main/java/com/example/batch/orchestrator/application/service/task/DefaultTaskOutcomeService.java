@@ -36,6 +36,7 @@ import com.example.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
+import com.example.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -106,7 +107,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       MeterRegistry meterRegistry,
       JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler,
       ResultVersionWriter resultVersionWriter,
-      BatchDayReplayTerminalReconciler batchDayReplayTerminalReconciler) {}
+      BatchDayReplayTerminalReconciler batchDayReplayTerminalReconciler,
+      FailureClassifier failureClassifier) {}
 
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
@@ -262,6 +264,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .retryGovernanceService()
                 .scheduleRetryIfNecessary(
                     task, partition, jobInstance, command.errorCode(), command.errorMessage());
+    String resolvedFailureClass =
+        command.success()
+            ? null
+            : collaborators.failureClassifier().classify(command.failureClass(), null).code();
     int updated =
         jobMappers.jobTaskMapper.finishTask(
             FinishTaskParam.builder()
@@ -275,6 +281,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .errorMessage(command.errorMessage())
                 .errorKey(command.errorKey())
                 .errorArgs(command.errorArgs())
+                .failureClass(resolvedFailureClass)
                 .expectedVersion(task.getVersion())
                 .build());
     if (updated <= 0) {
@@ -455,6 +462,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .stateMachine()
             .transition(freshInstance != null ? freshInstance : jobInstance, instanceEvent)
             .toState();
+    // ADR-012: instance 级 failure_class 仅在终态且失败类（FAILED / PARTIAL_FAILED）时填；
+    // SUCCESS 终态保持 NULL。来源 = 当前命令本次推断的 class（合并 worker 上报 + classifier 兜底）。
+    String instanceFailureClass =
+        isTerminalJobInstanceStatus(instanceStatus)
+                && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
+                    || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus))
+            ? collaborators.failureClassifier().classify(command.failureClass(), null).code()
+            : null;
     int progressUpdated =
         jobMappers.jobInstanceMapper.updateProgress(
             UpdateInstanceProgressParam.builder()
@@ -467,6 +482,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
                         jobInstance, partitions, command))
                 .finishedAt(jobFullyComplete ? finishedAt : null)
+                .failureClass(instanceFailureClass)
                 .expectedVersion(jobInstance.getVersion())
                 .build());
     if (progressUpdated <= 0) {
@@ -475,6 +491,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
     jobInstance.setInstanceStatus(instanceStatus);
     if (isTerminalJobInstanceStatus(instanceStatus)) {
+      // ADR-012 Stage 5: 失败终态打 failure_class 维度 metric, alert routing / 看板使用。
+      if (instanceFailureClass != null) {
+        collaborators
+            .meterRegistry()
+            .counter(
+                "batch.job.failure",
+                "tenant",
+                Optional.ofNullable(command.tenantId()).orElse("unknown"),
+                "jobCode",
+                Optional.ofNullable(jobInstance.getJobCode()).orElse("unknown"),
+                "class",
+                instanceFailureClass)
+            .increment();
+      }
       collaborators
           .jobInstanceTerminalChildStateReconciler()
           .reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
@@ -676,6 +706,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .errorMessage(nodeSuccess ? null : childCommand.errorMessage())
             .errorKey(nodeSuccess ? null : childCommand.errorKey())
             .errorArgs(nodeSuccess ? null : childCommand.errorArgs())
+            .failureClass(nodeSuccess ? null : childCommand.failureClass())
             .outputs(nodeSuccess ? childCommand.outputs() : null)
             .build();
     self.applyTaskOutcome(parentCommand);

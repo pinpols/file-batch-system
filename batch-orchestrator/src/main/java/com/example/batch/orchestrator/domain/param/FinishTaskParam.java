@@ -21,5 +21,8 @@ public class FinishTaskParam implements LocalizedErrorCarrier {
   /** i18n 占位符参数 JSON 数组。 */
   private final String errorArgs;
 
+  /** ADR-012 失败分类（V111）。FAILED 终态时填，SUCCESS 应为 null。 */
+  private final String failureClass;
+
   private final Long expectedVersion;
 }

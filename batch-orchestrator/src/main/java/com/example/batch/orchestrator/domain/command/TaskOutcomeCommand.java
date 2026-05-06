@@ -33,7 +33,12 @@ public record TaskOutcomeCommand(
      * ADR-014: optional; non-null must equal {@code job_partition.current_invocation_id} when
      * partition exists.
      */
-    String partitionInvocationId)
+    String partitionInvocationId,
+    /**
+     * ADR-012 worker 上报的失败分类（V111）。仅 {@code success=false} 路径有意义；为空时由 orchestrator 端 {@code
+     * FailureClassifier} 兜底推断。允许的取值见 {@link com.example.batch.common.enums.FailureClass}。
+     */
+    String failureClass)
     implements LocalizedErrorCarrier {
 
   // record 默认 accessor 是 errorMessage() 无 get 前缀;桥接 carrier 契约的 getErrorXxx() bean 命名。

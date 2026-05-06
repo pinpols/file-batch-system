@@ -45,6 +45,7 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
         <result column="replay_session_id" property="replaySessionId"/>
+        <result column="failure_class" property="failureClass"/>
     </resultMap>
 
     <select id="selectByInstanceNo" resultMap="JobInstanceResultMap">
@@ -180,6 +181,7 @@
             failed_partition_count = #{failedPartitionCount},
             result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             finished_at = #{finishedAt},
+            failure_class = #{failureClass,jdbcType=VARCHAR},
             version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}

@@ -15,4 +15,7 @@ public class UpdateInstanceProgressParam {
   private final String resultSummary;
   private final Instant finishedAt;
   private final Long expectedVersion;
+
+  /** ADR-012 失败终态时填；非 FAILED / PARTIAL_FAILED 应为 null。 */
+  private final String failureClass;
 }

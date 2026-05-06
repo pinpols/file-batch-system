@@ -37,4 +37,10 @@ public class TaskExecutionReportDto extends AbstractLocalizedErrorEntity {
 
   /** ADR-014: optional; mismatched invocation → orchestrator rejects report with CONFLICT。 */
   private String partitionInvocationId;
+
+  /**
+   * ADR-012 worker 上报的失败分类（V111）。仅 {@code success=false} 路径有意义；为空时由 orchestrator 端
+   * FailureClassifier 兜底推断。允许的取值见 {@link com.example.batch.common.enums.FailureClass}。
+   */
+  private String failureClass;
 }

@@ -31,6 +31,9 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
   private Instant createdAt;
   private Instant updatedAt;
 
+  /** ADR-012 task 级失败分类（V111）。worker REPORT 失败时上报，FailureClass 取值。 */
+  private String failureClass;
+
   @Override
   public String getStatus() {
     return taskStatus;

@@ -71,6 +71,12 @@ public class JobInstanceEntity implements Stateful {
   /** ADR-020 batch_day_replay_session.id 反查标签；NULL = 非 replay 创建。 */
   private Long replaySessionId;
 
+  /**
+   * ADR-012 失败分类（V111）。终态时填; 非 FAILED / PARTIAL_FAILED 实例为 NULL。 取值见 {@link
+   * com.example.batch.common.enums.FailureClass}。
+   */
+  private String failureClass;
+
   @Override
   public String getStatus() {
     return instanceStatus;

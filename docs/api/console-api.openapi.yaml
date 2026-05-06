@@ -7886,6 +7886,7 @@ components:
                 deadLetterErrorClass: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 quotaExceededStrategy: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 skipThresholdMode:  { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                failureClass:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
     CommonResponseObject:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'

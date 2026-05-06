@@ -1,9 +1,20 @@
 # ADR-012 · 失败分类（Failure Taxonomy）
 
-- **Status**: Accepted（建议 P1 优先实施，~3-5 人天）
+- **Status**: Accepted（**第 1 阶段必做 / P0**，不越界，~3-5 人天）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-011（幂等边界对齐）/ ADR-013（分布式 tracing）/ §14.3.2 后端缺口审计
+- **Related**: ADR-011（幂等边界对齐）/ ADR-013（分布式 tracing）/ §14.3.2 后端缺口审计 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **批量系统核心能力，不越界。**failure_class 不是为了"好看"，是为了支撑 retry / escalation alert routing / 自动 RERUN / DLQ 重放 / SLA 分析五条响应链。
+
+| ✅ 做 | ❌ 不做 |
+|---|---|
+| 7 enum 封闭分类 + DictEnum 一等公民 | 让 worker 自定义新 FailureClass（枚举封闭） |
+| 按 class 派发 retry / alert / RERUN | 把 FailureClass 拆成多个终态（保留 FAILED 单一终态 + class 列） |
+| Worker 显式上报 + classifier chain 兜底 | 让 ops 在 console 手填 errorClassHint 改分类（污染审计） |
+| `retry_policy_by_class` JSONB 让 job 级覆盖 | 按 class 分流到不同 worker pool（与 ADR-027 正交，v1 不做） |
 
 ## 背景
 
@@ -104,15 +115,15 @@ NULL = 用 §响应派发 默认表。
 
 ## 实施分阶段
 
-| Stage | 范围 | 估算 |
+| Stage | 范围 | 状态 |
 |---|---|---|
-| 1 | schema + enum + 默认 NULL 不影响现有 | 0.5 天 |
-| 2 | `FailureClassifier` chain + 兜底分类器（exception 类 / SQL state） | 1 天 |
-| 3 | Worker SDK 接 `TaskExecutionReportDto.failureClass`，BizException 携带 | 1 天 |
-| 4 | retry policy 按 class 派发；`retry_policy_by_class` JSONB 解析 | 1 天 |
-| 5 | metric / alert routing / Console 列展示 | 1 天 |
+| 1 | schema + enum + 默认 NULL 不影响现有 | ✓ V111 + `FailureClass` enum |
+| 2 | `FailureClassifier` chain + 兜底分类器（exception 类 / SQL state） | ✓ `service/failure/FailureClassifier` + `FailureClassifierTest` 7/7 |
+| 3 | Worker SDK 接 `TaskExecutionReportDto.failureClass`，BizException 携带 | ✓ `BizException.of(code, FailureClass, ...)` + Worker DTO + `TaskOutcomeCommand` 透传 + `finishTask` / `updateProgress` 写库 |
+| 4 | retry policy 按 class 派发；`retry_policy_by_class` JSONB 解析 | ☐ **deferred follow-up** —— Stage 1 已落 schema 列，应用层未接；触发条件：失败重试想按 class 微调时再做（默认全局 retry_policy 仍工作） |
+| 5 | metric / alert routing / Console 列展示 | ✓ `batch.job.failure{tenant,jobCode,class}` counter；`ConsoleMetaQueryService` 注册 `failureClass` + OpenAPI MetaEnums 同步 |
 
-总 ~3.5-5 人天。
+总 ~3.5-5 人天，本轮落 4/5（Stage 1/2/3/5），Stage 4 留给真正需要时再开工。
 
 ## 替代方案
 
