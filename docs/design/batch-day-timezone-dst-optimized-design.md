@@ -1104,18 +1104,18 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 | P2 | import scanner `defaultBizDate` 来源化 | `ImportScannerProperties.bizDatePattern` 从 object 名 named-group 解析 yyyyMMdd (28b77c59) |
 | 附加 | `SETTLING` 中间态 | V107 + `BatchDaySettleScheduler` 两阶段；崩溃中段下次幂等恢复 (28b77c59) |
 | 附加 | SLA escalation + alert event 流 | `JobSlaScheduler` 重试 + `BATCH_DAY_LATE_*` / `BATCH_DAY_GATE_*` alert event；可关闭 (a98ba722) |
+| P1 | 批量日治理 Console REST API | 单 endpoint dispatcher `POST /api/console/batch-days/operate`（5 个 action 走 body 路由）；orchestrator `POST /internal/batch-days/operate` + `ConsoleOrchestratorProxyService.batchDayOperate` 转发；ROLE_ADMIN + `@Idempotent` + `@Pattern` 白名单；OpenAPI / protocol changelog 同步 (455354f8) |
 
 #### 14.3.2 仍未做（非后端 / 设计层）
 
 | 优先级 | 缺口 | 性质 | 推进入口 |
 |---|---|---|---|
-| P1 | 批量日治理 Console REST API + 权限点 + 审批 UI | 非后端（API 层 + 前端 + 审批流） | 后端服务（`BatchDayOperationService` / `BatchDayGateService`）已就绪，`POST /api/console/jobs/batch-days/{bizDate}/{action}` 直接转发即可，权限点 `batch_day.skip / freeze / release / reopen / close` 沿 §5.4 |
 | P2 | Console 批量日视图：已打开未触发、阻塞原因、DST 调整、操作历史 | 非后端 | 数据源齐备（`batch_day_instance` 全字段 + V105 独立审计表 + V104 trigger 本地计划） |
 | 设计 | 跨业务域 / 核心链路联动限流 | 设计层（Accepted，实施 gated） | [ADR-019](../architecture/adr/ADR-019-cross-domain-rate-limit.md) — `business_domain` 主模型 + 域级 quota + 父子借调 + 三态开关；实施触发条件已明确，未触发期间不开工 |
 | 设计 | 跨批量日 DAG 依赖 | 设计层（Accepted，已开工） | [ADR-018](../architecture/adr/ADR-018-cross-batch-day-dag-dependency.md) — pipe 模型；`workflow_node.cross_day_dependencies` JSONB + `WAITING_DEPENDENCY` 节点状态 + `BizDateArithmetic` + `CrossDayDependencyResolver`。Stage 2-4 已落 V109，Stage 5 reconciler / Stage 6 E2E / Stage 7 超时治理排期中 |
 | 设计 | 批量日维度重放治理 | 设计层（Accepted，已开工） | [ADR-020](../architecture/adr/ADR-020-batch-day-replay.md) — `batch_day_replay_session` 聚合 + 4 种 scope (ALL/ALL_FAILED/SUBSET_JOB_CODES/OUTPUTS_ONLY) + 接审批 + 同 (tenant,calendar,bizDate) 唯一 active session 不变量。Stage 2 schema 已落 V110，dispatcher / approval / OUTPUTS_ONLY promote 按 Stage 3-8 推进 |
 | 设计 | 结果版本 "生效" 裁决 | 设计层（Accepted，主链路已落） | [ADR-017](../architecture/adr/ADR-017-result-version-model.md) — `result_version` 主模型 + EFFECTIVE 单版索引 + payload INLINE/EXTERNAL/FILE_RECORD + retention scheduler。Stage 1-5 已落 V108，Stage 6 console UI 待接入 |
-| 设计 | late arrival 跳批/等待/人工策略闭环细化 | 设计层 | 当前已能转跳批 + alert event 通知；细化策略待业务诉求触发 |
+| 设计 | late arrival 跳批/等待/人工策略闭环细化 | **决策：v1 不做**（类 ADR-019 gating 模式） | 当前 `routeLateArrivalIfNeeded` 已 binary 完整闭环：容差内 LATE_ACCEPTED + WARN alert；容差外自动翻 CATCH_UP + ERROR alert + audit log + DB CAS。SKIP_SILENT / WAIT_MANUAL_RELEASE / job 级 tolerance override 等"细化策略"会引入 4 枚举值 + 1 张表 + 3 API，但目前 backlog 无具体客户诉求。**触发条件**（满足任一才动）：(1) ≥2 个生产工单为"超容差但希望人工决定"；(2) 出现"已知会迟到、不希望刷屏 ERROR alert"的特殊业务（SKIP_SILENT 才有意义）；(3) 合规要求 late arrival 必须独立审计表（`batch_day_late_arrival` 才必要）。未触发期间不开 ADR、不排期 |
 
 ### 14.4 守护与回归
 
