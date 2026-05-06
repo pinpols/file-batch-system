@@ -1,9 +1,24 @@
 # ADR-021 · 数据对账闭环（Data Quality / Reconciliation）
 
-- **Status**: Accepted（实施 gated — 见"实施触发条件"）
+- **Status**: Accepted（**两档路径**：v0.0 mini 草案 ~3.5-5 天 待激活 / v1.0 完整 ~16-18 天 强金融触发；**默认两档都不开工** — 见"实施触发条件"+ §实施分阶段）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-012（失败分类，DQ 失败映射 DATA_QUALITY）/ ADR-017（result_version，DQ 通过才能 EFFECTIVE）/ ADR-020（重放，DQ 失败可走 OUTPUTS_ONLY 反向 promote）/ §14.3.2
+- **Related**: ADR-012（失败分类，DQ 失败映射 DATA_QUALITY）/ ADR-017（result_version，DQ 通过才能 EFFECTIVE）/ ADR-020（重放，DQ 失败可走 OUTPUTS_ONLY 反向 promote）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **本 ADR 的边界红线：只做"批量交付闭环对账"，不扩张为"企业数据治理 / 财务核算 / 主数据 / 数据血缘"平台。**
+>
+> **判定提问**：「这条规则的失败结果，是修业务数据还是裁定业务对错？」修业务数据 → 属本 ADR；裁定业务对错 → 不属本 ADR。
+
+| ✅ 做（批量交付闭环） | ❌ 不做（避免做成数据治理平台） |
+|---|---|
+| 文件条数 / 金额 / hash / 分区批次对账 | 主数据治理 / 数据血缘 / 全域数据质量平台 |
+| 上游交付清单 vs 实际接收 | 财务总账核算规则 / 风控量化裁定 |
+| 下游发送清单 vs 实际成功回执 | 跨系统业务语义仲裁 |
+| 借贷平衡 / 跨表 sum / 跨日连续性 | DQ 失败"自动修复"（auto-fix 反保守原则） |
+| 差异单生成 + 人工确认状态 | BLOCKER 一键禁用 ops 后门（要绕过必经 MANUAL_APPROVAL 留痕） |
+| 4 类规则 + 3 档 severity + EFFECTIVE gate | 跨租户共享规则（按租户隔离 + 模板库做最佳实践） |
 
 ## 背景
 
@@ -105,6 +120,62 @@ DataQualityCheckExecutor — 取 (tenant, business_key) 关联的 enabled rules
 
 ## 实施分阶段
 
+> **三档路径**：v0.0 mini（行级持久化 + ADR-017 hook，3-5 天，待激活）→ v1.0 完整版（4 类规则 + DSL，16-18 天，强金融触发）。**默认两档都不开工**，等触发信号到才走。
+
+### v0.0 mini — 待激活草案（3-5 人天）
+
+> **触发条件（mini 启动前置）**：≥ 1 次"读到 SUCCESS 但是数错的数据"投诉 / 业务方主动诉求"我想看哪些 instance 数据有质量问题"。
+
+#### 范围对比 v1.0
+
+| 项 | v0.0 mini | v1.0 完整 |
+|---|---|---|
+| 行级校验持久化 | ✓ | ✓ |
+| ROW_LEVEL 规则 | ✓（复用现成 ImportDataQualityService）| ✓ |
+| TABLE_LEVEL 规则 | ✗ 业务方自写 SPI 写回 | ✓ 平台 DSL |
+| CROSS_TABLE 规则 | ✗ 业务方自写 SPI 写回 | ✓ 平台 DSL |
+| CROSS_DAY 规则 | ✗ | ✓ 接 ADR-018 BizDateArithmetic |
+| ADR-017 PENDING gate hook | ✓（BLOCKER 失败 → 不进 EFFECTIVE）| ✓ |
+| 受限 SQL DSL 解析器 | ✗ | ✓ |
+| 规则 CRUD 控制台 | ✗ | ✓ |
+| 规则模板库 | ✗ | ✓ |
+
+#### v0.0 mini 实施 Stage
+
+| Stage | 范围 | 估算 | 触点 |
+|---|---|---|---|
+| 0-A | V117 `data_quality_check` 表 + archive 镜像（schema 只到 v0.0 字段，无 rule_id 外键 — 留 NULL 扩展位） | 0.5 天 | flyway + ArchiveSchemaDriftCheck 注册 |
+| 0-B | `DataQualityCheckEntity` + `DataQualityCheckMapper` + xml（insert / selectByJobInstance / selectByCalendarBizDate） | 0.5 天 | 单测 |
+| 0-C | `ImportDataQualityService` 失败路径增补：除了现有 `data_error` 还往 `data_quality_check` 写一条 `rule_type=ROW_LEVEL, severity=WARN/BLOCKER` 汇总行 | 1 天 | IT |
+| 0-D | 业务方 SPI：`DataQualityCheckSink` 接口（业务方自己跑跨表 SQL，把结果通过 sink 写到 `data_quality_check`）| 0.5 天 | 接口 + 1 个示例实现 |
+| 0-E | ADR-017 `ResultVersionWriter` 接 BLOCKER gate：终态时查 `data_quality_check`，有任意 BLOCKER `status=FAIL` 行 → result_version `promotion_policy = MANUAL_APPROVAL` | 1 天 | 单测 + 与 ADR-017 IT 联动 |
+| 0-F | Console 列表查询：`GET /api/console/queries/data-quality-checks?bizDate=&instanceId=` 只读视图 | 0.5 天 | controller 层只读 |
+| 0-G | 守护：`DataQualityCheckSinkSafetyTest` 强制 sink 不允许直接写业务表 | 0.5 天 | 静态守护 |
+
+总 ~3.5-5 人天。
+
+#### v0.0 mini 边界（写死）
+
+| ✅ v0.0 做 | ❌ v0.0 不做（v1.0 才做） |
+|---|---|
+| `data_quality_check` 一张表 + 行级 / 业务方写回结果 | SQL DSL 解析器 / 受限 SQL 执行器 |
+| BLOCKER → ADR-017 强制 MANUAL_APPROVAL | 平台帮业务方跑 SQL 规则 |
+| Console 只读视图列表 | 规则 CRUD / 编辑器 / 模板库 |
+| 业务方 SPI 写回（`DataQualityCheckSink`）| CROSS_DAY / 业务日历联动 |
+| 单测 + 静态守护防写业务表 | E2E 银行场景三件套（借贷 / 跨表 / 期初期末）|
+
+#### v0.0 mini → v1.0 升级路径
+
+mini 落地后如果出现：
+
+- ≥ 2 次"业务方写 SPI 太麻烦，我们想让平台跑 SQL"诉求；
+- 出现金融场景客户 / 监管要求；
+- 业务方在 SPI 里把"对账规则"散落到各个 worker → 平台失去统一治理；
+
+→ 启动 v1.0 完整版。mini 的 schema 已经预留了 `rule_id` 列（NULL 即业务方 SPI 写回），v1.0 加上 `data_quality_rule` 表 + DSL 解析器即可，不破坏 v0.0 数据。
+
+### v1.0 完整版（强金融触发）
+
 | Stage | 范围 | 估算 |
 |---|---|---|
 | 1 | schema + DQ rule CRUD + 简单 ROW_LEVEL（迁移 ImportDataQualityService） | 3 天 |
@@ -116,6 +187,18 @@ DataQualityCheckExecutor — 取 (tenant, business_key) 关联的 enabled rules
 | 7 | 守护 + E2E | 2 天 |
 
 总 ~16-18 人天（不含 UI）。
+
+### v0.0 mini 主链路影响评估
+
+| 路径 | 影响 |
+|---|---|
+| trigger 路径 | 零 |
+| launch / dispatch 路径 | 零 |
+| worker claim / execute 路径 | 零（IMPORT worker 增 1 行 INSERT，与 data_error 同事务）|
+| worker REPORT 路径 | 零 |
+| orchestrator 终态推进 | **小** —— ResultVersionWriter 增 1 次 `selectByJobInstance` 查 BLOCKER；预期 < 5ms（部分索引 `WHERE severity='BLOCKER' AND status='FAIL'`）；零 BLOCKER 时直接命中索引返回 |
+
+mini 与 ADR-022 v0.1 同档：**主链路侵入极小**，仅终态推进路径多 1 次 hot-path 索引查询。
 
 ## 替代方案
 
@@ -142,12 +225,62 @@ DataQualityCheckExecutor — 取 (tenant, business_key) 关联的 enabled rules
 
 ## 实施触发条件
 
-满足任一：
+**两档分别 gated**：
+
+### v0.0 mini 触发（任一即可，~3.5-5 人天）
+
+1. **下游投诉**：出现客户 / 产品方"我读到了一份 SUCCESS 但是数错的数据"投诉 ≥ 1 次；
+2. **业务方诉求**：业务方主动要求"我想看哪些 instance 数据有质量问题"运维视图；
+3. **行级校验外溢**：`ImportDataQualityService` 失败行被业务方手工 SQL 反复查，平均每周 ≥ 3 次。
+
+### v1.0 完整触发（任一即可，~16-18 人天）
+
 1. **金融场景**：用于银行 / 证券 / 保险类批量（事实条件，强 P0）；
 2. **对账类业务**：项目里出现 ≥ 2 个 "B 表数 ≠ A 表数" 故障复盘；
-3. **下游消费方**：出现客户/产品方"我读到了一份 SUCCESS 但是数错的数据"投诉。
+3. **mini 不够用**：v0.0 mini 落地后，业务方写 `DataQualityCheckSink` SPI 散落到 ≥ 3 个 worker，平台失去统一治理；
+4. **监管 / 合规**：明确要求"数据质量必须独立审计 / 平台统一管控"。
 
-非金融 + 无下游一致性诉求时本 ADR 暂不开工。
+**非金融 + 无下游一致性诉求 + 无业务方写回 SPI 诉求时，两档都暂不开工。**
+
+### v0.0 mini schema 草案（V117 待激活）
+
+```sql
+-- 待激活：触发条件命中再 commit，先在 ADR 留草案防漂移
+CREATE TABLE IF NOT EXISTS batch.data_quality_check (
+    id                 BIGSERIAL PRIMARY KEY,
+    tenant_id          VARCHAR(64)  NOT NULL,
+    job_instance_id    BIGINT       NOT NULL,
+    rule_id            BIGINT,                    -- v0.0 留 NULL（业务方 SPI 写回）
+                                                  -- v1.0 引用 data_quality_rule.id
+    rule_type          VARCHAR(32)  NOT NULL,     -- ROW_LEVEL（v0.0）/ TABLE_LEVEL / CROSS_TABLE / CROSS_DAY（v1.0）
+    rule_code          VARCHAR(128),              -- 业务方自起，便于 UI 检索
+    severity           VARCHAR(16)  NOT NULL,     -- BLOCKER / WARN / INFO
+    status             VARCHAR(16)  NOT NULL,     -- PASS / WARN / FAIL / SKIPPED
+    metrics_json       JSONB,                     -- 命中数 / 比例 / 偏差等
+    failure_sample     JSONB,                     -- 前 N 条失败样本（≤ 64KB）
+    error_message      VARCHAR(2048),
+    checked_at         TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tenant_id, job_instance_id, rule_code)  -- 同 instance 同规则结果幂等
+);
+
+ALTER TABLE batch.data_quality_check ADD CONSTRAINT ck_dq_check_rule_type
+    CHECK (rule_type IN ('ROW_LEVEL', 'TABLE_LEVEL', 'CROSS_TABLE', 'CROSS_DAY'));
+ALTER TABLE batch.data_quality_check ADD CONSTRAINT ck_dq_check_severity
+    CHECK (severity IN ('BLOCKER', 'WARN', 'INFO'));
+ALTER TABLE batch.data_quality_check ADD CONSTRAINT ck_dq_check_status
+    CHECK (status IN ('PASS', 'WARN', 'FAIL', 'SKIPPED'));
+
+-- 部分索引：BLOCKER + FAIL 走 hot path（ResultVersionWriter 终态查这个）
+CREATE INDEX idx_dq_check_blocker_fail
+    ON batch.data_quality_check (tenant_id, job_instance_id)
+    WHERE severity = 'BLOCKER' AND status = 'FAIL';
+
+-- archive 镜像（保 ArchiveSchemaDriftCheck 通过）
+CREATE TABLE archive.data_quality_check_archive
+    (LIKE batch.data_quality_check INCLUDING ALL);
+```
+
+字段对 v1.0 全兼容：v1.0 加 `data_quality_rule` 表 + `rule_id` 引用即可，无破坏性 ALTER。
 
 ## 开放问题（已收口）
 
