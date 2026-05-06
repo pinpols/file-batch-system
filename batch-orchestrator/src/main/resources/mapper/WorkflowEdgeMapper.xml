@@ -31,4 +31,11 @@
           and enabled = true
         order by id asc
     </select>
+
+    <select id="selectAllByWorkflowDefinitionId" resultMap="WorkflowEdgeResultMap">
+        select *
+        from batch.workflow_edge
+        where workflow_definition_id = #{workflowDefinitionId}
+        order by id asc
+    </select>
 </mapper>
