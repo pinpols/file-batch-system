@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.ResultVersionMapper">
+
+    <resultMap id="ResultVersionResultMap"
+               type="com.example.batch.orchestrator.domain.entity.ResultVersionEntity">
+        <constructor>
+            <idArg  column="id"               javaType="java.lang.Long"/>
+            <arg    column="tenant_id"        javaType="java.lang.String"/>
+            <arg    column="business_key"     javaType="java.lang.String"/>
+            <arg    column="version_no"       javaType="java.lang.Integer"/>
+            <arg    column="job_instance_id"  javaType="java.lang.Long"/>
+            <arg    column="status"           javaType="java.lang.String"/>
+            <arg    column="effective_at"     javaType="java.time.Instant"/>
+            <arg    column="deactivated_at"   javaType="java.time.Instant"/>
+            <arg    column="payload_storage"  javaType="java.lang.String"/>
+            <arg    column="payload_json"     javaType="java.lang.String"/>
+            <arg    column="payload_ref"      javaType="java.lang.String"/>
+            <arg    column="generated_at"     javaType="java.time.Instant"/>
+            <arg    column="generated_by"     javaType="java.lang.String"/>
+            <arg    column="promotion_policy" javaType="java.lang.String"/>
+            <arg    column="approval_id"      javaType="java.lang.Long"/>
+            <arg    column="created_at"       javaType="java.time.Instant"/>
+            <arg    column="updated_at"       javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+            parameterType="com.example.batch.orchestrator.domain.entity.ResultVersionEntity">
+        insert into batch.result_version (
+            tenant_id,
+            business_key,
+            version_no,
+            job_instance_id,
+            status,
+            effective_at,
+            deactivated_at,
+            payload_storage,
+            payload_json,
+            payload_ref,
+            generated_at,
+            generated_by,
+            promotion_policy,
+            approval_id,
+            created_at,
+            updated_at
+        ) values (
+            #{tenantId},
+            #{businessKey},
+            #{versionNo},
+            #{jobInstanceId},
+            #{status},
+            #{effectiveAt},
+            #{deactivatedAt},
+            #{payloadStorage},
+            #{payloadJson,jdbcType=VARCHAR}::jsonb,
+            #{payloadRef},
+            #{generatedAt},
+            #{generatedBy},
+            #{promotionPolicy},
+            #{approvalId},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <select id="selectByJobInstanceId" resultMap="ResultVersionResultMap">
+        select *
+        from batch.result_version
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+        order by version_no desc
+        limit 1
+    </select>
+
+    <select id="selectMaxVersionNo" resultType="java.lang.Integer">
+        select max(version_no)
+        from batch.result_version
+        where tenant_id = #{tenantId}
+          and business_key = #{businessKey}
+    </select>
+
+    <update id="supersedePriorEffective">
+        update batch.result_version
+        set status         = 'SUPERSEDED',
+            deactivated_at = #{deactivatedAt},
+            updated_at     = #{deactivatedAt}
+        where tenant_id    = #{tenantId}
+          and business_key = #{businessKey}
+          and status       = 'EFFECTIVE'
+    </update>
+
+    <select id="selectEffective" resultMap="ResultVersionResultMap">
+        select *
+        from batch.result_version
+        where tenant_id    = #{tenantId}
+          and business_key = #{businessKey}
+          and status       = 'EFFECTIVE'
+        limit 1
+    </select>
+
+</mapper>

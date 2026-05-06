@@ -16,6 +16,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
+import com.example.batch.orchestrator.application.service.version.ResultVersionWriter;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
@@ -102,7 +103,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
       WorkflowTerminalOutboxService workflowTerminalOutboxService,
       MeterRegistry meterRegistry,
-      JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler) {}
+      JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler,
+      ResultVersionWriter resultVersionWriter) {}
 
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
@@ -469,10 +471,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
     }
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
+    jobInstance.setInstanceStatus(instanceStatus);
     if (isTerminalJobInstanceStatus(instanceStatus)) {
       collaborators
           .jobInstanceTerminalChildStateReconciler()
           .reconcile(command.tenantId(), jobInstance.getId(), instanceStatus);
+      // ADR-017 Stage 2: SUCCESS / PARTIAL_FAILED → 落 result_version (writer 自身做幂等 + 非成功类终态 skip)
+      collaborators.resultVersionWriter().writeOnTerminal(jobInstance, command.outputs());
     }
     // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
     if (jobFullyComplete && isTerminalJobInstanceStatus(instanceStatus)) {

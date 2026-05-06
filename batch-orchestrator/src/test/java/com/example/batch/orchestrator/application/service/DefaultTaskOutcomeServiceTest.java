@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.TaskStatus;
@@ -14,6 +15,7 @@ import com.example.batch.orchestrator.application.service.task.DefaultTaskOutcom
 import com.example.batch.orchestrator.application.service.task.DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators;
 import com.example.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import com.example.batch.orchestrator.application.service.version.ResultVersionWriter;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -81,7 +83,8 @@ class DefaultTaskOutcomeServiceTest {
             workflowNodeDispatchServiceProvider,
             workflowTerminalOutboxService,
             new SimpleMeterRegistry(),
-            jobInstanceTerminalChildStateReconciler);
+            jobInstanceTerminalChildStateReconciler,
+            mock(ResultVersionWriter.class));
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 
