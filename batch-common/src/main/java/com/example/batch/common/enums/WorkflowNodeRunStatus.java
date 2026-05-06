@@ -21,6 +21,8 @@ import lombok.experimental.Accessors;
 @Getter
 public enum WorkflowNodeRunStatus implements DictEnum {
   READY("READY", "待执行"),
+  /** ADR-018 跨批量日依赖未齐：节点 READY 后等待上游 result_version EFFECTIVE。 */
+  WAITING_DEPENDENCY("WAITING_DEPENDENCY", "等待跨日依赖"),
   RUNNING("RUNNING", "执行中"),
   SUCCESS("SUCCESS", "成功"),
   FAILED("FAILED", "失败"),
@@ -29,10 +31,13 @@ public enum WorkflowNodeRunStatus implements DictEnum {
   private final String code;
   private final String label;
 
-  /** 投影到公共 {@link BatchLifecycleStatus};SKIPPED 视为 SUCCESS(节点跳过不算失败)。 */
+  /**
+   * 投影到公共 {@link BatchLifecycleStatus};SKIPPED 视为 SUCCESS(节点跳过不算失败); WAITING_DEPENDENCY 视为
+   * READY(还未真正跑)。
+   */
   public BatchLifecycleStatus lifecycle() {
     return switch (this) {
-      case READY -> BatchLifecycleStatus.READY;
+      case READY, WAITING_DEPENDENCY -> BatchLifecycleStatus.READY;
       case RUNNING -> BatchLifecycleStatus.RUNNING;
       case SUCCESS, SKIPPED -> BatchLifecycleStatus.SUCCESS;
       case FAILED -> BatchLifecycleStatus.FAILED;
