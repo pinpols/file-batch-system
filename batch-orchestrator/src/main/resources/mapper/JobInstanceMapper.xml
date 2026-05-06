@@ -365,6 +365,28 @@
           and ji.instance_status in ('FAILED', 'PARTIAL_FAILED')
         order by ji.job_code, ji.id desc
     </select>
+
+    <select id="selectBatchDayCandidates" resultMap="JobInstanceResultMap">
+        select distinct on (ji.job_code) ji.*
+        from batch.job_instance ji
+                 join batch.job_definition jd on jd.id = ji.job_definition_id
+        where ji.tenant_id = #{tenantId}
+          and jd.calendar_code = #{calendarCode}
+          and ji.biz_date = #{bizDate}
+        <if test="statuses != null and !statuses.isEmpty()">
+            and ji.instance_status in
+            <foreach collection="statuses" item="s" open="(" separator="," close=")">
+                #{s}
+            </foreach>
+        </if>
+        <if test="jobCodes != null and !jobCodes.isEmpty()">
+            and ji.job_code in
+            <foreach collection="jobCodes" item="jc" open="(" separator="," close=")">
+                #{jc}
+            </foreach>
+        </if>
+        order by ji.job_code, ji.id desc
+    </select>
     <update id="updateStatus">
         update batch.job_instance
         set instance_status = #{instanceStatus},

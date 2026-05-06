@@ -90,6 +90,23 @@ public interface JobInstanceMapper {
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);
 
+  /**
+   * ADR-020 batch_day_replay 候选筛选：按 (tenant, calendarCode, bizDate) 内每个 job_code 取最新一行实例， 由
+   * statuses 与 jobCodes 双重过滤。
+   *
+   * <ul>
+   *   <li>{@code statuses} 非空 → 实例状态在集合内（如 ALL: SUCCESS/FAILED/PARTIAL_FAILED；ALL_FAILED:
+   *       FAILED/PARTIAL_FAILED）；空集合等价于不限；
+   *   <li>{@code jobCodes} 非空 → 仅这些 jobCode 的实例（SUBSET_JOB_CODES 模式）；空集合等价于不限。
+   * </ul>
+   */
+  List<JobInstanceEntity> selectBatchDayCandidates(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate,
+      @Param("statuses") List<String> statuses,
+      @Param("jobCodes") List<String> jobCodes);
+
   int updateStatus(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
