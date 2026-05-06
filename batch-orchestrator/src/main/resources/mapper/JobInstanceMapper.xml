@@ -266,6 +266,24 @@
           and sla_alerted_at is null
     </update>
 
+    <select id="selectSlaEscalationCandidates" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where instance_status in ('WAITING', 'READY', 'RUNNING')
+          and sla_alerted_at is not null
+          and sla_alerted_at &lt; #{escalationBefore}
+        order by sla_alerted_at asc, id asc
+        limit #{limit}
+    </select>
+
+    <select id="countSlaEscalationCandidates" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where instance_status in ('WAITING', 'READY', 'RUNNING')
+          and sla_alerted_at is not null
+          and sla_alerted_at &lt; #{escalationBefore}
+    </select>
+
     <!-- quota 决策用：仅统计真正占用 worker 资源的实例（READY/RUNNING），
          WAITING 是待调度队列，本身就是被 quota check 裁决的候选集，
          不能把候选人算进分母——否则一旦 WAITING 超过配额就永久死锁。 -->
@@ -393,4 +411,36 @@
             or (high_water_mark_out)::numeric &lt; (#{highWaterMarkOut})::numeric
           )
     </update>
+
+    <!--
+      BatchDayGateService SAME_JOB scope:
+        判断 (tenant, jobCode, prevBizDate) 是否仍有未到达终态的 job_instance。
+        终态 = SUCCESS / FAILED / CANCELLED / TERMINATED;非终态需要等待。
+        FAILED 是否允许放行由调用方决定(REJECT_IF_PREVIOUS_OPEN 不允许 / WAIT_PREVIOUS_DAY 也等待)。
+    -->
+    <select id="countNonTerminalByJobCodeAndBizDate" resultType="int">
+        select count(1)
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and job_code = #{jobCode}
+           and biz_date = #{bizDate}
+           and instance_status not in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
+    </select>
+
+    <!--
+      BatchDayGateService SAME_JOB_GROUP scope:
+        通过 JOIN job_definition.job_group_code 收敛同组 job_code, 再判断是否仍有非终态实例。
+        job_group_code 由运维主动配置, 未配置时调用方应回退到 SAME_JOB 语义。
+    -->
+    <select id="countNonTerminalByJobGroupAndBizDate" resultType="int">
+        select count(1)
+          from batch.job_instance ji
+          join batch.job_definition jd
+            on jd.tenant_id = ji.tenant_id
+           and jd.job_code = ji.job_code
+         where ji.tenant_id = #{tenantId}
+           and jd.job_group_code = #{jobGroupCode}
+           and ji.biz_date = #{bizDate}
+           and ji.instance_status not in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
+    </select>
 </mapper>
