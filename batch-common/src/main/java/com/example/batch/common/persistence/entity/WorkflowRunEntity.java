@@ -22,6 +22,9 @@ public class WorkflowRunEntity implements Stateful {
   private Instant createdAt;
   private Instant updatedAt;
 
+  /** ADR-026 dry-run 演练标记；与 batch_day_instance.dry_run / job_instance.dry_run 必须一致。 */
+  private Boolean dryRun;
+
   @Override
   public String getStatus() {
     return runStatus;

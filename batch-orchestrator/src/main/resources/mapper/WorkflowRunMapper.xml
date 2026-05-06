@@ -14,6 +14,7 @@
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <result column="dry_run" property="dryRun"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.example.batch.common.persistence.entity.WorkflowRunEntity"
@@ -25,7 +26,8 @@
             biz_date,
             run_status,
             current_node_code,
-            trace_id
+            trace_id,
+            dry_run
         ) values (
             #{tenantId},
             #{workflowDefinitionId},
@@ -33,7 +35,11 @@
             #{bizDate},
             #{runStatus},
             #{currentNodeCode},
-            #{traceId}
+            #{traceId},
+            <choose>
+                <when test="dryRun != null">#{dryRun}</when>
+                <otherwise>false</otherwise>
+            </choose>
         )
     </insert>
 

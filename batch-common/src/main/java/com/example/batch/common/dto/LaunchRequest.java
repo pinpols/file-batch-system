@@ -33,7 +33,9 @@ public record LaunchRequest(
     Instant dataIntervalStart,
     Instant dataIntervalEnd,
     /** ADR-020 batch_day_replay_session.id 透传标签；NULL = 非 replay 创建。 */
-    Long replaySessionId) {
+    Long replaySessionId,
+    /** ADR-026 dry-run 演练标记；true = 不副作用（不写业务表 / 不发外部 IO / 不进 EFFECTIVE 链）。 */
+    boolean dryRun) {
 
   /** 简洁兜底构造器: 不带 interval 的旧调用方 (RERUN / 历史路径) 直接传 7 参. */
   public LaunchRequest(
@@ -44,10 +46,21 @@ public record LaunchRequest(
       String requestId,
       String traceId,
       Map<String, Object> params) {
-    this(tenantId, jobCode, bizDate, triggerType, requestId, traceId, params, null, null, null);
+    this(
+        tenantId,
+        jobCode,
+        bizDate,
+        triggerType,
+        requestId,
+        traceId,
+        params,
+        null,
+        null,
+        null,
+        false);
   }
 
-  /** 9 参兼容构造：仅带 data interval，replay_session_id 默认 null。 */
+  /** 9 参兼容构造：仅带 data interval，replay_session_id + dry_run 默认 null/false。 */
   public LaunchRequest(
       String tenantId,
       String jobCode,
@@ -68,6 +81,33 @@ public record LaunchRequest(
         params,
         dataIntervalStart,
         dataIntervalEnd,
-        null);
+        null,
+        false);
+  }
+
+  /** 10 参兼容构造：含 replay_session_id，dry_run 默认 false。 */
+  public LaunchRequest(
+      String tenantId,
+      String jobCode,
+      LocalDate bizDate,
+      TriggerType triggerType,
+      String requestId,
+      String traceId,
+      Map<String, Object> params,
+      Instant dataIntervalStart,
+      Instant dataIntervalEnd,
+      Long replaySessionId) {
+    this(
+        tenantId,
+        jobCode,
+        bizDate,
+        triggerType,
+        requestId,
+        traceId,
+        params,
+        dataIntervalStart,
+        dataIntervalEnd,
+        replaySessionId,
+        false);
   }
 }

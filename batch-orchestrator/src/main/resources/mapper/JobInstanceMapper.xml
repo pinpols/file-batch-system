@@ -46,6 +46,7 @@
         <result column="updated_at" property="updatedAt"/>
         <result column="replay_session_id" property="replaySessionId"/>
         <result column="failure_class" property="failureClass"/>
+        <result column="dry_run" property="dryRun"/>
     </resultMap>
 
     <select id="selectByInstanceNo" resultMap="JobInstanceResultMap">
@@ -118,7 +119,8 @@
             deadline_at,
             expected_duration_seconds,
             sla_alerted_at,
-            replay_session_id
+            replay_session_id,
+            dry_run
         ) values (
             #{tenantId},
             #{jobDefinitionId},
@@ -157,7 +159,11 @@
             #{deadlineAt},
             #{expectedDurationSeconds},
             #{slaAlertedAt},
-            #{replaySessionId}
+            #{replaySessionId},
+            <choose>
+                <when test="dryRun != null">#{dryRun}</when>
+                <otherwise>false</otherwise>
+            </choose>
         )
     </insert>
 
@@ -469,5 +475,25 @@
            and jd.job_group_code = #{jobGroupCode}
            and ji.biz_date = #{bizDate}
            and ji.instance_status not in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
+    </select>
+
+    <!--
+      ADR-022 v0.1 forensic 取证：按 (tenantId, bizDate 范围, 可选 jobCodes) 拉取 instance 全量。
+      仅 forensic 路径调用；不在主链路 (trigger / claim / report)。
+      limit 防 unbounded 全表扫；调用方传业务可接受的 cap (默认 100k)。
+    -->
+    <select id="selectForensicByBizDateRange" resultMap="JobInstanceResultMap">
+        select *
+          from batch.job_instance
+         where tenant_id = #{tenantId}
+           and biz_date between #{bizDateFrom} and #{bizDateTo}
+        <if test="jobCodes != null and !jobCodes.isEmpty()">
+           and job_code in
+            <foreach collection="jobCodes" item="code" open="(" close=")" separator=",">
+                #{code}
+            </foreach>
+        </if>
+         order by biz_date asc, id asc
+         limit #{limit}
     </select>
 </mapper>

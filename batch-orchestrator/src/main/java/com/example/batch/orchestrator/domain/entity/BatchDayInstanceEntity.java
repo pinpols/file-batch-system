@@ -38,7 +38,9 @@ public record BatchDayInstanceEntity(
     Instant operatedAt,
     Long version,
     Instant createdAt,
-    Instant updatedAt) {
+    Instant updatedAt,
+    /** ADR-026 dry-run 整日演练标记；与子 job_instance.dry_run 一致。 */
+    Boolean dryRun) {
 
   public BatchDayInstanceEntity(
       Long id,
@@ -76,7 +78,8 @@ public record BatchDayInstanceEntity(
         null,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        false);
   }
 
   public BatchDayInstanceEntity(
@@ -116,7 +119,8 @@ public record BatchDayInstanceEntity(
         null,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        false);
   }
 
   public BatchDayInstanceEntity(
@@ -159,7 +163,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        false);
   }
 
   public BatchDayInstanceEntity withSlaDeadlineAt(Instant slaDeadlineAt, Instant updatedAt) {
@@ -183,7 +188,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withLateCount(Integer lateCount, Instant updatedAt) {
@@ -207,7 +213,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withCatchupCount(Integer catchupCount, Instant updatedAt) {
@@ -231,7 +238,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withDayStatus(String dayStatus, Instant updatedAt) {
@@ -255,7 +263,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withCutoffAt(Instant cutoffAt, Instant updatedAt) {
@@ -279,7 +288,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withCutoff(Instant cutoffAt, Instant updatedAt) {
@@ -303,7 +313,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withSettled(
@@ -328,7 +339,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withReopened(Instant updatedAt) {
@@ -352,7 +364,8 @@ public record BatchDayInstanceEntity(
         operatedAt,
         version,
         createdAt,
-        updatedAt);
+        updatedAt,
+        dryRun);
   }
 
   public BatchDayInstanceEntity withManualOperation(BatchDayManualOperation op) {

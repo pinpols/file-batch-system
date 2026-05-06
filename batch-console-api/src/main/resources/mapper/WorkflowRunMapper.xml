@@ -14,6 +14,7 @@
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <result column="dry_run" property="dryRun"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="WorkflowRunResultMap">

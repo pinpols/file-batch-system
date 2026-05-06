@@ -172,6 +172,23 @@ class ResultVersionWriterTest {
   }
 
   @Test
+  void dryRunInstanceWritesDryRunStatusWithoutSupersede() {
+    JobInstanceEntity instance = success("t1", 400L, "DAILY_PNL", LocalDate.of(2026, 5, 4), null);
+    instance.setDryRun(true);
+    when(mapper.selectByJobInstanceId("t1", 400L)).thenReturn(null);
+    when(mapper.selectMaxVersionNo("t1", "job:DAILY_PNL:2026-05-04")).thenReturn(3);
+
+    writer.writeOnTerminal(instance, Map.of("recordCount", 1));
+
+    ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
+    verify(mapper).insert(captor.capture());
+    assertThat(captor.getValue().status()).isEqualTo("DRY_RUN");
+    assertThat(captor.getValue().effectiveAt()).isNull();
+    assertThat(captor.getValue().versionNo()).isEqualTo(4);
+    verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
+  }
+
+  @Test
   void emptyOutputsSerializeAsEmptyObject() {
     JobInstanceEntity instance = success("t1", 304L, "JOB_A", LocalDate.of(2026, 5, 4), null);
     when(mapper.selectByJobInstanceId("t1", 304L)).thenReturn(null);
