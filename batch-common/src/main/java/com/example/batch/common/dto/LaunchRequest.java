@@ -34,8 +34,13 @@ public record LaunchRequest(
     Instant dataIntervalEnd,
     /** ADR-020 batch_day_replay_session.id 透传标签；NULL = 非 replay 创建。 */
     Long replaySessionId,
-    /** ADR-026 dry-run 演练标记；true = 不副作用（不写业务表 / 不发外部 IO / 不进 EFFECTIVE 链）。 */
-    boolean dryRun) {
+    /**
+     * ADR-026 dry-run 演练标记；true = 不副作用（不写业务表 / 不发外部 IO / 不进 EFFECTIVE 链）。
+     *
+     * <p>装箱为 {@link Boolean} 是为了让 JSON 反序列化容忍缺省字段（旧 trigger / 测试构造的 launch 请求未发送 该字段时，记录构造器收到
+     * {@code null}），下游 setter 按需将 null 视为 false（DB 列默认值兜底）。
+     */
+    Boolean dryRun) {
 
   /** 简洁兜底构造器: 不带 interval 的旧调用方 (RERUN / 历史路径) 直接传 7 参. */
   public LaunchRequest(

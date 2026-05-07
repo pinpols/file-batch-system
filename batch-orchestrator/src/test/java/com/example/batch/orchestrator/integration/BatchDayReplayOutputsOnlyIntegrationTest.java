@@ -159,7 +159,7 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
               + " param_schema, priority, default_params, version, enabled, description,"
               + " execution_mode, watermark_field) values"
               + " (?, ?, 'PnL', 'GENERAL', 'BIZ', 'CRON', '0 0 * * * *', 'UTC', 'wg', 'q',"
-              + " ?, '', 'STD', false, 'NONE', 'NONE', 0, 0, 'noop',"
+              + " ?, '', 'SCHEDULED', false, 'NONE', 'NONE', 0, 0, 'noop',"
               + " '{}'::jsonb, 5, '{}'::jsonb, 1, true, '', 'FULL', '')",
           TENANT,
           JOB_CODE,
@@ -175,8 +175,8 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
         "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no,"
             + " biz_date, trigger_type, instance_status, queue_code, worker_group, priority,"
             + " dedup_key, run_attempt, version, expected_partition_count, success_partition_count,"
-            + " failed_partition_count, params_snapshot)"
-            + " values (?, ?, ?, ?, ?, 'CRON', ?, 'q', 'wg', 5, ?, 1, 0, 0, 0, 0, '{}'::jsonb)",
+            + " failed_partition_count, params_snapshot) values (?, ?, ?, ?, ?, 'SCHEDULED', ?,"
+            + " 'q', 'wg', 5, ?, 1, 0, 0, 0, 0, '{}'::jsonb)",
         TENANT,
         jobDefId,
         JOB_CODE,
