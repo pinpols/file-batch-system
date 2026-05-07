@@ -21,6 +21,13 @@ public class WorkflowNodeEntity {
   private Integer retryMaxCount;
   private Integer timeoutSeconds;
   private String nodeParams;
+
+  /** ADR-018 跨日依赖 spec JSONB（数组）。 */
+  private String crossDayDependencies;
+
+  /** ADR-018 跨日依赖等待 timeout（秒）。 */
+  private Integer crossDayDependencyTimeoutSeconds;
+
   private Boolean enabled;
   private Instant createdAt;
   private Instant updatedAt;

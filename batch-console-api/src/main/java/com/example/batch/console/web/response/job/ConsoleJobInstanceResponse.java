@@ -28,4 +28,8 @@ public record ConsoleJobInstanceResponse(
     Integer expectedDurationSeconds,
     Instant slaAlertedAt,
     Instant startedAt,
-    Instant finishedAt) {}
+    Instant finishedAt,
+    /** ADR-026 dry-run 演练标记。 */
+    Boolean dryRun,
+    /** ADR-012 失败分类。 */
+    String failureClass) {}
