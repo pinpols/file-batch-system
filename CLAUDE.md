@@ -185,13 +185,20 @@ public enum XxxType implements DictEnum {
 
 ## 版本管理
 
-**Maven CI-friendly 版本策略**：全项目采用 `${revision}` 占位符，版本在根 pom `<properties><revision>` 单点控制，默认 **`1.0.0`**（非 SNAPSHOT）。
+**SemVer 2.0.0 + Maven CI-friendly `${revision}`** 单点控制，9 模块共版（不抄 Spring Cloud Release Train / CalVer，单 repo 不需要 BOM 协调）。
 
-- 默认构建：`mvn package` → 产物 `batch-*-1.0.0.jar`
-- 覆盖版本：`mvn -Drevision=2.0.0 package`
+- 版本号格式：`MAJOR.MINOR.PATCH[-PRERELEASE]`（详见 [`docs/runbook/releasing.md`](docs/runbook/releasing.md)）
+  - `MAJOR` 不向后兼容；`MINOR` 向后兼容新功能；`PATCH` bug fix
+  - `-SNAPSHOT` 开发分支（main 分支默认形态）；`-RC.N` release candidate
+- 当前状态：`v1.0.0` 已 release（commit `525e60f0`），main 分支默认 `<revision>1.1.0-SNAPSHOT</revision>` 累积下一版功能
+- 默认构建：`mvn package` → 产物 `batch-*-${revision}.jar`
+- 覆盖版本：`mvn -Drevision=1.1.0 package`（release 时用）
 - 根 pom 装配 `flatten-maven-plugin`，install/deploy 前自动把 `${revision}` 在 pom 里展开为实际版本号，下游消费者能正确解析
+- Git tag 规范：`v<version>`，annotated tag (`git tag -a v1.1.0 -m "..."`)；描述性 tag（如 `stable-*`）可与版本 tag 并存
 - **build script 禁用 `-Dmaven.test.skip=true`**（会同时跳过 test-jar 生成，打断 `batch-common:tests` 依赖链）；统一用 `-DskipTests`（只跳执行，保留 test-jar 产物）
 - `load-tests` 是独立模块（未纳入根 reactor），版本使用字面量，与根版本手工保持同步
+
+完整 release flow（含 hotfix / RC / patch）见 [`docs/runbook/releasing.md`](docs/runbook/releasing.md)。
 
 ## 架构硬约束
 
