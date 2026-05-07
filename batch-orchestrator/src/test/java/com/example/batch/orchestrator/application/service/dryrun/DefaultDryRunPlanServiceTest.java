@@ -7,17 +7,21 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
+import io.minio.MinioClient;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class DefaultDryRunPlanServiceTest {
 
@@ -32,7 +36,22 @@ class DefaultDryRunPlanServiceTest {
     WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
     WorkflowEdgeMapper edgeMapper = mock(WorkflowEdgeMapper.class);
     BatchTimezoneProvider tz = new BatchTimezoneProvider(new BatchTimezoneProperties());
-    service = new DefaultDryRunPlanService(configCache, planBuilder, nodeMapper, edgeMapper, tz);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<JdbcTemplate> jdbcTemplateProvider = mock(ObjectProvider.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MinioClient> minioClientProvider = mock(ObjectProvider.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MinioStorageProperties> minioPropsProvider = mock(ObjectProvider.class);
+    service =
+        new DefaultDryRunPlanService(
+            configCache,
+            planBuilder,
+            nodeMapper,
+            edgeMapper,
+            tz,
+            jdbcTemplateProvider,
+            minioClientProvider,
+            minioPropsProvider);
   }
 
   @Test
@@ -177,10 +196,14 @@ class DefaultDryRunPlanServiceTest {
                 .build());
 
     assertThat(result.success()).isTrue();
+    // L3 真接后：无 SQL/MinIO/endpoint params 时返回 EXEC_PLAN_NO_PROBES_TRIGGERED
     assertThat(result.findings())
         .extracting(DryRunFinding::code)
-        .contains("EXEC_PLAN_BACKEND_PENDING");
-    assertThat(result.summary()).containsEntry("executionPlanStub", true);
+        .contains("EXEC_PLAN_NO_PROBES_TRIGGERED");
+    assertThat(result.summary())
+        .containsEntry("l3SqlProbed", 0)
+        .containsEntry("l3MinioProbed", 0)
+        .containsEntry("l3EndpointProbed", 0);
   }
 
   @Test
