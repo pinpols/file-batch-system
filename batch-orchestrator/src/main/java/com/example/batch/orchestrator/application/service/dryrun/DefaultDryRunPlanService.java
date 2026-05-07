@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.service.dryrun;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.ScheduleType;
 import com.example.batch.common.exception.BizException;
@@ -15,6 +16,12 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
+import io.minio.BucketExistsArgs;
+import io.minio.MinioClient;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -25,8 +32,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 
@@ -43,14 +52,52 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class DefaultDryRunPlanService implements DryRunPlanService {
+
+  /** L3 endpoint reachability HEAD timeout — 短超时避免 dry-run 卡死。 */
+  private static final Duration HTTP_PROBE_TIMEOUT = Duration.ofSeconds(5);
+
+  /** L3 effectiveParams 中可能的 SQL key 候选；命中即跑 EXPLAIN。 */
+  private static final Set<String> SQL_PARAM_KEYS =
+      Set.of("sql", "querySql", "sourceQuery", "validationSql", "selectSql");
+
+  /** L3 effectiveParams 中可能的 endpoint URL key 候选；命中即跑 HTTP HEAD。 */
+  private static final Set<String> ENDPOINT_PARAM_KEYS =
+      Set.of("endpointUrl", "callbackUrl", "channelEndpoint", "dispatchTarget");
+
+  /** MinIO bucket 命名规则（DNS-style：3-63 字符，小写字母 / 数字 / `-`，不能 `-` 起止）。 */
+  private static final Pattern MINIO_BUCKET_PATTERN =
+      Pattern.compile("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$");
 
   private final OrchestratorConfigCacheService configCacheService;
   private final SchedulePlanBuilder schedulePlanBuilder;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final BatchTimezoneProvider timezoneProvider;
+  private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
+  private final ObjectProvider<MinioClient> minioClientProvider;
+  private final ObjectProvider<MinioStorageProperties> minioPropertiesProvider;
+  private final HttpClient httpClient =
+      HttpClient.newBuilder().connectTimeout(HTTP_PROBE_TIMEOUT).build();
+
+  public DefaultDryRunPlanService(
+      OrchestratorConfigCacheService configCacheService,
+      SchedulePlanBuilder schedulePlanBuilder,
+      WorkflowNodeMapper workflowNodeMapper,
+      WorkflowEdgeMapper workflowEdgeMapper,
+      BatchTimezoneProvider timezoneProvider,
+      ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
+      ObjectProvider<MinioClient> minioClientProvider,
+      ObjectProvider<MinioStorageProperties> minioPropertiesProvider) {
+    this.configCacheService = configCacheService;
+    this.schedulePlanBuilder = schedulePlanBuilder;
+    this.workflowNodeMapper = workflowNodeMapper;
+    this.workflowEdgeMapper = workflowEdgeMapper;
+    this.timezoneProvider = timezoneProvider;
+    this.jdbcTemplateProvider = jdbcTemplateProvider;
+    this.minioClientProvider = minioClientProvider;
+    this.minioPropertiesProvider = minioPropertiesProvider;
+  }
 
   @Override
   public DryRunPlanResult plan(DryRunPlanRequest request) {
@@ -277,16 +324,158 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     }
     List<DryRunFinding> findings = new ArrayList<>(schedule.findings());
     Map<String, Object> summary = new LinkedHashMap<>(schedule.summary());
-    // L3 暂未把 SQL explain / MinIO key 预生成 / endpoint reachability 接入实际 client，
-    // 先返回结构化 stub finding，让 console 端能展示三层结果 — 后续 stages 接入具体 backend。
-    findings.add(
-        DryRunFinding.warn(
-            "EXEC_PLAN_BACKEND_PENDING",
-            "execution",
-            "L3 SQL explain / MinIO key / channel reachability stub; backend wiring pending",
-            null));
-    summary.put("executionPlanStub", true);
+    Map<String, Object> params = request.params() == null ? Map.of() : request.params();
+
+    int sqlProbed = probeSqlExplain(params, findings);
+    int minioProbed = probeMinioBucket(params, findings);
+    int endpointProbed = probeEndpointReachability(params, findings);
+    summary.put("l3SqlProbed", sqlProbed);
+    summary.put("l3MinioProbed", minioProbed);
+    summary.put("l3EndpointProbed", endpointProbed);
+    if (sqlProbed + minioProbed + endpointProbed == 0) {
+      findings.add(
+          DryRunFinding.pass(
+              "EXEC_PLAN_NO_PROBES_TRIGGERED",
+              "execution",
+              "no SQL / MinIO / endpoint params to probe; L3 reduces to L2 result"));
+    }
     return DryRunPlanResult.of(DryRunLevel.EXECUTION_PLAN, findings, summary);
+  }
+
+  /** L3-1: 对 params 中匹配 SQL_PARAM_KEYS 的字符串调用 jdbcTemplate.execute("EXPLAIN " + sql)。 */
+  private int probeSqlExplain(Map<String, Object> params, List<DryRunFinding> findings) {
+    JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+    if (jdbcTemplate == null) return 0;
+    int probed = 0;
+    for (String key : SQL_PARAM_KEYS) {
+      Object raw = params.get(key);
+      if (!(raw instanceof String sql) || !Texts.hasText(sql)) continue;
+      probed++;
+      try {
+        jdbcTemplate.execute("EXPLAIN " + sql);
+        findings.add(
+            DryRunFinding.pass("EXEC_SQL_EXPLAIN_OK", "execution", "EXPLAIN passed for " + key));
+      } catch (RuntimeException ex) {
+        findings.add(
+            DryRunFinding.error(
+                "EXEC_SQL_EXPLAIN_FAILED",
+                "execution",
+                "EXPLAIN failed for " + key + ": " + ex.getMessage(),
+                key));
+      }
+    }
+    return probed;
+  }
+
+  /**
+   * L3-2: MinIO bucket 探测。
+   *
+   * <ul>
+   *   <li>若 params.minioBucket 缺失，回退到 MinioStorageProperties.bucket 默认；
+   *   <li>校验 bucket 命名合法（DNS-style）；
+   *   <li>若 MinioClient 可用，调用 bucketExists；不可用降级为只校验命名规则。
+   * </ul>
+   */
+  private int probeMinioBucket(Map<String, Object> params, List<DryRunFinding> findings) {
+    String bucket = stringValue(params, "minioBucket");
+    if (!Texts.hasText(bucket)) {
+      MinioStorageProperties props = minioPropertiesProvider.getIfAvailable();
+      bucket = props == null ? null : props.getBucket();
+    }
+    if (!Texts.hasText(bucket)) return 0;
+    if (!MINIO_BUCKET_PATTERN.matcher(bucket).matches()) {
+      findings.add(
+          DryRunFinding.error(
+              "EXEC_MINIO_BUCKET_INVALID",
+              "execution",
+              "minio bucket name does not match DNS-style rule: " + bucket,
+              bucket));
+      return 1;
+    }
+    MinioClient client = minioClientProvider.getIfAvailable();
+    if (client == null) {
+      findings.add(
+          DryRunFinding.warn(
+              "EXEC_MINIO_CLIENT_UNAVAILABLE",
+              "execution",
+              "MinioClient bean unavailable; bucket name passed regex only",
+              bucket));
+      return 1;
+    }
+    try {
+      boolean exists = client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+      if (exists) {
+        findings.add(
+            DryRunFinding.pass(
+                "EXEC_MINIO_BUCKET_OK", "execution", "minio bucket exists: " + bucket));
+      } else {
+        findings.add(
+            DryRunFinding.error(
+                "EXEC_MINIO_BUCKET_MISSING",
+                "execution",
+                "minio bucket not found: " + bucket,
+                bucket));
+      }
+    } catch (Exception ex) {
+      findings.add(
+          DryRunFinding.warn(
+              "EXEC_MINIO_PROBE_FAILED",
+              "execution",
+              "minio probe failed: " + ex.getMessage(),
+              bucket));
+    }
+    return 1;
+  }
+
+  /** L3-3: 对 params 中匹配 ENDPOINT_PARAM_KEYS 的 URL 做 HTTP HEAD（5s timeout，失败 WARN 不阻断）。 */
+  private int probeEndpointReachability(Map<String, Object> params, List<DryRunFinding> findings) {
+    int probed = 0;
+    for (String key : ENDPOINT_PARAM_KEYS) {
+      Object raw = params.get(key);
+      if (!(raw instanceof String url) || !Texts.hasText(url)) continue;
+      probed++;
+      String trimmed = url.trim();
+      if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+        findings.add(
+            DryRunFinding.warn(
+                "EXEC_ENDPOINT_NON_HTTP",
+                "execution",
+                "endpoint not http/https; reachability probe skipped: " + key,
+                trimmed));
+        continue;
+      }
+      try {
+        HttpRequest req =
+            HttpRequest.newBuilder(URI.create(trimmed))
+                .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                .timeout(HTTP_PROBE_TIMEOUT)
+                .build();
+        HttpResponse<Void> resp = httpClient.send(req, HttpResponse.BodyHandlers.discarding());
+        int status = resp.statusCode();
+        if (status >= 200 && status < 500) {
+          findings.add(
+              DryRunFinding.pass(
+                  "EXEC_ENDPOINT_OK", "execution", key + " reachable; HEAD returned " + status));
+        } else {
+          findings.add(
+              DryRunFinding.warn(
+                  "EXEC_ENDPOINT_5XX", "execution", key + " HEAD returned " + status, trimmed));
+        }
+      } catch (Exception ex) {
+        findings.add(
+            DryRunFinding.warn(
+                "EXEC_ENDPOINT_UNREACHABLE",
+                "execution",
+                key + " probe failed: " + ex.getMessage(),
+                trimmed));
+      }
+    }
+    return probed;
+  }
+
+  private static String stringValue(Map<String, Object> params, String key) {
+    Object raw = params == null ? null : params.get(key);
+    return raw instanceof String s ? s : null;
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
