@@ -256,7 +256,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
         n.getNodeParams(),
         n.getEnabled(),
         n.getCreatedAt(),
-        n.getUpdatedAt());
+        n.getUpdatedAt(),
+        n.getCrossDayDependencies(),
+        n.getCrossDayDependencyTimeoutSeconds());
   }
 
   private ConsoleWorkflowEdgeResponse toEdgeResponse(WorkflowEdgeEntity e) {

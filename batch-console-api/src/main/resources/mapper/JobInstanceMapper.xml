@@ -29,6 +29,8 @@
         <result column="sla_alerted_at" property="slaAlertedAt"/>
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
+        <result column="dry_run" property="dryRun"/>
+        <result column="failure_class" property="failureClass"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="JobInstanceResultMap">

@@ -39,4 +39,10 @@ public class JobInstanceEntity {
   private Instant slaAlertedAt;
   private Instant startedAt;
   private Instant finishedAt;
+
+  /** ADR-026 dry-run 演练标记。 */
+  private Boolean dryRun;
+
+  /** ADR-012 失败分类。 */
+  private String failureClass;
 }

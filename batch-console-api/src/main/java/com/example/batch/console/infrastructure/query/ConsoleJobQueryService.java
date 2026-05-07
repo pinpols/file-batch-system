@@ -207,7 +207,9 @@ public class ConsoleJobQueryService {
         entity.getExpectedDurationSeconds(),
         entity.getSlaAlertedAt(),
         entity.getStartedAt(),
-        entity.getFinishedAt());
+        entity.getFinishedAt(),
+        entity.getDryRun(),
+        display(entity.getFailureClass()));
   }
 
   private ConsoleJobStepInstanceResponse toJobStepInstanceResponse(JobStepInstanceEntity entity) {

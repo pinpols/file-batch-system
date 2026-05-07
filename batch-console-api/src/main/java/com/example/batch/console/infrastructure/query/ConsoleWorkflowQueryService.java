@@ -268,7 +268,9 @@ public class ConsoleWorkflowQueryService {
         display(entity.getNodeParams()),
         entity.getEnabled(),
         entity.getCreatedAt(),
-        entity.getUpdatedAt());
+        entity.getUpdatedAt(),
+        display(entity.getCrossDayDependencies()),
+        entity.getCrossDayDependencyTimeoutSeconds());
   }
 
   private ConsoleWorkflowEdgeResponse toWorkflowEdgeResponse(WorkflowEdgeEntity entity) {
