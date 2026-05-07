@@ -115,6 +115,36 @@ sed -i '' 's|<revision>1.2.0-RC.1</revision>|<revision>1.2.0-SNAPSHOT</revision>
 git commit -am "chore: back to 1.2.0-SNAPSHOT after RC.1"
 ```
 
+## 4.5. release-bump-checklist（每次 release 必改的版本入口）
+
+`${revision}` 之外还有 4 处版本入口**不在主 reactor 联动**，发版时必须手工同步：
+
+| 文件 | 字段 | 语义 | release 时何时改 |
+|---|---|---|---|
+| `pom.xml` `<revision>` | 主 reactor 单点（9 模块） | 当前开发 / release 版本 | §2.2 步骤 1 |
+| `load-tests/pom.xml` `<version>` | 独立模块（未入 reactor） | 跟主 reactor 一致（永远 = 当前 main 的 `${revision}`） | §2.2 步骤 1 同时改 |
+| `helm/batch-platform/Chart.yaml` `appVersion` | helm chart 默认 image tag | **= 上一次 GA**（不跟 SNAPSHOT，部署侧重稳定） | §2.2 步骤 4 之后，发了 `vX.Y.Z` 才改成 `X.Y.Z` |
+| `helm/values-prod.yaml` `image.tag` | 生产环境镜像 tag override | **= 当前生产部署版本** | 部署到生产时改（SRE 触发，不在代码 release flow 内强制） |
+
+**对应 sed 命令**（标准 release `X.Y.0`，§2.2 步骤 1 + 步骤 4 之间按顺序执行）：
+
+```bash
+# 1. 主 reactor + load-tests 同步（去 SNAPSHOT）
+sed -i '' 's|<revision>X.Y.0-SNAPSHOT</revision>|<revision>X.Y.0</revision>|' pom.xml
+sed -i '' 's|<version>X.Y.0-SNAPSHOT</version>|<version>X.Y.0</version>|' load-tests/pom.xml
+
+# ... mvn package / commit / tag vX.Y.0 / push 之后 ...
+
+# 2. helm Chart.appVersion 升级到刚发的 GA
+sed -i '' 's|appVersion: ".*"|appVersion: "X.Y.0"|' helm/batch-platform/Chart.yaml
+
+# 3. main 分支立即 bump 到下一开发版本
+sed -i '' 's|<revision>X.Y.0</revision>|<revision>X.(Y+1).0-SNAPSHOT</revision>|' pom.xml
+sed -i '' 's|<version>X.Y.0</version>|<version>X.(Y+1).0-SNAPSHOT</version>|' load-tests/pom.xml
+```
+
+`helm/values-prod.yaml` 的 `image.tag` 由 SRE 在发到生产时改，**不**在代码仓库 release flow 内强制（可能存在"代码 release 1.2.0 但暂不发到生产"的窗口）。
+
 ## 5. Maven 命令速查
 
 | 场景 | 命令 |
