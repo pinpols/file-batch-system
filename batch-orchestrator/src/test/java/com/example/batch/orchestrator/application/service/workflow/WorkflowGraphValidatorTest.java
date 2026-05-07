@@ -5,8 +5,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import java.util.ArrayList;
@@ -18,13 +20,15 @@ class WorkflowGraphValidatorTest {
 
   private WorkflowNodeMapper nodeMapper;
   private WorkflowEdgeMapper edgeMapper;
+  private JobDefinitionMapper jobDefMapper;
   private WorkflowGraphValidator validator;
 
   @BeforeEach
   void setUp() {
     nodeMapper = mock(WorkflowNodeMapper.class);
     edgeMapper = mock(WorkflowEdgeMapper.class);
-    validator = new WorkflowGraphValidator(nodeMapper, edgeMapper);
+    jobDefMapper = mock(JobDefinitionMapper.class);
+    validator = new WorkflowGraphValidator(nodeMapper, edgeMapper, jobDefMapper);
   }
 
   @Test
@@ -172,6 +176,92 @@ class WorkflowGraphValidatorTest {
     assertThat(result.hasErrors()).isFalse();
   }
 
+  // ── V5 / V8 / V12 / V15 ─────────────────────────────────────────────────
+
+  @Test
+  void v5UnknownOutputKeyEmitsWarn() {
+    WorkflowNodeEntity start = node("START", "START");
+    WorkflowNodeEntity loadFile = node("LOAD_FILE", "TASK");
+    loadFile.setRelatedJobCode("import_daily");
+    WorkflowNodeEntity downstream = node("DOWNSTREAM", "TASK");
+    downstream.setNodeParams("{\"src\": \"$.nodes.LOAD_FILE.output.unknownKey\"}");
+    WorkflowNodeEntity end = node("END", "END");
+    seed(
+        List.of(start, loadFile, downstream, end),
+        edges(
+            edge("START", "LOAD_FILE"),
+            edge("LOAD_FILE", "DOWNSTREAM"),
+            edge("DOWNSTREAM", "END")));
+    when(jobDefMapper.selectFirstByTenantAndCodeAndEnabled(null, "import_daily", true))
+        .thenReturn(jobDef("import_daily", "IMPORT", null, null));
+
+    var result = validator.validate(1L);
+
+    assertThat(result.hasErrors()).isFalse();
+    assertThat(result.warnings()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V5"));
+  }
+
+  @Test
+  void v8OptionalUpstreamReferenceEmitsError() {
+    WorkflowNodeEntity start = node("START", "START");
+    WorkflowNodeEntity optionalUpstream = node("DEP_ON_PREV", "TASK");
+    optionalUpstream.setRelatedJobCode("opt_dep_job");
+    optionalUpstream.setCrossDayDependencies(
+        "[{\"jobCode\":\"prev_day_pnl\",\"bizDateOffset\":-1,\"scope\":\"OPTIONAL\"}]");
+    WorkflowNodeEntity downstream = node("DOWN", "TASK");
+    downstream.setNodeParams("{\"src\": \"$.nodes.DEP_ON_PREV.output.fileId\"}");
+    WorkflowNodeEntity end = node("END", "END");
+    seed(
+        List.of(start, optionalUpstream, downstream, end),
+        edges(edge("START", "DEP_ON_PREV"), edge("DEP_ON_PREV", "DOWN"), edge("DOWN", "END")));
+
+    var result = validator.validate(1L);
+
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V8"));
+  }
+
+  @Test
+  void v12KnownOutputKeyEmitsTypeHintWarn() {
+    WorkflowNodeEntity start = node("START", "START");
+    WorkflowNodeEntity src = node("SRC", "TASK");
+    src.setRelatedJobCode("import_daily");
+    WorkflowNodeEntity downstream = node("DOWN", "TASK");
+    downstream.setNodeParams("{\"fid\": \"$.nodes.SRC.output.fileId\"}");
+    WorkflowNodeEntity end = node("END", "END");
+    seed(
+        List.of(start, src, downstream, end),
+        edges(edge("START", "SRC"), edge("SRC", "DOWN"), edge("DOWN", "END")));
+    when(jobDefMapper.selectFirstByTenantAndCodeAndEnabled(null, "import_daily", true))
+        .thenReturn(jobDef("import_daily", "IMPORT", null, null));
+
+    var result = validator.validate(1L);
+
+    assertThat(result.warnings()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V12"));
+  }
+
+  @Test
+  void v15MixedCalendarEmitsWarn() {
+    WorkflowNodeEntity start = node("START", "START");
+    WorkflowNodeEntity hk = node("HK_JOB", "TASK");
+    hk.setRelatedJobCode("hk_pnl");
+    WorkflowNodeEntity us = node("US_JOB", "TASK");
+    us.setRelatedJobCode("us_pnl");
+    WorkflowNodeEntity end = node("END", "END");
+    seed(
+        List.of(start, hk, us, end),
+        edges(edge("START", "HK_JOB"), edge("HK_JOB", "US_JOB"), edge("US_JOB", "END")));
+    when(jobDefMapper.selectFirstByTenantAndCodeAndEnabled(null, "hk_pnl", true))
+        .thenReturn(jobDef("hk_pnl", "GENERAL", "CAL_HK", "Asia/Hong_Kong"));
+    when(jobDefMapper.selectFirstByTenantAndCodeAndEnabled(null, "us_pnl", true))
+        .thenReturn(jobDef("us_pnl", "GENERAL", "CAL_US", "America/New_York"));
+
+    var result = validator.validate(1L);
+
+    assertThat(result.warnings())
+        .filteredOn(i -> "V15".equals(i.code()))
+        .hasSizeGreaterThanOrEqualTo(1);
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────────
 
   private void seed(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
@@ -205,5 +295,17 @@ class WorkflowGraphValidatorTest {
     e.setToNodeCode(to);
     e.setEnabled(true);
     return e;
+  }
+
+  private static JobDefinitionEntity jobDef(
+      String code, String type, String calendarCode, String timezone) {
+    return JobDefinitionEntity.builder()
+        .id(1L)
+        .jobCode(code)
+        .jobType(type)
+        .calendarCode(calendarCode)
+        .timezone(timezone)
+        .enabled(true)
+        .build();
   }
 }

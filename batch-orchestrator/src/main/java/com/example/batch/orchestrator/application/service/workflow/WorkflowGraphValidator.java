@@ -3,9 +3,11 @@ package com.example.batch.orchestrator.application.service.workflow;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.workflow.CrossDayDependencySpec;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -54,12 +56,48 @@ import org.springframework.stereotype.Service;
 public class WorkflowGraphValidator {
 
   private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.");
+  private static final Pattern DSL_OUTPUT_KEY_REF =
+      Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.output\\.([A-Za-z0-9_]+)");
   private static final TypeReference<List<CrossDayDependencySpec>> SPEC_LIST_TYPE =
       new TypeReference<>() {};
   private static final int MAX_RANGE_DAYS = 90;
 
+  /**
+   * ADR-009 §Worker 暴露的 output key（按业务领域）— 内置 contract，避免依赖 worker SPI 上报。
+   *
+   * <p>未列业务（GENERAL / WORKFLOW）跳过 V5/V12 检查（ADR-025 §V5/V12 行规定向后兼容）。
+   */
+  private static final Map<String, Set<String>> KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE =
+      Map.of(
+          "IMPORT",
+              Set.of(
+                  "fileId",
+                  "recordCount",
+                  "parsedCount",
+                  "validatedCount",
+                  "skippedCount",
+                  "bizDate"),
+          "EXPORT",
+              Set.of(
+                  "fileId",
+                  "objectName",
+                  "recordCount",
+                  "fileSizeBytes",
+                  "checksumValue",
+                  "bizDate"),
+          "PROCESS",
+              Set.of(
+                  "processedCount",
+                  "stagedCount",
+                  "publishedCount",
+                  "batchKey",
+                  "highWaterMarkOut"),
+          "DISPATCH",
+              Set.of("fileId", "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
+
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
+  private final JobDefinitionMapper jobDefinitionMapper;
 
   public WorkflowValidationResult validate(Long workflowDefinitionId) {
     if (workflowDefinitionId == null) {
@@ -202,7 +240,178 @@ public class WorkflowGraphValidator {
       }
     }
 
+    // V5 / V8 / V12 / V15
+    Map<String, JobDefinitionEntity> jobDefByCode = loadJobDefinitions(byCode);
+    Set<String> optionalNodes = collectOptionalNodes(byCode);
+    for (WorkflowNodeEntity n : byCode.values()) {
+      validateOutputContractRefs(n, byCode, jobDefByCode, optionalNodes, errors, warnings);
+    }
+    validateCalendarTimezoneConsistency(byCode.values(), jobDefByCode, warnings);
+
     return WorkflowValidationResult.builder().errors(errors).warnings(warnings).build();
+  }
+
+  /** 收集本 workflow 节点引用的 jobCode → JobDefinition 映射；缺失节点 / 缺失定义不抛错。 */
+  private Map<String, JobDefinitionEntity> loadJobDefinitions(
+      Map<String, WorkflowNodeEntity> nodes) {
+    Map<String, JobDefinitionEntity> result = new HashMap<>();
+    for (WorkflowNodeEntity node : nodes.values()) {
+      String jobCode = node.getRelatedJobCode();
+      if (!Texts.hasText(jobCode) || result.containsKey(jobCode)) {
+        continue;
+      }
+      try {
+        JobDefinitionEntity def =
+            jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+                node.getTenantId(), jobCode, true);
+        if (def != null) {
+          result.put(jobCode, def);
+        }
+      } catch (RuntimeException ex) {
+        log.warn(
+            "validator skipped job_definition lookup for jobCode={} due to {}",
+            jobCode,
+            ex.getMessage());
+      }
+    }
+    return result;
+  }
+
+  /**
+   * ADR-025 V8：cross_day_dependencies 中任一 dep.scope=OPTIONAL 即视该节点本身为 OPTIONAL（输出可能 incomplete）。
+   */
+  private Set<String> collectOptionalNodes(Map<String, WorkflowNodeEntity> nodes) {
+    Set<String> result = new HashSet<>();
+    for (WorkflowNodeEntity node : nodes.values()) {
+      String spec = node.getCrossDayDependencies();
+      if (!Texts.hasText(spec)) continue;
+      try {
+        List<CrossDayDependencySpec> deps = JsonUtils.fromJson(spec, SPEC_LIST_TYPE);
+        if (deps == null) continue;
+        for (CrossDayDependencySpec dep : deps) {
+          if (dep != null && "OPTIONAL".equalsIgnoreCase(dep.scope())) {
+            result.add(node.getNodeCode());
+            break;
+          }
+        }
+      } catch (Exception ignored) {
+        // V6 已经报过 parse 失败，这里不重复
+      }
+    }
+    return result;
+  }
+
+  /**
+   * V5 / V8 / V12 一次扫节点 nodeParams 的 DSL 输出引用：
+   *
+   * <ul>
+   *   <li>V5 — Y 不在引用节点 jobType 内置 contract → WARN（jobType 未列 / 找不到 def 跳过）
+   *   <li>V8 — X ∈ optionalNodes → ERROR（OPTIONAL → REQUIRED 传染性退化）
+   *   <li>V12 — Y 命中 contract 时附加 type-hint WARN（contract type info 留 worker SPI 扩展位）
+   * </ul>
+   */
+  private void validateOutputContractRefs(
+      WorkflowNodeEntity node,
+      Map<String, WorkflowNodeEntity> nodesByCode,
+      Map<String, JobDefinitionEntity> jobDefByCode,
+      Set<String> optionalNodes,
+      List<ValidationIssue> errors,
+      List<ValidationIssue> warnings) {
+    if (!Texts.hasText(node.getNodeParams())) return;
+    Matcher m = DSL_OUTPUT_KEY_REF.matcher(node.getNodeParams());
+    while (m.find()) {
+      String referencedNodeCode = m.group(1);
+      String outputKey = m.group(2);
+      // V8 — OPTIONAL 节点输出被引用
+      if (optionalNodes.contains(referencedNodeCode)) {
+        errors.add(
+            issue(
+                "V8",
+                "node_params references output of OPTIONAL upstream node "
+                    + referencedNodeCode
+                    + " (cross-day OPTIONAL → REQUIRED contagion)",
+                node.getNodeCode()));
+      }
+      WorkflowNodeEntity refNode = nodesByCode.get(referencedNodeCode);
+      if (refNode == null) {
+        // V4 已经报；这里跳过 V5/V12
+        continue;
+      }
+      JobDefinitionEntity refJobDef =
+          refNode.getRelatedJobCode() == null
+              ? null
+              : jobDefByCode.get(refNode.getRelatedJobCode());
+      if (refJobDef == null) {
+        // 未关联 job_definition → 跳过 V5/V12（向后兼容）
+        continue;
+      }
+      Set<String> contract =
+          KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE.get(
+              refJobDef.jobType() == null ? "" : refJobDef.jobType().toUpperCase(Locale.ROOT));
+      if (contract == null) {
+        // jobType 不在内置 contract（如 GENERAL / WORKFLOW）→ 跳过
+        continue;
+      }
+      // V5
+      if (!contract.contains(outputKey)) {
+        warnings.add(
+            warning(
+                "V5",
+                "DSL ref $.nodes."
+                    + referencedNodeCode
+                    + ".output."
+                    + outputKey
+                    + " not in known output contract for jobType="
+                    + refJobDef.jobType(),
+                node.getNodeCode()));
+      } else {
+        // V12 占位 — contract type info 留 worker SPI 扩展（@WorkerOutputContract 注解未来注入）；
+        // 当前只对 contract-hit 输出 key 记一条信息级 hint，避免 type 误判
+        warnings.add(
+            warning(
+                "V12",
+                "DSL ref $.nodes."
+                    + referencedNodeCode
+                    + ".output."
+                    + outputKey
+                    + " hits contract; type-check pending worker SPI",
+                node.getNodeCode()));
+      }
+    }
+  }
+
+  /** V15 — 同 workflow 多个节点引用的 job_definition.calendarCode / timezone 不一致 → WARN。 */
+  private void validateCalendarTimezoneConsistency(
+      java.util.Collection<WorkflowNodeEntity> nodes,
+      Map<String, JobDefinitionEntity> jobDefByCode,
+      List<ValidationIssue> warnings) {
+    Set<String> calendars = new HashSet<>();
+    Set<String> timezones = new HashSet<>();
+    for (WorkflowNodeEntity node : nodes) {
+      if (!Texts.hasText(node.getRelatedJobCode())) continue;
+      JobDefinitionEntity def = jobDefByCode.get(node.getRelatedJobCode());
+      if (def == null) continue;
+      if (Texts.hasText(def.calendarCode())) calendars.add(def.calendarCode());
+      if (Texts.hasText(def.timezone())) timezones.add(def.timezone());
+    }
+    if (calendars.size() > 1) {
+      warnings.add(
+          warning(
+              "V15", "workflow nodes reference jobs with mixed calendarCode: " + calendars, null));
+    }
+    if (timezones.size() > 1) {
+      warnings.add(
+          warning("V15", "workflow nodes reference jobs with mixed timezone: " + timezones, null));
+    }
+  }
+
+  private ValidationIssue warning(String code, String message, String nodeCode) {
+    return ValidationIssue.builder()
+        .code(code)
+        .severity(ValidationIssue.SEVERITY_WARN)
+        .nodeCode(nodeCode)
+        .message(message)
+        .build();
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
