@@ -161,7 +161,7 @@ sed -i '' 's|<version>X.Y.0</version>|<version>X.(Y+1).0-SNAPSHOT</version>|' lo
 - 格式 `v<version>`：`v1.0.0` / `v1.1.0-RC.1` / `v2.0.0`
 - 必须是 **annotated tag** (`git tag -a`)，不要轻量 tag
 - tag 信息至少含：版本号 + 一句话亮点 + 关键变更引用（ADR / migration / commit）
-- 描述性 tag（如 `stable-2026-05-07-doc-aligned`）可与版本 tag 并存，但不替代版本 tag
+- **仅保留版本 tag**，不打描述性 tag（避免一份 commit 两个名字造成混乱）
 
 ## 7. CHANGELOG.md 维护
 
@@ -198,7 +198,6 @@ Release 时把 `[Unreleased]` 改成 `[X.Y.Z] - YYYY-MM-DD`，再开新空 `[Unr
 ## 9. 当前状态（2026-05-07）
 
 - **GA 版本**：`v1.0.0` @ commit `525e60f0`（含 ADR-012/017/018/020/021/022/023/025/026 backend 全落地、9 模块、Migration 至 V118、1220 tests / 0 failures）
-- **stable tag 别名**：`stable-2026-05-07-doc-aligned`（描述性 tag，与 `v1.0.0` 共存）
 - **下一开发版本**：`<revision>1.1.0-SNAPSHOT</revision>`（main 分支默认）
 
 ## 10. FAQ
