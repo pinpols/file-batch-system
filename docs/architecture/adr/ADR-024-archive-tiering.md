@@ -1,9 +1,20 @@
 # ADR-024 · 冷热数据分层 + 长保留
 
-- **Status**: Accepted（实施 gated — 见"实施触发条件"）
+- **Status**: Accepted（**第 3 阶段 / P2 暂缓**，数据量 / 备份 / 监管阈值到了再开工 — 见"实施触发条件"）
 - **Date**: 2026-05-06
 - **Supersedes**: 部分超越 §archive 冷表对齐基线（仍兼容）
-- **Related**: ADR-022（forensic 长保留）/ §archive 冷表对齐 / §14.3.2
+- **Related**: ADR-022（forensic 长保留）/ §archive 冷表对齐 / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **暂缓。**当前先做轻量保留策略（保留天数 / 按 biz_date 清理 / 删除前 manifest），完整冷热分层 + OSS Parquet 等阈值触发再做。**绝不做完整数据湖架构。**
+
+| ✅ 触发条件到了再做 | ❌ 当前先做的轻量基线（不属本 ADR） | ❌ 绝不做 |
+|---|---|---|
+| 14 张 archive 表 PG 月分区 | 大表带 `business_date` / `created_at` + 合理索引 | 完整数据湖（Iceberg / Delta Lake，过度工程） |
+| DETACH PARTITION + OSS Parquet 卸载 | 日志类表保留天数配置 | TimescaleDB / ClickHouse 双引擎（运维多一套） |
+| `archive_storage_metadata` + sha256 attestation | 删除前写 audit log | v1 不做 OSS 跨区域复制（DR 另算） |
+| DuckDB embedded 冷查询 + 双源合并 | 预留 `archive_storage_metadata` 列名 / partition 切分键 = `biz_date`（防未来改不动） | 冷数据"按需重新 attach 回 PG"（重新加载成本 > 直接查 OSS） |
 
 ## 背景
 

@@ -1,9 +1,31 @@
 # ADR-026 · 演练 / Dry-run 模式
 
-- **Status**: Accepted（实施 gated — 见"实施触发条件"）
+- **Status**: Accepted（**第 2 阶段 / P1-P2 轻量版**，gated — 三层粒度先做 L1/L2/L3 配置/计划/Explain，FULL_SIMULATION 不做）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: §配置开关规范（与 `bypass-mode` 区分）/ ADR-020（重放，dry-run 是 replay 的另一面）/ §14.3.2
+- **Related**: §配置开关规范（与 `bypass-mode` 区分）/ ADR-020（重放，dry-run 是 replay 的另一面）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **本 ADR 的边界红线：只做"计划 / 校验 / Explain"，不做"完整副作用沙箱 + 事务回滚 + Kafka 不消费"模拟。**
+>
+> **判定提问**：「这个 dry-run 想看什么？」"看配置对不对 / 看会不会跑 / 看 SQL 能不能跑" → 属本 ADR；"跑出来看业务结果对不对" → 不属本 ADR（那是 UAT 环境的活）。
+
+### 三层粒度（写死，不扩张）
+
+| 层 | 粒度 | 行为 |
+|---|---|---|
+| **L1 CONFIG_VALIDATE** | workflow / job 定义 | 解析 cron / 业务日 / 参数 / DAG / fileTemplate / SQL；只读 + 不调外 |
+| **L2 SCHEDULE_PLAN** | bizDate 维度 | 给定 bizDate，输出"会触发哪些 job / 预计 instance 数 / 预计分区数 / 预计 Worker 类型 / 预计输入输出文件" |
+| **L3 EXECUTION_PLAN** | task 级 | SQL explain / 文件路径解析 / 模板字段检查 / MinIO key 预生成 / 下游 endpoint reachability |
+
+| ✅ 做 | ❌ 不做（绝对红线） |
+|---|---|
+| `dry_run` 一等字段贯穿 LaunchRequest → instance / partition / task | "FULL_SIMULATION"（真实执行 + 事务回滚 / 真实写文件后删 / 真实发 Kafka 不消费 / 完整副作用沙箱） |
+| `DryRunGuard` 拦所有写业务表 / 外部 IO，统一短路 | "实跑后回滚"作为替代（业务表 + 外部 IO 已改，回滚不可靠） |
+| result_version 不进 EFFECTIVE 链；终态 `SUCCESS_DRY_RUN` / `FAILED_DRY_RUN` | mixed mode（同一 instance 内一部分 step dry 一部分 real） |
+| audit / metric / log / result_version metadata 全写（演练就是要看这些） | 复用 bypass-mode 开关（语义不同：bypass 放行不安全；dry-run 安全但不副作用） |
+| CI lint 守护 step plugin 必经 DryRunGuard | v1 不做 dry-run vs real diff 工具（用 metric / audit 各自看） |
 
 ## 背景
 
