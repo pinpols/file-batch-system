@@ -387,7 +387,9 @@ class ConsoleQueryControllerTest {
                 3600,
                 null,
                 Instant.EPOCH,
-                Instant.EPOCH));
+                Instant.EPOCH,
+                false,
+                null));
 
     mockMvc
         .perform(get("/api/console/queries/instances/11").param("tenantId", "t1"))
@@ -504,6 +506,8 @@ class ConsoleQueryControllerTest {
                     3600,
                     null,
                     Instant.EPOCH,
+                    null,
+                    false,
                     null)));
 
     mockMvc
