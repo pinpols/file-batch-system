@@ -1,9 +1,21 @@
 # ADR-023 · 多日历联动 + 半天工作日
 
-- **Status**: Accepted（实施 gated — 见"实施触发条件"）
+- **Status**: Accepted（**第 1 阶段必做 / P0-P1**，gated — 见"实施触发条件"；满足跨境 / 半天 cutoff / 灾难日审计 任一即开工）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-018（跨日 DAG，calendar 跨时区独立）/ §14.3.2
+- **Related**: ADR-018（跨日 DAG，calendar 跨时区独立）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **批量调度系统的核心能力，不越界。**只做"让 Job 引用业务日历 + 跨日历联动"，不做"全球日历 SaaS / 外部公假日同步"。
+
+| ✅ 做 | ❌ 不做 |
+|---|---|
+| `calendar_dependency`：A SETTLED 才起 B（中港美串联） | 引入 ICU / iCal RFC 5545 RRULE（过度工程） |
+| `cutoff_schedule` JSONB：圣诞夜 / 春节前夕半天 cutoff | calendar 自动同步外部公假日 API（数据来源不可控、合规风险） |
+| `calendar_group` + holiday `scope=GROUP` 共享假日 | 全球日历 SaaS / "calendar fork / branch" |
+| `disaster_day_override`：突发停业不改 holiday 表保审计清晰 | calendar_group 嵌套（flat group 即可） |
+| 5 个调度核心能力：是否工作日 / 半天工作日 / 下一工作日 / 是否触发 / 顺延跳过 | disaster override 未来生效（只解当下灾难，未来停业走正常 holiday） |
 
 ## 背景
 

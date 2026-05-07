@@ -1,9 +1,21 @@
 # ADR-025 · Workflow 静态校验
 
-- **Status**: Accepted（建议 P2 优先实施，~3-5 人天，便宜高收益）
+- **Status**: Accepted（**第 1 阶段必做 / P0**，~5 人天，便宜高收益，建议第一个落地）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2
+- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **批量系统核心能力，不越界。**配置越灵活，发布前校验越重要 —— 凌晨 2 点跑挂 vs 配置时拒绝，体验差距大；ROI 极高。
+
+| ✅ 做 | ❌ 不做 |
+|---|---|
+| V1-V15 静态校验项（拓扑 / 不可达 / DSL nodeCode / 跨日依赖 offset & 90 天 / OPTIONAL 传染性退化 / GATEWAY 一致性 / param_schema 类型 / output contract） | 完整 type system（Dagster 风格） —— Java SPI 注解已够 |
+| enable 切换时同步校验 + 错误清单一次性返回（不只一个错） | 隐式 type-coercion（int ↔ long） —— 不匹配就是错 |
+| daily reconciler 重 evaluate 并发 alert | launch 时重跑 validator（性能不可接受，只在 enable） |
+| 批量导入 all-or-nothing 校验 | ERROR 通过 `force=true` 强制 enable 后门（不留逃生路径） |
+| reconciler 不修复，只告警 — 修复必经人工 | disable 路径校验（disable 是清理操作，不该 block） |
 
 ## 背景
 

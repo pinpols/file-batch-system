@@ -1,9 +1,32 @@
 # ADR-027 · 资源亲和性 / 地理调度
 
-- **Status**: Accepted（实施 gated — 见"实施触发条件"）
+- **Status**: Accepted（**第 3 阶段 / P2-P3 暂缓**，最高越界风险 — 触发条件不到只保留 workerType + capabilityTags + resourceProfile + region/zone 字段）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-019（域级配额）/ §worker_group / §14.3.2
+- **Related**: ADR-019（域级配额）/ §worker_group / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+
+## 范围边界（Scope Discipline）
+
+> **本 ADR 是最高越界风险项。**只做"批量任务到 Worker 的路由策略"，**绝不做"自研 Kubernetes Scheduler / 多集群编排 / 节点拓扑"**。本系统不是 K8s，不重做 K8s scheduler。
+>
+> **判定提问**：「这个调度策略是在挑 worker 还是在挑机器？」挑 worker → 属本 ADR；挑机器 / 挑容器 / 挑节点 → 不属本 ADR（那是 K8s 的活）。
+
+### 当前阶段保留的轻量字段（不属本 ADR，是基线）
+
+- `worker_group`（已有，不变）；
+- `workerType` / `capabilityTags` / `resourceProfile` / `region` / `zone` / `dataAffinityKey` 字段预留即可；
+- 简单策略：`workerType` 必匹配 → `capabilityTags` 必满足 → `region/zone` 优先匹配 → 不做复杂打分。
+- 单机房 + 同质 worker + 无合规隔离场景：`worker_group` 完全够用，本 ADR 不开工。
+
+### 完整版（触发条件到了再做）
+
+| ✅ 做（本 ADR 完整版） | ❌ 绝不做（系统定位红线） |
+|---|---|
+| K8s 风格 label + affinity（required / preferred / antiAffinity / weight 排序） | 自研 Kubernetes Scheduler / 多集群调度平台 / 容器资源编排器 |
+| Taint + toleration（NO_SCHEDULE / PREFER_NO_SCHEDULE） | PodAffinity / TopologySpreadConstraints / 节点拓扑调度 |
+| `WAITING_NO_AFFINITY_MATCH` 临时不可调度 + reconciler 周期重 evaluate | 底层机器资源编排 / 节点生命周期管理 |
+| label op：In / NotIn / Exists / DoesNotExist 四种（K8s 一致） | 复杂 multi-objective optimization 调度算法 |
+| 数据本地性 / GPU / 合规隔离 / 机房倾斜 / license 绑机 5 类典型场景 | label 表达式（regex / 计算字段） — K8s 也只支持 In/NotIn/Exists/DoesNotExist |
 
 ## 背景
 
