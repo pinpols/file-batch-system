@@ -921,6 +921,145 @@ paths:
               schema:
                 type: string
                 format: binary
+  /api/console/ops/batch-day-replay/sessions:
+    post:
+      tags: [Ops]
+      summary: ADR-020 提交批次日重放 session
+      description: |-
+        转发到 orchestrator `POST /internal/orchestrator/batch-day-replay/sessions`。
+        scope ∈ {ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY}；ALL/ALL_FAILED 物化所有候选 instance，
+        SUBSET 需 jobCodes，OUTPUTS_ONLY 需 versionIds。autoApprove=true 直接 RUNNING；否则 PENDING_APPROVAL。
+        同 (tenant, calendarCode, bizDate) 已存在 active session → STATE_CONFLICT。
+      operationId: submitBatchDayReplay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDayReplaySubmitRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/batch-day-replay/sessions/{sessionId}/approve:
+    post:
+      tags: [Ops]
+      summary: ADR-020 审批通过批次日重放 session（PENDING_APPROVAL → RUNNING）
+      operationId: approveBatchDayReplay
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: approver
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/batch-day-replay/sessions/{sessionId}/cancel:
+    post:
+      tags: [Ops]
+      summary: ADR-020 取消批次日重放 session（PENDING_APPROVAL / RUNNING → CANCELLED）
+      description: 已 RUNNING 的 instance 不强杀，让其自然跑完；session 标 CANCELLED 阻止后续派发。
+      operationId: cancelBatchDayReplay
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/batch-day-replay/sessions/{sessionId}:
+    get:
+      tags: [Ops]
+      summary: ADR-020 批次日重放 session detail（含 totalCount / succeededCount / failedCount / inFlightCount 进度）
+      operationId: detailBatchDayReplay
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/batch-day-replay/sessions/{sessionId}/entries:
+    get:
+      tags: [Ops]
+      summary: ADR-020 批次日重放 session 条目进度（按 status 过滤 PENDING/SUCCEEDED/FAILED）
+      operationId: listBatchDayReplayEntries
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: status
+          required: false
+          schema: { type: string, enum: [PENDING, SUCCEEDED, FAILED] }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, format: int32, default: 500 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObjectArray'
+  /api/console/ops/dry-run/plan:
+    post:
+      tags: [Ops]
+      summary: ADR-026 演练计划（L1 CONFIG_VALIDATE / L2 SCHEDULE_PLAN / L3 EXECUTION_PLAN）
+      description: |-
+        转发到 orchestrator `POST /internal/orchestrator/dry-run/plan`。
+        L1 解析 cron / DAG / 参数；L2 复用 SchedulePlanBuilder 输出 partition / worker route；
+        L3 在 L2 基础上叠加 SQL EXPLAIN / MinIO bucketExists / HTTP HEAD reachability。
+        响应含 findings (PASS/WARN/ERROR) + summary。**不写 instance / 不调外部投递**（priority-scope §ADR-026 §5）。
+      operationId: dryRunPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DryRunPlanRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/batch-days/operate:
     post:
       tags: [BatchDays]
@@ -7943,6 +8082,15 @@ components:
           properties:
             data:
               nullable: true
+    CommonResponseObjectArray:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
     CommonResponseMapList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -8580,6 +8728,61 @@ components:
           type: string
           maxLength: 128
       required: [bizDateFrom, bizDateTo]
+    BatchDayReplaySubmitRequest:
+      type: object
+      description: ADR-020 批次日重放提交命令
+      properties:
+        tenantId:        { type: string }
+        calendarCode:    { type: string }
+        bizDate:         { type: string, format: date }
+        scope:
+          type: string
+          enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]
+        jobCodes:
+          type: array
+          items: { type: string }
+          description: 仅 SUBSET_JOB_CODES scope 必填
+        versionIds:
+          type: array
+          items: { type: integer, format: int64 }
+          description: 仅 OUTPUTS_ONLY scope 必填，要 promote 的 result_version id 列表
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+          description: 缺省 CREATE_NEW_VERSION
+        configVersionPolicy:
+          type: string
+          enum: [USE_ORIGINAL_CONFIG, USE_CURRENT_CONFIG, USE_SPECIFIC_VERSION]
+          description: 缺省 USE_ORIGINAL_CONFIG
+        configVersion:   { type: integer, format: int32 }
+        reason:          { type: string }
+        requestedBy:     { type: string }
+        autoApprove:     { type: boolean, description: 'true 直接 RUNNING；false PENDING_APPROVAL（默认）' }
+        traceId:         { type: string }
+      required: [tenantId, calendarCode, bizDate, scope, reason, requestedBy]
+    DryRunPlanRequest:
+      type: object
+      description: ADR-026 演练计划请求
+      properties:
+        tenantId: { type: string }
+        jobCode:  { type: string }
+        bizDate:
+          type: string
+          format: date
+          description: L2/L3 必填；L1 可空
+        level:
+          type: string
+          enum: [CONFIG_VALIDATE, SCHEDULE_PLAN, EXECUTION_PLAN]
+          description: 'L1=CONFIG_VALIDATE / L2=SCHEDULE_PLAN / L3=EXECUTION_PLAN'
+        params:
+          type: object
+          additionalProperties: true
+          description: |
+            可选 effectiveParams；L3 EXECUTION_PLAN 中识别以下 key 触发探测：
+            - sql / querySql / sourceQuery / validationSql / selectSql → JdbcTemplate EXPLAIN
+            - minioBucket → MinioClient.bucketExists（命名 DNS-style 校验）
+            - endpointUrl / callbackUrl / channelEndpoint / dispatchTarget → HTTP HEAD（5s timeout）
+      required: [tenantId, jobCode]
     BatchDayOperateRequest:
       type: object
       properties:
@@ -9243,6 +9446,12 @@ components:
         finishedAt:
           type: string
           format: date-time
+        dryRun:
+          type: boolean
+          description: ADR-026 演练标记；true = dry-run instance，UI 应渲染演练徽标，区分 SUCCESS_DRY_RUN/FAILED_DRY_RUN 终态。
+        failureClass:
+          type: string
+          description: ADR-012 失败分类码（FailureClass enum），仅终态 FAILED/PARTIAL_FAILED 时填值。
       required: [id, tenantId, jobCode, instanceNo, bizDate, triggerType, instanceStatus, batchNo, operatorId, rerunFlag, retryFlag, rerunReason, relatedFileId, parentInstanceId, queueCode, workerGroup, priority, traceId, paramsSnapshot, resultSummary, deadlineAt, expectedDurationSeconds, slaAlertedAt, startedAt, finishedAt]
     ConsoleJobStepInstanceResponse:
       type: object
@@ -9396,6 +9605,13 @@ components:
         updatedAt:
           type: string
           format: date-time
+        crossDayDependencies:
+          type: string
+          description: ADR-018 跨日依赖 JSONB 数组（CrossDayDependencySpec[]）；UI 渲染依赖图。
+        crossDayDependencyTimeoutSeconds:
+          type: integer
+          format: int32
+          description: ADR-018 跨日依赖等待 timeout（秒）；用于 UI 显示"已等 X 分钟 / 剩 Y 分钟"。
       required: [id, workflowDefinitionId, nodeCode, nodeName, nodeType, relatedJobCode, relatedPipelineCode, workerGroup, windowCode, nodeOrder, retryPolicy, retryMaxCount, timeoutSeconds, nodeParams, enabled, createdAt, updatedAt]
     ConsoleWorkflowEdgeResponse:
       type: object
