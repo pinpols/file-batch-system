@@ -296,3 +296,33 @@ public enum XxxType implements DictEnum {
 `batch-common` / `batch-trigger` / `batch-orchestrator` /
 `batch-worker-core` / `batch-worker-import` / `batch-worker-export` /
 `batch-worker-process` / `batch-worker-dispatch` / `batch-console-api`
+
+## ADR 实施范围纪律（防越界）
+
+**系统定位写死**：批量运行控制面 + 文件 / 任务交付闭环。**不扩张**为企业数据治理 / 容器资源编排 / 合规审计平台。详见 [`docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md)。
+
+### 三阶段优先级
+
+| 阶段 | ADR | 触发条件 |
+|---|---|---|
+| **P0 第 1 阶段必做** | ADR-012 失败分类 / ADR-023 多日历联动 / ADR-025 Workflow 静态校验 | 已就绪可直接做 |
+| **P1 第 2 阶段应做但收敛边界** | ADR-021 数据对账 / ADR-022 Forensic / ADR-026 dry-run | 各自实施触发条件出现即开工，但严守 ❌ 红线 |
+| **P2 第 3 阶段暂缓** | ADR-024 冷热分层 / ADR-027 资源亲和 | 触发条件未到不开工（archive 行数 / 多机房 / 异构硬件 / 合规隔离 / worker_group ≥ 8 等） |
+
+### 4 个最高越界风险 ADR 的判定提问（实施 / PR 评审必看）
+
+| ADR | 判定提问 | 一句话越界红线 |
+|---|---|---|
+| **ADR-021** 数据对账 | 「修业务数据」vs 「裁定业务对错」 | 后者拒收：主数据 / 财务核算 / 数据治理 / 数据血缘 |
+| **ADR-022** Forensic | 「按 bizDate 圈定批次取证包」vs 「实时合规审计流」 | 后者拒收：SIEM / Splunk 接入 / 合规调查工作流 |
+| **ADR-026** dry-run | 「看配置 / 看会不会跑 / 看 SQL 能跑」vs 「看业务结果对」 | 后者拒收：FULL_SIMULATION / 事务回滚 / 真发 Kafka 不消费 / mixed mode / 复用 bypass-mode |
+| **ADR-027** 资源亲和 | 「挑 worker」vs 「挑机器」 | 后者拒收：自研 K8s Scheduler / PodAffinity / TopologySpreadConstraints / 节点拓扑调度 / multi-objective optimization |
+
+### PR 评审硬规则
+
+- 上述 4 个 ADR 的实施 PR 必须在描述里**答出判定提问** + 引用对应 ADR 文档"❌ 不做"清单
+- 评审者发现越界（即使代码功能正确）必须 reject 并要求拆为后续 ADR
+- 第 3 阶段（ADR-024/027）启动必须先行触发条件证据（监控数据 / 业务诉求工单），否则不开工
+- 各 ADR 文档顶部"范围边界（Scope Discipline）"小节是单一权威源，与本节冲突以 ADR 文档为准
+
+详见各 ADR 文档 + [`docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md) §5 一句话越界风险表。
