@@ -1,8 +1,10 @@
 package com.example.batch.orchestrator.config;
 
+import com.example.batch.common.exception.BizException;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,13 +15,29 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 
 /**
  * ADR-010 Stage 4: orchestrator Kafka 消费侧配置（固化无开关）。
  *
- * <p>消费模式:MANUAL_IMMEDIATE ack(consumer 端处理完才 ack);失败抛异常 → Spring Kafka 默认 SeekTo 行为重试,失败次数耗尽走
- * DLQ(本 Stage 暂不配 DLQ topic,依赖 orchestrator 端 uk_job_instance_tenant_dedup 兜底重复消息)。
+ * <p>消费模式:MANUAL_IMMEDIATE ack(consumer 端处理完才 ack)。
+ *
+ * <p><b>错误处理 (poison-pill skip)</b>：注入 {@link DefaultErrorHandler} 替换默认无限重试：
+ *
+ * <ul>
+ *   <li>瞬时错误（PG 抖动 / Kafka 短暂不可用）：固定 backoff（默认 3 次 × 2s）后跳过当前 offset，避免一条挂死整个 partition；
+ *   <li>永久错误（jobCode 不存在 / 协议反序列化失败 / 校验失败）：注册 {@link BizException} + {@link
+ *       IllegalArgumentException} 为 not-retryable，命中即跳过 — 业务错不会无限重试；
+ *   <li>recover 阶段仅 ERROR 日志（LOG_ONLY），不发 DLT。如未来要落 DLT topic，注入 {@code
+ *       DeadLetterPublishingRecoverer} 替换 lambda 即可。
+ * </ul>
+ *
+ * <p><b>历史教训</b>：2026-05-07 STRICT smoke 期间一条 jobCode 拼错的 launch 消息在 trigger.launch.v1 上无限重试， 占满
+ * orchestrator KafkaListener 线程并通过 batch-scheduler 线程池连锁让 WaitingPartitionDispatchScheduler 抢不到调度权
+ * — 所有 worker 链路被卡住。明确把业务异常列为 not-retryable 后，这类错一次就跳过 offset。
  */
+@Slf4j
 @Configuration(proxyBeanMethods = false)
 @EnableKafka
 public class OrchestratorKafkaConsumerConfiguration {
@@ -59,6 +77,12 @@ public class OrchestratorKafkaConsumerConfiguration {
     return new DefaultKafkaConsumerFactory<>(properties);
   }
 
+  @Value("${batch.trigger.consumer.error-handler.retry-attempts:3}")
+  private int errorRetryAttempts;
+
+  @Value("${batch.trigger.consumer.error-handler.retry-backoff-ms:2000}")
+  private long errorRetryBackoffMs;
+
   @Bean(name = TRIGGER_LISTENER_FACTORY)
   public ConcurrentKafkaListenerContainerFactory<String, String>
       triggerLaunchKafkaListenerContainerFactory(
@@ -70,6 +94,31 @@ public class OrchestratorKafkaConsumerConfiguration {
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.getContainerProperties().setObservationEnabled(true);
     factory.getContainerProperties().setObservationRegistry(observationRegistry);
+    factory.setCommonErrorHandler(triggerLaunchErrorHandler());
     return factory;
+  }
+
+  /**
+   * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
+   * IllegalArgumentException）不重试直接放行。日志记录失败上下文，offset 前进，避免单条卡死 partition。
+   */
+  private DefaultErrorHandler triggerLaunchErrorHandler() {
+    DefaultErrorHandler handler =
+        new DefaultErrorHandler(
+            (record, exception) ->
+                log.error(
+                    "TriggerLaunchConsumer 消息已超出重试上限或业务错跳过: topic={} partition={} offset={}"
+                        + " key={} value={} cause={}",
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.key(),
+                    record.value(),
+                    exception.getMessage()),
+            new FixedBackOff(errorRetryBackoffMs, Math.max(0, errorRetryAttempts - 1)));
+    // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
+    handler.addNotRetryableExceptions(BizException.class);
+    handler.addNotRetryableExceptions(IllegalArgumentException.class);
+    return handler;
   }
 }

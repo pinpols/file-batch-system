@@ -28,6 +28,21 @@ export PGPASSWORD
 RUN_ID="${RUN_ID:-ltw-stress-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
+# 同 run-worker-load-tests.sh 的 EXIT trap：压测产物按 RUN_ID 全清，避免历史 dead_letter 累积。
+SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
+on_exit_cleanup() {
+  local rc=$?
+  if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
+    echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place for inspection"
+    exit $rc
+  fi
+  echo "Auto-cleanup RUN_ID=${RUN_ID} ..." >&2
+  RUN_ID="$RUN_ID" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2 || \
+    echo "WARN: cleanup failed for RUN_ID=${RUN_ID}, run manually: RUN_ID=${RUN_ID} bash $LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2
+  exit $rc
+}
+trap on_exit_cleanup EXIT
+
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
 source "$LOAD_DIR/target/worker-load-data/run.env"

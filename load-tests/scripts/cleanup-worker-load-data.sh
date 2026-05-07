@@ -148,6 +148,119 @@ WITH ji AS (
 )
 DELETE FROM batch.compensation_command WHERE related_job_instance_id IN (SELECT id FROM ji);
 
+-- 异步事件 / 重试 / 死信清理（必须在 job_instance / job_partition 删除前完成，
+-- 否则 dead_letter_task.source_id / retry_schedule.related_id / outbox_event.aggregate_id
+-- 仍指向 job_instance / job_partition，留下"孤儿"行被 orchestrator 调度器持续重试）。
+WITH ji AS (
+  SELECT id
+  FROM batch.job_instance
+  WHERE tenant_id = 'default-tenant'
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND (
+      trace_id LIKE '${RUN_ID}%'
+      OR params_snapshot::text LIKE '%${RUN_ID}%'
+      OR batch_no = '${RUN_ID}-SETTLEMENT'
+    )
+),
+jp AS (
+  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
+),
+jt AS (
+  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
+),
+oe AS (
+  SELECT id
+  FROM batch.outbox_event
+  WHERE tenant_id = 'default-tenant'
+    AND (
+      (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
+      OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
+      OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
+    )
+)
+DELETE FROM batch.event_outbox_retry
+WHERE tenant_id = 'default-tenant'
+  AND outbox_event_id IN (SELECT id FROM oe);
+
+WITH ji AS (
+  SELECT id
+  FROM batch.job_instance
+  WHERE tenant_id = 'default-tenant'
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND (
+      trace_id LIKE '${RUN_ID}%'
+      OR params_snapshot::text LIKE '%${RUN_ID}%'
+      OR batch_no = '${RUN_ID}-SETTLEMENT'
+    )
+),
+jp AS (
+  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
+),
+jt AS (
+  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
+)
+DELETE FROM batch.outbox_event
+WHERE tenant_id = 'default-tenant'
+  AND (
+    (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
+    OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
+    OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
+  );
+
+WITH ji AS (
+  SELECT id
+  FROM batch.job_instance
+  WHERE tenant_id = 'default-tenant'
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND (
+      trace_id LIKE '${RUN_ID}%'
+      OR params_snapshot::text LIKE '%${RUN_ID}%'
+      OR batch_no = '${RUN_ID}-SETTLEMENT'
+    )
+),
+jp AS (
+  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
+),
+jt AS (
+  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
+)
+DELETE FROM batch.dead_letter_task
+WHERE tenant_id = 'default-tenant'
+  AND (
+    (source_type = 'JOB_INSTANCE' AND source_id IN (SELECT id FROM ji))
+    OR (source_type = 'JOB_PARTITION' AND source_id IN (SELECT id FROM jp))
+    OR (source_type = 'JOB_TASK' AND source_id IN (SELECT id FROM jt))
+  );
+
+WITH ji AS (
+  SELECT id
+  FROM batch.job_instance
+  WHERE tenant_id = 'default-tenant'
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND (
+      trace_id LIKE '${RUN_ID}%'
+      OR params_snapshot::text LIKE '%${RUN_ID}%'
+      OR batch_no = '${RUN_ID}-SETTLEMENT'
+    )
+),
+jp AS (
+  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
+),
+jt AS (
+  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
+)
+DELETE FROM batch.retry_schedule
+WHERE tenant_id = 'default-tenant'
+  AND (
+    (related_type = 'JOB_INSTANCE' AND related_id IN (SELECT id FROM ji))
+    OR (related_type = 'JOB_PARTITION' AND related_id IN (SELECT id FROM jp))
+    OR (related_type = 'JOB_TASK' AND related_id IN (SELECT id FROM jt))
+  );
+
+DELETE FROM batch.trigger_outbox_event
+WHERE tenant_id = 'default-tenant'
+  AND request_id LIKE '%${RUN_ID}%';
+
 WITH ji AS (
   SELECT id
   FROM batch.job_instance

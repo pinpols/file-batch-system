@@ -28,6 +28,26 @@ export PGPASSWORD
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
+# 自动 cleanup（EXIT trap）：压测产物（job_instance / job_partition / job_task /
+# dead_letter_task / outbox_event / event_outbox_retry / retry_schedule /
+# trigger_request / trigger_outbox_event / file_record / biz seed）按 RUN_ID 全清。
+# 历史 bug：以前没挂 trap，跑完 dead_letter_task 越攒越多（实测某次 555K 行
+# 把 orchestrator 的 scheduler thread pool 占满，导致后续 STRICT smoke 全卡）。
+# 设 SKIP_AUTO_CLEANUP=1 可临时禁用（排查现场用）。
+SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
+on_exit_cleanup() {
+  local rc=$?
+  if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
+    echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place for inspection"
+    exit $rc
+  fi
+  echo "Auto-cleanup RUN_ID=${RUN_ID} ..." >&2
+  RUN_ID="$RUN_ID" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2 || \
+    echo "WARN: cleanup failed for RUN_ID=${RUN_ID}, run manually: RUN_ID=${RUN_ID} bash $LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2
+  exit $rc
+}
+trap on_exit_cleanup EXIT
+
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
 source "$LOAD_DIR/target/worker-load-data/run.env"
