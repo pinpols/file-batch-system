@@ -8,6 +8,7 @@
 
 ### 2026-05-07
 - **CLAUDE.md 新增 §ADR 实施范围纪律（防越界）**：写死系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用 ❌ 不做清单。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` §5。
+- **CLAUDE.md §archive 冷表对齐**：覆盖范围由 "14 张" 修正为 17 张（V108 加 result_version；V110 加 batch_day_replay_session + batch_day_replay_entry）；新增 V116 forensic_export_log / V118 data_quality_rule / V118 data_quality_check 暂未入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 的事实说明（运维域 + 时间点决定是否归档）。
 
 ### 2026-05-04
 - **CLAUDE.md §时区策略**：控制台 `ConsoleQuerySupport.parseFlexibleInstant*` 与 `BatchTimezoneProvider.defaultZone()` 对齐，删除「可保留 `ZoneId.systemDefault()`」豁免表述；实现上为解析方法增加 `ZoneId` 参数，`ConsoleJobQueryService` / `ConsoleOpsQueryService` 注入 provider 传入默认区。

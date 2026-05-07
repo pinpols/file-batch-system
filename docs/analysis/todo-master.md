@@ -1,6 +1,6 @@
 # 📋 TODO Master · 全仓待办整合
 
-> **生成日期**:2026-05-01
+> **生成日期**:2026-05-01（**2026-05-07 重要更新见下方 Update Note**）
 > **整合范围**:`docs/` 全部 md(analysis / runbook / architecture / design / compliance / changelog)+ 代码 `TODO`/`FIXME`/`@Deprecated forRemoval` 注解
 > **维护规则**:
 > - 一切待办进入本文件,**不再散落** `hardening-backlog.md` 之外
@@ -9,6 +9,18 @@
 > - 环境标:`🔒-ops` = **本地仓库不能完整完成,需 ops / staging / prod / DBA / 业务方 / 外部客户端 配合**(列在 §九"本地不能做"专表)
 > - 状态变更时**同步本文件**,不要只改源文档导致漂移
 > - 已完成项每月归档到 `## 归档` 段(避免本文件越写越长)
+
+## 📌 2026-05-07 Update Note —— priority-scope §ADR-012/021..027 三阶段进展
+
+本文件主体快照定格在 2026-05-01。自那以来发生的变化（**未逐条回写本文 §一/§三 表，避免大幅重写；以 priority-scope 文档为权威**）：
+
+- **第 1 阶段 P0（已落 backend）**：ADR-012 失败分类（V111）/ ADR-023 多日历联动（V112-V114）/ ADR-025 Workflow 静态校验（**15 条规则全员到齐 V1-V15**）
+- **第 2 阶段 P1（已落 backend）**：ADR-021 数据对账 v1.0（V118 + DataQualityCheckExecutor + EFFECTIVE gate）/ ADR-022 Forensic v0.1（V116 + 同步 bundle + SHA-256）/ ADR-026 dry-run 全链路（V115 + V117 + DryRunGuard SPI + L1/L2/L3 service + SUCCESS_DRY_RUN/FAILED_DRY_RUN 终态 + L3 真接 SQL EXPLAIN / MinIO bucketExists / HTTP HEAD）
+- **第 3 阶段（暂缓）**：ADR-024 冷热分层 / ADR-027 资源亲和（触发条件未达，priority-scope §5 守红线）
+- **前端待办**（接口已就绪，前端可开干）：ADR-026 Console UI 演练模式 toggle / ADR-018 跨日 DAG Console UI / ADR-020 批次日重放 Console UI + ALL/ALL_FAILED/SUBSET E2E
+- **横切关注点**（未做）：CI lint 守护 step plugin 必经 DryRunGuard / audit + metric label 加 dry_run 维度
+
+权威源：`docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` + 各 ADR 顶部"范围边界（Scope Discipline）"小节。下次本 todo-master 重整时直接以那两份为基准回写。
 
 ---
 

@@ -135,6 +135,7 @@
 - `batch-worker-core`
 - `batch-worker-import`
 - `batch-worker-export`
+- `batch-worker-process`
 - `batch-worker-dispatch`
 - `batch-console-api`
 
@@ -158,6 +159,8 @@
   - 导入链路阶段实现
 - `batch-worker-export`
   - 导出链路阶段实现
+- `batch-worker-process`
+  - 处理链路阶段实现（PROCESS 域 staging → target publish）
 - `batch-worker-dispatch`
   - 分发链路阶段实现
 - `batch-console-api`
@@ -171,6 +174,7 @@
 - `batch-orchestrator`
 - `batch-worker-import`
 - `batch-worker-export`
+- `batch-worker-process`
 - `batch-worker-dispatch`
 - `batch-console-api`
 
