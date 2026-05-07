@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -36,6 +37,10 @@ public class CompensateDispatchStep implements DispatchStageStep {
 
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
+    // ADR-026: 演练模式不发外部补偿（也没真投递过），跳过即可。
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return DispatchStageResult.success(stage());
+    }
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(

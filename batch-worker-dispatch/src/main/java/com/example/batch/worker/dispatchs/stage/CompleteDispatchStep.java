@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -34,6 +35,10 @@ public class CompleteDispatchStep implements DispatchStageStep {
 
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
+    // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return DispatchStageResult.success(stage());
+    }
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(

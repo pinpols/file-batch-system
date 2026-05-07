@@ -1,5 +1,6 @@
 package com.example.batch.worker.exports.stage;
 
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -34,6 +35,10 @@ public class CompleteStep implements ExportStageStep {
 
   @Override
   public ExportStageResult execute(ExportJobContext context) {
+    // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return ExportStageResult.success(stage());
+    }
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
       return ExportStageResult.failure(
           stage(),
