@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.config.BatchClockConfig;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
@@ -109,6 +110,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @EnableConfigurationProperties({FileGovernanceProperties.class, MinioStorageProperties.class})
   @MapperScan("com.example.batch.orchestrator.mapper")
   @Import({
+    BatchClockConfig.class,
     FileGovernanceScheduler.class,
     FileGovernanceRepository.class,
     MinioGovernanceStorage.class,

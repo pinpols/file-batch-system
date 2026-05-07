@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.config.BatchClockConfig;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
@@ -23,7 +24,7 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
   @EnableAutoConfiguration
-  @Import(OrchestratorRedisSupport.class)
+  @Import({BatchClockConfig.class, OrchestratorRedisSupport.class})
   static class TestApplication {}
 
   @Autowired private OrchestratorRedisSupport redis;
