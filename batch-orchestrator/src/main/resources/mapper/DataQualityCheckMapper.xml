@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.DataQualityCheckMapper">
+
+    <resultMap id="DqCheckResultMap"
+               type="com.example.batch.orchestrator.domain.entity.DataQualityCheckEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="job_instance_id" javaType="java.lang.Long"/>
+            <arg column="rule_id" javaType="java.lang.Long"/>
+            <arg column="rule_code" javaType="java.lang.String"/>
+            <arg column="rule_type" javaType="java.lang.String"/>
+            <arg column="severity" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="metrics_json" javaType="java.lang.String"/>
+            <arg column="failure_sample" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="checked_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+      DataQualityCheckEntity 是 record（无 setter），不写回 id；
+      caller 不依赖 id 回填（写入即结束）。
+    -->
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.DataQualityCheckEntity">
+        insert into batch.data_quality_check (
+            tenant_id, job_instance_id, rule_id, rule_code, rule_type,
+            severity, status, metrics_json, failure_sample, error_message, checked_at
+        ) values (
+            #{tenantId}, #{jobInstanceId}, #{ruleId}, #{ruleCode}, #{ruleType},
+            #{severity}, #{status},
+            #{metricsJson,jdbcType=VARCHAR}::jsonb,
+            #{failureSample,jdbcType=VARCHAR}::jsonb,
+            #{errorMessage},
+            <choose>
+                <when test="checkedAt != null">#{checkedAt}</when>
+                <otherwise>current_timestamp</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <select id="selectByJobInstance" resultMap="DqCheckResultMap">
+        select *
+          from batch.data_quality_check
+         where tenant_id = #{tenantId}
+           and job_instance_id = #{jobInstanceId}
+         order by id asc
+    </select>
+</mapper>

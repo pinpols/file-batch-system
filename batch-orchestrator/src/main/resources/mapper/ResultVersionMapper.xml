@@ -23,6 +23,7 @@
             <arg    column="approval_id"      javaType="java.lang.Long"/>
             <arg    column="created_at"       javaType="java.time.Instant"/>
             <arg    column="updated_at"       javaType="java.time.Instant"/>
+            <arg    column="dq_gate_status"   javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -51,7 +52,8 @@
             promotion_policy,
             approval_id,
             created_at,
-            updated_at
+            updated_at,
+            dq_gate_status
         ) values (
             #{tenantId},
             #{businessKey},
@@ -68,7 +70,8 @@
             #{promotionPolicy},
             #{approvalId},
             #{createdAt},
-            #{updatedAt}
+            #{updatedAt},
+            #{dqGateStatus}
         )
     </insert>
 

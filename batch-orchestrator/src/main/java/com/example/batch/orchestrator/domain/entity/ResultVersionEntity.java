@@ -38,4 +38,47 @@ public record ResultVersionEntity(
     String promotionPolicy,
     Long approvalId,
     Instant createdAt,
-    Instant updatedAt) {}
+    Instant updatedAt,
+    /** ADR-021 DQ gate 结果：PASS / WARN / BLOCKED；NULL = 无规则关联，未跑 gate。 */
+    String dqGateStatus) {
+
+  /** 兼容旧调用：不带 dqGateStatus 的 17 元构造（V117 之前的调用方）。 */
+  public ResultVersionEntity(
+      Long id,
+      String tenantId,
+      String businessKey,
+      Integer versionNo,
+      Long jobInstanceId,
+      String status,
+      Instant effectiveAt,
+      Instant deactivatedAt,
+      String payloadStorage,
+      String payloadJson,
+      String payloadRef,
+      Instant generatedAt,
+      String generatedBy,
+      String promotionPolicy,
+      Long approvalId,
+      Instant createdAt,
+      Instant updatedAt) {
+    this(
+        id,
+        tenantId,
+        businessKey,
+        versionNo,
+        jobInstanceId,
+        status,
+        effectiveAt,
+        deactivatedAt,
+        payloadStorage,
+        payloadJson,
+        payloadRef,
+        generatedAt,
+        generatedBy,
+        promotionPolicy,
+        approvalId,
+        createdAt,
+        updatedAt,
+        null);
+  }
+}

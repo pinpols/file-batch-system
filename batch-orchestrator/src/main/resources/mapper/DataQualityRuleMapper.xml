@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.DataQualityRuleMapper">
+
+    <resultMap id="DqRuleResultMap"
+               type="com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="rule_code" property="ruleCode"/>
+        <result column="rule_name" property="ruleName"/>
+        <result column="rule_type" property="ruleType"/>
+        <result column="scope_business_key" property="scopeBusinessKey"/>
+        <result column="expression" property="expression"/>
+        <result column="threshold_json" property="thresholdJson"/>
+        <result column="severity" property="severity"/>
+        <result column="enabled" property="enabled"/>
+        <result column="description" property="description"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectEnabledByBusinessKey" resultMap="DqRuleResultMap">
+        select *
+          from batch.data_quality_rule
+         where tenant_id = #{tenantId}
+           and enabled = true
+           and #{businessKey} like (scope_business_key || '%')
+    </select>
+
+    <select id="selectById" resultMap="DqRuleResultMap">
+        select * from batch.data_quality_rule where id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.data_quality_rule (
+            tenant_id, rule_code, rule_name, rule_type, scope_business_key,
+            expression, threshold_json, severity, enabled, description
+        ) values (
+            #{tenantId}, #{ruleCode}, #{ruleName}, #{ruleType}, #{scopeBusinessKey},
+            #{expression}, #{thresholdJson,jdbcType=VARCHAR}::jsonb,
+            <choose>
+                <when test="severity != null">#{severity}</when>
+                <otherwise>'WARN'</otherwise>
+            </choose>,
+            <choose>
+                <when test="enabled != null">#{enabled}</when>
+                <otherwise>true</otherwise>
+            </choose>,
+            #{description}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity">
+        update batch.data_quality_rule
+           set rule_name = #{ruleName},
+               rule_type = #{ruleType},
+               scope_business_key = #{scopeBusinessKey},
+               expression = #{expression},
+               threshold_json = #{thresholdJson,jdbcType=VARCHAR}::jsonb,
+               severity = #{severity},
+               enabled = #{enabled},
+               description = #{description},
+               updated_at = current_timestamp
+         where id = #{id}
+    </update>
+</mapper>

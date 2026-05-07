@@ -6,6 +6,8 @@ import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.service.dataquality.DataQualityCheckExecutor;
+import com.example.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.ResultVersionEntity;
 import com.example.batch.orchestrator.mapper.ResultVersionMapper;
@@ -13,6 +15,7 @@ import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -48,6 +51,12 @@ public class ResultVersionWriter {
   private final BatchDateTimeSupport dateTimeSupport;
 
   /**
+   * ADR-021 DQ gate 执行器（可选注入）：BLOCKER 失败 → 强制 promotion_policy=MANUAL_APPROVAL；缺省 / NO_RULES →
+   * 不影响现有 promote 流程。
+   */
+  private final ObjectProvider<DataQualityCheckExecutor> dqExecutorProvider;
+
+  /**
    * 在 job_instance 进入 SUCCESS / PARTIAL_FAILED 终态时调用。 调用方必须确保已经在外层事务里完成了 instance
    * 状态转换；本方法在同一事务里写入版本。
    *
@@ -78,26 +87,50 @@ public class ResultVersionWriter {
     Instant now = dateTimeSupport.nowInstant();
     String status;
     Instant effectiveAt;
+    String dqGateStatus = null;
     boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
     if (dryRun) {
       // ADR-026 dry-run：不进 EFFECTIVE 链，落 DRY_RUN 状态供运维核对，不超越也不影响实盘版本
       status = STATUS_DRY_RUN;
       effectiveAt = null;
-    } else if (PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy)) {
-      status = STATUS_PENDING;
-      effectiveAt = null;
     } else {
-      // AUTO_LATEST：先把同 business_key 的旧 EFFECTIVE 推到 SUPERSEDED，再插入新 EFFECTIVE
-      resultVersionMapper.supersedePriorEffective(tenantId, businessKey, now);
-      status = STATUS_EFFECTIVE;
-      effectiveAt = now;
+      // ADR-021 DQ gate：若 BLOCKER 失败 → 强制 MANUAL_APPROVAL（即使 resultPolicy=CREATE_NEW_VERSION）
+      DataQualityGateOutcome dqOutcome = runDqGateSafely(instance, businessKey);
+      dqGateStatus =
+          switch (dqOutcome.status()) {
+            case BLOCKED -> "BLOCKED";
+            case WARN -> "WARN";
+            case PASS -> "PASS";
+            case NO_RULES -> null;
+          };
+      boolean dqBlocked = dqOutcome.status() == DataQualityGateOutcome.GateStatus.BLOCKED;
+      if (dqBlocked || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy)) {
+        status = STATUS_PENDING;
+        effectiveAt = null;
+        if (dqBlocked) {
+          promotionPolicy = PROMOTION_MANUAL_APPROVAL;
+          log.warn(
+              "DQ gate BLOCKED → result_version forced to PENDING/MANUAL_APPROVAL:"
+                  + " tenantId={}, businessKey={}, jobInstanceId={}",
+              tenantId,
+              businessKey,
+              instance.getId());
+        }
+      } else {
+        // AUTO_LATEST：先把同 business_key 的旧 EFFECTIVE 推到 SUPERSEDED，再插入新 EFFECTIVE
+        resultVersionMapper.supersedePriorEffective(tenantId, businessKey, now);
+        status = STATUS_EFFECTIVE;
+        effectiveAt = now;
+      }
     }
 
     Integer maxVersion = resultVersionMapper.selectMaxVersionNo(tenantId, businessKey);
     int versionNo = (maxVersion == null ? 0 : maxVersion) + 1;
 
+    final String finalDqGateStatus = dqGateStatus;
     ResultVersionEntity newVersion =
         ResultVersionEntity.builder()
+            .dqGateStatus(finalDqGateStatus)
             .tenantId(tenantId)
             .businessKey(businessKey)
             .versionNo(versionNo)
@@ -127,6 +160,22 @@ public class ResultVersionWriter {
   /** 业务主键格式（ADR-017 §业务主键定义）：{@code job:{jobCode}:{bizDate}}。 */
   private String buildBusinessKey(JobInstanceEntity instance) {
     return "job:" + instance.getJobCode() + ":" + instance.getBizDate();
+  }
+
+  /**
+   * ADR-021 DQ gate 执行包装：executor bean 缺失 / 抛异常 → 返回 NO_RULES（不影响现有 promote 流程，避免 gate 自身故障阻塞业务）。
+   */
+  private DataQualityGateOutcome runDqGateSafely(JobInstanceEntity instance, String businessKey) {
+    DataQualityCheckExecutor executor = dqExecutorProvider.getIfAvailable();
+    if (executor == null) {
+      return DataQualityGateOutcome.noRules();
+    }
+    try {
+      return executor.execute(instance, businessKey);
+    } catch (RuntimeException ex) {
+      SwallowedExceptionLogger.warn(ResultVersionWriter.class, "catch:dq_gate_failure", ex);
+      return DataQualityGateOutcome.noRules();
+    }
   }
 
   private boolean isSuccessTerminal(String instanceStatus) {
