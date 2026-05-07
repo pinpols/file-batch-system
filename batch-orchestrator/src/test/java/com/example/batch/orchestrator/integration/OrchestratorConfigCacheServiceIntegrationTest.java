@@ -5,6 +5,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchClockConfig;
 import com.example.batch.common.redis.BatchRedisKeys;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
@@ -31,7 +32,11 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
 
   @SpringBootConfiguration
   @EnableAutoConfiguration
-  @Import({OrchestratorRedisSupport.class, OrchestratorConfigCacheService.class})
+  @Import({
+    BatchClockConfig.class,
+    OrchestratorRedisSupport.class,
+    OrchestratorConfigCacheService.class
+  })
   static class TestApplication {}
 
   @MockitoBean private JobDefinitionMapper jobDefinitionMapper;
