@@ -248,9 +248,9 @@ public enum XxxType implements DictEnum {
 
 **热表 `batch.*` 与归档表 `archive.*_archive` 必须 1:1 字段镜像。**
 
-- **拦截机制**：`ArchiveSchemaDriftCheck` 启动期 `@EventListener(ApplicationReadyEvent.class)` 双向 diff 14 张归档对照表，差异即 `IllegalStateException` fail-fast；启动失败比静默归档差异更安全
-- **演进规则**：任何 `ALTER TABLE batch.* ADD COLUMN` 必须**同 PR** 补齐 `ALTER TABLE archive.*_archive` 的 migration（参考 V77 → V79 三轮 i18n 列同步）
-- **覆盖范围**：14 张运行态归档表（job_instance / outbox_event / pipeline_step_run 等）；定义表（job_definition / workflow_definition 等）不入归档，无需对齐
+- **拦截机制**：`ArchiveSchemaDriftCheck` 启动期 `@EventListener(ApplicationReadyEvent.class)` 双向 diff 已注册的归档对照表，差异即 `IllegalStateException` fail-fast；启动失败比静默归档差异更安全
+- **演进规则**：任何 `ALTER TABLE batch.* ADD COLUMN` 必须**同 PR** 补齐 `ALTER TABLE archive.*_archive` 的 migration（参考 V77 → V79 三轮 i18n 列同步）；新增主表带归档时同步把表名加入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES`
+- **覆盖范围（2026-05-07 现状）**：17 张（V108 加 result_version；V110 加 batch_day_replay_session + batch_day_replay_entry）；V116 forensic_export_log / V118 data_quality_rule / V118 data_quality_check 暂未入 ARCHIVED_TABLES（独立运维域，待启用归档时注册）；定义表（job_definition / workflow_definition 等）不入归档，无需对齐
 - **未来演进**：考虑 PG 15+ `MERGE INTO` 或 declarative partition + `DETACH PARTITION` 替代物理双表，彻底消除人工 sync
 
 详见 `batch-orchestrator/src/main/java/.../infrastructure/archive/ArchiveSchemaDriftCheck.java`。

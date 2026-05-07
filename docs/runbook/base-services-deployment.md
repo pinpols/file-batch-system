@@ -18,7 +18,7 @@
 另有 2 个 init 容器：`batch-kafka-init` 建 topic、`batch-minio-init` 建 bucket。一键启停：
 
 ```bash
-make dev-start   # 包装 scripts/local/start-all.sh：up -d 基础依赖 + 启 6 个 app JVM
+make dev-start   # 包装 scripts/local/start-all.sh：up -d 基础依赖 + 启 7 个 app JVM（含 batch-worker-process）
 make dev-stop    # 仅停 app JVM；基础依赖保持 up
 ```
 
@@ -141,7 +141,7 @@ Postgres / Kafka / Redis 跑在单独 VM 集群，**不在 K8s 里**；应用 K8
 | 完整的 `security-scan.md` / `observability-stack.md` / `observability-stack.md` | `docs/runbook/` | 严肃 SRE 思维 |
 
 **综合判断**：本项目大概率定位于**中大型企业内部批处理平台**，**传统部署（方案 3）** 是默认
-落地姿势——基础服务（Postgres / Kafka / Redis）走独立 VM 集群或 DBA 自管，应用层（6 个 jar）
+落地姿势——基础服务（Postgres / Kafka / Redis）走独立 VM 集群或 DBA 自管，应用层（7 个 jar）
 走 K8s 滚动升级。
 
 ### 4 种典型部署组合（按实际场景）

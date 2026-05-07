@@ -1112,8 +1112,8 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 |---|---|---|---|
 | P2 | Console 批量日视图：已打开未触发、阻塞原因、DST 调整、操作历史 | 非后端 | 数据源齐备（`batch_day_instance` 全字段 + V105 独立审计表 + V104 trigger 本地计划） |
 | 设计 | 跨业务域 / 核心链路联动限流 | 设计层（Accepted，实施 gated） | [ADR-019](../architecture/adr/ADR-019-cross-domain-rate-limit.md) — `business_domain` 主模型 + 域级 quota + 父子借调 + 三态开关；实施触发条件已明确，未触发期间不开工 |
-| 设计 | 跨批量日 DAG 依赖 | 设计层（Accepted，已开工） | [ADR-018](../architecture/adr/ADR-018-cross-batch-day-dag-dependency.md) — pipe 模型；`workflow_node.cross_day_dependencies` JSONB + `WAITING_DEPENDENCY` 节点状态 + `BizDateArithmetic` + `CrossDayDependencyResolver`。Stage 2-4 已落 V109，Stage 5 reconciler / Stage 6 E2E / Stage 7 超时治理排期中 |
-| 设计 | 批量日维度重放治理 | 设计层（Accepted，已开工） | [ADR-020](../architecture/adr/ADR-020-batch-day-replay.md) — `batch_day_replay_session` 聚合 + 4 种 scope (ALL/ALL_FAILED/SUBSET_JOB_CODES/OUTPUTS_ONLY) + 接审批 + 同 (tenant,calendar,bizDate) 唯一 active session 不变量。Stage 2 schema 已落 V110，dispatcher / approval / OUTPUTS_ONLY promote 按 Stage 3-8 推进 |
+| 设计 | 跨批量日 DAG 依赖 | 后端已落 backend Stages 1-7 | [ADR-018](../architecture/adr/ADR-018-cross-batch-day-dag-dependency.md) — pipe 模型；`workflow_node.cross_day_dependencies` JSONB + `WAITING_DEPENDENCY` 节点状态 + `BizDateArithmetic` + `CrossDayDependencyResolver` + reconciler + 超时治理。Stages 1-7 全部 backend 已落（V109 起），剩 Console UI |
+| 设计 | 批量日维度重放治理 | 后端已落 backend Stages 1-6+8 + Console API | [ADR-020](../architecture/adr/ADR-020-batch-day-replay.md) — `batch_day_replay_session` 聚合 + 4 种 scope (ALL/ALL_FAILED/SUBSET_JOB_CODES/OUTPUTS_ONLY) + 审批 + 同 (tenant,calendar,bizDate) 唯一 active session 不变量。V110 + BatchDayReplayService submit/approve/cancel + dispatcher + terminal reconciler + OUTPUTS_ONLY 同步 promote 已落；`/api/console/ops/batch-day-replay/sessions...` 5 个 console 端点已就绪。剩 Console UI + ALL/ALL_FAILED/SUBSET 全 E2E |
 | 设计 | 结果版本 "生效" 裁决 | 设计层（Accepted，主链路已落） | [ADR-017](../architecture/adr/ADR-017-result-version-model.md) — `result_version` 主模型 + EFFECTIVE 单版索引 + payload INLINE/EXTERNAL/FILE_RECORD + retention scheduler。Stage 1-5 已落 V108，Stage 6 console UI 待接入 |
 | 设计 | late arrival 跳批/等待/人工策略闭环细化 | **决策：v1 不做**（类 ADR-019 gating 模式） | 当前 `routeLateArrivalIfNeeded` 已 binary 完整闭环：容差内 LATE_ACCEPTED + WARN alert；容差外自动翻 CATCH_UP + ERROR alert + audit log + DB CAS。SKIP_SILENT / WAIT_MANUAL_RELEASE / job 级 tolerance override 等"细化策略"会引入 4 枚举值 + 1 张表 + 3 API，但目前 backlog 无具体客户诉求。**触发条件**（满足任一才动）：(1) ≥2 个生产工单为"超容差但希望人工决定"；(2) 出现"已知会迟到、不希望刷屏 ERROR alert"的特殊业务（SKIP_SILENT 才有意义）；(3) 合规要求 late arrival 必须独立审计表（`batch_day_late_arrival` 才必要）。未触发期间不开 ADR、不排期 |
 
@@ -1132,11 +1132,11 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 | [026](../architecture/adr/ADR-026-dry-run-mode.md) | dry_run 一等字段 + DryRunGuard + DRY_RUN result_version + SUCCESS_DRY_RUN 终态 | 大版本 / 灾备演练触发 | ~17 人天 |
 | [027](../architecture/adr/ADR-027-resource-affinity.md) | worker label / taint / job affinity_json（K8s 风格） | 多机房 / 异构硬件 / 合规隔离触发 | ~18 人天 |
 
-**建议优先级**：
-- **必做 3 项（成本低）**：ADR-012 失败分类、ADR-025 Workflow 静态校验、ADR-021 数据对账（金融场景）；
-- **看场景 2 项**：ADR-022 Forensic（受监管）、ADR-023 多日历（跨境）；
-- **预留架构 1 项**：ADR-024 archive 分层（schema 不定死，数据量到了再实施）；
-- **暂不做 4 项**：ADR-026 dry-run、ADR-027 affinity、ADR-019 cross-domain rate-limit、late arrival 细化。
+**建议优先级**（2026-05-07 update — priority-scope 三阶段已写死，详见 `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`）：
+- **第 1 阶段必做（已落）**：ADR-012 失败分类（V111）、ADR-025 Workflow 静态校验（15 条规则全员到齐）、ADR-023 多日历联动（V112-V114）；
+- **第 2 阶段已落 backend**：ADR-021 数据对账 v1.0（V118 + DataQualityCheckExecutor + EFFECTIVE gate）、ADR-022 Forensic v0.1（V116 + 同步 bundle + SHA-256）、ADR-026 dry-run（V115/V117 + DryRunGuard SPI + L1/L2/L3 service + SUCCESS_DRY_RUN/FAILED_DRY_RUN 终态，**全链路落地**）；
+- **第 3 阶段暂缓**：ADR-024 archive 分层（数据量到 5 亿行触发）、ADR-027 资源亲和（多机房 / 异构硬件触发，priority-scope §5 最高越界风险）；
+- **不做**：ADR-019 cross-domain rate-limit、late arrival 细化（已写死 won't-do v1）。
 
 ### 14.4 守护与回归
 
