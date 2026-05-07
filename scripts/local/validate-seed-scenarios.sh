@@ -553,18 +553,23 @@ if [[ "$STRICT" == "1" ]]; then
     '{"templateCode":"import_customer_json_v1","content":"[{\"customerNo\":\"SEEDVAL_C001\",\"customerName\":\"smoke probe\",\"customerType\":\"PERSONAL\"}]"}' \
     success
 
-  # EXPORT/WORKFLOW PIPELINE 用 PROBE_TAG 唯一 batch 避免跨 run file_record checksum 冲突
+  # EXPORT/WORKFLOW PIPELINE 各用独立 batch_no 避免同一 run 内 file_record 命名 + checksum 冲突
+  # (export 模板 naming_rule = settlement-${bizDate}-${version}，同 batch 同 bizDate 二次 fire
+  # 会撞 EXPORT_REGISTER_CHECKSUM_CONFLICT；WORKFLOW 节点 EXPORT_STEP 调同 job 必须用独立 batch)。
   PROBE_BATCH_NO="${PROBE_TAG}-BATCH"
+  PROBE_WF_BATCH_NO="${PROBE_TAG}-WF-BATCH"
   PROBE_BIZDATE=$(date +%Y-%m-%d)
-  # 先 seed 一个 settlement_batch 行供 EXPORT loadBatch 命中(注意 biz 表在 batch_business DB)
+  # 先 seed 两个 settlement_batch 行供 EXPORT loadBatch 命中(注意 biz 表在 batch_business DB)
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc \
     "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('default-tenant', '$PROBE_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
+  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc \
+    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('default-tenant', '$PROBE_WF_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
 
   assert_fire "EXPORT 严格 (default-tenant, settlement)" "default-tenant" "export_settlement_job" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
   assert_fire "WORKFLOW PIPELINE 严格 (default-tenant)" "default-tenant" "wf_probe_pipeline" \
-    "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
+    "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_WF_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
   # ===== DISPATCH 严格 =====
   # 自 seed: PROBE_TAG file_record (LOCAL 占位) + default-tenant DISPATCH job + fire
