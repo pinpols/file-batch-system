@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-05-07
+- **CLAUDE.md 新增 §ADR 实施范围纪律（防越界）**：写死系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用 ❌ 不做清单。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` §5。
+
 ### 2026-05-04
 - **CLAUDE.md §时区策略**：控制台 `ConsoleQuerySupport.parseFlexibleInstant*` 与 `BatchTimezoneProvider.defaultZone()` 对齐，删除「可保留 `ZoneId.systemDefault()`」豁免表述；实现上为解析方法增加 `ZoneId` 参数，`ConsoleJobQueryService` / `ConsoleOpsQueryService` 注入 provider 传入默认区。
 - **CLAUDE.md §时区策略 / §字符编码 + 运维样例 env**：`.env.example` 以 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 为唯一时区变量（`docker-compose` 的 `TZ`/`PGTZ` 从该变量插值，兼容显式 `TZ=`）；**`BATCH_LOCALE`** 为进程/中间件 locale 唯一变量；本地 `start-all.sh`/`restart.sh` 导出 `TZ`←`BATCH_TIMEZONE`、`LANG`/`LC_ALL`←`BATCH_LOCALE`；`.env.prod` / `check-env-prod-sync` 白名单同步。
