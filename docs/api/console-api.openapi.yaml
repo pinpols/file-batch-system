@@ -1037,6 +1037,120 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObjectArray'
+  /api/console/result-versions:
+    get:
+      tags: [Ops]
+      summary: ADR-017 列举 result_version（含 PENDING / EFFECTIVE / SUPERSEDED / ARCHIVED / DRY_RUN）
+      description: |-
+        转发到 orchestrator `GET /internal/orchestrator/result-versions`。按 (tenantId, businessKey)
+        逐版本返回（businessKey 形如 `job:{jobCode}:{bizDate}` 或 `workflow:{wfCode}:{bizDate}`），
+        默认上限 50 条。EFFECTIVE 单版裁决靠 partial unique index 保证。
+      operationId: listResultVersions
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: businessKey
+          required: true
+          schema: { type: string }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, format: int32, default: 50 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObjectArray'
+  /api/console/result-versions/effective:
+    get:
+      tags: [Ops]
+      summary: ADR-017 当前 EFFECTIVE 版本（同 businessKey 至多 1 条）
+      operationId: effectiveResultVersion
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: businessKey
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/result-versions/{id}:
+    get:
+      tags: [Ops]
+      summary: ADR-017 result_version 详情（含完整 payload_json）
+      operationId: detailResultVersion
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/result-versions/{id}/promote:
+    post:
+      tags: [Ops]
+      summary: ADR-017 promote PENDING → EFFECTIVE（手工 / 审批驱动）
+      description: 命中 partial unique index `uk_result_version_effective` 由 orchestrator service 保证 EFFECTIVE 单版唯一。
+      operationId: promoteResultVersion
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/result-versions/{id}/reject:
+    post:
+      tags: [Ops]
+      summary: ADR-017 reject PENDING → ARCHIVED（候选放弃，不影响其他版本）
+      operationId: rejectResultVersion
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/ops/dry-run/plan:
     post:
       tags: [Ops]
