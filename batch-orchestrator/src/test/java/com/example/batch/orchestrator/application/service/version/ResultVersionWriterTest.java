@@ -29,13 +29,29 @@ class ResultVersionWriterTest {
   private ResultVersionMapper mapper;
   private ResultVersionWriter writer;
 
+  private com.example.batch.orchestrator.application.service.dataquality.DataQualityCheckExecutor
+      dqExecutor;
+
   @BeforeEach
   void setUp() {
     mapper = mock(ResultVersionMapper.class);
     BatchDateTimeSupport dateTimeSupport =
         new BatchDateTimeSupport(
             Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    writer = new ResultVersionWriter(mapper, dateTimeSupport);
+    dqExecutor =
+        mock(
+            com.example.batch.orchestrator.application.service.dataquality.DataQualityCheckExecutor
+                .class);
+    @SuppressWarnings("unchecked")
+    org.springframework.beans.factory.ObjectProvider<
+            com.example.batch.orchestrator.application.service.dataquality.DataQualityCheckExecutor>
+        dqProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
+    when(dqProvider.getIfAvailable()).thenReturn(dqExecutor);
+    when(dqExecutor.execute(any(), anyString()))
+        .thenReturn(
+            com.example.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome
+                .noRules());
+    writer = new ResultVersionWriter(mapper, dateTimeSupport, dqProvider);
   }
 
   @Test
@@ -185,6 +201,38 @@ class ResultVersionWriterTest {
     assertThat(captor.getValue().status()).isEqualTo("DRY_RUN");
     assertThat(captor.getValue().effectiveAt()).isNull();
     assertThat(captor.getValue().versionNo()).isEqualTo(4);
+    verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
+  }
+
+  @Test
+  void dqGateBlockedForcesPendingAndManualApprovalEvenWithCreateNewVersion() {
+    JobInstanceEntity instance =
+        success(
+            "t1",
+            500L,
+            "DAILY_PNL",
+            LocalDate.of(2026, 5, 4),
+            "{\"resultPolicy\":\"CREATE_NEW_VERSION\"}");
+    when(mapper.selectByJobInstanceId("t1", 500L)).thenReturn(null);
+    when(mapper.selectMaxVersionNo(anyString(), anyString())).thenReturn(null);
+    when(dqExecutor.execute(any(), anyString()))
+        .thenReturn(
+            com.example.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome
+                .builder()
+                .status(
+                    com.example.batch.orchestrator.application.service.dataquality
+                        .DataQualityGateOutcome.GateStatus.BLOCKED)
+                .findings(java.util.List.of())
+                .build());
+
+    writer.writeOnTerminal(instance, Map.of("recordCount", 1));
+
+    ArgumentCaptor<ResultVersionEntity> captor = ArgumentCaptor.forClass(ResultVersionEntity.class);
+    verify(mapper).insert(captor.capture());
+    // BLOCKED 强制 PENDING + MANUAL_APPROVAL，不调 supersedePriorEffective
+    assertThat(captor.getValue().status()).isEqualTo("PENDING");
+    assertThat(captor.getValue().promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
+    assertThat(captor.getValue().dqGateStatus()).isEqualTo("BLOCKED");
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
   }
 
