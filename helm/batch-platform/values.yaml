@@ -2,7 +2,8 @@
 # Override with -f values-prod.yaml or --set key=value.
 
 # ── Image ─────────────────────────────────────────────────────────────────────
-# tag 留空时 fallback 到 Chart.appVersion（与 pom.xml <revision> 对齐，当前 1.0.0）
+# tag 留空时 fallback 到 Chart.appVersion；Chart.appVersion 跟随 **最近一次 GA 版本**
+# （非 main 分支的 SNAPSHOT；详见 docs/runbook/releasing.md §Release flow 的 helm 同步步骤）。
 # 仅临时覆盖才填（如 "latest" / "sha-abc123" / "1.0.1-rc1"）
 image:
   registry: ""          # e.g. registry.example.com/batch-platform
