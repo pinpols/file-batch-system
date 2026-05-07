@@ -1,5 +1,6 @@
 package com.example.batch.e2e.apps;
 
+import com.example.batch.common.config.BatchClockConfig;
 import com.example.batch.common.config.BatchJsonAutoConfiguration;
 import com.example.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import com.example.batch.console.BatchConsoleApiApplication;
@@ -41,6 +42,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     })
 @EnableKafka
 @Import({
+  BatchClockConfig.class,
   E2ePlatformDataSourceConfiguration.class,
   E2eImportWorkerDataSourceConfiguration.class,
   E2ePlatformMybatisConfiguration.class,

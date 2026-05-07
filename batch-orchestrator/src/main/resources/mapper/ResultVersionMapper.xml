@@ -26,7 +26,14 @@
         </constructor>
     </resultMap>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+    <!--
+      ResultVersionEntity 是 java record（不可变, 无 setter）。
+      MyBatis useGeneratedKeys 需要 setId(...) 把 SERIAL 回写, 在 record 上抛
+      "No setter found for keyProperty 'id'"。caller (ResultVersionWriter) 不读
+      插入后的 id, 所以这里不需要 useGeneratedKeys; 如果未来需要 id 回查,
+      用独立 SELECT (tenant, business_key, version_no) 即可。
+    -->
+    <insert id="insert"
             parameterType="com.example.batch.orchestrator.domain.entity.ResultVersionEntity">
         insert into batch.result_version (
             tenant_id,

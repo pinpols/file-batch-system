@@ -32,7 +32,11 @@
         </constructor>
     </resultMap>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+    <!--
+      BatchDayReplaySessionEntity 是 record（无 setter），MyBatis useGeneratedKeys 写不回 id；
+      caller (BatchDayReplayService) 通过 selectActiveByCalendarBizDate 重读拿持久化后的行。
+    -->
+    <insert id="insert"
             parameterType="com.example.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity">
         insert into batch.batch_day_replay_session (
             tenant_id, calendar_code, biz_date, scope, scope_payload,
