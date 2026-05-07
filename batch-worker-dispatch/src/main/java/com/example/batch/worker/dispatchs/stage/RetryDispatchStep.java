@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -46,6 +47,10 @@ public class RetryDispatchStep implements DispatchStageStep {
 
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
+    // ADR-026: 演练模式不重试外部投递（无副作用 → 也不需要 retry）。
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return DispatchStageResult.success(stage());
+    }
     if (context == null) {
       return DispatchStageResult.failure(
           stage(),

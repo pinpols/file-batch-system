@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage;
 
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -32,6 +33,10 @@ public class FeedbackStep implements ImportStageStep {
 
   @Override
   public ImportStageResult execute(ImportJobContext context) {
+    // ADR-026: 演练模式不写 audit 日志（避免污染实盘 file_audit 历史），直接返回 success。
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return ImportStageResult.success(stage());
+    }
     Long fileId =
         runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
     Map<String, Object> detailSummary = new LinkedHashMap<>();

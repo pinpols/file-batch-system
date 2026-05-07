@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -36,6 +37,10 @@ public class AckDispatchStep implements DispatchStageStep {
 
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
+    // ADR-026: 演练模式不更新 file_dispatch_record，跳过 ack。
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return DispatchStageResult.success(stage());
+    }
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(

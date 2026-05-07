@@ -4,6 +4,7 @@ import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
+import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.FileRecordParam;
@@ -53,6 +54,10 @@ public class RegisterStep implements ExportStageStep {
 
   @Override
   public ExportStageResult execute(ExportJobContext context) {
+    // ADR-026: 演练模式不创建 file_record / 不调 plugin.onRegistered（避免污染平台 file 视图）。
+    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes()).isDryRun()) {
+      return ExportStageResult.success(stage());
+    }
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
       return ExportStageResult.failure(
           stage(),
