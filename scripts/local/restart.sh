@@ -7,7 +7,7 @@
 #
 # 支持的模块名：
 #   orchestrator  trigger  console
-#   worker-import  worker-export  worker-dispatch
+#   worker-import  worker-export  worker-process  worker-dispatch
 #
 # 示例：
 #   ./scripts/local/restart.sh trigger
@@ -227,7 +227,7 @@ wait_orchestrator() {
 
 if [ $# -eq 0 ]; then
   echo "用法: $0 <module> [module...]"
-  echo "支持: orchestrator trigger console worker-import worker-export worker-dispatch"
+  echo "支持: orchestrator trigger console worker-import worker-export worker-process worker-dispatch"
   exit 1
 fi
 
@@ -260,7 +260,7 @@ echo "==> 按依赖顺序启动..."
 export BATCH_CONSOLE_READ_REPLICA_ENABLED="${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}"
 
 # 定义全局启动顺序
-ORDERED=(orchestrator trigger console worker-import worker-export worker-dispatch)
+ORDERED=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch)
 
 need_wait_orch=false
 for name in "${TARGETS[@]}"; do
