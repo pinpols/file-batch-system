@@ -2,7 +2,7 @@
 
 这份清单用于在提交 GitHub 之前做一次本地自检，覆盖最常见的 secret 泄露、依赖漏洞、代码级 SAST、镜像与文件系统扫描，以及 HTTP 动态探测。
 
-如果你想要一个统一入口，优先使用 [scripts/ci/security-scan.sh](../../scripts/ci/security-scan.sh)。
+统一入口优先使用 [scripts/ci/security-scan.sh](../../scripts/ci/security-scan.sh)。
 这个脚本会先打包 [security-scan/](../../security-scan/) 独立 Java 模块，再调用外部工具完成扫描；Java 模块只负责编排，不重写扫描器。
 
 ## 一键入口

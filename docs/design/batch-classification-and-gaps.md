@@ -61,7 +61,7 @@
 
 ### 2.1 BatchType ↔ `JobType` / `PipelineType`
 
-| 你想要的 | 系统现状 | 实现位置 | 评价 |
+| 维度 | 系统现状 | 实现位置 | 评价 |
 |---|---|---|---|
 | IMPORT | ✅ `JobType.IMPORT` + `PipelineType.IMPORT` + `batch-worker-import`（6 阶段：RECEIVE→PARSE→PREPROCESS→VALIDATE→LOAD→COMPLETE） | `batch-worker-import/.../DefaultImportStageExecutor` | 落地完整 |
 | EXPORT | ✅ `JobType.EXPORT` + `PipelineType.EXPORT` + `batch-worker-export`（5 阶段：PREPARE→GENERATE→STORE→REGISTER→COMPLETE） | `batch-worker-export` | 落地完整 |
@@ -88,7 +88,7 @@
 
 ### 2.3 TriggerType ↔ `TriggerType`
 
-| 你想要的 | 系统现状 | 实现位置 |
+| 维度 | 系统现状 | 实现位置 |
 |---|---|---|
 | SCHEDULED | ✅ `TriggerType.SCHEDULED` + Quartz / HashedWheelTimer 双引擎 | `batch-trigger/.../infrastructure/QuartzLaunchJob.java` + wheel 实现 |
 | EVENT | ✅ `TriggerType.EVENT` | `TriggerController` |

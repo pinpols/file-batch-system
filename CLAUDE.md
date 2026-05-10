@@ -249,7 +249,7 @@ public enum XxxType implements DictEnum {
   - `biz_table_schema` — 目标库 schema 元数据（建议后续也加 tenant_id）
 - **守护**：`ArchiveSchemaDriftCheck` 已覆盖 archive 对齐；新增多租约束应补 `TenantIsolationIntegrationTest` 断言。
 
-详见 [PG Schema 审计 2026-05-03 §P0](analysis/pg-schema-audit-2026-05-03.md)、V82-V85 落地。
+详见 [PG Schema 审计 2026-05-03 §P0（archive）](docs/archive/analysis/pg-schema-audit-2026-05-03.md)、V82-V85 落地。
 
 ## archive 冷表对齐
 
@@ -306,7 +306,7 @@ public enum XxxType implements DictEnum {
 
 ## ADR 实施范围纪律（防越界）
 
-**系统定位写死**：批量运行控制面 + 文件 / 任务交付闭环。**不扩张**为企业数据治理 / 容器资源编排 / 合规审计平台。详见 [`docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md)。
+**系统定位写死**：批量运行控制面 + 文件 / 任务交付闭环。**不扩张**为企业数据治理 / 容器资源编排 / 合规审计平台。详见 [`docs/archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](docs/archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)（已 fold 进本节）。
 
 ### 三阶段优先级
 
@@ -332,4 +332,4 @@ public enum XxxType implements DictEnum {
 - 第 3 阶段（ADR-024/027）启动必须先行触发条件证据（监控数据 / 业务诉求工单），否则不开工
 - 各 ADR 文档顶部"范围边界（Scope Discipline）"小节是单一权威源，与本节冲突以 ADR 文档为准
 
-详见各 ADR 文档 + [`docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md) §5 一句话越界风险表。
+详见各 ADR 文档 + [`docs/archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`](docs/archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md) §5 一句话越界风险表（原档已归档，本节为权威）。

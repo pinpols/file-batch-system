@@ -1467,7 +1467,7 @@ public class MyProcessPlugin implements ProcessComputePlugin {
 
 ## 8. 进一步阅读
 
-| 你想看 | 文档 |
+| 查询场景 | 文档 |
 |---|---|
 | 一条任务的具体表读写 | [`runtime-module-communication.md`](./runtime-module-communication.md) |
 | 模块边界与版本基线 | [`architecture-truth.md`](./architecture-truth.md) |

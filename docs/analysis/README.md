@@ -1,20 +1,18 @@
 # 演进分析索引
 
-随版本迭代的"问题发现 → 修复 → 硬化"三件套。当前最新都是 v4 系列（2026-04-23），历史多版本在 [`../archive/analysis/`](../archive/analysis/)。
+随版本迭代的"问题发现 → 修复 → 硬化"主线，加上少量长期治理方案与项目评估快照。一次性的 audit / benchmark / 已 fold 进 CLAUDE.md 的决策档，全部归 [`../archive/analysis/`](../archive/analysis/)。
 
 ## 文件清单（编号即推荐阅读顺序）
 
 | # | 文件 | 作用 | 何时看 |
 |---|---|---|---|
-| 01 | [deep-issue-analysis.md](./deep-issue-analysis.md) | 系统级深度问题分析（v4，2026-04-23）：Bug / 漏洞 / 设计缺陷全景 | 想知道"目前有哪些坑" |
-| 02 | [fix-report.md](./fix-report.md) | 修复报告（v4，2026-04-22）：哪些已修、谁改的、commit 引用 | 验收 / 复盘 |
-| 03 | [hardening-backlog.md](./hardening-backlog.md) | 硬化 backlog（v4，2026-04-20）：剩下的 P0/P1/P2 优先级排序 | 决定下个 sprint 干什么 |
-| 04 | [project-assessment-2026-04-29.md](./project-assessment-2026-04-29.md) | 项目工程深度评估快照 v1（2026-04-29）:四维评分 + 7 轮校正历史 | 历史基线参考 |
-| 05 | [project-assessment-2026-04-30.md](./project-assessment-2026-04-30.md) | 项目工程深度评估快照 v2（2026-04-30）:24h 演进 delta + 实地 grep 复评 + P1 ops 缺口锁定 | **当前权威**,看"项目今天整体水准"一页式判断 |
-| 06 | [positional-args-cleanup-plan.md](./positional-args-cleanup-plan.md) | V6-P2-POSITIONAL-ARGS 治理方案（2026-05-01）：49 处位置参数构造臃肿全清，分 6 批 PR 落地 | 接手该治理 / review 范围与提交策略 |
-| 07 | [batch-system-timezone-consistency-check.md](./batch-system-timezone-consistency-check.md) | 批量系统统一时区检查与设计建议（2026-05-05）：现状审计 + 与 design/timezone-and-dst-design 的差距 | 改时区相关代码前的现状参照 |
-| 08 | [adr-012-021-027-priority-scope-2026-05-06.md](./adr-012-021-027-priority-scope-2026-05-06.md) | ADR 设计储备的"做不做 / 什么时候做 / 边界在哪"决策档（2026-05-06）：8 ADR 优先级 + 范围边界纪律 | 启动 ADR 实施前 / 担心 scope 拽偏时 |
-| 09 | [system-scope-boundary-audit-2026-05-06.md](./system-scope-boundary-audit-2026-05-06.md) | 已落地代码的越界审计（2026-05-06）：4 处中度模糊点（telemetry / SqlTransform / AI chat / ResourceTag）+ 5 条 CI 哨兵建议 | 担心系统拽偏成"企业数据治理 + K8s 调度器" / review 越界风险时 |
+| 01 | [deep-issue-analysis.md](./deep-issue-analysis.md) | 系统级深度问题分析：Bug / 漏洞 / 设计缺陷全景 | 想知道"目前有哪些坑" |
+| 02 | [fix-report.md](./fix-report.md) | 修复报告：哪些已修、commit 引用 | 验收 / 复盘 |
+| 03 | [hardening-backlog.md](./hardening-backlog.md) | 硬化 backlog：剩下的 P0/P1/P2 优先级排序 | 决定下个 sprint 干什么 |
+| 04 | [project-assessment.md](./project-assessment.md) | 项目工程深度评估（当前权威）：四维评分 + 演进 delta + ops 缺口锁定 | 看"项目今天整体水准"一页式判断 |
+| 05 | [positional-args-cleanup-plan.md](./positional-args-cleanup-plan.md) | 位置参数构造臃肿治理方案 v4（已闭环）：CLAUDE.md "调用方约束" 子节由本方案沉淀 | review 该治理范围 / 历史决策溯源 |
+| 06 | [system-scope-boundary.md](./system-scope-boundary.md) | 系统职责范围基准：批量调度 + 文件交付闭环的边界守护 | 判定新功能是否越界、季度复盘 |
+| 07 | [todo-master.md](./todo-master.md) | 全仓待办整合：跨 docs/ 与代码注解的统一 backlog | 想知道"还有什么没干" |
 
 ## 工作循环
 
@@ -28,11 +26,19 @@
 
 每滚一个 vN，旧版整体进 `archive/analysis/`，主干 `.md` 直接覆盖最新版（不留版本号后缀）。
 
+## 归档策略
+
+下列三类一律落 `archive/analysis/`，不在主干维护：
+
+1. **一次性 audit / benchmark**：vs-industry 对比、pg-schema-audit、sonar-cleanup、persistence-and-test-architecture 等
+2. **已 fold 进 CLAUDE.md / 主干文档的决策档**：原文作为"历史证据"留档，CLAUDE.md 是权威
+3. **被新版覆盖的快照**：project-assessment-2026-04-29 这类版本快照
+
 ## 与其他子目录的分工
 
 | 目录 | 视角 |
 |---|---|
-| `analysis/`（本目录） | 演进向：问题 / 修复 / 加固的滚动文档 |
-| [`../architecture/architecture-truth.md`](../architecture/architecture-truth.md) | 架构现状（"是什么"，不含"该改什么"） |
+| `analysis/`（本目录） | 演进向：问题 / 修复 / 加固的滚动文档 + 长期治理方案 |
+| [`../architecture/`](../architecture/README.md) | 架构现状（"是什么"，不含"该改什么"） |
 | [`../runbook/incident-response.md`](../runbook/incident-response.md) | 应急响应（"出问题怎么办"） |
-| [`../archive/analysis/`](../archive/analysis/) | v1/v2/v3 历史快照 |
+| [`../archive/analysis/`](../archive/analysis/) | 历史快照 / 一次性 audit / 已 fold 的决策档 |

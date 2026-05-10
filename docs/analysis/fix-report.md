@@ -1,8 +1,8 @@
-# 深度问题修复报告 V4
+# 深度问题修复报告
 
-> 修复日期：2026-04-21
-> 基准：v3 修复后的场景验证会话；本轮定位于「把种子数据跑不通的多租户业务链路打通 + 顺带把代码里发现的 bug 修掉」
-> 验证结果：所有修复动作均在本地真跑通（真表真数据真出站文件）；新增单元测试 6 条全绿；重启后端服务无回退
+> 最近一次大批闭环：2026-04-21（V4 滚动版本，历史 V1-V3 见 [`../archive/analysis/`](../archive/analysis/)）
+> 范围：多租户业务链路打通 + 关联代码 bug 修复
+> 验证基线：所有修复在本地全链路真跑通（真表 / 真数据 / 真出站文件）+ 6 条新增单元测试全绿 + 重启无回退
 
 ---
 
@@ -115,7 +115,7 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 | `tc / TC_EXPORT_RISK_ALERT` ※ | 本来禁用，后来为验证 EXPORT 跑通又重新启用；同上，可视为**已修复** |
 | `default-tenant / gen_reconcile` | worker_group = GENERAL，但 worker_registry 里根本没注册 GENERAL worker |
 
-※ 标记的两条本次已修复并验证。`TA_DISPATCH_ORDER` 和 `gen_reconcile` 仍保持禁用。
+※ 标记的两条已修复并验证。`TA_DISPATCH_ORDER` 和 `gen_reconcile` 仍保持禁用。
 
 ---
 
@@ -141,13 +141,13 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 
 ## 七、基础设施运维事件
 
-会话中期发现 **trigger JVM (18081) 与 console JVM (18080) 进入"半死"状态**：
+**事件**：trigger JVM (18081) 与 console JVM (18080) 一度进入"半死"状态：
 - 所有 HTTP 请求返回 `HTTP 500 Content-Length: 0`，无栈
-- 自 10:00（session 开始前 3.5 h）零日志输出
+- 数小时零日志输出
 - Quartz worker 线程全 `Object.wait()`，stdout/stderr 重定向到 `.log` 但文件未增长
-- RSS 异常低（24 MB）—— macOS 过夜休眠后 JVM 被冻住未能正常恢复
+- RSS 异常低（24 MB）—— macOS 过夜休眠后 JVM 未能正常恢复
 
-**处理**：`./scripts/local/restart.sh console trigger` 重启，立即恢复。**不是代码 bug**，属本地开发环境的已知副作用。后来 V4-BUG-1 修完后又单独 restart trigger 一次让代码生效。
+**处理**：`./scripts/local/restart.sh console trigger` 重启即恢复。**非代码 bug**，属本地开发环境已知副作用。
 
 ---
 
@@ -172,22 +172,23 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 
 ## 仍未闭环的问题
 
-见 **`docs/analysis/hardening-backlog.md`**(v5 滚到 v6)。三大块:
-1. Workflow DAG 节点间参数/文件自动串联(SETTLE→DISPATCH 卡在这) — 已部分修(Stage 1+1.2),剩 Stage 2-4
-2. 种子治理(7 个空壳 workflow、本次 DB 改动未入 Flyway)
-3. 未覆盖场景(非 SFTP dispatch、calendar、quota 压测、compensation 独立、workflow PIPELINE/MIXED 等)
+详见 [`./hardening-backlog.md`](./hardening-backlog.md)。三大块：
+
+1. Workflow DAG 节点间参数 / 文件自动串联（SETTLE→DISPATCH）— 已部分修（Stage 1+1.2），剩 Stage 2-4
+2. 种子治理（7 个空壳 workflow、本次 DB 改动未入 Flyway）
+3. 未覆盖场景（非 SFTP dispatch、calendar、quota 压测、compensation 独立、workflow PIPELINE/MIXED 等）
 
 ---
 
-## 八、2026-04-30 校正补录(从 deep-issue v4 口径滚到 v6)
+## 八、2026-04-30 校正记录
+
+口径校正：`project-assessment-2026-04-29` 评估当时 §5 部分项目仍标"未完成"，实际仓库代码已落地。下表为补录证据，deep-issue / hardening-backlog 同步对齐。
 
 | 项 | 状态 | 证据 / commit |
 |---|---|---|
-| deep-issue §5.1 Trigger Security | 🟢 已修 | `cd389a0b`(2026-04-22 v4 闭环);`TriggerSecurityConfiguration.java:42-46` 真起 `SecurityFilterChain` 把 `/actuator/**` 之外强制 `authenticated()` |
-| deep-issue §5.2 X-Console-Token | 🟡 部分修 | `application.yml:67` `BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false` 默认关闭 compat 路径;真删动作在 `project-assessment-2026-04-29.md` §8 S5-d |
-| deep-issue §5.12 Console Job 过胖 | 🟢 已修 | `DefaultConsoleJobApplicationService` 现 90 LOC 纯 delegate,拆出 `ConsoleJobOpsSupport`(407)/`ConsoleJobQueryService`(226)/`DefaultConsoleJobApprovalService`(192)/`DefaultConsoleJobRecoveryService`(230)/`DefaultConsoleJobTriggerService`(133)共 6 个兄弟类 |
-| ADR-009 Stage 1.2 worker outputs 上报管线 | 🟢 已修 | `TaskExecutionReport.outputs` + `DefaultTaskExecutionWrapper.java:108-117` 透传 + `WorkflowNodeRunMapper.xml:84-85` 写 jsonb;`ImportStepExecutionAdapter.java:112` 已填 `NODE_OUTPUTS`(E/D/P 按需后补) |
-| 半完成基类重构 | 🟢 已修 | `4e634c7c`(2026-04-29):4×`ERROR_OBJECT_MAPPER` + 4×`loadConfiguredSteps` + 3×`handlePipelineFailure` 上提到基类,消除 ~150 行复制;FQN 违规修了 |
-| i18n 业务路径收口 | 🟢 已修 | `23137b2c`(2026-04-29):56 文件 BizException 全量从 literal message 迁到 i18n key + args 三元组;9 个 test 同步 |
-
-修订动机:`project-assessment-2026-04-29.md` 评估时 §5 把 §5.1 / §5.2 / §5.12 标"未完成",实际仓库代码已落地。本节把校正落在 fix-report,deep-issue / hardening-backlog 同步。下次评估应同步滚 deep-issue / backlog,避免口径再滞后。
+| deep-issue §5.1 Trigger Security | 🟢 已修 | `cd389a0b`（2026-04-22 V4 闭环）；`TriggerSecurityConfiguration.java:42-46` 真起 `SecurityFilterChain` 把 `/actuator/**` 之外强制 `authenticated()` |
+| deep-issue §5.2 X-Console-Token | 🟡 部分修 | `application.yml:67` `BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false` 默认关闭 compat 路径；真删动作详见归档 `project-assessment-2026-04-29.md` §8 S5-d |
+| deep-issue §5.12 Console Job 过胖 | 🟢 已修 | `DefaultConsoleJobApplicationService` 现 90 LOC 纯 delegate，拆出 `ConsoleJobOpsSupport`(407) / `ConsoleJobQueryService`(226) / `DefaultConsoleJobApprovalService`(192) / `DefaultConsoleJobRecoveryService`(230) / `DefaultConsoleJobTriggerService`(133) 共 6 个兄弟类 |
+| ADR-009 Stage 1.2 worker outputs 上报管线 | 🟢 已修 | `TaskExecutionReport.outputs` + `DefaultTaskExecutionWrapper.java:108-117` 透传 + `WorkflowNodeRunMapper.xml:84-85` 写 jsonb；`ImportStepExecutionAdapter.java:112` 已填 `NODE_OUTPUTS`（E/D/P 按需后补） |
+| 半完成基类重构 | 🟢 已修 | `4e634c7c`（2026-04-29）：4×`ERROR_OBJECT_MAPPER` + 4×`loadConfiguredSteps` + 3×`handlePipelineFailure` 上提到基类，消除 ~150 行复制；FQN 违规修了 |
+| i18n 业务路径收口 | 🟢 已修 | `23137b2c`（2026-04-29）：56 文件 BizException 全量从 literal message 迁到 i18n key + args 三元组；9 个 test 同步 |
