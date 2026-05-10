@@ -2,6 +2,7 @@ package com.example.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.config.BatchClockConfig;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.config.ConsoleRealtimeProperties;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeMetrics;
@@ -33,7 +34,7 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
   @SpringBootConfiguration
   @EnableAutoConfiguration
   @EnableConfigurationProperties(ConsoleRealtimeProperties.class)
-  @Import(ConsoleRealtimeReplayStore.class)
+  @Import({BatchClockConfig.class, ConsoleRealtimeReplayStore.class})
   static class TestApplication {}
 
   @MockitoBean private ConsoleRealtimeMetrics realtimeMetrics;
