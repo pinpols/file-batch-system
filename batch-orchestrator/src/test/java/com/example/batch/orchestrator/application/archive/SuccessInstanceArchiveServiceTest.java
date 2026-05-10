@@ -87,10 +87,11 @@ class SuccessInstanceArchiveServiceTest {
     order.verify(mapper).nullifyPipelineInstanceFileIdByInstanceIds(ids);
     order.verify(mapper).deleteFileDispatchRecordsByInstanceIds(ids);
     order.verify(mapper).deletePipelineInstancesByInstanceIds(ids);
+    // execution_log 必须早于 job_partition：V119 之前 job_execution_log.job_partition_id 无级联
+    order.verify(mapper).deleteJobExecutionLogsByInstanceIds(ids);
     order.verify(mapper).deleteJobPartitionsByInstanceIds(ids);
     order.verify(mapper).deleteWorkflowNodeRunsByInstanceIds(ids);
     order.verify(mapper).deleteWorkflowRunsByInstanceIds(ids);
-    order.verify(mapper).deleteJobExecutionLogsByInstanceIds(ids);
     order.verify(mapper).deleteCompensationCommandsByInstanceIds(ids);
     order.verify(mapper).nullifyParentInstanceIdByParentIds(ids);
     order.verify(mapper).deleteJobInstancesByIds(ids);

@@ -52,16 +52,18 @@ public class SuccessInstanceArchiveService {
     long archivedCompensations = archiveMapper.archiveCompensationCommandsByInstanceIds(ids);
 
     // 12 步级联删（顺序遵守 cleanup-success-instances.sql）
+    // FK 依赖：job_execution_log.job_partition_id 在 V119 之前没有 ON DELETE CASCADE，必须在
+    // deleteJobPartitionsByInstanceIds 之前删完执行日志，否则 partition 删除会被 FK 阻塞。
     long stepInstances = archiveMapper.deleteJobStepInstancesByInstanceIds(ids);
     long jobTasks = archiveMapper.deleteJobTasksByInstanceIds(ids);
     long pipelineStepRuns = archiveMapper.deletePipelineStepRunsByInstanceIds(ids);
     archiveMapper.nullifyPipelineInstanceFileIdByInstanceIds(ids);
     long fileDispatchRecords = archiveMapper.deleteFileDispatchRecordsByInstanceIds(ids);
     long pipelineInstances = archiveMapper.deletePipelineInstancesByInstanceIds(ids);
+    long executionLogs = archiveMapper.deleteJobExecutionLogsByInstanceIds(ids);
     long partitions = archiveMapper.deleteJobPartitionsByInstanceIds(ids);
     long workflowNodeRuns = archiveMapper.deleteWorkflowNodeRunsByInstanceIds(ids);
     long workflowRuns = archiveMapper.deleteWorkflowRunsByInstanceIds(ids);
-    long executionLogs = archiveMapper.deleteJobExecutionLogsByInstanceIds(ids);
     long compensations = archiveMapper.deleteCompensationCommandsByInstanceIds(ids);
     archiveMapper.nullifyParentInstanceIdByParentIds(ids);
     long instances = archiveMapper.deleteJobInstancesByIds(ids);

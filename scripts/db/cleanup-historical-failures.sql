@@ -84,6 +84,14 @@ DELETE FROM batch.dead_letter_task
  WHERE source_type = 'JOB_PARTITION'
    AND source_id IN (SELECT id FROM old_partitions);
 
+-- job_execution_log 依赖 job_instance（必须早于 job_partition：V119 之前 job_execution_log.job_partition_id 无级联）
+WITH old_instances AS (
+  SELECT id FROM batch.job_instance
+   WHERE instance_status IN ('FAILED','CANCELLED','TERMINATED')
+     AND created_at < now() - interval :'retention_interval'
+)
+DELETE FROM batch.job_execution_log WHERE job_instance_id IN (SELECT id FROM old_instances);
+
 -- job_partition
 WITH old_instances AS (
   SELECT id FROM batch.job_instance
@@ -112,14 +120,6 @@ WITH old_instances AS (
 )
 DELETE FROM batch.workflow_run
  WHERE related_job_instance_id IN (SELECT id FROM old_instances);
-
--- job_execution_log 依赖 job_instance
-WITH old_instances AS (
-  SELECT id FROM batch.job_instance
-   WHERE instance_status IN ('FAILED','CANCELLED','TERMINATED')
-     AND created_at < now() - interval :'retention_interval'
-)
-DELETE FROM batch.job_execution_log WHERE job_instance_id IN (SELECT id FROM old_instances);
 
 -- 最后根：job_instance
 DELETE FROM batch.job_instance
