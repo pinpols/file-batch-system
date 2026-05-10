@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -37,6 +38,7 @@ class ConsoleAuthenticationFilterTest {
 
   @Mock private ConsoleJwtService jwtService;
   @Mock private ConsoleSecurityResponseWriter responseWriter;
+  @Mock private SseTicketService sseTicketService;
 
   private ConsoleSecurityProperties properties;
   private BatchSecurityProperties batchProperties;
@@ -55,7 +57,7 @@ class ConsoleAuthenticationFilterTest {
 
     filter =
         new ConsoleAuthenticationFilter(
-            properties, batchProperties, jwtService, responseWriter, mock(SseTicketService.class));
+            properties, batchProperties, jwtService, responseWriter, sseTicketService);
     SecurityContextHolder.clearContext();
   }
 
@@ -164,6 +166,32 @@ class ConsoleAuthenticationFilterTest {
 
     verifyNoInteractions(jwtService);
     verify(chain).doFilter(request, response);
+  }
+
+  @Test
+  void filter_validatesSseTicketAndCachesResultForAsyncDispatch() throws Exception {
+    when(sseTicketService.validate("ticket-1")).thenReturn("alice:t1");
+
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.setParameter("ticket", "ticket-1");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    // 首轮 REQUEST 分派：consume ticket，缓存到 attribute
+    filter.doFilterInternal(request, response, chain);
+    verify(sseTicketService, times(1)).validate("ticket-1");
+    verify(chain, times(1)).doFilter(request, response);
+    assertThat(request.getAttribute(ConsoleAuthenticationFilter.TICKET_PRINCIPAL_ATTR))
+        .isEqualTo("alice:t1");
+
+    // 模拟 ASYNC/ERROR 分派：ticket 已被消费，validate 必须不被再次调用，认证仍要建立
+    when(sseTicketService.validate("ticket-1")).thenReturn(null);
+    filter.doFilterInternal(request, response, chain);
+
+    // validate 仍只调用过一次（首轮）
+    verify(sseTicketService, times(1)).validate("ticket-1");
+    // 第二轮 chain 也被调用，证明走到了认证成功路径
+    verify(chain, times(2)).doFilter(request, response);
   }
 
   @Test
