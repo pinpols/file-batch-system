@@ -14,6 +14,7 @@ import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -36,8 +37,13 @@ class ConsoleEventCatalogControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
+    ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+    messageSource.setBasename("messages");
+    messageSource.setDefaultEncoding("UTF-8");
+
     mockMvc =
-        MockMvcBuilders.standaloneSetup(new ConsoleEventCatalogController(responseFactory))
+        MockMvcBuilders.standaloneSetup(
+                new ConsoleEventCatalogController(responseFactory, messageSource))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
