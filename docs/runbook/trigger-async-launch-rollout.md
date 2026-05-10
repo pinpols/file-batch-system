@@ -10,7 +10,7 @@
 
 - [ ] V80 migration 已 apply 到目标环境(`SELECT 1 FROM batch.trigger_outbox_event LIMIT 1` 不报错)
 - [ ] Kafka topic `batch.trigger.launch.v1` 已创建(分区数 ≥ tenant 数,replication-factor=3)
-- [ ] orchestrator + trigger 镜像版本 ≥ 含 ADR-010 Stage 1-4 的版本(`git log` 含 `9587b8bf` / `087f6b7a` / `1ca3a957` + 本会话 Stage 4 commit)
+- [ ] orchestrator + trigger 镜像版本 ≥ 含 ADR-010 Stage 1-4 的版本（`git log` 含 `9587b8bf` / `087f6b7a` / `1ca3a957` + Stage 4 收尾 commit）
 - [ ] orchestrator consumer group `orchestrator-trigger-launch` 不存在或 offset 在最新位置(避免重复消费历史消息)
 - [ ] Prometheus 已抓取以下指标(`{__name__=~"batch.trigger.*"}`):
   - `batch.trigger.launch.consumed.total`(orchestrator 端)
