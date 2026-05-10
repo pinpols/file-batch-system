@@ -2,6 +2,7 @@ package com.example.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.config.BatchClockConfig;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.support.auth.ConsoleSessionRegistry;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -28,7 +29,7 @@ class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
   @SpringBootConfiguration
   @EnableAutoConfiguration
   @EnableConfigurationProperties(ConsoleSecurityProperties.class)
-  @Import(ConsoleSessionRegistry.class)
+  @Import({BatchClockConfig.class, ConsoleSessionRegistry.class})
   static class TestApplication {}
 
   @Autowired private ConsoleSessionRegistry sessionRegistry;
