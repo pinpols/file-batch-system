@@ -105,7 +105,15 @@ WITH old_instances AS (
 DELETE FROM batch.pipeline_instance
  WHERE related_job_instance_id IN (SELECT id FROM old_instances);
 
--- 5) job_partition → job_instance
+-- 5) job_execution_log（必须早于 job_partition：V119 之前 job_execution_log.job_partition_id 无级联）
+WITH old_instances AS (
+  SELECT id FROM batch.job_instance
+   WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
+     AND finished_at < now() - (:success_retention_days || ' days')::interval
+)
+DELETE FROM batch.job_execution_log WHERE job_instance_id IN (SELECT id FROM old_instances);
+
+-- 6) job_partition → job_instance
 WITH old_instances AS (
   SELECT id FROM batch.job_instance
    WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
@@ -113,7 +121,7 @@ WITH old_instances AS (
 )
 DELETE FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM old_instances);
 
--- 6) workflow_node_run → workflow_run → job_instance
+-- 7) workflow_node_run → workflow_run → job_instance
 WITH old_instances AS (
   SELECT id FROM batch.job_instance
    WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
@@ -131,14 +139,6 @@ WITH old_instances AS (
      AND finished_at < now() - (:success_retention_days || ' days')::interval
 )
 DELETE FROM batch.workflow_run WHERE related_job_instance_id IN (SELECT id FROM old_instances);
-
--- 7) job_execution_log
-WITH old_instances AS (
-  SELECT id FROM batch.job_instance
-   WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
-     AND finished_at < now() - (:success_retention_days || ' days')::interval
-)
-DELETE FROM batch.job_execution_log WHERE job_instance_id IN (SELECT id FROM old_instances);
 
 -- 7.5) compensation_command FK 引用：补偿命令记录与 job_instance 关联
 WITH old_instances AS (
