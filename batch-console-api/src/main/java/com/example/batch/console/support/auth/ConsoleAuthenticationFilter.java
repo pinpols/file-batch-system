@@ -47,6 +47,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
   /**
+   * SSE ticket 在 REQUEST 分派被 {@code getAndDelete} 一次性消费后，缓存到当次 request 的 attribute； ASYNC / ERROR
+   * 分派再次进入本过滤器时直接复用，避免二次 validate 拿不到值导致认证空缺、 上抛 {@code AuthorizationDeniedException} + Tomcat
+   * ERROR 级日志雪崩（response 已 commit 写不下 403）。
+   */
+  static final String TICKET_PRINCIPAL_ATTR =
+      ConsoleAuthenticationFilter.class.getName() + ".TICKET_PRINCIPAL";
+
+  /**
    * Spring MVC 异步完成（例如 SSE 的 {@code SseEmitter} / Streaming 等）会再走一轮 {@code DispatcherType.ASYNC}。
    *
    * <p>{@link OncePerRequestFilter} 默认跳过 ASYNC 分派，则本轮不会重建 {@link SecurityContextHolder}，而 Spring
@@ -83,7 +91,15 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
       // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
       String sseTicket = request.getParameter("ticket");
       if (Texts.hasText(sseTicket)) {
-        String ticketValue = sseTicketService.validate(sseTicket);
+        // ASYNC/ERROR 分派复用 REQUEST 阶段已消费的 ticket 解析结果，避免二次 validate
+        // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
+        String ticketValue = (String) request.getAttribute(TICKET_PRINCIPAL_ATTR);
+        if (ticketValue == null) {
+          ticketValue = sseTicketService.validate(sseTicket);
+          if (ticketValue != null) {
+            request.setAttribute(TICKET_PRINCIPAL_ATTR, ticketValue);
+          }
+        }
         if (ticketValue != null) {
           String[] parts = ticketValue.split(":", 2);
           String ticketUser = parts[0];
