@@ -302,7 +302,10 @@ public final class ConsoleExcelStyles {
     CellRangeAddressList addressList =
         new CellRangeAddressList(1, Math.max(1, maxRow), columnIndex, columnIndex);
     DataValidation validation = helper.createValidation(constraint, addressList);
-    validation.setSuppressDropDownArrow(false);
+    // POI 5.x 的 setSuppressDropDownArrow 实现与方法名相反:传 false 会输出
+    // showDropDown="true"(OOXML spec 该值 = 隐藏下拉箭头) → Excel 不显示下拉。
+    // 必须传 true 才会 setShowDropDown(false) → 箭头显示。POI bug 54440 至今未修。
+    validation.setSuppressDropDownArrow(true);
     validation.setShowErrorBox(true);
     validation.createErrorBox("输入不合法", "请从下拉列表中选择有效值。");
     if (hasText(promptTitle) || hasText(promptText)) {
