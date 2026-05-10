@@ -13,6 +13,7 @@ import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -52,6 +53,14 @@ public class ConsoleAuthController {
   @PreAuthorize("isAuthenticated()")
   public CommonResponse<ConsoleAuthProfileResponse> me(Authentication authentication) {
     return responseFactory.success(authApplicationService.profile(authentication));
+  }
+
+  // 轻量鉴权探针，专给 nginx auth_request / 反代鉴权用：登录 → 204，未登录 → 401（走 entryPoint）。
+  // 不查 DB、不组菜单，避免 /docs/* 反代每次请求都拖累 /me。
+  @GetMapping("/check")
+  @PreAuthorize("isAuthenticated()")
+  public ResponseEntity<Void> check() {
+    return ResponseEntity.noContent().build();
   }
 
   /** 签发一次性 SSE ticket（5min 有效，用于 EventSource 连接鉴权）。 */

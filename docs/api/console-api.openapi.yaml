@@ -166,6 +166,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuthProfileResponse'
+  /api/console/auth/check:
+    get:
+      tags: [Auth]
+      summary: Lightweight auth probe (for nginx auth_request / reverse-proxy gating)
+      operationId: checkConsoleAuth
+      description: |
+        Returns 204 if the current request carries a valid console session/JWT, 401 otherwise.
+        Designed for high-frequency reverse-proxy auth checks (e.g. gating `/docs/*` static
+        files); avoids the menu-assembly cost of `GET /api/console/auth/me`.
+      responses:
+        '204':
+          description: Authenticated
+        '401':
+          description: Not authenticated
   /api/console/auth/stream/ticket:
     post:
       tags: [Auth]
@@ -3775,7 +3789,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/JobDefinitionCreateRequest'
       responses:
         '200':
           description: Created job definition id
@@ -3828,7 +3842,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/JobDefinitionUpdateRequest'
       responses:
         '200':
           description: Success
@@ -6525,6 +6539,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cluster-diagnostic/terminal-children:
+    get:
+      tags: [ClusterDiagnostic]
+      summary: Terminal children health
+      operationId: terminalChildrenHealth
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Terminal children health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/tenants:
     get:
       tags: [Tenants]
@@ -8769,7 +8797,7 @@ components:
           type: boolean
           default: false
           description: When true, validates the trigger request without executing. Idempotency-Key not required.
-      required: [tenantId, jobCode, bizDate, triggerType]
+      required: [tenantId, jobCode, bizDate]
     BatchDayQueryRequest:
       type: object
       properties:
@@ -8955,19 +8983,39 @@ components:
       required: [tenantId, compensationType]
     CompensateRequest:
       type: object
+      description: 与 BE Java DTO `CompensateRequest` 对齐。
       properties:
         tenantId:
           type: string
         jobCode:
           type: string
+          maxLength: 128
         bizDate:
           type: string
           format: date
+        compensationType:
+          type: string
+        targetId:
+          type: integer
+          format: int64
         targetInstanceNo:
+          type: string
+        batchNo:
+          type: string
+        relatedFileId:
+          type: integer
+          format: int64
+        channelCode:
           type: string
         reason:
           type: string
-      required: [tenantId, jobCode, bizDate, targetInstanceNo, reason]
+        operatorId:
+          type: string
+        approvalId:
+          type: string
+        strategy:
+          type: string
+      required: [tenantId, jobCode, bizDate]
     RerunRequest:
       type: object
       properties:
@@ -9012,6 +9060,7 @@ components:
       required: [tenantId, jobCode, bizDate, reason]
     DeadLetterReplayRequest:
       type: object
+      description: 与 BE Java DTO `DeadLetterReplayRequest` 对齐。
       properties:
         tenantId:
           type: string
@@ -9020,24 +9069,49 @@ components:
           format: int64
         reason:
           type: string
+          maxLength: 512
+        operatorId:
+          type: string
+          maxLength: 64
+        approvalId:
+          type: string
+          maxLength: 64
+        strategy:
+          type: string
+          maxLength: 32
       required: [tenantId, deadLetterId]
     ConsoleCatchUpApprovalRequest:
       type: object
+      description: |
+        Catch-up 双流程语义:
+        - 不传 approvalId: 创建审批 ticket,返回 approvalNo
+        - 传 approvalId + requestId: 已批准的 ticket 触发实际补跑
+        与 BE Java DTO `ConsoleCatchUpApprovalRequest` 对齐。
       properties:
         tenantId:
           type: string
+        requestId:
+          type: string
+          maxLength: 128
+          description: 用于幂等关联的业务 requestId(必填)
         jobCode:
           type: string
+          maxLength: 128
         bizDate:
           type: string
           format: date
-        approvalNo:
+        scheduledAt:
           type: string
-        operatorId:
-          type: string
+          maxLength: 64
+          description: 可选,计划补跑时间
         reason:
           type: string
-      required: [tenantId, jobCode, bizDate, approvalNo]
+          maxLength: 512
+        approvalId:
+          type: string
+          maxLength: 64
+          description: 已批准 ticket 的 ID(第二阶段调用时传)
+      required: [tenantId, requestId, jobCode, bizDate]
     ApprovalActionRequest:
       type: object
       properties:
@@ -9064,22 +9138,37 @@ components:
       required: [tenantId, approvalNos]
     ConfigReleaseUpsertRequest:
       type: object
+      description: 与 BE Java DTO `ConfigReleaseUpsertRequest` 对齐(注:configPayload 在 BE 是 JSON-string,字段名 configPayloadJson)。
       properties:
         tenantId:
           type: string
         configType:
           type: string
+          maxLength: 64
         configKey:
           type: string
+          maxLength: 128
         configName:
           type: string
-        configPayload:
-          type: object
-          additionalProperties: true
+          maxLength: 256
+        configPayloadJson:
+          type: string
+          description: 配置内容序列化为 JSON 字符串(BE 不解析,直接落库)
+        grayScopeJson:
+          type: string
+        effectiveFromAt:
+          type: string
+        effectiveToAt:
+          type: string
         operatorId:
           type: string
+          maxLength: 64
+        traceId:
+          type: string
+          maxLength: 128
         reason:
           type: string
+          maxLength: 512
       required: [tenantId, configType, configKey, configName]
     ConfigReleaseActionRequest:
       type: object
@@ -9440,6 +9529,134 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, bizType, fileName, fileStatus, bizDate, traceId, createdAt, updatedAt]
+    JobDefinitionCreateRequest:
+      type: object
+      description: 创建作业定义。与 BE Java DTO `JobDefinitionCreateRequest` 对齐。
+      properties:
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+          maxLength: 128
+        jobType:
+          type: string
+        scheduleType:
+          type: string
+        jobName:
+          type: string
+          maxLength: 256
+        bizType:
+          type: string
+        scheduleExpr:
+          type: string
+        timezone:
+          type: string
+        triggerMode:
+          type: string
+        workerGroup:
+          type: string
+        queueCode:
+          type: string
+        calendarCode:
+          type: string
+        windowCode:
+          type: string
+        dagEnabled:
+          type: boolean
+        shardStrategy:
+          type: string
+        executionMode:
+          type: string
+          enum: [FULL, INCREMENTAL, CDC]
+          maxLength: 16
+          description: "执行模式 ExecutionMode 枚举,缺省 FULL。INCREMENTAL 必须配合 watermarkField"
+        watermarkField:
+          type: string
+          maxLength: 64
+          description: "增量模式下的水位字段名(例:update_time / id);FULL 模式下应为空"
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        executionHandler:
+          type: string
+        paramSchema:
+          type: string
+        defaultParams:
+          type: string
+        priority:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+      required: [jobCode, jobType, scheduleType]
+    JobDefinitionUpdateRequest:
+      type: object
+      description: |
+        更新作业定义。所有字段可选(缺省视为不修改),与 BE Java DTO `JobDefinitionUpdateRequest`
+        对齐。jobCode/jobType 在更新场景不可改,故未列出。
+      properties:
+        tenantId:
+          type: string
+        jobName:
+          type: string
+          maxLength: 256
+        bizType:
+          type: string
+        scheduleType:
+          type: string
+        scheduleExpr:
+          type: string
+        timezone:
+          type: string
+        triggerMode:
+          type: string
+        workerGroup:
+          type: string
+        queueCode:
+          type: string
+        calendarCode:
+          type: string
+        windowCode:
+          type: string
+        dagEnabled:
+          type: boolean
+        shardStrategy:
+          type: string
+        executionMode:
+          type: string
+          enum: [FULL, INCREMENTAL, CDC]
+          maxLength: 16
+        watermarkField:
+          type: string
+          maxLength: 64
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        executionHandler:
+          type: string
+        paramSchema:
+          type: string
+        defaultParams:
+          type: string
+        priority:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
     ConsoleJobDefinitionResponse:
       type: object
       properties:
