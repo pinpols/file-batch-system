@@ -67,8 +67,8 @@
             allow_cross_day, enabled, description
         ) values (
             #{tenantId}, #{windowCode}, #{windowName}, #{timezone},
-            #{startTime}::time, #{endTime}::time, #{endStrategy}, #{outOfWindowAction},
-            #{allowCrossDay}, #{enabled}, #{description}
+            #{startTime}::time, #{endTime}::time, <choose><when test="endStrategy != null and endStrategy != ''">#{endStrategy}</when><otherwise>'FINISH_RUNNING'</otherwise></choose>, <choose><when test="outOfWindowAction != null and outOfWindowAction != ''">#{outOfWindowAction}</when><otherwise>'WAIT'</otherwise></choose>,
+            <choose><when test="allowCrossDay != null">#{allowCrossDay}</when><otherwise>false</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
         on conflict (tenant_id, window_code) do update
         set window_name = excluded.window_name,
@@ -90,8 +90,8 @@
             allow_cross_day, enabled, description
         ) values (
             #{tenant_id}, #{window_code}, #{window_name}, #{timezone},
-            #{start_time}::time, #{end_time}::time, #{end_strategy}, #{out_of_window_action},
-            #{allow_cross_day}, #{enabled}, #{description}
+            #{start_time}::time, #{end_time}::time, <choose><when test="end_strategy != null and end_strategy != ''">#{end_strategy}</when><otherwise>'FINISH_RUNNING'</otherwise></choose>, <choose><when test="out_of_window_action != null and out_of_window_action != ''">#{out_of_window_action}</when><otherwise>'WAIT'</otherwise></choose>,
+            <choose><when test="allow_cross_day != null">#{allow_cross_day}</when><otherwise>false</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
     </insert>
 

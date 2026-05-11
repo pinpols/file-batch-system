@@ -63,9 +63,9 @@
             max_partitions_per_tenant, max_qps_per_tenant,
             fair_share_weight, enabled, description
         ) values (
-            #{tenantId}, #{policyCode}, #{maxRunningJobsPerTenant},
-            #{maxPartitionsPerTenant}, #{maxQpsPerTenant},
-            #{fairShareWeight}, #{enabled}, #{description}
+            #{tenantId}, #{policyCode}, <choose><when test="maxRunningJobsPerTenant != null">#{maxRunningJobsPerTenant}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="maxPartitionsPerTenant != null">#{maxPartitionsPerTenant}</when><otherwise>0</otherwise></choose>, <choose><when test="maxQpsPerTenant != null">#{maxQpsPerTenant}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="fairShareWeight != null">#{fairShareWeight}</when><otherwise>1</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
         on conflict (tenant_id, policy_code) do update
         set max_running_jobs_per_tenant = excluded.max_running_jobs_per_tenant,
@@ -84,9 +84,9 @@
             max_partitions_per_tenant, max_qps_per_tenant,
             fair_share_weight, enabled, description
         ) values (
-            #{tenantId}, #{policyCode}, #{maxRunningJobsPerTenant},
-            #{maxPartitionsPerTenant}, #{maxQpsPerTenant},
-            #{fairShareWeight}, #{enabled}, #{description}
+            #{tenantId}, #{policyCode}, <choose><when test="maxRunningJobsPerTenant != null">#{maxRunningJobsPerTenant}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="maxPartitionsPerTenant != null">#{maxPartitionsPerTenant}</when><otherwise>0</otherwise></choose>, <choose><when test="maxQpsPerTenant != null">#{maxQpsPerTenant}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="fairShareWeight != null">#{fairShareWeight}</when><otherwise>1</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
     </insert>
 

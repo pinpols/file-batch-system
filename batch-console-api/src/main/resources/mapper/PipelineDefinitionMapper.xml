@@ -71,7 +71,7 @@
             biz_type, worker_group, version, enabled, description
         ) values (
             #{tenant_id}, #{job_code}, #{pipeline_name}, #{pipeline_type},
-            #{biz_type}, #{worker_group}, #{version}, #{enabled}, #{description}
+            #{biz_type}, #{worker_group}, <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
     </insert>
 
