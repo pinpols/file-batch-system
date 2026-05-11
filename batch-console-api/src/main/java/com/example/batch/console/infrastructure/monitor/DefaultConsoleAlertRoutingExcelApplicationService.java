@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.monitor;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
@@ -29,6 +28,7 @@ import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.config.ConsoleAlertRoutingResponse;
 import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.Builder;
@@ -37,6 +37,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -77,24 +78,68 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
   private static final Set<String> SEVERITIES = DictEnum.codes(AlertSeverity.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry("route_code", requiredColumn("路由唯一编码，作为导入匹配键。", GUIDE_STR, "RT_BATCH_ERROR")),
-          Map.entry("route_name", requiredColumn("控制台展示的路由名称。", GUIDE_STR, "批处理异常路由")),
-          Map.entry(COL_TEAM, requiredColumn("负责该路由的团队或值班组。", GUIDE_STR, "ops")),
-          Map.entry("alert_group", requiredColumn("通知引擎使用的告警分组。", GUIDE_STR, "batch")),
+          Map.entry(
+              "tenant_id",
+              optionalColumn(
+                  "excel.alert.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+          Map.entry(
+              "route_code",
+              requiredColumn(
+                  "excel.alert.route_code.desc", "excel.guide.format.string", "RT_BATCH_ERROR")),
+          Map.entry(
+              "route_name",
+              requiredColumn(
+                  "excel.alert.route_name.desc", "excel.guide.format.string", "批处理异常路由")),
+          Map.entry(
+              COL_TEAM,
+              requiredColumn("excel.alert.team.desc", "excel.guide.format.string", "ops")),
+          Map.entry(
+              "alert_group",
+              requiredColumn("excel.alert.alert_group.desc", "excel.guide.format.string", "batch")),
           Map.entry(
               COL_SEVERITY,
-              requiredColumn("该路由处理的告警级别。", "枚举", "ERROR", "INFO", "WARN", "ERROR", "CRITICAL")),
-          Map.entry(COL_RECEIVER, requiredColumn("目标接收方、通道或 webhook 别名。", GUIDE_STR, "slack-ops")),
-          Map.entry("group_by", optionalColumn("用于去重和聚合的分组键，可选。", "表达式", "job_code")),
-          Map.entry("group_wait_seconds", optionalColumn("首次聚合通知前的等待秒数，必须大于等于 0。", "整数", "30")),
+              requiredColumn(
+                  "excel.alert.severity.desc",
+                  "excel.guide.format.enum",
+                  "ERROR",
+                  "INFO",
+                  "WARN",
+                  "ERROR",
+                  "CRITICAL")),
           Map.entry(
-              "group_interval_seconds", optionalColumn("两次聚合通知之间的最小间隔，必须大于等于 0。", "整数", "300")),
+              COL_RECEIVER,
+              requiredColumn(
+                  "excel.alert.receiver.desc", "excel.guide.format.string", "slack-ops")),
           Map.entry(
-              "repeat_interval_seconds", optionalColumn("持续告警的重复通知间隔，必须大于等于 0。", "整数", "3600")),
+              "group_by",
+              optionalColumn(
+                  "excel.alert.group_by.desc", "excel.guide.format.expression", "job_code")),
           Map.entry(
-              COL_ENABLED, optionalColumn("告警路由是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
-          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "批处理失败默认路由")));
+              "group_wait_seconds",
+              optionalColumn(
+                  "excel.alert.group_wait_seconds.desc", "excel.guide.format.integer", "30")),
+          Map.entry(
+              "group_interval_seconds",
+              optionalColumn(
+                  "excel.alert.group_interval_seconds.desc", "excel.guide.format.integer", "300")),
+          Map.entry(
+              "repeat_interval_seconds",
+              optionalColumn(
+                  "excel.alert.repeat_interval_seconds.desc",
+                  "excel.guide.format.integer",
+                  "3600")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.alert.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  "FALSE")),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.alert.description.desc", "excel.guide.format.string", "批处理失败默认路由")));
 
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -256,27 +301,42 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
 
   @Override
   protected void applyValidations(Sheet sheet) {
+    Locale locale = LocaleContextHolder.getLocale();
     addDropdownValidation(
-        sheet, 5, SEVERITIES.toArray(String[]::new), "severity 填写提示", "请从下拉列表中选择告警级别。");
-    addBooleanValidation(sheet, new int[] {11}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        sheet,
+        5,
+        SEVERITIES.toArray(String[]::new),
+        "excel.alert.severity.prompt_title",
+        "excel.alert.severity.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        11,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
+    Locale locale = LocaleContextHolder.getLocale();
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "告警路由配置维护模板",
-      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "2. severity 与 enabled 已内置下拉值校验。",
-      "3. route_code 是预览与应用阶段使用的唯一键。",
-      "4. 时间字段以秒为单位的整数表示,必须 ≥ 0。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.alert.readme.title",
+      "excel.alert.readme.line1",
+      "excel.alert.readme.line2",
+      "excel.alert.readme.line3",
+      "excel.alert.readme.line4",
+      "excel.alert.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
