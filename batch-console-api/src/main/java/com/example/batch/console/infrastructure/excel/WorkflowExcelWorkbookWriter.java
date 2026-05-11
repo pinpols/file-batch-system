@@ -18,7 +18,6 @@ import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumn
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumnMetadata.NODE_COLUMNS;
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumnMetadata.NODE_COLUMN_GUIDES;
 import static com.example.batch.console.infrastructure.excel.WorkflowExcelColumnMetadata.NODE_SHEET;
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.setGuideColumnWidths;
@@ -53,6 +52,7 @@ import com.example.batch.console.web.response.workflow.ConsoleWorkflowExcelRowIs
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +61,8 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -87,10 +89,12 @@ public class WorkflowExcelWorkbookWriter {
 
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
+  private final MessageSource messageSource;
 
   /** 维护态导出:每个 definition 同步带出对应 nodes + edges,含 README/字典/校验 sheet。 */
   public byte[] writeMaintenanceWorkbook(
       String tenantId, List<WorkflowDefinitionEntity> definitions) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet definitionSheet = workbook.createSheet(DEF_SHEET);
@@ -99,9 +103,12 @@ public class WorkflowExcelWorkbookWriter {
       definitionSheet.createFreezePane(0, 1, 0, 1);
       nodeSheet.createFreezePane(0, 1, 0, 1);
       edgeSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(definitionSheet, DEF_COLUMNS, DEF_COLUMN_GUIDES, workbook);
-      writeTemplateHeaders(nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook);
-      writeTemplateHeaders(edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(
+          definitionSheet, DEF_COLUMNS, DEF_COLUMN_GUIDES, workbook, messageSource, locale);
+      writeTemplateHeaders(
+          nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook, messageSource, locale);
+      writeTemplateHeaders(
+          edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook, messageSource, locale);
 
       writeDefinitionSheet(definitionSheet, definitions);
       int nodeRowIndex = 1;
@@ -111,11 +118,11 @@ public class WorkflowExcelWorkbookWriter {
         edgeRowIndex = writeEdgeSheet(edgeSheet, tenantId, definition, edgeRowIndex);
       }
 
-      applyValidations(definitionSheet, nodeSheet, edgeSheet);
+      applyValidations(definitionSheet, nodeSheet, edgeSheet, locale);
       setWidths(definitionSheet, DEF_COLUMNS);
       setWidths(nodeSheet, NODE_COLUMNS);
       setWidths(edgeSheet, EDGE_COLUMNS);
-      createReadmeSheet(workbook);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
@@ -131,6 +138,7 @@ public class WorkflowExcelWorkbookWriter {
       List<WorkflowNodeRow> nodes,
       List<WorkflowEdgeRow> edges,
       List<ConsoleWorkflowExcelRowIssueResponse> issues) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet definitionSheet = workbook.createSheet(DEF_SHEET);
       Sheet nodeSheet = workbook.createSheet(NODE_SHEET);
@@ -138,19 +146,22 @@ public class WorkflowExcelWorkbookWriter {
       definitionSheet.createFreezePane(0, 1, 0, 1);
       nodeSheet.createFreezePane(0, 1, 0, 1);
       edgeSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(definitionSheet, DEF_COLUMNS, DEF_COLUMN_GUIDES, workbook);
-      writeTemplateHeaders(nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook);
-      writeTemplateHeaders(edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(
+          definitionSheet, DEF_COLUMNS, DEF_COLUMN_GUIDES, workbook, messageSource, locale);
+      writeTemplateHeaders(
+          nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook, messageSource, locale);
+      writeTemplateHeaders(
+          edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook, messageSource, locale);
 
       populatePreviewDefinitionSheet(definitionSheet, definitions);
       populatePreviewNodeSheet(nodeSheet, nodes);
       populatePreviewEdgeSheet(edgeSheet, edges);
 
-      applyValidations(definitionSheet, nodeSheet, edgeSheet);
+      applyValidations(definitionSheet, nodeSheet, edgeSheet, locale);
       setWidths(definitionSheet, DEF_COLUMNS);
       setWidths(nodeSheet, NODE_COLUMNS);
       setWidths(edgeSheet, EDGE_COLUMNS);
-      createReadmeSheet(workbook);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
 
@@ -318,43 +329,81 @@ public class WorkflowExcelWorkbookWriter {
 
   // ── README / 字典 / 校验 sheet ──────────────────────────────────────────
 
-  private void applyValidations(Sheet definitionSheet, Sheet nodeSheet, Sheet edgeSheet) {
+  private void applyValidations(
+      Sheet definitionSheet, Sheet nodeSheet, Sheet edgeSheet, Locale locale) {
     addDropdownValidation(
         definitionSheet,
         3,
         WORKFLOW_TYPES.toArray(String[]::new),
-        "workflow_type 填写提示",
-        "请从下拉列表中选择 DAG、PIPELINE 或 MIXED。");
-    addBooleanValidation(definitionSheet, new int[] {5}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        "excel.workflow.def.workflow_type.prompt_title",
+        "excel.workflow.def.workflow_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        nodeSheet, 5, NODE_TYPES.toArray(String[]::new), "node_type 填写提示", "请从下拉列表中选择节点类型。");
+        definitionSheet,
+        5,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        nodeSheet,
+        5,
+        NODE_TYPES.toArray(String[]::new),
+        "excel.workflow.node.node_type.prompt_title",
+        "excel.workflow.node.node_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         nodeSheet,
         11,
         RETRY_POLICIES.toArray(String[]::new),
-        "retry_policy 填写提示",
-        "请从下拉列表中选择重试策略。");
-    addBooleanValidation(nodeSheet, new int[] {15}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        "excel.workflow.node.retry_policy.prompt_title",
+        "excel.workflow.node.retry_policy.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        edgeSheet, 5, EDGE_TYPES.toArray(String[]::new), "edge_type 填写提示", "请从下拉列表中选择边类型。");
-    addBooleanValidation(edgeSheet, new int[] {7}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        nodeSheet,
+        15,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        edgeSheet,
+        5,
+        EDGE_TYPES.toArray(String[]::new),
+        "excel.workflow.edge.edge_type.prompt_title",
+        "excel.workflow.edge.edge_type.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        edgeSheet,
+        7,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
-  private void createReadmeSheet(Workbook workbook) {
+  private void createReadmeSheet(Workbook workbook, Locale locale) {
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "Workflow 定义 / 节点 / 边维护模板",
-      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "2. 工作簿必须保持 sheet 顺序:definition / node / edge / 说明 / 字典 / 校验。",
-      "3. workflow_code + version 是 definition / node / edge 三表之间的关联键。",
-      "4. node_params 必须保持合法 JSON;CONDITION 类型边可使用 condition_expr。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.workflow.readme.title",
+      "excel.workflow.readme.line1",
+      "excel.workflow.readme.line2",
+      "excel.workflow.readme.line3",
+      "excel.workflow.readme.line4",
+      "excel.workflow.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
