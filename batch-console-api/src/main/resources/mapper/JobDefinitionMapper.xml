@@ -107,6 +107,13 @@
         select * from batch.job_definition where tenant_id = #{tenantId} and id = #{id}
     </select>
 
+    <!--
+        NOT NULL 列只要 Excel parser / 调用方没填,就 fallback 到 DB 默认值,避免 NULL 约束违反:
+          timezone='Asia/Shanghai', trigger_mode='SCHEDULED', dag_enabled=false, priority=5,
+          shard_strategy='NONE', retry_policy='NONE', retry_max_count=0, timeout_seconds=0,
+          enabled=true, execution_mode='FULL'
+        与 batch.job_definition 列 DEFAULT 同步;DB migration 改默认值时本 SQL 须同步。
+    -->
     <insert id="insert" parameterType="com.example.batch.console.domain.entity.JobDefinitionEntity" useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
@@ -117,13 +124,20 @@
             created_by, updated_by
         ) values (
             #{tenantId}, #{jobCode}, #{jobName}, #{jobType}, #{bizType}, #{scheduleType}, #{scheduleExpr},
-            #{timezone}, #{workerGroup}, #{queueCode}, #{calendarCode}, #{windowCode}, #{triggerMode},
-            #{dagEnabled}, #{shardStrategy},
+            <choose><when test="timezone != null and timezone != ''">#{timezone}</when><otherwise>'Asia/Shanghai'</otherwise></choose>,
+            #{workerGroup}, #{queueCode}, #{calendarCode}, #{windowCode},
+            <choose><when test="triggerMode != null and triggerMode != ''">#{triggerMode}</when><otherwise>'SCHEDULED'</otherwise></choose>,
+            <choose><when test="dagEnabled != null">#{dagEnabled}</when><otherwise>false</otherwise></choose>,
+            <choose><when test="shardStrategy != null and shardStrategy != ''">#{shardStrategy}</when><otherwise>'NONE'</otherwise></choose>,
             <choose><when test="executionMode != null and executionMode != ''">#{executionMode}</when><otherwise>'FULL'</otherwise></choose>,
             #{watermarkField},
-            #{retryPolicy}, #{retryMaxCount}, #{timeoutSeconds},
-            #{executionHandler}, #{paramSchema}::jsonb, #{defaultParams}::jsonb, #{priority}, #{enabled}, #{description},
-            #{createdBy}, #{updatedBy}
+            <choose><when test="retryPolicy != null and retryPolicy != ''">#{retryPolicy}</when><otherwise>'NONE'</otherwise></choose>,
+            <choose><when test="retryMaxCount != null">#{retryMaxCount}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="timeoutSeconds != null">#{timeoutSeconds}</when><otherwise>0</otherwise></choose>,
+            #{executionHandler}, #{paramSchema}::jsonb, #{defaultParams}::jsonb,
+            <choose><when test="priority != null">#{priority}</when><otherwise>5</otherwise></choose>,
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
+            #{description}, #{createdBy}, #{updatedBy}
         )
     </insert>
 
