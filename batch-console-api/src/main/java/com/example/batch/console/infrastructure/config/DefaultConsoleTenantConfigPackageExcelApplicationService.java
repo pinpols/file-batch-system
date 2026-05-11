@@ -67,6 +67,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.context.MessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -127,14 +128,16 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final BizTableSchemaQueryMapper bizTableSchemaQueryMapper;
   private final TenantConfigPackageRowProjections rowProjections;
   private final BatchDateTimeSupport dateTimeSupport;
+  private final MessageSource messageSource;
 
   private ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
         jobDefinitionMapper, pipelineDefinitionMapper, stepRegistryQueryMapper);
   }
 
-  private final ConfigPackageExcelWorkbookWriter workbookWriter =
-      new ConfigPackageExcelWorkbookWriter();
+  private ConfigPackageExcelWorkbookWriter workbookWriter() {
+    return new ConfigPackageExcelWorkbookWriter(messageSource);
+  }
 
   @Override
   public ResponseEntity<InputStreamResource> exportPackage(String tenantId) {
@@ -154,10 +157,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities);
     List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
     List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
-    workbookWriter.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
+    workbookWriter().setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes =
-        workbookWriter.buildExportWorkbook(
-            List.of(jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges));
+        workbookWriter()
+            .buildExportWorkbook(
+                List.of(jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges));
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
@@ -165,8 +169,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   @Override
   public ResponseEntity<InputStreamResource> downloadTemplate() {
-    workbookWriter.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
-    byte[] bytes = workbookWriter.buildTemplateWorkbook();
+    workbookWriter().setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
+    byte[] bytes = workbookWriter().buildTemplateWorkbook();
     return ConsoleSingleSheetExcelImportSupport.excelResponse(
         "tenant-config-package-template.xlsx", bytes);
   }
@@ -230,7 +234,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
-    byte[] bytes = workbookWriter.buildPreviewWorkbook(session, result);
+    byte[] bytes = workbookWriter().buildPreviewWorkbook(session, result);
     return ConsoleSingleSheetExcelImportSupport.excelResponse(
         ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), bytes);
   }
