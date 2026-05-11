@@ -1,7 +1,6 @@
 package com.example.batch.console.infrastructure.excel;
 
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.*;
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createOptionalMarkStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
@@ -24,8 +23,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -34,6 +34,8 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 /**
  * Generates Excel workbooks (export, template, preview) for the tenant config package. Extracted
@@ -186,9 +188,10 @@ public class ConfigPackageExcelWorkbookWriter {
       String name,
       List<String> columns,
       Map<String, ConsoleExcelStyles.ColumnGuide> guides,
-      Consumer<Sheet> validationApplier) {}
+      BiConsumer<Sheet, Locale> validationApplier) {}
 
   private final List<SheetDef> sheetDefs;
+  private final MessageSource messageSource;
   // module → 该模块的 bean name 列表；applyStepValidations 会拼成 MODULE:beanName 格式的下拉项。
   // 由调用方（DefaultConsoleTenantConfigPackageExcelApplicationService）在每次 buildXxx 前从
   // batch.step_registry 查并 set；空/null 时不加 impl_code 下拉（避免 worker 未启动时模板不可下载）。
@@ -200,7 +203,8 @@ public class ConfigPackageExcelWorkbookWriter {
     this.registeredImplCodesByModule = registeredImplCodesByModule;
   }
 
-  public ConfigPackageExcelWorkbookWriter() {
+  public ConfigPackageExcelWorkbookWriter(MessageSource messageSource) {
+    this.messageSource = messageSource;
     this.sheetDefs =
         List.of(
             new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
@@ -229,13 +233,14 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       for (int i = 0; i < sheetDefs.size(); i++) {
         SheetDef def = sheetDefs.get(i);
-        writeDataSheet(wb, def, sheetDataList.get(i));
+        writeDataSheet(wb, def, sheetDataList.get(i), locale);
       }
-      createReadmeSheet(wb);
+      createReadmeSheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -246,12 +251,13 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   public byte[] buildTemplateWorkbook() {
+    Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       for (SheetDef def : sheetDefs) {
-        writeDataSheet(wb, def, List.of());
+        writeDataSheet(wb, def, List.of(), locale);
       }
-      createReadmeSheet(wb);
+      createReadmeSheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -262,6 +268,7 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   public byte[] buildPreviewWorkbook(PackageExcelSession session, PackageValidationResult result) {
+    Locale locale = LocaleContextHolder.getLocale();
     List<List<Map<String, String>>> sessionData =
         List.of(
             session.jobRows(),
@@ -285,7 +292,7 @@ public class ConfigPackageExcelWorkbookWriter {
     try (XSSFWorkbook wb = new XSSFWorkbook()) {
       for (int i = 0; i < sheetDefs.size(); i++) {
         SheetDef def = sheetDefs.get(i);
-        writePreviewSheet(wb, def, sessionData.get(i), results.get(i).issues());
+        writePreviewSheet(wb, def, sessionData.get(i), results.get(i).issues(), locale);
       }
       ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(wb, result.allIssues());
       return ConsoleExcelPreviewWorkbookSupport.toBytes(wb);
@@ -294,10 +301,11 @@ public class ConfigPackageExcelWorkbookWriter {
     }
   }
 
-  private void writeDataSheet(Workbook wb, SheetDef def, List<Map<String, Object>> dataRows) {
+  private void writeDataSheet(
+      Workbook wb, SheetDef def, List<Map<String, Object>> dataRows, Locale locale) {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
-    writeTemplateHeaders(sheet, def.columns(), def.guides(), wb);
+    writeTemplateHeaders(sheet, def.columns(), def.guides(), wb, messageSource, locale);
     int idx = 1;
     for (Map<String, Object> row : dataRows) {
       Row dataRow = sheet.createRow(idx++);
@@ -309,7 +317,7 @@ public class ConfigPackageExcelWorkbookWriter {
                 val == null ? EMPTY : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
       }
     }
-    def.validationApplier().accept(sheet);
+    def.validationApplier().accept(sheet, locale);
     setWidths(sheet, def.columns());
   }
 
@@ -317,7 +325,8 @@ public class ConfigPackageExcelWorkbookWriter {
       Workbook wb,
       SheetDef def,
       List<Map<String, String>> dataRows,
-      List<WorkbookIssue> sheetIssues) {
+      List<WorkbookIssue> sheetIssues,
+      Locale locale) {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
@@ -330,31 +339,31 @@ public class ConfigPackageExcelWorkbookWriter {
         dataRow.createCell(c).setCellValue(val == null ? EMPTY : val);
       }
     }
-    def.validationApplier().accept(sheet);
+    def.validationApplier().accept(sheet, locale);
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);
     setWidths(sheet, def.columns());
   }
 
-  private void createReadmeSheet(Workbook wb) {
+  private void createReadmeSheet(Workbook wb, Locale locale) {
     Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     sheet.setColumnWidth(0, 18000);
     CellStyle title = createReadmeTitleStyle(wb);
-    String[] lines = {
-      "租户配置包导入模板",
-      "包含 8 个 sheet:job_definition / file_channel_config / alert_routing_config",
-      "  / pipeline_definition / pipeline_step_definition",
-      "  / workflow_definition / workflow_node / workflow_edge",
-      "导入流程:上传 → 预览 → 应用(单事务原子提交)",
-      "跨 sheet 引用校验:pipeline.job_code → job_definition,",
-      "  wf_node.related_job_code → job_definition,",
-      "  wf_node.related_pipeline_code → pipeline_definition",
-      "Job 定义:未找到则 INSERT,已存在则更新可变字段。",
-      "其他类型:按唯一键 UPSERT。"
+    String[] keys = {
+      "excel.package.readme.title",
+      "excel.package.readme.line1",
+      "excel.package.readme.line2",
+      "excel.package.readme.line3",
+      "excel.package.readme.line4",
+      "excel.package.readme.line5",
+      "excel.package.readme.line6",
+      "excel.package.readme.line7",
+      "excel.package.readme.line8",
+      "excel.package.readme.line9"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
       Cell cell = row.createCell(0);
-      cell.setCellValue(lines[i]);
+      cell.setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         cell.setCellStyle(title);
       }
@@ -452,44 +461,113 @@ public class ConfigPackageExcelWorkbookWriter {
     cell.setCellStyle(style);
   }
 
-  private void applyJobValidations(Sheet sheet) {
-    addDropdownValidation(sheet, 3, JOB_TYPES.toArray(String[]::new), COL_JOB_TYPE, "请选择作业类型");
+  private void applyJobValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 7, SCHEDULE_TYPES.toArray(String[]::new), COL_SCHEDULE_TYPE, "请选择调度类型");
+        sheet,
+        3,
+        JOB_TYPES.toArray(String[]::new),
+        "excel.job.def.job_type.prompt_title",
+        "excel.job.def.job_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 11, RETRY_POLICIES.toArray(String[]::new), COL_RETRY_POLICY, "请选择重试策略");
+        sheet,
+        7,
+        SCHEDULE_TYPES.toArray(String[]::new),
+        "excel.job.def.schedule_type.prompt_title",
+        "excel.job.def.schedule_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 14, SHARD_STRATEGIES.toArray(String[]::new), COL_SHARD_STRATEGY, "请选择分片策略");
-    addBooleanValidation(sheet, new int[] {18}, COL_ENABLED, GUIDE_BOOL_HINT);
+        sheet,
+        11,
+        RETRY_POLICIES.toArray(String[]::new),
+        "excel.job.def.retry_policy.prompt_title",
+        "excel.job.def.retry_policy.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        14,
+        SHARD_STRATEGIES.toArray(String[]::new),
+        "excel.job.def.shard_strategy.prompt_title",
+        "excel.job.def.shard_strategy.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 18, locale);
   }
 
-  private void applyChannelValidations(Sheet sheet) {
+  private void applyChannelValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 3, CHANNEL_TYPES.toArray(String[]::new), COL_CHANNEL_TYPE, "请选择通道类型");
-    addDropdownValidation(sheet, 5, AUTH_TYPES.toArray(String[]::new), COL_AUTH_TYPE, "请选择认证类型");
+        sheet,
+        3,
+        CHANNEL_TYPES.toArray(String[]::new),
+        "excel.channel.channel_type.prompt_title",
+        "excel.channel.channel_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 7, RECEIPT_POLICIES.toArray(String[]::new), COL_RECEIPT_POLICY, "请选择回执策略");
-    addBooleanValidation(sheet, new int[] {9}, COL_ENABLED, GUIDE_BOOL_HINT);
+        sheet,
+        5,
+        AUTH_TYPES.toArray(String[]::new),
+        "excel.channel.auth_type.prompt_title",
+        "excel.channel.auth_type.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        7,
+        RECEIPT_POLICIES.toArray(String[]::new),
+        "excel.channel.receipt_policy.prompt_title",
+        "excel.channel.receipt_policy.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 9, locale);
   }
 
-  private void applyRoutingValidations(Sheet sheet) {
-    addDropdownValidation(sheet, 5, SEVERITIES.toArray(String[]::new), COL_SEVERITY, "请选择告警级别");
-    addBooleanValidation(sheet, new int[] {11}, COL_ENABLED, GUIDE_BOOL_HINT);
+  private void applyRoutingValidations(Sheet sheet, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        5,
+        SEVERITIES.toArray(String[]::new),
+        "excel.alert.severity.prompt_title",
+        "excel.alert.severity.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 11, locale);
   }
 
-  private void applyPipelineValidations(Sheet sheet) {
+  private void applyPipelineValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 3, PIPELINE_TYPES.toArray(String[]::new), COL_PIPELINE_TYPE, "请选择流水线类型");
-    addBooleanValidation(sheet, new int[] {7}, COL_ENABLED, GUIDE_BOOL_HINT);
+        sheet,
+        3,
+        PIPELINE_TYPES.toArray(String[]::new),
+        "excel.pipeline.def.pipeline_type.prompt_title",
+        "excel.pipeline.def.pipeline_type.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 7, locale);
   }
 
-  private void applyStepValidations(Sheet sheet) {
-    addDropdownValidation(sheet, 4, STAGE_CODES.toArray(String[]::new), COL_STAGE_CODE, "请选择阶段");
+  private void applyStepValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 9, RETRY_POLICIES.toArray(String[]::new), COL_RETRY_POLICY, "请选择重试策略");
-    // impl_code（第 7 列 index=6）：动态下拉，格式 MODULE:beanName 让用户一眼看出模块归属。
-    // 上传时 Validator 会剥掉前缀比对 pipeline_type 与 module 是否匹配，不匹配会报错。
-    // registry 空时不加下拉（首次部署没 worker 启动过也能下载模板）。
+        sheet,
+        4,
+        STAGE_CODES.toArray(String[]::new),
+        "excel.pipeline.step.stage_code.prompt_title",
+        "excel.pipeline.step.stage_code.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        9,
+        RETRY_POLICIES.toArray(String[]::new),
+        "excel.pipeline.step.retry_policy.prompt_title",
+        "excel.pipeline.step.retry_policy.prompt_box",
+        messageSource,
+        locale);
+    // impl_code(第 7 列 index=6):动态下拉,格式 MODULE:beanName 让用户一眼看出模块归属。
+    // registry 空时不加下拉(首次部署没 worker 启动过也能下载模板)。
     if (registeredImplCodesByModule != null && !registeredImplCodesByModule.isEmpty()) {
       List<String> options = new ArrayList<>();
       registeredImplCodesByModule.forEach(
@@ -503,29 +581,68 @@ public class ConfigPackageExcelWorkbookWriter {
             sheet,
             6,
             options.toArray(String[]::new),
-            "impl_code",
-            "格式 MODULE:beanName（MODULE 来自 pipeline_type，beanName 来自 worker 启动时上报的 step_registry）");
+            "excel.package.impl_code.prompt_title",
+            "excel.package.impl_code.prompt_box",
+            messageSource,
+            locale);
       }
     }
-    addBooleanValidation(sheet, new int[] {11}, COL_ENABLED, GUIDE_BOOL_HINT);
+    boolDropdown(sheet, 11, locale);
   }
 
-  private void applyWfDefValidations(Sheet sheet) {
+  private void applyWfDefValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 3, WORKFLOW_TYPES.toArray(String[]::new), COL_WORKFLOW_TYPE, "请选择工作流类型");
-    addBooleanValidation(sheet, new int[] {5}, COL_ENABLED, GUIDE_BOOL_HINT);
+        sheet,
+        3,
+        WORKFLOW_TYPES.toArray(String[]::new),
+        "excel.workflow.def.workflow_type.prompt_title",
+        "excel.workflow.def.workflow_type.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 5, locale);
   }
 
-  private void applyWfNodeValidations(Sheet sheet) {
-    addDropdownValidation(sheet, 5, NODE_TYPES.toArray(String[]::new), COL_NODE_TYPE, "请选择节点类型");
+  private void applyWfNodeValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 11, RETRY_POLICIES.toArray(String[]::new), COL_RETRY_POLICY, "请选择重试策略");
-    addBooleanValidation(sheet, new int[] {15}, COL_ENABLED, GUIDE_BOOL_HINT);
+        sheet,
+        5,
+        NODE_TYPES.toArray(String[]::new),
+        "excel.workflow.node.node_type.prompt_title",
+        "excel.workflow.node.node_type.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        11,
+        RETRY_POLICIES.toArray(String[]::new),
+        "excel.workflow.node.retry_policy.prompt_title",
+        "excel.workflow.node.retry_policy.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 15, locale);
   }
 
-  private void applyWfEdgeValidations(Sheet sheet) {
-    addDropdownValidation(sheet, 5, EDGE_TYPES.toArray(String[]::new), COL_EDGE_TYPE, "请选择边类型");
-    addBooleanValidation(sheet, new int[] {7}, COL_ENABLED, GUIDE_BOOL_HINT);
+  private void applyWfEdgeValidations(Sheet sheet, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        5,
+        EDGE_TYPES.toArray(String[]::new),
+        "excel.workflow.edge.edge_type.prompt_title",
+        "excel.workflow.edge.edge_type.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 7, locale);
+  }
+
+  private void boolDropdown(Sheet sheet, int columnIndex, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        columnIndex,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildJobGuides() {
