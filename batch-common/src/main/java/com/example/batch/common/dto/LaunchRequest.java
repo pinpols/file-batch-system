@@ -66,6 +66,7 @@ public record LaunchRequest(
   }
 
   /** 9 参兼容构造：仅带 data interval，replay_session_id + dry_run 默认 null/false。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public LaunchRequest(
       String tenantId,
       String jobCode,
@@ -91,6 +92,7 @@ public record LaunchRequest(
   }
 
   /** 10 参兼容构造：含 replay_session_id，dry_run 默认 false。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public LaunchRequest(
       String tenantId,
       String jobCode,
