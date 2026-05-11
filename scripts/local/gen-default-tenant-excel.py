@@ -3,14 +3,18 @@
 # gen-default-tenant-excel.py
 # 依据 multi-tenant-seed.sql 里 default-tenant 的 "v4 硬化批次" 新增项
 # 生成与 ta/tb/tc-tenant-config-package-test.xlsx 同结构的配置包 Excel，
-# 覆盖 4 条 channel_config + 3 条 wf_probe workflow（PIPELINE / DAG+GATEWAY /
-# MIXED）+ 对应 job_definition。其他 sheet 仅保留表头占位。
+# 9+2 v3 结构（11 sheet）：8 业务核心 + 3 可选基础依赖。
+#
+# 历史变化：alert_routing_config 已剔除（走 /config/excel?domain=alert-routings
+# 独立入口）；file_template_config 进核心（含 Import 目标表 / Export SQL）；
+# resource_queue / business_calendar / batch_window 进可选，引用时必填且允许 DB 兜底。
 # =====================================================================
 import json
 from openpyxl import Workbook
 
 OUT = "docs/test-data/test-full-coverage-import-suite/default-tenant-config-package-test.xlsx"
 
+# ─── 8 业务核心 sheet 列定义 ──────────────────────────────────────────────────
 JOB_COLS = [
     "tenant_id","job_code","job_name","job_type","biz_type","queue_code","worker_group",
     "schedule_type","schedule_expr","calendar_code","window_code","retry_policy",
@@ -21,10 +25,16 @@ CHANNEL_COLS = [
     "tenant_id","channel_code","channel_name","channel_type","target_endpoint",
     "auth_type","config_json","receipt_policy","timeout_seconds","enabled",
 ]
-ROUTING_COLS = [
-    "tenant_id","route_code","route_name","team","alert_group","severity","receiver",
-    "group_by","group_wait_seconds","group_interval_seconds","repeat_interval_seconds",
-    "enabled","description",
+# file_template_config 41 列（与 backend ConfigPackageExcelWorkbookWriter.FILE_TEMPLATE_COLUMNS 对齐）
+FILE_TEMPLATE_COLS = [
+    "tenant_id","template_code","template_name","template_type","biz_type","file_format_type",
+    "charset","target_charset","with_bom","line_separator","delimiter","quote_char","escape_char",
+    "record_length","header_rows","footer_rows","header_template","trailer_template",
+    "checksum_type","compress_type","encrypt_type","naming_rule","field_mappings",
+    "validation_rule_set","default_query_code","default_query_sql","query_param_schema",
+    "streaming_enabled","page_size","fetch_size","chunk_size","preview_masking_enabled",
+    "error_line_masking_enabled","log_masking_enabled","content_encryption_enabled",
+    "encryption_key_ref","download_requires_approval","masking_rule_set","enabled","version","description",
 ]
 PIPELINE_COLS = [
     "tenant_id","job_code","pipeline_name","pipeline_type","biz_type","worker_group",
@@ -45,6 +55,21 @@ WF_NODE_COLS = [
 WF_EDGE_COLS = [
     "tenant_id","workflow_code","workflow_version","from_node_code","to_node_code",
     "edge_type","condition_expr","enabled",
+]
+
+# ─── 3 可选基础依赖 sheet 列定义（引用时必填，允许 DB 兜底） ────────────────
+RESOURCE_QUEUE_COLS = [
+    "tenant_id","queue_code","queue_name","queue_type","max_running_jobs",
+    "max_running_partitions","max_qps","worker_group","resource_tag",
+    "priority_policy","fair_share_weight","enabled","description",
+]
+BUSINESS_CALENDAR_COLS = [
+    "tenant_id","calendar_code","calendar_name","timezone","holiday_roll_rule",
+    "catch_up_policy","catch_up_max_days","holidays","enabled","description",
+]
+BATCH_WINDOW_COLS = [
+    "tenant_id","window_code","window_name","timezone","start_time","end_time",
+    "end_strategy","out_of_window_action","allow_cross_day","enabled","description",
 ]
 
 TENANT = "default-tenant"
@@ -138,25 +163,35 @@ WF_EDGE_ROWS = [
     we("wf_probe_mixed","REPORT","END","ALWAYS"),
 ]
 
+
 def write_sheet(wb, name, columns, rows):
     ws = wb.create_sheet(title=name)
     ws.append(columns)
     for r in rows:
         ws.append(r)
 
+
 def main():
     wb = Workbook()
     wb.remove(wb.active)
-    write_sheet(wb, "job_definition",           JOB_COLS,     JOB_ROWS)
-    write_sheet(wb, "file_channel_config",      CHANNEL_COLS, CHANNEL_ROWS)
-    write_sheet(wb, "alert_routing_config",     ROUTING_COLS, [])
-    write_sheet(wb, "pipeline_definition",      PIPELINE_COLS,[])
-    write_sheet(wb, "pipeline_step_definition", STEP_COLS,    [])
-    write_sheet(wb, "workflow_definition",      WF_DEF_COLS,  WF_DEF_ROWS)
-    write_sheet(wb, "workflow_node",            WF_NODE_COLS, WF_NODE_ROWS)
-    write_sheet(wb, "workflow_edge",            WF_EDGE_COLS, WF_EDGE_ROWS)
+    # 9+2 v3 顺序：8 业务核心（job 在前 → file_template → channel → pipeline → workflow）
+    # + 3 可选基础依赖（resource_queue / business_calendar / batch_window）。
+    # 输出顺序与 backend ConfigPackageExcelWorkbookWriter.sheetDefs 完全一致，
+    # 方便 diff 与可视化对齐。
+    write_sheet(wb, "resource_queue",           RESOURCE_QUEUE_COLS,    [])
+    write_sheet(wb, "business_calendar",        BUSINESS_CALENDAR_COLS, [])
+    write_sheet(wb, "batch_window",             BATCH_WINDOW_COLS,      [])
+    write_sheet(wb, "job_definition",           JOB_COLS,               JOB_ROWS)
+    write_sheet(wb, "file_channel_config",      CHANNEL_COLS,           CHANNEL_ROWS)
+    write_sheet(wb, "file_template_config",     FILE_TEMPLATE_COLS,     [])
+    write_sheet(wb, "pipeline_definition",      PIPELINE_COLS,          [])
+    write_sheet(wb, "pipeline_step_definition", STEP_COLS,              [])
+    write_sheet(wb, "workflow_definition",      WF_DEF_COLS,            WF_DEF_ROWS)
+    write_sheet(wb, "workflow_node",            WF_NODE_COLS,           WF_NODE_ROWS)
+    write_sheet(wb, "workflow_edge",            WF_EDGE_COLS,           WF_EDGE_ROWS)
     wb.save(OUT)
     print(f"wrote {OUT}")
+
 
 if __name__ == "__main__":
     main()

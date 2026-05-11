@@ -22,19 +22,29 @@ import com.example.batch.console.domain.param.WorkflowNodeUpsertParam;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.domain.query.WorkflowDefinitionQuery;
+import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser;
+import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;
+import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser;
+import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser.CalendarRow;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter;
 import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser;
 import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
+import com.example.batch.console.infrastructure.excel.ResourceQueueExcelRowParser;
+import com.example.batch.console.infrastructure.excel.ResourceQueueExcelRowParser.QueueRow;
+import com.example.batch.console.mapper.BatchWindowMapper;
 import com.example.batch.console.mapper.BizTableSchemaQueryMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
+import com.example.batch.console.mapper.CalendarHolidayMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
+import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
@@ -55,6 +65,7 @@ import com.example.batch.console.web.response.config.TenantConfigPackageExcelPre
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,17 +93,18 @@ import org.springframework.web.multipart.MultipartFile;
  * <p><b>3 阶段导入流程</b>：
  *
  * <ol>
- *   <li>{@link #upload} — 解析 Excel 字节流（8 sheet），构建 {@code PackageExcelSession} 存入 {@link
+ *   <li>{@link #upload} — 解析 Excel 字节流（11 sheet），构建 {@code PackageExcelSession} 存入 {@link
  *       TenantConfigPackageExcelImportStore}，返回短期 token（内存 TTL）。
  *   <li>{@link #preview} — 用 token 取回 session，调 {@link ConfigPackageExcelValidator} 做 跨 sheet
  *       依赖校验（如 pipelineStep 引用的 jobCode 必须存在），返回每 sheet 的 valid/invalid 统计和逐行错误列表，不写库。
- *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内 按 job → channel →
- *       fileTemplate → pipeline+step → workflow+node+edge 顺序写库， 完成后 {@code
- *       importStore.remove(token)}。
+ *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内 按 resourceQueue →
+ *       businessCalendar → batchWindow → fileTemplate → channel → job → pipeline+step →
+ *       workflow+node+edge 顺序写库， 完成后 {@code importStore.remove(token)}。
  * </ol>
  *
- * <p><b>8 sheets</b>（顺序即写库顺序）： job、file_channel、file_template、pipeline_definition、pipeline_step、
- * workflow_definition、workflow_node、workflow_edge。
+ * <p><b>11 sheets</b>（顺序即写库顺序）：resource_queue、business_calendar、batch_window、job、
+ * file_channel、file_template、pipeline_definition、pipeline_step、workflow_definition、workflow_node、
+ * workflow_edge。
  *
  * <p><b>多级结构写法</b>：
  *
@@ -117,6 +129,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantConfigPackageExcelImportStore importStore;
   private final JobDefinitionMapper jobDefinitionMapper;
+  private final ResourceQueueMapper resourceQueueMapper;
+  private final BusinessCalendarMapper businessCalendarMapper;
+  private final CalendarHolidayMapper calendarHolidayMapper;
+  private final BatchWindowMapper batchWindowMapper;
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
@@ -138,7 +154,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         jobDefinitionMapper,
         pipelineDefinitionMapper,
         stepRegistryQueryMapper,
-        fileTemplateConfigMapper);
+        fileTemplateConfigMapper,
+        resourceQueueMapper,
+        businessCalendarMapper,
+        batchWindowMapper);
   }
 
   private ConfigPackageExcelWorkbookWriter workbookWriter() {
@@ -148,6 +167,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   @Override
   public ResponseEntity<InputStreamResource> exportPackage(String tenantId) {
     String tid = tenantGuard.resolveTenant(tenantId);
+    List<Map<String, Object>> resourceQueues =
+        resourceQueueMapper.selectByQuery(tid, null, null, null, null);
+    List<Map<String, Object>> businessCalendars =
+        withCalendarHolidayValues(businessCalendarMapper.selectByQuery(tid, null, null, null));
+    List<Map<String, Object>> batchWindows = batchWindowMapper.selectByQuery(tid, null, null, null);
     List<Map<String, Object>> jobs =
         rowProjections.toJobRows(
             jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null)));
@@ -167,7 +191,18 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     writer.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes =
         writer.buildExportWorkbook(
-            List.of(jobs, channels, fileTemplates, pipelines, steps, wfDefs, wfNodes, wfEdges));
+            List.of(
+                resourceQueues,
+                businessCalendars,
+                batchWindows,
+                jobs,
+                channels,
+                fileTemplates,
+                pipelines,
+                steps,
+                wfDefs,
+                wfNodes,
+                wfEdges));
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
@@ -208,6 +243,36 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return result;
   }
 
+  private List<Map<String, Object>> withCalendarHolidayValues(List<Map<String, Object>> rows) {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (Map<String, Object> row : rows) {
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put(COL_TENANT_ID, row.get("tenantId"));
+      item.put("calendar_code", row.get("calendarCode"));
+      item.put("calendar_name", row.get("calendarName"));
+      item.put("timezone", row.get("timezone"));
+      item.put("holiday_roll_rule", row.get("holidayRollRule"));
+      item.put("catch_up_policy", row.get("catchUpPolicy"));
+      item.put("catch_up_max_days", row.get("catchUpMaxDays"));
+      item.put("holidays", calendarHolidaysText(row.get(KEY_ID)));
+      item.put(COL_ENABLED, row.get(COL_ENABLED));
+      item.put(COL_DESCRIPTION, row.get(COL_DESCRIPTION));
+      out.add(item);
+    }
+    return out;
+  }
+
+  private String calendarHolidaysText(Object idValue) {
+    if (!(idValue instanceof Number number)) {
+      return null;
+    }
+    List<String> dates =
+        calendarHolidayMapper.selectByCalendarId(number.longValue()).stream()
+            .map(row -> String.valueOf(row.get("bizDate")))
+            .toList();
+    return dates.isEmpty() ? null : String.join(",", dates);
+  }
+
   @Override
   public TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String requestTenantId)
       throws IOException {
@@ -220,6 +285,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return new TenantConfigPackageExcelUploadResponse(
         token,
         fileName,
+        session.resourceQueueRows().size(),
+        session.businessCalendarRows().size(),
+        session.batchWindowRows().size(),
         session.jobRows().size(),
         session.fileChannelRows().size(),
         session.fileTemplateRows().size(),
@@ -262,9 +330,12 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         new ApplyContext(
             session.tenantId(), metadata.operatorId(), request.getReason(), metadata.traceId());
 
-    ApplyStats jobStats = applyJobs(result.validJobs(), ctx);
-    ApplyStats channelStats = applyChannels(result.validChannels(), ctx);
+    ApplyStats resourceQueueStats = applyResourceQueues(result.validResourceQueues(), ctx);
+    ApplyStats businessCalendarStats = applyBusinessCalendars(result.validBusinessCalendars(), ctx);
+    ApplyStats batchWindowStats = applyBatchWindows(result.validBatchWindows(), ctx);
     ApplyStats fileTemplateStats = applyFileTemplates(result.validFileTemplates(), ctx);
+    ApplyStats channelStats = applyChannels(result.validChannels(), ctx);
+    ApplyStats jobStats = applyJobs(result.validJobs(), ctx);
     ApplyStats pipelineStats = applyPipelines(result.validPipelines(), result.validSteps(), ctx);
     ApplyStats wfStats =
         applyWorkflows(result.validWfDefs(), result.validWfNodes(), result.validWfEdges(), ctx);
@@ -273,6 +344,12 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return new TenantConfigPackageExcelApplyResponse(
         uploadToken,
         session.tenantId(),
+        resourceQueueStats.inserted(),
+        resourceQueueStats.updated(),
+        businessCalendarStats.inserted(),
+        businessCalendarStats.updated(),
+        batchWindowStats.inserted(),
+        batchWindowStats.updated(),
         jobStats.inserted(),
         jobStats.updated(),
         channelStats.inserted(),
@@ -291,6 +368,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
           fileName,
           tenantId,
           dateTimeSupport.nowInstant(),
+          parseOptionalSheet(wb, RESOURCE_QUEUE_SHEET, RESOURCE_QUEUE_COLUMNS, tenantId),
+          parseOptionalSheet(wb, BUSINESS_CALENDAR_SHEET, BUSINESS_CALENDAR_COLUMNS, tenantId),
+          parseOptionalSheet(wb, BATCH_WINDOW_SHEET, BATCH_WINDOW_COLUMNS, tenantId),
           parseSheet(wb, JOB_SHEET, JOB_COLUMNS, tenantId),
           parseSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId),
           parseSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId),
@@ -335,6 +415,110 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       rows.add(values);
     }
     return rows;
+  }
+
+  private List<Map<String, String>> parseOptionalSheet(
+      Workbook wb, String sheetName, List<String> columns, String tenantId) {
+    return wb.getSheet(sheetName) == null
+        ? List.of()
+        : parseSheet(wb, sheetName, columns, tenantId);
+  }
+
+  private ApplyStats applyResourceQueues(List<Map<String, String>> rows, ApplyContext ctx) {
+    int inserted = 0, updated = 0;
+    for (Map<String, String> row : rows) {
+      List<String> issues = new ArrayList<>();
+      QueueRow queue = ResourceQueueExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
+      if (!issues.isEmpty()) {
+        throw invalidParsedRow(RESOURCE_QUEUE_SHEET, issues);
+      }
+      Map<String, Object> existing =
+          resourceQueueMapper.selectByUniqueKey(ctx.tenantId(), queue.queueCode());
+      resourceQueueMapper.upsertResourceQueue(
+          ResourceQueueExcelRowParser.toUpsertParam(queue, ctx.operatorId()));
+      if (existing == null || existing.isEmpty()) {
+        inserted++;
+      } else {
+        updated++;
+      }
+    }
+    return new ApplyStats(inserted, updated);
+  }
+
+  private ApplyStats applyBusinessCalendars(List<Map<String, String>> rows, ApplyContext ctx) {
+    int inserted = 0, updated = 0;
+    for (Map<String, String> row : rows) {
+      List<String> issues = new ArrayList<>();
+      CalendarRow calendar =
+          BusinessCalendarExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
+      if (!issues.isEmpty()) {
+        throw invalidParsedRow(BUSINESS_CALENDAR_SHEET, issues);
+      }
+      Map<String, Object> existing =
+          businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+              ctx.tenantId(), calendar.calendarCode());
+      businessCalendarMapper.upsertBusinessCalendar(
+          BusinessCalendarExcelRowParser.toUpsertParam(calendar, safeOp(ctx.operatorId())));
+      applyCalendarHolidays(ctx.tenantId(), calendar);
+      if (existing == null || existing.isEmpty()) {
+        inserted++;
+      } else {
+        updated++;
+      }
+    }
+    return new ApplyStats(inserted, updated);
+  }
+
+  private ApplyStats applyBatchWindows(List<Map<String, String>> rows, ApplyContext ctx) {
+    int inserted = 0, updated = 0;
+    for (Map<String, String> row : rows) {
+      List<String> issues = new ArrayList<>();
+      WindowRow window = BatchWindowExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
+      if (!issues.isEmpty()) {
+        throw invalidParsedRow(BATCH_WINDOW_SHEET, issues);
+      }
+      Map<String, Object> existing =
+          batchWindowMapper.selectByUniqueKey(ctx.tenantId(), window.windowCode());
+      batchWindowMapper.upsertBatchWindow(BatchWindowExcelRowParser.toUpsertParam(window));
+      if (existing == null || existing.isEmpty()) {
+        inserted++;
+      } else {
+        updated++;
+      }
+    }
+    return new ApplyStats(inserted, updated);
+  }
+
+  private void applyCalendarHolidays(String tenantId, CalendarRow calendar) {
+    Map<String, Object> saved =
+        businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+            tenantId, calendar.calendarCode());
+    if (saved == null || saved.get(KEY_ID) == null) {
+      return;
+    }
+    Long calendarId = ((Number) saved.get(KEY_ID)).longValue();
+    calendarHolidayMapper.deleteByCalendarId(calendarId);
+    if (calendar.holidays() == null || calendar.holidays().isEmpty()) {
+      return;
+    }
+    List<Map<String, Object>> params = new ArrayList<>();
+    for (LocalDate holiday : calendar.holidays()) {
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("calendarId", calendarId);
+      item.put("bizDate", holiday);
+      item.put("dayType", "HOLIDAY");
+      item.put("holidayName", null);
+      item.put(COL_DESCRIPTION, calendar.description());
+      params.add(item);
+    }
+    calendarHolidayMapper.batchInsert(params);
+  }
+
+  private static BizException invalidParsedRow(String sheetName, List<String> issues) {
+    return BizException.of(
+        ResultCode.INVALID_ARGUMENT,
+        "error.common.invalid_argument_detail",
+        "invalid " + sheetName + " row: " + issues);
   }
 
   private ApplyStats applyJobs(List<Map<String, String>> rows, ApplyContext ctx) {
@@ -624,6 +808,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       String uploadToken, String fileName, PackageValidationResult result) {
     List<SheetStats> sheets =
         List.of(
+            toSheetStats(result.resourceQueues()),
+            toSheetStats(result.businessCalendars()),
+            toSheetStats(result.batchWindows()),
             toSheetStats(result.jobs()),
             toSheetStats(result.channels()),
             toSheetStats(result.fileTemplates()),
