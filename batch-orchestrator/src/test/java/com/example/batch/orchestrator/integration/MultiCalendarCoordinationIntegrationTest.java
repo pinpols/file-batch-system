@@ -88,17 +88,22 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Test
   void disasterSkipOverrideShortCircuitsOpen() {
     insertCalendar("CAL_US", "America/New_York");
+    // NY EDT cutoff=22:00 → 用 NY 本地 22:01 of BIZ 让 scheduler 算出 bizDate=BIZ
+    Instant now = BIZ.atTime(22, 1).atZone(java.time.ZoneId.of("America/New_York")).toInstant();
+    // disaster_day_override.effective_at 默认 = current_timestamp(墙钟今天),
+    // 而测试 now = BIZ(可能是几天前)。selectActiveByCalendarBizDate 的
+    // "effective_at <= now" 过滤会把这条 override 过滤掉。显式把 effective_at
+    // 设为 now - 1 小时,保证 mapper 能命中。
     jdbcTemplate.update(
         "insert into batch.disaster_day_override"
             + " (tenant_id, calendar_code, biz_date, action, reason, approved_by,"
-            + "  approved_at, ttl_until)"
-            + " values (?, 'CAL_US', ?, 'SKIP', 'hurricane', 'ops-1',"
-            + "         current_timestamp, current_timestamp + interval '1 day')",
+            + "  approved_at, effective_at, ttl_until)"
+            + " values (?, 'CAL_US', ?, 'SKIP', 'hurricane', 'ops-1', ?, ?, ?)",
         TENANT,
-        BIZ);
-    // NY EDT cutoff=22:00 → 用 NY 本地 22:01 of BIZ 让 scheduler 算出 bizDate=BIZ
-    Instant now = BIZ.atTime(22, 1).atZone(java.time.ZoneId.of("America/New_York")).toInstant();
-
+        BIZ,
+        java.sql.Timestamp.from(now.minusSeconds(3600)),
+        java.sql.Timestamp.from(now.minusSeconds(3600)),
+        java.sql.Timestamp.from(now.plusSeconds(86400)));
     scheduler.openDueBatchDays(now);
     Map<String, Object> usRow = selectFirstBatchDay("CAL_US");
 
