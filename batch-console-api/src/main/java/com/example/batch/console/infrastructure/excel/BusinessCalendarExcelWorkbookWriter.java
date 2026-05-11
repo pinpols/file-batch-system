@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.excel;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
@@ -25,16 +24,20 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -43,7 +46,10 @@ import org.springframework.stereotype.Component;
  * <p>覆盖原 service ~270 行写盘逻辑(2 个 sheet + SheetSpec 模板 + 校验下拉 + README/字典/校验 sheet),自带列名/列说明/枚举集常量。
  */
 @Component
+@RequiredArgsConstructor
 public class BusinessCalendarExcelWorkbookWriter {
+
+  private final MessageSource messageSource;
 
   static final String CALENDAR_SHEET_NAME = "business_calendar";
   static final String HOLIDAY_SHEET_NAME = "calendar_holiday";
@@ -85,38 +91,90 @@ public class BusinessCalendarExcelWorkbookWriter {
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> CALENDAR_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
-              COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+              COL_TENANT_ID,
+              optionalColumn(
+                  "excel.calendar.cal.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
           Map.entry(
-              COL_CALENDAR_CODE, requiredColumn("日历唯一编码，作为导入匹配键。", GUIDE_STR, "CAL_CN_STOCK")),
-          Map.entry(COL_CALENDAR_NAME, requiredColumn("控制台展示的日历名称。", GUIDE_STR, "中国A股交易日历")),
-          Map.entry("timezone", requiredColumn("日历时区。", "时区ID", "Asia/Shanghai")),
+              COL_CALENDAR_CODE,
+              requiredColumn(
+                  "excel.calendar.cal.calendar_code.desc",
+                  "excel.guide.format.string",
+                  "CAL_CN_STOCK")),
+          Map.entry(
+              COL_CALENDAR_NAME,
+              requiredColumn(
+                  "excel.calendar.cal.calendar_name.desc",
+                  "excel.guide.format.string",
+                  "中国A股交易日历")),
+          Map.entry(
+              "timezone",
+              requiredColumn(
+                  "excel.calendar.cal.timezone.desc",
+                  "excel.guide.format.timezone_id",
+                  "Asia/Shanghai")),
           Map.entry(
               COL_HOLIDAY_ROLL_RULE,
-              requiredColumn("假日滚动规则。", "枚举", "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
+              requiredColumn(
+                  "excel.calendar.cal.holiday_roll_rule.desc",
+                  "excel.guide.format.enum",
+                  "SKIP",
+                  "SKIP",
+                  "NEXT_WORKDAY",
+                  "PREV_WORKDAY")),
           Map.entry(
               COL_CATCH_UP_POLICY,
-              requiredColumn("补跑策略。", "枚举", "NONE", "NONE", "AUTO", "MANUAL_APPROVAL")),
-          Map.entry(COL_CATCH_UP_MAX_DAYS, requiredColumn("补跑最大天数，必须大于等于 0。", "整数", "0")),
+              requiredColumn(
+                  "excel.calendar.cal.catch_up_policy.desc",
+                  "excel.guide.format.enum",
+                  "NONE",
+                  "NONE",
+                  "AUTO",
+                  "MANUAL_APPROVAL")),
           Map.entry(
-              COL_ENABLED, optionalColumn("日历是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
+              COL_CATCH_UP_MAX_DAYS,
+              requiredColumn(
+                  "excel.calendar.cal.catch_up_max_days.desc", "excel.guide.format.integer", "0")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.calendar.cal.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  "FALSE")));
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> HOLIDAY_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
               COL_CALENDAR_CODE,
               requiredColumn(
-                  "关联日历编码，必须与 business_calendar sheet 中的 calendar_code 对应。",
-                  GUIDE_STR,
+                  "excel.calendar.hol.calendar_code.desc",
+                  "excel.guide.format.string",
                   "CAL_CN_STOCK")),
-          Map.entry(COL_BIZ_DATE, requiredColumn("日期，格式 yyyy-MM-dd。", "日期", "2026-01-01")),
+          Map.entry(
+              COL_BIZ_DATE,
+              requiredColumn(
+                  "excel.calendar.hol.biz_date.desc", "excel.guide.format.date", "2026-01-01")),
           Map.entry(
               COL_DAY_TYPE,
-              requiredColumn("日期类型。", "枚举", "HOLIDAY", "HOLIDAY", "WORKDAY_OVERRIDE")),
-          Map.entry(COL_HOLIDAY_NAME, optionalColumn("假日名称。", GUIDE_STR, "元旦")),
-          Map.entry(COL_DESCRIPTION, optionalColumn("备注说明。", GUIDE_STR, "元旦法定假日")));
+              requiredColumn(
+                  "excel.calendar.hol.day_type.desc",
+                  "excel.guide.format.enum",
+                  "HOLIDAY",
+                  "HOLIDAY",
+                  "WORKDAY_OVERRIDE")),
+          Map.entry(
+              COL_HOLIDAY_NAME,
+              optionalColumn(
+                  "excel.calendar.hol.holiday_name.desc", "excel.guide.format.string", "元旦")),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.calendar.hol.description.desc", "excel.guide.format.string", "元旦法定假日")));
 
   public byte[] writeMaintenanceWorkbook(
       List<Map<String, Object>> calendars, List<Map<String, Object>> holidays) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       writeDataSheet(
@@ -126,8 +184,9 @@ public class BusinessCalendarExcelWorkbookWriter {
               CALENDAR_COLUMNS,
               CALENDAR_COLUMN_GUIDES,
               this::mapCalendarExportValue,
-              this::applyCalendarValidations),
-          calendars);
+              sheet -> applyCalendarValidations(sheet, locale)),
+          calendars,
+          locale);
       writeDataSheet(
           workbook,
           new SheetSpec(
@@ -135,9 +194,10 @@ public class BusinessCalendarExcelWorkbookWriter {
               HOLIDAY_COLUMNS,
               HOLIDAY_COLUMN_GUIDES,
               this::mapHolidayExportValue,
-              this::applyHolidayValidations),
-          holidays);
-      createReadmeSheet(workbook);
+              sheet -> applyHolidayValidations(sheet, locale)),
+          holidays,
+          locale);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
@@ -151,10 +211,12 @@ public class BusinessCalendarExcelWorkbookWriter {
       List<Map<String, String>> calendarRawRows,
       List<Map<String, String>> holidayRawRows,
       List<ConsoleBusinessCalendarExcelRowIssueResponse> issues) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet calendarSheet = workbook.createSheet(CALENDAR_SHEET_NAME);
       calendarSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(calendarSheet, CALENDAR_COLUMNS, CALENDAR_COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(
+          calendarSheet, CALENDAR_COLUMNS, CALENDAR_COLUMN_GUIDES, workbook, messageSource, locale);
       int rowIndex = 1;
       for (Map<String, String> rawRow : calendarRawRows) {
         Row dataRow = calendarSheet.createRow(rowIndex++);
@@ -164,12 +226,13 @@ public class BusinessCalendarExcelWorkbookWriter {
           cell.setCellValue(value == null ? "" : value);
         }
       }
-      applyCalendarValidations(calendarSheet);
+      applyCalendarValidations(calendarSheet, locale);
       setWidths(calendarSheet, CALENDAR_COLUMNS);
 
       Sheet holidaySheet = workbook.createSheet(HOLIDAY_SHEET_NAME);
       holidaySheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(holidaySheet, HOLIDAY_COLUMNS, HOLIDAY_COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(
+          holidaySheet, HOLIDAY_COLUMNS, HOLIDAY_COLUMN_GUIDES, workbook, messageSource, locale);
       int holidayRowIndex = 1;
       for (Map<String, String> rawRow : holidayRawRows) {
         Row dataRow = holidaySheet.createRow(holidayRowIndex++);
@@ -179,10 +242,10 @@ public class BusinessCalendarExcelWorkbookWriter {
           cell.setCellValue(value == null ? "" : value);
         }
       }
-      applyHolidayValidations(holidaySheet);
+      applyHolidayValidations(holidaySheet, locale);
       setWidths(holidaySheet, HOLIDAY_COLUMNS);
 
-      createReadmeSheet(workbook);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
 
@@ -212,10 +275,11 @@ public class BusinessCalendarExcelWorkbookWriter {
     }
   }
 
-  private void writeDataSheet(Workbook workbook, SheetSpec spec, List<Map<String, Object>> rows) {
+  private void writeDataSheet(
+      Workbook workbook, SheetSpec spec, List<Map<String, Object>> rows, Locale locale) {
     Sheet sheet = workbook.createSheet(spec.name());
     sheet.createFreezePane(0, 1, 0, 1);
-    writeTemplateHeaders(sheet, spec.columns(), spec.guides(), workbook);
+    writeTemplateHeaders(sheet, spec.columns(), spec.guides(), workbook, messageSource, locale);
     int rowIndex = 1;
     for (Map<String, Object> row : rows) {
       Row dataRow = sheet.createRow(rowIndex++);
@@ -260,43 +324,60 @@ public class BusinessCalendarExcelWorkbookWriter {
     };
   }
 
-  private void applyCalendarValidations(Sheet sheet) {
+  private void applyCalendarValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
         sheet,
         4,
         HOLIDAY_ROLL_RULES.toArray(String[]::new),
-        "holiday_roll_rule 填写提示",
-        "请从下拉列表中选择假日滚动规则。");
+        "excel.calendar.cal.holiday_roll_rule.prompt_title",
+        "excel.calendar.cal.holiday_roll_rule.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         sheet,
         5,
         CATCH_UP_POLICIES.toArray(String[]::new),
-        "catch_up_policy 填写提示",
-        "请从下拉列表中选择补跑策略。");
-    addBooleanValidation(sheet, new int[] {7}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
-  }
-
-  private void applyHolidayValidations(Sheet sheet) {
+        "excel.calendar.cal.catch_up_policy.prompt_title",
+        "excel.calendar.cal.catch_up_policy.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 2, DAY_TYPES.toArray(String[]::new), "day_type 填写提示", "请从下拉列表中选择日期类型。");
+        sheet,
+        7,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
-  private void createReadmeSheet(Workbook workbook) {
+  private void applyHolidayValidations(Sheet sheet, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        2,
+        DAY_TYPES.toArray(String[]::new),
+        "excel.calendar.hol.day_type.prompt_title",
+        "excel.calendar.hol.day_type.prompt_box",
+        messageSource,
+        locale);
+  }
+
+  private void createReadmeSheet(Workbook workbook, Locale locale) {
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "业务日历维护模板",
-      "1. 工作簿包含两个数据 sheet:business_calendar 与 calendar_holiday。",
-      "2. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "3. calendar_code 是日历的唯一键;calendar_code + biz_date 是节假日的唯一键。",
-      "4. holiday_roll_rule / catch_up_policy / day_type / enabled 已内置下拉值校验。",
-      "5. calendar_holiday sheet 中的 calendar_code 必须引用 business_calendar 中的 calendar_code。",
-      "6. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.calendar.readme.title",
+      "excel.calendar.readme.line1",
+      "excel.calendar.readme.line2",
+      "excel.calendar.readme.line3",
+      "excel.calendar.readme.line4",
+      "excel.calendar.readme.line5",
+      "excel.calendar.readme.line6"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
