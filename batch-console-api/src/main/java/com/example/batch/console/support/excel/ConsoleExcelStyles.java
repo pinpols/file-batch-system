@@ -3,6 +3,7 @@ package com.example.batch.console.support.excel;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -27,6 +28,7 @@ import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.springframework.context.MessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -191,6 +193,21 @@ public final class ConsoleExcelStyles {
 
   public static void writeTemplateHeaders(
       Sheet sheet, List<String> columns, Map<String, ColumnGuide> guides, Workbook workbook) {
+    writeTemplateHeaders(sheet, columns, guides, workbook, null, null);
+  }
+
+  /**
+   * 多语言版本:guide 的 description / formatHint / example / allowedValues 中以 {@code "excel."} 开头的值会被当做
+   * i18n key,通过 {@code messageSource} + {@code locale} 解析;其他值按字面量保留。{@code messageSource} 为 null
+   * 时退化为 老行为(无 i18n)。
+   */
+  public static void writeTemplateHeaders(
+      Sheet sheet,
+      List<String> columns,
+      Map<String, ColumnGuide> guides,
+      Workbook workbook,
+      MessageSource messageSource,
+      Locale locale) {
     Row headerRow = sheet.createRow(0);
     headerRow.setHeightInPoints(28);
     Map<String, ColumnGuide> safeGuides = guides == null ? Map.of() : guides;
@@ -202,12 +219,12 @@ public final class ConsoleExcelStyles {
 
     for (int i = 0; i < columns.size(); i++) {
       String columnName = columns.get(i);
-      ColumnGuide guide = safeGuides.get(columnName);
+      ColumnGuide guide = resolveGuide(safeGuides.get(columnName), messageSource, locale);
       Cell cell = headerRow.createCell(i);
       cell.setCellValue(columnName);
       cell.setCellStyle(
           resolveTemplateHeaderStyle(guide, defaultStyle, requiredStyle, readOnlyStyle));
-      addGuideCommentIfPresent(cell, guide, creationHelper, drawing);
+      addGuideCommentIfPresent(cell, guide, creationHelper, drawing, messageSource, locale);
     }
     if (!columns.isEmpty()) {
       sheet.setAutoFilter(new CellRangeAddress(0, 0, 0, columns.size() - 1));
@@ -282,13 +299,34 @@ public final class ConsoleExcelStyles {
   public static void addDropdownValidation(
       Sheet sheet, int columnIndex, String[] values, String promptTitle, String promptText) {
     addDropdownValidation(
-        sheet, columnIndex, values, promptTitle, promptText, DEFAULT_DROPDOWN_MAX_ROW);
+        sheet, columnIndex, values, promptTitle, promptText, DEFAULT_DROPDOWN_MAX_ROW, null, null);
+  }
+
+  public static void addDropdownValidation(
+      Sheet sheet,
+      int columnIndex,
+      String[] values,
+      String promptTitle,
+      String promptText,
+      MessageSource messageSource,
+      Locale locale) {
+    addDropdownValidation(
+        sheet,
+        columnIndex,
+        values,
+        promptTitle,
+        promptText,
+        DEFAULT_DROPDOWN_MAX_ROW,
+        messageSource,
+        locale);
   }
 
   /**
    * 加下拉数据校验,作用范围 = 第 2 行 ~ 第 {@code maxRow} 行(包含)。
    *
-   * <p>单 sheet 数据量超 5000 行时调用方应显式传 {@code maxRow},否则尾部行不会触发校验。
+   * <p>单 sheet 数据量超 5000 行时调用方应显式传 {@code maxRow},否则尾部行不会触发校验。{@code promptTitle / promptText} 以
+   * {@code "excel."} 开头会被当 i18n key 解析;内置的"输入不合法/请从下拉列表中选择有效值"等默认提示在 {@code messageSource} 非 null
+   * 时按 locale 翻译。
    */
   public static void addDropdownValidation(
       Sheet sheet,
@@ -297,6 +335,18 @@ public final class ConsoleExcelStyles {
       String promptTitle,
       String promptText,
       int maxRow) {
+    addDropdownValidation(sheet, columnIndex, values, promptTitle, promptText, maxRow, null, null);
+  }
+
+  public static void addDropdownValidation(
+      Sheet sheet,
+      int columnIndex,
+      String[] values,
+      String promptTitle,
+      String promptText,
+      int maxRow,
+      MessageSource messageSource,
+      Locale locale) {
     DataValidationHelper helper = sheet.getDataValidationHelper();
     DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
     CellRangeAddressList addressList =
@@ -307,11 +357,19 @@ public final class ConsoleExcelStyles {
     // 必须传 true 才会 setShowDropDown(false) → 箭头显示。POI bug 54440 至今未修。
     validation.setSuppressDropDownArrow(true);
     validation.setShowErrorBox(true);
-    validation.createErrorBox("输入不合法", "请从下拉列表中选择有效值。");
-    if (hasText(promptTitle) || hasText(promptText)) {
+    validation.createErrorBox(
+        localize(messageSource, locale, "excel.dropdown.error_title", "输入不合法"),
+        localize(messageSource, locale, "excel.dropdown.error_box", "请从下拉列表中选择有效值。"));
+    String resolvedTitle = localizeIfKey(messageSource, locale, promptTitle);
+    String resolvedText = localizeIfKey(messageSource, locale, promptText);
+    if (hasText(resolvedTitle) || hasText(resolvedText)) {
       validation.createPromptBox(
-          hasText(promptTitle) ? promptTitle : "填写提示",
-          hasText(promptText) ? promptText : "请使用下拉列表中的可选值。");
+          hasText(resolvedTitle)
+              ? resolvedTitle
+              : localize(messageSource, locale, "excel.dropdown.prompt_title", "填写提示"),
+          hasText(resolvedText)
+              ? resolvedText
+              : localize(messageSource, locale, "excel.dropdown.prompt_box", "请使用下拉列表中的可选值。"));
       validation.setShowPromptBox(true);
     }
     sheet.addValidationData(validation);
@@ -418,8 +476,13 @@ public final class ConsoleExcelStyles {
   }
 
   private static void addGuideCommentIfPresent(
-      Cell cell, ColumnGuide guide, CreationHelper creationHelper, Drawing<?> drawing) {
-    String commentText = buildGuideCommentText(guide);
+      Cell cell,
+      ColumnGuide guide,
+      CreationHelper creationHelper,
+      Drawing<?> drawing,
+      MessageSource messageSource,
+      Locale locale) {
+    String commentText = buildGuideCommentText(guide, messageSource, locale);
     if (!hasText(commentText)) {
       return;
     }
@@ -446,7 +509,8 @@ public final class ConsoleExcelStyles {
     cell.setCellComment(comment);
   }
 
-  private static String buildGuideCommentText(ColumnGuide guide) {
+  private static String buildGuideCommentText(
+      ColumnGuide guide, MessageSource messageSource, Locale locale) {
     if (guide == null) {
       return null;
     }
@@ -454,18 +518,70 @@ public final class ConsoleExcelStyles {
     if (hasText(guide.description())) {
       lines.add(guide.description().trim());
     }
-    lines.add(guide.required() ? "是否必填：是" : "是否必填：否");
-    lines.add(guide.readOnly() ? "是否可编辑：否，请保持导出值不变" : "是否可编辑：是");
+    lines.add(
+        guide.required()
+            ? localize(messageSource, locale, "excel.guide.required.yes", "是否必填：是")
+            : localize(messageSource, locale, "excel.guide.required.no", "是否必填：否"));
+    lines.add(
+        guide.readOnly()
+            ? localize(messageSource, locale, "excel.guide.editable.no", "是否可编辑：否，请保持导出值不变")
+            : localize(messageSource, locale, "excel.guide.editable.yes", "是否可编辑：是"));
     if (hasText(guide.formatHint())) {
-      lines.add("格式：" + guide.formatHint().trim());
+      lines.add(
+          localize(messageSource, locale, "excel.guide.format_prefix", "格式：")
+              + guide.formatHint().trim());
     }
     if (!guide.allowedValues().isEmpty()) {
-      lines.add("下拉值：" + String.join(" / ", guide.allowedValues()));
+      lines.add(
+          localize(messageSource, locale, "excel.guide.allowed_prefix", "下拉值：")
+              + String.join(" / ", guide.allowedValues()));
     }
     if (hasText(guide.example())) {
-      lines.add("示例：" + guide.example().trim());
+      lines.add(
+          localize(messageSource, locale, "excel.guide.example_prefix", "示例：")
+              + guide.example().trim());
     }
     return String.join("\n", lines);
+  }
+
+  /**
+   * 如果 {@code value} 以 {@code "excel."} 开头则视为 i18n key,通过 messageSource 按 locale 解析;否则按字面量返回。{@code
+   * messageSource} 为 null 时不解析,直接返回原值。
+   */
+  private static String localizeIfKey(MessageSource messageSource, Locale locale, String value) {
+    if (value == null || messageSource == null || locale == null || !value.startsWith("excel.")) {
+      return value;
+    }
+    return messageSource.getMessage(value, null, value, locale);
+  }
+
+  /** 解析固定 i18n key + fallback;messageSource / locale 缺一即用 fallback。 */
+  private static String localize(
+      MessageSource messageSource, Locale locale, String key, String fallback) {
+    if (messageSource == null || locale == null) {
+      return fallback;
+    }
+    return messageSource.getMessage(key, null, fallback, locale);
+  }
+
+  /**
+   * 把 guide 内所有可能是 i18n key 的字段(description / formatHint / example / allowedValues)按 locale 解析后返回新
+   * guide。
+   */
+  private static ColumnGuide resolveGuide(
+      ColumnGuide guide, MessageSource messageSource, Locale locale) {
+    if (guide == null || messageSource == null || locale == null) {
+      return guide;
+    }
+    List<String> resolvedAllowed =
+        guide.allowedValues().stream().map(v -> localizeIfKey(messageSource, locale, v)).toList();
+    return new ColumnGuide(
+        guide.required(),
+        guide.readOnly(),
+        localizeIfKey(messageSource, locale, guide.description()),
+        localizeIfKey(messageSource, locale, guide.formatHint()),
+        localizeIfKey(messageSource, locale, guide.example()),
+        resolvedAllowed);
   }
 
   private static boolean hasText(String value) {
