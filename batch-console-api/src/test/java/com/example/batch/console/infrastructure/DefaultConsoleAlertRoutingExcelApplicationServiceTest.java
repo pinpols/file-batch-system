@@ -34,6 +34,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
@@ -57,6 +58,7 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
             requestMetadataResolver,
             importStore,
             dateTimeSupport(),
+            newMessageSource(),
             alertRoutingConfigMapper,
             configChangeLogMapper);
     when(requestMetadataResolver.current())
@@ -222,5 +224,12 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
     row.put("enabled", true);
     row.put("description", "test route");
     return row;
+  }
+
+  private static ResourceBundleMessageSource newMessageSource() {
+    ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+    source.setBasename("messages");
+    source.setDefaultEncoding("UTF-8");
+    return source;
   }
 }

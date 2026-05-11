@@ -33,6 +33,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
@@ -56,6 +57,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
             requestMetadataResolver,
             importStore,
             dateTimeSupport(),
+            newMessageSource(),
             fileChannelConfigMapper,
             configChangeLogMapper);
     when(requestMetadataResolver.current())
@@ -199,5 +201,12 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
     row.put("timeout_seconds", 30);
     row.put("enabled", true);
     return row;
+  }
+
+  private static ResourceBundleMessageSource newMessageSource() {
+    ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+    source.setBasename("messages");
+    source.setDefaultEncoding("UTF-8");
+    return source;
   }
 }

@@ -42,6 +42,7 @@ import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.springframework.context.MessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -252,9 +253,10 @@ public class DefaultConsoleFileTemplateExcelApplicationService
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
       BatchDateTimeSupport dateTimeSupport,
+      MessageSource messageSource,
       FileTemplateConfigMapper fileTemplateConfigMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport, messageSource);
     this.fileTemplateConfigMapper = fileTemplateConfigMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }
