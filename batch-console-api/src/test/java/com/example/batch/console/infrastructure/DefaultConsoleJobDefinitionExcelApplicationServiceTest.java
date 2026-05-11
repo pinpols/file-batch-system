@@ -37,6 +37,7 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
@@ -67,7 +68,7 @@ class DefaultConsoleJobDefinitionExcelApplicationServiceTest {
             resourceQueueMapper,
             batchWindowMapper,
             businessCalendarMapper,
-            new JobDefinitionExcelWorkbookWriter(),
+            new JobDefinitionExcelWorkbookWriter(newMessageSource()),
             dateTimeSupport());
     when(requestMetadataResolver.current())
         .thenReturn(
@@ -286,5 +287,12 @@ class DefaultConsoleJobDefinitionExcelApplicationServiceTest {
         row.createCell(i).setCellValue(String.valueOf(value));
       }
     }
+  }
+
+  private static ResourceBundleMessageSource newMessageSource() {
+    ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+    source.setBasename("messages");
+    source.setDefaultEncoding("UTF-8");
+    return source;
   }
 }
