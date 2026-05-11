@@ -168,8 +168,13 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     List<WorkflowEdgeEntity> edges =
         edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null));
 
-    List<String> errors = validateDag(resolvedTenant, nodes, edges);
-    return new DagValidationResult(errors.isEmpty(), errors);
+    List<DagValidationResult.Finding> findings = validateDag(resolvedTenant, nodes, edges);
+    List<String> errors =
+        findings.stream()
+            .filter(f -> DagValidationResult.Finding.LEVEL_ERROR.equals(f.level()))
+            .map(DagValidationResult.Finding::message)
+            .toList();
+    return new DagValidationResult(errors.isEmpty(), errors, findings);
   }
 
   private void upsertNodesAndEdges(
@@ -274,9 +279,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
         e.getUpdatedAt());
   }
 
-  private List<String> validateDag(
+  private List<DagValidationResult.Finding> validateDag(
       String tenantId, List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
-    List<String> errors = new ArrayList<>();
+    List<DagValidationResult.Finding> findings = new ArrayList<>();
     Set<String> nodeCodes = new HashSet<>();
     List<String> startNodes = new ArrayList<>();
     List<String> endNodes = new ArrayList<>();
@@ -291,83 +296,133 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       }
     }
 
-    validateNodeReferences(errors, nodeCodes, startNodes, endNodes, edges);
-    validateJobNodeReferences(errors, tenantId, nodes);
-    validateConditionEdges(errors, edges);
+    validateNodeReferences(findings, nodeCodes, startNodes, endNodes, edges);
+    validateJobNodeReferences(findings, tenantId, nodes);
+    validateConditionEdges(findings, edges);
     DagAdjacency dag = buildAdjacency(nodeCodes, edges);
-    detectCycles(errors, dag, nodeCodes);
-    validateReachability(errors, nodes, nodeCodes, startNodes, endNodes, dag);
+    detectCycles(findings, dag, nodeCodes);
+    validateReachability(findings, nodes, nodeCodes, startNodes, endNodes, dag);
 
-    return errors;
+    return findings;
   }
 
   // WF-design-5: JOB 节点必须填 related_job_code 且对应 job_definition 必须存在且 enabled=true。
   private void validateJobNodeReferences(
-      List<String> errors, String tenantId, List<WorkflowNodeEntity> nodes) {
+      List<DagValidationResult.Finding> findings, String tenantId, List<WorkflowNodeEntity> nodes) {
     for (WorkflowNodeEntity n : nodes) {
       if (!"JOB".equalsIgnoreCase(n.getNodeType())) {
         continue;
       }
       String jobCode = n.getRelatedJobCode();
       if (jobCode == null || jobCode.isBlank()) {
-        errors.add("JOB node missing related_job_code: " + n.getNodeCode());
+        findings.add(
+            DagValidationResult.Finding.error(
+                "JOB_REF_MISSING",
+                "JOB node missing related_job_code: " + n.getNodeCode(),
+                n.getNodeCode(),
+                null));
         continue;
       }
       var jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
       if (jobDef == null) {
-        errors.add(
-            "JOB node " + n.getNodeCode() + " references non-existent job_definition: " + jobCode);
+        findings.add(
+            DagValidationResult.Finding.error(
+                "JOB_REF_NOT_FOUND",
+                "JOB node "
+                    + n.getNodeCode()
+                    + " references non-existent job_definition: "
+                    + jobCode,
+                n.getNodeCode(),
+                null));
         continue;
       }
       if (Boolean.FALSE.equals(jobDef.getEnabled())) {
-        errors.add(
-            "JOB node " + n.getNodeCode() + " references disabled job_definition: " + jobCode);
+        findings.add(
+            DagValidationResult.Finding.error(
+                "JOB_REF_DISABLED",
+                "JOB node " + n.getNodeCode() + " references disabled job_definition: " + jobCode,
+                n.getNodeCode(),
+                null));
       }
     }
   }
 
   // WF-design-6: edge_type=CONDITION 必须填 condition_expr。
-  private void validateConditionEdges(List<String> errors, List<WorkflowEdgeEntity> edges) {
+  private void validateConditionEdges(
+      List<DagValidationResult.Finding> findings, List<WorkflowEdgeEntity> edges) {
     for (WorkflowEdgeEntity e : edges) {
       if (!"CONDITION".equalsIgnoreCase(e.getEdgeType())) {
         continue;
       }
       if (e.getConditionExpr() == null || e.getConditionExpr().isBlank()) {
-        errors.add(
-            "CONDITION edge missing condition_expr: "
-                + e.getFromNodeCode()
-                + " -> "
-                + e.getToNodeCode());
+        findings.add(
+            DagValidationResult.Finding.error(
+                "EDGE_CONDITION_MISSING_EXPR",
+                "CONDITION edge missing condition_expr: "
+                    + e.getFromNodeCode()
+                    + " -> "
+                    + e.getToNodeCode(),
+                null,
+                edgeIdOf(e)));
       }
     }
   }
 
   private void validateNodeReferences(
-      List<String> errors,
+      List<DagValidationResult.Finding> findings,
       Set<String> nodeCodes,
       List<String> startNodes,
       List<String> endNodes,
       List<WorkflowEdgeEntity> edges) {
     if (startNodes.isEmpty()) {
-      errors.add("Missing START node");
+      findings.add(
+          DagValidationResult.Finding.error("MISSING_START", "Missing START node", null, null));
     } else if (startNodes.size() > 1) {
-      errors.add("Multiple START nodes found: " + startNodes);
+      // 多个 START 时把第 2 个之后的位置标到具体 node 以便前端高亮
+      for (int i = 1; i < startNodes.size(); i++) {
+        findings.add(
+            DagValidationResult.Finding.error(
+                "MULTIPLE_START",
+                "Multiple START nodes found: " + startNodes,
+                startNodes.get(i),
+                null));
+      }
     }
 
     if (endNodes.isEmpty()) {
-      errors.add("Missing END node");
+      findings.add(
+          DagValidationResult.Finding.error("MISSING_END", "Missing END node", null, null));
     } else if (endNodes.size() > 1) {
-      errors.add("Multiple END nodes found: " + endNodes);
+      for (int i = 1; i < endNodes.size(); i++) {
+        findings.add(
+            DagValidationResult.Finding.error(
+                "MULTIPLE_END", "Multiple END nodes found: " + endNodes, endNodes.get(i), null));
+      }
     }
 
     for (WorkflowEdgeEntity e : edges) {
       if (!nodeCodes.contains(e.getFromNodeCode())) {
-        errors.add("Edge references non-existent source node: " + e.getFromNodeCode());
+        findings.add(
+            DagValidationResult.Finding.error(
+                "EDGE_SOURCE_MISSING",
+                "Edge references non-existent source node: " + e.getFromNodeCode(),
+                null,
+                edgeIdOf(e)));
       }
       if (!nodeCodes.contains(e.getToNodeCode())) {
-        errors.add("Edge references non-existent target node: " + e.getToNodeCode());
+        findings.add(
+            DagValidationResult.Finding.error(
+                "EDGE_TARGET_MISSING",
+                "Edge references non-existent target node: " + e.getToNodeCode(),
+                null,
+                edgeIdOf(e)));
       }
     }
+  }
+
+  /** 边没有持久化的 string id，前端用 `${from}-${to}-${edgeType}` 拼，保持一致。 */
+  private static String edgeIdOf(WorkflowEdgeEntity e) {
+    return e.getFromNodeCode() + "-" + e.getToNodeCode() + "-" + e.getEdgeType();
   }
 
   private DagAdjacency buildAdjacency(Set<String> nodeCodes, List<WorkflowEdgeEntity> edges) {
@@ -389,7 +444,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     return new DagAdjacency(adj, reverseAdj, inDegree);
   }
 
-  private void detectCycles(List<String> errors, DagAdjacency dag, Set<String> nodeCodes) {
+  private void detectCycles(
+      List<DagValidationResult.Finding> findings, DagAdjacency dag, Set<String> nodeCodes) {
     Deque<String> queue = new ArrayDeque<>();
     Map<String, Integer> inDegree = new HashMap<>(dag.inDegree());
     for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
@@ -410,12 +466,22 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       }
     }
     if (visited < nodeCodes.size()) {
-      errors.add("Cycle detected in workflow DAG");
+      // 把仍有 inDegree > 0 的节点（在环里）逐个标出，便于前端高亮
+      for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
+        if (entry.getValue() > 0) {
+          findings.add(
+              DagValidationResult.Finding.error(
+                  "CYCLE_DETECTED",
+                  "Cycle detected in workflow DAG (node still has incoming edges)",
+                  entry.getKey(),
+                  null));
+        }
+      }
     }
   }
 
   private void validateReachability(
-      List<String> errors,
+      List<DagValidationResult.Finding> findings,
       List<WorkflowNodeEntity> nodes,
       Set<String> nodeCodes,
       List<String> startNodes,
@@ -428,7 +494,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       for (String code : nodeCodes) {
         if (!"START".equalsIgnoreCase(nodeTypeByCode(nodes, code))
             && !reachableFromStart.contains(code)) {
-          errors.add("Node not reachable from START: " + code);
+          findings.add(
+              DagValidationResult.Finding.error(
+                  "UNREACHABLE_FROM_START", "Node not reachable from START: " + code, code, null));
         }
       }
     }
@@ -440,7 +508,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       for (String code : nodeCodes) {
         if (!"END".equalsIgnoreCase(nodeTypeByCode(nodes, code))
             && !reachableToEnd.contains(code)) {
-          errors.add("Node cannot reach END: " + code);
+          findings.add(
+              DagValidationResult.Finding.error(
+                  "CANNOT_REACH_END", "Node cannot reach END: " + code, code, null));
         }
       }
     }

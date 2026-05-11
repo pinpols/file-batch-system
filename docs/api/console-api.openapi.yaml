@@ -4084,7 +4084,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseDagValidationResult'
 
   # ─── P0: Instance operations ──────────────────────────────────────────────────
   /api/console/instances/{id}/cancel:
@@ -8224,6 +8224,53 @@ components:
           properties:
             data:
               nullable: true
+    DagValidationFinding:
+      type: object
+      description: 工作流 DAG 静态校验的单条发现条目。`nodeCode` 与 `edgeId` 至多一个非空。
+      required: [code, level, message]
+      properties:
+        code:
+          type: string
+          description: 规则码，例如 MISSING_START / CYCLE_DETECTED / JOB_REF_MISSING
+        level:
+          type: string
+          enum: [ERROR, WARNING]
+          description: 严重级别
+        message:
+          type: string
+          description: 人类可读说明（含上下文，如节点 code 或边端点）
+        nodeCode:
+          type: string
+          nullable: true
+          description: 若该规则定位到具体节点，则为节点 code；否则 null
+        edgeId:
+          type: string
+          nullable: true
+          description: 若该规则定位到具体边，则为 `${fromNodeCode}-${toNodeCode}-${edgeType}`；否则 null
+    DagValidationResult:
+      type: object
+      required: [valid, errors, findings]
+      properties:
+        valid:
+          type: boolean
+          description: 是否通过（findings 中无 ERROR）
+        errors:
+          type: array
+          description: 兼容旧前端的错误字符串列表（保留至下个 minor 版本，新代码请消费 findings）
+          items:
+            type: string
+        findings:
+          type: array
+          description: 结构化校验条目，前端可按 nodeCode/edgeId 高亮画布单元
+          items:
+            $ref: '#/components/schemas/DagValidationFinding'
+    CommonResponseDagValidationResult:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DagValidationResult'
     CommonResponseObjectArray:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
