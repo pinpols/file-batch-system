@@ -28,13 +28,17 @@ import com.example.batch.console.web.response.job.ConsoleJobDefinitionExcelRowIs
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -43,7 +47,10 @@ import org.springframework.stereotype.Component;
  * <p>覆盖原 service ~165 行写盘逻辑(单 sheet + 19 列 + 校验下拉 + README/字典/校验 sheet),自带列名/列说明/枚举集常量。
  */
 @Component
+@RequiredArgsConstructor
 public class JobDefinitionExcelWorkbookWriter {
+
+  private final MessageSource messageSource;
 
   static final String SHEET = "job_definition";
 
@@ -59,7 +66,6 @@ public class JobDefinitionExcelWorkbookWriter {
   private static final String GUIDE_NONE = "NONE";
   private static final String GUIDE_TRUE = "TRUE";
   private static final String GUIDE_FALSE = "FALSE";
-  private static final String GUIDE_STR = "字符串";
 
   static final List<String> COLUMNS =
       List.of(
@@ -92,28 +98,43 @@ public class JobDefinitionExcelWorkbookWriter {
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
-              "job_code", requiredColumn("作业唯一编码，用于匹配已有作业定义。", GUIDE_STR, "JOB_SETTLEMENT_001")),
-          Map.entry("job_name", optionalColumn("控制台展示的作业名称。", GUIDE_STR, "清算作业")),
+              "tenant_id",
+              optionalColumn(
+                  "excel.job.def.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+          Map.entry(
+              "job_code",
+              requiredColumn(
+                  "excel.job.def.job_code.desc",
+                  "excel.guide.format.string",
+                  "JOB_SETTLEMENT_001")),
+          Map.entry(
+              "job_name",
+              optionalColumn("excel.job.def.job_name.desc", "excel.guide.format.string", "清算作业")),
           Map.entry(
               COL_JOB_TYPE,
               requiredReadOnlyColumn(
-                  "作业执行类型。该维护模板中为只读字段，仅校验是否与导出值一致。",
-                  "枚举",
+                  "excel.job.def.job_type.desc",
+                  "excel.guide.format.enum",
                   "GENERAL",
                   "GENERAL",
                   "IMPORT",
                   "EXPORT",
                   "DISPATCH",
                   "WORKFLOW")),
-          Map.entry("queue_code", optionalColumn("资源队列编码。留空表示保持当前值。", "编码", "queue-default")),
-          Map.entry("worker_group", optionalColumn("目标执行器分组。留空表示保持当前值。", "编码", "worker-general")),
+          Map.entry(
+              "queue_code",
+              optionalColumn(
+                  "excel.job.def.queue_code.desc", "excel.guide.format.code", "queue-default")),
+          Map.entry(
+              "worker_group",
+              optionalColumn(
+                  "excel.job.def.worker_group.desc", "excel.guide.format.code", "worker-general")),
           Map.entry(
               COL_SCHEDULE_TYPE,
               requiredReadOnlyColumn(
-                  "调度类型在维护模板中为只读字段，必须与导出值一致。",
-                  "枚举",
+                  "excel.job.def.schedule_type.desc",
+                  "excel.guide.format.enum",
                   "CRON",
                   "CRON",
                   "FIXED_RATE",
@@ -123,41 +144,82 @@ public class JobDefinitionExcelWorkbookWriter {
           Map.entry(
               "schedule_expr",
               optionalColumn(
-                  "调度表达式，具体格式取决于 schedule_type。",
-                  "Cron / ISO-8601 时长 / 时间戳 / 事件主题",
+                  "excel.job.def.schedule_expr.desc",
+                  "excel.guide.format.schedule_expr",
                   "0 0/30 * * * ?")),
-          Map.entry("calendar_code", optionalColumn("业务日历编码，系统中必须已存在。", "编码", "BIZ_CALENDAR")),
-          Map.entry("window_code", optionalColumn("批量窗口编码，系统中必须已存在。", "编码", "WINDOW_NIGHT")),
+          Map.entry(
+              "calendar_code",
+              optionalColumn(
+                  "excel.job.def.calendar_code.desc", "excel.guide.format.code", "BIZ_CALENDAR")),
+          Map.entry(
+              "window_code",
+              optionalColumn(
+                  "excel.job.def.window_code.desc", "excel.guide.format.code", "WINDOW_NIGHT")),
           Map.entry(
               COL_RETRY_POLICY,
-              optionalColumn("执行失败后的重试策略。", "枚举", "FIXED", GUIDE_NONE, "FIXED", "EXPONENTIAL")),
-          Map.entry("retry_max_count", optionalColumn("最大重试次数，必须大于等于 0。", "整数", "3")),
-          Map.entry("timeout_seconds", optionalColumn("超时时间（秒），必须大于等于 0。", "整数", "1800")),
+              optionalColumn(
+                  "excel.job.def.retry_policy.desc",
+                  "excel.guide.format.enum",
+                  "FIXED",
+                  GUIDE_NONE,
+                  "FIXED",
+                  "EXPONENTIAL")),
+          Map.entry(
+              "retry_max_count",
+              optionalColumn(
+                  "excel.job.def.retry_max_count.desc", "excel.guide.format.integer", "3")),
+          Map.entry(
+              "timeout_seconds",
+              optionalColumn(
+                  "excel.job.def.timeout_seconds.desc", "excel.guide.format.integer", "1800")),
           Map.entry(
               COL_SHARD_STRATEGY,
-              optionalColumn("编排器使用的分片策略。", "枚举", "AUTO", GUIDE_NONE, "STATIC", "DYNAMIC", "AUTO")),
+              optionalColumn(
+                  "excel.job.def.shard_strategy.desc",
+                  "excel.guide.format.enum",
+                  "AUTO",
+                  GUIDE_NONE,
+                  "STATIC",
+                  "DYNAMIC",
+                  "AUTO")),
           Map.entry(
               COL_EXECUTION_HANDLER,
               readOnlyColumn(
-                  "运行时处理器 Bean/Class。该维护模板中为只读字段。",
-                  GUIDE_STR,
+                  "excel.job.def.execution_handler.desc",
+                  "excel.guide.format.string",
                   "com.example.batch.worker.general.GenericTaskHandler")),
           Map.entry(
               COL_PARAM_SCHEMA,
-              readOnlyColumn("启动参数 Schema。该维护模板中请保持导出的 JSON 不变。", "JSON", "{\"type\":\"object\"}")),
+              readOnlyColumn(
+                  "excel.job.def.param_schema.desc",
+                  "excel.guide.format.json",
+                  "{\"type\":\"object\"}")),
           Map.entry(
               COL_DEFAULT_PARAMS,
-              readOnlyColumn("默认启动参数。该维护模板中请保持导出的 JSON 不变。", "JSON", "{\"batchSize\":1000}")),
+              readOnlyColumn(
+                  "excel.job.def.default_params.desc",
+                  "excel.guide.format.json",
+                  "{\"batchSize\":1000}")),
           Map.entry(
-              COL_ENABLED, optionalColumn("作业定义是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "夜间清算处理链路")));
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.job.def.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.job.def.description.desc", "excel.guide.format.string", "夜间清算处理链路")));
 
   public byte[] writeMaintenanceWorkbook(List<JobDefinitionEntity> rows) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet dataSheet = workbook.createSheet(SHEET);
       dataSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook, messageSource, locale);
       int rowIndex = 1;
       for (JobDefinitionEntity entity : rows) {
         Row row = dataSheet.createRow(rowIndex++);
@@ -181,9 +243,9 @@ public class JobDefinitionExcelWorkbookWriter {
         writeCell(row, 17, entity.getEnabled());
         writeCell(row, 18, entity.getDescription());
       }
-      applyValidations(dataSheet);
+      applyValidations(dataSheet, locale);
       setWidths(dataSheet, COLUMNS);
-      createReadmeSheet(workbook);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
@@ -195,10 +257,11 @@ public class JobDefinitionExcelWorkbookWriter {
 
   public byte[] writePreviewWorkbook(
       List<JobDefinitionRow> sessionRows, List<ConsoleJobDefinitionExcelRowIssueResponse> issues) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet dataSheet = workbook.createSheet(SHEET);
       dataSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook, messageSource, locale);
       int rowIndex = 1;
       for (JobDefinitionRow rowData : sessionRows) {
         Row row = dataSheet.createRow(rowIndex++);
@@ -222,9 +285,9 @@ public class JobDefinitionExcelWorkbookWriter {
         writeCell(row, 17, rowData.enabled());
         writeCell(row, 18, rowData.description());
       }
-      applyValidations(dataSheet);
+      applyValidations(dataSheet, locale);
       setWidths(dataSheet, COLUMNS);
-      createReadmeSheet(workbook);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
 
@@ -244,46 +307,64 @@ public class JobDefinitionExcelWorkbookWriter {
     }
   }
 
-  private void applyValidations(Sheet sheet) {
+  private void applyValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
         sheet,
         3,
         JOB_TYPES.toArray(String[]::new),
-        "job_type 填写提示",
-        "该字段为只读字段，请保持导出的 job_type 不变。");
+        "excel.job.def.job_type.prompt_title",
+        "excel.job.def.job_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         sheet,
         6,
         SCHEDULE_TYPES.toArray(String[]::new),
-        "schedule_type 填写提示",
-        "该字段为只读字段，请保持导出的 schedule_type 不变。");
+        "excel.job.def.schedule_type.prompt_title",
+        "excel.job.def.schedule_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 10, RETRY_POLICIES.toArray(String[]::new), "retry_policy 填写提示", "请从下拉列表中选择重试策略。");
+        sheet,
+        10,
+        RETRY_POLICIES.toArray(String[]::new),
+        "excel.job.def.retry_policy.prompt_title",
+        "excel.job.def.retry_policy.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         sheet,
         13,
         SHARD_STRATEGIES.toArray(String[]::new),
-        "shard_strategy 填写提示",
-        "请从下拉列表中选择分片策略。");
+        "excel.job.def.shard_strategy.prompt_title",
+        "excel.job.def.shard_strategy.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 17, ENABLED_VALUES.toArray(String[]::new), "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        sheet,
+        17,
+        ENABLED_VALUES.toArray(String[]::new),
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
-  private void createReadmeSheet(Workbook workbook) {
+  private void createReadmeSheet(Workbook workbook, Locale locale) {
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "Job 定义安全字段维护模板",
-      "1. 橙色表头表示关键字段;灰蓝色表头表示只读一致性字段。",
-      "2. 鼠标悬停表头单元格可查看字段用途、格式提示、下拉值与示例。",
-      "3. 导入按 tenant_id + job_code 匹配。",
-      "4. 可编辑单元格留空时保持当前导出值。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.job.readme.title",
+      "excel.job.readme.line1",
+      "excel.job.readme.line2",
+      "excel.job.readme.line3",
+      "excel.job.readme.line4",
+      "excel.job.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
