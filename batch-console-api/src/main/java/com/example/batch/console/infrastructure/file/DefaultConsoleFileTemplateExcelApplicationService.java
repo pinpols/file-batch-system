@@ -14,11 +14,11 @@ import com.example.batch.common.enums.FileEncryptType;
 import com.example.batch.common.enums.FileTemplateFormat;
 import com.example.batch.common.enums.FileTemplateType;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.file.ConsoleFileTemplateExcelApplicationService;
-import com.example.batch.console.domain.param.FileTemplateConfigUpsertParam;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
 import com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService;
+import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser;
+import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.support.ConfigChangeLogBuilder;
@@ -35,9 +35,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.experimental.Accessors;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -54,8 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class DefaultConsoleFileTemplateExcelApplicationService
-    extends AbstractSingleSheetExcelService<
-        DefaultConsoleFileTemplateExcelApplicationService.TemplateRow, ConsoleFileTemplateResponse>
+    extends AbstractSingleSheetExcelService<TemplateRow, ConsoleFileTemplateResponse>
     implements ConsoleFileTemplateExcelApplicationService {
 
   private static final String SHEET_NAME = "file_template_config";
@@ -423,14 +419,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   @Override
   protected TemplateRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
-    String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    TemplateRow.TemplateRowBuilder builder =
-        TemplateRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
-    extractBasicFields(builder, values, issues);
-    extractFieldMappings(builder, values, issues);
-    extractStepConfig(builder, values, issues);
-    extractSecurityConfig(builder, values, issues);
-    return builder.build();
+    return FileTemplateExcelRowParser.parseRow(tenantId, rowNo, values, issues);
   }
 
   @Override
@@ -493,7 +482,8 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   protected boolean upsertRow(TemplateRow row, String tenantId, String operatorId) {
     Map<String, Object> existing =
         fileTemplateConfigMapper.selectByUniqueKey(tenantId, row.templateCode(), row.version());
-    fileTemplateConfigMapper.upsertFileTemplateConfig(toUpsertParam(tenantId, row, operatorId));
+    fileTemplateConfigMapper.upsertFileTemplateConfig(
+        FileTemplateExcelRowParser.toUpsertParam(tenantId, row, operatorId));
     return existing == null || existing.isEmpty();
   }
 
@@ -694,189 +684,5 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     sheet.setColumnWidth(0, 28 * 256);
     sheet.setColumnWidth(1, 20 * 256);
     sheet.setColumnWidth(2, 36 * 256);
-  }
-
-  private static void extractBasicFields(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .templateCode(requireText(values, "template_code", 128, issues))
-        .templateName(requireText(values, "template_name", 256, issues))
-        .templateType(requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, 32, issues))
-        .bizType(optionalText(values, "biz_type", 64, issues))
-        .fileFormatType(requireEnum(values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, 32, issues))
-        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
-        .version(optionalInteger(values, "version", 1, 1, issues))
-        .description(optionalText(values, COL_DESCRIPTION, 1024, issues));
-  }
-
-  private static void extractFieldMappings(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .charset(optionalText(values, "charset", 32, issues))
-        .targetCharset(optionalText(values, "target_charset", 32, issues))
-        .withBom(optionalBoolean(values, COL_WITH_BOM, false, issues))
-        .lineSeparator(optionalText(values, "line_separator", 16, issues))
-        .delimiter(optionalText(values, "delimiter", 8, issues))
-        .quoteChar(optionalText(values, "quote_char", 8, issues))
-        .escapeChar(optionalText(values, "escape_char", 8, issues))
-        .recordLength(optionalInteger(values, "record_length", 0, 0, issues))
-        .headerRows(optionalInteger(values, "header_rows", 0, 0, issues))
-        .footerRows(optionalInteger(values, "footer_rows", 0, 0, issues))
-        .headerTemplateJson(optionalJson(values, "header_template", issues))
-        .trailerTemplateJson(optionalJson(values, "trailer_template", issues))
-        .checksumType(requireEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, 32, issues))
-        .compressType(requireEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, 32, issues))
-        .encryptType(requireEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, 32, issues))
-        .namingRule(optionalText(values, "naming_rule", 512, issues))
-        .fieldMappingsJson(optionalJson(values, "field_mappings", issues))
-        .validationRuleSetJson(optionalJson(values, "validation_rule_set", issues));
-  }
-
-  private static void extractStepConfig(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .defaultQueryCode(optionalText(values, "default_query_code", 128, issues))
-        .defaultQuerySql(optionalText(values, "default_query_sql", 10000, issues))
-        .queryParamSchemaJson(optionalJson(values, "query_param_schema", issues))
-        .streamingEnabled(optionalBoolean(values, COL_STREAMING_ENABLED, true, issues))
-        .pageSize(optionalInteger(values, "page_size", 0, 1000, issues))
-        .fetchSize(optionalInteger(values, "fetch_size", 0, 1000, issues))
-        .chunkSize(optionalInteger(values, "chunk_size", 0, 500, issues));
-  }
-
-  private static void extractSecurityConfig(
-      TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    builder
-        .previewMaskingEnabled(optionalBoolean(values, "preview_masking_enabled", false, issues))
-        .errorLineMaskingEnabled(
-            optionalBoolean(values, "error_line_masking_enabled", false, issues))
-        .logMaskingEnabled(optionalBoolean(values, "log_masking_enabled", false, issues))
-        .contentEncryptionEnabled(
-            optionalBoolean(values, "content_encryption_enabled", false, issues))
-        .encryptionKeyRef(optionalText(values, "encryption_key_ref", 128, issues))
-        .downloadRequiresApproval(
-            optionalBoolean(values, COL_DOWNLOAD_REQUIRES_APPROVAL, false, issues))
-        .maskingRuleSet(optionalText(values, "masking_rule_set", 256, issues));
-  }
-
-  private static FileTemplateConfigUpsertParam toUpsertParam(
-      String tenantId, TemplateRow row, String operatorId) {
-    FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
-    param.setTenantId(tenantId);
-    param.setTemplateCode(row.templateCode());
-
-    FileTemplateConfigUpsertParam.BasicInfo basicInfo =
-        new FileTemplateConfigUpsertParam.BasicInfo();
-    basicInfo.setTemplateName(row.templateName());
-    basicInfo.setTemplateType(row.templateType());
-    basicInfo.setBizType(row.bizType());
-    basicInfo.setEnabled(row.enabled());
-    basicInfo.setVersion(row.version());
-    basicInfo.setDescription(row.description());
-    param.setBasicInfo(basicInfo);
-
-    FileTemplateConfigUpsertParam.FormatOptions format =
-        new FileTemplateConfigUpsertParam.FormatOptions();
-    format.setFileFormatType(row.fileFormatType());
-    format.setCharset(row.charset());
-    format.setTargetCharset(row.targetCharset());
-    format.setWithBom(row.withBom());
-    format.setLineSeparator(row.lineSeparator());
-    format.setDelimiter(row.delimiter());
-    format.setQuoteChar(row.quoteChar());
-    format.setEscapeChar(row.escapeChar());
-    format.setRecordLength(row.recordLength());
-    format.setHeaderRows(row.headerRows());
-    format.setFooterRows(row.footerRows());
-    format.setHeaderTemplateJson(row.headerTemplateJson());
-    format.setTrailerTemplateJson(row.trailerTemplateJson());
-    format.setChecksumType(row.checksumType());
-    format.setCompressType(row.compressType());
-    format.setEncryptType(row.encryptType());
-    format.setNamingRule(row.namingRule());
-    format.setFieldMappingsJson(row.fieldMappingsJson());
-    format.setValidationRuleSetJson(row.validationRuleSetJson());
-    param.setFormat(format);
-
-    FileTemplateConfigUpsertParam.QueryOptions query =
-        new FileTemplateConfigUpsertParam.QueryOptions();
-    query.setDefaultQueryCode(row.defaultQueryCode());
-    query.setDefaultQuerySql(row.defaultQuerySql());
-    query.setQueryParamSchemaJson(row.queryParamSchemaJson());
-    param.setQuery(query);
-
-    FileTemplateConfigUpsertParam.RuntimeOptions runtime =
-        new FileTemplateConfigUpsertParam.RuntimeOptions();
-    runtime.setStreamingEnabled(row.streamingEnabled());
-    runtime.setPageSize(row.pageSize());
-    runtime.setFetchSize(row.fetchSize());
-    runtime.setChunkSize(row.chunkSize());
-    param.setRuntime(runtime);
-
-    FileTemplateConfigUpsertParam.SecurityOptions security =
-        new FileTemplateConfigUpsertParam.SecurityOptions();
-    security.setPreviewMaskingEnabled(row.previewMaskingEnabled());
-    security.setErrorLineMaskingEnabled(row.errorLineMaskingEnabled());
-    security.setLogMaskingEnabled(row.logMaskingEnabled());
-    security.setContentEncryptionEnabled(row.contentEncryptionEnabled());
-    security.setEncryptionKeyRef(row.encryptionKeyRef());
-    security.setDownloadRequiresApproval(row.downloadRequiresApproval());
-    security.setMaskingRuleSet(row.maskingRuleSet());
-    param.setSecurity(security);
-
-    FileTemplateConfigUpsertParam.AuditOptions audit =
-        new FileTemplateConfigUpsertParam.AuditOptions();
-    audit.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
-    audit.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
-    param.setAudit(audit);
-    return param;
-  }
-
-  @Getter
-  @Builder
-  @Accessors(fluent = true)
-  static class TemplateRow {
-    private final Integer rowNo;
-    private final String tenantId;
-    private final String templateCode;
-    private final String templateName;
-    private final String templateType;
-    private final String bizType;
-    private final String fileFormatType;
-    private final String charset;
-    private final String targetCharset;
-    private final Boolean withBom;
-    private final String lineSeparator;
-    private final String delimiter;
-    private final String quoteChar;
-    private final String escapeChar;
-    private final Integer recordLength;
-    private final Integer headerRows;
-    private final Integer footerRows;
-    private final String headerTemplateJson;
-    private final String trailerTemplateJson;
-    private final String checksumType;
-    private final String compressType;
-    private final String encryptType;
-    private final String namingRule;
-    private final String fieldMappingsJson;
-    private final String validationRuleSetJson;
-    private final String defaultQueryCode;
-    private final String defaultQuerySql;
-    private final String queryParamSchemaJson;
-    private final Boolean streamingEnabled;
-    private final Integer pageSize;
-    private final Integer fetchSize;
-    private final Integer chunkSize;
-    private final Boolean previewMaskingEnabled;
-    private final Boolean errorLineMaskingEnabled;
-    private final Boolean logMaskingEnabled;
-    private final Boolean contentEncryptionEnabled;
-    private final String encryptionKeyRef;
-    private final Boolean downloadRequiresApproval;
-    private final String maskingRuleSet;
-    private final Boolean enabled;
-    private final Integer version;
-    private final String description;
   }
 }
