@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.file;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
@@ -34,6 +33,7 @@ import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import com.example.batch.console.web.response.file.ConsoleFileChannelResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.Builder;
@@ -42,6 +42,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -82,22 +83,43 @@ public class DefaultConsoleFileChannelExcelApplicationService
   private static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
-              "channel_code", requiredColumn("通道唯一编码，作为导入匹配键。", GUIDE_STR, "CH_API_SETTLEMENT")),
-          Map.entry("channel_name", requiredColumn("控制台展示的通道名称。", GUIDE_STR, "清算 API 通道")),
+              "tenant_id",
+              optionalColumn(
+                  "excel.channel.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+          Map.entry(
+              "channel_code",
+              requiredColumn(
+                  "excel.channel.channel_code.desc",
+                  "excel.guide.format.string",
+                  "CH_API_SETTLEMENT")),
+          Map.entry(
+              "channel_name",
+              requiredColumn(
+                  "excel.channel.channel_name.desc", "excel.guide.format.string", "清算 API 通道")),
           Map.entry(
               COL_CHANNEL_TYPE,
               requiredColumn(
-                  "该通道的传输类型。", "枚举", "API", "SFTP", "API", "EMAIL", "NAS", "OSS", "LOCAL")),
+                  "excel.channel.channel_type.desc",
+                  "excel.guide.format.enum",
+                  "API",
+                  "SFTP",
+                  "API",
+                  "EMAIL",
+                  "NAS",
+                  "OSS",
+                  "LOCAL")),
           Map.entry(
               "target_endpoint",
-              optionalColumn("目标地址、路径或邮箱。", "URL / 路径 / 邮箱", "https://api.example.com/push")),
+              optionalColumn(
+                  "excel.channel.target_endpoint.desc",
+                  "excel.guide.format.endpoint",
+                  "https://api.example.com/push")),
           Map.entry(
               COL_AUTH_TYPE,
               requiredColumn(
-                  "目标端点使用的认证方式。",
-                  "枚举",
+                  "excel.channel.auth_type.desc",
+                  "excel.guide.format.enum",
                   "TOKEN",
                   GUIDE_NONE,
                   "PASSWORD",
@@ -107,14 +129,32 @@ public class DefaultConsoleFileChannelExcelApplicationService
                   "CUSTOM")),
           Map.entry(
               "config_json",
-              requiredColumn("通道专属连接配置，请保持为合法 JSON。", "JSON", "{\"token\":\"xxx\"}")),
+              requiredColumn(
+                  "excel.channel.config_json.desc",
+                  "excel.guide.format.json",
+                  "{\"token\":\"xxx\"}")),
           Map.entry(
               COL_RECEIPT_POLICY,
               requiredColumn(
-                  "文件投递后的回执或回调策略。", "枚举", "SYNC", GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
-          Map.entry("timeout_seconds", requiredColumn("超时时间（秒），必须大于等于 0。", "整数", "30")),
+                  "excel.channel.receipt_policy.desc",
+                  "excel.guide.format.enum",
+                  "SYNC",
+                  GUIDE_NONE,
+                  "SYNC",
+                  "ASYNC",
+                  "POLLING")),
           Map.entry(
-              COL_ENABLED, optionalColumn("文件通道是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
+              "timeout_seconds",
+              requiredColumn(
+                  "excel.channel.timeout_seconds.desc", "excel.guide.format.integer", "30")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.channel.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  "FALSE")));
 
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -268,31 +308,58 @@ public class DefaultConsoleFileChannelExcelApplicationService
 
   @Override
   protected void applyValidations(Sheet sheet) {
+    Locale locale = LocaleContextHolder.getLocale();
     addDropdownValidation(
-        sheet, 3, CHANNEL_TYPES.toArray(String[]::new), "channel_type 填写提示", "请从下拉列表中选择通道类型。");
+        sheet,
+        3,
+        CHANNEL_TYPES.toArray(String[]::new),
+        "excel.channel.channel_type.prompt_title",
+        "excel.channel.channel_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 5, AUTH_TYPES.toArray(String[]::new), "auth_type 填写提示", "请从下拉列表中选择认证方式。");
+        sheet,
+        5,
+        AUTH_TYPES.toArray(String[]::new),
+        "excel.channel.auth_type.prompt_title",
+        "excel.channel.auth_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 7, RECEIPT_POLICIES.toArray(String[]::new), "receipt_policy 填写提示", "请从下拉列表中选择回执策略。");
-    addBooleanValidation(sheet, new int[] {9}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        sheet,
+        7,
+        RECEIPT_POLICIES.toArray(String[]::new),
+        "excel.channel.receipt_policy.prompt_title",
+        "excel.channel.receipt_policy.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        9,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
+    Locale locale = LocaleContextHolder.getLocale();
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "文件渠道配置维护模板",
-      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "2. channel_code 是预览与应用阶段使用的唯一键。",
-      "3. channel_type / auth_type / receipt_policy / enabled 已内置下拉值校验。",
-      "4. config_json 必须保持合法 JSON。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.channel.readme.title",
+      "excel.channel.readme.line1",
+      "excel.channel.readme.line2",
+      "excel.channel.readme.line3",
+      "excel.channel.readme.line4",
+      "excel.channel.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
