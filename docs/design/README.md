@@ -28,6 +28,7 @@
 | 14 | [multi-tenant-and-security.md](./multi-tenant-and-security.md) | 多租户隔离边界 / 角色权限 / 密钥轮换 / 配置发布治理 / AI 输入边界 | 安全评审 / 加敏感字段 |
 | 15 | [batch-classification-and-gaps.md](./batch-classification-and-gaps.md) | 批量类型 3 维分类法（BatchType / ExecutionMode / TriggerType） + 系统缺口与 P0 落地草案 | 加新业务类型 / 评估增量执行 / 抽公共状态机 |
 | 16 | [process-worker-known-issues.md](./process-worker-known-issues.md) | PROCESS Worker 落地后的漏洞、bug、设计缺陷与下一步修复计划 | 修 PROCESS / SQL transform / staging / watermark 前 |
+| 17 | [tenant-config-package-excel-9plus2-design.md](./tenant-config-package-excel-9plus2-design.md) | 租户配置包 Excel 9+2 优化设计：默认 9 sheet + 可选 calendar/window、依赖说明 sheet、字段说明合并单元格与关联关系列 | 改 tenant-package Excel / 补 Import 表名与 Export SQL 配置包迁移 |
 
 ## 与 architecture/ 的分工
 

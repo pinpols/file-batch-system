@@ -6,7 +6,7 @@ public record TenantConfigPackageExcelUploadResponse(
     String fileName,
     int jobRows,
     int fileChannelRows,
-    int alertRoutingRows,
+    int fileTemplateRows,
     int pipelineRows,
     int pipelineStepRows,
     int workflowDefinitionRows,
