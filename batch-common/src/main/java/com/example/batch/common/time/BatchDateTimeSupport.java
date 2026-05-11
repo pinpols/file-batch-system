@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -59,9 +60,12 @@ public class BatchDateTimeSupport {
    *
    * <p>优先用于无法注入 Spring Bean 的值对象、静态工具、轻量回调。Spring 管理的业务组件仍优先注入 {@link BatchDateTimeSupport} 并调用
    * {@link #nowInstant()}。
+   *
+   * <p>截断到微秒：PostgreSQL {@code TIMESTAMP} 仅支持 6 位精度，Java 9+ 在 Linux 上 {@code Clock.systemUTC()}
+   * 返回纳秒精度（9 位），不截断会导致 in-memory Instant 与 DB 读回值不相等（精度不对齐 → 哈希 / 等值断言 / 乐观锁 CAS 误判）。
    */
   public static Instant utcNow() {
-    return Clock.systemUTC().instant();
+    return Clock.systemUTC().instant().truncatedTo(ChronoUnit.MICROS);
   }
 
   /** 静态 UTC epoch milliseconds 入口，语义同 {@link #currentEpochMillis()}。 */
@@ -91,7 +95,7 @@ public class BatchDateTimeSupport {
    * </ul>
    */
   public Instant nowInstant() {
-    return clock.instant();
+    return clock.instant().truncatedTo(ChronoUnit.MICROS);
   }
 
   /** 当前 UTC epoch milliseconds。适用于限流窗口、唯一技术 key、缓存过期等技术时间。 */
