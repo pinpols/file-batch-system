@@ -4,6 +4,7 @@ import java.util.Map;
 import lombok.Builder;
 
 @Builder
+@SuppressWarnings("PMD.ExcessiveParameterList")
 public record JobDefinitionEntity(
     Long id,
     String tenantId,

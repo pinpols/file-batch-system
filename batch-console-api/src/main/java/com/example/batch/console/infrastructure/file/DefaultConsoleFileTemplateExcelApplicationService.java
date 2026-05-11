@@ -61,6 +61,9 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   private static final String SHEET_NAME = "file_template_config";
 
   // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String FMT_STRING_KEY = "excel.guide.format.string";
+  private static final String FMT_BOOLEAN_KEY = "excel.guide.format.boolean";
+  private static final String FMT_INTEGER_KEY = "excel.guide.format.integer";
   private static final String COL_DESCRIPTION = "description";
   private static final String GUIDE_FALSE = "FALSE";
   private static final String GUIDE_TRUE = "TRUE";
@@ -143,18 +146,14 @@ public class DefaultConsoleFileTemplateExcelApplicationService
       Map.ofEntries(
           Map.entry(
               "tenant_id",
-              optionalColumn(
-                  "excel.template.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+              optionalColumn("excel.template.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
           Map.entry(
               "template_code",
               requiredColumn(
-                  "excel.template.template_code.desc",
-                  "excel.guide.format.string",
-                  "TPL_SETTLEMENT_001")),
+                  "excel.template.template_code.desc", FMT_STRING_KEY, "TPL_SETTLEMENT_001")),
           Map.entry(
               "template_name",
-              requiredColumn(
-                  "excel.template.template_name.desc", "excel.guide.format.string", "清算导出模板")),
+              requiredColumn("excel.template.template_name.desc", FMT_STRING_KEY, "清算导出模板")),
           Map.entry(
               COL_TEMPLATE_TYPE,
               requiredColumn(
@@ -166,8 +165,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
                   "SHARED")),
           Map.entry(
               "biz_type",
-              optionalColumn(
-                  "excel.template.biz_type.desc", "excel.guide.format.string", "SETTLEMENT")),
+              optionalColumn("excel.template.biz_type.desc", FMT_STRING_KEY, "SETTLEMENT")),
           Map.entry(
               COL_FILE_FORMAT_TYPE,
               requiredColumn(
@@ -181,43 +179,37 @@ public class DefaultConsoleFileTemplateExcelApplicationService
                   "JSON",
                   "BINARY")),
           Map.entry(
-              "charset",
-              optionalColumn("excel.template.charset.desc", "excel.guide.format.string", "UTF-8")),
+              "charset", optionalColumn("excel.template.charset.desc", FMT_STRING_KEY, "UTF-8")),
           Map.entry(
               "target_charset",
-              optionalColumn(
-                  "excel.template.target_charset.desc", "excel.guide.format.string", "GBK")),
+              optionalColumn("excel.template.target_charset.desc", FMT_STRING_KEY, "GBK")),
           Map.entry(
               COL_WITH_BOM,
               optionalColumn(
                   "excel.template.with_bom.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_FALSE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
           Map.entry(
               "line_separator",
-              optionalColumn(
-                  "excel.template.line_separator.desc", "excel.guide.format.string", "\\n")),
+              optionalColumn("excel.template.line_separator.desc", FMT_STRING_KEY, "\\n")),
           Map.entry(
-              "delimiter",
-              optionalColumn("excel.template.delimiter.desc", "excel.guide.format.string", ",")),
+              "delimiter", optionalColumn("excel.template.delimiter.desc", FMT_STRING_KEY, ",")),
           Map.entry(
-              "quote_char",
-              optionalColumn("excel.template.quote_char.desc", "excel.guide.format.string", "\"")),
+              "quote_char", optionalColumn("excel.template.quote_char.desc", FMT_STRING_KEY, "\"")),
           Map.entry(
               "escape_char",
-              optionalColumn("excel.template.escape_char.desc", "excel.guide.format.string", "\\")),
+              optionalColumn("excel.template.escape_char.desc", FMT_STRING_KEY, "\\")),
           Map.entry(
               "record_length",
-              optionalColumn(
-                  "excel.template.record_length.desc", "excel.guide.format.integer", "200")),
+              optionalColumn("excel.template.record_length.desc", FMT_INTEGER_KEY, "200")),
           Map.entry(
               "header_rows",
-              optionalColumn("excel.template.header_rows.desc", "excel.guide.format.integer", "1")),
+              optionalColumn("excel.template.header_rows.desc", FMT_INTEGER_KEY, "1")),
           Map.entry(
               "footer_rows",
-              optionalColumn("excel.template.footer_rows.desc", "excel.guide.format.integer", "0")),
+              optionalColumn("excel.template.footer_rows.desc", FMT_INTEGER_KEY, "0")),
           Map.entry(
               "header_template",
               optionalColumn(
@@ -280,7 +272,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               "default_query_code",
               optionalColumn(
                   "excel.template.default_query_code.desc",
-                  "excel.guide.format.string",
+                  FMT_STRING_KEY,
                   "QRY_SETTLEMENT_EXPORT")),
           Map.entry(
               "default_query_sql",
@@ -298,27 +290,24 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               COL_STREAMING_ENABLED,
               optionalColumn(
                   "excel.template.streaming_enabled.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_TRUE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
           Map.entry(
               "page_size",
-              optionalColumn(
-                  "excel.template.page_size.desc", "excel.guide.format.integer", "1000")),
+              optionalColumn("excel.template.page_size.desc", FMT_INTEGER_KEY, "1000")),
           Map.entry(
               "fetch_size",
-              optionalColumn(
-                  "excel.template.fetch_size.desc", "excel.guide.format.integer", "1000")),
+              optionalColumn("excel.template.fetch_size.desc", FMT_INTEGER_KEY, "1000")),
           Map.entry(
               "chunk_size",
-              optionalColumn(
-                  "excel.template.chunk_size.desc", "excel.guide.format.integer", "500")),
+              optionalColumn("excel.template.chunk_size.desc", FMT_INTEGER_KEY, "500")),
           Map.entry(
               "preview_masking_enabled",
               optionalColumn(
                   "excel.template.preview_masking_enabled.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_FALSE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
@@ -326,7 +315,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               "error_line_masking_enabled",
               optionalColumn(
                   "excel.template.error_line_masking_enabled.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_FALSE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
@@ -334,7 +323,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               "log_masking_enabled",
               optionalColumn(
                   "excel.template.log_masking_enabled.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_TRUE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
@@ -342,7 +331,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               "content_encryption_enabled",
               optionalColumn(
                   "excel.template.content_encryption_enabled.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_FALSE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
@@ -350,37 +339,32 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               "encryption_key_ref",
               optionalColumn(
                   "excel.template.encryption_key_ref.desc",
-                  "excel.guide.format.string",
+                  FMT_STRING_KEY,
                   "kms://file-template/settlement")),
           Map.entry(
               COL_DOWNLOAD_REQUIRES_APPROVAL,
               optionalColumn(
                   "excel.template.download_requires_approval.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_TRUE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
           Map.entry(
               "masking_rule_set",
               optionalColumn(
-                  "excel.template.masking_rule_set.desc",
-                  "excel.guide.format.string",
-                  "MASK_RULE_SETTLEMENT")),
+                  "excel.template.masking_rule_set.desc", FMT_STRING_KEY, "MASK_RULE_SETTLEMENT")),
           Map.entry(
               COL_ENABLED,
               optionalColumn(
                   "excel.template.enabled.desc",
-                  "excel.guide.format.boolean",
+                  FMT_BOOLEAN_KEY,
                   GUIDE_TRUE,
                   GUIDE_TRUE,
                   GUIDE_FALSE)),
-          Map.entry(
-              "version",
-              optionalColumn("excel.template.version.desc", "excel.guide.format.integer", "1")),
+          Map.entry("version", optionalColumn("excel.template.version.desc", FMT_INTEGER_KEY, "1")),
           Map.entry(
               COL_DESCRIPTION,
-              optionalColumn(
-                  "excel.template.description.desc", "excel.guide.format.string", "清算导出模板")));
+              optionalColumn("excel.template.description.desc", FMT_STRING_KEY, "清算导出模板")));
 
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;

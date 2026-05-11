@@ -141,17 +141,18 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     Validated<ROW> result = validateRows(session);
     String previewWorkbookUrl =
         result.invalidRows() > 0 ? "preview/" + uploadToken + "/workbook" : null;
-    return new ExcelPreviewResponse<>(
-        uploadToken,
-        session.fileName(),
-        session.sheetName(),
-        result.totalRows(),
-        result.validRows(),
-        result.invalidRows(),
-        result.rows().stream().map(this::toResponse).toList(),
-        result.issues(),
-        previewWorkbookUrl,
-        summarizeChanges(session.tenantId(), result.rows()));
+    return ExcelPreviewResponse.<RESP>builder()
+        .uploadToken(uploadToken)
+        .fileName(session.fileName())
+        .sheetName(session.sheetName())
+        .totalRows(result.totalRows())
+        .validRows(result.validRows())
+        .invalidRows(result.invalidRows())
+        .rows(result.rows().stream().map(this::toResponse).toList())
+        .issues(result.issues())
+        .previewWorkbookUrl(previewWorkbookUrl)
+        .changeSummary(summarizeChanges(session.tenantId(), result.rows()))
+        .build();
   }
 
   public final ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {

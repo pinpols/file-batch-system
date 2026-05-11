@@ -143,7 +143,7 @@ public interface JobInstanceMapper {
   int countNonTerminalByJobCodeAndBizDate(
       @Param("tenantId") String tenantId,
       @Param("jobCode") String jobCode,
-      @Param("bizDate") java.time.LocalDate bizDate);
+      @Param("bizDate") LocalDate bizDate);
 
   /**
    * 同一 (tenantId, jobGroupCode, bizDate) 下,是否存在尚未到达终态的 job_instance。 BatchDayGateService 的
@@ -152,7 +152,7 @@ public interface JobInstanceMapper {
   int countNonTerminalByJobGroupAndBizDate(
       @Param("tenantId") String tenantId,
       @Param("jobGroupCode") String jobGroupCode,
-      @Param("bizDate") java.time.LocalDate bizDate);
+      @Param("bizDate") LocalDate bizDate);
 
   /**
    * ADR-022 v0.1 forensic 取证：按 (tenantId, bizDate 范围, 可选 jobCodes) 拉取所有 instance。 仅 forensic
@@ -160,8 +160,8 @@ public interface JobInstanceMapper {
    */
   List<JobInstanceEntity> selectForensicByBizDateRange(
       @Param("tenantId") String tenantId,
-      @Param("bizDateFrom") java.time.LocalDate bizDateFrom,
-      @Param("bizDateTo") java.time.LocalDate bizDateTo,
+      @Param("bizDateFrom") LocalDate bizDateFrom,
+      @Param("bizDateTo") LocalDate bizDateTo,
       @Param("jobCodes") List<String> jobCodes,
       @Param("limit") int limit);
 }

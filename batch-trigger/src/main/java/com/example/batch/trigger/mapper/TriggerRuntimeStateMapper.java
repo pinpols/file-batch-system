@@ -20,6 +20,7 @@ import org.apache.ibatis.annotations.Param;
  *   <li>{@link #insertOnReconcile} / {@link #deleteByJobDefinitionId} — TriggerReconciler 同步用
  * </ul>
  */
+@SuppressWarnings("PMD.ExcessiveParameterList")
 public interface TriggerRuntimeStateMapper {
 
   /**

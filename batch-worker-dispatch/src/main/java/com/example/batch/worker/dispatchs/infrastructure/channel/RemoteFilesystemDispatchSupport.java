@@ -41,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 final class RemoteFilesystemDispatchSupport {
 
   // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String LOG_CATCH_EXCEPTION = "catch:Exception";
   private static final String KEY_TARGET_ENDPOINT = "target_endpoint";
   private static final String PATH_SEP = "/";
   // R-4.2: NAS 沙箱根目录（可选）。若系统属性 batch.dispatch.nas-sandbox-root 设置，
@@ -82,7 +83,7 @@ final class RemoteFilesystemDispatchSupport {
       return finishResult(
           command, externalRequestId, receiptCode, "uploaded via NAS", target.toString());
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
       return failResult(command, ex);
     }
@@ -167,7 +168,7 @@ final class RemoteFilesystemDispatchSupport {
           "uploaded via OSS",
           "oss://" + bucket + PATH_SEP + objectName);
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
       return failResult(command, ex);
     }
@@ -207,7 +208,7 @@ final class RemoteFilesystemDispatchSupport {
       Files.deleteIfExists(probeFile);
       return new DispatchChannelProbeResult(true, "nas probe ok", probeFile.toString());
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
@@ -240,7 +241,7 @@ final class RemoteFilesystemDispatchSupport {
       return new DispatchChannelProbeResult(
           true, "oss probe ok", "oss://" + bucket + PATH_SEP + objectName);
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
@@ -264,7 +265,7 @@ final class RemoteFilesystemDispatchSupport {
       }
       return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
@@ -288,7 +289,7 @@ final class RemoteFilesystemDispatchSupport {
       }
       return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
@@ -322,7 +323,7 @@ final class RemoteFilesystemDispatchSupport {
       return new DispatchChannelProbeResult(
           false, "http probe failed (status=" + status + ")", endpoint);
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }

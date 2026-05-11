@@ -104,15 +104,54 @@ public class WorkflowGraphValidator {
       return WorkflowValidationResult.clean();
     }
     List<WorkflowNodeEntity> nodes =
-        workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId);
+        nullToEmpty(workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId));
     List<WorkflowEdgeEntity> edges =
-        workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId);
-    if (nodes == null) nodes = List.of();
-    if (edges == null) edges = List.of();
+        nullToEmpty(workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId));
 
     List<ValidationIssue> errors = new ArrayList<>();
     List<ValidationIssue> warnings = new ArrayList<>();
 
+    Map<String, WorkflowNodeEntity> byCode = indexNodesByCode(nodes, errors);
+    validateEdgeNodeRefs(edges, byCode, errors);
+
+    Map<String, List<String>> outgoing = buildAdjacency(edges, true);
+    Map<String, List<String>> incoming = buildAdjacency(edges, false);
+
+    detectCycles(byCode.keySet(), outgoing, errors);
+
+    Set<String> startCodes = new HashSet<>();
+    Set<String> endCodes = new HashSet<>();
+    for (WorkflowNodeEntity n : byCode.values()) {
+      if ("START".equalsIgnoreCase(n.getNodeType())) startCodes.add(n.getNodeCode());
+      else if ("END".equalsIgnoreCase(n.getNodeType())) endCodes.add(n.getNodeCode());
+    }
+
+    validateStartEndEdges(startCodes, endCodes, incoming, outgoing, errors);
+    validateReachability(byCode.keySet(), startCodes, endCodes, outgoing, incoming, errors);
+    validateDslNodeRefs(byCode, errors);
+
+    for (WorkflowNodeEntity n : byCode.values()) {
+      validateCrossDayDeps(n, errors);
+    }
+
+    validateGatewayJoinMode(byCode.values(), incoming, errors);
+
+    Map<String, JobDefinitionEntity> jobDefByCode = loadJobDefinitions(byCode);
+    Set<String> optionalNodes = collectOptionalNodes(byCode);
+    for (WorkflowNodeEntity n : byCode.values()) {
+      validateOutputContractRefs(n, byCode, jobDefByCode, optionalNodes, errors, warnings);
+    }
+    validateCalendarTimezoneConsistency(byCode.values(), jobDefByCode, warnings);
+
+    return WorkflowValidationResult.builder().errors(errors).warnings(warnings).build();
+  }
+
+  private static <T> List<T> nullToEmpty(List<T> list) {
+    return list == null ? List.of() : list;
+  }
+
+  private Map<String, WorkflowNodeEntity> indexNodesByCode(
+      List<WorkflowNodeEntity> nodes, List<ValidationIssue> errors) {
     Map<String, WorkflowNodeEntity> byCode = new LinkedHashMap<>();
     Set<String> duplicates = new HashSet<>();
     for (WorkflowNodeEntity n : nodes) {
@@ -120,13 +159,16 @@ public class WorkflowGraphValidator {
       WorkflowNodeEntity prior = byCode.put(n.getNodeCode(), n);
       if (prior != null) duplicates.add(n.getNodeCode());
     }
-
-    // V13 重复 node_code
     for (String code : duplicates) {
       errors.add(issue("V13", "duplicate node_code", code));
     }
+    return byCode;
+  }
 
-    // V14 edge 引用不存在的节点
+  private void validateEdgeNodeRefs(
+      List<WorkflowEdgeEntity> edges,
+      Map<String, WorkflowNodeEntity> byCode,
+      List<ValidationIssue> errors) {
     for (WorkflowEdgeEntity e : edges) {
       if (e == null) continue;
       if (Texts.hasText(e.getFromNodeCode()) && !byCode.containsKey(e.getFromNodeCode())) {
@@ -144,23 +186,14 @@ public class WorkflowGraphValidator {
                 e.getToNodeCode()));
       }
     }
+  }
 
-    // 邻接矩阵
-    Map<String, List<String>> outgoing = buildAdjacency(edges, true);
-    Map<String, List<String>> incoming = buildAdjacency(edges, false);
-
-    // V1 cycle / self-loop
-    detectCycles(byCode.keySet(), outgoing, errors);
-
-    // 找 START / END
-    Set<String> startCodes = new HashSet<>();
-    Set<String> endCodes = new HashSet<>();
-    for (WorkflowNodeEntity n : byCode.values()) {
-      if ("START".equalsIgnoreCase(n.getNodeType())) startCodes.add(n.getNodeCode());
-      else if ("END".equalsIgnoreCase(n.getNodeType())) endCodes.add(n.getNodeCode());
-    }
-
-    // V11 START 不能有 incoming；END 不能有 outgoing
+  private void validateStartEndEdges(
+      Set<String> startCodes,
+      Set<String> endCodes,
+      Map<String, List<String>> incoming,
+      Map<String, List<String>> outgoing,
+      List<ValidationIssue> errors) {
     for (String s : startCodes) {
       if (!incoming.getOrDefault(s, List.of()).isEmpty()) {
         errors.add(issue("V11", "START node has incoming edges", s));
@@ -171,26 +204,33 @@ public class WorkflowGraphValidator {
         errors.add(issue("V11", "END node has outgoing edges", e));
       }
     }
+  }
 
-    // V2 不可达：从所有 START 出发 DFS 看哪些节点没被访问
+  private void validateReachability(
+      Set<String> allCodes,
+      Set<String> startCodes,
+      Set<String> endCodes,
+      Map<String, List<String>> outgoing,
+      Map<String, List<String>> incoming,
+      List<ValidationIssue> errors) {
     Set<String> reachableFromStart = new HashSet<>();
     for (String s : startCodes) dfs(s, outgoing, reachableFromStart);
-    for (String code : byCode.keySet()) {
+    for (String code : allCodes) {
       if (!startCodes.isEmpty() && !reachableFromStart.contains(code)) {
         errors.add(issue("V2", "node unreachable from START", code));
       }
     }
-
-    // V3 不可终止：从节点出发能否走到 END（反向 BFS 自 END）
     Set<String> reachableToEnd = new HashSet<>();
     for (String e : endCodes) dfs(e, incoming, reachableToEnd);
-    for (String code : byCode.keySet()) {
+    for (String code : allCodes) {
       if (!endCodes.isEmpty() && !reachableToEnd.contains(code) && !endCodes.contains(code)) {
         errors.add(issue("V3", "node cannot reach END", code));
       }
     }
+  }
 
-    // V4 DSL 引用 $.nodes.<X>.* 检查 X 存在
+  private void validateDslNodeRefs(
+      Map<String, WorkflowNodeEntity> byCode, List<ValidationIssue> errors) {
     for (WorkflowNodeEntity n : byCode.values()) {
       if (!Texts.hasText(n.getNodeParams())) continue;
       Matcher m = DSL_NODE_REF.matcher(n.getNodeParams());
@@ -203,14 +243,13 @@ public class WorkflowGraphValidator {
         }
       }
     }
+  }
 
-    // V6 / V7 跨日依赖
-    for (WorkflowNodeEntity n : byCode.values()) {
-      validateCrossDayDeps(n, errors);
-    }
-
-    // V9 / V10 GATEWAY join_mode 一致性
-    for (WorkflowNodeEntity n : byCode.values()) {
+  private void validateGatewayJoinMode(
+      java.util.Collection<WorkflowNodeEntity> nodes,
+      Map<String, List<String>> incoming,
+      List<ValidationIssue> errors) {
+    for (WorkflowNodeEntity n : nodes) {
       if (!"GATEWAY".equalsIgnoreCase(n.getNodeType())) continue;
       int incomingCount = incoming.getOrDefault(n.getNodeCode(), List.of()).size();
       JoinMode joinMode = parseJoinMode(n.getNodeParams());
@@ -239,16 +278,6 @@ public class WorkflowGraphValidator {
         }
       }
     }
-
-    // V5 / V8 / V12 / V15
-    Map<String, JobDefinitionEntity> jobDefByCode = loadJobDefinitions(byCode);
-    Set<String> optionalNodes = collectOptionalNodes(byCode);
-    for (WorkflowNodeEntity n : byCode.values()) {
-      validateOutputContractRefs(n, byCode, jobDefByCode, optionalNodes, errors, warnings);
-    }
-    validateCalendarTimezoneConsistency(byCode.values(), jobDefByCode, warnings);
-
-    return WorkflowValidationResult.builder().errors(errors).warnings(warnings).build();
   }
 
   /** 收集本 workflow 节点引用的 jobCode → JobDefinition 映射；缺失节点 / 缺失定义不抛错。 */

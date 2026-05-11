@@ -6,6 +6,8 @@ import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEv
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotResponse;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,8 @@ import org.springframework.web.client.RestClient;
 public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestratorProxyService {
 
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
+  private static final String PARAM_TENANT_ID = "tenantId";
+
   private final RestClient.Builder restClientBuilder;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
@@ -97,7 +101,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             uriBuilder ->
                 uriBuilder
                     .path("/internal/scheduler/snapshot")
-                    .queryParam("tenantId", tenantId)
+                    .queryParam(PARAM_TENANT_ID, tenantId)
                     .build())
         .retrieve()
         .body(ConsoleSchedulerSnapshotResponse.class);
@@ -118,7 +122,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             uriBuilder ->
                 uriBuilder
                     .path("/internal/scheduler/snapshot/history")
-                    .queryParam("tenantId", tenantId)
+                    .queryParam(PARAM_TENANT_ID, tenantId)
                     .queryParam("limit", limit)
                     .build())
         .retrieve()
@@ -136,7 +140,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             uriBuilder ->
                 uriBuilder
                     .path("/internal/outbox/cleanup")
-                    .queryParam("tenantId", resolved)
+                    .queryParam(PARAM_TENANT_ID, resolved)
                     .queryParam("retainDays", retainDays)
                     .build())
         .retrieve()
@@ -154,7 +158,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             uriBuilder ->
                 uriBuilder
                     .path("/internal/outbox/republish")
-                    .queryParam("tenantId", resolved)
+                    .queryParam(PARAM_TENANT_ID, resolved)
                     .build())
         .body(Map.of("ids", ids == null ? List.of() : ids))
         .retrieve()
@@ -165,15 +169,15 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   public Map<String, Object> batchDayOperate(
       String tenantId,
       String calendarCode,
-      java.time.LocalDate bizDate,
+      LocalDate bizDate,
       String action,
       String operatorId,
       String reason) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     RestClient client =
         restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-    Map<String, Object> body = new java.util.LinkedHashMap<>();
-    body.put("tenantId", resolved);
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put(PARAM_TENANT_ID, resolved);
     body.put("calendarCode", calendarCode);
     body.put("bizDate", bizDate == null ? null : bizDate.toString());
     body.put("action", action);
@@ -193,16 +197,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Object> requestForensicExport(
       String tenantId,
-      java.time.LocalDate bizDateFrom,
-      java.time.LocalDate bizDateTo,
-      java.util.List<String> jobCodes,
+      LocalDate bizDateFrom,
+      LocalDate bizDateTo,
+      List<String> jobCodes,
       String exportFormat,
       String requestedBy) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     RestClient client =
         restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-    Map<String, Object> body = new java.util.LinkedHashMap<>();
-    body.put("tenantId", resolved);
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put(PARAM_TENANT_ID, resolved);
     body.put("bizDateFrom", bizDateFrom == null ? null : bizDateFrom.toString());
     body.put("bizDateTo", bizDateTo == null ? null : bizDateTo.toString());
     body.put("jobCodes", jobCodes);
@@ -227,7 +231,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             uriBuilder ->
                 uriBuilder
                     .path("/internal/forensic/export/{exportId}/download")
-                    .queryParam("tenantId", resolved)
+                    .queryParam(PARAM_TENANT_ID, resolved)
                     .build(exportId))
         .retrieve()
         .body(byte[].class);

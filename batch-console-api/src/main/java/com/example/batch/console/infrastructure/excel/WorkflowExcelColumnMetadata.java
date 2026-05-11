@@ -21,6 +21,8 @@ public final class WorkflowExcelColumnMetadata {
 
   private WorkflowExcelColumnMetadata() {}
 
+  private static final String FMT_STRING_KEY = "excel.guide.format.string";
+
   // ── sheet 名 ──────────────────────────────────────────────────────────────
   public static final String DEF_SHEET = "workflow_definition";
   public static final String NODE_SHEET = "workflow_node";
@@ -93,18 +95,14 @@ public final class WorkflowExcelColumnMetadata {
       Map.ofEntries(
           Map.entry(
               COL_TENANT_ID,
-              optionalColumn(
-                  "excel.workflow.def.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+              optionalColumn("excel.workflow.def.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
           Map.entry(
               COL_WORKFLOW_CODE,
               requiredColumn(
-                  "excel.workflow.def.workflow_code.desc",
-                  "excel.guide.format.string",
-                  "WF_SETTLEMENT")),
+                  "excel.workflow.def.workflow_code.desc", FMT_STRING_KEY, "WF_SETTLEMENT")),
           Map.entry(
               "workflow_name",
-              requiredColumn(
-                  "excel.workflow.def.workflow_name.desc", "excel.guide.format.string", "清算工作流")),
+              requiredColumn("excel.workflow.def.workflow_name.desc", FMT_STRING_KEY, "清算工作流")),
           Map.entry(
               COL_WORKFLOW_TYPE,
               requiredColumn(
@@ -127,34 +125,26 @@ public final class WorkflowExcelColumnMetadata {
                   GUIDE_FALSE)),
           Map.entry(
               COL_DESCRIPTION,
-              optionalColumn(
-                  "excel.workflow.def.description.desc", "excel.guide.format.string", "夜间清算编排流程")));
+              optionalColumn("excel.workflow.def.description.desc", FMT_STRING_KEY, "夜间清算编排流程")));
   public static final Map<String, ConsoleExcelStyles.ColumnGuide> NODE_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
               COL_TENANT_ID,
-              optionalColumn(
-                  "excel.workflow.node.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+              optionalColumn("excel.workflow.node.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
           Map.entry(
               COL_WORKFLOW_CODE,
               requiredColumn(
-                  "excel.workflow.node.workflow_code.desc",
-                  "excel.guide.format.string",
-                  "WF_SETTLEMENT")),
+                  "excel.workflow.node.workflow_code.desc", FMT_STRING_KEY, "WF_SETTLEMENT")),
           Map.entry(
               COL_WORKFLOW_VERSION,
               requiredColumn(
                   "excel.workflow.node.workflow_version.desc", "excel.guide.format.integer", "1")),
           Map.entry(
               "node_code",
-              requiredColumn(
-                  "excel.workflow.node.node_code.desc",
-                  "excel.guide.format.string",
-                  "LOAD_SOURCE")),
+              requiredColumn("excel.workflow.node.node_code.desc", FMT_STRING_KEY, "LOAD_SOURCE")),
           Map.entry(
               "node_name",
-              requiredColumn(
-                  "excel.workflow.node.node_name.desc", "excel.guide.format.string", "加载源文件")),
+              requiredColumn("excel.workflow.node.node_name.desc", FMT_STRING_KEY, "加载源文件")),
           Map.entry(
               COL_NODE_TYPE,
               requiredColumn(
@@ -170,27 +160,21 @@ public final class WorkflowExcelColumnMetadata {
           Map.entry(
               "related_job_code",
               optionalColumn(
-                  "excel.workflow.node.related_job_code.desc",
-                  "excel.guide.format.string",
-                  "JOB_IMPORT_001")),
+                  "excel.workflow.node.related_job_code.desc", FMT_STRING_KEY, "JOB_IMPORT_001")),
           Map.entry(
               "related_pipeline_code",
               optionalColumn(
                   "excel.workflow.node.related_pipeline_code.desc",
-                  "excel.guide.format.string",
+                  FMT_STRING_KEY,
                   "PIPE_IMPORT_001")),
           Map.entry(
               "worker_group",
               optionalColumn(
-                  "excel.workflow.node.worker_group.desc",
-                  "excel.guide.format.string",
-                  "worker-general")),
+                  "excel.workflow.node.worker_group.desc", FMT_STRING_KEY, "worker-general")),
           Map.entry(
               "window_code",
               optionalColumn(
-                  "excel.workflow.node.window_code.desc",
-                  "excel.guide.format.string",
-                  "WINDOW_NIGHT")),
+                  "excel.workflow.node.window_code.desc", FMT_STRING_KEY, "WINDOW_NIGHT")),
           Map.entry(
               "node_order",
               optionalColumn(
@@ -232,14 +216,11 @@ public final class WorkflowExcelColumnMetadata {
       Map.ofEntries(
           Map.entry(
               COL_TENANT_ID,
-              optionalColumn(
-                  "excel.workflow.edge.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+              optionalColumn("excel.workflow.edge.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
           Map.entry(
               COL_WORKFLOW_CODE,
               requiredColumn(
-                  "excel.workflow.edge.workflow_code.desc",
-                  "excel.guide.format.string",
-                  "WF_SETTLEMENT")),
+                  "excel.workflow.edge.workflow_code.desc", FMT_STRING_KEY, "WF_SETTLEMENT")),
           Map.entry(
               COL_WORKFLOW_VERSION,
               requiredColumn(
@@ -247,15 +228,11 @@ public final class WorkflowExcelColumnMetadata {
           Map.entry(
               "from_node_code",
               requiredColumn(
-                  "excel.workflow.edge.from_node_code.desc",
-                  "excel.guide.format.string",
-                  "LOAD_SOURCE")),
+                  "excel.workflow.edge.from_node_code.desc", FMT_STRING_KEY, "LOAD_SOURCE")),
           Map.entry(
               "to_node_code",
               requiredColumn(
-                  "excel.workflow.edge.to_node_code.desc",
-                  "excel.guide.format.string",
-                  "VALIDATE_FILE")),
+                  "excel.workflow.edge.to_node_code.desc", FMT_STRING_KEY, "VALIDATE_FILE")),
           Map.entry(
               COL_EDGE_TYPE,
               requiredColumn(

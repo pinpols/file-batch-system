@@ -298,8 +298,14 @@ public final class ConsoleExcelStyles {
 
   public static void addDropdownValidation(
       Sheet sheet, int columnIndex, String[] values, String promptTitle, String promptText) {
-    addDropdownValidation(
-        sheet, columnIndex, values, promptTitle, promptText, DEFAULT_DROPDOWN_MAX_ROW, null, null);
+    DropdownValidationSpec spec =
+        DropdownValidationSpec.builder()
+            .values(values)
+            .promptTitle(promptTitle)
+            .promptText(promptText)
+            .maxRow(DEFAULT_DROPDOWN_MAX_ROW)
+            .build();
+    addDropdownValidation(sheet, columnIndex, spec);
   }
 
   public static void addDropdownValidation(
@@ -310,15 +316,16 @@ public final class ConsoleExcelStyles {
       String promptText,
       MessageSource messageSource,
       Locale locale) {
-    addDropdownValidation(
-        sheet,
-        columnIndex,
-        values,
-        promptTitle,
-        promptText,
-        DEFAULT_DROPDOWN_MAX_ROW,
-        messageSource,
-        locale);
+    DropdownValidationSpec spec =
+        DropdownValidationSpec.builder()
+            .values(values)
+            .promptTitle(promptTitle)
+            .promptText(promptText)
+            .maxRow(DEFAULT_DROPDOWN_MAX_ROW)
+            .messageSource(messageSource)
+            .locale(locale)
+            .build();
+    addDropdownValidation(sheet, columnIndex, spec);
   }
 
   /**
@@ -335,41 +342,43 @@ public final class ConsoleExcelStyles {
       String promptTitle,
       String promptText,
       int maxRow) {
-    addDropdownValidation(sheet, columnIndex, values, promptTitle, promptText, maxRow, null, null);
+    DropdownValidationSpec spec =
+        DropdownValidationSpec.builder()
+            .values(values)
+            .promptTitle(promptTitle)
+            .promptText(promptText)
+            .maxRow(maxRow)
+            .build();
+    addDropdownValidation(sheet, columnIndex, spec);
   }
 
   public static void addDropdownValidation(
-      Sheet sheet,
-      int columnIndex,
-      String[] values,
-      String promptTitle,
-      String promptText,
-      int maxRow,
-      MessageSource messageSource,
-      Locale locale) {
+      Sheet sheet, int columnIndex, DropdownValidationSpec spec) {
     DataValidationHelper helper = sheet.getDataValidationHelper();
-    DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
+    DataValidationConstraint constraint = helper.createExplicitListConstraint(spec.values());
     CellRangeAddressList addressList =
-        new CellRangeAddressList(1, Math.max(1, maxRow), columnIndex, columnIndex);
+        new CellRangeAddressList(1, Math.max(1, spec.maxRow()), columnIndex, columnIndex);
     DataValidation validation = helper.createValidation(constraint, addressList);
     // POI 5.x 的 setSuppressDropDownArrow 实现与方法名相反:传 false 会输出
     // showDropDown="true"(OOXML spec 该值 = 隐藏下拉箭头) → Excel 不显示下拉。
     // 必须传 true 才会 setShowDropDown(false) → 箭头显示。POI bug 54440 至今未修。
     validation.setSuppressDropDownArrow(true);
     validation.setShowErrorBox(true);
+    MessageSource ms = spec.messageSource();
+    Locale loc = spec.locale();
     validation.createErrorBox(
-        localize(messageSource, locale, "excel.dropdown.error_title", "输入不合法"),
-        localize(messageSource, locale, "excel.dropdown.error_box", "请从下拉列表中选择有效值。"));
-    String resolvedTitle = localizeIfKey(messageSource, locale, promptTitle);
-    String resolvedText = localizeIfKey(messageSource, locale, promptText);
+        localize(ms, loc, "excel.dropdown.error_title", "输入不合法"),
+        localize(ms, loc, "excel.dropdown.error_box", "请从下拉列表中选择有效值。"));
+    String resolvedTitle = localizeIfKey(ms, loc, spec.promptTitle());
+    String resolvedText = localizeIfKey(ms, loc, spec.promptText());
     if (hasText(resolvedTitle) || hasText(resolvedText)) {
       validation.createPromptBox(
           hasText(resolvedTitle)
               ? resolvedTitle
-              : localize(messageSource, locale, "excel.dropdown.prompt_title", "填写提示"),
+              : localize(ms, loc, "excel.dropdown.prompt_title", "填写提示"),
           hasText(resolvedText)
               ? resolvedText
-              : localize(messageSource, locale, "excel.dropdown.prompt_box", "请使用下拉列表中的可选值。"));
+              : localize(ms, loc, "excel.dropdown.prompt_box", "请使用下拉列表中的可选值。"));
       validation.setShowPromptBox(true);
     }
     sheet.addValidationData(validation);

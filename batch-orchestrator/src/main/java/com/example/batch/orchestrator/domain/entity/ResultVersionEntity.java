@@ -21,6 +21,7 @@ import lombok.Builder;
  * <p><b>不要加 Spring Data 注解</b>—— 本表走 MyBatis；持久化由 {@code ResultVersionMapper} 接管。
  */
 @Builder(toBuilder = true)
+@SuppressWarnings("PMD.ExcessiveParameterList")
 public record ResultVersionEntity(
     Long id,
     String tenantId,

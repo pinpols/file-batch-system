@@ -51,6 +51,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
     implements ConsoleAlertRoutingExcelApplicationService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String FMT_STRING_KEY = "excel.guide.format.string";
   private static final String COL_TEAM = "team";
   private static final String COL_RECEIVER = "receiver";
   private static final String COL_DESCRIPTION = "description";
@@ -80,22 +81,17 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
       Map.ofEntries(
           Map.entry(
               "tenant_id",
-              optionalColumn(
-                  "excel.alert.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+              optionalColumn("excel.alert.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
           Map.entry(
               "route_code",
-              requiredColumn(
-                  "excel.alert.route_code.desc", "excel.guide.format.string", "RT_BATCH_ERROR")),
+              requiredColumn("excel.alert.route_code.desc", FMT_STRING_KEY, "RT_BATCH_ERROR")),
           Map.entry(
               "route_name",
-              requiredColumn(
-                  "excel.alert.route_name.desc", "excel.guide.format.string", "批处理异常路由")),
-          Map.entry(
-              COL_TEAM,
-              requiredColumn("excel.alert.team.desc", "excel.guide.format.string", "ops")),
+              requiredColumn("excel.alert.route_name.desc", FMT_STRING_KEY, "批处理异常路由")),
+          Map.entry(COL_TEAM, requiredColumn("excel.alert.team.desc", FMT_STRING_KEY, "ops")),
           Map.entry(
               "alert_group",
-              requiredColumn("excel.alert.alert_group.desc", "excel.guide.format.string", "batch")),
+              requiredColumn("excel.alert.alert_group.desc", FMT_STRING_KEY, "batch")),
           Map.entry(
               COL_SEVERITY,
               requiredColumn(
@@ -108,8 +104,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
                   "CRITICAL")),
           Map.entry(
               COL_RECEIVER,
-              requiredColumn(
-                  "excel.alert.receiver.desc", "excel.guide.format.string", "slack-ops")),
+              requiredColumn("excel.alert.receiver.desc", FMT_STRING_KEY, "slack-ops")),
           Map.entry(
               "group_by",
               optionalColumn(
@@ -138,8 +133,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
                   "FALSE")),
           Map.entry(
               COL_DESCRIPTION,
-              optionalColumn(
-                  "excel.alert.description.desc", "excel.guide.format.string", "批处理失败默认路由")));
+              optionalColumn("excel.alert.description.desc", FMT_STRING_KEY, "批处理失败默认路由")));
 
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
