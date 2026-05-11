@@ -22,6 +22,11 @@
         order by step_order
     </select>
 
+    <!--
+        NOT NULL DEFAULT 列 fallback,避免 Excel parser 漏字段时 NULL 约束失败
+        (timeout_seconds=0, retry_policy='NONE', retry_max_count=0, enabled=true)。
+        与 batch.pipeline_step_definition 列 DEFAULT 同步。
+    -->
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.pipeline_step_definition (
             pipeline_definition_id, step_code, step_name, stage_code,
@@ -29,8 +34,11 @@
             retry_policy, retry_max_count, enabled
         ) values (
             #{pipeline_definition_id}, #{step_code}, #{step_name}, #{stage_code},
-            #{step_order}, #{impl_code}, #{step_params}::jsonb, #{timeout_seconds},
-            #{retry_policy}, #{retry_max_count}, #{enabled}
+            #{step_order}, #{impl_code}, #{step_params}::jsonb,
+            <choose><when test="timeout_seconds != null">#{timeout_seconds}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="retry_policy != null and retry_policy != ''">#{retry_policy}</when><otherwise>'NONE'</otherwise></choose>,
+            <choose><when test="retry_max_count != null">#{retry_max_count}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
         )
     </insert>
 
