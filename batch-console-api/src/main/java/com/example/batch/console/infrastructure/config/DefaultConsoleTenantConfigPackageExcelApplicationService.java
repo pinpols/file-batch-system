@@ -163,11 +163,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities);
     List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
     List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
-    workbookWriter().setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
+    ConfigPackageExcelWorkbookWriter writer = workbookWriter();
+    writer.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes =
-        workbookWriter()
-            .buildExportWorkbook(
-                List.of(jobs, channels, fileTemplates, pipelines, steps, wfDefs, wfNodes, wfEdges));
+        writer.buildExportWorkbook(
+            List.of(jobs, channels, fileTemplates, pipelines, steps, wfDefs, wfNodes, wfEdges));
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
@@ -175,8 +175,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   @Override
   public ResponseEntity<InputStreamResource> downloadTemplate() {
-    workbookWriter().setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
-    byte[] bytes = workbookWriter().buildTemplateWorkbook();
+    ConfigPackageExcelWorkbookWriter writer = workbookWriter();
+    writer.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
+    byte[] bytes = writer.buildTemplateWorkbook();
     return ConsoleSingleSheetExcelImportSupport.excelResponse(
         "tenant-config-package-template.xlsx", bytes);
   }
@@ -240,7 +241,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
-    byte[] bytes = workbookWriter().buildPreviewWorkbook(session, result);
+    ConfigPackageExcelWorkbookWriter writer = workbookWriter();
+    writer.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
+    byte[] bytes = writer.buildPreviewWorkbook(session, result);
     return ConsoleSingleSheetExcelImportSupport.excelResponse(
         ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), bytes);
   }
