@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import lombok.Builder;
 
 @Builder
+@SuppressWarnings("PMD.ExcessiveParameterList")
 public record CompensationSubmitCommand(
     String tenantId,
     String compensationType,

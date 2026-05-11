@@ -52,6 +52,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   /** 业务参数走 payload.metadata,展开为 :metadata_&lt;key&gt;。前缀公开,避免与内置参数冲突。 */
   private static final String METADATA_PARAM_PREFIX = "metadata_";
 
+  private static final String PARAM_BATCH_KEY = "batchKey";
+  private static final String PARAM_TENANT_ID = "tenantId";
+  private static final String PARAM_TARGET_SCHEMA = "targetSchema";
+  private static final String PARAM_TARGET_TABLE = "targetTable";
+
   private final NamedParameterJdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
   private final SqlTransformComputeSecurityProperties security;
@@ -114,10 +119,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     // 携带 batchKey)若不清,COMPUTE 重 INSERT 会与旧行累加,COMMIT publish 把两轮并集都搬到 target。
     // 默认每次 task 生成新 batchKey 时 DELETE 0 行,代价可忽略。
     Map<String, Object> preCleanParams = new LinkedHashMap<>();
-    preCleanParams.put("batchKey", batchKey);
-    preCleanParams.put("tenantId", context.getTenantId());
-    preCleanParams.put("targetSchema", spec.targetSchema());
-    preCleanParams.put("targetTable", spec.targetTable());
+    preCleanParams.put(PARAM_BATCH_KEY, batchKey);
+    preCleanParams.put(PARAM_TENANT_ID, context.getTenantId());
+    preCleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+    preCleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
     int leftover =
         jdbc.update(
             "DELETE FROM batch.process_staging WHERE batch_key = :batchKey"
@@ -146,10 +151,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     // 在事务边界外删除即可,因 PR-3 P0-3 已让 commit+cleanup 同事务,这里只是补"提前刹车"。
     if (stagedRows > spec.maxStagedRows()) {
       Map<String, Object> cleanParams = new LinkedHashMap<>();
-      cleanParams.put("batchKey", batchKey);
-      cleanParams.put("tenantId", context.getTenantId());
-      cleanParams.put("targetSchema", spec.targetSchema());
-      cleanParams.put("targetTable", spec.targetTable());
+      cleanParams.put(PARAM_BATCH_KEY, batchKey);
+      cleanParams.put(PARAM_TENANT_ID, context.getTenantId());
+      cleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+      cleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
       jdbc.update(
           "DELETE FROM batch.process_staging WHERE batch_key = :batchKey"
               + " AND tenant_id = :tenantId"
@@ -218,10 +223,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
           objectMapper);
     }
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchKey", batchKey);
-    params.put("tenantId", context.getTenantId());
-    params.put("targetSchema", spec.targetSchema());
-    params.put("targetTable", spec.targetTable());
+    params.put(PARAM_BATCH_KEY, batchKey);
+    params.put(PARAM_TENANT_ID, context.getTenantId());
+    params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+    params.put(PARAM_TARGET_TABLE, spec.targetTable());
     for (SqlTransformComputeSpec.ValidationRule rule : spec.validations()) {
       String checkSql = sqlValidator.validateUserCheckSelect(rule.checkSql());
       validateNamedParameters(checkSql, params);
@@ -268,10 +273,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchKey", batchKey);
-    params.put("tenantId", context.getTenantId());
-    params.put("targetSchema", spec.targetSchema());
-    params.put("targetTable", spec.targetTable());
+    params.put(PARAM_BATCH_KEY, batchKey);
+    params.put(PARAM_TENANT_ID, context.getTenantId());
+    params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+    params.put(PARAM_TARGET_TABLE, spec.targetTable());
     String publishSql = buildPublishSql(spec);
     int publishedRows = jdbc.update(publishSql, params);
     int cleaned = cleanupCommittedStaging(params);
@@ -296,10 +301,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     String batchKey = requireBatchKey(context);
     SqlTransformComputeSpec spec = parsedSpec(context);
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchKey", batchKey);
-    params.put("tenantId", context.getTenantId());
-    params.put("targetSchema", spec.targetSchema());
-    params.put("targetTable", spec.targetTable());
+    params.put(PARAM_BATCH_KEY, batchKey);
+    params.put(PARAM_TENANT_ID, context.getTenantId());
+    params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+    params.put(PARAM_TARGET_TABLE, spec.targetTable());
     int cleaned = cleanupCommittedStaging(params);
     log.info(
         "sqlTransformCompute feedback cleaned staging: tenantId={}, batchKey={}, deletedRows={}",
@@ -391,7 +396,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       ProcessJobContext context, SqlTransformComputeSpec spec) {
     Map<String, Object> params = new LinkedHashMap<>();
     // 1. 内置参数
-    params.put("tenantId", context.getTenantId());
+    params.put(PARAM_TENANT_ID, context.getTenantId());
     params.put("jobCode", context.getJobCode());
     params.put("workerId", context.getWorkerId());
     params.put("traceId", context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
@@ -399,9 +404,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         "stepCode", context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE));
     params.put(
         "highWaterMarkIn", context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
-    params.put("batchKey", context.getBatchKey());
-    params.put("targetSchema", spec.targetSchema());
-    params.put("targetTable", spec.targetTable());
+    params.put(PARAM_BATCH_KEY, context.getBatchKey());
+    params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+    params.put(PARAM_TARGET_TABLE, spec.targetTable());
     // 2. 业务级 bizDate + payload.metadata 展开
     if (context.getAttributes().get("processPayload") instanceof ProcessPayload typedPayload) {
       if (Texts.hasText(typedPayload.bizDate())) {
@@ -530,10 +535,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
   private Object queryMaxWatermark(SqlTransformComputeSpec spec, String batchKey, String tenantId) {
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("batchKey", batchKey);
-    params.put("tenantId", tenantId);
-    params.put("targetSchema", spec.targetSchema());
-    params.put("targetTable", spec.targetTable());
+    params.put(PARAM_BATCH_KEY, batchKey);
+    params.put(PARAM_TENANT_ID, tenantId);
+    params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+    params.put(PARAM_TARGET_TABLE, spec.targetTable());
     params.put("watermarkColumn", spec.watermarkColumn());
     String sql =
         """

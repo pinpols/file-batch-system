@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /** ADR-020 batch_day_replay_session MyBatis 映射。 */
+@SuppressWarnings("PMD.ExcessiveParameterList")
 public interface BatchDayReplaySessionMapper {
 
   int insert(BatchDayReplaySessionEntity record);

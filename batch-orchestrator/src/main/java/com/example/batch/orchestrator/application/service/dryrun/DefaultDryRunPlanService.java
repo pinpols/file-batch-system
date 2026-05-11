@@ -52,10 +52,14 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
+@SuppressWarnings("PMD.ExcessiveParameterList")
 public class DefaultDryRunPlanService implements DryRunPlanService {
 
   /** L3 endpoint reachability HEAD timeout — 短超时避免 dry-run 卡死。 */
   private static final Duration HTTP_PROBE_TIMEOUT = Duration.ofSeconds(5);
+
+  private static final String SCOPE_JOB = "job";
+  private static final String SCOPE_EXECUTION = "execution";
 
   /** L3 effectiveParams 中可能的 SQL key 候选；命中即跑 EXPLAIN。 */
   private static final Set<String> SQL_PARAM_KEYS =
@@ -139,18 +143,22 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     if (!Texts.hasText(type)) {
       findings.add(
           DryRunFinding.error(
-              "JOB_SCHEDULE_TYPE_MISSING", "job", "scheduleType is required", null));
+              "JOB_SCHEDULE_TYPE_MISSING", SCOPE_JOB, "scheduleType is required", null));
       return;
     }
     String upper = type.trim().toUpperCase(Locale.ROOT);
     if (ScheduleType.MANUAL.code().equals(upper)) {
-      findings.add(DryRunFinding.pass("JOB_SCHEDULE_OK", "job", "MANUAL trigger; no expr needed"));
+      findings.add(
+          DryRunFinding.pass("JOB_SCHEDULE_OK", SCOPE_JOB, "MANUAL trigger; no expr needed"));
       return;
     }
     if (!Texts.hasText(expr)) {
       findings.add(
           DryRunFinding.error(
-              "JOB_SCHEDULE_EXPR_MISSING", "job", "scheduleExpr is required for " + upper, null));
+              "JOB_SCHEDULE_EXPR_MISSING",
+              SCOPE_JOB,
+              "scheduleExpr is required for " + upper,
+              null));
       return;
     }
     try {
@@ -159,26 +167,30 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         CronExpression cron = CronExpression.parse(expr);
         ZonedDateTime nextZdt = cron.next(ZonedDateTime.now(zone));
         Instant next = nextZdt == null ? null : nextZdt.toInstant();
-        findings.add(DryRunFinding.pass("JOB_CRON_OK", "job", "cron next fire computed: " + next));
+        findings.add(
+            DryRunFinding.pass("JOB_CRON_OK", SCOPE_JOB, "cron next fire computed: " + next));
       } else if (ScheduleType.FIXED_RATE.code().equals(upper)) {
         Duration d = parseFixedRate(expr);
         if (d == null || d.isZero() || d.isNegative()) {
           findings.add(
               DryRunFinding.error(
-                  "JOB_FIXED_RATE_INVALID", "job", "fixed-rate expr unparsable: " + expr, expr));
+                  "JOB_FIXED_RATE_INVALID",
+                  SCOPE_JOB,
+                  "fixed-rate expr unparsable: " + expr,
+                  expr));
         } else {
-          findings.add(DryRunFinding.pass("JOB_FIXED_RATE_OK", "job", "interval=" + d));
+          findings.add(DryRunFinding.pass("JOB_FIXED_RATE_OK", SCOPE_JOB, "interval=" + d));
         }
       } else {
         findings.add(
             DryRunFinding.warn(
-                "JOB_SCHEDULE_TYPE_UNKNOWN", "job", "unknown scheduleType: " + upper, upper));
+                "JOB_SCHEDULE_TYPE_UNKNOWN", SCOPE_JOB, "unknown scheduleType: " + upper, upper));
       }
     } catch (RuntimeException ex) {
       findings.add(
           DryRunFinding.error(
               "JOB_SCHEDULE_EXPR_INVALID",
-              "job",
+              SCOPE_JOB,
               "schedule expression invalid: " + ex.getMessage(),
               expr));
     }
@@ -191,12 +203,12 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         request.params() == null ? Map.of() : new LinkedHashMap<>(request.params());
     if (schema == null || schema.isEmpty()) {
       findings.add(
-          DryRunFinding.pass("JOB_PARAMS_NO_SCHEMA", "job", "no paramSchema defined; skip"));
+          DryRunFinding.pass("JOB_PARAMS_NO_SCHEMA", SCOPE_JOB, "no paramSchema defined; skip"));
       return;
     }
     Object requiredObj = schema.get("required");
     if (!(requiredObj instanceof List<?> required)) {
-      findings.add(DryRunFinding.pass("JOB_PARAMS_OK", "job", "schema has no required clause"));
+      findings.add(DryRunFinding.pass("JOB_PARAMS_OK", SCOPE_JOB, "schema has no required clause"));
       return;
     }
     List<String> missing = new ArrayList<>();
@@ -207,10 +219,10 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       }
     }
     if (missing.isEmpty()) {
-      findings.add(DryRunFinding.pass("JOB_PARAMS_OK", "job", "all required params present"));
+      findings.add(DryRunFinding.pass("JOB_PARAMS_OK", SCOPE_JOB, "all required params present"));
     } else {
       findings.add(
-          DryRunFinding.error("JOB_PARAMS_MISSING", "job", "missing required params", missing));
+          DryRunFinding.error("JOB_PARAMS_MISSING", SCOPE_JOB, "missing required params", missing));
     }
   }
 
@@ -336,7 +348,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       findings.add(
           DryRunFinding.pass(
               "EXEC_PLAN_NO_PROBES_TRIGGERED",
-              "execution",
+              SCOPE_EXECUTION,
               "no SQL / MinIO / endpoint params to probe; L3 reduces to L2 result"));
     }
     return DryRunPlanResult.of(DryRunLevel.EXECUTION_PLAN, findings, summary);
@@ -354,12 +366,13 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       try {
         jdbcTemplate.execute("EXPLAIN " + sql);
         findings.add(
-            DryRunFinding.pass("EXEC_SQL_EXPLAIN_OK", "execution", "EXPLAIN passed for " + key));
+            DryRunFinding.pass(
+                "EXEC_SQL_EXPLAIN_OK", SCOPE_EXECUTION, "EXPLAIN passed for " + key));
       } catch (RuntimeException ex) {
         findings.add(
             DryRunFinding.error(
                 "EXEC_SQL_EXPLAIN_FAILED",
-                "execution",
+                SCOPE_EXECUTION,
                 "EXPLAIN failed for " + key + ": " + ex.getMessage(),
                 key));
       }
@@ -387,7 +400,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       findings.add(
           DryRunFinding.error(
               "EXEC_MINIO_BUCKET_INVALID",
-              "execution",
+              SCOPE_EXECUTION,
               "minio bucket name does not match DNS-style rule: " + bucket,
               bucket));
       return 1;
@@ -397,7 +410,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       findings.add(
           DryRunFinding.warn(
               "EXEC_MINIO_CLIENT_UNAVAILABLE",
-              "execution",
+              SCOPE_EXECUTION,
               "MinioClient bean unavailable; bucket name passed regex only",
               bucket));
       return 1;
@@ -407,12 +420,12 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       if (exists) {
         findings.add(
             DryRunFinding.pass(
-                "EXEC_MINIO_BUCKET_OK", "execution", "minio bucket exists: " + bucket));
+                "EXEC_MINIO_BUCKET_OK", SCOPE_EXECUTION, "minio bucket exists: " + bucket));
       } else {
         findings.add(
             DryRunFinding.error(
                 "EXEC_MINIO_BUCKET_MISSING",
-                "execution",
+                SCOPE_EXECUTION,
                 "minio bucket not found: " + bucket,
                 bucket));
       }
@@ -420,7 +433,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       findings.add(
           DryRunFinding.warn(
               "EXEC_MINIO_PROBE_FAILED",
-              "execution",
+              SCOPE_EXECUTION,
               "minio probe failed: " + ex.getMessage(),
               bucket));
     }
@@ -439,7 +452,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         findings.add(
             DryRunFinding.warn(
                 "EXEC_ENDPOINT_NON_HTTP",
-                "execution",
+                SCOPE_EXECUTION,
                 "endpoint not http/https; reachability probe skipped: " + key,
                 trimmed));
         continue;
@@ -455,17 +468,19 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
         if (status >= 200 && status < 500) {
           findings.add(
               DryRunFinding.pass(
-                  "EXEC_ENDPOINT_OK", "execution", key + " reachable; HEAD returned " + status));
+                  "EXEC_ENDPOINT_OK",
+                  SCOPE_EXECUTION,
+                  key + " reachable; HEAD returned " + status));
         } else {
           findings.add(
               DryRunFinding.warn(
-                  "EXEC_ENDPOINT_5XX", "execution", key + " HEAD returned " + status, trimmed));
+                  "EXEC_ENDPOINT_5XX", SCOPE_EXECUTION, key + " HEAD returned " + status, trimmed));
         }
       } catch (Exception ex) {
         findings.add(
             DryRunFinding.warn(
                 "EXEC_ENDPOINT_UNREACHABLE",
-                "execution",
+                SCOPE_EXECUTION,
                 key + " probe failed: " + ex.getMessage(),
                 trimmed));
       }
@@ -487,7 +502,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       findings.add(
           DryRunFinding.error(
               "JOB_DEFINITION_NOT_FOUND",
-              "job",
+              SCOPE_JOB,
               "job_definition not found or disabled",
               request.jobCode()));
     }

@@ -10,6 +10,10 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.charset.Charset;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
@@ -418,11 +422,9 @@ public final class ImportPreprocessPipeline {
     // ⚠3 (2026-05-03): 之前 new String(input, fromCs) 把整个文件物化为 UTF-16 String, 100 MB 输入 = 200 MB
     // 中间堆峰 (input byte[] + UTF-16 String) + 100 MB 输出 byte[] = 总 300 MB+ 峰值. 现在改 reader/writer
     // chunk 转码, 中间 buffer 仅 8 KiB; 输出 BAOS 同时检 cap 触发即抛, 不让超量数据继续累积.
-    java.io.ByteArrayOutputStream out =
-        new java.io.ByteArrayOutputStream(Math.min(input.length, 1 << 16));
-    try (java.io.Reader reader =
-            new java.io.InputStreamReader(new ByteArrayInputStream(input), fromCs);
-        java.io.Writer writer = new java.io.OutputStreamWriter(out, toCs)) {
+    ByteArrayOutputStream out = new ByteArrayOutputStream(Math.min(input.length, 1 << 16));
+    try (Reader reader = new InputStreamReader(new ByteArrayInputStream(input), fromCs);
+        Writer writer = new OutputStreamWriter(out, toCs)) {
       char[] buf = new char[8192];
       int n;
       while ((n = reader.read(buf)) > 0) {

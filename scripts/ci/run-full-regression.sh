@@ -101,7 +101,9 @@ run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-bounda
 if [[ "${BATCH_CI_SKIP_PMD_GATE:-}" == "1" ]]; then
   echo "[PMD gate] skipped via BATCH_CI_SKIP_PMD_GATE=1 (debug only)"
 else
-  run_step "PMD — code conventions (fail PR if violations introduced)" run_mvn pmd:check -fae
+  # 注：必须先 test-compile 让 reactor 编译 batch-common 等 sibling 模块，否则下游
+  # 模块解析 com.example.batch:batch-common:${revision} 失败（CI 干净 .m2 找不到）。
+  run_step "PMD — code conventions (fail PR if violations introduced)" run_mvn -DskipTests test-compile pmd:check -fae
 fi
 
 run_step "Spotless — code formatting" run_mvn spotless:check -fae || true

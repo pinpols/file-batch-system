@@ -2,6 +2,7 @@ package com.example.batch.console.application.ops;
 
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotResponse;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -59,7 +60,7 @@ public interface ConsoleOrchestratorProxyService {
   Map<String, Object> batchDayOperate(
       String tenantId,
       String calendarCode,
-      java.time.LocalDate bizDate,
+      LocalDate bizDate,
       String action,
       String operatorId,
       String reason);
@@ -71,9 +72,9 @@ public interface ConsoleOrchestratorProxyService {
    */
   Map<String, Object> requestForensicExport(
       String tenantId,
-      java.time.LocalDate bizDateFrom,
-      java.time.LocalDate bizDateTo,
-      java.util.List<String> jobCodes,
+      LocalDate bizDateFrom,
+      LocalDate bizDateTo,
+      List<String> jobCodes,
       String exportFormat,
       String requestedBy);
 

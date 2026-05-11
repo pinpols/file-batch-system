@@ -18,6 +18,7 @@ import lombok.Builder;
  * BatchDayInstanceMapper} 接管 CRUD + 乐观锁；保留 SDJ 注解会被框架误扫成 Repository。
  */
 @Builder(toBuilder = true)
+@SuppressWarnings("PMD.ExcessiveParameterList")
 public record BatchDayInstanceEntity(
     Long id,
     String tenantId,

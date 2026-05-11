@@ -48,6 +48,8 @@ public class PipelineExcelWorkbookWriter {
 
   private final MessageSource messageSource;
 
+  private static final String FMT_STRING_KEY = "excel.guide.format.string";
+
   // ── sheet 与列常量 ─────────────────────────────────────────────────────────
   static final String PIPELINE_SHEET_NAME = "pipeline_definition";
   static final String STEP_SHEET_NAME = "pipeline_step_definition";
@@ -125,18 +127,14 @@ public class PipelineExcelWorkbookWriter {
       Map.ofEntries(
           Map.entry(
               COL_TENANT_ID,
-              optionalColumn(
-                  "excel.pipeline.def.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+              optionalColumn("excel.pipeline.def.tenant_id.desc", FMT_STRING_KEY, "tenant-a")),
           Map.entry(
               COL_JOB_CODE,
               requiredColumn(
-                  "excel.pipeline.def.job_code.desc",
-                  "excel.guide.format.string",
-                  "JOB_IMPORT_SETTLEMENT")),
+                  "excel.pipeline.def.job_code.desc", FMT_STRING_KEY, "JOB_IMPORT_SETTLEMENT")),
           Map.entry(
               COL_PIPELINE_NAME,
-              requiredColumn(
-                  "excel.pipeline.def.pipeline_name.desc", "excel.guide.format.string", "清算导入流水线")),
+              requiredColumn("excel.pipeline.def.pipeline_name.desc", FMT_STRING_KEY, "清算导入流水线")),
           Map.entry(
               COL_PIPELINE_TYPE,
               requiredColumn(
@@ -148,12 +146,10 @@ public class PipelineExcelWorkbookWriter {
                   STAGE_DISPATCH)),
           Map.entry(
               COL_BIZ_TYPE,
-              optionalColumn(
-                  "excel.pipeline.def.biz_type.desc", "excel.guide.format.string", "SETTLEMENT")),
+              optionalColumn("excel.pipeline.def.biz_type.desc", FMT_STRING_KEY, "SETTLEMENT")),
           Map.entry(
               COL_WORKER_GROUP,
-              optionalColumn(
-                  "excel.pipeline.def.worker_group.desc", "excel.guide.format.string", "default")),
+              optionalColumn("excel.pipeline.def.worker_group.desc", FMT_STRING_KEY, "default")),
           Map.entry(
               COL_VERSION,
               requiredColumn("excel.pipeline.def.version.desc", "excel.guide.format.integer", "1")),
@@ -167,17 +163,14 @@ public class PipelineExcelWorkbookWriter {
                   GUIDE_FALSE)),
           Map.entry(
               COL_DESCRIPTION,
-              optionalColumn(
-                  "excel.pipeline.def.description.desc", "excel.guide.format.string", "用于清算文件导入")));
+              optionalColumn("excel.pipeline.def.description.desc", FMT_STRING_KEY, "用于清算文件导入")));
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> STEP_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
               COL_JOB_CODE,
               requiredColumn(
-                  "excel.pipeline.step.job_code.desc",
-                  "excel.guide.format.string",
-                  "JOB_IMPORT_SETTLEMENT")),
+                  "excel.pipeline.step.job_code.desc", FMT_STRING_KEY, "JOB_IMPORT_SETTLEMENT")),
           Map.entry(
               COL_VERSION,
               requiredColumn(
@@ -185,13 +178,10 @@ public class PipelineExcelWorkbookWriter {
           Map.entry(
               COL_STEP_CODE,
               requiredColumn(
-                  "excel.pipeline.step.step_code.desc",
-                  "excel.guide.format.string",
-                  "STEP_PARSE_CSV")),
+                  "excel.pipeline.step.step_code.desc", FMT_STRING_KEY, "STEP_PARSE_CSV")),
           Map.entry(
               COL_STEP_NAME,
-              requiredColumn(
-                  "excel.pipeline.step.step_name.desc", "excel.guide.format.string", "解析CSV文件")),
+              requiredColumn("excel.pipeline.step.step_name.desc", FMT_STRING_KEY, "解析CSV文件")),
           Map.entry(
               COL_STAGE_CODE,
               requiredColumn(
@@ -214,9 +204,7 @@ public class PipelineExcelWorkbookWriter {
           Map.entry(
               COL_IMPL_CODE,
               requiredColumn(
-                  "excel.pipeline.step.impl_code.desc",
-                  "excel.guide.format.string",
-                  "csvParserStep")),
+                  "excel.pipeline.step.impl_code.desc", FMT_STRING_KEY, "csvParserStep")),
           Map.entry(
               COL_STEP_PARAMS,
               optionalColumn(
