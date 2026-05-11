@@ -2,7 +2,11 @@ name: staging-gate
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows:
+      - full-ci-gate
+    types:
+      - completed
     branches:
       - main
 
@@ -15,6 +19,7 @@ concurrency:
 
 jobs:
   staging-gate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -43,6 +48,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -82,6 +89,9 @@ jobs:
           BATCH_DEPLOY_VERIFICATION_MINIO_SECRET_KEY: ${{ secrets.STAGING_MINIO_SECRET_KEY }}
         run: |
           bash scripts/ci/run-full-regression.sh \
+            --skip-static-gates \
+            --skip-default-tests \
+            --skip-it-suite \
             --with-deploy-smoke \
             --with-deployment-verification \
             --with-load-smoke \
