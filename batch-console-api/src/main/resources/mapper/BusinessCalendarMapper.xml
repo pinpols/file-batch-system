@@ -3,6 +3,7 @@
 <mapper namespace="com.example.batch.console.mapper.BusinessCalendarMapper">
     <select id="selectActiveByTenantAndCalendarCode" resultType="map">
         select
+            id,
             tenant_id as tenantId,
             calendar_code as calendarCode,
             timezone as timezone,

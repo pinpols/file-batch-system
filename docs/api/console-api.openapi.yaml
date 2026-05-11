@@ -7636,7 +7636,7 @@ paths:
   /api/console/config/tenant-package/excel/template:
     get:
       tags: [Config]
-      summary: Download blank tenant config package Excel template (8 sheets)
+      summary: Download blank tenant config package Excel template (11 sheets)
       operationId: downloadTenantConfigPackageExcelTemplate
       responses:
         '200':
@@ -7649,7 +7649,7 @@ paths:
   /api/console/config/tenant-package/excel/upload:
     post:
       tags: [Config]
-      summary: Upload tenant config package Excel (8 sheets)
+      summary: Upload tenant config package Excel (11 sheets)
       operationId: uploadTenantConfigPackageExcel
       parameters:
         - name: tenantId
@@ -12190,6 +12190,15 @@ components:
           type: string
         fileName:
           type: string
+        resourceQueueRows:
+          type: integer
+          format: int32
+        businessCalendarRows:
+          type: integer
+          format: int32
+        batchWindowRows:
+          type: integer
+          format: int32
         jobRows:
           type: integer
           format: int32
@@ -12214,7 +12223,7 @@ components:
         workflowEdgeRows:
           type: integer
           format: int32
-      required: [uploadToken, fileName, jobRows, fileChannelRows, fileTemplateRows, pipelineRows, pipelineStepRows, workflowDefinitionRows, workflowNodeRows, workflowEdgeRows]
+      required: [uploadToken, fileName, resourceQueueRows, businessCalendarRows, batchWindowRows, jobRows, fileChannelRows, fileTemplateRows, pipelineRows, pipelineStepRows, workflowDefinitionRows, workflowNodeRows, workflowEdgeRows]
     TenantConfigPackageExcelPreviewResponse:
       type: object
       properties:
@@ -12275,6 +12284,24 @@ components:
           type: string
         tenantId:
           type: string
+        resourceQueueInserted:
+          type: integer
+          format: int32
+        resourceQueueUpdated:
+          type: integer
+          format: int32
+        businessCalendarInserted:
+          type: integer
+          format: int32
+        businessCalendarUpdated:
+          type: integer
+          format: int32
+        batchWindowInserted:
+          type: integer
+          format: int32
+        batchWindowUpdated:
+          type: integer
+          format: int32
         jobInserted:
           type: integer
           format: int32
@@ -12305,7 +12332,7 @@ components:
         workflowUpdated:
           type: integer
           format: int32
-      required: [uploadToken, tenantId, jobInserted, jobUpdated, channelInserted, channelUpdated, fileTemplateInserted, fileTemplateUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]
+      required: [uploadToken, tenantId, resourceQueueInserted, resourceQueueUpdated, businessCalendarInserted, businessCalendarUpdated, batchWindowInserted, batchWindowUpdated, jobInserted, jobUpdated, channelInserted, channelUpdated, fileTemplateInserted, fileTemplateUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]
 
     # ── 补充枚举 schema（前端类型安全）──────────────────────────
     TriggerStatus:

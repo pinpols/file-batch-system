@@ -2,12 +2,12 @@
 
 租户：`ta` / `tb` / `tc`、`default-tenant`
 
-本目录下的 `*-tenant-config-package-test.xlsx` 是系统当前主用的整合式配置包（8 sheet：job_definition / file_channel_config / file_template_config / pipeline_definition / pipeline_step_definition / workflow_definition / workflow_node / workflow_edge），通过 `POST /api/console/config/tenant-package/excel/{upload,preview,apply}` 导入。
+本目录下的 `*-tenant-config-package-test.xlsx` 是系统当前主用的整合式配置包（11 sheet：resource_queue / business_calendar / batch_window / job_definition / file_channel_config / file_template_config / pipeline_definition / pipeline_step_definition / workflow_definition / workflow_node / workflow_edge），通过 `POST /api/console/config/tenant-package/excel/{upload,preview,apply}` 导入。
 
 - `ta/tb/tc-tenant-config-package-test.xlsx`：三大业务租户样本。按租户分工覆盖枚举长尾——ta 补 IMPORT FEEDBACK 全链 / EXPORT 全链 / LOCAL channel；tb 补 DISPATCH 全链 / API channel；tc 补 GATEWAY ALL 与 N_OF join + FAILURE / CONDITION 边。幂等追加脚本 `scripts/local/append-tenant-coverage.py`。
 - `default-tenant-config-package-test.xlsx`：与 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql` 中 v4 硬化批次新增的 `default-tenant` 项对齐（4 条本地化 channel_config + `wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed` 3 条探针 workflow + 对应 job_definition）。生成脚本 `scripts/local/gen-default-tenant-excel.py`。
 
-> **关于 `file_template_config`**：当前样本已切到 Phase B 格式，配置包内直接携带文件模板；Import 目标表、字段映射和 Export SQL 后续应继续收敛到该 sheet。完整 9+2 扩展见 [9+2 优化设计](../../design/tenant-config-package-excel-9plus2-design.md)。
+> **关于基础依赖**：当前样本已切到 v3 11-sheet 格式，配置包内直接携带 `resource_queue`、`business_calendar`、`batch_window`、`file_template_config`；Import 目标表、字段映射和 Export SQL 后续应继续收敛到 `file_template_config`。完整 9+2 扩展见 [9+2 优化设计](../../design/tenant-config-package-excel-9plus2-design.md)。
 
 ## E2E 渠道基础设施（ta/tb/tc）
 

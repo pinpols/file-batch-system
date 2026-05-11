@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
+import com.example.batch.console.mapper.BatchWindowMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
+import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.time.Instant;
@@ -79,12 +82,33 @@ class ConfigPackageExcelValidatorTest {
             });
   }
 
+  @Test
+  void validatesOptionalDependencySheetsAndCrossReferences() {
+    ConfigPackageExcelValidator validator = validator();
+    PackageExcelSession session =
+        sessionWithDependencies(
+            List.of(resourceQueueRow("import-queue")),
+            List.of(calendarRow("default-calendar")),
+            List.of(windowRow("always-open")),
+            List.of(jobRow("import-queue", "default-calendar", "always-open")));
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator.validate(session);
+
+    assertThat(result.resourceQueues().valid()).isEqualTo(1);
+    assertThat(result.businessCalendars().valid()).isEqualTo(1);
+    assertThat(result.batchWindows().valid()).isEqualTo(1);
+    assertThat(result.allIssues()).isEmpty();
+  }
+
   private static ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),
         mock(PipelineDefinitionMapper.class),
         mock(StepRegistryQueryMapper.class),
-        mock(FileTemplateConfigMapper.class));
+        mock(FileTemplateConfigMapper.class),
+        mock(ResourceQueueMapper.class),
+        mock(BusinessCalendarMapper.class),
+        mock(BatchWindowMapper.class));
   }
 
   private static PackageExcelSession session(List<Map<String, String>> fileTemplateRows) {
@@ -97,9 +121,34 @@ class ConfigPackageExcelValidatorTest {
         "package.xlsx",
         "t1",
         Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
         jobRows,
         List.of(),
         fileTemplateRows,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
+  }
+
+  private static PackageExcelSession sessionWithDependencies(
+      List<Map<String, String>> resourceQueues,
+      List<Map<String, String>> businessCalendars,
+      List<Map<String, String>> batchWindows,
+      List<Map<String, String>> jobRows) {
+    return new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        resourceQueues,
+        businessCalendars,
+        batchWindows,
+        jobRows,
+        List.of(),
+        List.of(),
         List.of(),
         List.of(),
         List.of(),
@@ -119,5 +168,58 @@ class ConfigPackageExcelValidatorTest {
     row.put("encrypt_type", "NONE");
     row.put("version", version);
     return row;
+  }
+
+  private static Map<String, String> resourceQueueRow(String queueCode) {
+    Map<String, String> row = new LinkedHashMap<>();
+    row.put("tenant_id", "t1");
+    row.put("queue_code", queueCode);
+    row.put("queue_name", "导入队列");
+    row.put("queue_type", "IMPORT");
+    row.put("max_running_jobs", "10");
+    row.put("max_running_partitions", "20");
+    row.put("max_qps", "100");
+    row.put("priority_policy", "FIFO");
+    row.put("fair_share_weight", "1");
+    return row;
+  }
+
+  private static Map<String, String> calendarRow(String calendarCode) {
+    Map<String, String> row = new LinkedHashMap<>();
+    row.put("tenant_id", "t1");
+    row.put("calendar_code", calendarCode);
+    row.put("calendar_name", "默认日历");
+    row.put("timezone", "Asia/Shanghai");
+    row.put("holiday_roll_rule", "SKIP");
+    row.put("catch_up_policy", "NONE");
+    row.put("catch_up_max_days", "0");
+    row.put("holidays", "2026-01-01");
+    return row;
+  }
+
+  private static Map<String, String> windowRow(String windowCode) {
+    Map<String, String> row = new LinkedHashMap<>();
+    row.put("tenant_id", "t1");
+    row.put("window_code", windowCode);
+    row.put("window_name", "全天窗口");
+    row.put("timezone", "Asia/Shanghai");
+    row.put("start_time", "00:00");
+    row.put("end_time", "23:59");
+    row.put("end_strategy", "FINISH_RUNNING");
+    row.put("out_of_window_action", "WAIT");
+    return row;
+  }
+
+  private static Map<String, String> jobRow(
+      String queueCode, String calendarCode, String windowCode) {
+    return Map.of(
+        "tenant_id", "t1",
+        "job_code", "JOB_IMPORT_CUSTOMER",
+        "job_name", "导入客户",
+        "job_type", "IMPORT",
+        "schedule_type", "MANUAL",
+        "queue_code", queueCode,
+        "calendar_code", calendarCode,
+        "window_code", windowCode);
   }
 }

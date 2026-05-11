@@ -20,10 +20,16 @@ import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;
+import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser.CalendarRow;
 import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
+import com.example.batch.console.infrastructure.excel.ResourceQueueExcelRowParser.QueueRow;
+import com.example.batch.console.mapper.BatchWindowMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
+import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
@@ -100,6 +106,9 @@ public class ConfigPackageExcelValidator {
   public static final String KEY_SEP_HASH = "#";
 
   public static final String JOB_SHEET = "job_definition";
+  public static final String RESOURCE_QUEUE_SHEET = ResourceQueueExcelRowParser.SHEET_NAME;
+  public static final String BUSINESS_CALENDAR_SHEET = BusinessCalendarExcelRowParser.SHEET_NAME;
+  public static final String BATCH_WINDOW_SHEET = BatchWindowExcelRowParser.SHEET_NAME;
   public static final String CHANNEL_SHEET = "file_channel_config";
   public static final String FILE_TEMPLATE_SHEET = FileTemplateExcelRowParser.SHEET_NAME;
   public static final String PIPELINE_SHEET = "pipeline_definition";
@@ -152,17 +161,26 @@ public class ConfigPackageExcelValidator {
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final StepRegistryQueryMapper stepRegistryQueryMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
+  private final ResourceQueueMapper resourceQueueMapper;
+  private final BusinessCalendarMapper businessCalendarMapper;
+  private final BatchWindowMapper batchWindowMapper;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   public ConfigPackageExcelValidator(
       JobDefinitionMapper jobDefinitionMapper,
       PipelineDefinitionMapper pipelineDefinitionMapper,
       StepRegistryQueryMapper stepRegistryQueryMapper,
-      FileTemplateConfigMapper fileTemplateConfigMapper) {
+      FileTemplateConfigMapper fileTemplateConfigMapper,
+      ResourceQueueMapper resourceQueueMapper,
+      BusinessCalendarMapper businessCalendarMapper,
+      BatchWindowMapper batchWindowMapper) {
     this.jobDefinitionMapper = jobDefinitionMapper;
     this.pipelineDefinitionMapper = pipelineDefinitionMapper;
     this.stepRegistryQueryMapper = stepRegistryQueryMapper;
     this.fileTemplateConfigMapper = fileTemplateConfigMapper;
+    this.resourceQueueMapper = resourceQueueMapper;
+    this.businessCalendarMapper = businessCalendarMapper;
+    this.batchWindowMapper = batchWindowMapper;
   }
 
   public record SheetResult(
@@ -180,6 +198,9 @@ public class ConfigPackageExcelValidator {
   }
 
   public record PackageValidationResult(
+      SheetResult resourceQueues,
+      SheetResult businessCalendars,
+      SheetResult batchWindows,
       SheetResult jobs,
       SheetResult channels,
       SheetResult fileTemplates,
@@ -191,7 +212,10 @@ public class ConfigPackageExcelValidator {
       List<WorkbookIssue> crossRefIssues) {
 
     public int totalInvalid() {
-      return jobs.invalid()
+      return resourceQueues.invalid()
+          + businessCalendars.invalid()
+          + batchWindows.invalid()
+          + jobs.invalid()
           + channels.invalid()
           + fileTemplates.invalid()
           + pipelines.invalid()
@@ -204,6 +228,18 @@ public class ConfigPackageExcelValidator {
 
     public List<Map<String, String>> validJobs() {
       return jobs.validRows();
+    }
+
+    public List<Map<String, String>> validResourceQueues() {
+      return resourceQueues.validRows();
+    }
+
+    public List<Map<String, String>> validBusinessCalendars() {
+      return businessCalendars.validRows();
+    }
+
+    public List<Map<String, String>> validBatchWindows() {
+      return batchWindows.validRows();
     }
 
     public List<Map<String, String>> validChannels() {
@@ -236,6 +272,9 @@ public class ConfigPackageExcelValidator {
 
     public List<WorkbookIssue> allIssues() {
       List<WorkbookIssue> all = new ArrayList<>();
+      all.addAll(resourceQueues.issues());
+      all.addAll(businessCalendars.issues());
+      all.addAll(batchWindows.issues());
       all.addAll(jobs.issues());
       all.addAll(channels.issues());
       all.addAll(fileTemplates.issues());
@@ -251,6 +290,10 @@ public class ConfigPackageExcelValidator {
 
   public PackageValidationResult validate(PackageExcelSession session) {
     String tid = session.tenantId();
+    SheetResult resourceQueues = validateResourceQueueRows(tid, session.resourceQueueRows());
+    SheetResult businessCalendars =
+        validateBusinessCalendarRows(tid, session.businessCalendarRows());
+    SheetResult batchWindows = validateBatchWindowRows(tid, session.batchWindowRows());
     SheetResult jobs = validateJobRows(tid, session.jobRows());
     SheetResult channels = validateChannelRows(tid, session.fileChannelRows());
     SheetResult fileTemplates = validateFileTemplateRows(tid, session.fileTemplateRows());
@@ -264,6 +307,9 @@ public class ConfigPackageExcelValidator {
     List<WorkbookIssue> crossIssues =
         validateCrossReferences(
             tid,
+            resourceQueues.validRows(),
+            businessCalendars.validRows(),
+            batchWindows.validRows(),
             jobs.validRows(),
             fileTemplates.validRows(),
             pipelines.validRows(),
@@ -271,7 +317,79 @@ public class ConfigPackageExcelValidator {
             wfNodes.validRows(),
             session.pipelineRows());
     return new PackageValidationResult(
-        jobs, channels, fileTemplates, pipelines, steps, wfDefs, wfNodes, wfEdges, crossIssues);
+        resourceQueues,
+        businessCalendars,
+        batchWindows,
+        jobs,
+        channels,
+        fileTemplates,
+        pipelines,
+        steps,
+        wfDefs,
+        wfNodes,
+        wfEdges,
+        crossIssues);
+  }
+
+  private SheetResult validateResourceQueueRows(String tenantId, List<Map<String, String>> rows) {
+    List<WorkbookIssue> issues = new ArrayList<>();
+    List<Map<String, String>> valid = new ArrayList<>();
+    Set<String> seen = new LinkedHashSet<>();
+    int rowNo = 2;
+    for (Map<String, String> row : rows) {
+      List<String> ri = new ArrayList<>();
+      QueueRow queue = ResourceQueueExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      if (hasText(queue.queueCode()) && !seen.add(queue.queueCode())) {
+        ri.add("duplicate queue_code in excel: " + queue.queueCode());
+      }
+      addIssues(ri, RESOURCE_QUEUE_SHEET, rowNo, issues);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
+      rowNo++;
+    }
+    return new SheetResult(RESOURCE_QUEUE_SHEET, rows.size(), valid, issues);
+  }
+
+  private SheetResult validateBusinessCalendarRows(
+      String tenantId, List<Map<String, String>> rows) {
+    List<WorkbookIssue> issues = new ArrayList<>();
+    List<Map<String, String>> valid = new ArrayList<>();
+    Set<String> seen = new LinkedHashSet<>();
+    int rowNo = 2;
+    for (Map<String, String> row : rows) {
+      List<String> ri = new ArrayList<>();
+      CalendarRow calendar = BusinessCalendarExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      if (hasText(calendar.calendarCode()) && !seen.add(calendar.calendarCode())) {
+        ri.add("duplicate calendar_code in excel: " + calendar.calendarCode());
+      }
+      addIssues(ri, BUSINESS_CALENDAR_SHEET, rowNo, issues);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
+      rowNo++;
+    }
+    return new SheetResult(BUSINESS_CALENDAR_SHEET, rows.size(), valid, issues);
+  }
+
+  private SheetResult validateBatchWindowRows(String tenantId, List<Map<String, String>> rows) {
+    List<WorkbookIssue> issues = new ArrayList<>();
+    List<Map<String, String>> valid = new ArrayList<>();
+    Set<String> seen = new LinkedHashSet<>();
+    int rowNo = 2;
+    for (Map<String, String> row : rows) {
+      List<String> ri = new ArrayList<>();
+      WindowRow window = BatchWindowExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      if (hasText(window.windowCode()) && !seen.add(window.windowCode())) {
+        ri.add("duplicate window_code in excel: " + window.windowCode());
+      }
+      addIssues(ri, BATCH_WINDOW_SHEET, rowNo, issues);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
+      rowNo++;
+    }
+    return new SheetResult(BATCH_WINDOW_SHEET, rows.size(), valid, issues);
   }
 
   private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
@@ -718,6 +836,9 @@ public class ConfigPackageExcelValidator {
 
   private List<WorkbookIssue> validateCrossReferences(
       String tenantId,
+      List<Map<String, String>> validResourceQueues,
+      List<Map<String, String>> validBusinessCalendars,
+      List<Map<String, String>> validBatchWindows,
       List<Map<String, String>> validJobs,
       List<Map<String, String>> validFileTemplates,
       List<Map<String, String>> validPipelines,
@@ -735,7 +856,13 @@ public class ConfigPackageExcelValidator {
             .filter(Texts::hasText)
             .collect(Collectors.toSet());
     Set<String> fileTemplatesInExcel = buildFileTemplateKeys(validFileTemplates);
+    Set<String> queueCodesInExcel = extractCodes(validResourceQueues, "queue_code");
+    Set<String> calendarCodesInExcel = extractCodes(validBusinessCalendars, "calendar_code");
+    Set<String> windowCodesInExcel = extractCodes(validBatchWindows, "window_code");
     List<WorkbookIssue> issues = new ArrayList<>();
+
+    addJobDependencyIssues(
+        tenantId, validJobs, queueCodesInExcel, calendarCodesInExcel, windowCodesInExcel, issues);
 
     int rowNo = 2;
     for (Map<String, String> row : allPipelineRows) {
@@ -785,9 +912,89 @@ public class ConfigPackageExcelValidator {
                   "related_pipeline_code references unknown pipeline: " + relatedPipeline));
         }
       }
+      String windowCode = normalize(row.get(COL_WINDOW_CODE));
+      if (hasText(windowCode)
+          && !windowCodesInExcel.contains(windowCode)
+          && !batchWindowExists(tenantId, windowCode)) {
+        issues.add(
+            new WorkbookIssue(
+                WF_NODE_SHEET,
+                rowNo,
+                COL_WINDOW_CODE,
+                "window_code references unknown batch_window: " + windowCode));
+      }
       rowNo++;
     }
     return issues;
+  }
+
+  private void addJobDependencyIssues(
+      String tenantId,
+      List<Map<String, String>> rows,
+      Set<String> queueCodesInExcel,
+      Set<String> calendarCodesInExcel,
+      Set<String> windowCodesInExcel,
+      List<WorkbookIssue> issues) {
+    int rowNo = 2;
+    for (Map<String, String> row : rows) {
+      String queueCode = normalize(row.get(COL_QUEUE_CODE));
+      if (hasText(queueCode)
+          && !queueCodesInExcel.contains(queueCode)
+          && !resourceQueueExists(tenantId, queueCode)) {
+        issues.add(
+            new WorkbookIssue(
+                JOB_SHEET,
+                rowNo,
+                COL_QUEUE_CODE,
+                "queue_code references unknown resource_queue: " + queueCode));
+      }
+      String calendarCode = normalize(row.get(COL_CALENDAR_CODE));
+      if (hasText(calendarCode)
+          && !calendarCodesInExcel.contains(calendarCode)
+          && !businessCalendarExists(tenantId, calendarCode)) {
+        issues.add(
+            new WorkbookIssue(
+                JOB_SHEET,
+                rowNo,
+                COL_CALENDAR_CODE,
+                "calendar_code references unknown business_calendar: " + calendarCode));
+      }
+      String windowCode = normalize(row.get(COL_WINDOW_CODE));
+      if (hasText(windowCode)
+          && !windowCodesInExcel.contains(windowCode)
+          && !batchWindowExists(tenantId, windowCode)) {
+        issues.add(
+            new WorkbookIssue(
+                JOB_SHEET,
+                rowNo,
+                COL_WINDOW_CODE,
+                "window_code references unknown batch_window: " + windowCode));
+      }
+      rowNo++;
+    }
+  }
+
+  private boolean resourceQueueExists(String tenantId, String queueCode) {
+    Map<String, Object> found = resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
+    return found != null && !found.isEmpty();
+  }
+
+  private boolean businessCalendarExists(String tenantId, String calendarCode) {
+    Map<String, Object> found =
+        businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
+    return found != null && !found.isEmpty();
+  }
+
+  private boolean batchWindowExists(String tenantId, String windowCode) {
+    Map<String, Object> found = batchWindowMapper.selectByUniqueKey(tenantId, windowCode);
+    return found != null && !found.isEmpty();
+  }
+
+  private static Set<String> extractCodes(List<Map<String, String>> rows, String column) {
+    return rows.stream()
+        .map(r -> normalize(r.get(column)))
+        .filter(Texts::hasText)
+        .collect(Collectors.toSet());
   }
 
   private void addTemplateReferenceIssues(

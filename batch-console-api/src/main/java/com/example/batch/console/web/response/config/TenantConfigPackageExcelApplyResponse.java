@@ -4,6 +4,12 @@ package com.example.batch.console.web.response.config;
 public record TenantConfigPackageExcelApplyResponse(
     String uploadToken,
     String tenantId,
+    int resourceQueueInserted,
+    int resourceQueueUpdated,
+    int businessCalendarInserted,
+    int businessCalendarUpdated,
+    int batchWindowInserted,
+    int batchWindowUpdated,
     int jobInserted,
     int jobUpdated,
     int channelInserted,

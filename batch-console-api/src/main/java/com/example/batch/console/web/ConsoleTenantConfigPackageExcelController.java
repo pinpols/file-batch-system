@@ -30,9 +30,9 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 租户配置包（tenant-config-package）多 Sheet Excel 批量导入接口。
  *
- * <p>8 个数据 Sheet 合并为单文件导入：job_definition / file_channel_config / file_template_config /
- * pipeline_definition / pipeline_step_definition / workflow_definition / workflow_node /
- * workflow_edge。
+ * <p>11 个数据 Sheet 合并为单文件导入：resource_queue / business_calendar / batch_window / job_definition /
+ * file_channel_config / file_template_config / pipeline_definition / pipeline_step_definition /
+ * workflow_definition / workflow_node / workflow_edge。
  *
  * <p>典型流程：{@code GET /template} 下载模板 → {@code POST /upload} 上传得 {@code uploadToken} → {@code GET
  * /preview/{uploadToken}} 预览校验 → {@code GET /preview/{uploadToken}/workbook} 下载带批注 workbook（可选）→
@@ -48,7 +48,7 @@ public class ConsoleTenantConfigPackageExcelController {
   private final ConsoleTenantConfigPackageExcelApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
 
-  /** 导出当前租户全量配置包（8 Sheet），可直接回灌至 {@code /upload → /apply} 流程。 */
+  /** 导出当前租户全量配置包（11 Sheet），可直接回灌至 {@code /upload → /apply} 流程。 */
   @GetMapping("/export")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<InputStreamResource> export(
@@ -56,7 +56,7 @@ public class ConsoleTenantConfigPackageExcelController {
     return applicationService.exportPackage(tenantId);
   }
 
-  /** 下载包含全部 8 个数据 Sheet 及填写说明的空白导入模板 {@code .xlsx}。 */
+  /** 下载包含全部 11 个数据 Sheet 及填写说明的空白导入模板 {@code .xlsx}。 */
   @GetMapping("/template")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<InputStreamResource> template() {
@@ -64,7 +64,7 @@ public class ConsoleTenantConfigPackageExcelController {
   }
 
   /**
-   * 上传租户配置包 Excel，解析 8 个 Sheet 后写入服务端临时会话，返回 {@code uploadToken}。
+   * 上传租户配置包 Excel，解析 11 个 Sheet 后写入服务端临时会话，返回 {@code uploadToken}。
    *
    * @param file 表单字段名 {@code file}，内容为 xlsx
    * @param tenantId 目标租户 id。ROLE_ADMIN / ROLE_CONFIG_ADMIN 是全局角色，必须显式指定； 租户级账号可不传（自动沿用 JWT 内

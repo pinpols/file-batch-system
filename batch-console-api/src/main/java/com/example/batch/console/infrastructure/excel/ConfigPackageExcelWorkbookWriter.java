@@ -11,12 +11,18 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.setWidt
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.BatchWindowEndStrategy;
+import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.FileChecksumType;
 import com.example.batch.common.enums.FileCompressType;
 import com.example.batch.common.enums.FileEncryptType;
 import com.example.batch.common.enums.FileTemplateFormat;
 import com.example.batch.common.enums.FileTemplateType;
+import com.example.batch.common.enums.HolidayRollRule;
+import com.example.batch.common.enums.OutOfWindowAction;
+import com.example.batch.common.enums.QueuePriorityPolicy;
+import com.example.batch.common.enums.ResourceQueueType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
@@ -122,7 +128,56 @@ public class ConfigPackageExcelWorkbookWriter {
   private static final Set<String> CHECKSUM_TYPES = DictEnum.codes(FileChecksumType.class);
   private static final Set<String> COMPRESS_TYPES = DictEnum.codes(FileCompressType.class);
   private static final Set<String> ENCRYPT_TYPES = DictEnum.codes(FileEncryptType.class);
+  private static final Set<String> QUEUE_TYPES = DictEnum.codes(ResourceQueueType.class);
+  private static final Set<String> PRIORITY_POLICIES = DictEnum.codes(QueuePriorityPolicy.class);
+  private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
+  private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
+  private static final Set<String> END_STRATEGIES = DictEnum.codes(BatchWindowEndStrategy.class);
+  private static final Set<String> OUT_OF_WINDOW_ACTIONS = DictEnum.codes(OutOfWindowAction.class);
   private static final int[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
+
+  public static final List<String> RESOURCE_QUEUE_COLUMNS =
+      List.of(
+          COL_TENANT_ID,
+          "queue_code",
+          "queue_name",
+          "queue_type",
+          "max_running_jobs",
+          "max_running_partitions",
+          "max_qps",
+          COL_WORKER_GROUP,
+          "resource_tag",
+          "priority_policy",
+          "fair_share_weight",
+          COL_ENABLED,
+          COL_DESCRIPTION);
+
+  public static final List<String> BUSINESS_CALENDAR_COLUMNS =
+      List.of(
+          COL_TENANT_ID,
+          "calendar_code",
+          "calendar_name",
+          "timezone",
+          "holiday_roll_rule",
+          "catch_up_policy",
+          "catch_up_max_days",
+          "holidays",
+          COL_ENABLED,
+          COL_DESCRIPTION);
+
+  public static final List<String> BATCH_WINDOW_COLUMNS =
+      List.of(
+          COL_TENANT_ID,
+          "window_code",
+          "window_name",
+          "timezone",
+          "start_time",
+          "end_time",
+          "end_strategy",
+          "out_of_window_action",
+          "allow_cross_day",
+          COL_ENABLED,
+          COL_DESCRIPTION);
 
   public static final List<String> JOB_COLUMNS =
       List.of(
@@ -294,6 +349,21 @@ public class ConfigPackageExcelWorkbookWriter {
     this.messageSource = messageSource;
     this.sheetDefs =
         List.of(
+            new SheetDef(
+                RESOURCE_QUEUE_SHEET,
+                RESOURCE_QUEUE_COLUMNS,
+                buildResourceQueueGuides(),
+                this::applyResourceQueueValidations),
+            new SheetDef(
+                BUSINESS_CALENDAR_SHEET,
+                BUSINESS_CALENDAR_COLUMNS,
+                buildBusinessCalendarGuides(),
+                this::applyBusinessCalendarValidations),
+            new SheetDef(
+                BATCH_WINDOW_SHEET,
+                BATCH_WINDOW_COLUMNS,
+                buildBatchWindowGuides(),
+                this::applyBatchWindowValidations),
             new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
             new SheetDef(
                 CHANNEL_SHEET,
@@ -358,6 +428,9 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     List<List<Map<String, String>>> sessionData =
         List.of(
+            session.resourceQueueRows(),
+            session.businessCalendarRows(),
+            session.batchWindowRows(),
             session.jobRows(),
             session.fileChannelRows(),
             session.fileTemplateRows(),
@@ -368,6 +441,9 @@ public class ConfigPackageExcelWorkbookWriter {
             session.workflowEdgeRows());
     List<SheetResult> results =
         List.of(
+            result.resourceQueues(),
+            result.businessCalendars(),
+            result.batchWindows(),
             result.jobs(),
             result.channels(),
             result.fileTemplates(),
@@ -431,29 +507,25 @@ public class ConfigPackageExcelWorkbookWriter {
     setWidths(sheet, def.columns());
   }
 
+  /** 填写说明 sheet 内容总行数（标题 1 行 + line1..lineN）。详见 messages.properties。 */
+  private static final int README_LINE_COUNT = 46;
+
   private void createReadmeSheet(Workbook wb, Locale locale) {
     Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
-    sheet.setColumnWidth(0, 18000);
+    sheet.setColumnWidth(0, 28000);
     CellStyle title = createReadmeTitleStyle(wb);
-    String[] keys = {
-      "excel.package.readme.title",
-      "excel.package.readme.line1",
-      "excel.package.readme.line2",
-      "excel.package.readme.line3",
-      "excel.package.readme.line4",
-      "excel.package.readme.line5",
-      "excel.package.readme.line6",
-      "excel.package.readme.line7",
-      "excel.package.readme.line8",
-      "excel.package.readme.line9"
-    };
-    for (int i = 0; i < keys.length; i++) {
+    // 标题 + line1..line46（v3 9+2 完整说明：sheet 范围 / 跨 sheet 依赖 /
+    // 四类 Worker 填哪些 sheet / Apply 流程 / UPSERT 行为）
+    Row titleRow = sheet.createRow(0);
+    Cell titleCell = titleRow.createCell(0);
+    String titleKey = "excel.package.readme.title";
+    titleCell.setCellValue(messageSource.getMessage(titleKey, null, titleKey, locale));
+    titleCell.setCellStyle(title);
+    for (int i = 1; i <= README_LINE_COUNT; i++) {
+      String key = "excel.package.readme.line" + i;
       Row row = sheet.createRow(i);
       Cell cell = row.createCell(0);
-      cell.setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
-      if (i == 0) {
-        cell.setCellStyle(title);
-      }
+      cell.setCellValue(messageSource.getMessage(key, null, key, locale));
     }
   }
 
@@ -548,6 +620,77 @@ public class ConfigPackageExcelWorkbookWriter {
     cell.setCellStyle(style);
   }
 
+  private Map<String, ConsoleExcelStyles.ColumnGuide> buildResourceQueueGuides() {
+    return Map.ofEntries(
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry("queue_code", requiredColumn("资源队列编码。", GUIDE_STR, "import-queue")),
+        Map.entry("queue_name", requiredColumn("资源队列名称。", GUIDE_STR, "导入主队列")),
+        Map.entry(
+            "queue_type",
+            requiredColumn(
+                "队列类型。", GUIDE_ENUM, GUIDE_IMPORT, "IMPORT", "EXPORT", "DISPATCH", "MIXED")),
+        Map.entry("max_running_jobs", requiredColumn("最大并发作业数。", GUIDE_INT, "10")),
+        Map.entry("max_running_partitions", requiredColumn("最大并发分区数。", GUIDE_INT, "20")),
+        Map.entry("max_qps", requiredColumn("最大派发 QPS。", GUIDE_INT, "100")),
+        Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
+        Map.entry("resource_tag", optionalColumn("资源标签。", GUIDE_STR, "standard")),
+        Map.entry(
+            "priority_policy",
+            requiredColumn("优先级策略。", GUIDE_ENUM, "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
+        Map.entry("fair_share_weight", requiredColumn("公平调度权重。", GUIDE_INT, "1")),
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "导入任务默认资源队列")));
+  }
+
+  private Map<String, ConsoleExcelStyles.ColumnGuide> buildBusinessCalendarGuides() {
+    return Map.ofEntries(
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry("calendar_code", requiredColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
+        Map.entry("calendar_name", requiredColumn("业务日历名称。", GUIDE_STR, "默认业务日历")),
+        Map.entry("timezone", requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
+        Map.entry(
+            "holiday_roll_rule",
+            requiredColumn("节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
+        Map.entry(
+            "catch_up_policy",
+            requiredColumn("补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
+        Map.entry("catch_up_max_days", requiredColumn("最大补跑天数。", GUIDE_INT, "0")),
+        Map.entry(
+            "holidays", optionalColumn("节假日，逗号分隔 yyyy-MM-dd。", GUIDE_STR, "2026-01-01,2026-10-01")),
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "默认业务日历")));
+  }
+
+  private Map<String, ConsoleExcelStyles.ColumnGuide> buildBatchWindowGuides() {
+    return Map.ofEntries(
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry("window_code", requiredColumn("批次窗口编码。", GUIDE_STR, "always-open")),
+        Map.entry("window_name", requiredColumn("批次窗口名称。", GUIDE_STR, "全天窗口")),
+        Map.entry("timezone", requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
+        Map.entry("start_time", requiredColumn("开始时间 HH:mm 或 HH:mm:ss。", "时间", "00:00")),
+        Map.entry("end_time", requiredColumn("结束时间 HH:mm 或 HH:mm:ss。", "时间", "23:59")),
+        Map.entry(
+            "end_strategy",
+            requiredColumn(
+                "窗口结束策略。", GUIDE_ENUM, "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
+        Map.entry(
+            "out_of_window_action", requiredColumn("窗口外动作。", GUIDE_ENUM, "WAIT", "WAIT", "FAIL")),
+        Map.entry(
+            "allow_cross_day",
+            optionalColumn("是否允许跨日。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "默认批次窗口")));
+  }
+
   private void applyJobValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
         sheet,
@@ -609,6 +752,67 @@ public class ConfigPackageExcelWorkbookWriter {
         "excel.channel.receipt_policy.prompt_box",
         messageSource,
         locale);
+    boolDropdown(sheet, 9, locale);
+  }
+
+  private void applyResourceQueueValidations(Sheet sheet, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        3,
+        QUEUE_TYPES.toArray(String[]::new),
+        "excel.queue.queue_type.prompt_title",
+        "excel.queue.queue_type.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        9,
+        PRIORITY_POLICIES.toArray(String[]::new),
+        "excel.queue.priority_policy.prompt_title",
+        "excel.queue.priority_policy.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 11, locale);
+  }
+
+  private void applyBusinessCalendarValidations(Sheet sheet, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        4,
+        HOLIDAY_ROLL_RULES.toArray(String[]::new),
+        "excel.calendar.holiday_roll_rule.prompt_title",
+        "excel.calendar.holiday_roll_rule.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        5,
+        CATCH_UP_POLICIES.toArray(String[]::new),
+        "excel.calendar.catch_up_policy.prompt_title",
+        "excel.calendar.catch_up_policy.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 8, locale);
+  }
+
+  private void applyBatchWindowValidations(Sheet sheet, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        6,
+        END_STRATEGIES.toArray(String[]::new),
+        "excel.window.end_strategy.prompt_title",
+        "excel.window.end_strategy.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        7,
+        OUT_OF_WINDOW_ACTIONS.toArray(String[]::new),
+        "excel.window.out_of_window_action.prompt_title",
+        "excel.window.out_of_window_action.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 8, locale);
     boolDropdown(sheet, 9, locale);
   }
 
