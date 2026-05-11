@@ -45,6 +45,52 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private static final String EMPTY = "";
 
+  /**
+   * 枚举下拉数组 — 单一权威源，全部从 enum 声明顺序 + ConfigPackageExcelValidator 集合派生。
+   *
+   * <p>下拉项展示顺序 = enum 声明顺序（业务认知顺序），不直接用 Set#toArray 的 unordered 输出。 CI 单测 {@code
+   * ConfigPackageEnumDropdownConsistencyTest} 锁定这 4 个数组的内容 == validator 集合， 防止文档侧漂移（job_type 漏
+   * PROCESS / schedule_type 多 EVENT/ONE_TIME / pipeline_type 漏 PROCESS / stage_code 含 TRANSFER
+   * 等历史漂移问题已修复，CI 守护后续不再退步）。
+   */
+  static final String[] JOB_TYPE_DROPDOWN =
+      com.example.batch.common.enums.DictEnum.codeList(com.example.batch.common.enums.JobType.class)
+          .toArray(String[]::new);
+
+  static final String[] SCHEDULE_TYPE_DROPDOWN =
+      com.example.batch.common.enums.DictEnum.codeList(
+              com.example.batch.common.enums.ScheduleType.class)
+          .toArray(String[]::new);
+
+  static final String[] PIPELINE_TYPE_DROPDOWN =
+      com.example.batch.common.enums.DictEnum.codeList(
+              com.example.batch.common.enums.PipelineType.class)
+          .toArray(String[]::new);
+
+  /**
+   * stage_code 在 worker 侧拆 3 enum（ImportStage / ExportStage / DispatchStage / ProcessStage 等模块自管），
+   * 这里只取 validator 的 union 集合，并按业务流转顺序固定列出，避免 Set 转 array 出现非预期顺序。
+   */
+  static final String[] STAGE_CODE_DROPDOWN = {
+    "RECEIVE",
+    "PREPROCESS",
+    "PARSE",
+    "VALIDATE",
+    "LOAD",
+    "FEEDBACK",
+    "PREPARE",
+    "COMPUTE",
+    "GENERATE",
+    "STORE",
+    "REGISTER",
+    "COMPLETE",
+    "COMMIT",
+    "DISPATCH",
+    "ACK",
+    "RETRY",
+    "COMPENSATE"
+  };
+
   private static final String GUIDE_IMPORT = "IMPORT";
   private static final String GUIDE_TIMEOUT_DESC = "超时秒数。";
   private static final String GUIDE_DESC_DESC = "描述。";
@@ -61,7 +107,6 @@ public class ConfigPackageExcelWorkbookWriter {
   private static final String GUIDE_TENANT_DESC = "所属租户。";
   private static final String GUIDE_TENANT_EXAMPLE = "tenant-a";
   private static final String GUIDE_JOB_EXAMPLE = "JOB_IMPORT_CUSTOMER";
-  private static final String GUIDE_DISPATCH = "DISPATCH";
   private static final String GUIDE_EMPTY_JSON = "{}";
   private static final String GUIDE_VERSION_ONE = "1";
 
@@ -656,11 +701,9 @@ public class ConfigPackageExcelWorkbookWriter {
                 "作业类型。",
                 GUIDE_ENUM,
                 GUIDE_IMPORT,
-                "GENERAL",
-                GUIDE_IMPORT,
-                "EXPORT",
-                GUIDE_DISPATCH,
-                "WORKFLOW")),
+                // 与 JobType enum / ConfigPackageExcelValidator.JOB_TYPES 对齐：
+                // GENERAL / IMPORT / EXPORT / PROCESS / DISPATCH / WORKFLOW
+                JOB_TYPE_DROPDOWN)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
         Map.entry(COL_QUEUE_CODE, optionalColumn("资源队列编码。", GUIDE_STR, "import-queue")),
         Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
@@ -670,11 +713,9 @@ public class ConfigPackageExcelWorkbookWriter {
                 "调度类型。",
                 GUIDE_ENUM,
                 "MANUAL",
-                "CRON",
-                "FIXED_RATE",
-                "MANUAL",
-                "EVENT",
-                "ONE_TIME")),
+                // 与 ScheduleType enum / ConfigPackageExcelValidator.SCHEDULE_TYPES 对齐：
+                // CRON / FIXED_RATE / MANUAL（不再包含历史值 EVENT / ONE_TIME，validator 已拒收）
+                SCHEDULE_TYPE_DROPDOWN)),
         Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
         Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
@@ -777,7 +818,12 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry(
             COL_PIPELINE_TYPE,
             requiredColumn(
-                "流水线类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", GUIDE_DISPATCH)),
+                "流水线类型。",
+                GUIDE_ENUM,
+                GUIDE_IMPORT,
+                // 与 PipelineType enum / ConfigPackageExcelValidator.PIPELINE_TYPES 对齐：
+                // IMPORT / EXPORT / PROCESS / DISPATCH
+                PIPELINE_TYPE_DROPDOWN)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
         Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
         Map.entry(
@@ -797,18 +843,16 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry(
             COL_STAGE_CODE,
             requiredColumn(
-                "阶段。",
+                "阶段。按 pipeline_type 选对应"
+                    + " stage：IMPORT[RECEIVE,PREPROCESS,PARSE,VALIDATE,LOAD,FEEDBACK]"
+                    + "；EXPORT[PREPARE,GENERATE,STORE,REGISTER,COMPLETE]"
+                    + "；PROCESS[PREPARE,COMPUTE,VALIDATE,COMMIT,FEEDBACK]"
+                    + "；DISPATCH[PREPARE,DISPATCH,ACK,RETRY,COMPENSATE,COMPLETE]。",
                 GUIDE_ENUM,
                 "PARSE",
-                "RECEIVE",
-                "PREPROCESS",
-                "PARSE",
-                "VALIDATE",
-                "LOAD",
-                "GENERATE",
-                "TRANSFER",
-                GUIDE_DISPATCH,
-                "ACK")),
+                // 17 个 stage 的 union，validator 按 pipeline_type 进一步收窄（STAGES_BY_TYPE）；
+                // 旧值 TRANSFER 已删除（validator 不接受），文档侧不再出现
+                STAGE_CODE_DROPDOWN)),
         Map.entry("step_order", optionalColumn("步骤顺序号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry("impl_code", optionalColumn("实现插件编码。", GUIDE_STR, "csvParser")),
         Map.entry("step_params", optionalColumn("步骤参数 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),

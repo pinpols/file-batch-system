@@ -57,4 +57,14 @@ public interface DictEnum {
   static <E extends Enum<E> & DictEnum> List<String> labels(Class<E> enumClass) {
     return Arrays.stream(enumClass.getEnumConstants()).map(DictEnum::label).toList();
   }
+
+  /**
+   * 返回枚举全部 code 的有序列表，保持枚举声明顺序。
+   *
+   * <p>{@link #codes(Class)} 返回 unordered Set，做集合校验（contains）够用，但生成 Excel 下拉、API 返回值需要
+   * 业务认知的固定顺序时必须用本方法。
+   */
+  static <E extends Enum<E> & DictEnum> List<String> codeList(Class<E> enumClass) {
+    return Arrays.stream(enumClass.getEnumConstants()).map(DictEnum::code).toList();
+  }
 }
