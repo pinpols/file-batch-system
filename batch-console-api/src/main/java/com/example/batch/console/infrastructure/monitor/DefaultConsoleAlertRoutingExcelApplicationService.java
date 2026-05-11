@@ -36,6 +36,7 @@ import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.springframework.context.MessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -103,9 +104,10 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
       BatchDateTimeSupport dateTimeSupport,
+      MessageSource messageSource,
       AlertRoutingConfigMapper alertRoutingConfigMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport);
+    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport, messageSource);
     this.alertRoutingConfigMapper = alertRoutingConfigMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }

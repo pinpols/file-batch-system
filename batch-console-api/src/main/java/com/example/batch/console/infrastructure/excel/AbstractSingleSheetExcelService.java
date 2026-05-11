@@ -42,6 +42,8 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,16 +55,19 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected final ConsoleRequestMetadataResolver requestMetadataResolver;
   protected final ExcelImportStore importStore;
   protected final BatchDateTimeSupport dateTimeSupport;
+  protected final MessageSource messageSource;
 
   protected AbstractSingleSheetExcelService(
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
       ExcelImportStore importStore,
-      BatchDateTimeSupport dateTimeSupport) {
+      BatchDateTimeSupport dateTimeSupport,
+      MessageSource messageSource) {
     this.tenantGuard = tenantGuard;
     this.requestMetadataResolver = requestMetadataResolver;
     this.importStore = importStore;
     this.dateTimeSupport = dateTimeSupport;
+    this.messageSource = messageSource;
   }
 
   protected abstract String sheetName();
@@ -475,11 +480,12 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   }
 
   private byte[] writeWorkbook(List<Map<String, Object>> rows) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet dataSheet = workbook.createSheet(sheetName());
       dataSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(dataSheet, columns(), columnGuides(), workbook);
+      writeTemplateHeaders(dataSheet, columns(), columnGuides(), workbook, messageSource, locale);
       int rowIndex = 1;
       for (Map<String, Object> row : rows) {
         Row dataRow = dataSheet.createRow(rowIndex++);
