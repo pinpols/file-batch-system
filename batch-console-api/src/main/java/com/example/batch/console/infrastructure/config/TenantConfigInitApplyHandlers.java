@@ -56,7 +56,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * P2-3 god-class-decomposition extract: 把 TenantConfigInit 服务的 10 类 spec apply + 对应
@@ -89,6 +92,7 @@ public class TenantConfigInitApplyHandlers {
   private final CalendarHolidayMapper calendarHolidayMapper;
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
+  private final PlatformTransactionManager transactionManager;
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
   record ApplyContext(String tenantId, InitMode mode, String operator, boolean dryRun) {}
@@ -168,31 +172,43 @@ public class TenantConfigInitApplyHandlers {
     }
   }
 
-  /** 公共 apply 模板：封装"查找 → 跳过/更新/创建"循环和异常收集，消除 10 个 apply* 方法中的重复代码。 */
+  /**
+   * 公共 apply 模板：封装"查找 → 跳过/更新/创建"循环和异常收集，消除 10 个 apply* 方法中的重复代码。
+   *
+   * <p>每条 spec 包裹在 PROPAGATION_NESTED 子事务里(底层用 JDBC Savepoint),单条失败回滚到 savepoint, 不污染
+   * outer @Transactional 主事务 — 否则一条 SQL 报错会让 PG 把整个事务标 "aborted",后续所有 SELECT/INSERT 都撞 "current
+   * transaction is aborted, commands ignored until end of transaction block",批量初始化变成
+   * all-or-nothing。
+   */
   private <T, E> ItemStats applySpecs(List<T> specs, ApplyContext ctx, SpecHandler<T, E> handler) {
     if (specs == null || specs.isEmpty()) {
       return ItemStats.empty();
     }
+    TransactionTemplate nested = new TransactionTemplate(transactionManager);
+    nested.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
     ItemStatsAccumulator acc = new ItemStatsAccumulator();
     for (T spec : specs) {
       String code = handler.code(spec);
       try {
-        Optional<E> existing = handler.find(ctx.tenantId(), spec);
-        if (existing.isPresent()) {
-          if (ctx.mode() == InitMode.UPSERT) {
-            if (!ctx.dryRun()) {
-              handler.update(ctx, spec, existing.get());
-            }
-            acc.recordUpdated(code);
-          } else {
-            acc.recordSkipped(code);
-          }
-        } else {
-          if (!ctx.dryRun()) {
-            handler.insert(ctx, spec);
-          }
-          acc.recordCreated(code);
-        }
+        nested.executeWithoutResult(
+            status -> {
+              Optional<E> existing = handler.find(ctx.tenantId(), spec);
+              if (existing.isPresent()) {
+                if (ctx.mode() == InitMode.UPSERT) {
+                  if (!ctx.dryRun()) {
+                    handler.update(ctx, spec, existing.get());
+                  }
+                  acc.recordUpdated(code);
+                } else {
+                  acc.recordSkipped(code);
+                }
+              } else {
+                if (!ctx.dryRun()) {
+                  handler.insert(ctx, spec);
+                }
+                acc.recordCreated(code);
+              }
+            });
       } catch (Exception ex) {
         log.warn(
             "[TenantConfigBatchInit] {} code={} tenant={} failed: {}",

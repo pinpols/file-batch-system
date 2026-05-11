@@ -86,7 +86,20 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
             businessCalendarMapper,
             calendarHolidayMapper,
             tenantQuotaPolicyMapper,
-            alertRoutingConfigMapper);
+            alertRoutingConfigMapper,
+            new org.springframework.transaction.PlatformTransactionManager() {
+              @Override
+              public org.springframework.transaction.TransactionStatus getTransaction(
+                  org.springframework.transaction.TransactionDefinition definition) {
+                return new org.springframework.transaction.support.SimpleTransactionStatus();
+              }
+
+              @Override
+              public void commit(org.springframework.transaction.TransactionStatus status) {}
+
+              @Override
+              public void rollback(org.springframework.transaction.TransactionStatus status) {}
+            });
     ReflectionTestUtils.setField(handlers, "self", handlers);
     service = new DefaultConsoleTenantConfigInitApplicationService(handlers);
     ReflectionTestUtils.setField(service, "self", service);
