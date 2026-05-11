@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.excel;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
@@ -23,14 +22,18 @@ import com.example.batch.console.web.response.workflow.ConsolePipelineDefinition
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -40,7 +43,10 @@ import org.springframework.stereotype.Component;
  * WorkflowExcelWorkbookWriter} 同款 pattern;每个业务 Excel god class 都可挂一个 writer。
  */
 @Component
+@RequiredArgsConstructor
 public class PipelineExcelWorkbookWriter {
+
+  private final MessageSource messageSource;
 
   // ── sheet 与列常量 ─────────────────────────────────────────────────────────
   static final String PIPELINE_SHEET_NAME = "pipeline_definition";
@@ -118,34 +124,79 @@ public class PipelineExcelWorkbookWriter {
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> PIPELINE_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
-              COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+              COL_TENANT_ID,
+              optionalColumn(
+                  "excel.pipeline.def.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
           Map.entry(
               COL_JOB_CODE,
-              requiredColumn("作业唯一编码，与 version 组成联合键。", GUIDE_STR, "JOB_IMPORT_SETTLEMENT")),
-          Map.entry(COL_PIPELINE_NAME, requiredColumn("流水线名称。", GUIDE_STR, "清算导入流水线")),
+              requiredColumn(
+                  "excel.pipeline.def.job_code.desc",
+                  "excel.guide.format.string",
+                  "JOB_IMPORT_SETTLEMENT")),
+          Map.entry(
+              COL_PIPELINE_NAME,
+              requiredColumn(
+                  "excel.pipeline.def.pipeline_name.desc", "excel.guide.format.string", "清算导入流水线")),
           Map.entry(
               COL_PIPELINE_TYPE,
-              requiredColumn("流水线类型。", "枚举", "IMPORT", "IMPORT", "EXPORT", STAGE_DISPATCH)),
-          Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "SETTLEMENT")),
-          Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组名称。", GUIDE_STR, "default")),
-          Map.entry(COL_VERSION, requiredColumn("版本号，与 job_code 组成联合键。", GUIDE_INT, "1")),
+              requiredColumn(
+                  "excel.pipeline.def.pipeline_type.desc",
+                  "excel.guide.format.enum",
+                  "IMPORT",
+                  "IMPORT",
+                  "EXPORT",
+                  STAGE_DISPATCH)),
           Map.entry(
-              COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry(COL_DESCRIPTION, optionalColumn("流水线描述。", GUIDE_STR, "用于清算文件导入")));
+              COL_BIZ_TYPE,
+              optionalColumn(
+                  "excel.pipeline.def.biz_type.desc", "excel.guide.format.string", "SETTLEMENT")),
+          Map.entry(
+              COL_WORKER_GROUP,
+              optionalColumn(
+                  "excel.pipeline.def.worker_group.desc", "excel.guide.format.string", "default")),
+          Map.entry(
+              COL_VERSION,
+              requiredColumn("excel.pipeline.def.version.desc", "excel.guide.format.integer", "1")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.pipeline.def.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.pipeline.def.description.desc", "excel.guide.format.string", "用于清算文件导入")));
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> STEP_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
               COL_JOB_CODE,
-              requiredColumn("关联的 pipeline job_code。", GUIDE_STR, "JOB_IMPORT_SETTLEMENT")),
-          Map.entry(COL_VERSION, requiredColumn("关联的 pipeline version。", GUIDE_INT, "1")),
-          Map.entry(COL_STEP_CODE, requiredColumn("步骤唯一编码。", GUIDE_STR, "STEP_PARSE_CSV")),
-          Map.entry(COL_STEP_NAME, requiredColumn("步骤名称。", GUIDE_STR, "解析CSV文件")),
+              requiredColumn(
+                  "excel.pipeline.step.job_code.desc",
+                  "excel.guide.format.string",
+                  "JOB_IMPORT_SETTLEMENT")),
+          Map.entry(
+              COL_VERSION,
+              requiredColumn(
+                  "excel.pipeline.step.version.desc", "excel.guide.format.integer", "1")),
+          Map.entry(
+              COL_STEP_CODE,
+              requiredColumn(
+                  "excel.pipeline.step.step_code.desc",
+                  "excel.guide.format.string",
+                  "STEP_PARSE_CSV")),
+          Map.entry(
+              COL_STEP_NAME,
+              requiredColumn(
+                  "excel.pipeline.step.step_name.desc", "excel.guide.format.string", "解析CSV文件")),
           Map.entry(
               COL_STAGE_CODE,
               requiredColumn(
-                  "阶段编码。",
-                  "枚举",
+                  "excel.pipeline.step.stage_code.desc",
+                  "excel.guide.format.enum",
                   STAGE_PARSE,
                   "RECEIVE",
                   "PREPROCESS",
@@ -156,25 +207,56 @@ public class PipelineExcelWorkbookWriter {
                   "TRANSFER",
                   STAGE_DISPATCH,
                   "ACK")),
-          Map.entry(COL_STEP_ORDER, requiredColumn("步骤顺序，整数。", GUIDE_INT, "1")),
-          Map.entry(COL_IMPL_CODE, requiredColumn("步骤实现编码。", GUIDE_STR, "csvParserStep")),
           Map.entry(
-              COL_STEP_PARAMS, optionalColumn("步骤参数，须为合法 JSON。", "JSON", "{\"delimiter\":\",\"}")),
-          Map.entry(COL_TIMEOUT_SECONDS, requiredColumn("超时时间（秒），必须 >= 0。", GUIDE_INT, "60")),
+              COL_STEP_ORDER,
+              requiredColumn(
+                  "excel.pipeline.step.step_order.desc", "excel.guide.format.integer", "1")),
+          Map.entry(
+              COL_IMPL_CODE,
+              requiredColumn(
+                  "excel.pipeline.step.impl_code.desc",
+                  "excel.guide.format.string",
+                  "csvParserStep")),
+          Map.entry(
+              COL_STEP_PARAMS,
+              optionalColumn(
+                  "excel.pipeline.step.step_params.desc",
+                  "excel.guide.format.json",
+                  "{\"delimiter\":\",\"}")),
+          Map.entry(
+              COL_TIMEOUT_SECONDS,
+              requiredColumn(
+                  "excel.pipeline.step.timeout_seconds.desc", "excel.guide.format.integer", "60")),
           Map.entry(
               COL_RETRY_POLICY,
-              requiredColumn("重试策略。", "枚举", "NONE", "NONE", "FIXED", "EXPONENTIAL")),
-          Map.entry(COL_RETRY_MAX_COUNT, requiredColumn("最大重试次数，必须 >= 0。", GUIDE_INT, "0")),
+              requiredColumn(
+                  "excel.pipeline.step.retry_policy.desc",
+                  "excel.guide.format.enum",
+                  "NONE",
+                  "NONE",
+                  "FIXED",
+                  "EXPONENTIAL")),
           Map.entry(
-              COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+              COL_RETRY_MAX_COUNT,
+              requiredColumn(
+                  "excel.pipeline.step.retry_max_count.desc", "excel.guide.format.integer", "0")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.pipeline.step.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)));
 
   public byte[] writeMaintenanceWorkbook(
       List<Map<String, Object>> pipelines, List<Map<String, Object>> steps) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      writePipelineSheet(workbook, pipelines);
-      writeStepSheet(workbook, steps);
-      createReadmeSheet(workbook);
+      writePipelineSheet(workbook, pipelines, locale);
+      writeStepSheet(workbook, steps, locale);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
@@ -188,10 +270,12 @@ public class PipelineExcelWorkbookWriter {
       List<Map<String, String>> pipelineRawRows,
       List<Map<String, String>> stepRawRows,
       List<ConsolePipelineDefinitionExcelRowIssueResponse> allIssues) {
+    Locale locale = LocaleContextHolder.getLocale();
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet pipelineSheet = workbook.createSheet(PIPELINE_SHEET_NAME);
       pipelineSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(pipelineSheet, PIPELINE_COLUMNS, PIPELINE_COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(
+          pipelineSheet, PIPELINE_COLUMNS, PIPELINE_COLUMN_GUIDES, workbook, messageSource, locale);
       int rowIndex = 1;
       for (Map<String, String> rawRow : pipelineRawRows) {
         Row dataRow = pipelineSheet.createRow(rowIndex++);
@@ -201,12 +285,13 @@ public class PipelineExcelWorkbookWriter {
           cell.setCellValue(value == null ? "" : value);
         }
       }
-      applyPipelineValidations(pipelineSheet);
+      applyPipelineValidations(pipelineSheet, locale);
       setWidths(pipelineSheet, PIPELINE_COLUMNS);
 
       Sheet stepSheet = workbook.createSheet(STEP_SHEET_NAME);
       stepSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(stepSheet, STEP_COLUMNS, STEP_COLUMN_GUIDES, workbook);
+      writeTemplateHeaders(
+          stepSheet, STEP_COLUMNS, STEP_COLUMN_GUIDES, workbook, messageSource, locale);
       rowIndex = 1;
       for (Map<String, String> rawRow : stepRawRows) {
         Row dataRow = stepSheet.createRow(rowIndex++);
@@ -216,10 +301,10 @@ public class PipelineExcelWorkbookWriter {
           cell.setCellValue(value == null ? "" : value);
         }
       }
-      applyStepValidations(stepSheet);
+      applyStepValidations(stepSheet, locale);
       setWidths(stepSheet, STEP_COLUMNS);
 
-      createReadmeSheet(workbook);
+      createReadmeSheet(workbook, locale);
       createDictSheet(workbook);
       createValidationSheet(workbook);
 
@@ -251,10 +336,12 @@ public class PipelineExcelWorkbookWriter {
     }
   }
 
-  private void writePipelineSheet(SXSSFWorkbook workbook, List<Map<String, Object>> rows) {
+  private void writePipelineSheet(
+      SXSSFWorkbook workbook, List<Map<String, Object>> rows, Locale locale) {
     Sheet sheet = workbook.createSheet(PIPELINE_SHEET_NAME);
     sheet.createFreezePane(0, 1, 0, 1);
-    writeTemplateHeaders(sheet, PIPELINE_COLUMNS, PIPELINE_COLUMN_GUIDES, workbook);
+    writeTemplateHeaders(
+        sheet, PIPELINE_COLUMNS, PIPELINE_COLUMN_GUIDES, workbook, messageSource, locale);
     int rowIndex = 1;
     for (Map<String, Object> row : rows) {
       Row dataRow = sheet.createRow(rowIndex++);
@@ -266,14 +353,15 @@ public class PipelineExcelWorkbookWriter {
             value == null ? "" : ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
       }
     }
-    applyPipelineValidations(sheet);
+    applyPipelineValidations(sheet, locale);
     setWidths(sheet, PIPELINE_COLUMNS);
   }
 
-  private void writeStepSheet(SXSSFWorkbook workbook, List<Map<String, Object>> rows) {
+  private void writeStepSheet(
+      SXSSFWorkbook workbook, List<Map<String, Object>> rows, Locale locale) {
     Sheet sheet = workbook.createSheet(STEP_SHEET_NAME);
     sheet.createFreezePane(0, 1, 0, 1);
-    writeTemplateHeaders(sheet, STEP_COLUMNS, STEP_COLUMN_GUIDES, workbook);
+    writeTemplateHeaders(sheet, STEP_COLUMNS, STEP_COLUMN_GUIDES, workbook, messageSource, locale);
     int rowIndex = 1;
     for (Map<String, Object> row : rows) {
       Row dataRow = sheet.createRow(rowIndex++);
@@ -285,40 +373,72 @@ public class PipelineExcelWorkbookWriter {
             value == null ? "" : ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
       }
     }
-    applyStepValidations(sheet);
+    applyStepValidations(sheet, locale);
     setWidths(sheet, STEP_COLUMNS);
   }
 
-  private void applyPipelineValidations(Sheet sheet) {
+  private void applyPipelineValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 3, PIPELINE_TYPES.toArray(String[]::new), "pipeline_type 填写提示", "请从下拉列表中选择流水线类型。");
-    addBooleanValidation(sheet, new int[] {7}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        sheet,
+        3,
+        PIPELINE_TYPES.toArray(String[]::new),
+        "excel.pipeline.def.pipeline_type.prompt_title",
+        "excel.pipeline.def.pipeline_type.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        7,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
-  private void applyStepValidations(Sheet sheet) {
+  private void applyStepValidations(Sheet sheet, Locale locale) {
     addDropdownValidation(
-        sheet, 4, STAGE_CODES.toArray(String[]::new), "stage_code 填写提示", "请从下拉列表中选择阶段编码。");
+        sheet,
+        4,
+        STAGE_CODES.toArray(String[]::new),
+        "excel.pipeline.step.stage_code.prompt_title",
+        "excel.pipeline.step.stage_code.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 9, RETRY_POLICIES.toArray(String[]::new), "retry_policy 填写提示", "请从下拉列表中选择重试策略。");
-    addBooleanValidation(sheet, new int[] {11}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        sheet,
+        9,
+        RETRY_POLICIES.toArray(String[]::new),
+        "excel.pipeline.step.retry_policy.prompt_title",
+        "excel.pipeline.step.retry_policy.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        11,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
-  private void createReadmeSheet(Workbook workbook) {
+  private void createReadmeSheet(Workbook workbook, Locale locale) {
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "Pipeline 定义维护模板",
-      "1. 'pipeline_definition' sheet 维护 pipeline 定义；橙色表头表示必填字段。",
-      "2. 'pipeline_step_definition' sheet 维护 step 定义,按 job_code + version 关联。",
-      "3. pipeline_type / stage_code / retry_policy / enabled 已内置下拉值校验。",
-      "4. step_params 必须保持合法 JSON(或留空)。",
-      "5. 导入流程：上传 → 预览 → 应用。",
-      "6. 鼠标悬停表头单元格可查看字段规则与示例。"
+    String[] keys = {
+      "excel.pipeline.readme.title",
+      "excel.pipeline.readme.line1",
+      "excel.pipeline.readme.line2",
+      "excel.pipeline.readme.line3",
+      "excel.pipeline.readme.line4",
+      "excel.pipeline.readme.line5",
+      "excel.pipeline.readme.line6"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
