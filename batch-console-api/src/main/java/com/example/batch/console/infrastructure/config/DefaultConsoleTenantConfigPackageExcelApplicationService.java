@@ -14,22 +14,24 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.config.ConsoleTenantConfigPackageExcelApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
-import com.example.batch.console.domain.param.AlertRoutingConfigUpsertParam;
 import com.example.batch.console.domain.param.FileChannelConfigUpsertParam;
 import com.example.batch.console.domain.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.domain.param.WorkflowDefinitionUpsertParam;
 import com.example.batch.console.domain.param.WorkflowEdgeUpsertParam;
 import com.example.batch.console.domain.param.WorkflowNodeUpsertParam;
+import com.example.batch.console.domain.query.FileTemplateConfigQuery;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.domain.query.WorkflowDefinitionQuery;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter;
-import com.example.batch.console.mapper.AlertRoutingConfigMapper;
+import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser;
+import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
 import com.example.batch.console.mapper.BizTableSchemaQueryMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
+import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
@@ -85,10 +87,11 @@ import org.springframework.web.multipart.MultipartFile;
  *   <li>{@link #preview} — 用 token 取回 session，调 {@link ConfigPackageExcelValidator} 做 跨 sheet
  *       依赖校验（如 pipelineStep 引用的 jobCode 必须存在），返回每 sheet 的 valid/invalid 统计和逐行错误列表，不写库。
  *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内 按 job → channel →
- *       routing → pipeline+step → workflow+node+edge 顺序写库， 完成后 {@code importStore.remove(token)}。
+ *       fileTemplate → pipeline+step → workflow+node+edge 顺序写库， 完成后 {@code
+ *       importStore.remove(token)}。
  * </ol>
  *
- * <p><b>8 sheets</b>（顺序即写库顺序）： job、file_channel、alert_routing、pipeline_definition、pipeline_step、
+ * <p><b>8 sheets</b>（顺序即写库顺序）： job、file_channel、file_template、pipeline_definition、pipeline_step、
  * workflow_definition、workflow_node、workflow_edge。
  *
  * <p><b>多级结构写法</b>：
@@ -115,7 +118,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final TenantConfigPackageExcelImportStore importStore;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final FileChannelConfigMapper fileChannelConfigMapper;
-  private final AlertRoutingConfigMapper alertRoutingConfigMapper;
+  private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -132,7 +135,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
-        jobDefinitionMapper, pipelineDefinitionMapper, stepRegistryQueryMapper);
+        jobDefinitionMapper,
+        pipelineDefinitionMapper,
+        stepRegistryQueryMapper,
+        fileTemplateConfigMapper);
   }
 
   private ConfigPackageExcelWorkbookWriter workbookWriter() {
@@ -147,8 +153,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
             jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null)));
     List<Map<String, Object>> channels =
         fileChannelConfigMapper.selectByQuery(tid, null, null, null, null);
-    List<Map<String, Object>> routings =
-        alertRoutingConfigMapper.selectByQuery(tid, null, null, null, null, null);
+    List<Map<String, Object>> fileTemplates =
+        fileTemplateConfigMapper.selectByQuery(FileTemplateConfigQuery.ofTenant(tid, null));
     List<Map<String, Object>> pipelines =
         pipelineDefinitionMapper.selectByQuery(tid, null, null, null, null);
     List<Map<String, Object>> steps = rowProjections.collectPipelineSteps(pipelines);
@@ -161,7 +167,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     byte[] bytes =
         workbookWriter()
             .buildExportWorkbook(
-                List.of(jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges));
+                List.of(jobs, channels, fileTemplates, pipelines, steps, wfDefs, wfNodes, wfEdges));
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
@@ -215,7 +221,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         fileName,
         session.jobRows().size(),
         session.fileChannelRows().size(),
-        session.alertRoutingRows().size(),
+        session.fileTemplateRows().size(),
         session.pipelineRows().size(),
         session.pipelineStepRows().size(),
         session.workflowDefinitionRows().size(),
@@ -255,7 +261,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
     ApplyStats jobStats = applyJobs(result.validJobs(), ctx);
     ApplyStats channelStats = applyChannels(result.validChannels(), ctx);
-    ApplyStats routingStats = applyRoutings(result.validRoutings(), ctx);
+    ApplyStats fileTemplateStats = applyFileTemplates(result.validFileTemplates(), ctx);
     ApplyStats pipelineStats = applyPipelines(result.validPipelines(), result.validSteps(), ctx);
     ApplyStats wfStats =
         applyWorkflows(result.validWfDefs(), result.validWfNodes(), result.validWfEdges(), ctx);
@@ -268,8 +274,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         jobStats.updated(),
         channelStats.inserted(),
         channelStats.updated(),
-        routingStats.inserted(),
-        routingStats.updated(),
+        fileTemplateStats.inserted(),
+        fileTemplateStats.updated(),
         pipelineStats.inserted(),
         pipelineStats.updated(),
         wfStats.inserted(),
@@ -284,7 +290,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
           dateTimeSupport.nowInstant(),
           parseSheet(wb, JOB_SHEET, JOB_COLUMNS, tenantId),
           parseSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId),
-          parseSheet(wb, ROUTING_SHEET, ROUTING_COLUMNS, tenantId),
+          parseSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId),
           parseSheet(wb, PIPELINE_SHEET, PIPELINE_COLUMNS, tenantId),
           parseSheet(wb, STEP_SHEET, STEP_COLUMNS, null),
           parseSheet(wb, WF_DEF_SHEET, WF_DEF_COLUMNS, tenantId),
@@ -412,29 +418,22 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return new ApplyStats(inserted, updated);
   }
 
-  private ApplyStats applyRoutings(List<Map<String, String>> rows, ApplyContext ctx) {
+  private ApplyStats applyFileTemplates(List<Map<String, String>> rows, ApplyContext ctx) {
     int inserted = 0, updated = 0;
     for (Map<String, String> row : rows) {
-      String code = normalize(row.get(COL_ROUTE_CODE));
+      List<String> issues = new ArrayList<>();
+      TemplateRow template = FileTemplateExcelRowParser.parseRow(ctx.tenantId(), 0, row, issues);
+      if (!issues.isEmpty()) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.common.invalid_argument_detail",
+            "invalid file_template_config row: " + issues);
+      }
       Map<String, Object> existing =
-          alertRoutingConfigMapper.selectByUniqueKey(ctx.tenantId(), code);
-      AlertRoutingConfigUpsertParam param = new AlertRoutingConfigUpsertParam();
-      param.setTenantId(ctx.tenantId());
-      param.setRouteCode(code);
-      param.setRouteName(normalize(row.get(COL_ROUTE_NAME)));
-      param.setTeam(normalize(row.get(COL_TEAM)));
-      param.setAlertGroup(normalize(row.get(COL_ALERT_GROUP)));
-      param.setSeverity(normalizeEnum(row.get(COL_SEVERITY)));
-      param.setReceiver(normalize(row.get(COL_RECEIVER)));
-      param.setGroupBy(normalize(row.get("group_by")));
-      param.setGroupWaitSeconds(parseInteger(row.get("group_wait_seconds")));
-      param.setGroupIntervalSeconds(parseInteger(row.get("group_interval_seconds")));
-      param.setRepeatIntervalSeconds(parseInteger(row.get("repeat_interval_seconds")));
-      param.setEnabled(parseBoolean(row.get(COL_ENABLED), true));
-      param.setDescription(normalize(row.get(COL_DESCRIPTION)));
-      param.setCreatedBy(safeOp(ctx.operatorId()));
-      param.setUpdatedBy(safeOp(ctx.operatorId()));
-      alertRoutingConfigMapper.upsertAlertRoutingConfig(param);
+          fileTemplateConfigMapper.selectByUniqueKey(
+              ctx.tenantId(), template.templateCode(), template.version());
+      fileTemplateConfigMapper.upsertFileTemplateConfig(
+          FileTemplateExcelRowParser.toUpsertParam(ctx.tenantId(), template, ctx.operatorId()));
       if (existing == null || existing.isEmpty()) {
         inserted++;
       } else {
@@ -624,7 +623,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         List.of(
             toSheetStats(result.jobs()),
             toSheetStats(result.channels()),
-            toSheetStats(result.routings()),
+            toSheetStats(result.fileTemplates()),
             toSheetStats(result.pipelines()),
             toSheetStats(result.steps()),
             toSheetStats(result.wfDefs()),

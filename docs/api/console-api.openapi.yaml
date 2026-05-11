@@ -12196,7 +12196,7 @@ components:
         fileChannelRows:
           type: integer
           format: int32
-        alertRoutingRows:
+        fileTemplateRows:
           type: integer
           format: int32
         pipelineRows:
@@ -12214,7 +12214,7 @@ components:
         workflowEdgeRows:
           type: integer
           format: int32
-      required: [uploadToken, fileName, jobRows, fileChannelRows, alertRoutingRows, pipelineRows, pipelineStepRows, workflowDefinitionRows, workflowNodeRows, workflowEdgeRows]
+      required: [uploadToken, fileName, jobRows, fileChannelRows, fileTemplateRows, pipelineRows, pipelineStepRows, workflowDefinitionRows, workflowNodeRows, workflowEdgeRows]
     TenantConfigPackageExcelPreviewResponse:
       type: object
       properties:
@@ -12287,10 +12287,10 @@ components:
         channelUpdated:
           type: integer
           format: int32
-        routingInserted:
+        fileTemplateInserted:
           type: integer
           format: int32
-        routingUpdated:
+        fileTemplateUpdated:
           type: integer
           format: int32
         pipelineInserted:
@@ -12305,7 +12305,7 @@ components:
         workflowUpdated:
           type: integer
           format: int32
-      required: [uploadToken, tenantId, jobInserted, jobUpdated, channelInserted, channelUpdated, routingInserted, routingUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]
+      required: [uploadToken, tenantId, jobInserted, jobUpdated, channelInserted, channelUpdated, fileTemplateInserted, fileTemplateUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]
 
     # ── 补充枚举 schema（前端类型安全）──────────────────────────
     TriggerStatus:

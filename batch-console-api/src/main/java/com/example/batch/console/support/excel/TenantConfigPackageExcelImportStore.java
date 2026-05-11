@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-/** 租户配置包 Excel 上传会话存储。持有 8 个 sheet 的原始行数据直至 apply 完成。 */
+/** 租户配置包 Excel 上传会话存储。持有 8 个业务 sheet 的原始行数据直至 apply 完成。 */
 public interface TenantConfigPackageExcelImportStore {
 
   String save(PackageExcelSession session);
@@ -19,7 +19,7 @@ public interface TenantConfigPackageExcelImportStore {
       Instant uploadedAt,
       List<Map<String, String>> jobRows,
       List<Map<String, String>> fileChannelRows,
-      List<Map<String, String>> alertRoutingRows,
+      List<Map<String, String>> fileTemplateRows,
       List<Map<String, String>> pipelineRows,
       List<Map<String, String>> pipelineStepRows,
       List<Map<String, String>> workflowDefinitionRows,

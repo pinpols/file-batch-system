@@ -30,7 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 租户配置包（tenant-config-package）多 Sheet Excel 批量导入接口。
  *
- * <p>8 个数据 Sheet 合并为单文件导入：job_definition / file_channel_config / alert_routing_config /
+ * <p>8 个数据 Sheet 合并为单文件导入：job_definition / file_channel_config / file_template_config /
  * pipeline_definition / pipeline_step_definition / workflow_definition / workflow_node /
  * workflow_edge。
  *

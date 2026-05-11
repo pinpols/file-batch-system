@@ -11,6 +11,12 @@ import static com.example.batch.console.support.excel.ConsoleExcelStyles.setWidt
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.DictEnum;
+import com.example.batch.common.enums.FileChecksumType;
+import com.example.batch.common.enums.FileCompressType;
+import com.example.batch.common.enums.FileEncryptType;
+import com.example.batch.common.enums.FileTemplateFormat;
+import com.example.batch.common.enums.FileTemplateType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
@@ -25,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import org.apache.poi.ss.usermodel.Cell;
@@ -99,6 +106,7 @@ public class ConfigPackageExcelWorkbookWriter {
   private static final String GUIDE_INT = "整数";
   private static final String GUIDE_BOOL = "布尔值";
   private static final String GUIDE_JSON = "JSON";
+  private static final String GUIDE_SQL = "SQL";
   private static final String GUIDE_TRUE = "TRUE";
   private static final String GUIDE_FALSE = "FALSE";
   private static final String GUIDE_NONE = "NONE";
@@ -109,6 +117,12 @@ public class ConfigPackageExcelWorkbookWriter {
   private static final String GUIDE_JOB_EXAMPLE = "JOB_IMPORT_CUSTOMER";
   private static final String GUIDE_EMPTY_JSON = "{}";
   private static final String GUIDE_VERSION_ONE = "1";
+  private static final Set<String> FILE_TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
+  private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
+  private static final Set<String> CHECKSUM_TYPES = DictEnum.codes(FileChecksumType.class);
+  private static final Set<String> COMPRESS_TYPES = DictEnum.codes(FileCompressType.class);
+  private static final Set<String> ENCRYPT_TYPES = DictEnum.codes(FileEncryptType.class);
+  private static final int[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
 
   public static final List<String> JOB_COLUMNS =
       List.of(
@@ -146,20 +160,48 @@ public class ConfigPackageExcelWorkbookWriter {
           COL_TIMEOUT_SECONDS,
           COL_ENABLED);
 
-  public static final List<String> ROUTING_COLUMNS =
+  public static final List<String> FILE_TEMPLATE_COLUMNS =
       List.of(
           COL_TENANT_ID,
-          COL_ROUTE_CODE,
-          COL_ROUTE_NAME,
-          COL_TEAM,
-          COL_ALERT_GROUP,
-          COL_SEVERITY,
-          COL_RECEIVER,
-          "group_by",
-          "group_wait_seconds",
-          "group_interval_seconds",
-          "repeat_interval_seconds",
+          "template_code",
+          "template_name",
+          "template_type",
+          COL_BIZ_TYPE,
+          "file_format_type",
+          "charset",
+          "target_charset",
+          "with_bom",
+          "line_separator",
+          "delimiter",
+          "quote_char",
+          "escape_char",
+          "record_length",
+          "header_rows",
+          "footer_rows",
+          "header_template",
+          "trailer_template",
+          "checksum_type",
+          "compress_type",
+          "encrypt_type",
+          "naming_rule",
+          "field_mappings",
+          "validation_rule_set",
+          "default_query_code",
+          "default_query_sql",
+          "query_param_schema",
+          "streaming_enabled",
+          "page_size",
+          "fetch_size",
+          "chunk_size",
+          "preview_masking_enabled",
+          "error_line_masking_enabled",
+          "log_masking_enabled",
+          "content_encryption_enabled",
+          "encryption_key_ref",
+          "download_requires_approval",
+          "masking_rule_set",
           COL_ENABLED,
+          COL_VERSION,
           COL_DESCRIPTION);
 
   public static final List<String> PIPELINE_COLUMNS =
@@ -259,10 +301,10 @@ public class ConfigPackageExcelWorkbookWriter {
                 buildChannelGuides(),
                 this::applyChannelValidations),
             new SheetDef(
-                ROUTING_SHEET,
-                ROUTING_COLUMNS,
-                buildRoutingGuides(),
-                this::applyRoutingValidations),
+                FILE_TEMPLATE_SHEET,
+                FILE_TEMPLATE_COLUMNS,
+                buildFileTemplateGuides(),
+                this::applyFileTemplateValidations),
             new SheetDef(
                 PIPELINE_SHEET,
                 PIPELINE_COLUMNS,
@@ -318,7 +360,7 @@ public class ConfigPackageExcelWorkbookWriter {
         List.of(
             session.jobRows(),
             session.fileChannelRows(),
-            session.alertRoutingRows(),
+            session.fileTemplateRows(),
             session.pipelineRows(),
             session.pipelineStepRows(),
             session.workflowDefinitionRows(),
@@ -328,7 +370,7 @@ public class ConfigPackageExcelWorkbookWriter {
         List.of(
             result.jobs(),
             result.channels(),
-            result.routings(),
+            result.fileTemplates(),
             result.pipelines(),
             result.steps(),
             result.wfDefs(),
@@ -570,16 +612,50 @@ public class ConfigPackageExcelWorkbookWriter {
     boolDropdown(sheet, 9, locale);
   }
 
-  private void applyRoutingValidations(Sheet sheet, Locale locale) {
+  private void applyFileTemplateValidations(Sheet sheet, Locale locale) {
+    addDropdownValidation(
+        sheet,
+        3,
+        FILE_TEMPLATE_TYPES.toArray(String[]::new),
+        "excel.template.template_type.prompt_title",
+        "excel.template.template_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         sheet,
         5,
-        SEVERITIES.toArray(String[]::new),
-        "excel.alert.severity.prompt_title",
-        "excel.alert.severity.prompt_box",
+        FILE_FORMAT_TYPES.toArray(String[]::new),
+        "excel.template.file_format_type.prompt_title",
+        "excel.template.file_format_type.prompt_box",
         messageSource,
         locale);
-    boolDropdown(sheet, 11, locale);
+    addDropdownValidation(
+        sheet,
+        18,
+        CHECKSUM_TYPES.toArray(String[]::new),
+        "excel.template.checksum_type.prompt_title",
+        "excel.template.checksum_type.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        19,
+        COMPRESS_TYPES.toArray(String[]::new),
+        "excel.template.compress_type.prompt_title",
+        "excel.template.compress_type.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        20,
+        ENCRYPT_TYPES.toArray(String[]::new),
+        "excel.template.encrypt_type.prompt_title",
+        "excel.template.encrypt_type.prompt_box",
+        messageSource,
+        locale);
+    for (int col : FILE_TEMPLATE_BOOLEAN_COLUMNS) {
+      boolDropdown(sheet, col, locale);
+    }
   }
 
   private void applyPipelineValidations(Sheet sheet, Locale locale) {
@@ -786,26 +862,97 @@ public class ConfigPackageExcelWorkbookWriter {
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
   }
 
-  private Map<String, ConsoleExcelStyles.ColumnGuide> buildRoutingGuides() {
+  private Map<String, ConsoleExcelStyles.ColumnGuide> buildFileTemplateGuides() {
     return Map.ofEntries(
         Map.entry(
             COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(COL_ROUTE_CODE, requiredColumn("路由唯一编码。", GUIDE_STR, "RT_BATCH_ERROR")),
-        Map.entry(COL_ROUTE_NAME, requiredColumn("路由名称。", GUIDE_STR, "批处理异常路由")),
-        Map.entry(COL_TEAM, requiredColumn("负责团队。", GUIDE_STR, "ops")),
-        Map.entry(COL_ALERT_GROUP, requiredColumn("告警分组。", GUIDE_STR, "batch")),
+        Map.entry("template_code", requiredColumn("文件模板唯一编码。", GUIDE_STR, "TPL_IMPORT_CUSTOMER")),
+        Map.entry("template_name", requiredColumn("文件模板名称。", GUIDE_STR, "客户导入模板")),
         Map.entry(
-            COL_SEVERITY,
-            requiredColumn("告警级别。", GUIDE_ENUM, "ERROR", "INFO", "WARN", "ERROR", "CRITICAL")),
-        Map.entry(COL_RECEIVER, requiredColumn("接收方。", GUIDE_STR, "slack-ops")),
-        Map.entry("group_by", optionalColumn("聚合分组键。", GUIDE_STR, COL_JOB_CODE)),
-        Map.entry("group_wait_seconds", optionalColumn("聚合等待秒数。", GUIDE_INT, "30")),
-        Map.entry("group_interval_seconds", optionalColumn("聚合间隔秒数。", GUIDE_INT, "300")),
-        Map.entry("repeat_interval_seconds", optionalColumn("重复通知间隔秒数。", GUIDE_INT, "3600")),
+            "template_type",
+            requiredColumn("模板类型。", GUIDE_ENUM, "IMPORT", "IMPORT", "EXPORT", "SHARED")),
+        Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
+        Map.entry(
+            "file_format_type",
+            requiredColumn(
+                "文件格式。",
+                GUIDE_ENUM,
+                "DELIMITED",
+                "DELIMITED",
+                "FIXED_WIDTH",
+                "EXCEL",
+                "XML",
+                "JSON",
+                "BINARY")),
+        Map.entry("charset", optionalColumn("源文件字符集。", GUIDE_STR, "UTF-8")),
+        Map.entry("target_charset", optionalColumn("导出目标字符集。", GUIDE_STR, "UTF-8")),
+        Map.entry(
+            "with_bom",
+            optionalColumn("是否带 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry("line_separator", optionalColumn("换行符。", GUIDE_STR, "\\n")),
+        Map.entry("delimiter", optionalColumn("分隔符。", GUIDE_STR, ",")),
+        Map.entry("quote_char", optionalColumn("引用符。", GUIDE_STR, "\"")),
+        Map.entry("escape_char", optionalColumn("转义符。", GUIDE_STR, "\\")),
+        Map.entry("record_length", optionalColumn("定长文件记录长度。", GUIDE_INT, "0")),
+        Map.entry("header_rows", optionalColumn("导入跳过头部行数。", GUIDE_INT, "1")),
+        Map.entry("footer_rows", optionalColumn("导入跳过尾部行数。", GUIDE_INT, "0")),
+        Map.entry("header_template", optionalColumn("导出头部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+        Map.entry("trailer_template", optionalColumn("导出尾部模板 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+        Map.entry(
+            "checksum_type",
+            requiredColumn("校验类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA256")),
+        Map.entry(
+            "compress_type",
+            requiredColumn("压缩类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "ZIP", "GZIP")),
+        Map.entry(
+            "encrypt_type",
+            requiredColumn("加密类型。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "PGP", "AES")),
+        Map.entry("naming_rule", optionalColumn("文件命名规则。", GUIDE_STR, "customer_${batchDate}.csv")),
+        Map.entry(
+            "field_mappings",
+            optionalColumn(
+                "字段映射 JSON。", GUIDE_JSON, "[{\"source\":\"name\",\"target\":\"NAME\"}]")),
+        Map.entry(
+            "validation_rule_set",
+            optionalColumn(
+                "校验规则 JSON。", GUIDE_JSON, "[{\"field\":\"name\",\"rule\":\"required\"}]")),
+        Map.entry(
+            "default_query_code", optionalColumn("默认查询编码。", GUIDE_STR, "QRY_CUSTOMER_EXPORT")),
+        Map.entry(
+            "default_query_sql", optionalColumn("默认导出 SQL。", GUIDE_SQL, "select * from customer")),
+        Map.entry(
+            "query_param_schema",
+            optionalColumn("查询参数 JSON Schema。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+        Map.entry(
+            "streaming_enabled",
+            optionalColumn("是否流式处理。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry("page_size", optionalColumn("分页大小。", GUIDE_INT, "1000")),
+        Map.entry("fetch_size", optionalColumn("JDBC fetch size。", GUIDE_INT, "1000")),
+        Map.entry("chunk_size", optionalColumn("分块大小。", GUIDE_INT, "500")),
+        Map.entry(
+            "preview_masking_enabled",
+            optionalColumn("预览是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            "error_line_masking_enabled",
+            optionalColumn("错误行是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            "log_masking_enabled",
+            optionalColumn("日志是否脱敏。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            "content_encryption_enabled",
+            optionalColumn("内容是否加密。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            "encryption_key_ref",
+            optionalColumn("密钥引用。", GUIDE_STR, "kms://file-template/customer")),
+        Map.entry(
+            "download_requires_approval",
+            optionalColumn("下载是否需要审批。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry("masking_rule_set", optionalColumn("脱敏规则集编码。", GUIDE_STR, "MASK_CUSTOMER")),
         Map.entry(
             COL_ENABLED,
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "批处理失败默认路由")));
+        Map.entry(COL_VERSION, optionalColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户导入文件模板")));
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildPipelineGuides() {

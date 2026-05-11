@@ -6,7 +6,6 @@ import static com.example.batch.console.support.excel.SheetValidationHelpers.req
 import static com.example.batch.console.support.excel.SheetValidationHelpers.requiredEnum;
 import static com.example.batch.console.support.excel.SheetValidationHelpers.validateJsonField;
 
-import com.example.batch.common.enums.AlertSeverity;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
@@ -21,11 +20,16 @@ import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
+import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -85,11 +89,6 @@ public class ConfigPackageExcelValidator {
   public static final String COL_CHANNEL_CODE = "channel_code";
   public static final String COL_CHANNEL_NAME = "channel_name";
   public static final String COL_CONFIG_JSON = "config_json";
-  public static final String COL_ROUTE_CODE = "route_code";
-  public static final String COL_ROUTE_NAME = "route_name";
-  public static final String COL_TEAM = "team";
-  public static final String COL_ALERT_GROUP = "alert_group";
-  public static final String COL_RECEIVER = "receiver";
   public static final String COL_PIPELINE_NAME = "pipeline_name";
   public static final String COL_STEP_CODE = "step_code";
   public static final String COL_STEP_NAME = "step_name";
@@ -102,7 +101,7 @@ public class ConfigPackageExcelValidator {
 
   public static final String JOB_SHEET = "job_definition";
   public static final String CHANNEL_SHEET = "file_channel_config";
-  public static final String ROUTING_SHEET = "alert_routing_config";
+  public static final String FILE_TEMPLATE_SHEET = FileTemplateExcelRowParser.SHEET_NAME;
   public static final String PIPELINE_SHEET = "pipeline_definition";
   public static final String STEP_SHEET = "pipeline_step_definition";
   public static final String WF_DEF_SHEET = "workflow_definition";
@@ -116,7 +115,6 @@ public class ConfigPackageExcelValidator {
   public static final Set<String> CHANNEL_TYPES = DictEnum.codes(FileChannelType.class);
   public static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
   public static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
-  public static final Set<String> SEVERITIES = DictEnum.codes(AlertSeverity.class);
   public static final Set<String> PIPELINE_TYPES = DictEnum.codes(PipelineType.class);
   // 旧的 STAGE_CODES 是跨 module 的 union，现在只保留做"基础形状校验"；精确校验按
   // pipeline_type 查 STAGES_BY_TYPE（对齐 worker 侧 ImportStage / ExportStage / DispatchStage
@@ -153,14 +151,18 @@ public class ConfigPackageExcelValidator {
   private final JobDefinitionMapper jobDefinitionMapper;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final StepRegistryQueryMapper stepRegistryQueryMapper;
+  private final FileTemplateConfigMapper fileTemplateConfigMapper;
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   public ConfigPackageExcelValidator(
       JobDefinitionMapper jobDefinitionMapper,
       PipelineDefinitionMapper pipelineDefinitionMapper,
-      StepRegistryQueryMapper stepRegistryQueryMapper) {
+      StepRegistryQueryMapper stepRegistryQueryMapper,
+      FileTemplateConfigMapper fileTemplateConfigMapper) {
     this.jobDefinitionMapper = jobDefinitionMapper;
     this.pipelineDefinitionMapper = pipelineDefinitionMapper;
     this.stepRegistryQueryMapper = stepRegistryQueryMapper;
+    this.fileTemplateConfigMapper = fileTemplateConfigMapper;
   }
 
   public record SheetResult(
@@ -180,7 +182,7 @@ public class ConfigPackageExcelValidator {
   public record PackageValidationResult(
       SheetResult jobs,
       SheetResult channels,
-      SheetResult routings,
+      SheetResult fileTemplates,
       SheetResult pipelines,
       SheetResult steps,
       SheetResult wfDefs,
@@ -191,7 +193,7 @@ public class ConfigPackageExcelValidator {
     public int totalInvalid() {
       return jobs.invalid()
           + channels.invalid()
-          + routings.invalid()
+          + fileTemplates.invalid()
           + pipelines.invalid()
           + steps.invalid()
           + wfDefs.invalid()
@@ -208,8 +210,8 @@ public class ConfigPackageExcelValidator {
       return channels.validRows();
     }
 
-    public List<Map<String, String>> validRoutings() {
-      return routings.validRows();
+    public List<Map<String, String>> validFileTemplates() {
+      return fileTemplates.validRows();
     }
 
     public List<Map<String, String>> validPipelines() {
@@ -236,7 +238,7 @@ public class ConfigPackageExcelValidator {
       List<WorkbookIssue> all = new ArrayList<>();
       all.addAll(jobs.issues());
       all.addAll(channels.issues());
-      all.addAll(routings.issues());
+      all.addAll(fileTemplates.issues());
       all.addAll(pipelines.issues());
       all.addAll(steps.issues());
       all.addAll(wfDefs.issues());
@@ -251,7 +253,7 @@ public class ConfigPackageExcelValidator {
     String tid = session.tenantId();
     SheetResult jobs = validateJobRows(tid, session.jobRows());
     SheetResult channels = validateChannelRows(tid, session.fileChannelRows());
-    SheetResult routings = validateRoutingRows(tid, session.alertRoutingRows());
+    SheetResult fileTemplates = validateFileTemplateRows(tid, session.fileTemplateRows());
     SheetResult pipelines = validatePipelineRows(tid, session.pipelineRows());
     SheetResult steps = validateStepRows(session.pipelineStepRows(), pipelines.validRows());
     SheetResult wfDefs = validateWfDefRows(tid, session.workflowDefinitionRows());
@@ -263,11 +265,13 @@ public class ConfigPackageExcelValidator {
         validateCrossReferences(
             tid,
             jobs.validRows(),
+            fileTemplates.validRows(),
             pipelines.validRows(),
+            steps.validRows(),
             wfNodes.validRows(),
             session.pipelineRows());
     return new PackageValidationResult(
-        jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges, crossIssues);
+        jobs, channels, fileTemplates, pipelines, steps, wfDefs, wfNodes, wfEdges, crossIssues);
   }
 
   private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
@@ -335,35 +339,25 @@ public class ConfigPackageExcelValidator {
     }
   }
 
-  private SheetResult validateRoutingRows(String tenantId, List<Map<String, String>> rows) {
+  private SheetResult validateFileTemplateRows(String tenantId, List<Map<String, String>> rows) {
     List<WorkbookIssue> issues = new ArrayList<>();
     List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
     int rowNo = 2;
     for (Map<String, String> row : rows) {
       List<String> ri = new ArrayList<>();
-      validateRoutingRow(tenantId, row, seen, ri);
-      addIssues(ri, ROUTING_SHEET, rowNo, issues);
+      TemplateRow template = FileTemplateExcelRowParser.parseRow(tenantId, rowNo, row, ri);
+      String key = templateKey(template.templateCode(), template.version());
+      if (hasText(template.templateCode()) && !seen.add(key)) {
+        ri.add("duplicate template_code + version in excel: " + key);
+      }
+      addIssues(ri, FILE_TEMPLATE_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
         valid.add(row);
       }
       rowNo++;
     }
-    return new SheetResult(ROUTING_SHEET, rows.size(), valid, issues);
-  }
-
-  private static void validateRoutingRow(
-      String tenantId, Map<String, String> row, Set<String> seen, List<String> ri) {
-    String code = normalize(row.get(COL_ROUTE_CODE));
-    requireField(ri, code, "route_code");
-    requireField(ri, normalize(row.get(COL_ROUTE_NAME)), "route_name");
-    requireField(ri, normalize(row.get(COL_TEAM)), "team");
-    requireField(ri, normalize(row.get(COL_ALERT_GROUP)), "alert_group");
-    requiredEnum(normalizeEnum(row.get(COL_SEVERITY)), "severity", SEVERITIES, ri);
-    requireField(ri, normalize(row.get(COL_RECEIVER)), "receiver");
-    if (hasText(code) && !seen.add(tenantId + KEY_SEP_HASH + code)) {
-      ri.add("duplicate route_code in excel: " + code);
-    }
+    return new SheetResult(FILE_TEMPLATE_SHEET, rows.size(), valid, issues);
   }
 
   private SheetResult validatePipelineRows(String tenantId, List<Map<String, String>> rows) {
@@ -725,7 +719,9 @@ public class ConfigPackageExcelValidator {
   private List<WorkbookIssue> validateCrossReferences(
       String tenantId,
       List<Map<String, String>> validJobs,
+      List<Map<String, String>> validFileTemplates,
       List<Map<String, String>> validPipelines,
+      List<Map<String, String>> validSteps,
       List<Map<String, String>> validWfNodes,
       List<Map<String, String>> allPipelineRows) {
     Set<String> jobCodesInExcel =
@@ -738,6 +734,7 @@ public class ConfigPackageExcelValidator {
             .map(r -> normalize(r.get(COL_JOB_CODE)))
             .filter(Texts::hasText)
             .collect(Collectors.toSet());
+    Set<String> fileTemplatesInExcel = buildFileTemplateKeys(validFileTemplates);
     List<WorkbookIssue> issues = new ArrayList<>();
 
     int rowNo = 2;
@@ -755,6 +752,11 @@ public class ConfigPackageExcelValidator {
       }
       rowNo++;
     }
+
+    addTemplateReferenceIssues(
+        tenantId, JOB_SHEET, COL_DEFAULT_PARAMS, validJobs, fileTemplatesInExcel, issues);
+    addTemplateReferenceIssues(
+        tenantId, STEP_SHEET, "step_params", validSteps, fileTemplatesInExcel, issues);
 
     rowNo = 2;
     for (Map<String, String> row : validWfNodes) {
@@ -786,6 +788,126 @@ public class ConfigPackageExcelValidator {
       rowNo++;
     }
     return issues;
+  }
+
+  private void addTemplateReferenceIssues(
+      String tenantId,
+      String sheetName,
+      String jsonColumn,
+      List<Map<String, String>> rows,
+      Set<String> fileTemplatesInExcel,
+      List<WorkbookIssue> issues) {
+    int rowNo = 2;
+    for (Map<String, String> row : rows) {
+      TemplateRef ref = extractTemplateRef(row.get(jsonColumn));
+      if (ref.hasTemplateCode()
+          && !fileTemplatesInExcel.contains(templateKey(ref.templateCode(), ref.version()))
+          && !fileTemplateExists(tenantId, ref)) {
+        issues.add(
+            new WorkbookIssue(
+                sheetName,
+                rowNo,
+                jsonColumn,
+                "templateCode references unknown file_template_config: "
+                    + templateKey(ref.templateCode(), ref.version())));
+      }
+      rowNo++;
+    }
+  }
+
+  private static Set<String> buildFileTemplateKeys(List<Map<String, String>> rows) {
+    Set<String> keys = new HashSet<>();
+    for (Map<String, String> row : rows) {
+      String templateCode = normalize(row.get("template_code"));
+      Integer version = parseVersion(row.get(COL_VERSION));
+      if (hasText(templateCode)) {
+        keys.add(templateCode);
+        keys.add(templateKey(templateCode, version));
+      }
+    }
+    return keys;
+  }
+
+  private TemplateRef extractTemplateRef(String json) {
+    String n = normalize(json);
+    if (!hasText(n)) {
+      return TemplateRef.empty();
+    }
+    try {
+      JsonNode root = objectMapper.readTree(n);
+      String templateCode = firstText(root, "templateCode", "template_code");
+      Integer version = firstInt(root, "templateVersion", "template_version", "version");
+      return new TemplateRef(templateCode, version);
+    } catch (JsonProcessingException e) {
+      return TemplateRef.empty();
+    }
+  }
+
+  private static String firstText(JsonNode root, String... names) {
+    for (String name : names) {
+      JsonNode node = root.get(name);
+      if (node != null && !node.isNull() && hasText(node.asText())) {
+        return normalize(node.asText());
+      }
+    }
+    return null;
+  }
+
+  private static Integer firstInt(JsonNode root, String... names) {
+    for (String name : names) {
+      JsonNode node = root.get(name);
+      if (node == null || node.isNull()) {
+        continue;
+      }
+      if (node.canConvertToInt()) {
+        return node.asInt();
+      }
+      Integer parsed = parseVersion(node.asText());
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  private boolean fileTemplateExists(String tenantId, TemplateRef ref) {
+    if (ref.version() != null) {
+      Map<String, Object> found =
+          fileTemplateConfigMapper.selectByUniqueKey(tenantId, ref.templateCode(), ref.version());
+      return found != null && !found.isEmpty();
+    }
+    Map<String, Object> found =
+        fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, ref.templateCode());
+    return found != null && !found.isEmpty();
+  }
+
+  private static String templateKey(String templateCode, Integer version) {
+    if (!hasText(templateCode)) {
+      return null;
+    }
+    return version == null ? templateCode : templateCode + KEY_SEP_COLON + version;
+  }
+
+  private static Integer parseVersion(String value) {
+    String n = normalize(value);
+    if (!hasText(n)) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(n);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private record TemplateRef(String templateCode, Integer version) {
+    private static TemplateRef empty() {
+      return new TemplateRef(null, null);
+    }
+
+    private boolean hasTemplateCode() {
+      return hasText(templateCode);
+    }
   }
 
   public static String normalize(String value) {
