@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.file;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
@@ -33,6 +32,7 @@ import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import com.example.batch.console.web.response.file.ConsoleFileTemplateResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.Builder;
@@ -43,6 +43,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -140,110 +141,246 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   private static final int[] BOOLEAN_VALIDATION_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry(
+              "tenant_id",
+              optionalColumn(
+                  "excel.template.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
           Map.entry(
               "template_code",
-              requiredColumn("模板唯一编码，与 version 一起作为导入匹配键。", GUIDE_STR, "TPL_SETTLEMENT_001")),
-          Map.entry("template_name", requiredColumn("控制台展示的模板名称。", GUIDE_STR, "清算导出模板")),
+              requiredColumn(
+                  "excel.template.template_code.desc",
+                  "excel.guide.format.string",
+                  "TPL_SETTLEMENT_001")),
+          Map.entry(
+              "template_name",
+              requiredColumn(
+                  "excel.template.template_name.desc", "excel.guide.format.string", "清算导出模板")),
           Map.entry(
               COL_TEMPLATE_TYPE,
-              requiredColumn("文件模板在链路中的角色。", GUIDE_ENUM, "EXPORT", "IMPORT", "EXPORT", "SHARED")),
-          Map.entry("biz_type", optionalColumn("用于检索和治理的业务分类标签。", GUIDE_STR, "SETTLEMENT")),
+              requiredColumn(
+                  "excel.template.template_type.desc",
+                  "excel.guide.format.enum",
+                  "EXPORT",
+                  "IMPORT",
+                  "EXPORT",
+                  "SHARED")),
+          Map.entry(
+              "biz_type",
+              optionalColumn(
+                  "excel.template.biz_type.desc", "excel.guide.format.string", "SETTLEMENT")),
           Map.entry(
               COL_FILE_FORMAT_TYPE,
               requiredColumn(
-                  "模板生产或消费的物理文件格式。",
-                  GUIDE_ENUM,
+                  "excel.template.file_format_type.desc",
+                  "excel.guide.format.enum",
                   "DELIMITED",
                   "DELIMITED",
                   "FIXED_WIDTH",
                   "EXCEL",
                   "XML",
-                  GUIDE_JSON,
+                  "JSON",
                   "BINARY")),
-          Map.entry("charset", optionalColumn("文本类文件的源字符集。", GUIDE_STR, "UTF-8")),
-          Map.entry("target_charset", optionalColumn("导出转换时的目标字符集。", GUIDE_STR, "GBK")),
+          Map.entry(
+              "charset",
+              optionalColumn("excel.template.charset.desc", "excel.guide.format.string", "UTF-8")),
+          Map.entry(
+              "target_charset",
+              optionalColumn(
+                  "excel.template.target_charset.desc", "excel.guide.format.string", "GBK")),
           Map.entry(
               COL_WITH_BOM,
-              optionalColumn("文本文件是否写入 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry("line_separator", optionalColumn("文本输出使用的换行符。", GUIDE_STR, "\\n")),
-          Map.entry("delimiter", optionalColumn("分隔文本使用的列分隔符。", GUIDE_STR, ",")),
-          Map.entry("quote_char", optionalColumn("分隔文本使用的引号字符。", GUIDE_STR, "\"")),
-          Map.entry("escape_char", optionalColumn("分隔文本使用的转义字符。", GUIDE_STR, "\\")),
-          Map.entry("record_length", optionalColumn("定长文件的记录长度，必须大于等于 0。", GUIDE_INT, "200")),
-          Map.entry("header_rows", optionalColumn("文件头行数，必须大于等于 0。", GUIDE_INT, "1")),
-          Map.entry("footer_rows", optionalColumn("文件尾行数，必须大于等于 0。", GUIDE_INT, "0")),
+              optionalColumn(
+                  "excel.template.with_bom.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_FALSE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
+          Map.entry(
+              "line_separator",
+              optionalColumn(
+                  "excel.template.line_separator.desc", "excel.guide.format.string", "\\n")),
+          Map.entry(
+              "delimiter",
+              optionalColumn("excel.template.delimiter.desc", "excel.guide.format.string", ",")),
+          Map.entry(
+              "quote_char",
+              optionalColumn("excel.template.quote_char.desc", "excel.guide.format.string", "\"")),
+          Map.entry(
+              "escape_char",
+              optionalColumn("excel.template.escape_char.desc", "excel.guide.format.string", "\\")),
+          Map.entry(
+              "record_length",
+              optionalColumn(
+                  "excel.template.record_length.desc", "excel.guide.format.integer", "200")),
+          Map.entry(
+              "header_rows",
+              optionalColumn("excel.template.header_rows.desc", "excel.guide.format.integer", "1")),
+          Map.entry(
+              "footer_rows",
+              optionalColumn("excel.template.footer_rows.desc", "excel.guide.format.integer", "0")),
           Map.entry(
               "header_template",
-              optionalColumn("文件头模板定义，请保持为合法 JSON。", GUIDE_JSON, "{\"recordType\":\"H\"}")),
+              optionalColumn(
+                  "excel.template.header_template.desc",
+                  "excel.guide.format.json",
+                  "{\"recordType\":\"H\"}")),
           Map.entry(
               "trailer_template",
-              optionalColumn("文件尾模板定义，请保持为合法 JSON。", GUIDE_JSON, "{\"recordType\":\"T\"}")),
+              optionalColumn(
+                  "excel.template.trailer_template.desc",
+                  "excel.guide.format.json",
+                  "{\"recordType\":\"T\"}")),
           Map.entry(
               COL_CHECKSUM_TYPE,
-              requiredColumn("文件使用的校验算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA-256")),
+              requiredColumn(
+                  "excel.template.checksum_type.desc",
+                  "excel.guide.format.enum",
+                  GUIDE_NONE,
+                  GUIDE_NONE,
+                  "MD5",
+                  "SHA-256")),
           Map.entry(
               COL_COMPRESS_TYPE,
-              requiredColumn("文件使用的压缩算法。", GUIDE_ENUM, "ZIP", GUIDE_NONE, "ZIP", "GZIP")),
+              requiredColumn(
+                  "excel.template.compress_type.desc",
+                  "excel.guide.format.enum",
+                  "ZIP",
+                  GUIDE_NONE,
+                  "ZIP",
+                  "GZIP")),
           Map.entry(
               COL_ENCRYPT_TYPE,
               requiredColumn(
-                  "文件使用的加密算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AES", "PGP", "CUSTOM")),
-          Map.entry("naming_rule", optionalColumn("文件命名规则或命名模板。", "表达式", "${bizDate}_${seq}.csv")),
+                  "excel.template.encrypt_type.desc",
+                  "excel.guide.format.enum",
+                  GUIDE_NONE,
+                  GUIDE_NONE,
+                  "AES",
+                  "PGP",
+                  "CUSTOM")),
+          Map.entry(
+              "naming_rule",
+              optionalColumn(
+                  "excel.template.naming_rule.desc",
+                  "excel.guide.format.expression",
+                  "${bizDate}_${seq}.csv")),
           Map.entry(
               "field_mappings",
               optionalColumn(
-                  "源字段与文件列之间的映射定义，请保持为合法 JSON。",
-                  GUIDE_JSON,
+                  "excel.template.field_mappings.desc",
+                  "excel.guide.format.json",
                   "[{\"source\":\"amount\",\"target\":\"AMOUNT\"}]")),
           Map.entry(
               "validation_rule_set",
               optionalColumn(
-                  "解析或生成时执行的校验规则，请保持为合法 JSON。",
-                  GUIDE_JSON,
+                  "excel.template.validation_rule_set.desc",
+                  "excel.guide.format.json",
                   "[{\"field\":\"amount\",\"rule\":\"required\"}]")),
           Map.entry(
               "default_query_code",
-              optionalColumn("导出步骤引用的默认查询编码。", GUIDE_STR, "QRY_SETTLEMENT_EXPORT")),
+              optionalColumn(
+                  "excel.template.default_query_code.desc",
+                  "excel.guide.format.string",
+                  "QRY_SETTLEMENT_EXPORT")),
           Map.entry(
               "default_query_sql",
-              optionalColumn("模板中可选的内联 SQL。", "SQL", "select * from settlement_result")),
+              optionalColumn(
+                  "excel.template.default_query_sql.desc",
+                  "excel.guide.format.sql",
+                  "select * from settlement_result")),
           Map.entry(
               "query_param_schema",
-              optionalColumn("查询参数 Schema，请保持为合法 JSON。", GUIDE_JSON, "{\"type\":\"object\"}")),
+              optionalColumn(
+                  "excel.template.query_param_schema.desc",
+                  "excel.guide.format.json",
+                  "{\"type\":\"object\"}")),
           Map.entry(
               COL_STREAMING_ENABLED,
-              optionalColumn("大结果集导出时是否启用流式处理。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry("page_size", optionalColumn("分页读取大小，必须大于等于 0。", GUIDE_INT, "1000")),
-          Map.entry("fetch_size", optionalColumn("数据库抓取大小，必须大于等于 0。", GUIDE_INT, "1000")),
-          Map.entry("chunk_size", optionalColumn("分段生成文件时的块大小，必须大于等于 0。", GUIDE_INT, "500")),
+              optionalColumn(
+                  "excel.template.streaming_enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
+          Map.entry(
+              "page_size",
+              optionalColumn(
+                  "excel.template.page_size.desc", "excel.guide.format.integer", "1000")),
+          Map.entry(
+              "fetch_size",
+              optionalColumn(
+                  "excel.template.fetch_size.desc", "excel.guide.format.integer", "1000")),
+          Map.entry(
+              "chunk_size",
+              optionalColumn(
+                  "excel.template.chunk_size.desc", "excel.guide.format.integer", "500")),
           Map.entry(
               "preview_masking_enabled",
-              optionalColumn("预览结果是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn(
+                  "excel.template.preview_masking_enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_FALSE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
           Map.entry(
               "error_line_masking_enabled",
-              optionalColumn("错误明细导出是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn(
+                  "excel.template.error_line_masking_enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_FALSE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
           Map.entry(
               "log_masking_enabled",
-              optionalColumn("日志是否对敏感字段脱敏。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn(
+                  "excel.template.log_masking_enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
           Map.entry(
               "content_encryption_enabled",
-              optionalColumn("存储中的文件内容是否加密。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn(
+                  "excel.template.content_encryption_enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_FALSE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
           Map.entry(
               "encryption_key_ref",
-              optionalColumn("加密所使用的密钥引用。", GUIDE_STR, "kms://file-template/settlement")),
+              optionalColumn(
+                  "excel.template.encryption_key_ref.desc",
+                  "excel.guide.format.string",
+                  "kms://file-template/settlement")),
           Map.entry(
               COL_DOWNLOAD_REQUIRES_APPROVAL,
-              optionalColumn("下载前是否需要人工审批。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn(
+                  "excel.template.download_requires_approval.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
           Map.entry(
               "masking_rule_set",
-              optionalColumn("脱敏规则集标识或表达式。", GUIDE_STR, "MASK_RULE_SETTLEMENT")),
+              optionalColumn(
+                  "excel.template.masking_rule_set.desc",
+                  "excel.guide.format.string",
+                  "MASK_RULE_SETTLEMENT")),
           Map.entry(
               COL_ENABLED,
-              optionalColumn("文件模板是否启用。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn(
+                  "excel.template.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
           Map.entry(
-              "version", optionalColumn("模板版本号，template_code + version 必须唯一。", GUIDE_INT, "1")),
-          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "清算导出模板")));
+              "version",
+              optionalColumn("excel.template.version.desc", "excel.guide.format.integer", "1")),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.template.description.desc", "excel.guide.format.string", "清算导出模板")));
 
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -412,34 +549,73 @@ public class DefaultConsoleFileTemplateExcelApplicationService
 
   @Override
   protected void applyValidations(Sheet sheet) {
+    Locale locale = LocaleContextHolder.getLocale();
     addDropdownValidation(
         sheet,
         3,
         TEMPLATE_TYPES.toArray(String[]::new),
-        "template_type 填写提示",
-        "请从下拉列表中选择 IMPORT、EXPORT 或 SHARED。");
+        "excel.template.template_type.prompt_title",
+        "excel.template.template_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         sheet,
         5,
         FILE_FORMAT_TYPES.toArray(String[]::new),
-        "file_format_type 填写提示",
-        "请从下拉列表中选择物理文件格式。");
+        "excel.template.file_format_type.prompt_title",
+        "excel.template.file_format_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 18, CHECKSUM_TYPES.toArray(String[]::new), "checksum_type 填写提示", "请从下拉列表中选择校验算法。");
+        sheet,
+        18,
+        CHECKSUM_TYPES.toArray(String[]::new),
+        "excel.template.checksum_type.prompt_title",
+        "excel.template.checksum_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 19, COMPRESS_TYPES.toArray(String[]::new), "compress_type 填写提示", "请从下拉列表中选择压缩算法。");
+        sheet,
+        19,
+        COMPRESS_TYPES.toArray(String[]::new),
+        "excel.template.compress_type.prompt_title",
+        "excel.template.compress_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
-        sheet, 20, ENCRYPT_TYPES.toArray(String[]::new), "encrypt_type 填写提示", "请从下拉列表中选择加密算法。");
-    addBooleanValidation(sheet, BOOLEAN_VALIDATION_COLUMNS, "布尔字段填写提示", "请填写 TRUE 或 FALSE。");
+        sheet,
+        20,
+        ENCRYPT_TYPES.toArray(String[]::new),
+        "excel.template.encrypt_type.prompt_title",
+        "excel.template.encrypt_type.prompt_box",
+        messageSource,
+        locale);
+    for (int col : BOOLEAN_VALIDATION_COLUMNS) {
+      addDropdownValidation(
+          sheet,
+          col,
+          new String[] {"TRUE", "FALSE"},
+          "excel.common.enabled.prompt_title",
+          "excel.common.enabled.prompt_box",
+          messageSource,
+          locale);
+    }
   }
 
   @Override
   protected void createExtraWorkbookSheets(Workbook workbook, List<Map<String, Object>> rows) {
+    Locale locale = LocaleContextHolder.getLocale();
     Sheet sheet = workbook.createSheet(JSON_SHEET_NAME);
     sheet.createFreezePane(0, 1, 0, 1);
     writeHeaders(sheet, JSON_COLUMNS, ConsoleExcelStyles.createHeaderStyle(workbook));
     addDropdownValidation(
-        sheet, 2, JSON_FIELDS.toArray(String[]::new), "json_field 填写提示", "选择要维护的 JSON 字段。");
+        sheet,
+        2,
+        JSON_FIELDS.toArray(String[]::new),
+        "excel.template.json_field.prompt_title",
+        "excel.template.json_field.prompt_box",
+        messageSource,
+        locale);
     int rowIndex = 1;
     for (Map<String, Object> sourceRow : rows) {
       for (String jsonField : JSON_FIELDS) {
@@ -469,21 +645,21 @@ public class DefaultConsoleFileTemplateExcelApplicationService
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
+    Locale locale = LocaleContextHolder.getLocale();
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "文件模板配置维护模板",
-      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "2. template_code + version 是预览与应用阶段使用的唯一键。",
-      "3. 枚举字段与布尔字段已内置下拉值校验。",
-      "4. header_template / field_mappings / validation_rule_set / query_param_schema 等 JSON"
-          + " 字段必须保持合法 JSON；也可参考 file_template_json Sheet 按行维护。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.template.readme.title",
+      "excel.template.readme.line1",
+      "excel.template.readme.line2",
+      "excel.template.readme.line3",
+      "excel.template.readme.line4",
+      "excel.template.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
@@ -504,7 +680,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
       {COL_FILE_FORMAT_TYPE, "FIXED_WIDTH", "fixed width text"},
       {COL_FILE_FORMAT_TYPE, "EXCEL", "excel workbook"},
       {COL_FILE_FORMAT_TYPE, "XML", "xml payload"},
-      {COL_FILE_FORMAT_TYPE, GUIDE_JSON, "json payload"},
+      {COL_FILE_FORMAT_TYPE, "excel.guide.format.json", "json payload"},
       {COL_FILE_FORMAT_TYPE, "BINARY", "binary payload"},
       {COL_CHECKSUM_TYPE, GUIDE_NONE, "no checksum"},
       {COL_CHECKSUM_TYPE, "MD5", "md5 checksum"},
