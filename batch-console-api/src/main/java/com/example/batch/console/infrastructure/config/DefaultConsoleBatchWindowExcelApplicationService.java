@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.config;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
@@ -29,6 +28,7 @@ import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import com.example.batch.console.web.response.file.ConsoleBatchWindowResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -38,6 +38,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -80,24 +81,64 @@ public class DefaultConsoleBatchWindowExcelApplicationService
   private static final Set<String> OUT_OF_WINDOW_ACTIONS = DictEnum.codes(OutOfWindowAction.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry("window_code", requiredColumn("窗口唯一编码，作为导入匹配键。", GUIDE_STR, "WIN_SETTLEMENT")),
-          Map.entry("window_name", requiredColumn("控制台展示的窗口名称。", GUIDE_STR, "清算窗口")),
-          Map.entry(COL_TIMEZONE, requiredColumn("时区标识。", GUIDE_STR, "Asia/Shanghai")),
-          Map.entry("start_time", requiredColumn("窗口开始时间，格式 HH:mm 或 HH:mm:ss。", "时间", "08:00")),
-          Map.entry("end_time", requiredColumn("窗口结束时间，格式 HH:mm 或 HH:mm:ss。", "时间", "18:00")),
+          Map.entry(
+              "tenant_id",
+              optionalColumn(
+                  "excel.window.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+          Map.entry(
+              "window_code",
+              requiredColumn(
+                  "excel.window.window_code.desc", "excel.guide.format.string", "WIN_SETTLEMENT")),
+          Map.entry(
+              "window_name",
+              requiredColumn("excel.window.window_name.desc", "excel.guide.format.string", "清算窗口")),
+          Map.entry(
+              COL_TIMEZONE,
+              requiredColumn(
+                  "excel.window.timezone.desc", "excel.guide.format.timezone_id", "Asia/Shanghai")),
+          Map.entry(
+              "start_time",
+              requiredColumn("excel.window.start_time.desc", "excel.guide.format.time", "08:00")),
+          Map.entry(
+              "end_time",
+              requiredColumn("excel.window.end_time.desc", "excel.guide.format.time", "18:00")),
           Map.entry(
               COL_END_STRATEGY,
               requiredColumn(
-                  "窗口结束策略。", "枚举", "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
+                  "excel.window.end_strategy.desc",
+                  "excel.guide.format.enum",
+                  "FINISH_RUNNING",
+                  "STOP",
+                  "FINISH_RUNNING",
+                  "CONTINUE")),
           Map.entry(
-              COL_OUT_OF_WINDOW_ACTION, requiredColumn("窗口外操作策略。", "枚举", "WAIT", "WAIT", "FAIL")),
+              COL_OUT_OF_WINDOW_ACTION,
+              requiredColumn(
+                  "excel.window.out_of_window_action.desc",
+                  "excel.guide.format.enum",
+                  "WAIT",
+                  "WAIT",
+                  "FAIL")),
           Map.entry(
               COL_ALLOW_CROSS_DAY,
-              optionalColumn("是否允许跨天。", "布尔值", GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn(
+                  "excel.window.allow_cross_day.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_FALSE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
           Map.entry(
-              COL_ENABLED, optionalColumn("窗口是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry(COL_DESCRIPTION, optionalColumn("窗口描述信息。", GUIDE_STR, "用于清算批处理的执行窗口")));
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.window.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  GUIDE_FALSE)),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.window.description.desc", "excel.guide.format.string", "用于清算批处理的执行窗口")));
 
   private final BatchWindowMapper batchWindowMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -248,33 +289,52 @@ public class DefaultConsoleBatchWindowExcelApplicationService
 
   @Override
   protected void applyValidations(Sheet sheet) {
+    Locale locale = LocaleContextHolder.getLocale();
     addDropdownValidation(
-        sheet, 6, END_STRATEGIES.toArray(String[]::new), "end_strategy 填写提示", "请从下拉列表中选择窗口结束策略。");
+        sheet,
+        6,
+        END_STRATEGIES.toArray(String[]::new),
+        "excel.window.end_strategy.prompt_title",
+        "excel.window.end_strategy.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         sheet,
         7,
         OUT_OF_WINDOW_ACTIONS.toArray(String[]::new),
-        "out_of_window_action 填写提示",
-        "请从下拉列表中选择窗口外操作策略。");
-    addBooleanValidation(sheet, new int[] {8, 9}, "布尔值填写提示", "请填写 TRUE 或 FALSE。");
+        "excel.window.out_of_window_action.prompt_title",
+        "excel.window.out_of_window_action.prompt_box",
+        messageSource,
+        locale);
+    for (int col : new int[] {8, 9}) {
+      addDropdownValidation(
+          sheet,
+          col,
+          new String[] {"TRUE", "FALSE"},
+          "excel.common.enabled.prompt_title",
+          "excel.common.enabled.prompt_box",
+          messageSource,
+          locale);
+    }
   }
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
+    Locale locale = LocaleContextHolder.getLocale();
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "批处理窗口配置维护模板",
-      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "2. window_code 是预览与应用阶段使用的唯一键。",
-      "3. end_strategy / out_of_window_action / allow_cross_day / enabled 已内置下拉值校验。",
-      "4. start_time 与 end_time 必须采用 HH:mm 或 HH:mm:ss 格式。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.window.readme.title",
+      "excel.window.readme.line1",
+      "excel.window.readme.line2",
+      "excel.window.readme.line3",
+      "excel.window.readme.line4",
+      "excel.window.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }

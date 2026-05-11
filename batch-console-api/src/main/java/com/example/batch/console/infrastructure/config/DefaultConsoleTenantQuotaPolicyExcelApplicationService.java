@@ -1,6 +1,6 @@
 package com.example.batch.console.infrastructure.config;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
+import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.requiredColumn;
@@ -24,6 +24,7 @@ import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.config.ConsoleTenantQuotaPolicyResponse;
 import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import lombok.Builder;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -31,6 +32,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -63,17 +65,46 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
           COL_DESCRIPTION);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry("policy_code", requiredColumn("策略唯一编码，作为导入匹配键。", GUIDE_STR, "DEFAULT_POLICY")),
           Map.entry(
-              "max_running_jobs_per_tenant", requiredColumn("租户最大并行作业数，必须 >= 0。", "整数", "10")),
-          Map.entry("max_partitions_per_tenant", requiredColumn("租户最大分区数，必须 >= 0。", "整数", "100")),
-          Map.entry("max_qps_per_tenant", requiredColumn("租户最大 QPS，必须 >= 0。", "整数", "50")),
-          Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", "整数", "1")),
+              "tenant_id",
+              optionalColumn(
+                  "excel.quota.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+          Map.entry(
+              "policy_code",
+              requiredColumn(
+                  "excel.quota.policy_code.desc", "excel.guide.format.string", "DEFAULT_POLICY")),
+          Map.entry(
+              "max_running_jobs_per_tenant",
+              requiredColumn(
+                  "excel.quota.max_running_jobs_per_tenant.desc",
+                  "excel.guide.format.integer",
+                  "10")),
+          Map.entry(
+              "max_partitions_per_tenant",
+              requiredColumn(
+                  "excel.quota.max_partitions_per_tenant.desc",
+                  "excel.guide.format.integer",
+                  "100")),
+          Map.entry(
+              "max_qps_per_tenant",
+              requiredColumn(
+                  "excel.quota.max_qps_per_tenant.desc", "excel.guide.format.integer", "50")),
+          Map.entry(
+              "fair_share_weight",
+              requiredColumn(
+                  "excel.quota.fair_share_weight.desc", "excel.guide.format.integer", "1")),
           Map.entry(
               COL_ENABLED,
-              optionalColumn("策略是否启用，默认 TRUE。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
-          Map.entry(COL_DESCRIPTION, optionalColumn("策略描述信息。", GUIDE_STR, "默认配额策略")));
+              optionalColumn(
+                  "excel.quota.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  "FALSE")),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.quota.description.desc", "excel.guide.format.string", "默认配额策略")));
 
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -215,25 +246,34 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
 
   @Override
   protected void applyValidations(Sheet sheet) {
-    addBooleanValidation(sheet, new int[] {6}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+    Locale locale = LocaleContextHolder.getLocale();
+    addDropdownValidation(
+        sheet,
+        6,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
+    Locale locale = LocaleContextHolder.getLocale();
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "租户配额策略维护模板",
-      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "2. policy_code 是预览与应用阶段使用的唯一键。",
-      "3. enabled 已内置下拉值校验(TRUE / FALSE)。",
-      "4. 全部整数字段必须 ≥ 0,fair_share_weight 必须 ≥ 1。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.quota.readme.title",
+      "excel.quota.readme.line1",
+      "excel.quota.readme.line2",
+      "excel.quota.readme.line3",
+      "excel.quota.readme.line4",
+      "excel.quota.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }

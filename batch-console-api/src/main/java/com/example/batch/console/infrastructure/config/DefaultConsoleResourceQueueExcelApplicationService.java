@@ -1,6 +1,5 @@
 package com.example.batch.console.infrastructure.config;
 
-import static com.example.batch.console.support.excel.ConsoleExcelStyles.addBooleanValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
@@ -29,6 +28,7 @@ import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.config.ConsoleResourceQueueResponse;
 import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.Builder;
@@ -37,6 +37,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -78,23 +79,71 @@ public class DefaultConsoleResourceQueueExcelApplicationService
   private static final Set<String> PRIORITY_POLICIES = DictEnum.codes(QueuePriorityPolicy.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry("queue_code", requiredColumn("队列唯一编码，作为导入匹配键。", GUIDE_STR, "QUEUE_IMPORT_01")),
-          Map.entry("queue_name", requiredColumn("控制台展示的队列名称。", GUIDE_STR, "导入主队列")),
+          Map.entry(
+              "tenant_id",
+              optionalColumn(
+                  "excel.queue.tenant_id.desc", "excel.guide.format.string", "tenant-a")),
+          Map.entry(
+              "queue_code",
+              requiredColumn(
+                  "excel.queue.queue_code.desc", "excel.guide.format.string", "QUEUE_IMPORT_01")),
+          Map.entry(
+              "queue_name",
+              requiredColumn("excel.queue.queue_name.desc", "excel.guide.format.string", "导入主队列")),
           Map.entry(
               COL_QUEUE_TYPE,
-              requiredColumn("队列类型。", "枚举", "IMPORT", "IMPORT", "EXPORT", "DISPATCH", "MIXED")),
-          Map.entry("max_running_jobs", requiredColumn("最大并行作业数，必须 >= 0。", GUIDE_INT, "10")),
-          Map.entry("max_running_partitions", requiredColumn("最大并行分区数，必须 >= 0。", GUIDE_INT, "20")),
-          Map.entry("max_qps", requiredColumn("最大 QPS 限制，必须 >= 0。", GUIDE_INT, "100")),
-          Map.entry("worker_group", optionalColumn("指定 Worker 分组。", GUIDE_STR, "group-a")),
-          Map.entry("resource_tag", optionalColumn("资源标签，用于资源隔离。", GUIDE_STR, "high-priority")),
+              requiredColumn(
+                  "excel.queue.queue_type.desc",
+                  "excel.guide.format.enum",
+                  "IMPORT",
+                  "IMPORT",
+                  "EXPORT",
+                  "DISPATCH",
+                  "MIXED")),
+          Map.entry(
+              "max_running_jobs",
+              requiredColumn(
+                  "excel.queue.max_running_jobs.desc", "excel.guide.format.integer", "10")),
+          Map.entry(
+              "max_running_partitions",
+              requiredColumn(
+                  "excel.queue.max_running_partitions.desc", "excel.guide.format.integer", "20")),
+          Map.entry(
+              "max_qps",
+              requiredColumn("excel.queue.max_qps.desc", "excel.guide.format.integer", "100")),
+          Map.entry(
+              "worker_group",
+              optionalColumn(
+                  "excel.queue.worker_group.desc", "excel.guide.format.string", "group-a")),
+          Map.entry(
+              "resource_tag",
+              optionalColumn(
+                  "excel.queue.resource_tag.desc", "excel.guide.format.string", "high-priority")),
           Map.entry(
               COL_PRIORITY_POLICY,
-              requiredColumn("优先级策略。", "枚举", "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
-          Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", GUIDE_INT, "1")),
-          Map.entry(COL_ENABLED, optionalColumn("队列是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
-          Map.entry(COL_DESCRIPTION, optionalColumn("队列描述信息。", GUIDE_STR, "用于导入任务的主队列")));
+              requiredColumn(
+                  "excel.queue.priority_policy.desc",
+                  "excel.guide.format.enum",
+                  "FIFO",
+                  "FIFO",
+                  "PRIORITY",
+                  "FAIR_SHARE")),
+          Map.entry(
+              "fair_share_weight",
+              requiredColumn(
+                  "excel.queue.fair_share_weight.desc", "excel.guide.format.integer", "1")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn(
+                  "excel.queue.enabled.desc",
+                  "excel.guide.format.boolean",
+                  GUIDE_TRUE,
+                  GUIDE_TRUE,
+                  "FALSE")),
+          Map.entry(
+              COL_DESCRIPTION,
+              optionalColumn(
+                  "excel.queue.description.desc", "excel.guide.format.string", "用于导入任务的主队列")));
 
   private final ResourceQueueMapper resourceQueueMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -251,33 +300,50 @@ public class DefaultConsoleResourceQueueExcelApplicationService
 
   @Override
   protected void applyValidations(Sheet sheet) {
+    Locale locale = LocaleContextHolder.getLocale();
     addDropdownValidation(
-        sheet, 3, QUEUE_TYPES.toArray(String[]::new), "queue_type 填写提示", "请从下拉列表中选择队列类型。");
+        sheet,
+        3,
+        QUEUE_TYPES.toArray(String[]::new),
+        "excel.queue.queue_type.prompt_title",
+        "excel.queue.queue_type.prompt_box",
+        messageSource,
+        locale);
     addDropdownValidation(
         sheet,
         9,
         PRIORITY_POLICIES.toArray(String[]::new),
-        "priority_policy 填写提示",
-        "请从下拉列表中选择优先级策略。");
-    addBooleanValidation(sheet, new int[] {11}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        "excel.queue.priority_policy.prompt_title",
+        "excel.queue.priority_policy.prompt_box",
+        messageSource,
+        locale);
+    addDropdownValidation(
+        sheet,
+        11,
+        new String[] {"TRUE", "FALSE"},
+        "excel.common.enabled.prompt_title",
+        "excel.common.enabled.prompt_box",
+        messageSource,
+        locale);
   }
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
+    Locale locale = LocaleContextHolder.getLocale();
     Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
-    String[] lines = {
-      "资源队列配置维护模板",
-      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
-      "2. queue_code 是预览与应用阶段使用的唯一键。",
-      "3. queue_type / priority_policy / enabled 已内置下拉值校验。",
-      "4. max_running_jobs / max_running_partitions / max_qps 必须 ≥ 0;fair_share_weight 必须 ≥ 1。",
-      "5. 导入流程：上传 → 预览 → 应用。"
+    String[] keys = {
+      "excel.queue.readme.title",
+      "excel.queue.readme.line1",
+      "excel.queue.readme.line2",
+      "excel.queue.readme.line3",
+      "excel.queue.readme.line4",
+      "excel.queue.readme.line5"
     };
-    for (int i = 0; i < lines.length; i++) {
+    for (int i = 0; i < keys.length; i++) {
       Row row = sheet.createRow(i);
-      row.createCell(0).setCellValue(lines[i]);
+      row.createCell(0).setCellValue(messageSource.getMessage(keys[i], null, keys[i], locale));
       if (i == 0) {
         row.getCell(0).setCellStyle(titleStyle);
       }
