@@ -170,7 +170,8 @@
                 S1.2: surefire 显式串行化以避免 testcontainers + Spring Boot context 在 -T 1C
                 reactor 并行下出现 PG/Redis 容器端口竞态(已实测 console-api / orchestrator IT 偶发 fail)。
                   - forkCount=1 + reuseForks=true: 同 module 内单 JVM 复用,降低 testcontainer 启停开销
-                  - forkedProcessTimeoutInSeconds=600: 单 fork 超时 10min,IT 拉镜像 + 启容器留余量
+                  - forkedProcessTimeoutInSeconds=1800: 单 fork 超时 30min,覆盖 GitHub Actions
+                    冷启动拉镜像 + Testcontainers Spring 上下文启动的最差情况
                   - testcontainers.reuse.enable=true: 命中 ~/.testcontainers.properties 时自动复用容器
                 跨 module 并行(`mvn -T`)无法在 surefire 层控制,见 docs/coding-conventions.md
                 §测试运行 部分:全 reactor 测试请用 `mvn test`(不带 -T)。
@@ -181,7 +182,8 @@
                 <configuration>
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
-                    <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
+                    <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
+                    <argLine>@{argLine} --enable-native-access=ALL-UNNAMED</argLine>
                     <excludes>
                         <!-- Shared composed annotation, not an executable test class. -->
                         <exclude>**/BatchIntegrationTest.class</exclude>

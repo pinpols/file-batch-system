@@ -22,6 +22,7 @@ RUN_LOAD_CAPACITY=false
 RUN_DEPLOY_SMOKE=false
 RUN_DEPLOY_VERIFICATION=false
 RUN_INSPECTION=false
+RUN_STATIC_GATES=true
 declare -a EXTRA_MVN_ARGS=()
 
 current_step=""
@@ -40,6 +41,7 @@ Usage:
   bash scripts/ci/run-full-regression.sh [options] [-- <extra maven args>]
 
 Options:
+  --skip-static-gates   Skip version/dependency/PMD/Spotless gates
   --skip-default-tests   Skip reactor default tests (*Test / *IntegrationTest)
   --skip-it-suite        Skip E2E suite (batch-e2e-tests, *E2eIT)
   --with-load-smoke      Run Gatling JobLaunchSimulation smoke
@@ -91,22 +93,6 @@ on_error() {
 }
 
 trap on_error ERR
-
-run_step "Version alignment (pom.xml / Chart.yaml / .env.*)" bash scripts/ci/check-version-alignment.sh
-
-run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-boundaries.py
-
-# PMD 0 violation 基线达成 (2026-04-26 maturity §6 P1 #2 收尾)，删 `|| true` 让 PMD 真正阻断 CI。
-# 调试模式可显式 export BATCH_CI_SKIP_PMD_GATE=1 让 dev 本地 escape；CI 不应设此变量。
-if [[ "${BATCH_CI_SKIP_PMD_GATE:-}" == "1" ]]; then
-  echo "[PMD gate] skipped via BATCH_CI_SKIP_PMD_GATE=1 (debug only)"
-else
-  # 注：必须先 test-compile 让 reactor 编译 batch-common 等 sibling 模块，否则下游
-  # 模块解析 com.example.batch:batch-common:${revision} 失败（CI 干净 .m2 找不到）。
-  run_step "PMD — code conventions (fail PR if violations introduced)" run_mvn -DskipTests test-compile pmd:check -fae
-fi
-
-run_step "Spotless — code formatting" run_mvn spotless:check -fae || true
 
 resolve_docker_bin() {
   if command -v docker >/dev/null 2>&1; then
@@ -423,6 +409,10 @@ deployment_verification() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --skip-static-gates)
+      RUN_STATIC_GATES=false
+      shift
+      ;;
     --skip-default-tests)
       RUN_DEFAULT_TESTS=false
       shift
@@ -471,6 +461,24 @@ done
 if [[ "$RUN_DEFAULT_TESTS" == false && "$RUN_IT_SUITE" == false && "$RUN_LOAD_SMOKE" == false && "$RUN_LOAD_CAPACITY" == false && "$RUN_DEPLOY_SMOKE" == false && "$RUN_DEPLOY_VERIFICATION" == false && "$RUN_INSPECTION" == false ]]; then
   printf 'Nothing to run. Use --help for options.\n' >&2
   exit 2
+fi
+
+if [[ "$RUN_STATIC_GATES" == true ]]; then
+  run_step "Version alignment (pom.xml / Chart.yaml / .env.*)" bash scripts/ci/check-version-alignment.sh
+
+  run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-boundaries.py
+
+  # PMD 0 violation 基线达成 (2026-04-26 maturity §6 P1 #2 收尾)，让 PMD 真正阻断 CI。
+  # 调试模式可显式 export BATCH_CI_SKIP_PMD_GATE=1 让 dev 本地 escape；CI 不应设此变量。
+  if [[ "${BATCH_CI_SKIP_PMD_GATE:-}" == "1" ]]; then
+    echo "[PMD gate] skipped via BATCH_CI_SKIP_PMD_GATE=1 (debug only)"
+  else
+    # 注：必须先 test-compile 让 reactor 编译 batch-common 等 sibling 模块，否则下游
+    # 模块解析 com.example.batch:batch-common:${revision} 失败（CI 干净 .m2 找不到）。
+    run_step "PMD — code conventions (fail PR if violations introduced)" run_mvn -DskipTests test-compile pmd:check -fae
+  fi
+
+  run_step "Spotless — code formatting" run_mvn spotless:check -fae
 fi
 
 if [[ "$RUN_DEFAULT_TESTS" == true ]]; then
