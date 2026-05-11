@@ -118,12 +118,12 @@
             #{relatedPipelineCode},
             #{workerGroup},
             #{windowCode},
-            #{nodeOrder},
-            #{retryPolicy},
-            #{retryMaxCount},
-            #{timeoutSeconds},
+            <choose><when test="nodeOrder != null">#{nodeOrder}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="retryPolicy != null and retryPolicy != ''">#{retryPolicy}</when><otherwise>'NONE'</otherwise></choose>,
+            <choose><when test="retryMaxCount != null">#{retryMaxCount}</when><otherwise>0</otherwise></choose>,
+            <choose><when test="timeoutSeconds != null">#{timeoutSeconds}</when><otherwise>0</otherwise></choose>,
             #{nodeParams, jdbcType=VARCHAR}::jsonb,
-            #{enabled}
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
         )
         on conflict (tenant_id, workflow_definition_id, node_code) do update
         set node_name = excluded.node_name,

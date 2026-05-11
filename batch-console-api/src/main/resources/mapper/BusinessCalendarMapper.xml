@@ -70,7 +70,7 @@
             holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
         ) values (
             #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
-            #{holidayRollRule}, #{catchUpPolicy}, #{catchUpMaxDays}, #{enabled}
+            <choose><when test="holidayRollRule != null and holidayRollRule != ''">#{holidayRollRule}</when><otherwise>'SKIP'</otherwise></choose>, <choose><when test="catchUpPolicy != null and catchUpPolicy != ''">#{catchUpPolicy}</when><otherwise>'NONE'</otherwise></choose>, <choose><when test="catchUpMaxDays != null">#{catchUpMaxDays}</when><otherwise>0</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
         )
         on conflict (tenant_id, calendar_code) do update
         set calendar_name = excluded.calendar_name,
@@ -88,7 +88,7 @@
             holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
         ) values (
             #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
-            #{holidayRollRule}, #{catchUpPolicy}, #{catchUpMaxDays}, #{enabled}
+            <choose><when test="holidayRollRule != null and holidayRollRule != ''">#{holidayRollRule}</when><otherwise>'SKIP'</otherwise></choose>, <choose><when test="catchUpPolicy != null and catchUpPolicy != ''">#{catchUpPolicy}</when><otherwise>'NONE'</otherwise></choose>, <choose><when test="catchUpMaxDays != null">#{catchUpMaxDays}</when><otherwise>0</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
         )
     </insert>
 

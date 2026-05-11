@@ -96,9 +96,9 @@
             #{tenantId},
             #{workflowCode},
             #{workflowName},
-            #{workflowType},
-            #{version},
-            #{enabled},
+            <choose><when test="workflowType != null and workflowType != ''">#{workflowType}</when><otherwise>'DAG'</otherwise></choose>,
+            <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>,
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
             #{description}
         )
     </insert>
@@ -142,9 +142,9 @@
             #{tenantId},
             #{workflowCode},
             #{workflowName},
-            #{workflowType},
-            #{version},
-            #{enabled},
+            <choose><when test="workflowType != null and workflowType != ''">#{workflowType}</when><otherwise>'DAG'</otherwise></choose>,
+            <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>,
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
             #{description},
             #{createdBy},
             #{updatedBy}

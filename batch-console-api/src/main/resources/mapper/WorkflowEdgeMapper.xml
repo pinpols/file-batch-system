@@ -103,9 +103,9 @@
             #{workflowDefinitionId},
             #{fromNodeCode},
             #{toNodeCode},
-            #{edgeType},
+            <choose><when test="edgeType != null and edgeType != ''">#{edgeType}</when><otherwise>'SUCCESS'</otherwise></choose>,
             #{conditionExpr},
-            #{enabled}
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
         )
         on conflict (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) do update
         set condition_expr = excluded.condition_expr,
