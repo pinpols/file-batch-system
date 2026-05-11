@@ -40,6 +40,7 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
@@ -69,7 +70,8 @@ class DefaultConsoleWorkflowExcelApplicationServiceTest {
             workflowEdgeMapper,
             configChangeLogMapper,
             importStore,
-            new WorkflowExcelWorkbookWriter(workflowNodeMapper, workflowEdgeMapper),
+            new WorkflowExcelWorkbookWriter(
+                workflowNodeMapper, workflowEdgeMapper, newMessageSource()),
             new WorkflowExcelSheetParser(),
             new WorkflowExcelRowValidator(),
             dateTimeSupport());
@@ -389,5 +391,12 @@ class DefaultConsoleWorkflowExcelApplicationServiceTest {
         row.createCell(i).setCellValue(String.valueOf(value));
       }
     }
+  }
+
+  private static ResourceBundleMessageSource newMessageSource() {
+    ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+    source.setBasename("messages");
+    source.setDefaultEncoding("UTF-8");
+    return source;
   }
 }
