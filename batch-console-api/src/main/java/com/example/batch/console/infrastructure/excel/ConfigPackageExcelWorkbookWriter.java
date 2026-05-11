@@ -507,8 +507,11 @@ public class ConfigPackageExcelWorkbookWriter {
     setWidths(sheet, def.columns());
   }
 
-  /** 填写说明 sheet 内容总行数（标题 1 行 + line1..lineN）。详见 messages.properties。 */
-  private static final int README_LINE_COUNT = 46;
+  /**
+   * 填写说明 sheet 内容总行数（标题 1 行 + line1..lineN）。详见 messages.properties。 内容含：sheet 范围 / 跨 sheet 依赖 / 5 类
+   * Worker (IMPORT/EXPORT/PROCESS/DISPATCH/GENERAL) + WORKFLOW 完整配置 / Apply 流程 / UPSERT 行为。
+   */
+  private static final int README_LINE_COUNT = 86;
 
   private void createReadmeSheet(Workbook wb, Locale locale) {
     Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
@@ -535,25 +538,39 @@ public class ConfigPackageExcelWorkbookWriter {
     GuideStyles styles = buildGuideStyles(wb);
     writeGuideHeader(sheet, styles.head());
     int rowIdx = 1;
+    // 记录每个 sheet 的起止行号，最后做第一列合并（per-sheet 一段，垂直居中），更美观、可读
     for (SheetDef spec : sheetDefs) {
+      int sectionStart = rowIdx;
       for (int ci = 0; ci < spec.columns().size(); ci++) {
         String colName = spec.columns().get(ci);
         Row row = sheet.createRow(rowIdx++);
         row.setHeightInPoints(18);
         writeGuideRow(
-            row, ci == 0 ? spec.name() : EMPTY, colName, spec.guides().get(colName), styles);
+            row,
+            ci == 0 ? spec.name() : EMPTY,
+            colName,
+            spec.guides().get(colName),
+            appliesToFor(spec.name(), colName),
+            styles);
+      }
+      int sectionEnd = rowIdx - 1;
+      // 单 sheet 多列时合并第一列；单列 sheet 无需合并
+      if (sectionEnd > sectionStart) {
+        sheet.addMergedRegion(
+            new org.apache.poi.ss.util.CellRangeAddress(sectionStart, sectionEnd, 0, 0));
       }
     }
   }
 
   private static void setGuideColumnWidths(Sheet sheet) {
-    sheet.setColumnWidth(0, 7000);
-    sheet.setColumnWidth(1, 7000);
-    sheet.setColumnWidth(2, 3500);
-    sheet.setColumnWidth(3, 3500);
-    sheet.setColumnWidth(4, 14000);
-    sheet.setColumnWidth(5, 18000);
-    sheet.setColumnWidth(6, 7000);
+    sheet.setColumnWidth(0, 6500); // 所属 Sheet
+    sheet.setColumnWidth(1, 7000); // 列名
+    sheet.setColumnWidth(2, 3500); // 必填
+    sheet.setColumnWidth(3, 3500); // 类型
+    sheet.setColumnWidth(4, 14000); // 可选值
+    sheet.setColumnWidth(5, 18000); // 说明
+    sheet.setColumnWidth(6, 7000); // 示例
+    sheet.setColumnWidth(7, 8000); // 适用 Worker
   }
 
   private GuideStyles buildGuideStyles(Workbook wb) {
@@ -570,7 +587,7 @@ public class ConfigPackageExcelWorkbookWriter {
   private static void writeGuideHeader(Sheet sheet, CellStyle headStyle) {
     Row header = sheet.createRow(0);
     header.setHeightInPoints(22);
-    String[] headers = {"所属 Sheet", "列名", "必填", "类型", "可选值", "说明", "示例"};
+    String[] headers = {"所属 Sheet", "列名", "必填", "类型", "可选值", "说明", "示例", "适用 Worker"};
     for (int i = 0; i < headers.length; i++) {
       Cell c = header.createCell(i);
       c.setCellValue(headers[i]);
@@ -583,6 +600,7 @@ public class ConfigPackageExcelWorkbookWriter {
       String sectionLabel,
       String colName,
       ConsoleExcelStyles.ColumnGuide guide,
+      String appliesTo,
       GuideStyles styles) {
     boolean isRequired = guide != null && guide.required();
     writeGuideCell(row, 0, sectionLabel, styles.body());
@@ -596,6 +614,7 @@ public class ConfigPackageExcelWorkbookWriter {
         row, 5, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::description), styles.body());
     writeGuideCell(
         row, 6, guideOrEmpty(guide, ConsoleExcelStyles.ColumnGuide::example), styles.body());
+    writeGuideCell(row, 7, appliesTo == null ? EMPTY : appliesTo, styles.body());
   }
 
   private static String guideOrEmpty(
@@ -603,6 +622,76 @@ public class ConfigPackageExcelWorkbookWriter {
       Function<ConsoleExcelStyles.ColumnGuide, String> getter) {
     return guide == null ? EMPTY : getter.apply(guide);
   }
+
+  /**
+   * 字段说明 sheet「适用 Worker」列。先查 per-column 覆盖（少数 worker-specific 字段），未命中走 per-sheet 默认。
+   *
+   * <p>Worker 缩写：I=IMPORT / E=EXPORT / P=PROCESS / D=DISPATCH / G=GENERAL / W=WORKFLOW；ALL = 全部。
+   */
+  private static String appliesToFor(String sheetName, String colName) {
+    String override = APPLIES_TO_OVERRIDE.getOrDefault(sheetName, java.util.Map.of()).get(colName);
+    if (override != null) return override;
+    return APPLIES_TO_SHEET_DEFAULT.getOrDefault(sheetName, "ALL");
+  }
+
+  /** Per-sheet 默认「适用 Worker」（覆盖大多数列）。 */
+  private static final java.util.Map<String, String> APPLIES_TO_SHEET_DEFAULT =
+      java.util.Map.ofEntries(
+          java.util.Map.entry(RESOURCE_QUEUE_SHEET, "ALL（任意 Job 引用时必填）"),
+          java.util.Map.entry(BUSINESS_CALENDAR_SHEET, "ALL（任意 Job 引用时必填）"),
+          java.util.Map.entry(BATCH_WINDOW_SHEET, "ALL（任意 Job/Node 引用时必填）"),
+          java.util.Map.entry(JOB_SHEET, "ALL（5 类 Worker + WORKFLOW 共用）"),
+          java.util.Map.entry(CHANNEL_SHEET, "DISPATCH 主；IMPORT.RECEIVE 次"),
+          java.util.Map.entry(FILE_TEMPLATE_SHEET, "IMPORT / EXPORT（DISPATCH 引用上游产物时间接用）"),
+          java.util.Map.entry(
+              PIPELINE_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type）"),
+          java.util.Map.entry(
+              STEP_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type 收窄 stage_code）"),
+          java.util.Map.entry(WF_DEF_SHEET, "WORKFLOW（编排层，可组合其他 4 类 Job）"),
+          java.util.Map.entry(WF_NODE_SHEET, "WORKFLOW"),
+          java.util.Map.entry(WF_EDGE_SHEET, "WORKFLOW"));
+
+  /**
+   * Per-column 覆盖（少数 worker-specific 字段，比 sheet 默认更精确）。
+   *
+   * <p>没有列在这里的字段一律走 {@link #APPLIES_TO_SHEET_DEFAULT}。
+   */
+  private static final java.util.Map<String, java.util.Map<String, String>> APPLIES_TO_OVERRIDE =
+      java.util.Map.ofEntries(
+          java.util.Map.entry(
+              JOB_SHEET,
+              java.util.Map.of(
+                  COL_JOB_TYPE,
+                  "决定本作业 Worker：GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW",
+                  COL_EXECUTION_HANDLER,
+                  "GENERAL（普通任务）执行 bean 名；其他 worker 不用",
+                  COL_DEFAULT_PARAMS,
+                  "IMPORT/EXPORT：用 templateCode 引用 file_template_config")),
+          java.util.Map.entry(
+              PIPELINE_SHEET,
+              java.util.Map.of(
+                  COL_PIPELINE_TYPE, "决定 Worker 类型和 stage 候选集（IMPORT/EXPORT/PROCESS/DISPATCH）")),
+          java.util.Map.entry(
+              STEP_SHEET,
+              java.util.Map.of(COL_STAGE_CODE, "按 pipeline_type 收窄；填非法 stage preview 报错")),
+          java.util.Map.entry(
+              FILE_TEMPLATE_SHEET,
+              java.util.Map.of(
+                  "default_query_sql", "EXPORT only（单条 SELECT）",
+                  "query_param_schema", "IMPORT 用 jdbcMappedImport / EXPORT 用 jdbcMappedExport",
+                  "field_mappings", "IMPORT 用",
+                  "naming_rule", "EXPORT 用",
+                  "header_template", "EXPORT 用",
+                  "trailer_template", "EXPORT 用")),
+          java.util.Map.entry(
+              CHANNEL_SHEET,
+              java.util.Map.of("config_json", "DISPATCH 用（endpoint + 凭据）；IMPORT.RECEIVE 用源凭据")),
+          java.util.Map.entry(
+              WF_NODE_SHEET,
+              java.util.Map.of(
+                  "node_type", "WORKFLOW 内部分类：START/END/TASK/GATEWAY/FILE_STEP/JOB",
+                  "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）",
+                  "related_pipeline_code", "WORKFLOW FILE_STEP 节点引用的 pipeline")));
 
   private static String joinAllowedValues(ConsoleExcelStyles.ColumnGuide guide) {
     if (guide == null || guide.allowedValues().isEmpty()) {
