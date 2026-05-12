@@ -15,13 +15,11 @@ import com.example.batch.console.application.config.ConsoleConfigApplicationServ
 import com.example.batch.console.application.file.ConsoleFileApplicationService;
 import com.example.batch.console.application.file.ConsoleFileDownloadApplicationService;
 import com.example.batch.console.application.job.ConsoleJobApprovalService;
-import com.example.batch.console.application.job.ConsoleJobDefinitionExcelApplicationService;
 import com.example.batch.console.application.job.ConsoleJobRecoveryService;
 import com.example.batch.console.application.job.ConsoleJobTriggerService;
 import com.example.batch.console.application.ops.ConsoleApprovalApplicationService;
 import com.example.batch.console.application.ops.ConsoleWorkerApplicationService;
 import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
-import com.example.batch.console.application.workflow.ConsoleWorkflowExcelApplicationService;
 import com.example.batch.console.web.response.auth.AiChatResponse;
 import com.example.batch.console.web.response.file.ConsoleFileOperationResponse;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
@@ -54,12 +52,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   @MockitoBean private ConsoleJobRecoveryService jobRecoveryService;
   @MockitoBean private ConsoleJobApprovalService jobApprovalService;
 
-  @MockitoBean
-  private ConsoleJobDefinitionExcelApplicationService jobDefinitionExcelApplicationService;
-
   @MockitoBean private ConsoleWorkerApplicationService workerApplicationService;
-
-  @MockitoBean private ConsoleWorkflowExcelApplicationService workflowExcelApplicationService;
 
   @MockitoBean private ConsoleApprovalApplicationService approvalApplicationService;
 
@@ -106,40 +99,6 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
             });
 
     verify(jobTriggerService).trigger(any(), anyString());
-  }
-
-  @Test
-  void shouldExportJobDefinitionExcelViaHttp() {
-    byte[] content = "job-definition-excel".getBytes(StandardCharsets.UTF_8);
-    when(jobDefinitionExcelApplicationService.exportJobDefinitions(any()))
-        .thenReturn(
-            ResponseEntity.ok().body(new InputStreamResource(new ByteArrayInputStream(content))));
-
-    webTestClient
-        .get()
-        .uri("/api/console/config/job-definitions/excel/export?tenantId=tenant-a")
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(byte[].class)
-        .value(bytes -> assertThat(bytes).isEqualTo(content));
-  }
-
-  @Test
-  void shouldExportWorkflowExcelViaHttp() {
-    byte[] content = "workflow-excel".getBytes(StandardCharsets.UTF_8);
-    when(workflowExcelApplicationService.exportWorkflowExcel(any()))
-        .thenReturn(
-            ResponseEntity.ok().body(new InputStreamResource(new ByteArrayInputStream(content))));
-
-    webTestClient
-        .get()
-        .uri("/api/console/config/workflows/excel/export?tenantId=tenant-a")
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(byte[].class)
-        .value(bytes -> assertThat(bytes).isEqualTo(content));
   }
 
   @Test

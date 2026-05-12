@@ -26,5 +26,12 @@ public interface AlertRoutingConfigMapper {
   Map<String, Object> selectByUniqueKey(
       @Param("tenantId") String tenantId, @Param("routeCode") String routeCode);
 
+  Map<String, Object> selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
   int upsertAlertRoutingConfig(@Param("p") AlertRoutingConfigUpsertParam param);
+
+  int updateById(@Param("p") AlertRoutingConfigUpsertParam param);
+
+  int toggleEnabled(
+      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 }

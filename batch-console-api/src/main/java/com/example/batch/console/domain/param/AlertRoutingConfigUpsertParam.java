@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class AlertRoutingConfigUpsertParam {
 
+  private Long id;
   private String tenantId;
   private String routeCode;
   private String routeName;
