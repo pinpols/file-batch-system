@@ -20,6 +20,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.file.ConsoleFileChannelExcelApplicationService;
 import com.example.batch.console.domain.param.FileChannelConfigUpsertParam;
 import com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService;
+import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.support.ConfigChangeLogBuilder;
@@ -66,18 +67,7 @@ public class DefaultConsoleFileChannelExcelApplicationService
   private static final String GUIDE_STR = "字符串";
 
   private static final String SHEET_NAME = "file_channel_config";
-  private static final List<String> COLUMNS =
-      List.of(
-          "tenant_id",
-          "channel_code",
-          "channel_name",
-          COL_CHANNEL_TYPE,
-          "target_endpoint",
-          COL_AUTH_TYPE,
-          "config_json",
-          COL_RECEIPT_POLICY,
-          "timeout_seconds",
-          COL_ENABLED);
+  private static final List<String> COLUMNS = ConfigPackageExcelSchema.FileChannel.COLUMNS;
   private static final Set<String> CHANNEL_TYPES = DictEnum.codes(FileChannelType.class);
   private static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
   private static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);

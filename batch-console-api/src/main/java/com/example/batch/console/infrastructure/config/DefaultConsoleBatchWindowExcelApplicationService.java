@@ -16,6 +16,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.config.ConsoleBatchWindowExcelApplicationService;
 import com.example.batch.console.domain.param.BatchWindowUpsertParam;
 import com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService;
+import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.mapper.BatchWindowMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.support.ConfigChangeLogBuilder;
@@ -64,19 +65,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
   private static final Pattern TIME_PATTERN = Pattern.compile("^\\d{2}:\\d{2}(:\\d{2})?$");
 
   private static final String SHEET_NAME = "batch_window";
-  private static final List<String> COLUMNS =
-      List.of(
-          "tenant_id",
-          "window_code",
-          "window_name",
-          COL_TIMEZONE,
-          "start_time",
-          "end_time",
-          COL_END_STRATEGY,
-          COL_OUT_OF_WINDOW_ACTION,
-          COL_ALLOW_CROSS_DAY,
-          COL_ENABLED,
-          COL_DESCRIPTION);
+  private static final List<String> COLUMNS = ConfigPackageExcelSchema.BatchWindow.COLUMNS;
   private static final Set<String> END_STRATEGIES = DictEnum.codes(BatchWindowEndStrategy.class);
   private static final Set<String> OUT_OF_WINDOW_ACTIONS = DictEnum.codes(OutOfWindowAction.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =

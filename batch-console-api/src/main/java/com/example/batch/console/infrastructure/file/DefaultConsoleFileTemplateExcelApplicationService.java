@@ -17,6 +17,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.file.ConsoleFileTemplateExcelApplicationService;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
 import com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService;
+import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser;
 import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
@@ -89,49 +90,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService
           "validation_rule_set",
           "query_param_schema");
 
-  private static final List<String> COLUMNS =
-      List.of(
-          "tenant_id",
-          "template_code",
-          "template_name",
-          COL_TEMPLATE_TYPE,
-          "biz_type",
-          COL_FILE_FORMAT_TYPE,
-          "charset",
-          "target_charset",
-          COL_WITH_BOM,
-          "line_separator",
-          "delimiter",
-          "quote_char",
-          "escape_char",
-          "record_length",
-          "header_rows",
-          "footer_rows",
-          "header_template",
-          "trailer_template",
-          COL_CHECKSUM_TYPE,
-          COL_COMPRESS_TYPE,
-          COL_ENCRYPT_TYPE,
-          "naming_rule",
-          "field_mappings",
-          "validation_rule_set",
-          "default_query_code",
-          "default_query_sql",
-          "query_param_schema",
-          COL_STREAMING_ENABLED,
-          "page_size",
-          "fetch_size",
-          "chunk_size",
-          "preview_masking_enabled",
-          "error_line_masking_enabled",
-          "log_masking_enabled",
-          "content_encryption_enabled",
-          "encryption_key_ref",
-          COL_DOWNLOAD_REQUIRES_APPROVAL,
-          "masking_rule_set",
-          COL_ENABLED,
-          "version",
-          COL_DESCRIPTION);
+  private static final List<String> COLUMNS = ConfigPackageExcelSchema.FileTemplate.COLUMNS;
   private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
   private static final Set<String> TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
   private static final Set<String> CHECKSUM_TYPES = DictEnum.codes(FileChecksumType.class);

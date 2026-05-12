@@ -18,6 +18,7 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.workflow.ConsolePipelineDefinitionExcelApplicationService;
+import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.infrastructure.excel.PipelineExcelWorkbookWriter;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
@@ -96,31 +97,9 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private static final String STEP_SHEET_NAME = "pipeline_step_definition";
 
   private static final List<String> PIPELINE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_JOB_CODE,
-          COL_PIPELINE_NAME,
-          COL_PIPELINE_TYPE,
-          COL_BIZ_TYPE,
-          COL_WORKER_GROUP,
-          COL_VERSION,
-          COL_ENABLED,
-          COL_DESCRIPTION);
+      ConfigPackageExcelSchema.PipelineDefinition.COLUMNS;
 
-  private static final List<String> STEP_COLUMNS =
-      List.of(
-          COL_JOB_CODE,
-          COL_VERSION,
-          COL_STEP_CODE,
-          COL_STEP_NAME,
-          COL_STAGE_CODE,
-          COL_STEP_ORDER,
-          COL_IMPL_CODE,
-          COL_STEP_PARAMS,
-          COL_TIMEOUT_SECONDS,
-          COL_RETRY_POLICY,
-          COL_RETRY_MAX_COUNT,
-          COL_ENABLED);
+  private static final List<String> STEP_COLUMNS = ConfigPackageExcelSchema.PipelineStep.COLUMNS;
 
   private static final Set<String> PIPELINE_REQUIRED_HEADERS = Set.copyOf(PIPELINE_COLUMNS);
   private static final Set<String> STEP_REQUIRED_HEADERS = Set.copyOf(STEP_COLUMNS);

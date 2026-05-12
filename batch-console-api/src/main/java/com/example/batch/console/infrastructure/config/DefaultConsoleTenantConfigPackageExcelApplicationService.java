@@ -26,7 +26,7 @@ import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser;
 import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;
 import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser;
 import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser.CalendarRow;
-import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelSchema;
+import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
@@ -246,7 +246,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private List<Map<String, Object>> withCalendarHolidayValues(List<Map<String, Object>> rows) {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Map<String, Object> row : rows) {
-      out.add(BusinessCalendarExcelSchema.toExportRow(row, calendarHolidaysText(row.get(KEY_ID))));
+      out.add(
+          ConfigPackageExcelSchema.BusinessCalendar.toExportRow(
+              row, calendarHolidaysText(row.get(KEY_ID))));
     }
     return out;
   }
