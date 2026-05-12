@@ -13,7 +13,7 @@ import java.util.Set;
  * 抽出的列定义/sheet 名/列说明常量。
  *
  * <p>原 service 内静态常量散布 ~150 行,既影响可读性又让 writer/parser 无法独立 reuse。 集中到 metadata 类后,后续 {@code
- * WorkflowExcelWorkbookWriter} / {@code WorkflowExcelSheetParser} 都从这里取列定义,主 service 只持业务编排责任。
+ * WorkflowExcelWorkbookWriter} 从这里取列定义,主 service 只持业务编排责任。
  *
  * <p>所有字段 public static final，供 infrastructure 及 infrastructure.excel 子包共用。
  */

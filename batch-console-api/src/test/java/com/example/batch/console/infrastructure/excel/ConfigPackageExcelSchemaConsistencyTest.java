@@ -3,11 +3,9 @@ package com.example.batch.console.infrastructure.excel;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.console.infrastructure.config.DefaultConsoleBatchWindowExcelApplicationService;
-import com.example.batch.console.infrastructure.config.DefaultConsoleBusinessCalendarExcelApplicationService;
 import com.example.batch.console.infrastructure.config.DefaultConsoleResourceQueueExcelApplicationService;
 import com.example.batch.console.infrastructure.file.DefaultConsoleFileChannelExcelApplicationService;
 import com.example.batch.console.infrastructure.file.DefaultConsoleFileTemplateExcelApplicationService;
-import com.example.batch.console.infrastructure.workflow.DefaultConsolePipelineDefinitionExcelApplicationService;
 import java.lang.reflect.Field;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -55,13 +53,9 @@ class ConfigPackageExcelSchemaConsistencyTest {
         .isEqualTo(ConfigPackageExcelSchema.FileChannel.COLUMNS);
     assertThat(staticListField(DefaultConsoleFileTemplateExcelApplicationService.class, "COLUMNS"))
         .isEqualTo(ConfigPackageExcelSchema.FileTemplate.COLUMNS);
-    assertThat(
-            staticListField(
-                DefaultConsolePipelineDefinitionExcelApplicationService.class, "PIPELINE_COLUMNS"))
+    assertThat(PipelineExcelWorkbookWriter.PIPELINE_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.PipelineDefinition.COLUMNS);
-    assertThat(
-            staticListField(
-                DefaultConsolePipelineDefinitionExcelApplicationService.class, "STEP_COLUMNS"))
+    assertThat(PipelineExcelWorkbookWriter.STEP_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.PipelineStep.COLUMNS);
   }
 
@@ -73,9 +67,7 @@ class ConfigPackageExcelSchemaConsistencyTest {
                 column -> !ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAYS.equals(column))
             .toList();
 
-    assertThat(
-            staticListField(
-                DefaultConsoleBusinessCalendarExcelApplicationService.class, "CALENDAR_COLUMNS"))
+    assertThat(BusinessCalendarExcelWorkbookWriter.CALENDAR_COLUMNS)
         .isEqualTo(expectedCalendarColumns);
   }
 

@@ -15,10 +15,7 @@ import com.example.batch.common.enums.PipelineType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
-import com.example.batch.console.web.response.workflow.ConsolePipelineDefinitionExcelRowIssueResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
@@ -251,76 +248,6 @@ public class PipelineExcelWorkbookWriter {
       return out.toByteArray();
     } catch (IOException exception) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
-    }
-  }
-
-  public byte[] writePreviewWorkbook(
-      List<Map<String, String>> pipelineRawRows,
-      List<Map<String, String>> stepRawRows,
-      List<ConsolePipelineDefinitionExcelRowIssueResponse> allIssues) {
-    Locale locale = LocaleContextHolder.getLocale();
-    try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
-      Sheet pipelineSheet = workbook.createSheet(PIPELINE_SHEET_NAME);
-      pipelineSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(
-          pipelineSheet, PIPELINE_COLUMNS, PIPELINE_COLUMN_GUIDES, workbook, messageSource, locale);
-      int rowIndex = 1;
-      for (Map<String, String> rawRow : pipelineRawRows) {
-        Row dataRow = pipelineSheet.createRow(rowIndex++);
-        for (int i = 0; i < PIPELINE_COLUMNS.size(); i++) {
-          Cell cell = dataRow.createCell(i);
-          String value = rawRow.get(PIPELINE_COLUMNS.get(i));
-          cell.setCellValue(value == null ? "" : value);
-        }
-      }
-      applyPipelineValidations(pipelineSheet, locale);
-      setWidths(pipelineSheet, PIPELINE_COLUMNS);
-
-      Sheet stepSheet = workbook.createSheet(STEP_SHEET_NAME);
-      stepSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(
-          stepSheet, STEP_COLUMNS, STEP_COLUMN_GUIDES, workbook, messageSource, locale);
-      rowIndex = 1;
-      for (Map<String, String> rawRow : stepRawRows) {
-        Row dataRow = stepSheet.createRow(rowIndex++);
-        for (int i = 0; i < STEP_COLUMNS.size(); i++) {
-          Cell cell = dataRow.createCell(i);
-          String value = rawRow.get(STEP_COLUMNS.get(i));
-          cell.setCellValue(value == null ? "" : value);
-        }
-      }
-      applyStepValidations(stepSheet, locale);
-      setWidths(stepSheet, STEP_COLUMNS);
-
-      createReadmeSheet(workbook, locale);
-      createDictSheet(workbook);
-      createValidationSheet(workbook);
-
-      List<WorkbookIssue> workbookIssues =
-          allIssues.stream()
-              .flatMap(
-                  issue -> {
-                    String targetSheet = issue.sheetName();
-                    List<String> columns =
-                        PIPELINE_SHEET_NAME.equals(targetSheet) ? PIPELINE_COLUMNS : STEP_COLUMNS;
-                    return ConsoleExcelPreviewWorkbookSupport.expandIssues(
-                        targetSheet, issue.rowNo(), issue.messages(), columns)
-                        .stream();
-                  })
-              .toList();
-      ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
-
-      List<WorkbookIssue> pipelineIssues =
-          workbookIssues.stream().filter(i -> PIPELINE_SHEET_NAME.equals(i.sheetName())).toList();
-      List<WorkbookIssue> stepIssues =
-          workbookIssues.stream().filter(i -> STEP_SHEET_NAME.equals(i.sheetName())).toList();
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-          pipelineSheet, PIPELINE_COLUMNS, pipelineIssues, 1);
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(stepSheet, STEP_COLUMNS, stepIssues, 1);
-
-      return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
-    } catch (IOException exception) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 
