@@ -41,8 +41,7 @@ class ConsoleAlertRoutingExcelControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
     mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsoleAlertRoutingExcelController(excelService, responseFactory))
+        MockMvcBuilders.standaloneSetup(new ConsoleAlertRoutingExcelController(excelService))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();

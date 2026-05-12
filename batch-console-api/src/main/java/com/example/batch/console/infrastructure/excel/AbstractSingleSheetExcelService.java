@@ -8,25 +8,14 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
-import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.excel.ConsoleSingleSheetExcelImportSupport;
-import com.example.batch.console.support.excel.ExcelImportStore;
-import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.support.web.UploadFileGuard;
-import com.example.batch.console.web.response.excel.ExcelApplyResponse;
-import com.example.batch.console.web.response.excel.ExcelPreviewResponse;
-import com.example.batch.console.web.response.excel.ExcelPreviewResponse.ExcelChangeSummary;
-import com.example.batch.console.web.response.excel.ExcelQuickImportResponse;
 import com.example.batch.console.web.response.excel.ExcelRowIssue;
-import com.example.batch.console.web.response.excel.ExcelUploadResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,26 +35,22 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.multipart.MultipartFile;
 
-/** 单 sheet Excel 导入导出模板基类：export 因查询参数各异由子类实现，复用 {@link #doExport} 生成 workbook。 */
+/** 单 sheet Excel 模板与导出基类：export 因查询参数各异由子类实现，复用 {@link #doExport} 生成 workbook。 */
 public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
 
   protected final ConsoleTenantGuard tenantGuard;
   protected final ConsoleRequestMetadataResolver requestMetadataResolver;
-  protected final ExcelImportStore importStore;
   protected final BatchDateTimeSupport dateTimeSupport;
   protected final MessageSource messageSource;
 
   protected AbstractSingleSheetExcelService(
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
-      ExcelImportStore importStore,
       BatchDateTimeSupport dateTimeSupport,
       MessageSource messageSource) {
     this.tenantGuard = tenantGuard;
     this.requestMetadataResolver = requestMetadataResolver;
-    this.importStore = importStore;
     this.dateTimeSupport = dateTimeSupport;
     this.messageSource = messageSource;
   }
@@ -118,141 +103,6 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     return ConsoleExcelStyles.templateResponse(bytes, sheetName() + "-template.xlsx");
   }
 
-  public final ExcelUploadResponse upload(MultipartFile file) throws IOException {
-    Guard.require(file != null && !file.isEmpty(), "file is required");
-    UploadFileGuard.requireExcel(file);
-    String tenantId = tenantGuard.resolveTenant(null);
-    ConsoleSingleSheetExcelImportSupport.ParsedWorkbook parsed =
-        ConsoleSingleSheetExcelImportSupport.parseWorkbook(
-            file.getBytes(),
-            tenantId,
-            file.getOriginalFilename(),
-            sheetName() + ".xlsx",
-            columns(),
-            Set.copyOf(columns()));
-    String uploadToken =
-        importStore.save(parsed.fileName(), parsed.tenantId(), parsed.sheetName(), parsed.rows());
-    return new ExcelUploadResponse(
-        uploadToken, parsed.fileName(), parsed.sheetName(), parsed.rows().size());
-  }
-
-  public final ExcelPreviewResponse<RESP> preview(String uploadToken) {
-    ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
-    Validated<ROW> result = validateRows(session);
-    String previewWorkbookUrl =
-        result.invalidRows() > 0 ? "preview/" + uploadToken + "/workbook" : null;
-    return ExcelPreviewResponse.<RESP>builder()
-        .uploadToken(uploadToken)
-        .fileName(session.fileName())
-        .sheetName(session.sheetName())
-        .totalRows(result.totalRows())
-        .validRows(result.validRows())
-        .invalidRows(result.invalidRows())
-        .rows(result.rows().stream().map(this::toResponse).toList())
-        .issues(result.issues())
-        .previewWorkbookUrl(previewWorkbookUrl)
-        .changeSummary(summarizeChanges(session.tenantId(), result.rows()))
-        .build();
-  }
-
-  public final ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
-    ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
-    Validated<ROW> result = validateRows(session);
-    byte[] bytes = writePreviewWorkbook(session, result);
-    return ConsoleSingleSheetExcelImportSupport.excelResponse(
-        ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), bytes);
-  }
-
-  public final ExcelApplyResponse doApply(String uploadToken, String reason) {
-    return doApply(uploadToken, reason, false);
-  }
-
-  /** skipInvalid=true 时只导入有效行；否则有无效行则整体拒绝。 */
-  public final ExcelApplyResponse doApply(String uploadToken, String reason, boolean skipInvalid) {
-    ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
-    Validated<ROW> result = validateRows(session);
-    if (!skipInvalid && result.invalidRows() > 0) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_rows");
-    }
-    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    String operatorId = metadata.operatorId();
-    String traceId = metadata.traceId();
-    int inserted = 0;
-    int updated = 0;
-    for (ROW row : result.rows()) {
-      boolean isNew = upsertRow(row, session.tenantId(), operatorId);
-      if (isNew) {
-        inserted++;
-        logChange(session.tenantId(), row, reason, operatorId, traceId, "CREATE");
-      } else {
-        updated++;
-        logChange(session.tenantId(), row, reason, operatorId, traceId, "PUBLISH");
-      }
-    }
-    ImportAuditContext auditCtx =
-        ImportAuditContext.builder()
-            .tenantId(session.tenantId())
-            .fileName(session.fileName())
-            .reason(reason)
-            .operatorId(operatorId)
-            .traceId(traceId)
-            .inserted(inserted)
-            .updated(updated)
-            .skipped(skipInvalid ? result.invalidRows() : 0)
-            .build();
-    logImportAudit(auditCtx);
-    importStore.remove(uploadToken);
-    return new ExcelApplyResponse(
-        uploadToken,
-        session.tenantId(),
-        result.rows().size(),
-        inserted,
-        updated,
-        skipInvalid ? result.invalidRows() : 0);
-  }
-
-  /** 一键导入：upload → validate → 无错误自动 apply / 有错误返回 preview + 错误 workbook URL。 */
-  public final ExcelQuickImportResponse<RESP> quickImport(
-      MultipartFile file, String reason, boolean skipInvalid) throws IOException {
-    ExcelUploadResponse uploaded = upload(file);
-    String uploadToken = uploaded.uploadToken();
-    ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
-    Validated<ROW> result = validateRows(session);
-
-    boolean canApply = result.invalidRows() == 0 || skipInvalid;
-    if (canApply && result.validRows() > 0) {
-      ExcelApplyResponse applied = doApply(uploadToken, reason, skipInvalid);
-      return new ExcelQuickImportResponse<>(
-          true,
-          uploadToken,
-          uploaded.fileName(),
-          result.totalRows(),
-          result.validRows(),
-          result.invalidRows(),
-          applied.insertedRows(),
-          applied.updatedRows(),
-          applied.skippedRows(),
-          result.issues(),
-          null);
-    }
-
-    // 有错误且不跳过 — 返回 preview 结果和错误 workbook 下载地址
-    String previewWorkbookUrl =
-        result.invalidRows() > 0 ? "preview/" + uploadToken + "/workbook" : null;
-    return new ExcelQuickImportResponse<>(
-        false,
-        uploadToken,
-        uploaded.fileName(),
-        result.totalRows(),
-        result.validRows(),
-        result.invalidRows(),
-        0,
-        0,
-        0,
-        result.issues(),
-        previewWorkbookUrl);
-  }
-
   /**
    * 默认为空（已有逐行 logChange）；子类可覆盖写入批次级审计。
    *
@@ -278,19 +128,6 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
 
   protected record Validated<R>(
       int totalRows, int validRows, int invalidRows, List<R> rows, List<ExcelRowIssue> issues) {}
-
-  private ExcelChangeSummary summarizeChanges(String tenantId, List<ROW> rows) {
-    int inserts = 0;
-    int updates = 0;
-    for (ROW row : rows) {
-      if (rowExists(row, tenantId)) {
-        updates++;
-      } else {
-        inserts++;
-      }
-    }
-    return new ExcelChangeSummary(inserts, updates, 0);
-  }
 
   protected final Validated<ROW> validateRows(
       ConsoleSingleSheetExcelImportSupport.ParsedSession session) {
@@ -475,11 +312,6 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
 
   // Workbook 生成（内部实现）
 
-  private ConsoleSingleSheetExcelImportSupport.ParsedSession loadSession(String uploadToken) {
-    return ConsoleSingleSheetExcelImportSupport.loadSession(
-        uploadToken, importStore.get(uploadToken), tenantGuard);
-  }
-
   private byte[] writeWorkbook(List<Map<String, Object>> rows) {
     Locale locale = LocaleContextHolder.getLocale();
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
@@ -510,33 +342,5 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       throw BizException.of(
           ResultCode.SYSTEM_ERROR, "error.excel.workbook_generate_failed", e, e.getMessage());
     }
-  }
-
-  private byte[] writePreviewWorkbook(
-      ConsoleSingleSheetExcelImportSupport.ParsedSession session, Validated<ROW> result) {
-    List<WorkbookIssue> workbookIssues =
-        result.issues().stream()
-            .flatMap(
-                issue ->
-                    ConsoleExcelPreviewWorkbookSupport.expandIssues(
-                        sheetName(), issue.rowNo(), issue.messages(), columns())
-                        .stream())
-            .toList();
-    return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
-        new ConsoleSingleSheetExcelImportSupport.WritePreviewWorkbookParam(
-            session,
-            columns(),
-            columnGuides(),
-            this::applyValidations,
-            workbook -> {
-              createReadmeSheet(workbook);
-              ConsoleExcelStyles.createFieldGuideSheet(
-                  workbook, sheetName(), columns(), columnGuides());
-              createDictSheet(workbook);
-              ConsoleExcelStyles.createValidationSheet(workbook);
-            },
-            workbookIssues,
-            1,
-            "failed to generate preview excel workbook"));
   }
 }
