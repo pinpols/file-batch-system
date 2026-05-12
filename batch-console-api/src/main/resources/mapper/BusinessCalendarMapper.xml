@@ -6,6 +6,7 @@
             id,
             tenant_id as tenantId,
             calendar_code as calendarCode,
+            description,
             timezone as timezone,
             catch_up_policy as catchUpPolicy,
             cutoff_time as cutoffTime,
@@ -24,7 +25,7 @@
             id, tenant_id as "tenantId", calendar_code as "calendarCode",
             calendar_name as "calendarName", timezone,
             holiday_roll_rule as "holidayRollRule", catch_up_policy as "catchUpPolicy",
-            catch_up_max_days as "catchUpMaxDays", enabled,
+            catch_up_max_days as "catchUpMaxDays", enabled, description,
             created_at as "createdAt", updated_at as "updatedAt"
         from batch.business_calendar
         where tenant_id = #{tenantId}
@@ -59,7 +60,7 @@
             id, tenant_id as "tenantId", calendar_code as "calendarCode",
             calendar_name as "calendarName", timezone,
             holiday_roll_rule as "holidayRollRule", catch_up_policy as "catchUpPolicy",
-            catch_up_max_days as "catchUpMaxDays", enabled,
+            catch_up_max_days as "catchUpMaxDays", enabled, description,
             created_at as "createdAt", updated_at as "updatedAt"
         from batch.business_calendar
         where tenant_id = #{tenantId} and id = #{id}
@@ -68,10 +69,10 @@
     <insert id="upsertBusinessCalendar" parameterType="com.example.batch.console.domain.param.BusinessCalendarUpsertParam">
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
-            holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
+            holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled, description
         ) values (
             #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
-            <choose><when test="holidayRollRule != null and holidayRollRule != ''">#{holidayRollRule}</when><otherwise>'SKIP'</otherwise></choose>, <choose><when test="catchUpPolicy != null and catchUpPolicy != ''">#{catchUpPolicy}</when><otherwise>'NONE'</otherwise></choose>, <choose><when test="catchUpMaxDays != null">#{catchUpMaxDays}</when><otherwise>0</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
+            <choose><when test="holidayRollRule != null and holidayRollRule != ''">#{holidayRollRule}</when><otherwise>'SKIP'</otherwise></choose>, <choose><when test="catchUpPolicy != null and catchUpPolicy != ''">#{catchUpPolicy}</when><otherwise>'NONE'</otherwise></choose>, <choose><when test="catchUpMaxDays != null">#{catchUpMaxDays}</when><otherwise>0</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
         on conflict (tenant_id, calendar_code) do update
         set calendar_name = excluded.calendar_name,
@@ -80,16 +81,17 @@
             catch_up_policy = excluded.catch_up_policy,
             catch_up_max_days = excluded.catch_up_max_days,
             enabled = excluded.enabled,
+            description = excluded.description,
             updated_at = current_timestamp
     </insert>
 
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
-            holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
+            holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled, description
         ) values (
             #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
-            <choose><when test="holidayRollRule != null and holidayRollRule != ''">#{holidayRollRule}</when><otherwise>'SKIP'</otherwise></choose>, <choose><when test="catchUpPolicy != null and catchUpPolicy != ''">#{catchUpPolicy}</when><otherwise>'NONE'</otherwise></choose>, <choose><when test="catchUpMaxDays != null">#{catchUpMaxDays}</when><otherwise>0</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
+            <choose><when test="holidayRollRule != null and holidayRollRule != ''">#{holidayRollRule}</when><otherwise>'SKIP'</otherwise></choose>, <choose><when test="catchUpPolicy != null and catchUpPolicy != ''">#{catchUpPolicy}</when><otherwise>'NONE'</otherwise></choose>, <choose><when test="catchUpMaxDays != null">#{catchUpMaxDays}</when><otherwise>0</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
         )
     </insert>
 
@@ -100,6 +102,7 @@
             holiday_roll_rule = #{holidayRollRule},
             catch_up_policy = #{catchUpPolicy},
             catch_up_max_days = #{catchUpMaxDays},
+            description = #{description},
             updated_at = current_timestamp
         where tenant_id = #{tenantId} and id = #{id}
     </update>

@@ -23,7 +23,7 @@ import lombok.Builder;
 /** Shared parser/upsert helper for business_calendar Excel rows. */
 public final class BusinessCalendarExcelRowParser {
 
-  public static final String SHEET_NAME = "business_calendar";
+  public static final String SHEET_NAME = BusinessCalendarExcelSchema.SHEET_NAME;
 
   private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
   private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
@@ -36,15 +36,30 @@ public final class BusinessCalendarExcelRowParser {
     return CalendarRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
-        .calendarCode(requireText(values, "calendar_code", 128, issues))
-        .calendarName(requireText(values, "calendar_name", 256, issues))
-        .timezone(requireText(values, "timezone", 64, issues))
-        .holidayRollRule(requireEnum(values, "holiday_roll_rule", HOLIDAY_ROLL_RULES, 32, issues))
-        .catchUpPolicy(requireEnum(values, "catch_up_policy", CATCH_UP_POLICIES, 32, issues))
-        .catchUpMaxDays(requireInteger(values, "catch_up_max_days", 0, issues))
-        .holidays(parseHolidays(values.get("holidays"), issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
-        .description(normalize(values.get("description")))
+        .calendarCode(
+            requireText(values, BusinessCalendarExcelSchema.COL_CALENDAR_CODE, 128, issues))
+        .calendarName(
+            requireText(values, BusinessCalendarExcelSchema.COL_CALENDAR_NAME, 256, issues))
+        .timezone(requireText(values, BusinessCalendarExcelSchema.COL_TIMEZONE, 64, issues))
+        .holidayRollRule(
+            requireEnum(
+                values,
+                BusinessCalendarExcelSchema.COL_HOLIDAY_ROLL_RULE,
+                HOLIDAY_ROLL_RULES,
+                32,
+                issues))
+        .catchUpPolicy(
+            requireEnum(
+                values,
+                BusinessCalendarExcelSchema.COL_CATCH_UP_POLICY,
+                CATCH_UP_POLICIES,
+                32,
+                issues))
+        .catchUpMaxDays(
+            requireInteger(values, BusinessCalendarExcelSchema.COL_CATCH_UP_MAX_DAYS, 0, issues))
+        .holidays(parseHolidays(values.get(BusinessCalendarExcelSchema.COL_HOLIDAYS), issues))
+        .enabled(optionalBoolean(values, ConfigPackageExcelValidator.COL_ENABLED, true, issues))
+        .description(normalize(values.get(ConfigPackageExcelValidator.COL_DESCRIPTION)))
         .build();
   }
 
@@ -58,6 +73,7 @@ public final class BusinessCalendarExcelRowParser {
     param.setCatchUpPolicy(row.catchUpPolicy());
     param.setCatchUpMaxDays(row.catchUpMaxDays());
     param.setEnabled(row.enabled());
+    param.setDescription(row.description());
     param.setCreatedBy(operatorId);
     param.setUpdatedBy(operatorId);
     return param;

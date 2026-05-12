@@ -26,6 +26,7 @@ import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser;
 import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;
 import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser;
 import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser.CalendarRow;
+import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelSchema;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
@@ -188,7 +189,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
     List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    writer.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes =
         writer.buildExportWorkbook(
             List.of(
@@ -202,7 +202,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
                 steps,
                 wfDefs,
                 wfNodes,
-                wfEdges));
+                wfEdges),
+            loadRegisteredImplCodesByModule());
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
@@ -211,8 +212,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   @Override
   public ResponseEntity<InputStreamResource> downloadTemplate() {
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    writer.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
-    byte[] bytes = writer.buildTemplateWorkbook();
+    byte[] bytes = writer.buildTemplateWorkbook(loadRegisteredImplCodesByModule());
     return ConsoleSingleSheetExcelImportSupport.excelResponse(
         "tenant-config-package-template.xlsx", bytes);
   }
@@ -246,18 +246,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private List<Map<String, Object>> withCalendarHolidayValues(List<Map<String, Object>> rows) {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Map<String, Object> row : rows) {
-      Map<String, Object> item = new LinkedHashMap<>();
-      item.put(COL_TENANT_ID, row.get("tenantId"));
-      item.put("calendar_code", row.get("calendarCode"));
-      item.put("calendar_name", row.get("calendarName"));
-      item.put("timezone", row.get("timezone"));
-      item.put("holiday_roll_rule", row.get("holidayRollRule"));
-      item.put("catch_up_policy", row.get("catchUpPolicy"));
-      item.put("catch_up_max_days", row.get("catchUpMaxDays"));
-      item.put("holidays", calendarHolidaysText(row.get(KEY_ID)));
-      item.put(COL_ENABLED, row.get(COL_ENABLED));
-      item.put(COL_DESCRIPTION, row.get(COL_DESCRIPTION));
-      out.add(item);
+      out.add(BusinessCalendarExcelSchema.toExportRow(row, calendarHolidaysText(row.get(KEY_ID))));
     }
     return out;
   }
@@ -310,8 +299,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    writer.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
-    byte[] bytes = writer.buildPreviewWorkbook(session, result);
+    byte[] bytes = writer.buildPreviewWorkbook(session, result, loadRegisteredImplCodesByModule());
     return ConsoleSingleSheetExcelImportSupport.excelResponse(
         ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), bytes);
   }
