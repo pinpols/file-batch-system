@@ -139,183 +139,32 @@ public class ConfigPackageExcelWorkbookWriter {
   private static final int[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
 
   public static final List<String> RESOURCE_QUEUE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          "queue_code",
-          "queue_name",
-          "queue_type",
-          "max_running_jobs",
-          "max_running_partitions",
-          "max_qps",
-          COL_WORKER_GROUP,
-          "resource_tag",
-          "priority_policy",
-          "fair_share_weight",
-          COL_ENABLED,
-          COL_DESCRIPTION);
+      ConfigPackageExcelSchema.ResourceQueue.COLUMNS;
 
-  public static final List<String> BUSINESS_CALENDAR_COLUMNS = BusinessCalendarExcelSchema.COLUMNS;
+  public static final List<String> BUSINESS_CALENDAR_COLUMNS =
+      ConfigPackageExcelSchema.BusinessCalendar.COLUMNS;
 
   public static final List<String> BATCH_WINDOW_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          "window_code",
-          "window_name",
-          "timezone",
-          "start_time",
-          "end_time",
-          "end_strategy",
-          "out_of_window_action",
-          "allow_cross_day",
-          COL_ENABLED,
-          COL_DESCRIPTION);
+      ConfigPackageExcelSchema.BatchWindow.COLUMNS;
 
-  public static final List<String> JOB_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_JOB_CODE,
-          COL_JOB_NAME,
-          COL_JOB_TYPE,
-          COL_BIZ_TYPE,
-          COL_QUEUE_CODE,
-          COL_WORKER_GROUP,
-          COL_SCHEDULE_TYPE,
-          COL_SCHEDULE_EXPR,
-          COL_CALENDAR_CODE,
-          COL_WINDOW_CODE,
-          COL_RETRY_POLICY,
-          COL_RETRY_MAX_COUNT,
-          COL_TIMEOUT_SECONDS,
-          COL_SHARD_STRATEGY,
-          COL_EXECUTION_HANDLER,
-          COL_PARAM_SCHEMA,
-          COL_DEFAULT_PARAMS,
-          COL_ENABLED,
-          COL_DESCRIPTION);
+  public static final List<String> JOB_COLUMNS = ConfigPackageExcelSchema.JobDefinition.COLUMNS;
 
-  public static final List<String> CHANNEL_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_CHANNEL_CODE,
-          COL_CHANNEL_NAME,
-          COL_CHANNEL_TYPE,
-          "target_endpoint",
-          COL_AUTH_TYPE,
-          COL_CONFIG_JSON,
-          COL_RECEIPT_POLICY,
-          COL_TIMEOUT_SECONDS,
-          COL_ENABLED);
+  public static final List<String> CHANNEL_COLUMNS = ConfigPackageExcelSchema.FileChannel.COLUMNS;
 
   public static final List<String> FILE_TEMPLATE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          "template_code",
-          "template_name",
-          "template_type",
-          COL_BIZ_TYPE,
-          "file_format_type",
-          "charset",
-          "target_charset",
-          "with_bom",
-          "line_separator",
-          "delimiter",
-          "quote_char",
-          "escape_char",
-          "record_length",
-          "header_rows",
-          "footer_rows",
-          "header_template",
-          "trailer_template",
-          "checksum_type",
-          "compress_type",
-          "encrypt_type",
-          "naming_rule",
-          "field_mappings",
-          "validation_rule_set",
-          "default_query_code",
-          "default_query_sql",
-          "query_param_schema",
-          "streaming_enabled",
-          "page_size",
-          "fetch_size",
-          "chunk_size",
-          "preview_masking_enabled",
-          "error_line_masking_enabled",
-          "log_masking_enabled",
-          "content_encryption_enabled",
-          "encryption_key_ref",
-          "download_requires_approval",
-          "masking_rule_set",
-          COL_ENABLED,
-          COL_VERSION,
-          COL_DESCRIPTION);
+      ConfigPackageExcelSchema.FileTemplate.COLUMNS;
 
   public static final List<String> PIPELINE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_JOB_CODE,
-          COL_PIPELINE_NAME,
-          COL_PIPELINE_TYPE,
-          COL_BIZ_TYPE,
-          COL_WORKER_GROUP,
-          COL_VERSION,
-          COL_ENABLED,
-          COL_DESCRIPTION);
+      ConfigPackageExcelSchema.PipelineDefinition.COLUMNS;
 
-  public static final List<String> STEP_COLUMNS =
-      List.of(
-          COL_JOB_CODE,
-          COL_VERSION,
-          COL_STEP_CODE,
-          COL_STEP_NAME,
-          COL_STAGE_CODE,
-          "step_order",
-          "impl_code",
-          "step_params",
-          COL_TIMEOUT_SECONDS,
-          COL_RETRY_POLICY,
-          COL_RETRY_MAX_COUNT,
-          COL_ENABLED);
+  public static final List<String> STEP_COLUMNS = ConfigPackageExcelSchema.PipelineStep.COLUMNS;
 
   public static final List<String> WF_DEF_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_WORKFLOW_CODE,
-          COL_WORKFLOW_NAME,
-          COL_WORKFLOW_TYPE,
-          COL_VERSION,
-          COL_ENABLED,
-          COL_DESCRIPTION);
+      ConfigPackageExcelSchema.WorkflowDefinition.COLUMNS;
 
-  public static final List<String> WF_NODE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_WORKFLOW_CODE,
-          COL_WORKFLOW_VERSION,
-          COL_NODE_CODE,
-          COL_NODE_NAME,
-          COL_NODE_TYPE,
-          COL_RELATED_JOB_CODE,
-          COL_RELATED_PIPELINE_CODE,
-          COL_WORKER_GROUP,
-          COL_WINDOW_CODE,
-          COL_NODE_ORDER,
-          COL_RETRY_POLICY,
-          COL_RETRY_MAX_COUNT,
-          COL_TIMEOUT_SECONDS,
-          COL_NODE_PARAMS,
-          COL_ENABLED);
+  public static final List<String> WF_NODE_COLUMNS = ConfigPackageExcelSchema.WorkflowNode.COLUMNS;
 
-  public static final List<String> WF_EDGE_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_WORKFLOW_CODE,
-          COL_WORKFLOW_VERSION,
-          COL_FROM_NODE_CODE,
-          COL_TO_NODE_CODE,
-          COL_EDGE_TYPE,
-          COL_CONDITION_EXPR,
-          COL_ENABLED);
+  public static final List<String> WF_EDGE_COLUMNS = ConfigPackageExcelSchema.WorkflowEdge.COLUMNS;
 
   private record SheetDef(
       String name,
@@ -774,25 +623,25 @@ public class ConfigPackageExcelWorkbookWriter {
         Map.entry(
             COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
-            BusinessCalendarExcelSchema.COL_CALENDAR_CODE,
+            ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_CODE,
             requiredColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
         Map.entry(
-            BusinessCalendarExcelSchema.COL_CALENDAR_NAME,
+            ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_NAME,
             requiredColumn("业务日历名称。", GUIDE_STR, "默认业务日历")),
         Map.entry(
-            BusinessCalendarExcelSchema.COL_TIMEZONE,
+            ConfigPackageExcelSchema.BusinessCalendar.COL_TIMEZONE,
             requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
         Map.entry(
-            BusinessCalendarExcelSchema.COL_HOLIDAY_ROLL_RULE,
+            ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
             requiredColumn("节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
         Map.entry(
-            BusinessCalendarExcelSchema.COL_CATCH_UP_POLICY,
+            ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
             requiredColumn("补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
         Map.entry(
-            BusinessCalendarExcelSchema.COL_CATCH_UP_MAX_DAYS,
+            ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_MAX_DAYS,
             requiredColumn("最大补跑天数。", GUIDE_INT, "0")),
         Map.entry(
-            BusinessCalendarExcelSchema.COL_HOLIDAYS,
+            ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAYS,
             optionalColumn("节假日，逗号分隔 yyyy-MM-dd。", GUIDE_STR, "2026-01-01,2026-10-01")),
         Map.entry(
             COL_ENABLED,

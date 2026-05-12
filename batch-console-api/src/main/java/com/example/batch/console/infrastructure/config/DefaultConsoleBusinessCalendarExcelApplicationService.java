@@ -21,6 +21,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.config.ConsoleBusinessCalendarExcelApplicationService;
 import com.example.batch.console.domain.param.BusinessCalendarUpsertParam;
 import com.example.batch.console.infrastructure.excel.BusinessCalendarExcelWorkbookWriter;
+import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.CalendarHolidayMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
@@ -72,14 +73,18 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   private static final String CALENDAR_SHEET_NAME = "business_calendar";
 
   // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String COL_CALENDAR_NAME = "calendar_name";
-  private static final String COL_CATCH_UP_MAX_DAYS = "catch_up_max_days";
+  private static final String COL_CALENDAR_NAME =
+      ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_NAME;
+  private static final String COL_CATCH_UP_MAX_DAYS =
+      ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_MAX_DAYS;
   private static final String COL_BIZ_DATE = "biz_date";
   private static final String COL_HOLIDAY_NAME = "holiday_name";
   private static final String COL_CALENDAR_CODE = "calendar_code";
   private static final String COL_TENANT_ID = "tenant_id";
-  private static final String COL_HOLIDAY_ROLL_RULE = "holiday_roll_rule";
-  private static final String COL_CATCH_UP_POLICY = "catch_up_policy";
+  private static final String COL_HOLIDAY_ROLL_RULE =
+      ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE;
+  private static final String COL_CATCH_UP_POLICY =
+      ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY;
   private static final String COL_ENABLED = "enabled";
   private static final String COL_DAY_TYPE = "day_type";
   private static final String GUIDE_STR = "字符串";
@@ -87,15 +92,9 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   private static final String HOLIDAY_SHEET_NAME = "calendar_holiday";
 
   private static final List<String> CALENDAR_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          COL_CALENDAR_CODE,
-          COL_CALENDAR_NAME,
-          "timezone",
-          COL_HOLIDAY_ROLL_RULE,
-          COL_CATCH_UP_POLICY,
-          COL_CATCH_UP_MAX_DAYS,
-          COL_ENABLED);
+      ConfigPackageExcelSchema.BusinessCalendar.COLUMNS.stream()
+          .filter(column -> !ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAYS.equals(column))
+          .toList();
   private static final Set<String> CALENDAR_REQUIRED_HEADERS = Set.copyOf(CALENDAR_COLUMNS);
 
   private static final List<String> HOLIDAY_COLUMNS =
@@ -266,6 +265,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       param.setCatchUpPolicy(row.catchUpPolicy());
       param.setCatchUpMaxDays(row.catchUpMaxDays());
       param.setEnabled(row.enabled());
+      param.setDescription(row.description());
       param.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
       param.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
       businessCalendarMapper.upsertBusinessCalendar(param);
@@ -489,6 +489,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         .catchUpPolicy(requireEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, issues))
         .catchUpMaxDays(requireInteger(values, COL_CATCH_UP_MAX_DAYS, 0, issues))
         .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+        .description(optionalText(values, COL_DESCRIPTION, 512, issues))
         .build();
   }
 
@@ -643,7 +644,8 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       String holidayRollRule,
       String catchUpPolicy,
       Integer catchUpMaxDays,
-      Boolean enabled) {}
+      Boolean enabled,
+      String description) {}
 
   @Builder
   private record HolidayRow(

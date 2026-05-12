@@ -16,6 +16,7 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.config.ConsoleResourceQueueExcelApplicationService;
 import com.example.batch.console.domain.param.ResourceQueueUpsertParam;
 import com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService;
+import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.support.ConfigChangeLogBuilder;
@@ -60,21 +61,7 @@ public class DefaultConsoleResourceQueueExcelApplicationService
   private static final String GUIDE_STR = "字符串";
 
   private static final String SHEET_NAME = "resource_queue";
-  private static final List<String> COLUMNS =
-      List.of(
-          "tenant_id",
-          "queue_code",
-          "queue_name",
-          COL_QUEUE_TYPE,
-          "max_running_jobs",
-          "max_running_partitions",
-          "max_qps",
-          "worker_group",
-          "resource_tag",
-          COL_PRIORITY_POLICY,
-          "fair_share_weight",
-          COL_ENABLED,
-          COL_DESCRIPTION);
+  private static final List<String> COLUMNS = ConfigPackageExcelSchema.ResourceQueue.COLUMNS;
   private static final Set<String> QUEUE_TYPES = DictEnum.codes(ResourceQueueType.class);
   private static final Set<String> PRIORITY_POLICIES = DictEnum.codes(QueuePriorityPolicy.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =

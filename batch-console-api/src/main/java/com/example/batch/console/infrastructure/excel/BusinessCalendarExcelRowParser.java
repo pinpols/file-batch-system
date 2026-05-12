@@ -6,6 +6,15 @@ import static com.example.batch.console.infrastructure.excel.AbstractSingleSheet
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireInteger;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static com.example.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_NAME;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_MAX_DAYS;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAYS;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema.BusinessCalendar.COL_TIMEZONE;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DESCRIPTION;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_ENABLED;
 
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.DictEnum;
@@ -23,7 +32,7 @@ import lombok.Builder;
 /** Shared parser/upsert helper for business_calendar Excel rows. */
 public final class BusinessCalendarExcelRowParser {
 
-  public static final String SHEET_NAME = BusinessCalendarExcelSchema.SHEET_NAME;
+  public static final String SHEET_NAME = ConfigPackageExcelSchema.BusinessCalendar.SHEET_NAME;
 
   private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
   private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
@@ -36,30 +45,15 @@ public final class BusinessCalendarExcelRowParser {
     return CalendarRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
-        .calendarCode(
-            requireText(values, BusinessCalendarExcelSchema.COL_CALENDAR_CODE, 128, issues))
-        .calendarName(
-            requireText(values, BusinessCalendarExcelSchema.COL_CALENDAR_NAME, 256, issues))
-        .timezone(requireText(values, BusinessCalendarExcelSchema.COL_TIMEZONE, 64, issues))
-        .holidayRollRule(
-            requireEnum(
-                values,
-                BusinessCalendarExcelSchema.COL_HOLIDAY_ROLL_RULE,
-                HOLIDAY_ROLL_RULES,
-                32,
-                issues))
-        .catchUpPolicy(
-            requireEnum(
-                values,
-                BusinessCalendarExcelSchema.COL_CATCH_UP_POLICY,
-                CATCH_UP_POLICIES,
-                32,
-                issues))
-        .catchUpMaxDays(
-            requireInteger(values, BusinessCalendarExcelSchema.COL_CATCH_UP_MAX_DAYS, 0, issues))
-        .holidays(parseHolidays(values.get(BusinessCalendarExcelSchema.COL_HOLIDAYS), issues))
-        .enabled(optionalBoolean(values, ConfigPackageExcelValidator.COL_ENABLED, true, issues))
-        .description(normalize(values.get(ConfigPackageExcelValidator.COL_DESCRIPTION)))
+        .calendarCode(requireText(values, COL_CALENDAR_CODE, 128, issues))
+        .calendarName(requireText(values, COL_CALENDAR_NAME, 256, issues))
+        .timezone(requireText(values, COL_TIMEZONE, 64, issues))
+        .holidayRollRule(requireEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, issues))
+        .catchUpPolicy(requireEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, issues))
+        .catchUpMaxDays(requireInteger(values, COL_CATCH_UP_MAX_DAYS, 0, issues))
+        .holidays(parseHolidays(values.get(COL_HOLIDAYS), issues))
+        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+        .description(normalize(values.get(COL_DESCRIPTION)))
         .build();
   }
 
