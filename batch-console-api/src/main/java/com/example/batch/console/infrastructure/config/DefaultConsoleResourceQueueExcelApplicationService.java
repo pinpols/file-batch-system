@@ -23,11 +23,8 @@ import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
-import com.example.batch.console.support.excel.ExcelImportStore;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.config.ConsoleResourceQueueResponse;
-import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,7 +39,6 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** {@link ConsoleResourceQueueExcelApplicationService} 的默认实现。 */
 @Service
@@ -138,12 +134,11 @@ public class DefaultConsoleResourceQueueExcelApplicationService
   public DefaultConsoleResourceQueueExcelApplicationService(
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
-      ExcelImportStore importStore,
       BatchDateTimeSupport dateTimeSupport,
       MessageSource messageSource,
       ResourceQueueMapper resourceQueueMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport, messageSource);
+    super(tenantGuard, requestMetadataResolver, dateTimeSupport, messageSource);
     this.resourceQueueMapper = resourceQueueMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }
@@ -155,12 +150,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     List<Map<String, Object>> rows =
         resourceQueueMapper.selectByQuery(resolvedTenantId, queueCode, queueType, enabled, null);
     return doExport(resolvedTenantId, rows);
-  }
-
-  @Override
-  @Transactional
-  public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
-    return doApply(uploadToken, request.getReason());
   }
 
   @Override

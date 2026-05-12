@@ -18,11 +18,8 @@ import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
-import com.example.batch.console.support.excel.ExcelImportStore;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.excel.ExcelApplyRequest;
 import com.example.batch.console.web.response.config.ConsoleTenantQuotaPolicyResponse;
-import com.example.batch.console.web.response.excel.ExcelApplyResponse;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,7 +33,6 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** {@link ConsoleTenantQuotaPolicyExcelApplicationService} 的默认实现。 */
 @Service
@@ -112,12 +108,11 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
   public DefaultConsoleTenantQuotaPolicyExcelApplicationService(
       ConsoleTenantGuard tenantGuard,
       ConsoleRequestMetadataResolver requestMetadataResolver,
-      ExcelImportStore importStore,
       BatchDateTimeSupport dateTimeSupport,
       MessageSource messageSource,
       TenantQuotaPolicyMapper tenantQuotaPolicyMapper,
       ConfigChangeLogMapper configChangeLogMapper) {
-    super(tenantGuard, requestMetadataResolver, importStore, dateTimeSupport, messageSource);
+    super(tenantGuard, requestMetadataResolver, dateTimeSupport, messageSource);
     this.tenantQuotaPolicyMapper = tenantQuotaPolicyMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }
@@ -129,12 +124,6 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     List<Map<String, Object>> rows =
         tenantQuotaPolicyMapper.selectByQuery(resolvedTenantId, policyCode, enabled, null);
     return doExport(resolvedTenantId, rows);
-  }
-
-  @Override
-  @Transactional
-  public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
-    return doApply(uploadToken, request.getReason());
   }
 
   @Override

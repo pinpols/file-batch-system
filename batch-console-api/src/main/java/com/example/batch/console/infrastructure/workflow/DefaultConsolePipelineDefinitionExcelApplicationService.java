@@ -59,7 +59,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /** {@link ConsolePipelineDefinitionExcelApplicationService} 的默认实现。 */
@@ -181,7 +180,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
   }
 
-  @Override
   public ConsolePipelineDefinitionExcelUploadResponse upload(MultipartFile file)
       throws IOException {
     Guard.require(file != null && !file.isEmpty(), "file is required");
@@ -194,7 +192,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         uploadToken, parsed.fileName(), parsed.pipelineRows().size(), parsed.stepRows().size());
   }
 
-  @Override
   public ConsolePipelineDefinitionExcelPreviewResponse preview(String uploadToken) {
     ParsedSession session = loadSession(uploadToken);
     ValidationResult result = validateRows(session);
@@ -212,7 +209,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         result.allIssues());
   }
 
-  @Override
   public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
     ParsedSession session = loadSession(uploadToken);
     ValidationResult result = validateRows(session);
@@ -233,8 +229,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
   }
 
-  @Override
-  @Transactional
   public ConsolePipelineDefinitionExcelApplyResponse apply(
       String uploadToken, PipelineDefinitionExcelApplyRequest request) {
     ParsedSession session = loadSession(uploadToken);

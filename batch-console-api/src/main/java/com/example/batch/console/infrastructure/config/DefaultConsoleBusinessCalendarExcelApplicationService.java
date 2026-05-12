@@ -62,7 +62,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -163,7 +162,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
   }
 
-  @Override
   public ConsoleBusinessCalendarExcelUploadResponse upload(MultipartFile file) throws IOException {
     Guard.require(file != null && !file.isEmpty(), "file is required");
     String tenantId = tenantGuard.resolveTenant(null);
@@ -177,7 +175,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         HOLIDAY_SHEET_NAME, parsed.holidayRows().size());
   }
 
-  @Override
   public ConsoleBusinessCalendarExcelPreviewResponse preview(String uploadToken) {
     ParsedSession session = loadSession(uploadToken);
     ValidationResult result = validateAll(session);
@@ -195,7 +192,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         result.issues());
   }
 
-  @Override
   public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
     ParsedSession session = loadSession(uploadToken);
     ValidationResult result = validateAll(session);
@@ -216,8 +212,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
   }
 
-  @Override
-  @Transactional
   public ConsoleBusinessCalendarExcelApplyResponse apply(
       String uploadToken, BusinessCalendarExcelApplyRequest request) {
     ParsedSession session = loadSession(uploadToken);

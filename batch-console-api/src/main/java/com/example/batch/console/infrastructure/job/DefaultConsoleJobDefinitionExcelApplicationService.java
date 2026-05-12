@@ -62,7 +62,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -178,7 +177,6 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
   }
 
-  @Override
   public ConsoleJobDefinitionExcelUploadResponse upload(MultipartFile file) throws IOException {
     Guard.require(file != null && !file.isEmpty(), "file is required");
     String tenantId = tenantGuard.resolveTenant(null);
@@ -189,7 +187,6 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
         uploadToken, workbook.fileName(), workbook.rows().size());
   }
 
-  @Override
   public ConsoleJobDefinitionExcelPreviewResponse preview(String uploadToken) {
     ParsedSession session = loadSession(uploadToken);
     ValidationResult validationResult = validate(session);
@@ -203,7 +200,6 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
         validationResult.issues());
   }
 
-  @Override
   public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
     ParsedSession session = loadSession(uploadToken);
     ValidationResult validationResult = validate(session);
@@ -223,8 +219,6 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
   }
 
-  @Override
-  @Transactional
   public ConsoleJobDefinitionExcelApplyResponse apply(
       String uploadToken, JobDefinitionExcelApplyRequest request) {
     ParsedSession session = loadSession(uploadToken);
