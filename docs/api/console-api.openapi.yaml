@@ -1973,446 +1973,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConfigChangeLogList'
-  /api/console/config/file-templates/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank file template Excel template
-      operationId: downloadFileTemplateExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/file-templates/excel/export:
-    get:
-      tags: [Config]
-      summary: Export file template configs as Excel
-      operationId: exportFileTemplateExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: templateCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: templateType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/file-channels/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank file channel Excel template
-      operationId: downloadFileChannelExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/file-channels/excel/export:
-    get:
-      tags: [Config]
-      summary: Export file channel configs as Excel
-      operationId: exportFileChannelExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: channelCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: channelType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/workflows/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank workflow Excel template
-      operationId: downloadWorkflowExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/workflows/excel/export:
-    get:
-      tags: [Config]
-      summary: Export workflow definitions, nodes, and edges as Excel
-      operationId: exportWorkflowExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: workflowCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: workflowType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: version
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int32
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/job-definitions/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank job definition Excel template
-      operationId: downloadJobDefinitionExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/job-definitions/excel/export:
-    get:
-      tags: [Config]
-      summary: Export job definitions as Excel
-      operationId: exportJobDefinitionExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: jobCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: jobType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/alert-routings/excel/template:
-    get:
-      tags: [AlertRoutings]
-      summary: Download blank alert routing Excel template
-      operationId: downloadAlertRoutingExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/alert-routings/excel/export:
-    get:
-      tags: [AlertRoutings]
-      summary: Export alert routing configs as Excel
-      operationId: exportAlertRoutingExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: routeCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: team
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: severity
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [INFO, WARN, ERROR, CRITICAL]
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/alert-routings/excel/quick-import:
-    post:
-      tags: [AlertRoutings]
-      summary: One-click import alert routing Excel (upload + validate + apply)
-      operationId: quickImportAlertRoutingExcel
-      description: >
-        合并上传、校验、应用为一次调用。无校验错误时自动 apply 并返回结果（applied=true）；
-        有校验错误时返回 preview 和带批注 workbook 下载 URL（applied=false），不执行 apply。
-        当 skipInvalid=true 时，跳过无效行仅导入有效行。
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                reason:
-                  type: string
-                  maxLength: 512
-                skipInvalid:
-                  type: boolean
-                  default: false
-              required: [file]
-      responses:
-        '200':
-          description: Quick import result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseExcelQuickImportAlertRouting'
-  /api/console/config/batch-windows/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank batch window Excel template
-      operationId: downloadBatchWindowExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/batch-windows/excel/export:
-    get:
-      tags: [Config]
-      summary: Export batch window configs as Excel
-      operationId: exportBatchWindowExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/business-calendars/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank business calendar Excel template
-      operationId: downloadBusinessCalendarExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/business-calendars/excel/export:
-    get:
-      tags: [Config]
-      summary: Export business calendar configs as Excel
-      operationId: exportBusinessCalendarExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/pipeline-definitions/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank pipeline definition Excel template
-      operationId: downloadPipelineDefinitionExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/pipeline-definitions/excel/export:
-    get:
-      tags: [Config]
-      summary: Export pipeline definition configs as Excel
-      operationId: exportPipelineDefinitionExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: jobCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: pipelineType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/quota-policies/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank quota policy Excel template
-      operationId: downloadQuotaPolicyExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/quota-policies/excel/export:
-    get:
-      tags: [Config]
-      summary: Export quota policy configs as Excel
-      operationId: exportQuotaPolicyExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: policyCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/resource-queues/excel/template:
-    get:
-      tags: [Config]
-      summary: Download blank resource queue Excel template
-      operationId: downloadResourceQueueExcelTemplate
-      responses:
-        '200':
-          description: Empty Excel template download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
-  /api/console/config/resource-queues/excel/export:
-    get:
-      tags: [Config]
-      summary: Export resource queue configs as Excel
-      operationId: exportResourceQueueExcel
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - name: queueCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: queueType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Excel file download
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
   /api/console/reports/excel/config-releases:
     get:
       tags: [Reports]
@@ -5456,6 +5016,132 @@ paths:
       tags: [QuotaPolicies]
       summary: Enable or disable quota policy
       operationId: toggleQuotaPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+
+  # ─── Alert Routings CRUD ─────────────────────────────────────────────────────
+  /api/console/alert-routings:
+    get:
+      tags: [AlertRoutings]
+      summary: List alert routings
+      operationId: listAlertRoutings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: routeCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: team
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: severity
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Alert routing list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [AlertRoutings]
+      summary: Create alert routing
+      operationId: createAlertRouting
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created alert routing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/alert-routings/{id}:
+    put:
+      tags: [AlertRoutings]
+      summary: Update alert routing
+      operationId: updateAlertRouting
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/alert-routings/{id}/toggle:
+    post:
+      tags: [AlertRoutings]
+      summary: Enable or disable alert routing
+      operationId: toggleAlertRouting
       security:
         - bearerAuth: []
       parameters:

@@ -65,6 +65,14 @@
         limit 1
     </select>
 
+    <select id="selectById" resultType="map">
+        select *
+        from batch.alert_routing_config
+        where tenant_id = #{tenantId}
+          and id = #{id}
+        limit 1
+    </select>
+
     <insert id="upsertAlertRoutingConfig">
         insert into batch.alert_routing_config (
             tenant_id, route_code, route_name, team, alert_group, severity,
@@ -92,4 +100,31 @@
             updated_by = excluded.updated_by,
             updated_at = current_timestamp
     </insert>
+
+    <update id="updateById">
+        update batch.alert_routing_config
+        set route_code = #{p.routeCode},
+            route_name = #{p.routeName},
+            team = #{p.team},
+            alert_group = #{p.alertGroup},
+            severity = #{p.severity},
+            receiver = #{p.receiver},
+            group_by = #{p.groupBy},
+            group_wait_seconds = #{p.groupWaitSeconds},
+            group_interval_seconds = #{p.groupIntervalSeconds},
+            repeat_interval_seconds = #{p.repeatIntervalSeconds},
+            enabled = #{p.enabled},
+            description = #{p.description},
+            updated_by = #{p.updatedBy},
+            updated_at = current_timestamp
+        where tenant_id = #{p.tenantId}
+          and id = #{p.id}
+    </update>
+
+    <update id="toggleEnabled">
+        update batch.alert_routing_config
+        set enabled = #{enabled}, updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
 </mapper>
