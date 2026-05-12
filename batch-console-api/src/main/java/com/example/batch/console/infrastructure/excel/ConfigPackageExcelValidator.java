@@ -39,6 +39,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -104,6 +105,7 @@ public class ConfigPackageExcelValidator {
 
   public static final String KEY_SEP_COLON = ":";
   public static final String KEY_SEP_HASH = "#";
+  private static final String INTERNAL_ROW_NO = "__excel_row_no";
 
   public static final String JOB_SHEET = "job_definition";
   public static final String RESOURCE_QUEUE_SHEET = ResourceQueueExcelRowParser.SHEET_NAME;
@@ -344,7 +346,7 @@ public class ConfigPackageExcelValidator {
       }
       addIssues(ri, RESOURCE_QUEUE_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -365,7 +367,7 @@ public class ConfigPackageExcelValidator {
       }
       addIssues(ri, BUSINESS_CALENDAR_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -385,7 +387,7 @@ public class ConfigPackageExcelValidator {
       }
       addIssues(ri, BATCH_WINDOW_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -402,7 +404,7 @@ public class ConfigPackageExcelValidator {
       validateJobRow(tenantId, row, seen, ri);
       addIssues(ri, JOB_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -435,7 +437,7 @@ public class ConfigPackageExcelValidator {
       validateChannelRow(tenantId, row, seen, ri);
       addIssues(ri, CHANNEL_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -471,7 +473,7 @@ public class ConfigPackageExcelValidator {
       }
       addIssues(ri, FILE_TEMPLATE_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -488,7 +490,7 @@ public class ConfigPackageExcelValidator {
       validatePipelineRow(tenantId, row, seen, ri);
       addIssues(ri, PIPELINE_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -533,7 +535,7 @@ public class ConfigPackageExcelValidator {
       // 里以下拉选项形式呈现给填表用户；真正的 schema 漂移由 LoadStep 在运行时报业务错。
       addIssues(ri, STEP_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -689,7 +691,7 @@ public class ConfigPackageExcelValidator {
       validateWfDefRow(tenantId, row, seen, ri);
       addIssues(ri, WF_DEF_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -730,7 +732,7 @@ public class ConfigPackageExcelValidator {
       validateWfNodeRow(row, wfKeys, seen, ri);
       addIssues(ri, WF_NODE_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -792,7 +794,7 @@ public class ConfigPackageExcelValidator {
       validateWfEdgeRow(row, wfKeys, nodeKeys, ri);
       addIssues(ri, WF_EDGE_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
-        valid.add(row);
+        valid.add(withRowNo(row, rowNo));
       }
       rowNo++;
     }
@@ -885,8 +887,9 @@ public class ConfigPackageExcelValidator {
     addTemplateReferenceIssues(
         tenantId, STEP_SHEET, "step_params", validSteps, fileTemplatesInExcel, issues);
 
-    rowNo = 2;
+    int fallbackRowNo = 2;
     for (Map<String, String> row : validWfNodes) {
+      int wfNodeRowNo = excelRowNo(row, fallbackRowNo);
       String relatedJob = normalize(row.get(COL_RELATED_JOB_CODE));
       if (hasText(relatedJob)
           && !jobCodesInExcel.contains(relatedJob)
@@ -894,7 +897,7 @@ public class ConfigPackageExcelValidator {
         issues.add(
             new WorkbookIssue(
                 WF_NODE_SHEET,
-                rowNo,
+                wfNodeRowNo,
                 COL_RELATED_JOB_CODE,
                 "related_job_code references unknown job definition: " + relatedJob));
       }
@@ -907,7 +910,7 @@ public class ConfigPackageExcelValidator {
           issues.add(
               new WorkbookIssue(
                   WF_NODE_SHEET,
-                  rowNo,
+                  wfNodeRowNo,
                   COL_RELATED_PIPELINE_CODE,
                   "related_pipeline_code references unknown pipeline: " + relatedPipeline));
         }
@@ -919,11 +922,11 @@ public class ConfigPackageExcelValidator {
         issues.add(
             new WorkbookIssue(
                 WF_NODE_SHEET,
-                rowNo,
+                wfNodeRowNo,
                 COL_WINDOW_CODE,
                 "window_code references unknown batch_window: " + windowCode));
       }
-      rowNo++;
+      fallbackRowNo++;
     }
     return issues;
   }
@@ -935,8 +938,9 @@ public class ConfigPackageExcelValidator {
       Set<String> calendarCodesInExcel,
       Set<String> windowCodesInExcel,
       List<WorkbookIssue> issues) {
-    int rowNo = 2;
+    int fallbackRowNo = 2;
     for (Map<String, String> row : rows) {
+      int rowNo = excelRowNo(row, fallbackRowNo);
       String queueCode = normalize(row.get(COL_QUEUE_CODE));
       if (hasText(queueCode)
           && !queueCodesInExcel.contains(queueCode)
@@ -970,7 +974,7 @@ public class ConfigPackageExcelValidator {
                 COL_WINDOW_CODE,
                 "window_code references unknown batch_window: " + windowCode));
       }
-      rowNo++;
+      fallbackRowNo++;
     }
   }
 
@@ -997,6 +1001,24 @@ public class ConfigPackageExcelValidator {
         .collect(Collectors.toSet());
   }
 
+  private static Map<String, String> withRowNo(Map<String, String> row, int rowNo) {
+    Map<String, String> copy = new LinkedHashMap<>(row);
+    copy.put(INTERNAL_ROW_NO, String.valueOf(rowNo));
+    return copy;
+  }
+
+  private static int excelRowNo(Map<String, String> row, int fallbackRowNo) {
+    String raw = row.get(INTERNAL_ROW_NO);
+    if (!Texts.hasText(raw)) {
+      return fallbackRowNo;
+    }
+    try {
+      return Integer.parseInt(raw);
+    } catch (NumberFormatException ignored) {
+      return fallbackRowNo;
+    }
+  }
+
   private void addTemplateReferenceIssues(
       String tenantId,
       String sheetName,
@@ -1004,8 +1026,9 @@ public class ConfigPackageExcelValidator {
       List<Map<String, String>> rows,
       Set<String> fileTemplatesInExcel,
       List<WorkbookIssue> issues) {
-    int rowNo = 2;
+    int fallbackRowNo = 2;
     for (Map<String, String> row : rows) {
+      int rowNo = excelRowNo(row, fallbackRowNo);
       TemplateRef ref = extractTemplateRef(row.get(jsonColumn));
       if (ref.hasTemplateCode()
           && !fileTemplatesInExcel.contains(templateKey(ref.templateCode(), ref.version()))
@@ -1018,7 +1041,7 @@ public class ConfigPackageExcelValidator {
                 "templateCode references unknown file_template_config: "
                     + templateKey(ref.templateCode(), ref.version())));
       }
-      rowNo++;
+      fallbackRowNo++;
     }
   }
 

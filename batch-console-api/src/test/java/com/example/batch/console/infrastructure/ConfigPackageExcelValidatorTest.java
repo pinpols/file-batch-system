@@ -100,6 +100,27 @@ class ConfigPackageExcelValidatorTest {
     assertThat(result.allIssues()).isEmpty();
   }
 
+  @Test
+  void crossReferenceIssuesKeepOriginalExcelRowNumberAfterInvalidRowsAreFiltered() {
+    ConfigPackageExcelValidator validator = validator();
+    Map<String, String> invalidRow = new LinkedHashMap<>(jobRow("missing-queue", "", ""));
+    invalidRow.put("job_code", "BROKEN_JOB");
+    invalidRow.remove("job_name");
+    PackageExcelSession session =
+        sessionWithDependencies(
+            List.of(), List.of(), List.of(), List.of(invalidRow, jobRow("missing-queue", "", "")));
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator.validate(session);
+
+    assertThat(result.crossRefIssues())
+        .anySatisfy(
+            issue -> {
+              assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
+              assertThat(issue.columnName()).isEqualTo(ConfigPackageExcelValidator.COL_QUEUE_CODE);
+              assertThat(issue.rowNo()).isEqualTo(3);
+            });
+  }
+
   private static ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),

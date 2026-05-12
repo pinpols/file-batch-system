@@ -34,6 +34,8 @@ import com.example.batch.console.support.excel.TenantConfigPackageExcelImportSto
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -152,18 +154,7 @@ public class ConfigPackageExcelWorkbookWriter {
           COL_ENABLED,
           COL_DESCRIPTION);
 
-  public static final List<String> BUSINESS_CALENDAR_COLUMNS =
-      List.of(
-          COL_TENANT_ID,
-          "calendar_code",
-          "calendar_name",
-          "timezone",
-          "holiday_roll_rule",
-          "catch_up_policy",
-          "catch_up_max_days",
-          "holidays",
-          COL_ENABLED,
-          COL_DESCRIPTION);
+  public static final List<String> BUSINESS_CALENDAR_COLUMNS = BusinessCalendarExcelSchema.COLUMNS;
 
   public static final List<String> BATCH_WINDOW_COLUMNS =
       List.of(
@@ -334,16 +325,6 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private final List<SheetDef> sheetDefs;
   private final MessageSource messageSource;
-  // module → 该模块的 bean name 列表；applyStepValidations 会拼成 MODULE:beanName 格式的下拉项。
-  // 由调用方（DefaultConsoleTenantConfigPackageExcelApplicationService）在每次 buildXxx 前从
-  // batch.step_registry 查并 set；空/null 时不加 impl_code 下拉（避免 worker 未启动时模板不可下载）。
-  private Map<String, List<String>> registeredImplCodesByModule;
-
-  /** 设置本次导出用的 (module → impl_code 列表)；由调用方在 build* 前从 step_registry 查出。 */
-  public void setRegisteredImplCodesByModule(
-      Map<String, List<String>> registeredImplCodesByModule) {
-    this.registeredImplCodesByModule = registeredImplCodesByModule;
-  }
 
   public ConfigPackageExcelWorkbookWriter(MessageSource messageSource) {
     this.messageSource = messageSource;
@@ -390,12 +371,19 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
+    return buildExportWorkbook(sheetDataList, Map.of());
+  }
+
+  public byte[] buildExportWorkbook(
+      List<List<Map<String, Object>>> sheetDataList,
+      Map<String, List<String>> registeredImplCodesByModule) {
     Locale locale = LocaleContextHolder.getLocale();
+    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       for (int i = 0; i < sheetDefs.size(); i++) {
         SheetDef def = sheetDefs.get(i);
-        writeDataSheet(wb, def, sheetDataList.get(i), locale);
+        writeDataSheet(wb, def, sheetDataList.get(i), locale, implRegistry);
       }
       createReadmeSheet(wb, locale);
       createFieldGuideSheet(wb);
@@ -408,11 +396,16 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   public byte[] buildTemplateWorkbook() {
+    return buildTemplateWorkbook(Map.of());
+  }
+
+  public byte[] buildTemplateWorkbook(Map<String, List<String>> registeredImplCodesByModule) {
     Locale locale = LocaleContextHolder.getLocale();
+    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       for (SheetDef def : sheetDefs) {
-        writeDataSheet(wb, def, List.of(), locale);
+        writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
       createReadmeSheet(wb, locale);
       createFieldGuideSheet(wb);
@@ -425,7 +418,15 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   public byte[] buildPreviewWorkbook(PackageExcelSession session, PackageValidationResult result) {
+    return buildPreviewWorkbook(session, result, Map.of());
+  }
+
+  public byte[] buildPreviewWorkbook(
+      PackageExcelSession session,
+      PackageValidationResult result,
+      Map<String, List<String>> registeredImplCodesByModule) {
     Locale locale = LocaleContextHolder.getLocale();
+    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     List<List<Map<String, String>>> sessionData =
         List.of(
             session.resourceQueueRows(),
@@ -455,7 +456,8 @@ public class ConfigPackageExcelWorkbookWriter {
     try (XSSFWorkbook wb = new XSSFWorkbook()) {
       for (int i = 0; i < sheetDefs.size(); i++) {
         SheetDef def = sheetDefs.get(i);
-        writePreviewSheet(wb, def, sessionData.get(i), results.get(i).issues(), locale);
+        writePreviewSheet(
+            wb, def, sessionData.get(i), results.get(i).issues(), locale, implRegistry);
       }
       ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(wb, result.allIssues());
       return ConsoleExcelPreviewWorkbookSupport.toBytes(wb);
@@ -465,7 +467,11 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   private void writeDataSheet(
-      Workbook wb, SheetDef def, List<Map<String, Object>> dataRows, Locale locale) {
+      Workbook wb,
+      SheetDef def,
+      List<Map<String, Object>> dataRows,
+      Locale locale,
+      Map<String, List<String>> registeredImplCodesByModule) {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, def.columns(), def.guides(), wb, messageSource, locale);
@@ -480,7 +486,7 @@ public class ConfigPackageExcelWorkbookWriter {
                 val == null ? EMPTY : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
       }
     }
-    def.validationApplier().accept(sheet, locale);
+    applyValidations(def, sheet, locale, registeredImplCodesByModule);
     setWidths(sheet, def.columns());
   }
 
@@ -489,7 +495,8 @@ public class ConfigPackageExcelWorkbookWriter {
       SheetDef def,
       List<Map<String, String>> dataRows,
       List<WorkbookIssue> sheetIssues,
-      Locale locale) {
+      Locale locale,
+      Map<String, List<String>> registeredImplCodesByModule) {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
@@ -502,9 +509,37 @@ public class ConfigPackageExcelWorkbookWriter {
         dataRow.createCell(c).setCellValue(val == null ? EMPTY : val);
       }
     }
-    def.validationApplier().accept(sheet, locale);
+    applyValidations(def, sheet, locale, registeredImplCodesByModule);
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);
     setWidths(sheet, def.columns());
+  }
+
+  private void applyValidations(
+      SheetDef def,
+      Sheet sheet,
+      Locale locale,
+      Map<String, List<String>> registeredImplCodesByModule) {
+    if (STEP_SHEET.equals(def.name())) {
+      applyStepValidations(sheet, locale, registeredImplCodesByModule);
+      return;
+    }
+    def.validationApplier().accept(sheet, locale);
+  }
+
+  private static Map<String, List<String>> copyImplRegistry(
+      Map<String, List<String>> registeredImplCodesByModule) {
+    if (registeredImplCodesByModule == null || registeredImplCodesByModule.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, List<String>> copied = new LinkedHashMap<>();
+    registeredImplCodesByModule.forEach(
+        (module, beans) -> {
+          if (module == null || beans == null || beans.isEmpty()) {
+            return;
+          }
+          copied.put(module, List.copyOf(beans));
+        });
+    return copied.isEmpty() ? Map.of() : Collections.unmodifiableMap(copied);
   }
 
   /**
@@ -738,18 +773,27 @@ public class ConfigPackageExcelWorkbookWriter {
     return Map.ofEntries(
         Map.entry(
             COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry("calendar_code", requiredColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
-        Map.entry("calendar_name", requiredColumn("业务日历名称。", GUIDE_STR, "默认业务日历")),
-        Map.entry("timezone", requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
         Map.entry(
-            "holiday_roll_rule",
+            BusinessCalendarExcelSchema.COL_CALENDAR_CODE,
+            requiredColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
+        Map.entry(
+            BusinessCalendarExcelSchema.COL_CALENDAR_NAME,
+            requiredColumn("业务日历名称。", GUIDE_STR, "默认业务日历")),
+        Map.entry(
+            BusinessCalendarExcelSchema.COL_TIMEZONE,
+            requiredColumn("时区 ID。", GUIDE_STR, "Asia/Shanghai")),
+        Map.entry(
+            BusinessCalendarExcelSchema.COL_HOLIDAY_ROLL_RULE,
             requiredColumn("节假日顺延规则。", GUIDE_ENUM, "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
         Map.entry(
-            "catch_up_policy",
+            BusinessCalendarExcelSchema.COL_CATCH_UP_POLICY,
             requiredColumn("补跑策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AUTO", "MANUAL_APPROVAL")),
-        Map.entry("catch_up_max_days", requiredColumn("最大补跑天数。", GUIDE_INT, "0")),
         Map.entry(
-            "holidays", optionalColumn("节假日，逗号分隔 yyyy-MM-dd。", GUIDE_STR, "2026-01-01,2026-10-01")),
+            BusinessCalendarExcelSchema.COL_CATCH_UP_MAX_DAYS,
+            requiredColumn("最大补跑天数。", GUIDE_INT, "0")),
+        Map.entry(
+            BusinessCalendarExcelSchema.COL_HOLIDAYS,
+            optionalColumn("节假日，逗号分隔 yyyy-MM-dd。", GUIDE_STR, "2026-01-01,2026-10-01")),
         Map.entry(
             COL_ENABLED,
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
@@ -964,6 +1008,11 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   private void applyStepValidations(Sheet sheet, Locale locale) {
+    applyStepValidations(sheet, locale, Map.of());
+  }
+
+  private void applyStepValidations(
+      Sheet sheet, Locale locale, Map<String, List<String>> registeredImplCodesByModule) {
     addDropdownValidation(
         sheet,
         4,

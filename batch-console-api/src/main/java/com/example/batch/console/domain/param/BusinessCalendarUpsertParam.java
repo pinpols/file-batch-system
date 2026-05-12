@@ -13,6 +13,7 @@ public class BusinessCalendarUpsertParam {
   private String catchUpPolicy;
   private Integer catchUpMaxDays;
   private Boolean enabled;
+  private String description;
   private String createdBy;
   private String updatedBy;
 }
