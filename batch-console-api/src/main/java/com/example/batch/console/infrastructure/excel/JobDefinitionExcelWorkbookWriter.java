@@ -20,11 +20,7 @@ import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
-import com.example.batch.console.support.excel.JobDefinitionExcelImportStore.JobDefinitionRow;
-import com.example.batch.console.web.response.job.ConsoleJobDefinitionExcelRowIssueResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
@@ -252,58 +248,6 @@ public class JobDefinitionExcelWorkbookWriter {
       return out.toByteArray();
     } catch (IOException exception) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
-    }
-  }
-
-  public byte[] writePreviewWorkbook(
-      List<JobDefinitionRow> sessionRows, List<ConsoleJobDefinitionExcelRowIssueResponse> issues) {
-    Locale locale = LocaleContextHolder.getLocale();
-    try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
-      Sheet dataSheet = workbook.createSheet(SHEET);
-      dataSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook, messageSource, locale);
-      int rowIndex = 1;
-      for (JobDefinitionRow rowData : sessionRows) {
-        Row row = dataSheet.createRow(rowIndex++);
-        writeCell(row, 0, rowData.tenantId());
-        writeCell(row, 1, rowData.jobCode());
-        writeCell(row, 2, rowData.jobName());
-        writeCell(row, 3, rowData.jobType());
-        writeCell(row, 4, rowData.queueCode());
-        writeCell(row, 5, rowData.workerGroup());
-        writeCell(row, 6, rowData.scheduleType());
-        writeCell(row, 7, rowData.scheduleExpr());
-        writeCell(row, 8, rowData.calendarCode());
-        writeCell(row, 9, rowData.windowCode());
-        writeCell(row, 10, rowData.retryPolicy());
-        writeCell(row, 11, rowData.retryMaxCount());
-        writeCell(row, 12, rowData.timeoutSeconds());
-        writeCell(row, 13, rowData.shardStrategy());
-        writeCell(row, 14, rowData.executionHandler());
-        writeCell(row, 15, rowData.paramSchema());
-        writeCell(row, 16, rowData.defaultParams());
-        writeCell(row, 17, rowData.enabled());
-        writeCell(row, 18, rowData.description());
-      }
-      applyValidations(dataSheet, locale);
-      setWidths(dataSheet, COLUMNS);
-      createReadmeSheet(workbook, locale);
-      createDictSheet(workbook);
-      createValidationSheet(workbook);
-
-      List<WorkbookIssue> workbookIssues =
-          issues.stream()
-              .flatMap(
-                  issue ->
-                      ConsoleExcelPreviewWorkbookSupport.expandIssues(
-                          issue.sheetName(), issue.rowNo(), issue.messages(), COLUMNS)
-                          .stream())
-              .toList();
-      ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(dataSheet, COLUMNS, workbookIssues, 1);
-      return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
-    } catch (IOException exception) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 

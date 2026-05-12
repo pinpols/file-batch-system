@@ -16,13 +16,9 @@ import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.HolidayRollRule;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
-import com.example.batch.console.web.response.file.ConsoleBusinessCalendarExcelRowIssueResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -77,7 +73,8 @@ public class BusinessCalendarExcelWorkbookWriter {
           COL_HOLIDAY_ROLL_RULE,
           COL_CATCH_UP_POLICY,
           COL_CATCH_UP_MAX_DAYS,
-          COL_ENABLED);
+          COL_ENABLED,
+          COL_DESCRIPTION);
   static final Set<String> CALENDAR_REQUIRED_HEADERS = Set.copyOf(CALENDAR_COLUMNS);
 
   static final List<String> HOLIDAY_COLUMNS =
@@ -204,74 +201,6 @@ public class BusinessCalendarExcelWorkbookWriter {
       return out.toByteArray();
     } catch (IOException exception) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
-    }
-  }
-
-  public byte[] writePreviewWorkbook(
-      List<Map<String, String>> calendarRawRows,
-      List<Map<String, String>> holidayRawRows,
-      List<ConsoleBusinessCalendarExcelRowIssueResponse> issues) {
-    Locale locale = LocaleContextHolder.getLocale();
-    try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
-      Sheet calendarSheet = workbook.createSheet(CALENDAR_SHEET_NAME);
-      calendarSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(
-          calendarSheet, CALENDAR_COLUMNS, CALENDAR_COLUMN_GUIDES, workbook, messageSource, locale);
-      int rowIndex = 1;
-      for (Map<String, String> rawRow : calendarRawRows) {
-        Row dataRow = calendarSheet.createRow(rowIndex++);
-        for (int i = 0; i < CALENDAR_COLUMNS.size(); i++) {
-          Cell cell = dataRow.createCell(i);
-          String value = rawRow.get(CALENDAR_COLUMNS.get(i));
-          cell.setCellValue(value == null ? "" : value);
-        }
-      }
-      applyCalendarValidations(calendarSheet, locale);
-      setWidths(calendarSheet, CALENDAR_COLUMNS);
-
-      Sheet holidaySheet = workbook.createSheet(HOLIDAY_SHEET_NAME);
-      holidaySheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(
-          holidaySheet, HOLIDAY_COLUMNS, HOLIDAY_COLUMN_GUIDES, workbook, messageSource, locale);
-      int holidayRowIndex = 1;
-      for (Map<String, String> rawRow : holidayRawRows) {
-        Row dataRow = holidaySheet.createRow(holidayRowIndex++);
-        for (int i = 0; i < HOLIDAY_COLUMNS.size(); i++) {
-          Cell cell = dataRow.createCell(i);
-          String value = rawRow.get(HOLIDAY_COLUMNS.get(i));
-          cell.setCellValue(value == null ? "" : value);
-        }
-      }
-      applyHolidayValidations(holidaySheet, locale);
-      setWidths(holidaySheet, HOLIDAY_COLUMNS);
-
-      createReadmeSheet(workbook, locale);
-      createDictSheet(workbook);
-      createValidationSheet(workbook);
-
-      List<WorkbookIssue> workbookIssues = new ArrayList<>();
-      for (ConsoleBusinessCalendarExcelRowIssueResponse issue : issues) {
-        List<String> columns =
-            CALENDAR_SHEET_NAME.equals(issue.sheetName()) ? CALENDAR_COLUMNS : HOLIDAY_COLUMNS;
-        workbookIssues.addAll(
-            ConsoleExcelPreviewWorkbookSupport.expandIssues(
-                issue.sheetName(), issue.rowNo(), issue.messages(), columns));
-      }
-      ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
-
-      List<WorkbookIssue> calendarIssues =
-          workbookIssues.stream().filter(i -> CALENDAR_SHEET_NAME.equals(i.sheetName())).toList();
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-          calendarSheet, CALENDAR_COLUMNS, calendarIssues, 1);
-
-      List<WorkbookIssue> holidayIssues =
-          workbookIssues.stream().filter(i -> HOLIDAY_SHEET_NAME.equals(i.sheetName())).toList();
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-          holidaySheet, HOLIDAY_COLUMNS, holidayIssues, 1);
-
-      return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
-    } catch (IOException exception) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 

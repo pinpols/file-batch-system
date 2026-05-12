@@ -42,18 +42,11 @@ import com.example.batch.console.domain.query.WorkflowNodeQuery;
 import com.example.batch.console.infrastructure.workflow.DefaultConsoleWorkflowExcelApplicationService;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
-import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
-import com.example.batch.console.support.excel.WorkflowExcelImportStore.WorkflowDefinitionRow;
-import com.example.batch.console.support.excel.WorkflowExcelImportStore.WorkflowEdgeRow;
-import com.example.batch.console.support.excel.WorkflowExcelImportStore.WorkflowNodeRow;
-import com.example.batch.console.web.response.workflow.ConsoleWorkflowExcelRowIssueResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -67,14 +60,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * P2-3 god-class-decomposition extract: 从 {@link DefaultConsoleWorkflowExcelApplicationService} 抽出的
- * Excel workbook 写入器(覆盖导出 + 预览两类输出)。
+ * Excel workbook 写入器(覆盖导出输出)。
  *
- * <p>原 service 内 ~280 行 POI 写盘逻辑("写表头/写正文行/下拉校验/说明 sheet/字典 shet/校验 sheet/批注")集中到本类:
- *
- * <ul>
- *   <li>{@link #writeMaintenanceWorkbook} — 维护态导出(包含已存在的 definition + 节点 + 边)
- *   <li>{@link #writePreviewWorkbook} — 上传预览(rows + 校验问题 → 高亮批注)
- * </ul>
+ * <p>原 service 内 POI 写盘逻辑("写表头/写正文行/下拉校验/说明 sheet/字典 sheet/校验 sheet")集中到本类。
  *
  * <p>两个公开方法都不抛 checked,内部 IOException 折叠为 {@link BizException};POI 资源用 try-with-resources 兜底。
  */
@@ -129,46 +117,6 @@ public class WorkflowExcelWorkbookWriter {
       return out.toByteArray();
     } catch (IOException exception) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
-    }
-  }
-
-  /** 预览工作簿:user 上传内容回填 + 校验问题 expand 成批注 + populate 校验 sheet。 */
-  public byte[] writePreviewWorkbook(
-      List<WorkflowDefinitionRow> definitions,
-      List<WorkflowNodeRow> nodes,
-      List<WorkflowEdgeRow> edges,
-      List<ConsoleWorkflowExcelRowIssueResponse> issues) {
-    Locale locale = LocaleContextHolder.getLocale();
-    try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
-      Sheet definitionSheet = workbook.createSheet(DEF_SHEET);
-      Sheet nodeSheet = workbook.createSheet(NODE_SHEET);
-      Sheet edgeSheet = workbook.createSheet(EDGE_SHEET);
-      definitionSheet.createFreezePane(0, 1, 0, 1);
-      nodeSheet.createFreezePane(0, 1, 0, 1);
-      edgeSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(
-          definitionSheet, DEF_COLUMNS, DEF_COLUMN_GUIDES, workbook, messageSource, locale);
-      writeTemplateHeaders(
-          nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook, messageSource, locale);
-      writeTemplateHeaders(
-          edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook, messageSource, locale);
-
-      populatePreviewDefinitionSheet(definitionSheet, definitions);
-      populatePreviewNodeSheet(nodeSheet, nodes);
-      populatePreviewEdgeSheet(edgeSheet, edges);
-
-      applyValidations(definitionSheet, nodeSheet, edgeSheet, locale);
-      setWidths(definitionSheet, DEF_COLUMNS);
-      setWidths(nodeSheet, NODE_COLUMNS);
-      setWidths(edgeSheet, EDGE_COLUMNS);
-      createReadmeSheet(workbook, locale);
-      createDictSheet(workbook);
-      createValidationSheet(workbook);
-
-      populatePreviewIssueAnnotations(workbook, definitionSheet, nodeSheet, edgeSheet, issues);
-      return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
-    } catch (IOException exception) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 
@@ -242,89 +190,6 @@ public class WorkflowExcelWorkbookWriter {
       writeCell(row, 7, edge.getEnabled());
     }
     return rowIndex;
-  }
-
-  private void populatePreviewDefinitionSheet(
-      Sheet definitionSheet, List<WorkflowDefinitionRow> definitions) {
-    int rowIndex = 1;
-    for (WorkflowDefinitionRow rowData : definitions) {
-      Row row = definitionSheet.createRow(rowIndex++);
-      writeCell(row, 0, rowData.tenantId());
-      writeCell(row, 1, rowData.workflowCode());
-      writeCell(row, 2, rowData.workflowName());
-      writeCell(row, 3, rowData.workflowType());
-      writeCell(row, 4, rowData.version());
-      writeCell(row, 5, rowData.enabled());
-      writeCell(row, 6, rowData.description());
-    }
-  }
-
-  private void populatePreviewNodeSheet(Sheet nodeSheet, List<WorkflowNodeRow> nodes) {
-    int rowIndex = 1;
-    for (WorkflowNodeRow rowData : nodes) {
-      Row row = nodeSheet.createRow(rowIndex++);
-      writeCell(row, 0, rowData.tenantId());
-      writeCell(row, 1, rowData.workflowCode());
-      writeCell(row, 2, rowData.workflowVersion());
-      writeCell(row, 3, rowData.nodeCode());
-      writeCell(row, 4, rowData.nodeName());
-      writeCell(row, 5, rowData.nodeType());
-      writeCell(row, 6, rowData.relatedJobCode());
-      writeCell(row, 7, rowData.relatedPipelineCode());
-      writeCell(row, 8, rowData.workerGroup());
-      writeCell(row, 9, rowData.windowCode());
-      writeCell(row, 10, rowData.nodeOrder());
-      writeCell(row, 11, rowData.retryPolicy());
-      writeCell(row, 12, rowData.retryMaxCount());
-      writeCell(row, 13, rowData.timeoutSeconds());
-      writeCell(row, 14, rowData.nodeParams());
-      writeCell(row, 15, rowData.enabled());
-    }
-  }
-
-  private void populatePreviewEdgeSheet(Sheet edgeSheet, List<WorkflowEdgeRow> edges) {
-    int rowIndex = 1;
-    for (WorkflowEdgeRow rowData : edges) {
-      Row row = edgeSheet.createRow(rowIndex++);
-      writeCell(row, 0, rowData.tenantId());
-      writeCell(row, 1, rowData.workflowCode());
-      writeCell(row, 2, rowData.workflowVersion());
-      writeCell(row, 3, rowData.fromNodeCode());
-      writeCell(row, 4, rowData.toNodeCode());
-      writeCell(row, 5, rowData.edgeType());
-      writeCell(row, 6, rowData.conditionExpr());
-      writeCell(row, 7, rowData.enabled());
-    }
-  }
-
-  private void populatePreviewIssueAnnotations(
-      Workbook workbook,
-      Sheet definitionSheet,
-      Sheet nodeSheet,
-      Sheet edgeSheet,
-      List<ConsoleWorkflowExcelRowIssueResponse> issues) {
-    List<WorkbookIssue> workbookIssues =
-        issues.stream()
-            .flatMap(
-                issue ->
-                    ConsoleExcelPreviewWorkbookSupport.expandIssues(
-                        issue.sheetName(),
-                        issue.rowNo(),
-                        issue.messages(),
-                        WorkflowExcelColumnMetadata.columnsForSheet(issue.sheetName()))
-                        .stream())
-            .toList();
-    ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
-    ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-        definitionSheet, DEF_COLUMNS, filterIssues(workbookIssues, DEF_SHEET), 1);
-    ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-        nodeSheet, NODE_COLUMNS, filterIssues(workbookIssues, NODE_SHEET), 3);
-    ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-        edgeSheet, EDGE_COLUMNS, filterIssues(workbookIssues, EDGE_SHEET), 3);
-  }
-
-  private List<WorkbookIssue> filterIssues(List<WorkbookIssue> issues, String sheetName) {
-    return issues.stream().filter(issue -> Objects.equals(sheetName, issue.sheetName())).toList();
   }
 
   // ── README / 字典 / 校验 sheet ──────────────────────────────────────────
