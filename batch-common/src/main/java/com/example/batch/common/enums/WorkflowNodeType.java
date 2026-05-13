@@ -13,7 +13,9 @@ public enum WorkflowNodeType implements DictEnum {
   FILE_STEP("FILE_STEP", "文件步骤"),
   START("START", "开始节点"),
   END("END", "结束节点"),
-  JOB("JOB", "作业节点");
+  JOB("JOB", "作业节点"),
+  // ADR-028: Sensor 等待外部条件（FILE_ARRIVAL / HTTP_POLL / KAFKA_OFFSET / DB_ROW_EXISTS）
+  WAIT("WAIT", "等待节点");
 
   private final String code;
   private final String label;
