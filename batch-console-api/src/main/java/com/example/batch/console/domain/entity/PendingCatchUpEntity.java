@@ -16,4 +16,13 @@ public class PendingCatchUpEntity {
   private String traceId;
   private Instant createdAt;
   private Instant updatedAt;
+
+  /**
+   * 关联 approval_command.approval_no(LEFT JOIN: approval_command.target_id =
+   * trigger_request.request_id AND approval_type='CATCH_UP')。未走统一审批的旧记录可为 null,前端据此判断是否可操作审批按钮。
+   */
+  private String approvalNo;
+
+  /** 关联 approval_command.approval_status: PENDING / APPROVED / REJECTED / EXECUTED, 可空。 */
+  private String approvalStatus;
 }
