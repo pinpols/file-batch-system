@@ -141,3 +141,6 @@ batch:
       task-result: batch.task.result
       task-retry: batch.task.retry
       dead-letter: batch.task.dead-letter
+  sensor:
+    kafka-offset:
+      enabled: true
