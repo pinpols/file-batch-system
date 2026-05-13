@@ -439,6 +439,7 @@ INSERT INTO batch.workflow_definition
   (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
 VALUES
   ('ta', 'TA_WF_SETTLEMENT',    'TA Settlement Workflow',    'DAG',      1, true, 'TA retail settlement workflow',        'test', 'test', now(), now()),
+  ('ta', 'TA_WF_WAIT_FILE',      'TA Wait File Workflow',     'DAG',      1, true, 'TA WAIT sensor fixture workflow',      'test', 'test', now(), now()),
   ('tb', 'TB_WF_RECONCILE',     'TB Reconcile Workflow',     'DAG',      1, true, 'TB finance reconciliation workflow',   'test', 'test', now(), now()),
   ('tc', 'TC_WF_RISK_PIPELINE', 'TC Risk Pipeline Workflow', 'PIPELINE', 1, true, 'TC risk management pipeline workflow', 'test', 'test', now(), now())
 ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
@@ -447,8 +448,39 @@ INSERT INTO batch.workflow_node
   (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
 SELECT d.tenant_id, d.id, 'START', 'Start', 'START', 0, 'NONE', 0, 0, true, now(), now()
   FROM batch.workflow_definition d
- WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
+	 WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
+	ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING;
+
+INSERT INTO batch.workflow_node
+  (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
+SELECT d.tenant_id, d.id, v.node_code, v.node_name, v.node_type, v.node_order, 'NONE', 0, 0, true, v.node_params::jsonb, now(), now()
+  FROM batch.workflow_definition d,
+       (VALUES
+         ('START', 'Start', 'START', 0, '{"entry":true}'),
+         ('WAIT_BANK_FILE', 'Wait Bank File', 'WAIT', 1,
+          '{"sensor_type":"FILE_ARRIVAL","sensor_spec":{"channelCode":"sftp_bank","pattern":"settle-*.csv","maxAgeSeconds":3600},"timeout_seconds":3600,"poll_interval_seconds":30,"on_timeout":"FAIL"}'),
+         ('END', 'End', 'END', 2, '{"entry":false}')
+       ) AS v(node_code, node_name, node_type, node_order, node_params)
+ WHERE d.tenant_id = 'ta' AND d.workflow_code = 'TA_WF_WAIT_FILE'
 ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING;
+
+INSERT INTO batch.workflow_edge
+  (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT d.tenant_id, d.id, v.from_node_code, v.to_node_code, 'SUCCESS', true, now(), now()
+  FROM batch.workflow_definition d,
+       (VALUES
+         ('START', 'WAIT_BANK_FILE'),
+         ('WAIT_BANK_FILE', 'END')
+       ) AS v(from_node_code, to_node_code)
+ WHERE d.tenant_id = 'ta' AND d.workflow_code = 'TA_WF_WAIT_FILE'
+ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;
+
+INSERT INTO batch.job_definition
+  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
+   queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)
+VALUES
+  ('ta','TA_WF_WAIT_FILE','TA Wait File Workflow','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','default_queue','IMPORT','always_open',5,true,now(),now())
+ON CONFLICT (tenant_id, job_code) DO NOTHING;
 
 INSERT INTO batch.workflow_node
   (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
