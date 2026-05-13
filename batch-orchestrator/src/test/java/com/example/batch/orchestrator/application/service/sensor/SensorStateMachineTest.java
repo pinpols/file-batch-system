@@ -9,10 +9,16 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.SensorType;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.task.TaskOutcomeService;
 import com.example.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
+import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
+import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
+import com.example.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -23,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 
 class SensorStateMachineTest {
 
@@ -33,6 +40,10 @@ class SensorStateMachineTest {
   private final TaskOutcomeService taskOutcomeService = Mockito.mock(TaskOutcomeService.class);
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final SensorPolicy filePolicy = Mockito.mock(SensorPolicy.class);
+  private final JobInstanceMapper jobInstanceMapper = Mockito.mock(JobInstanceMapper.class);
+  private final WorkflowDagService workflowDagService = Mockito.mock(WorkflowDagService.class);
+  private final WorkflowNodeDispatchService dispatchService =
+      Mockito.mock(WorkflowNodeDispatchService.class);
 
   private SensorStateMachine sm;
   private static final Instant NOW = Instant.parse("2026-05-13T12:00:00Z");
@@ -40,6 +51,12 @@ class SensorStateMachineTest {
 
   @BeforeEach
   void setUp() {
+    OrchestratorJobMappers jobMappers =
+        new OrchestratorJobMappers(jobInstanceMapper, null, null, null, null);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<WorkflowNodeDispatchService> dispatchProvider =
+        Mockito.mock(ObjectProvider.class);
+    when(dispatchProvider.getObject()).thenReturn(dispatchService);
     sm =
         new SensorStateMachine(
             registry,
@@ -47,7 +64,10 @@ class SensorStateMachineTest {
             nodeMapper,
             workflowRunMapper,
             taskOutcomeService,
-            objectMapper);
+            objectMapper,
+            jobMappers,
+            workflowDagService,
+            dispatchProvider);
     when(filePolicy.type()).thenReturn(SensorType.FILE_ARRIVAL);
     when(registry.resolve(SensorType.FILE_ARRIVAL)).thenReturn(filePolicy);
   }
@@ -161,7 +181,88 @@ class SensorStateMachineTest {
     verify(taskOutcomeService).recordNodeRunFinish(any());
   }
 
+  // ── S3.1 downstream advancement ────────────────────────────────────────────
+
+  @Test
+  void matched_dispatchesDownstreamJobNode() {
+    seedHappyPathWithJobInstance();
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
+    when(workflowDagService.resolveNextNodes(eq(7L), eq("wait-1"), eq(true), any()))
+        .thenReturn(java.util.List.of(new DagNodeResolution("job-a", "JOB")));
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    verify(dispatchService)
+        .dispatchNode(
+            any(JobInstanceEntity.class),
+            any(),
+            eq(new DagNodeResolution("job-a", "JOB")),
+            eq(null),
+            any());
+  }
+
+  @Test
+  void matched_endNode_recordsFinishWithoutDispatch() {
+    seedHappyPathWithJobInstance();
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
+    when(workflowDagService.resolveNextNodes(eq(7L), eq("wait-1"), eq(true), any()))
+        .thenReturn(java.util.List.of(new DagNodeResolution("END", "END")));
+    when(workflowDagService.isNodeReadyForDispatch(eq(1L), eq(7L), eq("END"), any()))
+        .thenReturn(true);
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
+    // WAIT finish + END finish = 2 calls
+    verify(taskOutcomeService, Mockito.times(2)).recordNodeRunFinish(any());
+  }
+
+  @Test
+  void matched_noJobInstance_skipsDownstreamGracefully() {
+    seedHappyPath(); // no jobInstance stubbed
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
+    when(workflowDagService.resolveNextNodes(any(), any(), eq(true), any()))
+        .thenReturn(java.util.List.of(new DagNodeResolution("job-a", "JOB")));
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    // WAIT 仍然标 SUCCESS，但下游 dispatch 跳过（warn log）
+    verify(taskOutcomeService).recordNodeRunFinish(any());
+    verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void timeout_dispatchesFailureBranch() {
+    seedHappyPathWithJobInstance();
+    WorkflowNodeRunEntity stale = nodeRun(10, 0);
+    stale.setStartedAt(NOW.minusSeconds(3600));
+    when(workflowDagService.resolveNextNodes(eq(7L), eq("wait-1"), eq(false), any()))
+        .thenReturn(java.util.List.of(new DagNodeResolution("on-fail-node", "TASK")));
+
+    sm.probeAndAdvance(stale, NOW);
+
+    verify(filePolicy, never()).probe(any());
+    verify(dispatchService)
+        .dispatchNode(
+            any(), any(), eq(new DagNodeResolution("on-fail-node", "TASK")), eq(null), any());
+  }
+
   // ── fixture helpers ────────────────────────────────────────────────────────
+
+  private void seedHappyPathWithJobInstance() {
+    seedHappyPath();
+    JobInstanceEntity ji = new JobInstanceEntity();
+    ji.setId(500L);
+    ji.setTenantId("ta");
+    when(jobInstanceMapper.selectById(eq("ta"), eq(500L))).thenReturn(ji);
+    // 让 workflowRun 有 relatedJobInstanceId
+    WorkflowRunEntity wfRun = new WorkflowRunEntity();
+    wfRun.setId(1L);
+    wfRun.setTenantId("ta");
+    wfRun.setWorkflowDefinitionId(7L);
+    wfRun.setRelatedJobInstanceId(500L);
+    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+  }
 
   private void seedHappyPath() {
     WorkflowRunEntity wfRun = new WorkflowRunEntity();

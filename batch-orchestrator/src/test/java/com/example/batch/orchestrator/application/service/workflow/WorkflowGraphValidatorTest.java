@@ -262,6 +262,90 @@ class WorkflowGraphValidatorTest {
         .hasSizeGreaterThanOrEqualTo(1);
   }
 
+  // ── ADR-028 V16 sensor 校验 ────────────────────────────────────────────────
+
+  @Test
+  void waitNodeWithValidSensorSpec_clean() {
+    WorkflowNodeEntity wait = node("WAIT1", "WAIT");
+    wait.setNodeParams(
+        "{\"sensor_type\":\"FILE_ARRIVAL\","
+            + "\"sensor_spec\":{\"pattern\":\"x-*\",\"maxAgeSeconds\":3600},"
+            + "\"timeout_seconds\":120,\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
+    seed(
+        List.of(node("START", "START"), wait, node("END", "END")),
+        edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).noneMatch(i -> i.code().startsWith("V16"));
+  }
+
+  @Test
+  void waitNodeMissingSensorType_V16a() {
+    WorkflowNodeEntity wait = node("WAIT1", "WAIT");
+    wait.setNodeParams("{}");
+    seed(
+        List.of(node("START", "START"), wait, node("END", "END")),
+        edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V16-a"));
+  }
+
+  @Test
+  void waitNodeInvalidSensorType_V16b() {
+    WorkflowNodeEntity wait = node("WAIT1", "WAIT");
+    wait.setNodeParams("{\"sensor_type\":\"BOGUS\"}");
+    seed(
+        List.of(node("START", "START"), wait, node("END", "END")),
+        edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V16-b"));
+  }
+
+  @Test
+  void waitNodeHttpPollMissingUrl_V16c() {
+    WorkflowNodeEntity wait = node("WAIT1", "WAIT");
+    wait.setNodeParams(
+        "{\"sensor_type\":\"HTTP_POLL\",\"sensor_spec\":{\"matchExpr\":\"status==200\"},"
+            + "\"timeout_seconds\":120,\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
+    seed(
+        List.of(node("START", "START"), wait, node("END", "END")),
+        edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors())
+        .anySatisfy(i -> assertThat(i.message()).contains("HTTP_POLL sensor_spec.url required"));
+  }
+
+  @Test
+  void waitNodeTimeoutNotGreaterThanPoll_V16d() {
+    WorkflowNodeEntity wait = node("WAIT1", "WAIT");
+    wait.setNodeParams(
+        "{\"sensor_type\":\"FILE_ARRIVAL\","
+            + "\"sensor_spec\":{\"pattern\":\"x\",\"maxAgeSeconds\":60},"
+            + "\"timeout_seconds\":30,\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
+    seed(
+        List.of(node("START", "START"), wait, node("END", "END")),
+        edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors())
+        .anySatisfy(
+            i ->
+                assertThat(i.message())
+                    .contains("timeout_seconds must be greater than poll_interval_seconds"));
+  }
+
+  @Test
+  void waitNodeInvalidOnTimeout_V16e() {
+    WorkflowNodeEntity wait = node("WAIT1", "WAIT");
+    wait.setNodeParams(
+        "{\"sensor_type\":\"FILE_ARRIVAL\","
+            + "\"sensor_spec\":{\"pattern\":\"x\",\"maxAgeSeconds\":60},"
+            + "\"timeout_seconds\":120,\"poll_interval_seconds\":30,\"on_timeout\":\"BOGUS\"}");
+    seed(
+        List.of(node("START", "START"), wait, node("END", "END")),
+        edges(edge("START", "WAIT1"), edge("WAIT1", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V16-e"));
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────────
 
   private void seed(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
