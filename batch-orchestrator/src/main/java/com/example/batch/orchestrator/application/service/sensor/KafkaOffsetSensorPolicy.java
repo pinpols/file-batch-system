@@ -80,7 +80,7 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
         return SensorProbeResult.matched(output);
       }
       return SensorProbeResult.notYet();
-    } catch (TimeoutException e) {
+    } catch (TimeoutException ex) {
       log.warn("KAFKA_OFFSET admin timeout topic={} partition={}", topic, partition);
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed", List.of("KAFKA_OFFSET", "admin timeout"));
