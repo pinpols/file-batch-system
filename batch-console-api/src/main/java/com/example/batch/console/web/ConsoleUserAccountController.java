@@ -6,6 +6,7 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleUserAccountService;
 import com.example.batch.console.support.web.Idempotent;
+import com.example.batch.console.web.request.auth.CreateUserAccountRequest;
 import com.example.batch.console.web.request.auth.ResetPasswordRequest;
 import com.example.batch.console.web.request.auth.UpdateUserAccountRequest;
 import com.example.batch.console.web.response.auth.ConsoleUserAccountResponse;
@@ -46,6 +47,18 @@ public class ConsoleUserAccountController {
   @GetMapping("/{id}")
   public CommonResponse<ConsoleUserAccountResponse> get(@PathVariable long id) {
     return responseFactory.success(userAccountService.get(id));
+  }
+
+  @PostMapping
+  public CommonResponse<ConsoleUserAccountResponse> create(
+      @Validated @RequestBody CreateUserAccountRequest request) {
+    return responseFactory.success(
+        userAccountService.create(
+            request.getTenantId(),
+            request.getUsername(),
+            request.getPassword(),
+            request.getDisplayName(),
+            request.getAuthoritiesCsv()));
   }
 
   @PutMapping("/{id}")

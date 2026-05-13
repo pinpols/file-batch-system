@@ -34,6 +34,31 @@ public class ConsoleUserAccountService {
     return toResponse(assertExists(id));
   }
 
+  /**
+   * 创建账号。V34 设计意图:由 ROLE_ADMIN 通过 POST /api/console/users 增量添加用户。username 跨租户唯一(V41 索引); 同租户
+   * username 唯一(V34 约束)。authoritiesCsv 为空时落 USER 默认。
+   */
+  public ConsoleUserAccountResponse create(
+      String tenantId,
+      String username,
+      String password,
+      String displayName,
+      String authoritiesCsv) {
+    Guard.require(username != null && !username.isBlank(), "username is required");
+    Guard.require(password != null && !password.isBlank(), "password is required");
+    if (userAccountMapper.selectByUsername(username) != null) {
+      throw new IllegalArgumentException("username already exists: " + username);
+    }
+    userAccountMapper.insert(
+        tenantId,
+        username,
+        displayName,
+        passwordHasher.encode(password),
+        normalizeAuthorities(authoritiesCsv),
+        null);
+    return toResponse(userAccountMapper.selectByUsername(username));
+  }
+
   public ConsoleUserAccountResponse update(long id, String displayName, String authoritiesCsv) {
     assertExists(id);
     userAccountMapper.updateProfile(id, displayName, normalizeAuthorities(authoritiesCsv));

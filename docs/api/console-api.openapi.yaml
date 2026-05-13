@@ -6547,6 +6547,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Users]
+      summary: Create a console user account (ROLE_ADMIN only)
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                tenantId:
+                  type: string
+                  description: Optional - falls back to caller tenant when omitted
+                username:
+                  type: string
+                  minLength: 2
+                  maxLength: 128
+                  pattern: '^[a-zA-Z0-9][a-zA-Z0-9._\-]*$'
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 256
+                displayName:
+                  type: string
+                  maxLength: 256
+                authoritiesCsv:
+                  type: string
+                  maxLength: 512
+                  description: CSV of role authorities, e.g. "ROLE_ADMIN,ROLE_TENANT_USER". Empty defaults to USER.
+      responses:
+        '200':
+          description: Created user account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
 
   /api/console/users/{id}:
     get:
