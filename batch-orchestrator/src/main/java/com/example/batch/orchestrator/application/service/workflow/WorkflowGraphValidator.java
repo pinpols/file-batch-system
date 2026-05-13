@@ -132,6 +132,7 @@ public class WorkflowGraphValidator {
 
     for (WorkflowNodeEntity n : byCode.values()) {
       validateCrossDayDeps(n, errors);
+      validateSensorSpec(n, errors);
     }
 
     validateGatewayJoinMode(byCode.values(), incoming, errors);
@@ -500,6 +501,156 @@ public class WorkflowGraphValidator {
   private void dfs(String node, Map<String, List<String>> adj, Set<String> visited) {
     if (!visited.add(node)) return;
     for (String next : adj.getOrDefault(node, List.of())) dfs(next, adj, visited);
+  }
+
+  private static final TypeReference<Map<String, Object>> SENSOR_MAP_TYPE =
+      new TypeReference<>() {};
+
+  private static final Set<String> SENSOR_TYPES =
+      Set.of("FILE_ARRIVAL", "HTTP_POLL", "KAFKA_OFFSET", "DB_ROW_EXISTS");
+
+  private static final Set<String> SENSOR_TIMEOUT_ACTIONS = Set.of("FAIL", "SKIP_DOWNSTREAM");
+
+  /**
+   * ADR-028 V16：WAIT 节点的 sensor_spec / sensor_type / 超时配置静态校验。非 WAIT 节点直接返回。
+   *
+   * <ul>
+   *   <li>V16-a sensor_type 必填
+   *   <li>V16-b sensor_type 必须在 4 个 enum 之一
+   *   <li>V16-c sensor_spec 必填 + 类型必须是 object；按 type 校验 spec 关键字段
+   *   <li>V16-d timeout_seconds &gt; poll_interval_seconds（两者均必填且 &gt;0）
+   *   <li>V16-e on_timeout 必填且在 FAIL/SKIP_DOWNSTREAM 之一
+   * </ul>
+   */
+  @SuppressWarnings("unchecked")
+  private void validateSensorSpec(WorkflowNodeEntity node, List<ValidationIssue> errors) {
+    if (!"WAIT".equalsIgnoreCase(node.getNodeType())) {
+      return;
+    }
+    Map<String, Object> params;
+    try {
+      params =
+          Texts.hasText(node.getNodeParams())
+              ? JsonUtils.fromJson(node.getNodeParams(), SENSOR_MAP_TYPE)
+              : Map.of();
+    } catch (Exception e) {
+      errors.add(
+          issue(
+              "V16", "WAIT node_params JSON parse failed: " + e.getMessage(), node.getNodeCode()));
+      return;
+    }
+    if (params == null) params = Map.of();
+
+    String sensorType = asString(params.get("sensor_type"));
+    if (!Texts.hasText(sensorType)) {
+      errors.add(issue("V16-a", "WAIT node missing sensor_type", node.getNodeCode()));
+      return;
+    }
+    if (!SENSOR_TYPES.contains(sensorType)) {
+      errors.add(
+          issue(
+              "V16-b",
+              "WAIT sensor_type invalid: " + sensorType + " (allowed: " + SENSOR_TYPES + ")",
+              node.getNodeCode()));
+      return;
+    }
+
+    Object spec = params.get("sensor_spec");
+    if (!(spec instanceof Map)) {
+      errors.add(issue("V16-c", "WAIT sensor_spec missing or not an object", node.getNodeCode()));
+    } else {
+      validateSensorSpecByType(sensorType, (Map<String, Object>) spec, node.getNodeCode(), errors);
+    }
+
+    Long timeout = asLong(params.get("timeout_seconds"));
+    Long pollInterval = asLong(params.get("poll_interval_seconds"));
+    if (timeout == null || timeout <= 0) {
+      errors.add(issue("V16-d", "WAIT timeout_seconds missing or <=0", node.getNodeCode()));
+    }
+    if (pollInterval == null || pollInterval <= 0) {
+      errors.add(issue("V16-d", "WAIT poll_interval_seconds missing or <=0", node.getNodeCode()));
+    }
+    if (timeout != null && pollInterval != null && timeout <= pollInterval) {
+      errors.add(
+          issue(
+              "V16-d",
+              "WAIT timeout_seconds must be greater than poll_interval_seconds",
+              node.getNodeCode()));
+    }
+
+    String onTimeout = asString(params.get("on_timeout"));
+    if (!Texts.hasText(onTimeout)) {
+      errors.add(issue("V16-e", "WAIT on_timeout missing", node.getNodeCode()));
+    } else if (!SENSOR_TIMEOUT_ACTIONS.contains(onTimeout)) {
+      errors.add(
+          issue(
+              "V16-e",
+              "WAIT on_timeout invalid: "
+                  + onTimeout
+                  + " (allowed: "
+                  + SENSOR_TIMEOUT_ACTIONS
+                  + ")",
+              node.getNodeCode()));
+    }
+  }
+
+  private void validateSensorSpecByType(
+      String sensorType, Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
+    switch (sensorType) {
+      case "FILE_ARRIVAL" -> {
+        if (!Texts.hasText(asString(spec.get("pattern")))) {
+          errors.add(issue("V16-c", "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
+        }
+        Long age = asLong(spec.get("maxAgeSeconds"));
+        if (age == null || age <= 0) {
+          errors.add(issue("V16-c", "FILE_ARRIVAL sensor_spec.maxAgeSeconds required", nodeCode));
+        }
+      }
+      case "HTTP_POLL" -> {
+        if (!Texts.hasText(asString(spec.get("url")))) {
+          errors.add(issue("V16-c", "HTTP_POLL sensor_spec.url required", nodeCode));
+        }
+        if (!Texts.hasText(asString(spec.get("matchExpr")))) {
+          errors.add(issue("V16-c", "HTTP_POLL sensor_spec.matchExpr required", nodeCode));
+        }
+      }
+      case "KAFKA_OFFSET" -> {
+        if (!Texts.hasText(asString(spec.get("topic")))) {
+          errors.add(issue("V16-c", "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
+        }
+        if (asLong(spec.get("partition")) == null) {
+          errors.add(issue("V16-c", "KAFKA_OFFSET sensor_spec.partition required", nodeCode));
+        }
+        if (asLong(spec.get("minOffset")) == null) {
+          errors.add(issue("V16-c", "KAFKA_OFFSET sensor_spec.minOffset required", nodeCode));
+        }
+      }
+      case "DB_ROW_EXISTS" -> {
+        if (!Texts.hasText(asString(spec.get("schema")))) {
+          errors.add(issue("V16-c", "DB_ROW_EXISTS sensor_spec.schema required", nodeCode));
+        }
+        if (!Texts.hasText(asString(spec.get("sql")))) {
+          errors.add(issue("V16-c", "DB_ROW_EXISTS sensor_spec.sql required", nodeCode));
+        }
+      }
+      default -> {
+        // 不应到此（type 已在外层 V16-b 校验）
+      }
+    }
+  }
+
+  private static String asString(Object v) {
+    return v == null ? null : v.toString();
+  }
+
+  private static Long asLong(Object v) {
+    if (v == null) return null;
+    if (v instanceof Number n) return n.longValue();
+    try {
+      return Long.parseLong(v.toString().trim());
+    } catch (NumberFormatException e) {
+      return null;
+    }
   }
 
   private void validateCrossDayDeps(WorkflowNodeEntity node, List<ValidationIssue> errors) {

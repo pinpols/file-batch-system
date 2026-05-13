@@ -2,12 +2,18 @@ package com.example.batch.orchestrator.application.service.sensor;
 
 import com.example.batch.common.enums.SensorTimeoutAction;
 import com.example.batch.common.enums.SensorType;
+import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.task.TaskOutcomeService;
 import com.example.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
 import com.example.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunKey;
 import com.example.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunOutcome;
+import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
+import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
+import com.example.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
@@ -23,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
@@ -53,6 +60,9 @@ public class SensorStateMachine {
   private final WorkflowRunMapper workflowRunMapper;
   private final TaskOutcomeService taskOutcomeService;
   private final ObjectMapper objectMapper;
+  private final OrchestratorJobMappers jobMappers;
+  private final WorkflowDagService workflowDagService;
+  private final ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
 
   /** scheduler 入口：对单个到期 WAIT 节点跑一次探测并推进状态。 */
   public void probeAndAdvance(WorkflowNodeRunEntity nodeRun, Instant now) {
@@ -197,6 +207,7 @@ public class SensorStateMachine {
     // 探测状态归零（之后归档/审计读到的快照不带遗留 next_probe_at）
     nodeRunMapper.updateSensorProbeState(
         nodeRun.getId(), null, now, safe(nodeRun.getSensorProbeCount()) + 1, 0);
+    advanceDownstream(wfRun, nodeRun.getNodeCode(), true, now);
   }
 
   private void finishFailure(
@@ -218,6 +229,75 @@ public class SensorStateMachine {
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(key, outcome));
     nodeRunMapper.updateSensorProbeState(
         nodeRun.getId(), null, now, safe(nodeRun.getSensorProbeCount()) + 1, 0);
+    advanceDownstream(wfRun, nodeRun.getNodeCode(), false, now);
+  }
+
+  /**
+   * WAIT 节点终态后推进下游（镜像 DefaultTaskOutcomeService.advanceDagNodes 简化版）。
+   *
+   * <ul>
+   *   <li>resolveNextNodes(success=true|false) 按 SUCCESS/FAILURE 边走分支
+   *   <li>END 节点：recordNodeRunFinish 内联（END 无 worker 派发）
+   *   <li>非 END：dispatchService.dispatchNode 进 CLAIM → EXECUTE → REPORT 主链路
+   * </ul>
+   *
+   * <p>失败路径 + cascadeSkipDownstream 不在本类范围（避免重复 ADR-018 skip 级联逻辑），由 WorkflowDagService 在下次 worker
+   * 回报时自然推进。
+   */
+  private void advanceDownstream(
+      WorkflowRunEntity wfRun, String currentNodeCode, boolean success, Instant now) {
+    JobInstanceEntity jobInstance = loadJobInstanceForDispatch(wfRun);
+    if (jobInstance == null) {
+      log.warn(
+          "advanceDownstream skipped: workflow_run={} has no related job_instance", wfRun.getId());
+      return;
+    }
+    List<DagNodeResolution> nextNodes =
+        workflowDagService.resolveNextNodes(
+            wfRun.getWorkflowDefinitionId(), currentNodeCode, success, null);
+    if (nextNodes == null || nextNodes.isEmpty()) {
+      return;
+    }
+    WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
+    for (DagNodeResolution next : nextNodes) {
+      if (next == null) {
+        continue;
+      }
+      try {
+        if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
+          dispatchEndNode(wfRun, next, success, now);
+        } else {
+          dispatchService.dispatchNode(jobInstance, wfRun, next, null, wfRun.getTraceId());
+        }
+      } catch (Exception e) {
+        log.warn(
+            "advanceDownstream dispatch failed: wfRunId={} from={} -> {} err={}",
+            wfRun.getId(),
+            currentNodeCode,
+            next.nodeCode(),
+            e.toString());
+      }
+    }
+  }
+
+  private void dispatchEndNode(
+      WorkflowRunEntity wfRun, DagNodeResolution endNode, boolean success, Instant now) {
+    if (!workflowDagService.isNodeReadyForDispatch(
+        wfRun.getId(), wfRun.getWorkflowDefinitionId(), endNode.nodeCode(), null)) {
+      return;
+    }
+    NodeRunOutcome endOutcome =
+        NodeRunOutcome.builder().success(success).startedAt(now).finishedAt(now).build();
+    NodeRunKey endKey = new NodeRunKey(wfRun.getId(), endNode.nodeCode(), endNode.nodeType());
+    taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(endKey, endOutcome));
+  }
+
+  private JobInstanceEntity loadJobInstanceForDispatch(WorkflowRunEntity wfRun) {
+    if (wfRun.getRelatedJobInstanceId() == null) {
+      return null;
+    }
+    return jobMappers.jobInstanceMapper.selectById(
+        wfRun.getTenantId(), wfRun.getRelatedJobInstanceId());
   }
 
   private Map<String, Object> parseJson(String raw) {
