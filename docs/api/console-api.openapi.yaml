@@ -2941,6 +2941,7 @@ paths:
         - $ref: '#/components/parameters/InstanceStatusFilter'
         - $ref: '#/components/parameters/StartDateFilter'
         - $ref: '#/components/parameters/EndDateFilter'
+        - $ref: '#/components/parameters/TraceIdFilter'
         - name: sortBy
           in: query
           required: false
@@ -3117,6 +3118,7 @@ paths:
         - $ref: '#/components/parameters/PageSizeQuery'
         - $ref: '#/components/parameters/WorkflowDefinitionIdFilter'
         - $ref: '#/components/parameters/RunStatusFilter'
+        - $ref: '#/components/parameters/TraceIdFilter'
       responses:
         '200':
           description: Workflow run list
