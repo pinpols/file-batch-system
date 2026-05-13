@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-05-03"
+  x-last-updated: "2026-05-13"
   x-changelog:
+    - date: "2026-05-13"
+      summary: "配置类 Excel 单域 template/export 已收敛删除，仅保留 /api/console/config/tenant-package/excel/** 作为 11-Sheet 租户配置包 Excel 唯一路径；报表中心 /api/console/reports/excel/** 保留"
     - date: "2026-05-03"
       summary: "POST /api/console/config/tenant-init 与 POST /api/console/config/tenant-copy 的 requestBody 改为 $ref 引用：新增 TenantConfigBatchInitRequest（含 11 个嵌套 Spec：JobDefinitionSpec/WorkflowDefinitionSpec(NodeSpec/EdgeSpec)/PipelineDefinitionSpec(StepSpec)/FileChannelSpec/FileTemplateSpec/ResourceQueueSpec/BatchWindowSpec/BusinessCalendarSpec/TenantQuotaPolicySpec/AlertRoutingSpec）+ TenantConfigCopyRequest + TenantConfigCopyType enum，前端 codegen 现可拿到完整嵌套结构"
     - date: "2026-04-16"
@@ -15,7 +17,7 @@ info:
     - date: "2026-04-11"
       summary: "移除 DELETE job-definitions/{id}、workflow-definitions/{id}、file-channels/{id}、file-templates/{id}；软删除统一走 PATCH /{id}，DELETE 仅保留于物理删除场景"
     - date: "2026-04-12"
-      summary: "新增 /api/console/config/tenant-package/excel 5 个端点：8-Sheet 租户配置包 Excel 导入（template/upload/preview/preview-workbook/apply），含跨 Sheet 依赖校验和单事务写库"
+      summary: "新增 /api/console/config/tenant-package/excel 配置包端点，后续收敛为 11-Sheet 租户配置包 Excel 唯一路径（template/export/upload/preview/preview-workbook/apply），含跨 Sheet 依赖校验和单事务写库"
     - date: "2026-04-12"
       summary: "POST /api/console/tenants/batch 新增可选字段 initConfigFrom/initMode：非空时建完租户后自动复制源租户配置，响应从 List<ConsoleTenantResponse> 改为 {tenants, configInit}"
     - date: "2026-04-11"
