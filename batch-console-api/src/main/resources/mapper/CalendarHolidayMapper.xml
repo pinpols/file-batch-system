@@ -31,10 +31,10 @@
 
     <insert id="batchInsert">
         insert into batch.calendar_holiday (
-            calendar_id, biz_date, day_type, holiday_name, description
+            tenant_id, calendar_id, biz_date, day_type, holiday_name, description
         ) values
         <foreach collection="list" item="item" separator=",">
-            (#{item.calendarId}, #{item.bizDate}, #{item.dayType}, #{item.holidayName}, #{item.description})
+            (#{item.tenantId}, #{item.calendarId}, #{item.bizDate}, #{item.dayType}, #{item.holidayName}, #{item.description})
         </foreach>
     </insert>
 

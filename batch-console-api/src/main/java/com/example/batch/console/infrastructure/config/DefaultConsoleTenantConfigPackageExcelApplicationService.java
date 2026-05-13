@@ -494,6 +494,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> params = new ArrayList<>();
     for (LocalDate holiday : calendar.holidays()) {
       Map<String, Object> item = new LinkedHashMap<>();
+      item.put("tenantId", tenantId); // NOT NULL 列必填，与 V*__tenant_isolation 加固一致
       item.put("calendarId", calendarId);
       item.put("bizDate", holiday);
       item.put("dayType", "HOLIDAY");
