@@ -37,7 +37,7 @@
             and current_node_code = #{currentNodeCode}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id = #{traceId}
+            and trace_id like concat('%', #{traceId}, '%')
         </if>
         order by id desc
         <if test="pageRequest != null">
@@ -74,7 +74,7 @@
             and current_node_code = #{currentNodeCode}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id = #{traceId}
+            and trace_id like concat('%', #{traceId}, '%')
         </if>
     </select>
 
