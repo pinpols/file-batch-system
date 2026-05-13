@@ -79,24 +79,26 @@ def update_ta():
     # pipeline_step_definition cols: job_code, version, step_code, step_name, stage_code, step_order,
     #   impl_code, step_params, timeout_seconds, retry_policy, retry_max_count, enabled
     ps = wb["pipeline_step_definition"]
+    # impl_code 必须匹配 worker 启动时上报的 step_registry：模式 = "{MODULE}_{STAGE}"
+    # 例：IMPORT/RECEIVE → IMPORT_RECEIVE；validator 在 preview 时校验
     import_steps = [
-        ("STEP_RECEIVE",   "接收文件","RECEIVE",   1,"sftpReceiveStep"),
-        ("STEP_PREPROCESS","预处理",  "PREPROCESS",2,"orderPreprocessStep"),
-        ("STEP_PARSE",     "解析",    "PARSE",     3,"csvParseStep"),
-        ("STEP_VALIDATE",  "校验",    "VALIDATE",  4,"orderValidateStep"),
-        ("STEP_LOAD",      "入库",    "LOAD",      5,"jdbcLoadStep"),
-        ("STEP_FEEDBACK",  "回执写回","FEEDBACK",  6,"orderFeedbackStep"),
+        ("STEP_RECEIVE",   "接收文件","RECEIVE",   1,"IMPORT_RECEIVE"),
+        ("STEP_PREPROCESS","预处理",  "PREPROCESS",2,"IMPORT_PREPROCESS"),
+        ("STEP_PARSE",     "解析",    "PARSE",     3,"IMPORT_PARSE"),
+        ("STEP_VALIDATE",  "校验",    "VALIDATE",  4,"IMPORT_VALIDATE"),
+        ("STEP_LOAD",      "入库",    "LOAD",      5,"IMPORT_LOAD"),
+        ("STEP_FEEDBACK",  "回执写回","FEEDBACK",  6,"IMPORT_FEEDBACK"),
     ]
     for sc, sn, stage, order, impl in import_steps:
         append_if_new(ps, [0,2], ["TA_IMPORT_ORDER", sc], [
             "TA_IMPORT_ORDER",1,sc,sn,stage,order,impl,"{}",300,"FIXED",2,"TRUE",
         ])
     export_steps = [
-        ("STEP_PREPARE",  "生成前准备","PREPARE",  1,"reportPrepareStep"),
-        ("STEP_GENERATE", "生成文件",  "GENERATE", 2,"reportGenerateStep"),
-        ("STEP_STORE",    "落盘存档",  "STORE",    3,"reportStoreStep"),
-        ("STEP_REGISTER", "登记 FileRecord","REGISTER",4,"fileRecordRegisterStep"),
-        ("STEP_COMPLETE", "完结",      "COMPLETE", 5,"reportCompleteStep"),
+        ("STEP_PREPARE",  "生成前准备","PREPARE",  1,"EXPORT_PREPARE"),
+        ("STEP_GENERATE", "生成文件",  "GENERATE", 2,"EXPORT_GENERATE"),
+        ("STEP_STORE",    "落盘存档",  "STORE",    3,"EXPORT_STORE"),
+        ("STEP_REGISTER", "登记 FileRecord","REGISTER",4,"EXPORT_REGISTER"),
+        ("STEP_COMPLETE", "完结",      "COMPLETE", 5,"EXPORT_COMPLETE"),
     ]
     for sc, sn, stage, order, impl in export_steps:
         append_if_new(ps, [0,2], ["TA_EXPORT_REPORT", sc], [
@@ -138,12 +140,12 @@ def update_tb():
 
     ps = wb["pipeline_step_definition"]
     dispatch_steps = [
-        ("STEP_PREPARE",   "分发前准备","PREPARE",   1,"dispatchPrepareStep"),
-        ("STEP_DISPATCH",  "实际下发",  "DISPATCH",  2,"dispatchSendStep"),
-        ("STEP_ACK",       "回执确认",  "ACK",       3,"dispatchAckStep"),
-        ("STEP_RETRY",     "失败重试",  "RETRY",     4,"dispatchRetryStep"),
-        ("STEP_COMPENSATE","补偿冲正",  "COMPENSATE",5,"dispatchCompensateStep"),
-        ("STEP_COMPLETE",  "完结",      "COMPLETE",  6,"dispatchCompleteStep"),
+        ("STEP_PREPARE",   "分发前准备","PREPARE",   1,"DISPATCH_PREPARE"),
+        ("STEP_DISPATCH",  "实际下发",  "DISPATCH",  2,"DISPATCH_DISPATCH"),
+        ("STEP_ACK",       "回执确认",  "ACK",       3,"DISPATCH_ACK"),
+        ("STEP_RETRY",     "失败重试",  "RETRY",     4,"DISPATCH_RETRY"),
+        ("STEP_COMPENSATE","补偿冲正",  "COMPENSATE",5,"DISPATCH_COMPENSATE"),
+        ("STEP_COMPLETE",  "完结",      "COMPLETE",  6,"DISPATCH_COMPLETE"),
     ]
     for sc, sn, stage, order, impl in dispatch_steps:
         append_if_new(ps, [0,2], ["TB_DISPATCH_SETTLE", sc], [
