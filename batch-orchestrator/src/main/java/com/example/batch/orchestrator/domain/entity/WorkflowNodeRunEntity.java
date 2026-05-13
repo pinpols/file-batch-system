@@ -40,6 +40,12 @@ public class WorkflowNodeRunEntity extends AbstractLocalizedErrorEntity implemen
    */
   private String output;
 
+  // ── ADR-028 Sensor WAIT 节点探测状态（V121） ────────────────────────────────────
+  private Instant sensorNextProbeAt;
+  private Instant sensorLastProbeAt;
+  private Integer sensorProbeCount;
+  private Integer sensorErrorCount;
+
   @Override
   public String getStatus() {
     return nodeStatus;

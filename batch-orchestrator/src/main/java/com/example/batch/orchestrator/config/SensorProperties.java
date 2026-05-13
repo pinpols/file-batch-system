@@ -10,7 +10,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.sensor")
 public class SensorProperties {
 
-  /** SensorPollScheduler 周期；默认 10s（轮询所有 RUNNING WAIT 节点）。S3 阶段接入。 */
+  /** SensorPollScheduler 总开关；false 时不调度，仅 SPI bean 可被人工/测试调用。 */
+  private boolean enabled = true;
+
+  /** SensorPollScheduler 周期；默认 10s（轮询所有 RUNNING WAIT 节点）。 */
   private Duration scanInterval = Duration.ofSeconds(10);
 
   /** HTTP_POLL 单次请求超时；默认 10s。 */
