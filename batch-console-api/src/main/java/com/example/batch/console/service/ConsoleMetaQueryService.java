@@ -227,6 +227,11 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("instanceStatus", JobInstanceStatus.class));
     list.add(new EnumReg<>("workflowType", WorkflowType.class));
     list.add(new EnumReg<>("workflowNodeType", WorkflowNodeType.class));
+    // ADR-028 Sensor WAIT 节点字典
+    list.add(new EnumReg<>("sensorType", com.example.batch.common.enums.SensorType.class));
+    list.add(
+        new EnumReg<>(
+            "sensorTimeoutAction", com.example.batch.common.enums.SensorTimeoutAction.class));
     list.add(new EnumReg<>("edgeType", WorkflowEdgeType.class));
     list.add(new EnumReg<>("workflowRunStatus", WorkflowRunStatus.class));
     list.add(new EnumReg<>("pipelineType", PipelineType.class));
