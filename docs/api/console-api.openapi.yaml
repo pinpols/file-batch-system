@@ -7860,7 +7860,7 @@ components:
                 workflowType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 workflowNodeType:   { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 sensorType:         { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
-                sensorTimeoutAction:{ type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                sensorTimeoutAction: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 edgeType:           { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 workflowRunStatus:  { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 pipelineType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
