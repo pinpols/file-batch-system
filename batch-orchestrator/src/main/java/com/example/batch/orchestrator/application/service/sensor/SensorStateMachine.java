@@ -43,8 +43,8 @@ import org.springframework.stereotype.Component;
  *   <li>ERROR：连续 3 次后视同 FAIL；否则视同 NOT_YET 重排下次探测
  * </ul>
  *
- * <p>DAG 下游派发不在本类范围：WAIT 节点 SUCCESS 后由 {@code WorkflowOrchestrationReconciler} 或后续 worker
- * 任务回报联动推进（见 S3.1 follow-up 跟踪）。
+ * <p>S3.1：WAIT 节点进入终态后，本状态机复用 {@link WorkflowDagService#resolveNextNodes} + {@link
+ * WorkflowNodeDispatchService#dispatchNode} 直接推进下游；END 节点无 worker，由本类内联完成。
  */
 @Slf4j
 @Component
