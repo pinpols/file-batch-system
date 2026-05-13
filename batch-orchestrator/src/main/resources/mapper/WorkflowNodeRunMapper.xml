@@ -17,6 +17,10 @@
         <result column="finished_at" property="finishedAt"/>
         <result column="duration_ms" property="durationMs"/>
         <result column="output" property="output"/>
+        <result column="sensor_next_probe_at" property="sensorNextProbeAt"/>
+        <result column="sensor_last_probe_at" property="sensorLastProbeAt"/>
+        <result column="sensor_probe_count" property="sensorProbeCount"/>
+        <result column="sensor_error_count" property="sensorErrorCount"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity"
@@ -100,4 +104,25 @@
         order by id asc
         limit #{limit}
     </select>
+
+    <!-- ADR-028 S3: 扫到期 WAIT 节点；FOR UPDATE SKIP LOCKED 防多 scheduler 并发探同一节点 -->
+    <select id="selectDueWaitNodes" resultMap="WorkflowNodeRunResultMap">
+        select *
+        from batch.workflow_node_run
+        where node_type = 'WAIT'
+          and node_status = 'RUNNING'
+          and (sensor_next_probe_at is null or sensor_next_probe_at &lt;= #{now})
+        order by sensor_next_probe_at asc nulls first, id asc
+        limit #{limit}
+        for update skip locked
+    </select>
+
+    <update id="updateSensorProbeState">
+        update batch.workflow_node_run
+        set sensor_next_probe_at = #{nextProbeAt},
+            sensor_last_probe_at = #{lastProbeAt},
+            sensor_probe_count   = #{probeCount},
+            sensor_error_count   = #{errorCount}
+        where id = #{id}
+    </update>
 </mapper>
