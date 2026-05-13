@@ -244,3 +244,6 @@ batch:
       enabled: ${BATCH_FILE_GOVERNANCE_ACCESS_ENABLED:true}
       # 预签名链接有效期（秒）
       presign-expiry-seconds: ${BATCH_FILE_GOVERNANCE_ACCESS_PRESIGN_EXPIRY_SECONDS:600}
+  sensor:
+     kafka-offset:
+       enabled: true

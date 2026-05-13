@@ -14,6 +14,8 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.common.TopicPartition;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Component;
 
@@ -36,6 +38,8 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "batch.sensor.kafka-offset", name = "enabled", havingValue = "true")
+@ConditionalOnBean(KafkaAdmin.class)
 public class KafkaOffsetSensorPolicy implements SensorPolicy {
 
   private final KafkaAdmin kafkaAdmin;
