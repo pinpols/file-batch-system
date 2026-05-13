@@ -543,7 +543,9 @@ public class ConsoleOpsQueryService {
         display(entity.getRequestStatus()),
         display(entity.getTraceId()),
         entity.getCreatedAt(),
-        entity.getUpdatedAt());
+        entity.getUpdatedAt(),
+        entity.getApprovalNo(),
+        entity.getApprovalStatus());
   }
 
   private ConsoleWorkerRegistryResponse toWorkerRegistryResponse(WorkerRegistryEntity entity) {

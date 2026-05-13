@@ -7859,6 +7859,8 @@ components:
                 instanceStatus:     { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 workflowType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 workflowNodeType:   { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                sensorType:         { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                sensorTimeoutAction:{ type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 edgeType:           { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 workflowRunStatus:  { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
                 pipelineType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
@@ -9962,6 +9964,14 @@ components:
         updatedAt:
           type: string
           format: date-time
+        approvalNo:
+          type: string
+          nullable: true
+          description: 关联 approval_command.approval_no(LEFT JOIN target_id=request_id + approval_type=CATCH_UP);用于走统一审批接口 /api/console/approvals/{approvalNo}/approve|reject。未走统一审批的旧记录可为 null。
+        approvalStatus:
+          type: string
+          nullable: true
+          description: 关联 approval_command.approval_status(PENDING/APPROVED/REJECTED/EXECUTED)。可空。
       required: [id, tenantId, requestId, jobCode, bizDate, requestStatus, traceId, createdAt, updatedAt]
     ConsoleFileArrivalGroupResponse:
       type: object
