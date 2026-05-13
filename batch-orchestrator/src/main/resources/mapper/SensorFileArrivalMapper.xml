@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.SensorFileArrivalMapper">
+
+    <!--
+      ADR-028 FILE_ARRIVAL sensor：查最新到达的 INPUT 文件。
+      由 FileArrivalSensorPolicy 调用：name pattern * → %，调用方传入 since（now - maxAgeSeconds）。
+    -->
+    <select id="selectLatestArrival" resultType="java.util.LinkedHashMap">
+        SELECT id          AS "fileId",
+               file_name   AS "fileName",
+               created_at  AS "arrivalTime",
+               storage_path AS "storagePath"
+          FROM batch.file_record
+         WHERE tenant_id = #{tenantId}
+           AND file_category = 'INPUT'
+           AND file_name LIKE #{namePattern}
+           AND created_at &gt;= #{since}
+        <if test="sourceType != null">
+           AND source_type = #{sourceType}
+        </if>
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+    </select>
+
+    <select id="recentMatches" resultType="java.util.LinkedHashMap">
+        SELECT id          AS "fileId",
+               file_name   AS "fileName",
+               created_at  AS "arrivalTime"
+          FROM batch.file_record
+         WHERE tenant_id = #{tenantId}
+           AND file_category = 'INPUT'
+           AND file_name LIKE #{namePattern}
+         ORDER BY created_at DESC, id DESC
+         LIMIT #{limit}
+    </select>
+
+</mapper>
