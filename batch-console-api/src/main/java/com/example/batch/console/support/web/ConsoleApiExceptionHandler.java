@@ -205,12 +205,16 @@ public class ConsoleApiExceptionHandler {
   /**
    * SSE / 异步响应在客户端断开后再次写入会抛 {@link AsyncRequestNotUsableException}。 此时 response Content-Type 已锁为
    * {@code text/event-stream}，再回写 {@code CommonResponse} 反而触发 {@code
-   * HttpMessageNotWritableException}。返回 {@code null} 让 Spring 跳过 body 写入，仅留一条 DEBUG 日志即可。
+   * HttpMessageNotWritableException}。
+   *
+   * <p>返回 {@code void} —— 这是 Spring MVC 公开契约里"handler 已自行处理完毕"的语义， 不依赖 "@ExceptionHandler 返回 null
+   * 跳过写入" 这种内部行为（在 Spring 升级时可能变化）。 Spring 看到 void return 不会再调 MessageConverter 写 body，也不会再触发后续
+   * resolver。
    */
   @ExceptionHandler(AsyncRequestNotUsableException.class)
-  public ResponseEntity<?> handleAsyncResponseUnusable(AsyncRequestNotUsableException exception) {
+  public void handleAsyncResponseUnusable(AsyncRequestNotUsableException exception) {
     log.debug("console async response unusable (client disconnected): {}", exception.getMessage());
-    return null;
+    // 不写任何 response 内容：客户端早已断开，response 也被锁住，任何写入都会再次失败。
   }
 
   @ExceptionHandler(Exception.class)

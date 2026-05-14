@@ -32,7 +32,15 @@ import org.springframework.stereotype.Component;
  *       DefaultTaskExecutionWrapper.buildReport} 透传给 orchestrator
  * </ol>
  *
- * <p>本钩子绝不抛出异常 / 翻转 success 标志；它是"软告警"基线。"硬中止" 策略由后续 PR 通过 attributes 标记叠加。
+ * <p>失败语义（ADR-030 §G）：
+ *
+ * <ul>
+ *   <li>软告警（默认）：失败仅落 attributes.verifierFailures + Micrometer + outbox；task 仍 SUCCESS
+ *   <li>硬中止（{@link ContentVerifier#fatal()} 返回 true）：失败将通过返回值告知 adapter，由 adapter 决定走
+ *       markPipelineFailed 而非 markPipelineSuccess（task 翻为 FAILED + 错误码 VERIFIER_FATAL）
+ * </ul>
+ *
+ * <p>hook 本身永不抛异常——异常路径透传到 pipeline 主链路会破坏 SLA 监控。
  */
 @Component
 @RequiredArgsConstructor
@@ -42,7 +50,16 @@ public class PipelineVerifierHook {
   private final ObjectProvider<ContentVerifierRegistry> registryProvider;
 
   /**
-   * 在 pipeline 成功路径调用；失败结果落到 attributes，不抛异常。
+   * Hook 执行结果。{@code fatalFailure=true} 表示至少一个 {@link ContentVerifier#fatal()} 的 verifier 失败，
+   * 调用方（adapter）应据此走 markPipelineFailed。{@code firstFatalCode/Message} 用于失败 response。
+   */
+  public record VerifierHookResult(
+      boolean fatalFailure, String firstFatalCode, String firstFatalMessage) {
+    public static final VerifierHookResult NO_FATAL = new VerifierHookResult(false, null, null);
+  }
+
+  /**
+   * 在 pipeline 成功路径调用；失败结果落到 attributes，并返回是否含 fatal 失败。
    *
    * @param tenantId tenant ID
    * @param pipelineType worker 上报的 pipeline 类型字符串（{@code "IMPORT"/"EXPORT"/...}），与 {@link
@@ -51,8 +68,9 @@ public class PipelineVerifierHook {
    * @param taskId 当前 job_task.id（同上）
    * @param stageCode 当前 stage 业务码（最后一个成功 stage），用于按 stage 精确路由
    * @param attributes pipeline runtime attributes（同时作为 payload 来源 + 失败结果落地点）
+   * @return 是否含 fatal 失败（adapter 据此决定走 success / failure 路径）
    */
-  public void runVerifiers(
+  public VerifierHookResult runVerifiers(
       String tenantId,
       String pipelineType,
       Long jobInstanceId,
@@ -60,21 +78,21 @@ public class PipelineVerifierHook {
       String stageCode,
       Map<String, Object> attributes) {
     if (attributes == null) {
-      return;
+      return VerifierHookResult.NO_FATAL;
     }
     ContentVerifierRegistry registry = registryProvider.getIfAvailable();
     if (registry == null) {
-      return;
+      return VerifierHookResult.NO_FATAL;
     }
     JobType jobType = resolveJobType(pipelineType);
     if (jobType == null) {
       // pipelineType 不在 JobType 字典里（如自定义 WORKER 类型）—— 跳过，不报错
-      return;
+      return VerifierHookResult.NO_FATAL;
     }
     try {
       List<ContentVerifier> applicable = registry.verifiersFor(jobType, stageCode);
       if (applicable.isEmpty()) {
-        return;
+        return VerifierHookResult.NO_FATAL;
       }
       // payload = 顶层 attributes ∪ NODE_OUTPUTS。NODE_OUTPUTS 是 worker
       // buildSuccessResponse 写的"对外契约"键集（recordCount / fileId / receiptCode /
@@ -100,6 +118,8 @@ public class PipelineVerifierHook {
               .payload(payload)
               .build();
       List<Map<String, Object>> failures = new ArrayList<>();
+      String firstFatalCode = null;
+      String firstFatalMessage = null;
       for (ContentVerifier verifier : applicable) {
         VerifyResult result = registry.run(verifier, context);
         if (!result.passed()) {
@@ -107,11 +127,18 @@ public class PipelineVerifierHook {
           entry.put("code", result.code());
           entry.put("message", result.message());
           entry.put("evidence", result.evidence());
+          entry.put("fatal", verifier.fatal());
           failures.add(entry);
+          if (verifier.fatal() && firstFatalCode == null) {
+            firstFatalCode = result.code();
+            firstFatalMessage = result.message();
+          }
           log.warn(
-              "ContentVerifier failed: code={}, reason={}, tenantId={}, taskId={}, evidence={}",
+              "ContentVerifier failed: code={}, reason={}, fatal={}, tenantId={}, taskId={},"
+                  + " evidence={}",
               verifier.code(),
               result.code(),
+              verifier.fatal(),
               tenantId,
               taskId,
               result.evidence());
@@ -120,9 +147,13 @@ public class PipelineVerifierHook {
       if (!failures.isEmpty()) {
         attributes.put(PipelineRuntimeKeys.VERIFIER_FAILURES, failures);
       }
+      return firstFatalCode == null
+          ? VerifierHookResult.NO_FATAL
+          : new VerifierHookResult(true, firstFatalCode, firstFatalMessage);
     } catch (RuntimeException ex) {
       // Hook 不允许把 verifier 路径异常透传到 pipeline 主链路
       SwallowedExceptionLogger.warn(PipelineVerifierHook.class, "catch:RuntimeException", ex);
+      return VerifierHookResult.NO_FATAL;
     }
   }
 

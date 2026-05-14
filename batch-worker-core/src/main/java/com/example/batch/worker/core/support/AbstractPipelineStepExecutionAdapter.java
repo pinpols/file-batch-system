@@ -179,23 +179,42 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
       R failed = firstFailure(results);
       if (failed == null) {
         String successStage = lastSuccessfulStage(attributes);
-        runtimeRepository.markPipelineSuccess(pipelineInstanceId, successStage, successStage);
-        // 先调 buildSuccessResponse，它会把 worker 的关键产出（recordCount / fileId /
-        // receiptCode 等）写进 attributes 的 NODE_OUTPUTS 子 map；之后 hook 才能拿到完整 schema。
-        StepExecutionResponse response = buildSuccessResponse(context, results, attributes);
-        // ADR-030 §C: pipeline 全部 stage 成功后跑 ContentVerifier；失败结果落到
-        // attributes.verifierFailures，由 DefaultTaskExecutionWrapper.buildReport 透传给
-        // orchestrator。Hook 自身吞咽异常，不影响主链路 success 返回。
-        if (verifierHook != null) {
-          verifierHook.runVerifiers(
-              request.tenantId(),
-              pipelineType(),
-              runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
-              runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID)),
-              successStage,
-              attributes);
+        // 先调 buildSuccessResponse 把 NODE_OUTPUTS 写进 attributes，verifier 才能拿到规范输出。
+        // 但不立即返回 / 不立即 markPipelineSuccess —— 给 §G 硬中止 verifier 留翻转机会。
+        StepExecutionResponse successResponse = buildSuccessResponse(context, results, attributes);
+
+        // ADR-030 §C/G: 跑 ContentVerifier。
+        //  - 软告警（fatal=false）：失败仅落 attributes.verifierFailures，pipeline 继续 SUCCESS
+        //  - 硬中止（fatal=true）：把 pipeline 翻为 FAILED，错误码 VERIFIER_FATAL
+        PipelineVerifierHook.VerifierHookResult verifierResult =
+            verifierHook == null
+                ? PipelineVerifierHook.VerifierHookResult.NO_FATAL
+                : verifierHook.runVerifiers(
+                    request.tenantId(),
+                    pipelineType(),
+                    runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
+                    runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID)),
+                    successStage,
+                    attributes);
+
+        if (verifierResult.fatalFailure()) {
+          // §G 硬中止：DB 标 FAILED，返回失败 response 而非 success。
+          runtimeRepository.markPipelineFailed(
+              pipelineInstanceId, successStage, lastSuccessfulStage(attributes));
+          String fatalCode =
+              verifierResult.firstFatalCode() == null
+                  ? "VERIFIER_FATAL"
+                  : verifierResult.firstFatalCode();
+          String fatalMessage =
+              verifierResult.firstFatalMessage() == null
+                  ? "ContentVerifier reported fatal failure"
+                  : verifierResult.firstFatalMessage();
+          handlePipelineFailure(attributes, fatalCode, fatalMessage, null, null);
+          return new StepExecutionResponse(false, fatalCode, fatalMessage);
         }
-        return response;
+
+        runtimeRepository.markPipelineSuccess(pipelineInstanceId, successStage, successStage);
+        return successResponse;
       }
       String failureStage = resultStage(failed);
       runtimeRepository.markPipelineFailed(
