@@ -46,4 +46,23 @@ class DispatchChannelStartupAuditContributorTest {
     assertThat(result.healthy()).isTrue();
     assertThat(result.details()).containsEntry("pendingFirstProbe", true);
   }
+
+  @Test
+  void auditDoesNotMarkPendingWhenOverdueExceedsUnhealthy() {
+    // 反例：1 个真故障 UNHEALTHY（已被 probe 验证）+ overdue 同样为 1 之外还有
+    // 真故障早已 overdue → 经过 mapper SQL 收紧后，countProbeOverdue 只数 UNHEALTHY-overdue。
+    // 但万一 mapper 行为又回退（DEGRADED 进入计数），strict == 仍能挡住误吞。
+    DispatchChannelHealthRepository repository = mock(DispatchChannelHealthRepository.class);
+    when(repository.countByHealthStatus("DEGRADED")).thenReturn(3L);
+    when(repository.countByHealthStatus("UNHEALTHY")).thenReturn(1L);
+    when(repository.countProbeOverdue(any(Instant.class))).thenReturn(3L);
+    DispatchChannelStartupAuditContributor contributor =
+        new DispatchChannelStartupAuditContributor(
+            repository, new DispatchChannelHealthProperties());
+
+    WorkerStartupAuditResult result = contributor.audit();
+
+    assertThat(result.healthy()).isFalse();
+    assertThat(result.details()).containsEntry("pendingFirstProbe", false);
+  }
 }

@@ -38,9 +38,10 @@ public class DispatchChannelStartupAuditContributor implements WorkerStartupAudi
     details.put("unhealthyChannels", unhealthy);
     details.put("probeOverdueChannels", overdue);
     // 启动瞬间 probe scheduler 尚未首跑，DB 里残留的 UNHEALTHY 都伴随 last_probe_at 过期。
-    // 此时把整体判为 unhealthy 是 false positive；改为：当且仅当所有 UNHEALTHY 都属于 overdue 时，
-    // 标记 pendingFirstProbe 并视为 healthy，等首轮 probe 完成后由调度器更新真实状态。
-    boolean pendingFirstProbe = unhealthy > 0 && unhealthy <= overdue;
+    // 此时把整体判为 unhealthy 是 false positive；改为：当且仅当 *所有* UNHEALTHY 都是 overdue 时，
+    // 才视为 pendingFirstProbe。严格 == 防止"真故障 UNHEALTHY + 多余 overdue"被误吞
+    // （mapper SQL 已收紧为 UNHEALTHY-only，这里再守一层）。
+    boolean pendingFirstProbe = unhealthy > 0 && unhealthy == overdue;
     details.put("pendingFirstProbe", pendingFirstProbe);
     boolean healthy = unhealthy == 0 || pendingFirstProbe;
     return healthy

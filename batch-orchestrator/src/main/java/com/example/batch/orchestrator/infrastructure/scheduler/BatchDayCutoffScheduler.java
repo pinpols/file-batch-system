@@ -41,7 +41,11 @@ public class BatchDayCutoffScheduler {
 
   @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
-  @SchedulerLock(name = "batch_day_cutoff", lockAtMostFor = "PT2M", lockAtLeastFor = "PT20S")
+  // 命名加模块前缀：与 trigger 同名 ShedLock 会跨服务互斥；两侧业务逻辑不同不应互斥。
+  @SchedulerLock(
+      name = "orchestrator_batch_day_cutoff",
+      lockAtMostFor = "PT2M",
+      lockAtLeastFor = "PT20S")
   public void scheduledAdvance() {
     advance();
   }

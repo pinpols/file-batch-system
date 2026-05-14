@@ -64,13 +64,16 @@ public class VerifierFailureOutboxService {
       return 0;
     }
     int written = 0;
+    int index = 0;
     for (Map<String, Object> failure : failures) {
       if (failure == null) {
+        index++;
         continue;
       }
-      OutboxEventEntity event = buildEvent(command, task, failure);
+      OutboxEventEntity event = buildEvent(command, task, failure, index);
       outboxEventMapper.insert(event);
       written++;
+      index++;
     }
     if (log.isInfoEnabled()) {
       log.info(
@@ -83,7 +86,7 @@ public class VerifierFailureOutboxService {
   }
 
   private OutboxEventEntity buildEvent(
-      TaskOutcomeCommand command, JobTaskEntity task, Map<String, Object> failure) {
+      TaskOutcomeCommand command, JobTaskEntity task, Map<String, Object> failure, int index) {
     String reason = stringValue(failure.get("code"));
     String message = stringValue(failure.get("message"));
     Object evidence = failure.get("evidence");
@@ -106,12 +109,16 @@ public class VerifierFailureOutboxService {
     event.setAggregateType(AGGREGATE_TYPE);
     event.setAggregateId(task.getJobInstanceId());
     event.setEventType(EVENT_TYPE);
+    // event_key 加 index 后缀：若同一 task 出多个失败且 reason 相同（同 verifier 重跑 / 不同
+    // verifier 撞 code），不会触发 outbox_event 唯一约束冲突导致整事务回滚。
     event.setEventKey(
         command.tenantId()
             + ":verifier:"
             + command.taskId()
             + ":"
-            + (reason == null ? "UNKNOWN" : reason));
+            + (reason == null ? "UNKNOWN" : reason)
+            + ":"
+            + index);
     event.setPayloadJson(JsonUtils.toJson(payload));
     event.setPublishStatus(OutboxPublishStatus.NEW.code());
     event.setPublishAttempt(0);
