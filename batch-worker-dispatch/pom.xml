@@ -13,6 +13,15 @@
     <name>batch-worker-dispatch</name>
 
     <dependencies>
+        <!--
+          ADR-029 §D2: 显式声明对 batch-config-defaults 的依赖（而非靠 batch-worker-core → batch-common 多跳传递）。
+          作用：未来重构 batch-common 或 batch-worker-core 时，本模块对 batch-defaults.yml 的依赖不会无声中断。
+        -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-config-defaults</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
             <artifactId>batch-worker-core</artifactId>

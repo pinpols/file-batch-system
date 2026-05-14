@@ -7,10 +7,12 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
 
@@ -95,22 +97,51 @@ class ConfigDriftGuardTest {
             "batch-worker-process",
             "batch-worker-dispatch",
             "batch-console-api")) {
-      Path appYml = root.resolve(module).resolve("src/main/resources/application.yml");
-      if (!Files.exists(appYml)) {
+      // 同时扫 application.yml + 所有 application-<profile>.yml；profile yml 优先级更高，
+      // 任何在那里复刻基线键的行为都会在运行时覆盖 batch-defaults.yml。
+      Path resourcesDir = root.resolve(module).resolve("src/main/resources");
+      if (!Files.exists(resourcesDir)) {
         continue;
       }
-      Map<String, Object> flat = flatten(loadYaml(appYml));
-      for (String owned : OWNED_KEYS) {
-        if (flat.containsKey(owned)) {
-          drift.put(module + "::" + owned, String.valueOf(flat.get(owned)));
+      for (Path yml : listApplicationYmls(resourcesDir)) {
+        Map<String, Object> flat = flatten(loadYaml(yml));
+        for (String owned : OWNED_KEYS) {
+          if (flat.containsKey(owned)) {
+            drift.put(
+                module + "::" + yml.getFileName() + "::" + owned, String.valueOf(flat.get(owned)));
+          }
         }
       }
     }
     assertThat(drift)
         .as(
-            "服务模块不应复刻基线 OWNED_KEYS（详见 ADR-029）；如确需 overlay 请把 key 从"
-                + " OWNED_KEYS 移除并在 ADR-029 记录原因")
+            "服务模块不应复刻基线 OWNED_KEYS（详见 ADR-029；包含 application-<profile>.yml）；"
+                + "如确需 overlay 请把 key 从 OWNED_KEYS 移除并在 ADR-029 记录原因")
         .isEmpty();
+  }
+
+  /**
+   * 守护范围：application.yml + 所有 application-<profile>.yml，但 <b>豁免</b> application-local.yml —— 它是开发者
+   * IDE 沙箱（指向本机 docker 端口），写死 localhost:15432 / 19092 等是设计意图，不属于"基线 drift"。生产/CI 不会激活 local
+   * profile。
+   */
+  private static List<Path> listApplicationYmls(Path resourcesDir) throws IOException {
+    List<Path> all = new ArrayList<>();
+    try (Stream<Path> entries = Files.list(resourcesDir)) {
+      entries
+          .filter(Files::isRegularFile)
+          .filter(
+              p -> {
+                String name = p.getFileName().toString();
+                if (name.equals("application-local.yml")) {
+                  return false;
+                }
+                return name.equals("application.yml")
+                    || (name.startsWith("application-") && name.endsWith(".yml"));
+              })
+          .forEach(all::add);
+    }
+    return all;
   }
 
   @SuppressWarnings("unchecked")

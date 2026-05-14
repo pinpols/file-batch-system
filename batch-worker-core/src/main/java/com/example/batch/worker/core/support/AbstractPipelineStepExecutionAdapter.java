@@ -180,7 +180,10 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
       if (failed == null) {
         String successStage = lastSuccessfulStage(attributes);
         runtimeRepository.markPipelineSuccess(pipelineInstanceId, successStage, successStage);
-        // ADR-030 §C: 在 pipeline 全部 stage 成功后跑 ContentVerifier；失败结果落到
+        // 先调 buildSuccessResponse，它会把 worker 的关键产出（recordCount / fileId /
+        // receiptCode 等）写进 attributes 的 NODE_OUTPUTS 子 map；之后 hook 才能拿到完整 schema。
+        StepExecutionResponse response = buildSuccessResponse(context, results, attributes);
+        // ADR-030 §C: pipeline 全部 stage 成功后跑 ContentVerifier；失败结果落到
         // attributes.verifierFailures，由 DefaultTaskExecutionWrapper.buildReport 透传给
         // orchestrator。Hook 自身吞咽异常，不影响主链路 success 返回。
         if (verifierHook != null) {
@@ -192,7 +195,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
               successStage,
               attributes);
         }
-        return buildSuccessResponse(context, results, attributes);
+        return response;
       }
       String failureStage = resultStage(failed);
       runtimeRepository.markPipelineFailed(
