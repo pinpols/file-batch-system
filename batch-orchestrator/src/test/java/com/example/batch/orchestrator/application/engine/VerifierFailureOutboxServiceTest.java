@@ -58,8 +58,33 @@ class VerifierFailureOutboxServiceTest {
     assertThat(events)
         .extracting(OutboxEventEntity::getEventKey)
         .containsExactlyInAnyOrder(
-            "t1:verifier:42:EXPORT_FILE_EMPTY", "t1:verifier:42:EXPORT_HEADER_INVALID");
+            "t1:verifier:42:EXPORT_FILE_EMPTY:0", "t1:verifier:42:EXPORT_HEADER_INVALID:1");
     assertThat(events.get(0).getPayloadJson()).contains("\"schemaVersion\":\"v1\"");
+  }
+
+  @Test
+  void eventKeyIncludesIndexSoSameReasonDoesNotCollide() {
+    OutboxEventMapper mapper = mock(OutboxEventMapper.class);
+    VerifierFailureOutboxService service = new VerifierFailureOutboxService(mapper);
+    Map<String, Object> a = Map.of("code", "DUP_CODE", "message", "first", "evidence", Map.of());
+    Map<String, Object> b = Map.of("code", "DUP_CODE", "message", "second", "evidence", Map.of());
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder()
+            .tenantId("t1")
+            .taskId(7L)
+            .success(true)
+            .verifierFailures(List.of(a, b))
+            .build();
+    JobTaskEntity task = new JobTaskEntity();
+    task.setJobInstanceId(1L);
+
+    service.writeVerifierFailures(command, task);
+
+    ArgumentCaptor<OutboxEventEntity> captor = ArgumentCaptor.forClass(OutboxEventEntity.class);
+    verify(mapper, org.mockito.Mockito.times(2)).insert(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(OutboxEventEntity::getEventKey)
+        .containsExactly("t1:verifier:7:DUP_CODE:0", "t1:verifier:7:DUP_CODE:1");
   }
 
   @Test

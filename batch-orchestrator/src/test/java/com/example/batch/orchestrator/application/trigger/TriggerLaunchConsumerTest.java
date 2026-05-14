@@ -39,7 +39,7 @@ import org.springframework.web.server.ResponseStatusException;
  *   <li>反序列化失败 → ack + 跳过(DLQ counter)
  *   <li>envelope/launchRequest 为 null → ack + 跳过
  *   <li>409 dedup 命中 → 视为成功 ack(uk_job_instance_tenant_dedup 兜底)
- *   <li>429 限流 → ack + 由 trigger outbox 重发
+ *   <li>429 限流 → 不 ack,抛出让 Kafka listener container 重投
  *   <li>RuntimeException → 抛出走 listener 重试
  *   <li>writeBack 成功:trigger_request 推到 LAUNCHED + relatedJobInstanceId
  *   <li>writeBack 找不到 job_instance:仍写 LAUNCHED,relatedJobInstanceId=null
@@ -114,14 +114,15 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
-  void consume_rateLimited_acksAndSkipsToAllowOutboxRetry() {
+  void consume_rateLimited_doesNotAckSoKafkaCanRedeliver() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-rate");
     when(launchApplicationService.launch(any(LaunchRequest.class)))
         .thenThrow(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "rate limit"));
 
-    consumer.consume(record(envelope), ack);
+    assertThatThrownBy(() -> consumer.consume(record(envelope), ack))
+        .isInstanceOf(ResponseStatusException.class);
 
-    verify(ack).acknowledge();
+    verify(ack, org.mockito.Mockito.never()).acknowledge();
     assertThat(failed("rate_limited")).isEqualTo(1.0);
   }
 

@@ -117,15 +117,16 @@ public class TriggerLaunchConsumer {
         ack.acknowledge();
         return;
       }
-      // 429 = 限流;记失败但仍 ack 避免无限重投阻塞 partition,等下次 trigger 上报时由 outbox 重发
+      // 429 = 限流;不 ack,让 Kafka listener container 自然重投。
+      // 之前的旧注释 "由 outbox 重发" 不成立——trigger_outbox_event 早已 PUBLISHED 不会再发,
+      // 仅依赖 TriggerRequestLaunchReconciler 60s 对账拉起,期间 launch 静默丢失。
       if (ex.getStatusCode().value() == 429) {
         log.warn(
-            "TriggerLaunchConsumer 限流被拒,ack 跳过(由 trigger outbox 重发): tenantId={} requestId={}",
+            "TriggerLaunchConsumer 限流被拒,不 ack 让 Kafka 重投: tenantId={} requestId={}",
             tenantId,
             request.requestId());
         counter(METRIC_FAILED, "reason", "rate_limited").increment();
-        ack.acknowledge();
-        return;
+        throw ex;
       }
       // 其它 5xx / 4xx 异常 → 抛出走 listener container 重试
       counter(METRIC_FAILED, "reason", "http_" + ex.getStatusCode().value()).increment();
