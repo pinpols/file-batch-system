@@ -65,14 +65,35 @@ public class BatchSecurityProperties {
     }
   }
 
+  /** 已知占位符前缀（大小写不敏感、忽略下划线/连字符）。 */
+  private static final java.util.Set<String> PLACEHOLDER_PREFIXES =
+      java.util.Set.of("changeme", "change", "placeholder", "todo", "secret", "yoursecret");
+
+  /** 内部 / JWT 密钥的最小长度——短于此值即使非占位符也拒绝。 */
+  private static final int MIN_SECRET_LENGTH = 16;
+
   private void validateNotPlaceholder(String key, String value) {
     if (value == null || value.isBlank()) {
       throw new IllegalStateException(
           "FATAL: 生产环境密钥未配置: " + key + " 为空，请通过 secret manager 或环境变量注入真实凭据");
     }
-    if (value.startsWith("CHANGE_ME")) {
+    // 归一化：trim + lowercase + 去掉 _ / - 后比对占位符前缀，覆盖 CHANGE_ME / change-me / changeme 等变体
+    String normalized = value.trim().toLowerCase().replaceAll("[_\\-]", "");
+    for (String prefix : PLACEHOLDER_PREFIXES) {
+      if (normalized.startsWith(prefix)) {
+        throw new IllegalStateException(
+            "FATAL: 生产环境密钥未配置: " + key + " 仍为占位符 ('" + value + "')，请通过 secret manager 或环境变量注入真实凭据");
+      }
+    }
+    if (value.trim().length() < MIN_SECRET_LENGTH) {
       throw new IllegalStateException(
-          "FATAL: 生产环境密钥未配置: " + key + " 仍为占位符，请通过 secret manager 或环境变量注入真实凭据");
+          "FATAL: 生产环境密钥强度不足: "
+              + key
+              + " 长度="
+              + value.trim().length()
+              + " < 最小要求 "
+              + MIN_SECRET_LENGTH
+              + "，请用 secret manager 注入足够熵的密钥");
     }
   }
 

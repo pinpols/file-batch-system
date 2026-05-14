@@ -58,6 +58,7 @@ import org.springframework.web.client.RestClient;
 public class DefaultConsoleApprovalApplicationService implements ConsoleApprovalApplicationService {
 
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleJobApplicationService consoleJobApplicationService;
@@ -114,10 +115,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
               throw BizException.of(
                   ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
             }
-            RestClient batchDayReplayClient =
-                restClientBuilder
-                    .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
-                    .build();
+            RestClient batchDayReplayClient = orchestratorInternalRestClient.build();
             batchDayReplayClient
                 .post()
                 .uri(
@@ -193,8 +191,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   }
 
   private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     ApprovalRecordResponse response =
         restClient
             .get()
@@ -208,8 +205,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private void approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     restClient
         .post()
         .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
@@ -226,8 +222,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private void rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     restClient
         .post()
         .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
@@ -243,8 +238,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   }
 
   private void markExecutedRemote(String tenantId, String approvalNo) {
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     restClient
         .post()
         .uri("/internal/approvals/{approvalNo}/executed", approvalNo)

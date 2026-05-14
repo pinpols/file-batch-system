@@ -50,6 +50,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
   private static final String KEY_TENANT_ID = "tenantId";
 
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleTenantGuard tenantGuard;
@@ -61,8 +62,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, DrainWorkerRequest request, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put(KEY_TENANT_ID, tenantId);
     if (request.getTimeoutSeconds() != null) {
@@ -89,8 +89,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     ConsoleWorkerRegistryResponse response =
         toResponse(
             client
@@ -112,8 +111,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     ConsoleWorkerRegistryResponse response =
         toResponse(
             client
@@ -134,8 +132,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
   public List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     List<ConsoleWorkerClaimedTaskResponse> tasks =
         client
             .get()
@@ -157,8 +154,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, String tenantId, String idempotencyKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     ConsoleWorkerRegistryResponse response =
         toResponse(
             client

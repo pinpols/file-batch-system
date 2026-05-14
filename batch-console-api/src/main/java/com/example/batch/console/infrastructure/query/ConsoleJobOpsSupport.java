@@ -11,6 +11,7 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
+import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
@@ -62,6 +63,7 @@ public class ConsoleJobOpsSupport {
   private static final String JOB_TYPE_COMPENSATION = "COMPENSATION";
 
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTriggerClientProperties triggerClientProperties;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -119,8 +121,7 @@ public class ConsoleJobOpsSupport {
 
   public String submitCompensation(CompensationPayload payload, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     CompensationResponse response =
         restClient
             .post()
@@ -142,8 +143,7 @@ public class ConsoleJobOpsSupport {
   public String triggerRecovery(
       String tenantId, String uriTemplate, Long targetId, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     CommonResponse<RecoveryOperationResponse> response =
         restClient
             .post()
@@ -162,8 +162,7 @@ public class ConsoleJobOpsSupport {
 
   public String submitApproval(ApprovalSubmitContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     ApprovalResponse response =
         restClient
             .post()
@@ -192,8 +191,7 @@ public class ConsoleJobOpsSupport {
   }
 
   public void requireApprovedApproval(String tenantId, String approvalNo) {
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     ApprovalRecordResponse response =
         restClient
             .get()

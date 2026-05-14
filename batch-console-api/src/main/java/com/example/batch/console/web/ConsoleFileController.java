@@ -15,6 +15,7 @@ import com.example.batch.console.web.response.file.ConsolePresignDownloadRespons
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,12 +26,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 控制台文件治理 REST：归档、删除、重派、预签名下载、到达组操作（需幂等键）。 */
+/**
+ * 控制台文件治理 REST：归档、删除、重派、预签名下载、到达组操作（需幂等键）。
+ *
+ * <p>P0-1 角色授权（ADR audit 2026-05-14）：文件治理是高危操作（删除/归档/重派），要求 {@code ROLE_ADMIN}/{@code
+ * ROLE_CONFIG_ADMIN} 之一；审计角色只读不在此处。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/files")
 @RequiredArgsConstructor
 @Idempotent
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
 public class ConsoleFileController {
 
   private final ConsoleFileApplicationService applicationService;
