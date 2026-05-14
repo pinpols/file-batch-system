@@ -3,37 +3,38 @@
 <mapper namespace="com.example.batch.console.mapper.FilePipelineStepRunMapper">
     <select id="selectByQuery" resultType="map">
         select
-            id,
-            pipeline_instance_id,
-            step_code,
-            stage_code,
-            run_seq,
-            step_status,
-            input_summary,
-            output_summary,
-            error_code,
-            error_message,
-            error_key,
-            error_args,
-            retry_count,
-            duration_ms,
-            started_at,
-            finished_at
-        from batch.pipeline_step_run
-        where 1 = 1
+            s.id,
+            s.pipeline_instance_id,
+            s.step_code,
+            s.stage_code,
+            s.run_seq,
+            s.step_status,
+            s.input_summary,
+            s.output_summary,
+            s.error_code,
+            s.error_message,
+            s.error_key,
+            s.error_args,
+            s.retry_count,
+            s.duration_ms,
+            s.started_at,
+            s.finished_at
+        from batch.pipeline_step_run s
+        join batch.pipeline_instance p on p.id = s.pipeline_instance_id
+        where p.tenant_id = #{tenantId}
         <if test="pipelineInstanceId != null">
-            and pipeline_instance_id = #{pipelineInstanceId}
+            and s.pipeline_instance_id = #{pipelineInstanceId}
         </if>
         <if test="stepCode != null and stepCode != ''">
-            and step_code = #{stepCode}
+            and s.step_code = #{stepCode}
         </if>
         <if test="stageCode != null and stageCode != ''">
-            and stage_code = #{stageCode}
+            and s.stage_code = #{stageCode}
         </if>
         <if test="stepStatus != null and stepStatus != ''">
-            and step_status = #{stepStatus}
+            and s.step_status = #{stepStatus}
         </if>
-        order by pipeline_instance_id desc, id desc
+        order by s.pipeline_instance_id desc, s.id desc
         <if test="pageRequest != null">
             limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
         </if>
@@ -41,19 +42,20 @@
 
     <select id="countByQuery" resultType="long">
         select count(1)
-        from batch.pipeline_step_run
-        where 1 = 1
+        from batch.pipeline_step_run s
+        join batch.pipeline_instance p on p.id = s.pipeline_instance_id
+        where p.tenant_id = #{tenantId}
         <if test="pipelineInstanceId != null">
-            and pipeline_instance_id = #{pipelineInstanceId}
+            and s.pipeline_instance_id = #{pipelineInstanceId}
         </if>
         <if test="stepCode != null and stepCode != ''">
-            and step_code = #{stepCode}
+            and s.step_code = #{stepCode}
         </if>
         <if test="stageCode != null and stageCode != ''">
-            and stage_code = #{stageCode}
+            and s.stage_code = #{stageCode}
         </if>
         <if test="stepStatus != null and stepStatus != ''">
-            and step_status = #{stepStatus}
+            and s.step_status = #{stepStatus}
         </if>
     </select>
 </mapper>

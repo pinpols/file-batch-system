@@ -21,7 +21,6 @@ import com.example.batch.orchestrator.application.service.workflow.OrchestratorW
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowNodePayloadBuilder;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
@@ -111,16 +110,8 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
     WorkflowDagService.DagNodeResolution node =
         new WorkflowDagService.DagNodeResolution("NODE_A", "TASK");
 
-    // 前置条件：DAG 检查通过，节点定义存在
-    when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), anyString()))
-        .thenReturn(true);
-    WorkflowNodeEntity workflowNode = new WorkflowNodeEntity();
-    workflowNode.setNodeCode("NODE_A");
-    workflowNode.setNodeType("TASK");
-    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(anyLong(), anyString()))
-        .thenReturn(workflowNode);
-
-    // 节点已激活时应短路返回 0，不创建新分区
+    // P1-4 after-fix：isNodeAlreadyActivated (FOR UPDATE) 现在跑在 readiness 检查之前。
+    // 节点已激活时直接短路返回 0，不会再触达 isNodeReadyForDispatch / selectByWorkflowDefinitionIdAndNodeCode。
     int result = service.dispatchNode(jobInstance, workflowRun, node, "{}", "trace-1");
 
     verify(workflowNodeRunMapper).selectLatestForUpdate(10L, "NODE_A");

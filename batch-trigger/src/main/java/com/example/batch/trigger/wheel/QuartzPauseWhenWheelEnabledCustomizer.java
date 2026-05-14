@@ -3,6 +3,7 @@ package com.example.batch.trigger.wheel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.quartz.autoconfigure.SchedulerFactoryBeanCustomizer;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
@@ -30,7 +31,7 @@ public class QuartzPauseWhenWheelEnabledCustomizer {
   @Value("${batch.trigger.scheduler-impl:wheel}")
   private String schedulerImpl;
 
-  @org.springframework.context.annotation.Bean
+  @Bean
   public SchedulerFactoryBeanCustomizer pauseQuartzWhenWheelEnabled() {
     return (SchedulerFactoryBean factory) -> {
       if ("wheel".equalsIgnoreCase(schedulerImpl)) {

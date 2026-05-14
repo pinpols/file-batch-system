@@ -4,10 +4,7 @@
     <select id="selectByQuery" resultType="map">
         select *
         from batch.event_delivery_log
-        where 1 = 1
-        <if test="tenantId != null and tenantId != ''">
-            and tenant_id = #{tenantId}
-        </if>
+        where tenant_id = #{tenantId}
         <if test="deliveryStatus != null and deliveryStatus != ''">
             and delivery_status = #{deliveryStatus}
         </if>
@@ -26,10 +23,7 @@
     <select id="countByQuery" resultType="long">
         select count(1)
         from batch.event_delivery_log
-        where 1 = 1
-        <if test="tenantId != null and tenantId != ''">
-            and tenant_id = #{tenantId}
-        </if>
+        where tenant_id = #{tenantId}
         <if test="deliveryStatus != null and deliveryStatus != ''">
             and delivery_status = #{deliveryStatus}
         </if>

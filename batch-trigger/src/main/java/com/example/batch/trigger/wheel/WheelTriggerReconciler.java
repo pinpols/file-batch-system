@@ -173,10 +173,15 @@ public class WheelTriggerReconciler {
     if (!cronAdapter.isValid(d.getScheduleExpression())) {
       return false; // 表达式无效,跳过 drift 检查(下个 reconcile 等运维修)
     }
-    // 用 desc 当前 cron + 时区,从 last_fire_time(或 now)计算 next,与 DB 现存对比
-    Instant baseline =
-        state.getLastFireTime() != null ? state.getLastFireTime() : BatchDateTimeSupport.utcNow();
-    Instant expectedNext = computeNext(d, baseline);
+    if (state.getNextFireTime() == null) {
+      return true; // DB next_fire_time 缺失 → 需要 reconcile 填上
+    }
+    // 用 state.nextFireTime 本身做锚点:若 cron 不变,cron.next(nextFireTime - 1ms) 应该 == nextFireTime。
+    // 不用 lastFireTime 作基线 — 上次 fire 失败 → lastFireTime 不更新 → 每轮误判 drift →
+    // 强行 rescheduleNextFireTime(now) 把原本待 fire 的那次跳过。
+    // 锚点固定在 DB 现存 nextFireTime 上,只检测 cron expression / timezone 是否真的变了。
+    Instant anchor = state.getNextFireTime().minusMillis(1);
+    Instant expectedNext = computeNext(d, anchor);
     if (expectedNext == null) {
       return false;
     }

@@ -149,6 +149,7 @@ public class ConsoleWorkflowQueryService {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     WorkflowNodeRunQuery query =
         new WorkflowNodeRunQuery(
+            resolveTenant(tenantGuard, request.getTenantId()),
             request.getWorkflowRunId(),
             request.getNodeCode(),
             request.getNodeStatus(),
@@ -224,7 +225,12 @@ public class ConsoleWorkflowQueryService {
         workflowRuns = List.of(run);
         nodeRuns =
             workflowMappers.workflowNodeRunMapper.selectByQuery(
-                new WorkflowNodeRunQuery(request.getWorkflowRunId(), null, null, null));
+                new WorkflowNodeRunQuery(
+                    resolveTenant(tenantGuard, request.getTenantId()),
+                    request.getWorkflowRunId(),
+                    null,
+                    null,
+                    null));
       }
     }
     return new ConsoleWorkflowTopologyResponse(

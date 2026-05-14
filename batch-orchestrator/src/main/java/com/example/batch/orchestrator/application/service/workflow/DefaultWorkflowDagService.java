@@ -266,8 +266,13 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (type == null) {
       return false;
     }
+    // P2-5 fail-closed：SKIPPED 上游不计入 ALWAYS 边的 match。
+    // 旧行为：所有终态（含 SKIPPED）都触发 ALWAYS，使 ALL 模式下 "全部 SKIPPED 上游 + ALWAYS 边" 误 fire。
+    // 现在 ALWAYS 只在真正完成（SUCCESS / FAILED）时认账；SKIPPED 上游被视为未触发，
+    // ALL 模式的 join 节点会一并被 cascadeSkipDownstream 标 SKIPPED，避免漏过空跑下游。
     return switch (type) {
-      case ALWAYS -> isTerminal(predecessorStatus);
+      case ALWAYS ->
+          isTerminal(predecessorStatus) && !"SKIPPED".equalsIgnoreCase(predecessorStatus);
       case SUCCESS -> STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus);
       case FAILURE -> "FAILED".equalsIgnoreCase(predecessorStatus);
       case CONDITION ->

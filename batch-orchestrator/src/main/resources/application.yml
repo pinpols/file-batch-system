@@ -10,8 +10,8 @@ spring:
     # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-orchestrator
   config:
-    # 可选导入共享默认配置（不存在也不报错）
-    import: "optional:classpath:batch-defaults.yml"
+    # 强制导入共享默认配置（与其他模块一致，缺失即启动失败 — ADR-029 baseline）
+    import: "classpath:batch-defaults.yml"
   # 注：DataRedisRepositoriesAutoConfiguration 已在 BatchOrchestratorApplication 主类 @SpringBootApplication(exclude=...) 排除
   #     data.redis.repositories.enabled=false 已在 batch-defaults.yml 设置；此处不再重复
   flyway:

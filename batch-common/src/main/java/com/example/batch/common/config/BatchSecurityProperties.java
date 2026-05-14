@@ -1,6 +1,7 @@
 package com.example.batch.common.config;
 
 import jakarta.annotation.PostConstruct;
+import java.util.Set;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,18 +66,27 @@ public class BatchSecurityProperties {
   }
 
   private void validateNotPlaceholder(String key, String value) {
-    if (value != null && value.startsWith("CHANGE_ME")) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalStateException(
+          "FATAL: 生产环境密钥未配置: " + key + " 为空，请通过 secret manager 或环境变量注入真实凭据");
+    }
+    if (value.startsWith("CHANGE_ME")) {
       throw new IllegalStateException(
           "FATAL: 生产环境密钥未配置: " + key + " 仍为占位符，请通过 secret manager 或环境变量注入真实凭据");
     }
   }
+
+  // 与 prod 同等严格度的 profile 列表：staging / uat / preprod 都不允许 bypass-mode=true
+  // 也不允许默认密钥占位符，避免预生产环境 role-escalation。
+  private static final Set<String> PROD_LIKE_PROFILES =
+      Set.of("prod", "production", "staging", "uat", "preprod", "pre-prod", "pre-production");
 
   private boolean isProductionProfile() {
     if (environment == null) {
       return false;
     }
     for (String profile : environment.getActiveProfiles()) {
-      if ("prod".equalsIgnoreCase(profile) || "production".equalsIgnoreCase(profile)) {
+      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase())) {
         return true;
       }
     }

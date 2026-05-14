@@ -59,28 +59,47 @@ public class ConsoleJwtService {
   private static final String CLAIM_TOKEN_TYPE = "tokenType";
   private static final String CLAIM_SESSION_VERSION = "sessionVersion";
 
+  // 与 BatchSecurityProperties.PROD_LIKE_PROFILES 对齐：staging / uat / preprod 也强制校验密钥占位符
+  private static final Set<String> PROD_LIKE_PROFILES =
+      Set.of("prod", "production", "staging", "uat", "preprod", "pre-prod", "pre-production");
+
   private final ConsoleSecurityProperties properties;
   private final ConsoleSessionRegistry sessionRegistry;
   private final Environment environment;
 
+  // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
+  // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
+  private NimbusJwtEncoder cachedEncoder;
+  private JwtDecoder cachedDecoder;
+
   @PostConstruct
   void validateSecuritySecrets() {
-    if (!isProductionProfile()) {
-      return;
-    }
-    String jwtSecret = properties.getJwtSecret();
-    if (jwtSecret != null) {
+    if (isProductionProfile()) {
+      String jwtSecret = properties.getJwtSecret();
+      if (!Texts.hasText(jwtSecret)) {
+        throw new IllegalStateException(
+            "FATAL: batch.console.security.jwt-secret 为空，生产环境必须通过环境变量或密钥管理注入真实密钥");
+      }
       String lower = jwtSecret.toLowerCase(Locale.ROOT);
       if (lower.contains("change-me") || lower.contains("change_me")) {
         throw new IllegalStateException(
             "FATAL: batch.console.security.jwt-secret 仍包含默认占位符，" + "生产环境必须通过环境变量或密钥管理注入真实密钥");
       }
+      // P1-8：jwt-secret 长度强度兜底（HS256 最小 256 bit / 32 ASCII 字符）
+      if (jwtSecret.length() < 32) {
+        throw new IllegalStateException(
+            "FATAL: batch.console.security.jwt-secret 长度不足 32 字符，HS256 弱密钥风险");
+      }
     }
+    SecretKey key = signingKey();
+    this.cachedEncoder = new NimbusJwtEncoder(new ImmutableSecret<>(key));
+    this.cachedDecoder =
+        NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
   }
 
   private boolean isProductionProfile() {
     for (String profile : environment.getActiveProfiles()) {
-      if ("prod".equalsIgnoreCase(profile) || "production".equalsIgnoreCase(profile)) {
+      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase(Locale.ROOT))) {
         return true;
       }
     }
@@ -155,11 +174,32 @@ public class ConsoleJwtService {
   }
 
   private NimbusJwtEncoder encoder() {
-    return new NimbusJwtEncoder(new ImmutableSecret<>(signingKey()));
+    NimbusJwtEncoder e = cachedEncoder;
+    if (e == null) {
+      // 单元测试 / 非 Spring 场景 PostConstruct 未触发时的兜底初始化（同 SecretKey 多次构造无副作用）
+      synchronized (this) {
+        e = cachedEncoder;
+        if (e == null) {
+          e = new NimbusJwtEncoder(new ImmutableSecret<>(signingKey()));
+          cachedEncoder = e;
+        }
+      }
+    }
+    return e;
   }
 
   private JwtDecoder decoder() {
-    return NimbusJwtDecoder.withSecretKey(signingKey()).macAlgorithm(MacAlgorithm.HS256).build();
+    JwtDecoder d = cachedDecoder;
+    if (d == null) {
+      synchronized (this) {
+        d = cachedDecoder;
+        if (d == null) {
+          d = NimbusJwtDecoder.withSecretKey(signingKey()).macAlgorithm(MacAlgorithm.HS256).build();
+          cachedDecoder = d;
+        }
+      }
+    }
+    return d;
   }
 
   private SecretKey signingKey() {

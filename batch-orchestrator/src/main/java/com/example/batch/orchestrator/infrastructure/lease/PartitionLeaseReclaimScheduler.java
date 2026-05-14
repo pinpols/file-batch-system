@@ -54,6 +54,13 @@ public class PartitionLeaseReclaimScheduler {
   private final AtomicBoolean reclaimRunning = new AtomicBoolean(false);
   private final AtomicBoolean sweepRunning = new AtomicBoolean(false);
 
+  // P1-5：lockAtMostFor 是 ShedLock 持锁上限。超过这个时间，二号实例可拿同名锁同时跑循环 →
+  // partition 已被 reclaim 后 version 已 +1 → 二号实例算出的 eventKey 不同（含 version） →
+  // 同 partition 真双 dispatch（unique 索引救不了）。lockAtMostFor 暂留 PT2M（与 publishing-timeout 对齐），
+  // 但循环内主动设置时间预算 budgetMillis = lockAtMostFor × 75%，超时即 break 并由下个 tick 接力。
+  private static final long LOCK_AT_MOST_MILLIS = 120_000L;
+  private static final long LOOP_BUDGET_MILLIS = (long) (LOCK_AT_MOST_MILLIS * 0.75);
+
   @Scheduled(fixedDelayString = "${batch.partition-lease.reclaim-interval-millis:15000}")
   @SchedulerLock(name = "partition_lease_reclaim", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
   public void reclaimExpiredPartitions() {
@@ -77,7 +84,20 @@ public class PartitionLeaseReclaimScheduler {
             expiredPartitions.size(),
             batchSize);
       }
+      long deadlineNanos = System.nanoTime() + LOOP_BUDGET_MILLIS * 1_000_000L;
+      int processed = 0;
       for (JobPartitionEntity partition : expiredPartitions) {
+        // P1-5：占用持锁时间预算前主动让出，避免 lock 过期 → 第二实例并发 reclaim 双 dispatch
+        if (System.nanoTime() > deadlineNanos) {
+          log.warn(
+              "partition reclaim yielded after {}/{}: lock budget {}ms exhausted, deferring"
+                  + " {} partitions to next tick",
+              processed,
+              expiredPartitions.size(),
+              LOOP_BUDGET_MILLIS,
+              expiredPartitions.size() - processed);
+          break;
+        }
         try {
           reclaimUnit.reclaim(partition);
         } catch (ReclaimRetryableException retryable) {
@@ -91,6 +111,7 @@ public class PartitionLeaseReclaimScheduler {
               partition.getId(),
               unexpected);
         }
+        processed++;
       }
     } finally {
       reclaimRunning.set(false);

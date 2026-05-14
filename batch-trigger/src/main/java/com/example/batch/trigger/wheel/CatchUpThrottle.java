@@ -21,7 +21,9 @@ import java.time.Duration;
  */
 public class CatchUpThrottle {
 
-  private final long intervalNanos;
+  // 全程用毫秒空间计算，避免纳秒→毫秒整数截断累积误差（rate=3 时 nanos/1e6=333ms 会让实际速率 ~3.003/s）。
+  // 用 Math.ceil 上取整保证"严格不超出 ratePerSecond"——宁可略慢，不可雪崩。
+  private final long intervalMillis;
   private final Clock clock;
   private long nextAvailableMillis;
 
@@ -37,7 +39,7 @@ public class CatchUpThrottle {
     if (ratePerSecond <= 0) {
       throw new IllegalArgumentException("ratePerSecond must be > 0, got " + ratePerSecond);
     }
-    this.intervalNanos = (long) (Duration.ofSeconds(1).toNanos() / ratePerSecond);
+    this.intervalMillis = (long) Math.ceil(Duration.ofSeconds(1).toMillis() / ratePerSecond);
     this.clock = clock;
     this.nextAvailableMillis = clock.millis();
   }
@@ -52,7 +54,7 @@ public class CatchUpThrottle {
       sleepMillis = 0;
       nextAvailableMillis = now;
     }
-    nextAvailableMillis += intervalNanos / 1_000_000L;
+    nextAvailableMillis += intervalMillis;
     return sleepMillis;
   }
 

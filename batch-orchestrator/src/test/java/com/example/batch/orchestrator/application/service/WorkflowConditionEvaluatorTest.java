@@ -15,16 +15,21 @@ class WorkflowConditionEvaluatorTest {
     evaluator = new WorkflowConditionEvaluator();
   }
 
-  // --- blank / null condition ---
+  // --- blank / null condition (P2-4 fail-closed) ---
 
   @Test
-  void shouldReturnTrueWhenConditionIsNull() {
-    assertThat(evaluator.matches(null, "{}")).isTrue();
+  void shouldThrowWhenConditionIsNull() {
+    // 旧行为 blank → true 已改为 fail-closed：CONDITION 边必须配置非空表达式
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> evaluator.matches(null, "{}"))
+        .isInstanceOf(com.example.batch.common.exception.BizException.class)
+        .hasMessageContaining("condition_expr_blank");
   }
 
   @Test
-  void shouldReturnTrueWhenConditionIsBlank() {
-    assertThat(evaluator.matches("  ", "{}")).isTrue();
+  void shouldThrowWhenConditionIsBlank() {
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> evaluator.matches("  ", "{}"))
+        .isInstanceOf(com.example.batch.common.exception.BizException.class)
+        .hasMessageContaining("condition_expr_blank");
   }
 
   // --- equality ---

@@ -19,19 +19,20 @@
     </resultMap>
 
     <select id="selectByQuery" resultMap="WorkflowNodeRunResultMap">
-        select *
-        from batch.workflow_node_run
-        where 1 = 1
+        select n.*
+        from batch.workflow_node_run n
+        join batch.workflow_run r on r.id = n.workflow_run_id
+        where r.tenant_id = #{tenantId}
         <if test="workflowRunId != null">
-            and workflow_run_id = #{workflowRunId}
+            and n.workflow_run_id = #{workflowRunId}
         </if>
         <if test="nodeCode != null and nodeCode != ''">
-            and node_code = #{nodeCode}
+            and n.node_code = #{nodeCode}
         </if>
         <if test="nodeStatus != null and nodeStatus != ''">
-            and node_status = #{nodeStatus}
+            and n.node_status = #{nodeStatus}
         </if>
-        order by run_seq desc, id desc
+        order by n.run_seq desc, n.id desc
         <if test="pageRequest != null">
             <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
             limit #{pageRequest.pageSize}
@@ -49,16 +50,17 @@
 
     <select id="countByQuery" resultType="long">
         select count(1)
-        from batch.workflow_node_run
-        where 1 = 1
+        from batch.workflow_node_run n
+        join batch.workflow_run r on r.id = n.workflow_run_id
+        where r.tenant_id = #{tenantId}
         <if test="workflowRunId != null">
-            and workflow_run_id = #{workflowRunId}
+            and n.workflow_run_id = #{workflowRunId}
         </if>
         <if test="nodeCode != null and nodeCode != ''">
-            and node_code = #{nodeCode}
+            and n.node_code = #{nodeCode}
         </if>
         <if test="nodeStatus != null and nodeStatus != ''">
-            and node_status = #{nodeStatus}
+            and n.node_status = #{nodeStatus}
         </if>
     </select>
 </mapper>
