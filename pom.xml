@@ -19,6 +19,7 @@
     <description>Batch scheduling platform multi-module engineering skeleton</description>
 
     <modules>
+        <module>batch-config-defaults</module>
         <module>batch-common</module>
         <module>batch-trigger</module>
         <module>batch-orchestrator</module>
@@ -51,6 +52,7 @@
         <okhttp.version>4.12.0</okhttp.version>
         <okio.version>3.16.1</okio.version>
         <lombok.version>1.18.42</lombok.version>
+        <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
         <spring-ai.version>2.0.0-M3</spring-ai.version>
         <jsqlparser.version>4.5</jsqlparser.version>
@@ -183,7 +185,7 @@
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
                     <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
-                    <argLine>@{argLine} --enable-native-access=ALL-UNNAMED</argLine>
+                    <argLine>@{argLine} --enable-native-access=ALL-UNNAMED -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
                     <excludes>
                         <!-- Shared composed annotation, not an executable test class. -->
                         <exclude>**/BatchIntegrationTest.class</exclude>
