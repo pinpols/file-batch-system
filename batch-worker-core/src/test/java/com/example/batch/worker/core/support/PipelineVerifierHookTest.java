@@ -1,0 +1,116 @@
+package com.example.batch.worker.core.support;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.example.batch.common.enums.JobType;
+import com.example.batch.common.verifier.ContentVerifier;
+import com.example.batch.common.verifier.ContentVerifierRegistry;
+import com.example.batch.common.verifier.VerifyContext;
+import com.example.batch.common.verifier.VerifyResult;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+
+class PipelineVerifierHookTest {
+
+  @Test
+  void writesFailuresIntoAttributes() {
+    StubVerifier failing =
+        new StubVerifier(
+            "EXPORT_NON_EMPTY",
+            Set.of(JobType.EXPORT),
+            VerifyResult.fail("EXPORT_FILE_EMPTY", "empty"));
+    ContentVerifierRegistry registry = registryWith(failing);
+    PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put("recordCount", 0);
+
+    hook.runVerifiers("t1", "EXPORT", 1L, 2L, "EXPORT_FINALIZE", attributes);
+
+    Object failures = attributes.get(PipelineRuntimeKeys.VERIFIER_FAILURES);
+    assertThat(failures).isInstanceOf(List.class);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> list = (List<Map<String, Object>>) failures;
+    assertThat(list).hasSize(1);
+    assertThat(list.get(0)).containsEntry("code", "EXPORT_FILE_EMPTY");
+  }
+
+  @Test
+  void doesNotWriteWhenAllPass() {
+    StubVerifier passing =
+        new StubVerifier("EXPORT_NON_EMPTY", Set.of(JobType.EXPORT), VerifyResult.pass());
+    ContentVerifierRegistry registry = registryWith(passing);
+    PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
+    Map<String, Object> attributes = new HashMap<>();
+
+    hook.runVerifiers("t1", "EXPORT", 1L, 2L, "EXPORT_FINALIZE", attributes);
+
+    assertThat(attributes).doesNotContainKey(PipelineRuntimeKeys.VERIFIER_FAILURES);
+  }
+
+  @Test
+  void skipsWhenRegistryAbsent() {
+    PipelineVerifierHook hook = new PipelineVerifierHook(providerOf());
+    Map<String, Object> attributes = new HashMap<>();
+
+    hook.runVerifiers("t1", "EXPORT", 1L, 2L, "EXPORT_FINALIZE", attributes);
+
+    assertThat(attributes).isEmpty();
+  }
+
+  @Test
+  void skipsForUnknownPipelineType() {
+    ContentVerifierRegistry registry =
+        registryWith(new StubVerifier("ANY", Set.of(JobType.EXPORT), VerifyResult.pass()));
+    PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
+    Map<String, Object> attributes = new HashMap<>();
+
+    hook.runVerifiers("t1", "BOGUS_TYPE", 1L, 2L, "any", attributes);
+
+    assertThat(attributes).isEmpty();
+  }
+
+  @Test
+  void nullAttributesIsSafe() {
+    PipelineVerifierHook hook = new PipelineVerifierHook(providerOf());
+    hook.runVerifiers("t1", "EXPORT", 1L, 2L, "EXPORT_FINALIZE", null);
+    // 仅断言不抛异常
+  }
+
+  private static ContentVerifierRegistry registryWith(ContentVerifier... beans) {
+    ContentVerifierRegistry registry = mock(ContentVerifierRegistry.class);
+    when(registry.verifiersFor(any(JobType.class), any())).thenAnswer(invocation -> List.of(beans));
+    when(registry.run(any(ContentVerifier.class), any(VerifyContext.class)))
+        .thenAnswer(
+            invocation -> {
+              ContentVerifier v = invocation.getArgument(0);
+              return ((StubVerifier) v).resultToReturn();
+            });
+    return registry;
+  }
+
+  @SafeVarargs
+  @SuppressWarnings("unchecked")
+  private static <T> ObjectProvider<T> providerOf(T... beans) {
+    ObjectProvider<T> provider = (ObjectProvider<T>) mock(ObjectProvider.class);
+    when(provider.orderedStream()).thenAnswer(invocation -> Stream.of(beans));
+    when(provider.getIfAvailable()).thenReturn(beans.length == 0 ? null : beans[0]);
+    return provider;
+  }
+
+  private record StubVerifier(String code, Set<JobType> appliesTo, VerifyResult resultToReturn)
+      implements ContentVerifier {
+    @Override
+    public VerifyResult verify(VerifyContext context) {
+      return resultToReturn;
+    }
+  }
+}

@@ -343,6 +343,15 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         Map<String, Object> typed = (Map<String, Object>) outputsMap;
         report.setOutputs(typed);
       }
+      // ADR-030 §C: PipelineVerifierHook 把失败结果写到 attributes.VERIFIER_FAILURES；
+      // 这里透传给 orchestrator（后续 PR 由 orchestrator 写入 outbox_event 走告警面板）。
+      Object failures = executionContext.get(PipelineRuntimeKeys.VERIFIER_FAILURES);
+      if (failures instanceof java.util.List<?> failureList && !failureList.isEmpty()) {
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> typedFailures =
+            (java.util.List<Map<String, Object>>) failureList;
+        report.setVerifierFailures(typedFailures);
+      }
     }
     return report;
   }

@@ -4,6 +4,7 @@ import com.example.batch.common.enums.JobType;
 import com.example.batch.common.verifier.ContentVerifier;
 import com.example.batch.common.verifier.VerifyContext;
 import com.example.batch.common.verifier.VerifyResult;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
@@ -36,13 +37,12 @@ public class ExportFileNonEmptyVerifier implements ContentVerifier {
     if (recordCount > 0 || fileSize > 0) {
       return VerifyResult.pass();
     }
+    Map<String, Object> evidence = new LinkedHashMap<>();
+    evidence.put("recordCount", recordCount);
+    evidence.put("fileSizeBytes", fileSize);
+    evidence.put("fileId", context.property("fileId"));
     return VerifyResult.fail(
-        "EXPORT_FILE_EMPTY",
-        "Export task reported success but produced empty file",
-        Map.of(
-            "recordCount", recordCount,
-            "fileSizeBytes", fileSize,
-            "fileId", context.property("fileId")));
+        "EXPORT_FILE_EMPTY", "Export task reported success but produced empty file", evidence);
   }
 
   private static long longValue(Object value) {

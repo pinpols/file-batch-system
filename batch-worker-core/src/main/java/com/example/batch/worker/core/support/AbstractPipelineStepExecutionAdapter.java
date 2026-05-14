@@ -51,8 +51,19 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
 
   private final PlatformFileRuntimeRepository runtimeRepository;
 
+  /**
+   * ADR-030 §C: 可选注入。Spring 在 batch-worker-core 上下文里有 PipelineVerifierHook 时自动通过 setter 注入；测试/单元场景
+   * hook 为 null，runVerifierHook() 直接跳过。
+   */
+  private PipelineVerifierHook verifierHook;
+
   protected AbstractPipelineStepExecutionAdapter(PlatformFileRuntimeRepository runtimeRepository) {
     this.runtimeRepository = runtimeRepository;
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setVerifierHook(PipelineVerifierHook verifierHook) {
+    this.verifierHook = verifierHook;
   }
 
   // 不能加 final:Spring CGLIB 用 Objenesis 实例化代理(跳过构造器→ runtimeRepository 字段为 null);
@@ -169,6 +180,18 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
       if (failed == null) {
         String successStage = lastSuccessfulStage(attributes);
         runtimeRepository.markPipelineSuccess(pipelineInstanceId, successStage, successStage);
+        // ADR-030 §C: 在 pipeline 全部 stage 成功后跑 ContentVerifier；失败结果落到
+        // attributes.verifierFailures，由 DefaultTaskExecutionWrapper.buildReport 透传给
+        // orchestrator。Hook 自身吞咽异常，不影响主链路 success 返回。
+        if (verifierHook != null) {
+          verifierHook.runVerifiers(
+              request.tenantId(),
+              pipelineType(),
+              runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
+              runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID)),
+              successStage,
+              attributes);
+        }
         return buildSuccessResponse(context, results, attributes);
       }
       String failureStage = resultStage(failed);
