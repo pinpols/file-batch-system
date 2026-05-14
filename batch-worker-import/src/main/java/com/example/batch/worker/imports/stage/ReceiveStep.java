@@ -14,6 +14,7 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -104,8 +105,11 @@ public class ReceiveStep implements ImportStageStep {
           "tenantId or payload is blank",
           objectMapper);
     }
-    // C-5/D-4: 在任何堆内存分配前拒绝超大 payload
-    long payloadLength = context.getRawPayload().length();
+    // C-5/D-4: 在任何堆内存分配前拒绝超大 payload。
+    // R2-P1-11：之前用 String.length() 当 bytes 比；UTF-16 char count 与 UTF-8 字节数对 CJK/emoji 差 ~2-3×，
+    // file_size_bytes 列语义错。改用 UTF-8 byte 长度做硬比较 + 持久化（rawPayload 即将进 createFileRecord，
+    // 这里一次性 getBytes 也是下游本来要做的，无额外内存浪费）。
+    long payloadLength = context.getRawPayload().getBytes(StandardCharsets.UTF_8).length;
     if (payloadLength > maxPayloadSizeBytes) {
       return ImportStageResult.failure(
           stage(),
@@ -255,31 +259,43 @@ public class ReceiveStep implements ImportStageStep {
     }
   }
 
+  // R2-P1-8：JSON 嵌套深度上限——之前 findFirstText 递归无防护，恶意/异常的 1000+ 层嵌套
+  // payload 会触发 StackOverflowError（Error 非 Exception，try-catch 接不住）→ worker 线程崩溃。
+  // 50 层覆盖正常业务 JSON 的最深包装（payload.body.content / metadata 嵌套），溢出即返回 null 安全降级。
+  private static final int MAX_FIND_DEPTH = 50;
+
   private String findFirstText(JsonNode node, String fieldName) {
     if (node == null || !Texts.hasText(fieldName)) {
       return null;
     }
-    if (node.isObject()) {
-      JsonNode v = node.get(fieldName);
-      if (v != null && v.isTextual()) {
-        return v.asText();
+    // 迭代 BFS：用显式 Deque 替代递归调用栈，深度由 MAX_FIND_DEPTH 硬上限
+    java.util.Deque<NodeAtDepth> queue = new java.util.ArrayDeque<>();
+    queue.add(new NodeAtDepth(node, 0));
+    while (!queue.isEmpty()) {
+      NodeAtDepth current = queue.poll();
+      JsonNode n = current.node();
+      int depth = current.depth();
+      if (n == null || depth > MAX_FIND_DEPTH) {
+        continue;
       }
-      for (JsonNode child : node) {
-        String found = findFirstText(child, fieldName);
-        if (Texts.hasText(found)) {
-          return found;
+      if (n.isObject()) {
+        JsonNode v = n.get(fieldName);
+        if (v != null && v.isTextual()) {
+          return v.asText();
         }
-      }
-    } else if (node.isArray()) {
-      for (JsonNode child : node) {
-        String found = findFirstText(child, fieldName);
-        if (Texts.hasText(found)) {
-          return found;
+        for (JsonNode child : n) {
+          queue.add(new NodeAtDepth(child, depth + 1));
+        }
+      } else if (n.isArray()) {
+        for (JsonNode child : n) {
+          queue.add(new NodeAtDepth(child, depth + 1));
         }
       }
     }
     return null;
   }
+
+  private record NodeAtDepth(JsonNode node, int depth) {}
 
   private String resolveFileName(ImportPayload payload, String fileFormatType, String traceId) {
     if (Texts.hasText(payload.fileName())) {

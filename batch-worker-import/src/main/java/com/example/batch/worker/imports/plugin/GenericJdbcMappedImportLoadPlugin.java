@@ -59,13 +59,15 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
     List<String> insertCols = orderedInsertColumns(spec);
     String sql = buildSql(spec, insertCols);
-    // C-2.7 b: 显式日志幂等模式——运维可按关键字 "idempotency=OFF" 扫出需要补
-    // conflict_columns 的模板（重跑安全性靠模板声明业务主键 + batch_no 唯一约束）。
+    // C-2.7 b / R2-P1-4: 模板未声明 conflict_columns → 纯 INSERT，partition reclaim 重试时已 COMMIT 的 chunk
+    // 会再次落入 → 业务表重复行。开发期允许（INFO），但 prod 必须开 strictIdempotency=true（启动期 parse 即拒）。
+    // 此处保留 ERROR 级日志 + 指明影响范围，运维按关键字 "idempotency=OFF" 监控并强制治理。
     if (spec.conflictColumns() == null || spec.conflictColumns().isEmpty()) {
-      log.warn(
+      log.error(
           "jdbc-mapped-import LOAD running without ON CONFLICT clause: tenantId={},"
-              + " template={}, schema={}, table={}, idempotency=OFF (重跑会重复落行)"
-              + " — add conflict_columns to template to enable UNIQUE-based dedupe",
+              + " template={}, schema={}, table={}, idempotency=OFF — RETRY WILL DUPLICATE ROWS."
+              + " Add conflict_columns to template or set"
+              + " batch.worker.import.jdbc-mapped.strict-idempotency=true to enforce.",
           context.tenantId(),
           context.templateCode(),
           spec.schema(),

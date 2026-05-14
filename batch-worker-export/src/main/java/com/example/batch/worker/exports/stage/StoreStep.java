@@ -110,11 +110,27 @@ public class StoreStep implements ExportStageStep {
   }
 
   private String resolveObjectName(ExportJobContext context) {
-    return resolveText(
-        context.getAttributes().get("objectName"),
-        BatchFileConstants.EXPORT_OBJECT_PREFIX
-            + UUID.randomUUID()
-            + BatchFileConstants.JSON_SUFFIX);
+    // R2-P1-6：之前 fallback 用 UUID.randomUUID()——执行成功一半（已 PUT .part 但未 promote）后
+    // worker 崩溃，重试 context attribute 重建为空，新 UUID → 旧 .part 永远孤儿。
+    // 改为基于 jobInstanceId + taskId 的确定性名称：同一个 (instance, task) 重试得到相同 objectName，
+    // 重试时直接覆盖旧 .part 文件，不留孤儿。jobInstanceId / taskId 缺失时回退 UUID 保留兼容。
+    Object existing = context.getAttributes().get("objectName");
+    if (existing instanceof String s && Texts.hasText(s)) {
+      return s;
+    }
+    Object jobInstanceId = context.getAttributes().get(PipelineRuntimeKeys.JOB_INSTANCE_ID);
+    Object taskId = context.getAttributes().get("taskId");
+    if (jobInstanceId != null && taskId != null) {
+      return BatchFileConstants.EXPORT_OBJECT_PREFIX
+          + "job-"
+          + jobInstanceId
+          + "/task-"
+          + taskId
+          + BatchFileConstants.JSON_SUFFIX;
+    }
+    return BatchFileConstants.EXPORT_OBJECT_PREFIX
+        + UUID.randomUUID()
+        + BatchFileConstants.JSON_SUFFIX;
   }
 
   private String resolveTempObjectName(ExportJobContext context, String objectName) {

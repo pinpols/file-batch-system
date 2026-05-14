@@ -110,4 +110,17 @@ public class WheelMetrics {
   public void incrementStaleMarkerReleased(long count) {
     Counter.builder(STALE_MARKER_RELEASED).register(registry).increment(count);
   }
+
+  /**
+   * R2-P0-3: advanceAfterFire DB 失败计数；持续增长表示 wheel 处于"成功 fire 但 next_fire_time 没推进" 的危险态——会被下一 tick
+   * 重复 fire，触发条件通常是 DB 短暂不可达 / 锁等待超时。
+   */
+  public void incrementAdvanceFailed(String jobCode) {
+    Counter.builder("batch.trigger.wheel.advance.failed.total")
+        .description(
+            "advanceAfterFire DB update failed; next_fire_time may be stale → re-fire risk")
+        .tags(Tags.of("jobCode", jobCode == null ? "unknown" : jobCode))
+        .register(registry)
+        .increment();
+  }
 }

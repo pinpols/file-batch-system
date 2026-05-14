@@ -428,7 +428,20 @@ public class HashedWheelTriggerScheduler {
           nextTime,
           fireSequence);
     } catch (Exception e) {
-      log.warn("advanceAfterFire failed for job={}: {}", state.getJobCode(), e.getMessage());
+      // R2-P0-3：之前用 e.getMessage() 隐藏 stack 且静默继续 → next_fire_time 未推进，
+      // 每个 tick 重新 fire 同一 job 直到 DB 恢复。
+      // 修复方案：
+      // 1) ERROR 级 + 完整 stack（运维可见根因）
+      // 2) 指标计数 advanceAfterFire_failed，可触发告警
+      // 3) **不**重新抛出 — 调用方（fire success 路径 / catch 失败路径）若被打断，会导致 ScheduledExecutor
+      //    取消 wheel tick，影响所有 trigger。WheelTriggerReconciler 周期对账会兜底修复 next_fire_time。
+      log.error(
+          "advanceAfterFire failed for job={} tenantId={}: next_fire_time NOT advanced — RECONCILER"
+              + " WILL FIX",
+          state.getJobCode(),
+          state.getTenantId(),
+          e);
+      metrics.incrementAdvanceFailed(state.getJobCode());
     }
   }
 

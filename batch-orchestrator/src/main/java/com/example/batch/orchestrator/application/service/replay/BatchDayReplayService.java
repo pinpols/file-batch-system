@@ -359,12 +359,22 @@ public class BatchDayReplayService {
   }
 
   private String deriveJobCode(String businessKey) {
-    // ADR-017 形如 job:{jobCode}:{bizDate}; 容错：拿不到就回填 UNKNOWN
+    // ADR-017 形如 job:{jobCode}:{bizDate}。R2-P1-5：之前 fallback 返回 "UNKNOWN"，
+    // BatchDayReplayTerminalReconciler 按 (sessionId, tenantId, jobCode) 匹配不到任何 entry
+    // → session 永远卡 RUNNING、inFlight 永不减。改为 fail-fast：解析失败立即拒绝创建 replay entry，
+    // 让运维显式修 business_key 而不是产生卡死的 session。
     if (!Texts.hasText(businessKey)) {
-      return "UNKNOWN";
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.replay.business_key_blank",
+          businessKey == null ? "<null>" : "<blank>");
     }
     String[] parts = businessKey.split(":");
-    return parts.length >= 2 ? parts[1] : "UNKNOWN";
+    if (parts.length < 2 || !Texts.hasText(parts[1])) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.replay.business_key_unparseable", businessKey);
+    }
+    return parts[1];
   }
 
   private String buildScopePayload(BatchDayReplaySubmitCommand command, String scope) {

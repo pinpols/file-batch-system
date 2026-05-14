@@ -7,12 +7,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +52,16 @@ public class DispatchReceiptPollScheduler {
   private final ObjectMapper objectMapper;
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final MeterRegistry meterRegistry;
-  private final OkHttpClient httpClient = new OkHttpClient();
+  // R2-P0-4：OkHttp 默认 0 超时（永不超时）。stale 远端 → @SchedulerLock 持锁、调度线程被阻塞 → 整 receipt 轮询死锁。
+  // 显式 connect/read/write/call 超时；进程 shutdown 时显式回收 dispatcher / connectionPool（默认 keepalive 60s
+  // 非守护线程）。
+  private final OkHttpClient httpClient =
+      new OkHttpClient.Builder()
+          .connectTimeout(Duration.ofSeconds(5))
+          .readTimeout(Duration.ofSeconds(15))
+          .writeTimeout(Duration.ofSeconds(5))
+          .callTimeout(Duration.ofSeconds(30))
+          .build();
   private final AtomicLong pollFailures = new AtomicLong();
   private final AtomicLong pollSuccesses = new AtomicLong();
 
@@ -58,6 +69,20 @@ public class DispatchReceiptPollScheduler {
   void initializeMeters() {
     meterRegistry.gauge("batch.dispatch.receipt.poll.failures", pollFailures);
     meterRegistry.gauge("batch.dispatch.receipt.poll.successes", pollSuccesses);
+  }
+
+  /**
+   * R2-P0-4：进程退出前回收 OkHttp 内部资源——dispatcher 的 ExecutorService 是非守护线程，未 shutdown 会让 JVM 等 ~60s（idle
+   * keepalive）才真正退出；connectionPool.evictAll 关闭所有空闲连接。
+   */
+  @PreDestroy
+  void shutdown() {
+    try {
+      httpClient.dispatcher().executorService().shutdown();
+      httpClient.connectionPool().evictAll();
+    } catch (RuntimeException ex) {
+      log.warn("OkHttp shutdown cleanup error: {}", ex.getMessage(), ex);
+    }
   }
 
   @Scheduled(fixedDelayString = "${batch.worker.dispatch.receipt-poll.interval-millis:60000}")

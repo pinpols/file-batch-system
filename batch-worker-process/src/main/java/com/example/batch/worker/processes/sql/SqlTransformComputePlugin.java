@@ -458,12 +458,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
   /** COMPUTE 写 staging 的 SQL:把源 SELECT 包成 SUBSELECT,逐行 jsonb_build_object 序列化到 staging payload。 */
   static String buildStagingInsertSql(SqlTransformComputeSpec spec) {
+    // R2-P2-3 二层防御：column.target() 已被 validateIdentifiers() 白名单检查，但只是单层防御。
+    // 显式走 JdbcMappedSqlValidator.requireIdentifier 再校验一次，未来调用路径绕过 parse 时也阻断注入。
     String jsonbBuild =
         spec.columns().stream()
             .map(
                 column ->
                     "'"
-                        + column.target()
+                        + JdbcMappedSqlValidator.requireIdentifier(column.target(), "column.target")
                         + "', base."
                         + JdbcMappedSqlValidator.quotePg(column.source()))
             .collect(Collectors.joining(", "));

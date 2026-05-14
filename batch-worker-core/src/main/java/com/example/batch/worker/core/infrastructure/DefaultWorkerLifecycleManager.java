@@ -67,21 +67,52 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
         hasActiveLeases(workerId)
             ? WorkerRegistryStatus.DRAINING.code()
             : WorkerRegistryStatus.DECOMMISSIONED.code();
+    // R2-P1-7：之前 catch 仅 warn + e.getMessage()，registry 留 ONLINE → orchestrator 继续派任务给死 worker。
+    // 改为：最多 3 次指数退避重试，全部失败 ERROR + 完整 stack。
+    // finally 仍清本地 map（本地状态已不准确，留着无意义）；DB 状态由 PartitionLeaseReclaimScheduler 兜底。
     try {
-      workerRegistryService.updateStatus(activeRegistration, WorkerRegistryStatus.DRAINING.code());
+      updateStatusWithRetry(activeRegistration, WorkerRegistryStatus.DRAINING.code(), workerId);
       if (!WorkerRegistryStatus.DRAINING.code().equals(finalStatus)) {
-        workerRegistryService.updateStatus(activeRegistration, finalStatus);
+        updateStatusWithRetry(activeRegistration, finalStatus, workerId);
       }
-    } catch (Exception exception) {
-      log.warn(
-          "worker shutdown status sync failed: workerId={}, targetStatus={}, cause={}",
-          workerId,
-          finalStatus,
-          exception.getMessage());
     } finally {
       workerRuntimeState.remove(workerId);
     }
     log.info("worker shutdown handled: workerId={}, targetStatus={}", workerId, finalStatus);
+  }
+
+  private void updateStatusWithRetry(
+      WorkerRegistration registration, String targetStatus, String workerId) {
+    Exception lastError = null;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        workerRegistryService.updateStatus(registration, targetStatus);
+        return;
+      } catch (Exception ex) {
+        lastError = ex;
+        log.warn(
+            "worker shutdown status sync attempt {}/3 failed: workerId={}, targetStatus={},"
+                + " cause={}",
+            attempt,
+            workerId,
+            targetStatus,
+            ex.getMessage());
+        if (attempt < 3) {
+          try {
+            Thread.sleep(200L * attempt); // 200ms / 400ms 退避
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+        }
+      }
+    }
+    log.error(
+        "worker shutdown status sync FAILED after 3 retries — registry stays stale,"
+            + " PartitionLeaseReclaimScheduler will reconcile: workerId={}, targetStatus={}",
+        workerId,
+        targetStatus,
+        lastError);
   }
 
   private boolean hasActiveLeases(String workerId) {
