@@ -72,6 +72,7 @@ public class TaskControllerApplicationService {
             .outputs(request.getOutputs())
             .partitionInvocationId(request.getPartitionInvocationId())
             .failureClass(request.isSuccess() ? null : request.getFailureClass())
+            .verifierFailures(request.isSuccess() ? request.getVerifierFailures() : null)
             .build();
     taskExecutionService.applyTaskOutcome(command);
   }

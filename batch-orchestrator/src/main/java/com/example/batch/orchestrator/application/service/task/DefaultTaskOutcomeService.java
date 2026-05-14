@@ -14,6 +14,7 @@ import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
@@ -104,6 +105,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       WorkflowDagService workflowDagService,
       ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
       WorkflowTerminalOutboxService workflowTerminalOutboxService,
+      VerifierFailureOutboxService verifierFailureOutboxService,
       MeterRegistry meterRegistry,
       JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler,
       ResultVersionWriter resultVersionWriter,
@@ -293,6 +295,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     if (command.success()) {
       applySuccessOutcome(command, partition);
+      // ADR-030 §F：worker 上报的 ContentVerifier 失败 → 同事务写 outbox_event(verifier.failure.v1)。
+      // 软告警语义：不翻转 task SUCCESS，仅产出可订阅的事件供告警面板消费。
+      collaborators.verifierFailureOutboxService().writeVerifierFailures(command, task);
       // ExecutionMode.INCREMENTAL:把 worker 上报的新水位回写到 job_instance。null/空跳过
       // (保留旧值,下次启动时同 IN 不变);仅成功路径推水位,失败/重试不应推进。
       if (command.highWaterMarkOut() != null && !command.highWaterMarkOut().isBlank()) {

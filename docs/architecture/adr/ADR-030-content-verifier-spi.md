@@ -73,8 +73,8 @@ Verifier 失败默认**不**中止任务。调用方决定升级路径：
 | B | 1 个 `ExportFileNonEmptyVerifier`（在 batch-worker-export） | ✅ 落地 |
 | C | worker stage hook 接入 `AbstractPipelineStepExecutionAdapter` 成功路径 + 失败结果落入 `attributes.verifierFailures` + 透传给 `TaskExecutionReport.verifierFailures` | ✅ 落地 |
 | D | `DispatchReceiptPresentVerifier` + `ProcessPublishedCountVerifier` | ✅ 落地 |
-| E | worker 端透传字段就位（`TaskExecutionReport.verifierFailures` 由 hook 填充）；orchestrator 侧 outbox 持久化 + console 告警面板由 F 阶段做 | ✅ worker 端 / 🔜 orchestrator 端 |
-| F | orchestrator 消费 `TaskExecutionReport.verifierFailures`，在 task SUCCESS 事务内写 `outbox_event(event_type='verifier.failure.v1')`；console realtime 订阅展示 | 🔜 后续 PR |
+| E | worker 端透传字段就位（`TaskExecutionReport.verifierFailures` 由 hook 填充） | ✅ 落地 |
+| F | orchestrator 消费 `TaskOutcomeCommand.verifierFailures`，在 task SUCCESS 同事务内写 `outbox_event(event_type='verifier.failure.v1', aggregate_type='JOB_TASK', aggregate_id=jobInstanceId)`；event_key 形如 `<tenantId>:verifier:<taskId>:<reason>` 便于去重订阅；console realtime 订阅展示由独立 console PR 接 | ✅ 落地 |
 | G | 硬中止策略：业务侧明确"verifier 失败要把 task 翻成 FAILED"时，新增 attributes 标记让 hook 决定是否覆盖 success | 🔜 仅按需 |
 
 ## 范围红线（防越界）

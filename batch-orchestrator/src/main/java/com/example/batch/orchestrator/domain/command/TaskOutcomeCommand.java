@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.domain.command;
 
 import com.example.batch.common.i18n.LocalizedErrorCarrier;
+import java.util.List;
 import java.util.Map;
 import lombok.Builder;
 
@@ -38,7 +39,13 @@ public record TaskOutcomeCommand(
      * ADR-012 worker 上报的失败分类（V111）。仅 {@code success=false} 路径有意义；为空时由 orchestrator 端 {@code
      * FailureClassifier} 兜底推断。允许的取值见 {@link com.example.batch.common.enums.FailureClass}。
      */
-    String failureClass)
+    String failureClass,
+    /**
+     * ADR-030 §C/F: worker 端 ContentVerifier 检测到的产物级失败列表，仅 {@code success=true} 路径有意义。 每个元素 {@code
+     * {code, message, evidence}}。orchestrator 在 task SUCCESS 事务里每个失败发一条 {@code
+     * outbox_event(event_type='verifier.failure.v1')}。null/empty 等价"无失败"。
+     */
+    List<Map<String, Object>> verifierFailures)
     implements LocalizedErrorCarrier {
 
   // record 默认 accessor 是 errorMessage() 无 get 前缀;桥接 carrier 契约的 getErrorXxx() bean 命名。
