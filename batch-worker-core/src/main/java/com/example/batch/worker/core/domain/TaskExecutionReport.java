@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.domain;
 
 import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
+import java.util.List;
 import java.util.Map;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -43,4 +44,15 @@ public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
    * JSONB。null/empty 等价"无产出",DSL 引用按 null fallback。
    */
   private Map<String, Object> outputs;
+
+  /**
+   * ADR-030 §C/E: 当本次任务执行成功但 ContentVerifier 发现产物级问题时携带的失败列表。每个元素 {@code {code, message,
+   * evidence}}，对应 {@link com.example.batch.common.verifier.VerifyResult}。
+   *
+   * <p>null/empty 等价"verifier 全部通过 / 无适用 verifier / verifier 未启用"。 worker 在成功路径不会因 verifier 失败把
+   * success 翻成 false——硬中止策略由后续 PR 接入。
+   *
+   * <p>orchestrator 后续 PR 消费：在同事务里写 {@code outbox_event(event_type='verifier.failure.v1')} 供告警面板订阅。
+   */
+  private List<Map<String, Object>> verifierFailures;
 }

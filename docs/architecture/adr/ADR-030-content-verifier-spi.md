@@ -69,11 +69,13 @@ Verifier 失败默认**不**中止任务。调用方决定升级路径：
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| A | SPI + Registry + 单测 | ✅ 本 PR |
-| B | 1 个 `ExportFileNonEmptyVerifier`（在 batch-worker-export） | ✅ 本 PR |
-| C | worker stage hook 在 stage 结束后调 registry —— 暂未接入热路径，等业务侧明确"软告警 vs 硬中止"再做 | 🔜 |
-| D | 第 2/3 个 verifier（DispatchReceiptVerifier 转生产版、ProcessPublishedCountVerifier） | 🔜 |
-| E | Outbox 透传 `verifier.failure.v1`，console 接入告警面板 | 🔜 |
+| A | SPI + Registry + 单测 | ✅ 落地 |
+| B | 1 个 `ExportFileNonEmptyVerifier`（在 batch-worker-export） | ✅ 落地 |
+| C | worker stage hook 接入 `AbstractPipelineStepExecutionAdapter` 成功路径 + 失败结果落入 `attributes.verifierFailures` + 透传给 `TaskExecutionReport.verifierFailures` | ✅ 落地 |
+| D | `DispatchReceiptPresentVerifier` + `ProcessPublishedCountVerifier` | ✅ 落地 |
+| E | worker 端透传字段就位（`TaskExecutionReport.verifierFailures` 由 hook 填充）；orchestrator 侧 outbox 持久化 + console 告警面板由 F 阶段做 | ✅ worker 端 / 🔜 orchestrator 端 |
+| F | orchestrator 消费 `TaskExecutionReport.verifierFailures`，在 task SUCCESS 事务内写 `outbox_event(event_type='verifier.failure.v1')`；console realtime 订阅展示 | 🔜 后续 PR |
+| G | 硬中止策略：业务侧明确"verifier 失败要把 task 翻成 FAILED"时，新增 attributes 标记让 hook 决定是否覆盖 success | 🔜 仅按需 |
 
 ## 范围红线（防越界）
 
