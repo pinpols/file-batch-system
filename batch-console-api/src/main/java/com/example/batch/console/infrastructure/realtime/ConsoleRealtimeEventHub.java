@@ -253,11 +253,11 @@ public class ConsoleRealtimeEventHub {
       realtimeMetrics.decrementSubscriptions();
       try {
         subscription.emitter.complete();
-      } catch (IllegalStateException ignored) {
+      } catch (RuntimeException ignored) {
+        // emitter 已完成 / 客户端断开后 response 不可写（AsyncRequestNotUsableException 等）；
+        // close() 仅是清理路径，任何 emitter 状态异常都不应外抛去触发 @ControllerAdvice。
         SwallowedExceptionLogger.info(
-            ConsoleRealtimeEventHub.class, "catch:IllegalStateException", ignored);
-
-        // emitter 已完成
+            ConsoleRealtimeEventHub.class, "catch:emitterCompleteFailed", ignored);
       }
     }
   }

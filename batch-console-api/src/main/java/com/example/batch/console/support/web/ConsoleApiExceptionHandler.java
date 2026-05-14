@@ -28,6 +28,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -199,6 +200,17 @@ public class ConsoleApiExceptionHandler {
     log.warn("console message not readable: {}", exception.getMessage());
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+  }
+
+  /**
+   * SSE / 异步响应在客户端断开后再次写入会抛 {@link AsyncRequestNotUsableException}。 此时 response Content-Type 已锁为
+   * {@code text/event-stream}，再回写 {@code CommonResponse} 反而触发 {@code
+   * HttpMessageNotWritableException}。返回 {@code null} 让 Spring 跳过 body 写入，仅留一条 DEBUG 日志即可。
+   */
+  @ExceptionHandler(AsyncRequestNotUsableException.class)
+  public ResponseEntity<?> handleAsyncResponseUnusable(AsyncRequestNotUsableException exception) {
+    log.debug("console async response unusable (client disconnected): {}", exception.getMessage());
+    return null;
   }
 
   @ExceptionHandler(Exception.class)
