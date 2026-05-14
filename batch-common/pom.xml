@@ -13,6 +13,15 @@
     <name>batch-common</name>
 
     <dependencies>
+        <!--
+          共享配置基线（batch-defaults.yml）。所有服务模块通过 batch-common 传递引入，
+          避免在每个模块单独声明依赖；模块自身 application.yml 只做 overlay。详见 ADR-029。
+        -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-config-defaults</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
@@ -116,6 +125,15 @@
         </dependency>
 
         <!-- ── 分布式追踪（OTEL 桥接 + OTLP 导出器）── -->
+        <!--
+          micrometer-core：ContentVerifierRegistry (ADR-030) 用 Timer/Counter 暴露 batch.verifier.* 指标。
+          通过 optional=true 避免污染使用方依赖图——使用方模块都已通过 actuator starter 引入 micrometer-core。
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- micrometer-tracing-bridge-otel：将 Micrometer Observation API 桥接到 OpenTelemetry SDK -->
         <dependency>
             <groupId>io.micrometer</groupId>

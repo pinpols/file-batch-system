@@ -34,6 +34,9 @@
 | 025 | [ADR-025-workflow-static-validator.md](./ADR-025-workflow-static-validator.md)           | Workflow 静态校验：enable 时跑 15 项 V1-V15 检查（拓扑 / DSL / 跨日依赖 / GATEWAY 一致性）（Accepted，**第 1 阶段必做 / P0**，便宜高收益，~5 人天，建议第一个落地）              |
 | 026 | [ADR-026-dry-run-mode.md](./ADR-026-dry-run-mode.md)                                     | 演练 / Dry-run 模式：dry_run 一等字段贯穿全链 + DryRunGuard SDK + DRY_RUN result_version + SUCCESS_DRY_RUN 终态（Accepted，**第 2 阶段 / P1-P2 轻量版**：L1/L2/L3 配置/计划/Explain，FULL_SIMULATION 不做） |
 | 027 | [ADR-027-resource-affinity.md](./ADR-027-resource-affinity.md)                           | 资源亲和性 / 地理调度：worker_label + worker_taint + job affinity_json（K8s 风格 required/preferred/anti）（Accepted，**第 3 阶段 / P2-P3 暂缓**，最高越界风险，绝不重做 K8s scheduler）   |
+| 028 | [ADR-028-sensor-wait-node.md](./ADR-028-sensor-wait-node.md)                             | Sensor WAIT 节点：workflow_node_type=WAIT + 4 类 sensor（HTTP/FILE/KAFKA/TIME）+ 终态后下游派发 + V16 静态校验（Accepted） |
+| 029 | [ADR-029-shared-config-defaults-module.md](./ADR-029-shared-config-defaults-module.md)   | 共享配置基线独立模块 `batch-config-defaults`（只承载 `batch-defaults.yml` + marker AutoConfiguration），由 `batch-common` 传递依赖；`ConfigDriftGuardTest` 守护 OWNED_KEYS（Accepted）  |
+| 030 | [ADR-030-content-verifier-spi.md](./ADR-030-content-verifier-spi.md)                     | 产物内容验收 SPI：`ContentVerifier` + `ContentVerifierRegistry` + Micrometer Timer/Counter；首发实现 ExportFileNonEmptyVerifier；stage hot path 接入由后续 PR 按需做（Accepted）   |
 
 ### 优先级 + 范围边界纪律
 
