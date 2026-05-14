@@ -110,13 +110,25 @@ final class RemoteFilesystemDispatchSupport {
     Path realDirectory = directory.toRealPath();
     if (!realDirectory.equals(directory)
         && NAS_SYMLINK_WARNED.putIfAbsent(directory.toString(), Boolean.TRUE) == null) {
-      log.warn(
-          "NAS directory contains symlink(s): configured={}, real={} — using real path;"
-              + " set -D{}=<abs-path> to enforce sandbox root and reject symlink escape"
-              + " (this warning is emitted only once per configured path)",
-          directory,
-          realDirectory,
-          SANDBOX_ROOT_PROP);
+      // macOS 系统级 symlink (/tmp -> /private/tmp, /var -> /private/var) 是 OS 行为，
+      // 不属于用户错配，降级到 INFO；非此模式才以 WARN 提示真正的可疑 symlink。
+      boolean macOsPrivatePrefix =
+          realDirectory.toString().equals("/private" + directory)
+              && (directory.startsWith("/tmp") || directory.startsWith("/var"));
+      if (macOsPrivatePrefix) {
+        log.info(
+            "NAS directory resolved through macOS /private symlink: configured={}, real={}",
+            directory,
+            realDirectory);
+      } else {
+        log.warn(
+            "NAS directory contains symlink(s): configured={}, real={} — using real path;"
+                + " set -D{}=<abs-path> to enforce sandbox root and reject symlink escape"
+                + " (this warning is emitted only once per configured path)",
+            directory,
+            realDirectory,
+            SANDBOX_ROOT_PROP);
+      }
     }
     String sandboxRootRaw = System.getProperty(SANDBOX_ROOT_PROP);
     if (Texts.hasText(sandboxRootRaw)) {
