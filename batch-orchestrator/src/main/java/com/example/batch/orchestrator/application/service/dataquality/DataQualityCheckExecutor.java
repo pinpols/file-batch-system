@@ -5,6 +5,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
 import com.example.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.RuleFinding;
+import com.example.batch.orchestrator.application.service.sensor.SensorSqlValidator;
 import com.example.batch.orchestrator.domain.entity.DataQualityCheckEntity;
 import com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -20,7 +21,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -56,9 +58,14 @@ public class DataQualityCheckExecutor {
   private static final String SEVERITY_WARN = "WARN";
   private static final String SEVERITY_INFO = "INFO";
 
+  // R2-P0-1：DQ 规则 SQL 走 NamedParameterJdbcTemplate + JSqlParser AST 校验，消除字符串拼接注入面。
+  // SensorSqlValidator 已经做了「SELECT/WITH 限制 + 禁 *」校验，DQ 复用同一套规则。
+  // 允许的 schema 限定在 batch / archive 两个业务命名空间，禁止访问 pg_catalog / information_schema 等。
+  private static final List<String> ALLOWED_DQ_SCHEMAS = List.of("batch", "archive");
+
   private final DataQualityRuleMapper ruleMapper;
   private final DataQualityCheckMapper checkMapper;
-  private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
+  private final ObjectProvider<NamedParameterJdbcTemplate> jdbcTemplateProvider;
 
   /**
    * 执行 DQ gate。规则集为空时返回 {@link GateStatus#NO_RULES}（与现有行为一致 — 无规则不阻塞）。
@@ -139,11 +146,16 @@ public class DataQualityCheckExecutor {
   }
 
   /**
-   * TABLE_LEVEL 规则执行：只接受以 SELECT 开头的查询；占位符 :tenantId / :bizDate / :jobInstanceId 替换； 单行单值结果 vs
-   * thresholdJson.expected / .min / .max 判定 PASS / FAIL。
+   * TABLE_LEVEL 规则执行：JSqlParser 解析校验（必须 SELECT/WITH + 禁 * + schema 白名单）， 通过
+   * NamedParameterJdbcTemplate 的 {@code :tenantId} / {@code :bizDate} / {@code :jobInstanceId} 命名参数
+   * bind（驱动负责安全转义，杜绝字符串拼接注入面）；单行单值结果 vs thresholdJson 判定 PASS/FAIL。
+   *
+   * <p>R2-P0-1 安全说明：之前用 {@code String.replace(":bizDate", "'"+date+"'")} 把值拼回 SQL， 只对单引号做转义；bizDate
+   * 含 {@code --} 等即可注入。NamedParameterJdbcTemplate 改用 JDBC bind 参数后， 即使 rule.expression 由 admin
+   * 写库，注入面也被驱动层兜住。
    */
   private String executeTableLevel(JobInstanceEntity instance, DataQualityRuleEntity rule) {
-    JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
+    NamedParameterJdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
     if (jdbcTemplate == null) {
       throw new IllegalStateException("JdbcTemplate unavailable for DQ rule " + rule.getRuleCode());
     }
@@ -151,21 +163,25 @@ public class DataQualityCheckExecutor {
     if (!Texts.hasText(sql)) {
       throw new IllegalArgumentException("rule expression empty: " + rule.getRuleCode());
     }
-    String trimmed = sql.trim();
-    if (!trimmed.toUpperCase(Locale.ROOT).startsWith("SELECT")) {
+    String validated;
+    try {
+      validated = SensorSqlValidator.validate(sql.trim(), ALLOWED_DQ_SCHEMAS);
+    } catch (IllegalArgumentException ex) {
       throw new IllegalArgumentException(
-          "rule expression must start with SELECT (DDL/DML rejected): " + rule.getRuleCode());
+          "rule expression rejected by SQL validator: "
+              + rule.getRuleCode()
+              + " — "
+              + ex.getMessage(),
+          ex);
     }
-    String resolved =
-        trimmed
-            .replace(":tenantId", "'" + escape(instance.getTenantId()) + "'")
-            .replace(
-                ":bizDate",
-                instance.getBizDate() == null ? "NULL" : "'" + instance.getBizDate() + "'")
-            .replace(":jobInstanceId", String.valueOf(instance.getId()));
+    MapSqlParameterSource params =
+        new MapSqlParameterSource()
+            .addValue("tenantId", instance.getTenantId())
+            .addValue("bizDate", instance.getBizDate())
+            .addValue("jobInstanceId", instance.getId());
     Number result;
     try {
-      result = jdbcTemplate.queryForObject(resolved, Number.class);
+      result = jdbcTemplate.queryForObject(validated, params, Number.class);
     } catch (DataAccessException dae) {
       throw new IllegalStateException("DQ SQL execution failed: " + dae.getMessage(), dae);
     }
@@ -221,9 +237,5 @@ public class DataQualityCheckExecutor {
             .checkedAt(now)
             .build();
     checkMapper.insert(check);
-  }
-
-  private static String escape(String s) {
-    return s == null ? "" : s.replace("'", "''");
   }
 }

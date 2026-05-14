@@ -20,22 +20,23 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 class DataQualityCheckExecutorTest {
 
   private DataQualityRuleMapper ruleMapper;
   private DataQualityCheckMapper checkMapper;
-  private JdbcTemplate jdbcTemplate;
+  private NamedParameterJdbcTemplate jdbcTemplate;
   private DataQualityCheckExecutor executor;
 
   @BeforeEach
   void setUp() {
     ruleMapper = mock(DataQualityRuleMapper.class);
     checkMapper = mock(DataQualityCheckMapper.class);
-    jdbcTemplate = mock(JdbcTemplate.class);
+    jdbcTemplate = mock(NamedParameterJdbcTemplate.class);
     @SuppressWarnings("unchecked")
-    ObjectProvider<JdbcTemplate> provider = mock(ObjectProvider.class);
+    ObjectProvider<NamedParameterJdbcTemplate> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(jdbcTemplate);
     executor = new DataQualityCheckExecutor(ruleMapper, checkMapper, provider);
   }
@@ -60,7 +61,9 @@ class DataQualityCheckExecutorTest {
             "SELECT count(*) FROM batch.batch_day_instance WHERE tenant_id = :tenantId",
             "{\"min\":1}");
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
-    when(jdbcTemplate.queryForObject(anyString(), eq(Number.class))).thenReturn(5);
+    when(jdbcTemplate.queryForObject(
+            anyString(), any(MapSqlParameterSource.class), eq(Number.class)))
+        .thenReturn(5);
 
     var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
 
@@ -78,7 +81,9 @@ class DataQualityCheckExecutorTest {
             "SELECT count(*) FROM batch.batch_day_instance",
             "{\"min\":100}");
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
-    when(jdbcTemplate.queryForObject(anyString(), eq(Number.class))).thenReturn(5);
+    when(jdbcTemplate.queryForObject(
+            anyString(), any(MapSqlParameterSource.class), eq(Number.class)))
+        .thenReturn(5);
 
     var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
 
@@ -92,7 +97,9 @@ class DataQualityCheckExecutorTest {
     DataQualityRuleEntity rule =
         rule("FRESHNESS", "TABLE_LEVEL", "WARN", "SELECT 0", "{\"min\":1}");
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
-    when(jdbcTemplate.queryForObject(anyString(), eq(Number.class))).thenReturn(0);
+    when(jdbcTemplate.queryForObject(
+            anyString(), any(MapSqlParameterSource.class), eq(Number.class)))
+        .thenReturn(0);
 
     var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
 

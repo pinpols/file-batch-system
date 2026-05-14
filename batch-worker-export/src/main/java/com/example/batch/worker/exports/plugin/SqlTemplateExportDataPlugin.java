@@ -175,7 +175,9 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
    * @return 分页 SQL 字符串
    */
   static String buildPagedSql(String baseSql, String cursorColumn, boolean hasCursor) {
-    String cursorIdent = "\"" + cursorColumn + "\"";
+    // R2-P2-4 二层防御：之前手动 `"` 拼接 cursorColumn 依赖上游 requireIdentifier 校验。
+    // 改为统一走 quotePg（同样调 requireIdentifier 但出于此函数自管），即使未来调用绕过 spec.parse 也安全。
+    String cursorIdent = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
     String whereClause = hasCursor ? "WHERE base.%s > :__cursor%n".formatted(cursorIdent) : "";
     return """
     WITH base AS (

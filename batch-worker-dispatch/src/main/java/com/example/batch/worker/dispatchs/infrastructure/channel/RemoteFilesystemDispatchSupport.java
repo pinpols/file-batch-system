@@ -30,6 +30,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -56,7 +62,61 @@ final class RemoteFilesystemDispatchSupport {
   private static final ConcurrentMap<String, Boolean> NAS_SYMLINK_WARNED =
       new ConcurrentHashMap<>();
 
+  // R2-P1-10：NAS Files.copy 是阻塞 IO；stale NFS mount → 派发线程永久挂死，circuit breaker 接不到。
+  // 把 copy 跑在守护线程 pool 上，主线程 future.get(timeout) 限时等待；超时则 cancel(true) + 抛 IOException。
+  // 默认 5 分钟（GB 级文件 + 10 MB/s 慢盘 ~100s 留余量），可被 jvm property 覆盖。
+  private static final long NAS_COPY_TIMEOUT_SECONDS =
+      Long.getLong("batch.dispatch.nas-copy-timeout-seconds", 300L);
+  private static final ExecutorService NAS_COPY_EXECUTOR =
+      Executors.newCachedThreadPool(
+          new java.util.concurrent.ThreadFactory() {
+            private final AtomicLong index = new AtomicLong();
+
+            @Override
+            public Thread newThread(Runnable r) {
+              Thread t = new Thread(r, "nas-copy-" + index.incrementAndGet());
+              t.setDaemon(true);
+              return t;
+            }
+          });
+
   private RemoteFilesystemDispatchSupport() {}
+
+  /** R2-P1-10：有超时保护的 Files.copy。stale NFS mount 时不会让派发线程永久阻塞。 */
+  private static void copyWithTimeout(InputStream in, Path target) throws IOException {
+    Future<?> future =
+        NAS_COPY_EXECUTOR.submit(
+            () -> {
+              try {
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+              } catch (IOException ioe) {
+                throw new RuntimeException(ioe);
+              }
+            });
+    try {
+      future.get(NAS_COPY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    } catch (TimeoutException te) {
+      future.cancel(true);
+      throw new IOException(
+          "NAS Files.copy timed out after "
+              + NAS_COPY_TIMEOUT_SECONDS
+              + "s — likely stale NFS mount or hung remote",
+          te);
+    } catch (InterruptedException ie) {
+      future.cancel(true);
+      Thread.currentThread().interrupt();
+      throw new IOException("NAS Files.copy interrupted", ie);
+    } catch (java.util.concurrent.ExecutionException ee) {
+      Throwable cause = ee.getCause();
+      if (cause instanceof IOException ioe) {
+        throw ioe;
+      }
+      if (cause instanceof RuntimeException re && re.getCause() instanceof IOException ioe2) {
+        throw ioe2;
+      }
+      throw new IOException("NAS Files.copy failed", cause == null ? ee : cause);
+    }
+  }
 
   static DispatchResult dispatchNas(
       DispatchCommand command, DispatchFileContentResolver contentResolver) {
@@ -78,7 +138,7 @@ final class RemoteFilesystemDispatchSupport {
           resolveRemoteFileName(channelConfig, command.fileRecord(), "nas_remote_file_name");
       Path target = directory.resolve(remoteName);
       try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
-        Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        copyWithTimeout(in, target);
       }
       return finishResult(
           command, externalRequestId, receiptCode, "uploaded via NAS", target.toString());

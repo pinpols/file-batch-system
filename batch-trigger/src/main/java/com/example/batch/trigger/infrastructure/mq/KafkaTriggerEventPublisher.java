@@ -92,6 +92,14 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       return PublishResult.fail("kafka send timeout " + sendTimeoutSeconds + "s");
     } catch (ExecutionException ex) {
       Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+      // R2-P2-6：之前完全无日志 → 不可恢复错误（AuthorizationException / RecordTooLarge /
+      // InvalidTopic）会耗光全部 retry 直至 GIVE_UP，运维无实时信号。改为 ERROR + stack。
+      log.error(
+          "kafka publish failed (will retry until GIVE_UP): topic={} messageKey={} cause={}",
+          topic,
+          messageKey,
+          cause.getMessage(),
+          cause);
       return PublishResult.fail("kafka send: " + cause.getMessage());
     } catch (InterruptedException ex) {
       SwallowedExceptionLogger.info(

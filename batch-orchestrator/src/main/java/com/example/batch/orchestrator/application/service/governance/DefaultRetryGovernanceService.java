@@ -172,9 +172,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   @Override
-  @Transactional
   public void dispatchDueRetries() {
-    // 定时扫描：把到期的 retry_schedule 记录重排队（requeue）回 outbox。
+    // R2-P0-2：每条 retry 进独立 REQUIRES_NEW，避免外层单事务下某条 CAS 冲突回滚整批 outbox 写
+    // （之前已经 markRunning 的 retry 会留在 RUNNING 永远卡死）。
+    // 1) 扫描（只读，无事务）
+    // 2) 每条独立 tx 走 requeueOne：markRunning + requeuePartition + markSuccess 同事务，
+    //    抛 TransientConflictException → 整 tx 回滚 → markRunning 也撤销 → 状态自动留 WAITING 等下轮
+    // 3) 非 transient 异常 → 在独立 tx 内 markFailed
     List<RetryScheduleEntity> dueRetries =
         retryScheduleMapper.selectByQuery(
             new RetryScheduleQuery(
@@ -183,23 +187,14 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 BatchDateTimeSupport.utcNow(),
                 governance.retry().getBatchSize()));
     for (RetryScheduleEntity retrySchedule : dueRetries) {
-      if (retryScheduleMapper.markRunning(
-              retrySchedule.getId(),
-              RetryScheduleStatus.WAITING.code(),
-              RetryScheduleStatus.RUNNING.code())
-          <= 0) {
-        continue;
-      }
       try {
-        requeuePartition(retrySchedule);
-        retryScheduleMapper.markSuccess(retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
+        replayTransactionalShell().requeueOneRetry(retrySchedule);
       } catch (TransientConflictException conflict) {
         log.warn(
             "retry dispatch version conflict, will retry later: retryId={}, error={}",
             retrySchedule.getId(),
             conflict.getMessage());
-        retryScheduleMapper.resetToWaiting(
-            retrySchedule.getId(), RetryScheduleStatus.WAITING.code());
+        // markRunning 已随 REQUIRES_NEW 一起回滚，状态留在 WAITING，无需额外 resetToWaiting
       } catch (Exception exception) {
         log.warn(
             "retry dispatch failed: retryId={}, error={}",
@@ -214,9 +209,41 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 .lastErrorMessage(exception.getMessage())
                 .nextRetryAt(BatchDateTimeSupport.utcNow())
                 .build();
-        retryScheduleMapper.markFailed(markFailedParam);
+        try {
+          replayTransactionalShell().markRetryFailed(markFailedParam);
+        } catch (RuntimeException markFailedEx) {
+          log.error(
+              "markFailed itself failed for retryId={}, manual intervention required",
+              retrySchedule.getId(),
+              markFailedEx);
+        }
       }
     }
+  }
+
+  /**
+   * R2-P0-2：单条 retry 的独立事务（REQUIRES_NEW）。
+   *
+   * <p>必须通过 {@link #replayTransactionalShell()} 自代理调用以激活 AOP；类内自调用会跳过 REQUIRES_NEW。 markRunning +
+   * requeuePartition + markSuccess 同事务，任一失败整体回滚。
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void requeueOneRetry(RetryScheduleEntity retrySchedule) {
+    if (retryScheduleMapper.markRunning(
+            retrySchedule.getId(),
+            RetryScheduleStatus.WAITING.code(),
+            RetryScheduleStatus.RUNNING.code())
+        <= 0) {
+      return; // 另一实例已 claim
+    }
+    requeuePartition(retrySchedule);
+    retryScheduleMapper.markSuccess(retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
+  }
+
+  /** R2-P0-2：非 transient 失败的独立事务标记，避免与外层扫描状态混合。 */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markRetryFailed(RetryScheduleMapper.MarkFailedParam param) {
+    retryScheduleMapper.markFailed(param);
   }
 
   @Override

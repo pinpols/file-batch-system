@@ -151,7 +151,10 @@ batch:
     archive:
       enabled: ${BATCH_JOB_INSTANCE_ARCHIVE_ENABLED:true}
       retention-days: ${BATCH_JOB_INSTANCE_ARCHIVE_RETENTION_DAYS:30}
-      batch-size: ${BATCH_JOB_INSTANCE_ARCHIVE_BATCH_SIZE:1000}
+      # R2-P2-2：1000 在单 @Transactional 内跨 12 张表 INSERT SELECT + DELETE，长事务对 job_partition/job_task
+      # 行锁持有时间过长，与 orchestrator 热路径（partition CAS）争锁。降至 200 限制单事务规模；
+      # 积压更多时通过多轮 cron 摊薄。
+      batch-size: ${BATCH_JOB_INSTANCE_ARCHIVE_BATCH_SIZE:200}
       cron: "${BATCH_JOB_INSTANCE_ARCHIVE_CRON:0 30 4 * * SUN}"
   workflow:
     # P3-3: workflow_run / workflow_node_run 自动归档调度器（默认每天 04:15）
