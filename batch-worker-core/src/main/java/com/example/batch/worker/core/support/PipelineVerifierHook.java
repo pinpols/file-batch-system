@@ -76,6 +76,20 @@ public class PipelineVerifierHook {
       if (applicable.isEmpty()) {
         return;
       }
+      // payload = 顶层 attributes ∪ NODE_OUTPUTS。NODE_OUTPUTS 是 worker
+      // buildSuccessResponse 写的"对外契约"键集（recordCount / fileId / receiptCode /
+      // publishedCount 等），verifier 应该按这个 schema 写；展平合并避免每个 verifier 自己
+      // dig 进嵌套 map。同名键 NODE_OUTPUTS 覆盖顶层（前者是规范输出，后者可能是中间态）。
+      Map<String, Object> payload = new LinkedHashMap<>(attributes);
+      Object outputs = attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS);
+      if (outputs instanceof Map<?, ?> outputsMap) {
+        outputsMap.forEach(
+            (k, v) -> {
+              if (k != null) {
+                payload.put(k.toString(), v);
+              }
+            });
+      }
       VerifyContext context =
           VerifyContext.builder()
               .tenantId(tenantId)
@@ -83,7 +97,7 @@ public class PipelineVerifierHook {
               .jobInstanceId(jobInstanceId)
               .taskId(taskId)
               .stageCode(stageCode)
-              .payload(attributes)
+              .payload(payload)
               .build();
       List<Map<String, Object>> failures = new ArrayList<>();
       for (ContentVerifier verifier : applicable) {

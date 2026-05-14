@@ -258,6 +258,12 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          <!--
+            额外守护 lease_expire_at &lt; now：reclaim 选中 → renew 抢答（不 bump version）
+            的窗口期里，CAS 仅看 version 会误判 lease 仍过期。补这一条让 renew 抢答能挡住 reclaim。
+            lease_expire_at IS NULL 也接受（极端竞争下另一侧 reclaim 已把它清空，本侧无需重做）。
+          -->
+          and (lease_expire_at is null or lease_expire_at &lt; current_timestamp)
     </update>
 
     <update id="promoteStatus">

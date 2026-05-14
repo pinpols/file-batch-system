@@ -62,4 +62,26 @@ class DefaultStateMachineTest {
     StateTransition t = machine.transition("WAITING", "CUSTOM");
     assertThat(t.toState()).isEqualTo("WAITING");
   }
+
+  @Test
+  void shouldRefuseIllegalTransitionFromTerminalState() {
+    // TERMINATED 不应被 SUCCEED 复活
+    StateTransition succeedFromTerminated = machine.transition("TERMINATED", "SUCCEED");
+    assertThat(succeedFromTerminated.toState()).isEqualTo("TERMINATED");
+
+    // SUCCESS 已终态，RUN 不应再驱动回 RUNNING
+    StateTransition runFromSuccess = machine.transition("SUCCESS", "RUN");
+    assertThat(runFromSuccess.toState()).isEqualTo("SUCCESS");
+
+    // CANCELLED 不应被 FAIL 切换终态
+    StateTransition failFromCancelled = machine.transition("CANCELLED", "FAIL");
+    assertThat(failFromCancelled.toState()).isEqualTo("CANCELLED");
+  }
+
+  @Test
+  void shouldAllowTerminalSelfLoopAsIdempotent() {
+    // 同终态重复上报 → 幂等保持
+    StateTransition t = machine.transition("SUCCESS", "SUCCEED");
+    assertThat(t.toState()).isEqualTo("SUCCESS");
+  }
 }

@@ -7,6 +7,7 @@ import com.example.batch.orchestrator.domain.statemachine.StateTransition;
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -86,30 +87,63 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
     return Texts.hasText(event) ? event.trim().toUpperCase() : "NOOP";
   }
 
+  /** 终态集合：到达任意一个后业务认为该实体生命周期结束。 终态收到非自回边事件需要保留原状态 + WARN，避免静默"复活"或"切换终态"。 */
+  private static final Set<String> TERMINAL_STATES =
+      Set.of("SUCCESS", "FAILED", "PARTIAL_FAILED", "CANCELLED", "TERMINATED", "SKIPPED");
+
   private String resolveToState(String fromState, String event) {
-    return switch (event) {
-      case "READY" -> "READY";
-      case "START", "CLAIM", "RUN", "DISPATCH", "RETRYING", "RUNNING" -> "RUNNING";
-      case "SUCCESS", "SUCCEED", "COMPLETE", "FINISH" -> "SUCCESS";
-      case "PARTIAL_FAILED" -> "PARTIAL_FAILED";
-      case "FAIL", "FAILED", "ERROR", "REJECT" -> "FAILED";
-      case "TERMINATE", "CANCEL", "TERMINATED", "CANCELLED" -> "TERMINATED";
-      case "SKIP", "SKIPPED" -> "SKIPPED";
-      case "WAITING", "CREATED", "PENDING", "NOOP" -> fromState;
-      // A-3.3: 未知事件保留 NOOP 语义不变（向后兼容）。
-      // 自回边（event == fromState）属幂等重复上报，DEBUG 即可；
-      // 其他未知事件（如 "SUCESS" 拼错）保留 WARN 以便诊断状态机误用。
-      default -> {
-        if (fromState != null && fromState.equalsIgnoreCase(event)) {
-          log.debug("state machine self-transition noop: state={}", fromState);
-        } else {
-          log.warn(
-              "state machine NOOP on unknown event: fromState={}, event={} — check for typo",
-              fromState,
-              event);
-        }
-        yield fromState;
-      }
-    };
+    String candidate =
+        switch (event) {
+          case "READY" -> "READY";
+          case "START", "CLAIM", "RUN", "DISPATCH", "RETRYING", "RUNNING" -> "RUNNING";
+          case "SUCCESS", "SUCCEED", "COMPLETE", "FINISH" -> "SUCCESS";
+          case "PARTIAL_FAILED" -> "PARTIAL_FAILED";
+          case "FAIL", "FAILED", "ERROR", "REJECT" -> "FAILED";
+          case "TERMINATE", "CANCEL", "TERMINATED", "CANCELLED" -> "TERMINATED";
+          case "SKIP", "SKIPPED" -> "SKIPPED";
+          case "WAITING", "CREATED", "PENDING", "NOOP" -> fromState;
+          // A-3.3: 未知事件保留 NOOP 语义不变（向后兼容）。
+          // 自回边（event == fromState）属幂等重复上报，DEBUG 即可；
+          // 其他未知事件（如 "SUCESS" 拼错）保留 WARN 以便诊断状态机误用。
+          default -> {
+            if (fromState != null && fromState.equalsIgnoreCase(event)) {
+              log.debug("state machine self-transition noop: state={}", fromState);
+            } else {
+              log.warn(
+                  "state machine NOOP on unknown event: fromState={}, event={} — check for typo",
+                  fromState,
+                  event);
+            }
+            yield fromState;
+          }
+        };
+    return guardTerminal(fromState, event, candidate);
+  }
+
+  /**
+   * 终态守护：fromState 已是终态时，event 不应再驱动状态变化（除自回边 / NOOP）。
+   *
+   * <p>历史上各 mapper SQL 都自带 expectedStatus CAS 兜底；但状态机层做开放映射意味着， 任何未通过那些 mapper 的直接 UPDATE
+   * 路径（或测试代码、迁移脚本）都能用本方法构造非法转移 （TERMINATED → SUCCESS 等"复活"）。这里在上游堵住，让"非法转移"在状态机层就退化为 NOOP +
+   * WARN，更易诊断。
+   */
+  private String guardTerminal(String fromState, String event, String candidate) {
+    if (fromState == null || candidate == null) {
+      return candidate;
+    }
+    if (!TERMINAL_STATES.contains(fromState)) {
+      return candidate;
+    }
+    if (candidate.equals(fromState)) {
+      // 终态自回边（同终态重复上报）属幂等，保持
+      return candidate;
+    }
+    log.warn(
+        "state machine refuses illegal transition from terminal: fromState={}, event={},"
+            + " refusedTarget={} — staying in fromState",
+        fromState,
+        event,
+        candidate);
+    return fromState;
   }
 }
