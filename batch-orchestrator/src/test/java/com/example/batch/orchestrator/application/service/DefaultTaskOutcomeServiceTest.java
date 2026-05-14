@@ -84,6 +84,9 @@ class DefaultTaskOutcomeServiceTest {
             workflowDagService,
             workflowNodeDispatchServiceProvider,
             workflowTerminalOutboxService,
+            mock(
+                com.example.batch.orchestrator.application.engine.VerifierFailureOutboxService
+                    .class),
             new SimpleMeterRegistry(),
             jobInstanceTerminalChildStateReconciler,
             mock(ResultVersionWriter.class),
