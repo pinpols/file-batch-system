@@ -5,10 +5,19 @@ import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentReso
 import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-/** OSS（对象存储）渠道分发适配器，将文件上传至 MinIO/S3 兼容存储桶。 */
+/**
+ * OSS（对象存储）渠道分发适配器，将文件上传至 MinIO/S3 兼容存储桶。
+ *
+ * <p>{@code @Profile("!local & !test")}：local / test profile 下让位给 {@link
+ * StubRemoteFilesystemDispatchChannelAdapter}，避免本机连真实 OSS。
+ */
 @Component
+@Profile("!local & !test")
+@Order(20)
 @RequiredArgsConstructor
 public class OssDispatchChannelAdapter implements DispatchChannelAdapter {
 

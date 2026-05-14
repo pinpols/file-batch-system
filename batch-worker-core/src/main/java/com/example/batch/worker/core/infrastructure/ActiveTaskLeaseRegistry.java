@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -30,6 +31,11 @@ import org.springframework.stereotype.Component;
 public class ActiveTaskLeaseRegistry {
 
   private final Map<String, ActiveTaskLease> activeTaskLeases = new ConcurrentHashMap<>();
+
+  // P1-2: 已被 orchestrator REJECT 续租的 taskId（lease 已被驱逐，应中止当前执行，避免双执行）。
+  // 由 WorkerTaskLeaseRenewer 在 DB CAS 返回 false 时调用 markLost。execute() report 前检查 isLost。
+  // 注意：网络异常 / orchestrator 5xx 不算 lost（transient），不写入此集合。
+  private final Set<String> lostLeases = ConcurrentHashMap.newKeySet();
 
   // #1-3: 读写锁保护 register/remove 与 snapshot 的原子性，
   // 避免 shutdown 期间 snapshot 看到空集合而提前退出（TOCTOU）。
@@ -68,6 +74,7 @@ public class ActiveTaskLeaseRegistry {
     } finally {
       shutdownLock.writeLock().unlock();
     }
+    lostLeases.remove(taskId);
     // R-4.5: 每次 remove 后唤醒 awaitDrain 的等待者。放在 unlock 之后，
     // 避免 monitor 竞争时持有 shutdownLock 产生不必要的阻塞。
     if (activeTaskLeases.isEmpty()) {
@@ -75,6 +82,26 @@ public class ActiveTaskLeaseRegistry {
         drainMonitor.notifyAll();
       }
     }
+  }
+
+  /**
+   * P1-2: 标记某 task 的 lease 已被 orchestrator 驱逐。仅在 renew 收到明确 REJECT（DB CAS 返回 false）时调用， 不在网络异常 /
+   * 5xx 时调用——后者是 transient，应继续 retry。
+   *
+   * <p>由 {@link com.example.batch.worker.core.support.TaskExecutionWrapper#execute} 在 report 前 检查
+   * {@link #isLost}：若已 lost，应放弃当前执行结果（orchestrator 已重新派发给别的 worker）。
+   */
+  public void markLost(String taskId) {
+    if (taskId == null) {
+      return;
+    }
+    if (activeTaskLeases.containsKey(taskId)) {
+      lostLeases.add(taskId);
+    }
+  }
+
+  public boolean isLost(String taskId) {
+    return taskId != null && lostLeases.contains(taskId);
   }
 
   /**

@@ -146,6 +146,19 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     long startNanos = System.nanoTime();
     try {
       StepExecutionResponse response = runWithTimeout(request, task, timeoutSeconds);
+      // P1-2 闸门：若执行过程中 orchestrator 已明确驱逐本 lease（renew DB CAS 返回 false），
+      // 不再 report —— 此时 orchestrator 通常已把任务派给别的 worker，重复 report 会与对方竞争 CAS，
+      // 在 outbox/重试路径制造垃圾流量并潜在影响幂等性。
+      if (activeTaskLeaseRegistry.isLost(task.getTaskId())) {
+        log.error(
+            "task lease lost during execution — aborting report: tenantId={}, taskId={},"
+                + " workerId={}",
+            task.getTenantId(),
+            task.getTaskId(),
+            task.getWorkerId());
+        return new WorkerExecutionResult(
+            task.getTaskId(), false, "lease lost (evicted by orchestrator); report aborted");
+      }
       TaskExecutionReport report =
           buildReport(task, response, executionContext, response.success());
       taskExecutionClient.report(report);

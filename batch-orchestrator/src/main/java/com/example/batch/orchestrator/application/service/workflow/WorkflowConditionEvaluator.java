@@ -22,8 +22,13 @@ public class WorkflowConditionEvaluator {
    */
   @SuppressWarnings("unchecked")
   public boolean matches(String conditionExpr, String payloadJson) {
+    // P2-4 fail-closed：CONDITION 边的 condition_expr 为空属配置错误。
+    // 旧行为 "blank → true" 让空表达式静默退化成 ALWAYS，无法区分用户意图。
+    // 现在抛出 BizException，让运维在静态校验 / 配置 save 期间就发现问题。
     if (conditionExpr == null || conditionExpr.isBlank()) {
-      return true;
+      throw com.example.batch.common.exception.BizException.of(
+          com.example.batch.common.enums.ResultCode.INVALID_ARGUMENT,
+          "error.workflow.condition_expr_blank");
     }
     Map<String, Object> payload = Collections.emptyMap();
     if (payloadJson != null && !payloadJson.isBlank()) {

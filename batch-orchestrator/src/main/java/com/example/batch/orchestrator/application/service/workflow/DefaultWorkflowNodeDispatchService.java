@@ -96,6 +96,13 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (jobInstance == null || workflowRun == null || node == null) {
       return 0;
     }
+    // P1-4：先取 FOR UPDATE 行锁再做 readiness 检查。原顺序（先 readiness 后 lock）有 TOCTOU：
+    // 两个上游同时上报 SUCCESS 触发 join 节点，两个线程可同时通过 readiness 检查、再去拿锁。
+    // 调换顺序后，若存在历史 READY/RUNNING 记录，第二个线程在 FOR UPDATE 上阻塞或读取到已激活状态直接退出。
+    // 残留 race（首次激活、节点 run 行尚未存在）由下游 unique 索引 / DuplicateKeyException catch 兜底。
+    if (isNodeAlreadyActivated(workflowRun.getId(), node.nodeCode())) {
+      return 0;
+    }
     if (!workflowDagService.isNodeReadyForDispatch(
         workflowRun.getId(),
         workflowRun.getWorkflowDefinitionId(),
@@ -107,9 +114,6 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
             workflowRun.getWorkflowDefinitionId(), node.nodeCode());
     if (workflowNode == null) {
-      return 0;
-    }
-    if (isNodeAlreadyActivated(workflowRun.getId(), node.nodeCode())) {
       return 0;
     }
     // ADR-018 §决策 §解析时机 — 跨批量日依赖解析；REQUIRED 缺失 → WAITING_DEPENDENCY；解析失败 → 节点 FAIL
@@ -217,7 +221,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     failed.setDurationMs(0L);
     failed.setErrorCode(failureCode);
     failed.setErrorMessage("cross-day dependency resolve failed");
-    failed.setFinishedAt(Instant.now());
+    // BUG-2：禁用 Instant.now()，统一走 BatchDateTimeSupport（其他时间字段均如此）
+    failed.setFinishedAt(BatchDateTimeSupport.utcNow());
     workflowMappers.workflowNodeRunMapper.insert(failed);
   }
 

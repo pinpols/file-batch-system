@@ -105,8 +105,10 @@ public class ConsoleFileQueryService {
   public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
       FilePipelineStepQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     List<Map<String, Object>> rows =
         fileMappers.filePipelineStepRunMapper.selectByQuery(
+            tenantId,
             request.getPipelineInstanceId(),
             request.getStepCode(),
             request.getStageCode(),
@@ -114,6 +116,7 @@ public class ConsoleFileQueryService {
             pageRequest);
     long total =
         fileMappers.filePipelineStepRunMapper.countByQuery(
+            tenantId,
             request.getPipelineInstanceId(),
             request.getStepCode(),
             request.getStageCode(),

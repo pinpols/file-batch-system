@@ -3,7 +3,6 @@ package com.example.batch.trigger.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -30,21 +29,15 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultTriggerServiceTest {
 
   @Mock private LaunchAdapterService launchAdapterService;
-  @Mock private RestClient orchestratorRestClient;
-  @Mock private RestClient.RequestBodyUriSpec postSpec;
-  @Mock private RestClient.RequestBodySpec bodySpec;
-  @Mock private RestClient.ResponseSpec responseSpec;
   @Mock private TriggerRequestMapper triggerRequestMapper;
   @Mock private com.example.batch.trigger.mapper.TriggerOutboxEventMapper triggerOutboxEventMapper;
   @Mock private BusinessCalendarMapper businessCalendarMapper;
@@ -61,7 +54,6 @@ class DefaultTriggerServiceTest {
     service =
         new DefaultTriggerService(
             launchAdapterService,
-            orchestratorRestClient,
             triggerRequestMapper,
             triggerOutboxEventMapper,
             businessCalendarMapper,
@@ -106,7 +98,7 @@ class DefaultTriggerServiceTest {
     assertThat(response).isNotNull();
     assertThat(response.traceId()).isEqualTo("existing-trace");
     verify(triggerRequestMapper, never()).insert(any());
-    verify(orchestratorRestClient, never()).post();
+    verify(triggerOutboxEventMapper, never()).insert(any());
   }
 
   @Test
@@ -124,29 +116,20 @@ class DefaultTriggerServiceTest {
     pending.setTriggerType(TriggerType.CATCH_UP.code());
     pending.setRequestStatus("ACCEPTED");
     pending.setTraceId("trace-pending");
+    pending.setDedupKey("dedup-pending");
 
-    LaunchResponse response = new LaunchResponse("inst-001", "trace-pending");
     when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-pending")).thenReturn(pending);
     when(triggerRequestMapper.updateRequestStatusConditional(
             "t1", "req-pending", "PROCESSING", "ACCEPTED"))
         .thenReturn(1);
-    when(orchestratorRestClient.post()).thenReturn(postSpec);
-    when(postSpec.uri(anyString())).thenReturn(bodySpec);
-    when(bodySpec.body((Object) any())).thenReturn(bodySpec);
-    when(bodySpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(LaunchResponse.class)).thenReturn(response);
 
     LaunchResponse approved = service.approvePendingCatchUp(command);
 
-    assertThat(approved.instanceNo()).isEqualTo("inst-001");
-    ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(bodySpec).body(captor.capture());
-    assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
-    assertThat(captor.getValue().params())
-        .containsEntry("operationType", "CATCH_UP_APPROVAL")
-        .containsEntry("approvalMode", "MANUAL_APPROVAL")
-        .containsEntry("catchUpApproved", true)
-        .containsEntry("reason", "manual approve");
+    // ADR-010：审批走 outbox，不再调 orchestrator HTTP；返回 trigger 侧的 requestId/traceId
+    assertThat(approved.instanceNo()).isEqualTo("req-pending");
+    assertThat(approved.traceId()).isEqualTo("trace-pending");
+    // 同事务内：CAS PROCESSING → INSERT outbox → 更新 LAUNCHED
+    verify(triggerOutboxEventMapper).insert(any());
     verify(triggerRequestMapper).updateRequestStatus("t1", "req-pending", "LAUNCHED");
   }
 
@@ -165,7 +148,7 @@ class DefaultTriggerServiceTest {
         .isInstanceOf(BizException.class)
         .hasMessageContaining("not_catch_up");
 
-    verify(orchestratorRestClient, never()).post();
+    verify(triggerOutboxEventMapper, never()).insert(any());
   }
 
   @Test
@@ -194,7 +177,7 @@ class DefaultTriggerServiceTest {
     assertThat(response.instanceNo()).isNull();
     assertThat(response.traceId()).isEqualTo("trace-skip");
     verify(triggerRequestMapper, never()).insert(any());
-    verify(orchestratorRestClient, never()).post();
+    verify(triggerOutboxEventMapper, never()).insert(any());
   }
 
   @Test
@@ -212,7 +195,7 @@ class DefaultTriggerServiceTest {
             args -> assertThat(java.util.Arrays.toString((Object[]) args)).contains("suspended"));
 
     verify(triggerRequestMapper, never()).insert(any());
-    verify(orchestratorRestClient, never()).post();
+    verify(triggerOutboxEventMapper, never()).insert(any());
   }
 
   @Test

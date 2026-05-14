@@ -89,7 +89,15 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
 
   /** 终态集合：到达任意一个后业务认为该实体生命周期结束。 终态收到非自回边事件需要保留原状态 + WARN，避免静默"复活"或"切换终态"。 */
   private static final Set<String> TERMINAL_STATES =
-      Set.of("SUCCESS", "FAILED", "PARTIAL_FAILED", "CANCELLED", "TERMINATED", "SKIPPED");
+      Set.of(
+          "SUCCESS",
+          "FAILED",
+          "PARTIAL_FAILED",
+          "CANCELLED",
+          "TERMINATED",
+          "SKIPPED",
+          "SUCCESS_DRY_RUN",
+          "FAILED_DRY_RUN");
 
   private String resolveToState(String fromState, String event) {
     String candidate =

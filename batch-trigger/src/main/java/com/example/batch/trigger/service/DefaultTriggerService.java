@@ -37,7 +37,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.client.RestClient;
 
 /**
  * 触发层核心服务，负责校验 → 持久化 trigger_request → 转发给 Orchestrator，提供 4 条入口：
@@ -64,7 +63,6 @@ import org.springframework.web.client.RestClient;
 public class DefaultTriggerService implements TriggerService {
 
   private final LaunchAdapterService launchAdapterService;
-  private final RestClient orchestratorRestClient;
   private final TriggerRequestMapper triggerRequestMapper;
   private final TriggerOutboxEventMapper triggerOutboxEventMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
@@ -119,9 +117,13 @@ public class DefaultTriggerService implements TriggerService {
       }
     }
 
-    // 5.8: DB state mutation inside programmatic transaction; HTTP call stays outside
+    // ADR-010：审批通过后通过 outbox 异步转发，绝不走同步 HTTP。CAS → INSERT outbox → 标 LAUNCHED
+    // 三步在同事务内完成，orchestrator 宕机或网络故障不会让 trigger_request 卡在 PROCESSING。
+    // relay 周期把 trigger_outbox_event 推到 Kafka topic batch.trigger.launch.v1，
+    // orchestrator 端消费触发实际 launch；最终一致性由 outbox + (tenant,request_id) 唯一约束保证。
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
-    LaunchRequest launchRequest =
+    tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    LaunchResponse result =
         tx.execute(
             _ -> {
               TriggerRequestEntity pendingRequest =
@@ -135,54 +137,47 @@ public class DefaultTriggerService implements TriggerService {
                 throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
               }
               if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-                return null; // sentinel: already launched
+                return new LaunchResponse(
+                    pendingRequest.getRequestId(), pendingRequest.getTraceId());
               }
-              // H-5: 原子 CAS——只有一个实例可将 ACCEPTED → PROCESSING；
-              // 并发审批将看到 0 受影响行并跳过重复分发。
+              // 原子 CAS：ACCEPTED → PROCESSING，并发审批只有一个能进入
               int claimed =
                   triggerRequestMapper.updateRequestStatusConditional(
                       command.getTenantId(), command.getRequestId(), "PROCESSING", "ACCEPTED");
               if (claimed <= 0) {
-                return null; // 另一实例已在处理，或状态已发生变化
+                // 另一实例正在处理；返回当前状态，重试方需重新查询
+                return new LaunchResponse(
+                    pendingRequest.getRequestId(), pendingRequest.getTraceId());
               }
-              return new LaunchRequest(
-                  pendingRequest.getTenantId(),
-                  pendingRequest.getJobCode(),
-                  pendingRequest.getBizDate(),
-                  TriggerType.CATCH_UP,
-                  pendingRequest.getRequestId(),
-                  pendingRequest.getTraceId(),
-                  Map.of(
-                      "operationType",
-                      "CATCH_UP_APPROVAL",
-                      "approvalMode",
-                      "MANUAL_APPROVAL",
-                      "catchUpApproved",
-                      true,
-                      "reason",
-                      command.getReason() == null ? "" : command.getReason()));
+              LaunchRequest launchRequest =
+                  new LaunchRequest(
+                      pendingRequest.getTenantId(),
+                      pendingRequest.getJobCode(),
+                      pendingRequest.getBizDate(),
+                      TriggerType.CATCH_UP,
+                      pendingRequest.getRequestId(),
+                      pendingRequest.getTraceId(),
+                      Map.of(
+                          "operationType",
+                          "CATCH_UP_APPROVAL",
+                          "approvalMode",
+                          "MANUAL_APPROVAL",
+                          "catchUpApproved",
+                          true,
+                          "reason",
+                          command.getReason() == null ? "" : command.getReason()));
+              String dedupKey =
+                  Texts.hasText(pendingRequest.getDedupKey())
+                      ? pendingRequest.getDedupKey()
+                      : pendingRequest.getRequestId();
+              triggerOutboxEventMapper.insert(buildOutboxEntity(launchRequest, dedupKey));
+              // 同事务推进到 LAUNCHED — outbox 保证 at-least-once 投递；
+              // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再卡死。
+              triggerRequestMapper.updateRequestStatus(
+                  command.getTenantId(), command.getRequestId(), "LAUNCHED");
+              return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
             });
-
-    // Already launched or another instance claimed it — return current state
-    if (launchRequest == null) {
-      TriggerRequestEntity current =
-          triggerRequestMapper.selectByTenantAndRequestId(
-              command.getTenantId(), command.getRequestId());
-      Guard.requireFound(current, "pending catch-up request not found");
-      return new LaunchResponse(current.getRequestId(), current.getTraceId());
-    }
-
-    // 5.8: HTTP call outside transaction boundary
-    LaunchResponse response =
-        orchestratorRestClient
-            .post()
-            .uri("/internal/orchestrator/launch")
-            .body(launchRequest)
-            .retrieve()
-            .body(LaunchResponse.class);
-    triggerRequestMapper.updateRequestStatus(
-        command.getTenantId(), command.getRequestId(), "LAUNCHED");
-    return response;
+    return result;
   }
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {

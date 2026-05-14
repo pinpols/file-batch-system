@@ -637,16 +637,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         }
         continue;
       }
-      collaborators
-          .workflowNodeDispatchServiceProvider()
-          .getObject()
-          .dispatchNode(
-              ctx.jobInstance(),
-              ctx.workflowRun(),
-              nextNode,
-              ctx.task().getTaskPayload(),
-              ctx.jobInstance().getTraceId());
-      if (isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
+      int dispatched =
+          collaborators
+              .workflowNodeDispatchServiceProvider()
+              .getObject()
+              .dispatchNode(
+                  ctx.jobInstance(),
+                  ctx.workflowRun(),
+                  nextNode,
+                  ctx.task().getTaskPayload(),
+                  ctx.jobInstance().getTraceId());
+      // P2-6：只在真正派发产生分区时把下游加入 activeNodes；否则 workflow_run.current_node_code 会写入
+      // 幽灵节点（dispatchNode 因 readiness/已激活/cross-day 等返回 0 但 isActiveNode 偶尔仍命中并发线程
+      // 刚插入的 RUNNING 行），导致 workflow 永远到不了终态。
+      if (dispatched > 0 && isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
         ctx.activeNodes().add(nextNode.nodeCode());
       }
     }

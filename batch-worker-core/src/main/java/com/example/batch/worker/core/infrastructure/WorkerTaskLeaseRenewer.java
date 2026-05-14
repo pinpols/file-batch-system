@@ -127,6 +127,9 @@ public class WorkerTaskLeaseRenewer {
             activeTaskLease.getTaskId(),
             activeTaskLease.getWorkerId(),
             false);
+        // P1-2: orchestrator 明确 REJECT 续租（DB CAS=false），说明 lease 已被驱逐 / 重新派发。
+        // 标记 lost，让 wrapper 在 report 前中止，避免双执行结果同时上报。
+        activeTaskLeaseRegistry.markLost(activeTaskLease.getTaskId());
         trackFailure(activeTaskLease, "rejected");
       }
     }
@@ -189,6 +192,8 @@ public class WorkerTaskLeaseRenewer {
             activeTaskLease.getTaskId(),
             activeTaskLease.getWorkerId(),
             fastRetry);
+        // P1-2：与 batch 路径同步，明确 REJECT 时标 lost
+        activeTaskLeaseRegistry.markLost(activeTaskLease.getTaskId());
         trackFailure(activeTaskLease, "rejected");
         return false;
       } else {

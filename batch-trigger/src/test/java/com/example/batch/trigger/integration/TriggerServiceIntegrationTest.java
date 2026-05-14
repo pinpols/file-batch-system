@@ -1,11 +1,9 @@
 package com.example.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
@@ -114,16 +112,6 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
         "dedup-pending-001",
         "ACCEPTED",
         "trace-pending-001");
-    RestClient.RequestBodyUriSpec postSpec = mock(RestClient.RequestBodyUriSpec.class);
-    RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
-    RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
-    when(orchestratorRestClient.post()).thenReturn(postSpec);
-    when(postSpec.uri(anyString())).thenReturn(bodySpec);
-    when(bodySpec.body((Object) any())).thenReturn(bodySpec);
-    when(bodySpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(LaunchResponse.class))
-        .thenReturn(new LaunchResponse("inst-002", "trace-pending-001"));
-
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId("t1");
     command.setRequestId("pending-001");
@@ -139,9 +127,19 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
             "t1",
             "pending-001");
 
-    assertThat(response.instanceNo()).isEqualTo("inst-002");
+    // ADR-010：审批走 outbox。trigger_request 标 LAUNCHED 后立刻返回，trigger_outbox_event 同事务落库。
+    assertThat(response.instanceNo()).isEqualTo("pending-001");
+    assertThat(response.traceId()).isEqualTo("trace-pending-001");
     assertThat(status).isEqualTo("LAUNCHED");
-    verify(orchestratorRestClient).post();
+    Long outboxCount =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id ="
+                + " ?",
+            Long.class,
+            "t1",
+            "pending-001");
+    assertThat(outboxCount).isEqualTo(1L);
+    verify(orchestratorRestClient, never()).post();
   }
 
   @TestConfiguration(proxyBeanMethods = false)

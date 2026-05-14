@@ -138,9 +138,11 @@ public class WorkflowParamResolver {
     }
     String key = tail.substring(1);
     Map<String, Object> shared = context.workflowRunFields();
-    if (shared == null || !shared.containsKey(key.split("\\.", 2)[0])) {
+    if (shared == null) {
       return null;
     }
+    // P2-11：移除 containsKey 二次分割校验（与 resolveDottedPath 行为不一致）。
+    // 整段路径统一由 resolveDottedPath 决定：缺失 key / 中间非 Map 节点 → null（业务侧 null 兜底）。
     return resolveDottedPath(shared, key);
   }
 
