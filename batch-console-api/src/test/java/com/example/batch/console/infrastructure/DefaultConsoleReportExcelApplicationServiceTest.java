@@ -34,10 +34,19 @@ class DefaultConsoleReportExcelApplicationServiceTest {
     ConsoleOrchestratorClientProperties properties =
         mock(ConsoleOrchestratorClientProperties.class);
     RestClient.Builder builder = mock(RestClient.Builder.class);
+    com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient
+        orchestratorInternalRestClient =
+            mock(com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient.class);
     Environment environment = mock(Environment.class);
     DefaultConsoleReportExcelApplicationService service =
         new DefaultConsoleReportExcelApplicationService(
-            configService, queryService, properties, builder, environment, dateTimeSupport());
+            configService,
+            queryService,
+            properties,
+            builder,
+            orchestratorInternalRestClient,
+            environment,
+            dateTimeSupport());
     when(configService.configReleases(any()))
         .thenReturn(
             List.of(

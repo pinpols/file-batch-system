@@ -1,16 +1,21 @@
 package com.example.batch.console.web;
 
+import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.support.web.Idempotent;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,6 +35,7 @@ public class ConsoleResultVersionController {
 
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleResponseFactory responseFactory;
 
@@ -86,8 +92,12 @@ public class ConsoleResultVersionController {
             .body(unwrapToMap()));
   }
 
+  // P0-1: promote/reject 是高危结果版本变更，要求管理员/配置管理员权限；P1-6：强制幂等键
   @PostMapping("/{id}/promote")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  @Idempotent
   public CommonResponse<Map<String, Object>> promote(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
@@ -103,7 +113,10 @@ public class ConsoleResultVersionController {
   }
 
   @PostMapping("/{id}/reject")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  @Idempotent
   public CommonResponse<Map<String, Object>> reject(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
@@ -119,7 +132,7 @@ public class ConsoleResultVersionController {
   }
 
   private RestClient proxyClient() {
-    return restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+    return orchestratorInternalRestClient.build();
   }
 
   private static ParameterizedTypeReference<Map<String, Object>> unwrapToMap() {

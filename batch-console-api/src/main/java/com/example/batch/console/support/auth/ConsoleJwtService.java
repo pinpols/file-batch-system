@@ -93,8 +93,17 @@ public class ConsoleJwtService {
     }
     SecretKey key = signingKey();
     this.cachedEncoder = new NimbusJwtEncoder(new ImmutableSecret<>(key));
-    this.cachedDecoder =
+    NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+    // P2-9 (ADR audit 2026-05-14): 配置 clock skew validator，否则
+    // ConsoleSecurityProperties.jwtClockSkew 是死配置，运维调整不会生效。
+    java.time.Duration skew = properties.getJwtClockSkew();
+    if (skew == null || skew.isNegative()) {
+      skew = java.time.Duration.ofMinutes(1);
+    }
+    decoder.setJwtValidator(
+        new org.springframework.security.oauth2.jwt.JwtTimestampValidator(skew));
+    this.cachedDecoder = decoder;
   }
 
   private boolean isProductionProfile() {

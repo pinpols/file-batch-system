@@ -182,6 +182,18 @@ paths:
           description: Authenticated
         '401':
           description: Not authenticated
+  /api/console/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out — clear HttpOnly token cookie
+      operationId: logoutConsole
+      description: |
+        Sets `Set-Cookie: batch_console_token=; Max-Age=0` so the browser drops the auth cookie.
+        Idempotent and does not require authentication (permitAll). Front-end should also clear
+        the `batch-console-session` localStorage flag.
+      responses:
+        '204':
+          description: Cookie cleared
   /api/console/auth/stream/ticket:
     post:
       tags: [Auth]

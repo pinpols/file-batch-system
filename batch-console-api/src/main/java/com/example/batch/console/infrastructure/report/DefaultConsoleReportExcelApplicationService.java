@@ -14,6 +14,7 @@ import com.example.batch.console.application.config.ConsoleConfigApplicationServ
 import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
@@ -72,6 +73,7 @@ public class DefaultConsoleReportExcelApplicationService
   private final ConsoleQueryApplicationService queryApplicationService;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final Environment environment;
   private final BatchDateTimeSupport dateTimeSupport;
 
@@ -176,8 +178,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   private ConsoleSchedulerSnapshotResponse fetchSnapshot(String tenantId) {
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .get()
         .uri(
@@ -192,8 +193,7 @@ public class DefaultConsoleReportExcelApplicationService
 
   private List<ConsoleSchedulerSnapshotHistoryResponse> fetchSnapshotHistory(
       String tenantId, int limit) {
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     List<ConsoleSchedulerSnapshotHistoryResponse> body =
         client
             .get()

@@ -8,7 +8,9 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.file.ConsoleFileApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.file.ArchiveFileRequest;
@@ -50,15 +52,20 @@ import org.springframework.web.client.RestClient;
 public class DefaultConsoleFileApplicationService implements ConsoleFileApplicationService {
 
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final Environment environment;
+  // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
+  // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
+  private final ConsoleTenantGuard tenantGuard;
 
   @Override
   public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     FileExecContext ctx =
         FileExecContext.builder()
-            .tenantId(request.getTenantId())
+            .tenantId(tenantId)
             .fileId(request.getFileId())
             .reason(request.getReason())
             .idempotencyKey(idempotencyKey)
@@ -69,9 +76,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
   @Override
   public ConsoleFileOperationResponse delete(DeleteFileRequest request, String idempotencyKey) {
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     FileExecContext ctx =
         FileExecContext.builder()
-            .tenantId(request.getTenantId())
+            .tenantId(tenantId)
             .fileId(request.getFileId())
             .reason(request.getReason())
             .idempotencyKey(idempotencyKey)
@@ -83,9 +91,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   @Override
   public ConsoleFileOperationResponse redispatch(
       RedispatchFileRequest request, String idempotencyKey) {
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     FileExecContext ctx =
         FileExecContext.builder()
-            .tenantId(request.getTenantId())
+            .tenantId(tenantId)
             .fileId(request.getFileId())
             .channelCode(request.getChannelCode())
             .reason(request.getReason())
@@ -111,10 +120,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
               .build();
       return submitApproval(approvalCtx);
     }
-    requireApprovedApproval(request.getTenantId(), request.getApprovalId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+    requireApprovedApproval(tenantId, request.getApprovalId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     FileDownloadResponse response =
         restClient
             .post()
@@ -124,7 +133,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
             .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
             .body(
                 new FileOperationRequest(
-                    request.getTenantId(),
+                    tenantId,
                     null,
                     ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                     requestMetadata.traceId(),
@@ -140,9 +149,9 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   @Override
   public ConsoleFileOperationResponse operateArrivalGroup(
       FileArrivalGroupActionRequest request, String idempotencyKey) {
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     FileOperationResponse response =
         restClient
             .post()
@@ -154,7 +163,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
             .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
             .body(
                 new ArrivalGroupOperationRequest(
-                    request.getTenantId(),
+                    tenantId,
                     request.getAction(),
                     ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                     requestMetadata.traceId(),
@@ -168,9 +177,9 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   @Override
   public Map<String, Object> presignUpload(
       String tenantId, String channelCode, String fileName, String idempotencyKey) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     return restClient
         .post()
         .uri("/internal/files/presign-upload")
@@ -179,7 +188,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
         .body(
             Map.of(
-                "tenantId", tenantId,
+                "tenantId", resolvedTenantId,
                 "channelCode", channelCode,
                 "fileName", fileName,
                 "operatorId", ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64)))
@@ -190,9 +199,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   @Override
   public ConsoleFileOperationResponse confirmArrival(
       String tenantId, Long fileId, String idempotencyKey) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     FileExecContext ctx =
         FileExecContext.builder()
-            .tenantId(tenantId)
+            .tenantId(resolvedTenantId)
             .fileId(fileId)
             .reason("tenant confirmed arrival")
             .idempotencyKey(idempotencyKey)
@@ -223,8 +233,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
   private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     FileOperationResponse response =
         restClient
             .post()
@@ -247,8 +256,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
   private ConsolePresignDownloadResponse submitApproval(ApprovalSubmitContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     ApprovalResponse response =
         restClient
             .post()
@@ -277,8 +285,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   }
 
   private void requireApprovedApproval(String tenantId, String approvalNo) {
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     ApprovalRecordResponse response =
         restClient
             .get()

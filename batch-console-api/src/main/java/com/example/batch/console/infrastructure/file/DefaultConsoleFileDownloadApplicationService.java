@@ -11,6 +11,7 @@ import com.example.batch.console.application.file.ConsoleFileDownloadApplication
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.query.FileErrorRecordQuery;
+import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.mapper.FileErrorRecordMapper;
 import com.example.batch.console.mapper.FileRecordMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
@@ -59,9 +60,14 @@ public class DefaultConsoleFileDownloadApplicationService
   private final FileErrorRecordMapper fileErrorRecordMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final MinioStorageProperties minioStorageProperties;
+  // R2-P0-5：注入 Spring 管理的 MinioClient bean（MinioAutoConfiguration 提供），
+  // 复用其内部 OkHttp 连接池 + 后台线程。之前每次 download() 都 new 一个 MinioClient，
+  // 各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
+  private final MinioClient minioClient;
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties batchSecurityProperties;
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final Environment environment;
 
@@ -96,14 +102,8 @@ public class DefaultConsoleFileDownloadApplicationService
       contentType = "application/octet-stream";
     }
     try {
-      MinioClient client =
-          MinioClient.builder()
-              .endpoint(minioStorageProperties.getEndpoint())
-              .credentials(
-                  minioStorageProperties.getAccessKey(), minioStorageProperties.getSecretKey())
-              .build();
       InputStream inputStream =
-          client.getObject(GetObjectArgs.builder().bucket(bucket).object(objectName).build());
+          minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(objectName).build());
       InputStream payload =
           batchSecurityProperties.isBypassMode()
               ? inputStream
@@ -201,8 +201,7 @@ public class DefaultConsoleFileDownloadApplicationService
   }
 
   private void requireApprovedApproval(String tenantId, String approvalNo) {
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient restClient = orchestratorInternalRestClient.build();
     ApprovalRecordResponse response =
         restClient
             .get()

@@ -25,6 +25,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   private static final String PARAM_TENANT_ID = "tenantId";
 
   private final RestClient.Builder restClientBuilder;
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final Environment environment;
@@ -32,8 +33,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Object> instanceAction(Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .post()
         .uri("/internal/instances/{id}/{action}?tenantId={tenantId}", id, action, resolved)
@@ -44,8 +44,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Object> partitionAction(Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .post()
         .uri(
@@ -60,8 +59,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Object> workflowRunAction(Long id, String tenantId, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     Map<String, Object> response =
         client
             .post()
@@ -75,8 +73,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     Map<String, Object> response =
         client
             .post()
@@ -93,8 +90,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
 
   @Override
   public ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId) {
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .get()
         .uri(
@@ -114,8 +110,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(
       String tenantId, int limit) {
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .get()
         .uri(
@@ -132,8 +127,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Integer> outboxCleanup(String tenantId, int retainDays) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .post()
         .uri(
@@ -150,8 +144,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .post()
         .uri(
@@ -174,8 +167,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
       String operatorId,
       String reason) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put(PARAM_TENANT_ID, resolved);
     body.put("calendarCode", calendarCode);
@@ -203,8 +195,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
       String exportFormat,
       String requestedBy) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put(PARAM_TENANT_ID, resolved);
     body.put("bizDateFrom", bizDateFrom == null ? null : bizDateFrom.toString());
@@ -223,8 +214,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public byte[] downloadForensicExport(String tenantId, String exportId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    RestClient client = orchestratorInternalRestClient.build();
     return client
         .get()
         .uri(
