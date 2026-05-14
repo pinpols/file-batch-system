@@ -119,9 +119,9 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 ## 4. 数据库 Schema 基线
 
-**当前版本**：Flyway V85（`db/migration/`，跳过 V31）
+**当前版本**：Flyway V122（`db/migration/`，跳过 V31）
 
-> 本表早期手工维护到 V40，V41–V81 的演进未在此回填（涉及 archive / outbox 硬化 / i18n 三元组 / ADR-009 / ADR-010 等专题，详见各 `db/migration/V*.sql` 文件头注释 + [`docs/analysis/pg-schema-audit-2026-05-03.md`](../analysis/pg-schema-audit-2026-05-03.md) 的当前 schema 全量审计）。下表只补录 2026-05-03 多租隔离硬化批次（V82–V85）。
+> 本表早期手工维护到 V40，V41–V122 的演进以 `db/migration/V*.sql` 为准；其中 V82–V122 覆盖多租户隔离硬化、worker 上报 outbox、批量日治理、result_version、跨日 DAG、dry-run、取证导出、数据质量、sensor wait 等专题。
 
 | 版本 | 内容摘要 | 核心表 |
 |------|---------|-------|
@@ -316,13 +316,13 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | 业务异常无 i18n（zh/en 双语持久化） | i18n 全栈(Phase 1-F + Phase 2):`BizException.of(key, args)` + 11 表 `error_key`/`error_args` JSONB 列 + `LocalizedErrorRenderer` 按 Locale 重渲染。详 `docs/design/i18n.md` |
 | Workflow 节点间参数无显式串联 | ADR-009 受限 JSONPath DSL: `$.nodes.<X>.output.<key>` + V72 `workflow_node_run.output` 列 + `WorkflowParamResolver`。详 `docs/architecture/workflow-dependency-guide.md §10` |
 | trigger → orchestrator 同步 HTTP 桥（鲁棒性短板） | ADR-010 trigger_outbox + Kafka 异步路径（2026-05-02 固化）：V80 `trigger_outbox_event` + `TriggerOutboxRelay` + `KafkaTriggerEventPublisher` + `TriggerLaunchConsumer`；同步 HTTP 桥已删除，无开关 |
+| 架构决策无记录 | ADR 目录建成：`docs/architecture/adr/` 落地 28 个 ADR（ADR-001 ~ ADR-028），覆盖事务/幂等/失败分类/Tracing/result_version/批量日重放/Sensor 等核心决策；本文件 §10 索引同步 |
 
 ### 未关闭（P2，当前优先级）
 
 | 差距 | 目标 | 对应轮次 |
 |------|------|---------|
 | 配置 drift（多模块重复配置） | `batch-config-defaults` 共享基线 + 模块 overlay | 第10轮 |
-| 架构决策无记录 | ADR 目录（本文件 + `adr/` 子目录） | 第11轮（本轮） |
 | 产物内容验收无框架 | 可插拔 `Verifier` + Micrometer 指标 | 第12轮 |
 
 ### 未关闭（P3，暂不计划）
@@ -352,3 +352,21 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | [ADR-008](./adr/ADR-008-god-class-decomposition.md) | God Class 拆分：子服务 + Facade 保持接口稳定 | Accepted | 2026-03-25 |
 | [ADR-009](./adr/ADR-009-workflow-param-dsl.md) | Workflow 节点间参数串联 DSL（受限 JSONPath: `$.nodes.<X>.output.<key>` + `$.workflowRun.<key>`） | Accepted | 2026-04-29 |
 | [ADR-010](./adr/ADR-010-trigger-async-decoupling.md) | Trigger → Orchestrator 异步解耦（trigger_outbox + Kafka，复用 ADR-002 模式） | Accepted | 2026-04-30 |
+| [ADR-011](./adr/ADR-011-idempotency-boundary-alignment.md) | Console / Trigger / Orchestrator 三层幂等责任边界对齐 | Accepted | 2026-05-01 |
+| [ADR-012](./adr/ADR-012-failure-taxonomy.md) | 失败分类（Failure Taxonomy） | Accepted | 2026-05-03 |
+| [ADR-013](./adr/ADR-013-distributed-tracing.md) | 分布式 Tracing：Micrometer Observation + OpenTelemetry | Accepted | 2026-05-03 |
+| [ADR-014](./adr/ADR-014-claim-idempotency.md) | CLAIM 幂等保护（invocation-id 模型） | Accepted | 2026-05-04 |
+| [ADR-015](./adr/ADR-015-worker-side-outbox.md) | Worker 端本地 outbox（report 重投与防重复执行） | Accepted | 2026-05-04 |
+| [ADR-016](./adr/ADR-016-batch-renew-lease-api.md) | Batch Renew Lease API（减少 worker→orch HTTP 风暴） | Accepted | 2026-05-04 |
+| [ADR-017](./adr/ADR-017-result-version-model.md) | 结果版本（result_version）主模型 | Accepted | 2026-05-05 |
+| [ADR-018](./adr/ADR-018-cross-batch-day-dag-dependency.md) | 跨批量日 DAG 依赖（pipe 模型） | Accepted | 2026-05-05 |
+| [ADR-019](./adr/ADR-019-cross-domain-rate-limit.md) | 跨业务域限流（business_domain 主模型） | Accepted | 2026-05-06 |
+| [ADR-020](./adr/ADR-020-batch-day-replay.md) | 批量日维度重放（batch_day_replay_session） | Accepted | 2026-05-06 |
+| [ADR-021](./adr/ADR-021-data-quality-reconciliation.md) | 数据对账闭环（Data Quality / Reconciliation） | Accepted | 2026-05-06 |
+| [ADR-022](./adr/ADR-022-forensic-audit-bundle.md) | Forensic 一键取证（Forensic Audit Bundle） | Accepted | 2026-05-06 |
+| [ADR-023](./adr/ADR-023-multi-calendar-coordination.md) | 多日历联动 + 半天工作日 | Accepted | 2026-05-07 |
+| [ADR-024](./adr/ADR-024-archive-tiering.md) | 冷热数据分层 + 长保留 | Accepted | 2026-05-07 |
+| [ADR-025](./adr/ADR-025-workflow-static-validator.md) | Workflow 静态校验 | Accepted | 2026-05-08 |
+| [ADR-026](./adr/ADR-026-dry-run-mode.md) | 演练 / Dry-run 模式 | Accepted | 2026-05-09 |
+| [ADR-027](./adr/ADR-027-resource-affinity.md) | 资源亲和性 / 地理调度 | Accepted | 2026-05-10 |
+| [ADR-028](./adr/ADR-028-sensor-wait-node.md) | Sensor WAIT 节点 | Accepted | 2026-05-12 |
