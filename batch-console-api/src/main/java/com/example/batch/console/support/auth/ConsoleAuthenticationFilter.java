@@ -179,11 +179,35 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
+  /** ADR-030 §D7：HttpOnly cookie 名（与登录响应 Set-Cookie 同步）。 */
+  private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
+
   private String resolveBearerToken(HttpServletRequest request) {
-    // 5.4: 仅从 Authorization header 读取 JWT，不再接受 URL query token（防止日志/Referer 泄露）
+    // D7 优先：HttpOnly cookie（JS 不可读，XSS 无法外泄 token）
+    // 5.4 兼容：fallback 到 Authorization header，给老客户端 / SSE / SDK 一段过渡期
+    String cookieToken = resolveCookieToken(request);
+    if (Texts.hasText(cookieToken)) {
+      return cookieToken;
+    }
     String authorization = request.getHeader("Authorization");
     if (Texts.hasText(authorization) && authorization.startsWith("Bearer ")) {
       return authorization.substring(7).trim();
+    }
+    return null;
+  }
+
+  private String resolveCookieToken(HttpServletRequest request) {
+    jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+    if (cookies == null) {
+      return null;
+    }
+    for (jakarta.servlet.http.Cookie cookie : cookies) {
+      if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
+        String value = cookie.getValue();
+        if (Texts.hasText(value)) {
+          return value.trim();
+        }
+      }
     }
     return null;
   }

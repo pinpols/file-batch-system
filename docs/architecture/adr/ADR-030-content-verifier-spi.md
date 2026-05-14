@@ -75,7 +75,7 @@ Verifier 失败默认**不**中止任务。调用方决定升级路径：
 | D | `DispatchReceiptPresentVerifier` + `ProcessPublishedCountVerifier` | ✅ 落地 |
 | E | worker 端透传字段就位（`TaskExecutionReport.verifierFailures` 由 hook 填充） | ✅ 落地 |
 | F | orchestrator 消费 `TaskOutcomeCommand.verifierFailures`，在 task SUCCESS 同事务内写 `outbox_event(event_type='verifier.failure.v1', aggregate_type='JOB_TASK', aggregate_id=jobInstanceId)`；event_key 形如 `<tenantId>:verifier:<taskId>:<reason>` 便于去重订阅；console realtime 订阅展示由独立 console PR 接 | ✅ 落地 |
-| G | 硬中止策略：业务侧明确"verifier 失败要把 task 翻成 FAILED"时，新增 attributes 标记让 hook 决定是否覆盖 success | 🔜 仅按需 |
+| G | 硬中止策略：`ContentVerifier#fatal()` 默认 false（软告警），返回 true 时 worker hook 把整个 pipeline 翻为 FAILED + 错误码 `VERIFIER_FATAL`。`AbstractPipelineStepExecutionAdapter` 顺序调整：buildSuccessResponse → 跑 verifier → 据 fatal 决定 markPipelineSuccess / markPipelineFailed | ✅ 落地 |
 
 ## 范围红线（防越界）
 

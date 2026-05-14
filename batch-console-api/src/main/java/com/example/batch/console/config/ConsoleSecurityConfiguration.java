@@ -63,7 +63,10 @@ public class ConsoleSecurityConfiguration {
                     .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
                     .permitAll()
                     .requestMatchers(
-                        "/api/console/auth/login", "/console-login.html", "/favicon.ico")
+                        "/api/console/auth/login",
+                        "/api/console/auth/logout",
+                        "/console-login.html",
+                        "/favicon.ico")
                     .permitAll()
                     .requestMatchers("/actuator/loggers/**")
                     .hasAuthority(ConsoleRoles.ADMIN)

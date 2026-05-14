@@ -39,6 +39,21 @@ public interface ContentVerifier {
     return null;
   }
 
+  /**
+   * ADR-030 §G 硬中止开关。
+   *
+   * <ul>
+   *   <li>{@code false}（默认）：软告警——失败仅写 outbox + metrics，task 仍按 SUCCESS 推进
+   *   <li>{@code true}：失败将让 worker 把整个 pipeline 翻为 FAILED（错误码 VERIFIER_FATAL）
+   * </ul>
+   *
+   * <p>选 true 仅当"产物级问题等价于业务失败"——比如 DISPATCH 没回执 → 下游对账一定挂。 默认 false 是为了避免错把告警拔成中断；业务方设计 verifier
+   * 时显式 opt-in。
+   */
+  default boolean fatal() {
+    return false;
+  }
+
   /** 执行验证。实现必须保证幂等且无副作用（不写库、不发消息）。 */
   VerifyResult verify(VerifyContext context);
 }
