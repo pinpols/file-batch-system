@@ -33,8 +33,9 @@ import org.springframework.stereotype.Component;
  * <p>指标:
  *
  * <ul>
- *   <li>{@code process_staging_orphan_cleaned_total} —— 累计清理行数(Counter)
- *   <li>{@code process_staging_oldest_age_seconds} —— 当前 staging 中最老一行的年龄(Gauge,运维巡检)
+ *   <li>{@code batch.worker.process.staging.orphan.cleaned.total} —— 累计清理行数(Counter，dot-namespace
+ *       全栈对齐)
+ *   <li>{@code batch.worker.process.staging.oldest.age.seconds} —— 当前 staging 中最老一行的年龄(Gauge,运维巡检)
  * </ul>
  *
  * <p>关闭方式:`batch.worker.process.staging-cleanup.enabled=false`(默认 true)。
@@ -63,12 +64,14 @@ public class ProcessStagingOrphanCleaner {
     this.cleanedCounter =
         registry == null
             ? null
-            : Counter.builder("process_staging_orphan_cleaned_total")
+            // R7-A6-P2：dot-namespace 与全栈 (batch.worker.* / batch.outbox.*) 对齐；
+            // 原 snake_case 名 Prometheus 还能识别但与项目惯例脱节。
+            : Counter.builder("batch.worker.process.staging.orphan.cleaned.total")
                 .description("累计被 ProcessStagingOrphanCleaner 删除的孤儿 staging 行数")
                 .register(registry);
     if (registry != null) {
       registry.gauge(
-          "process_staging_oldest_age_seconds",
+          "batch.worker.process.staging.oldest.age.seconds",
           Collections.emptyList(),
           this,
           ProcessStagingOrphanCleaner::oldestAgeSecondsForGauge);

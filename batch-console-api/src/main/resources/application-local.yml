@@ -70,6 +70,8 @@ batch:
       jwt-secret: console-jwt-secret-change-me
       jwt-ttl: PT8H
       session-state-ttl: P30D
+      # R7-A1-P2：本地 HTTP 调试关掉 cookie Secure（默认 true，生产 HTTPS 强制）。
+      cookie-secure: false
     ai:
       enabled: false
       model: gpt-4o-mini

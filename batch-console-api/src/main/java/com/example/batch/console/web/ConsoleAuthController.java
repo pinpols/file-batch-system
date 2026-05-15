@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.SseTicketService;
@@ -36,6 +37,7 @@ public class ConsoleAuthController {
   private final ConsoleAuthApplicationService authApplicationService;
   private final ConsoleResponseFactory responseFactory;
   private final SseTicketService sseTicketService;
+  private final ConsoleSecurityProperties securityProperties;
 
   /**
    * 使用平台库中的控制台账号进行登录并签发 JWT。
@@ -83,7 +85,9 @@ public class ConsoleAuthController {
    * <ul>
    *   <li>HttpOnly：JS 不可读 → XSS 也无法外泄
    *   <li>SameSite=Lax：跨站 POST/iframe 不带 cookie；同站 GET / 普通跳转保留
-   *   <li>Secure=false：与本地 HTTP 开发兼容；生产由反代/网关层强制 HTTPS 并加 Secure flag
+   *   <li>Secure：默认 true（生产 HTTPS 强制），由 {@code batch.console.security.cookie-secure} 开关，本地 /
+   *       docker-compose 调试可在 application-local.yml 覆盖为 false。R7-A1-P2 改造前 硬编码 false 完全依赖反代改写，反代
+   *       misconfig 即明文传输 token。
    *   <li>Path=/：所有 console API 命中
    * </ul>
    */
@@ -97,7 +101,7 @@ public class ConsoleAuthController {
     }
     return ResponseCookie.from("batch_console_token", body.accessToken())
         .httpOnly(true)
-        .secure(false)
+        .secure(securityProperties.isCookieSecure())
         .sameSite("Lax")
         .path("/")
         .maxAge(maxAge)
