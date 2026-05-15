@@ -74,11 +74,12 @@ INSERT INTO batch.business_calendar (
     (1301, 'default-tenant', 'default-calendar', 'Default Calendar', 'Asia/Shanghai', 'NEXT_WORKDAY', 'AUTO', 3, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (1302, 'tenant-finance', 'finance-calendar', 'Finance Calendar', 'Asia/Shanghai', 'SKIP', 'MANUAL_APPROVAL', 2, TRUE, TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
 
+-- 2026-05-16: V84 多租约束加了 tenant_id NOT NULL,本 INSERT 补回该列(与 business_calendar 同 tenant)
 INSERT INTO batch.calendar_holiday (
-    id, calendar_id, biz_date, day_type, holiday_name, description, created_at, updated_at
+    id, tenant_id, calendar_id, biz_date, day_type, holiday_name, description, created_at, updated_at
 ) VALUES
-    (1401, 1301, DATE '2026-05-01', 'HOLIDAY', 'Labor Day', 'System test holiday entry', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
-    (1402, 1302, DATE '2026-05-02', 'WORKDAY_OVERRIDE', 'Weekend Make-up Day', 'Finance override', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
+    (1401, 'default-tenant', 1301, DATE '2026-05-01', 'HOLIDAY', 'Labor Day', 'System test holiday entry', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
+    (1402, 'tenant-finance', 1302, DATE '2026-05-02', 'WORKDAY_OVERRIDE', 'Weekend Make-up Day', 'Finance override', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08');
 
 INSERT INTO batch.worker_registry (
     id, tenant_id, worker_code, worker_group, host_name, host_ip, process_id, capability_tags, resource_tag,
