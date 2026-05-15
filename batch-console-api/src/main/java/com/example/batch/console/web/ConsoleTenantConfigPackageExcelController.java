@@ -12,7 +12,6 @@ import com.example.batch.console.web.response.config.TenantConfigPackageExcelUpl
 import jakarta.validation.Valid;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
  * 租户配置包（tenant-config-package）多 Sheet Excel 批量导入接口。
@@ -48,18 +48,26 @@ public class ConsoleTenantConfigPackageExcelController {
   private final ConsoleTenantConfigPackageExcelApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
 
-  /** 导出当前租户全量配置包（11 Sheet），可直接回灌至 {@code /upload → /apply} 流程。 */
+  /**
+   * 导出当前租户全量配置包（11 Sheet），可直接回灌至 {@code /upload → /apply} 流程。
+   *
+   * <p>R2-P1-9：返回 {@link StreamingResponseBody} 让 workbook 直接写到响应流，不再缓 byte[]。
+   */
   @GetMapping("/export")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
-  public ResponseEntity<InputStreamResource> export(
+  public ResponseEntity<StreamingResponseBody> export(
       @RequestParam(required = false) String tenantId) {
     return applicationService.exportPackage(tenantId);
   }
 
-  /** 下载包含全部 11 个数据 Sheet 及填写说明的空白导入模板 {@code .xlsx}。 */
+  /**
+   * 下载包含全部 11 个数据 Sheet 及填写说明的空白导入模板 {@code .xlsx}。
+   *
+   * <p>R2-P1-9：streaming 返回避免 byte[] 双拷贝。
+   */
   @GetMapping("/template")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
-  public ResponseEntity<InputStreamResource> template() {
+  public ResponseEntity<StreamingResponseBody> template() {
     return applicationService.downloadTemplate();
   }
 
@@ -98,7 +106,7 @@ public class ConsoleTenantConfigPackageExcelController {
    */
   @GetMapping("/preview/{uploadToken}/workbook")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public ResponseEntity<InputStreamResource> previewWorkbook(@PathVariable String uploadToken) {
+  public ResponseEntity<StreamingResponseBody> previewWorkbook(@PathVariable String uploadToken) {
     return applicationService.downloadPreviewWorkbook(uploadToken);
   }
 

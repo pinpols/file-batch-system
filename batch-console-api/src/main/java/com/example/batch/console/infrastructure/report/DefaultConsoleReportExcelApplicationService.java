@@ -35,8 +35,6 @@ import com.example.batch.console.web.response.ops.ConsoleWorkerRegistryResponse;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,13 +50,13 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.env.Environment;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
  * {@link com.example.batch.console.application.ConsoleReportExcelApplicationService} 的默认实现：
@@ -78,7 +76,7 @@ public class DefaultConsoleReportExcelApplicationService
   private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
-  public ResponseEntity<InputStreamResource> exportConfigReleases(
+  public ResponseEntity<StreamingResponseBody> exportConfigReleases(
       ConfigReleaseQueryRequest request) {
     return exportRows(
         "config_releases",
@@ -89,7 +87,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportSecretVersions(
+  public ResponseEntity<StreamingResponseBody> exportSecretVersions(
       SecretVersionQueryRequest request) {
     return exportRows(
         "secret_versions",
@@ -100,7 +98,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportConfigChangeLogs(
+  public ResponseEntity<StreamingResponseBody> exportConfigChangeLogs(
       ConfigChangeLogQueryRequest request) {
     return exportRows(
         "config_change_logs",
@@ -111,7 +109,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportAuditLogs(AuditLogQueryRequest request) {
+  public ResponseEntity<StreamingResponseBody> exportAuditLogs(AuditLogQueryRequest request) {
     return exportRows(
         "audit_logs",
         "audit-logs",
@@ -121,7 +119,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportSchedulerSnapshot(String tenantId) {
+  public ResponseEntity<StreamingResponseBody> exportSchedulerSnapshot(String tenantId) {
     ConsoleSchedulerSnapshotResponse snapshot = fetchSnapshot(tenantId);
     List<ConsoleSchedulerSnapshotResponse.PolicySnapshot> rows =
         snapshot == null ? List.of() : snapshot.policies();
@@ -134,7 +132,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportSchedulerSnapshotHistory(
+  public ResponseEntity<StreamingResponseBody> exportSchedulerSnapshotHistory(
       String tenantId, int limit) {
     List<ConsoleSchedulerSnapshotHistoryResponse> rows = fetchSnapshotHistory(tenantId, limit);
     return exportRows(
@@ -146,7 +144,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportWorkers(WorkerRegistryQueryRequest request) {
+  public ResponseEntity<StreamingResponseBody> exportWorkers(WorkerRegistryQueryRequest request) {
     return exportRows(
         "workers",
         "workers",
@@ -156,7 +154,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportOutboxRetries(
+  public ResponseEntity<StreamingResponseBody> exportOutboxRetries(
       OutboxRetryLogQueryRequest request) {
     return exportRows(
         "outbox_retries",
@@ -167,7 +165,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportOutboxDeliveries(
+  public ResponseEntity<StreamingResponseBody> exportOutboxDeliveries(
       OutboxDeliveryLogQueryRequest request) {
     return exportRows(
         "outbox_deliveries",
@@ -210,10 +208,10 @@ public class DefaultConsoleReportExcelApplicationService
     return body == null ? List.of() : body;
   }
 
-  private <T> ResponseEntity<InputStreamResource> exportRows(
+  private <T> ResponseEntity<StreamingResponseBody> exportRows(
       String sheetName, String filePrefix, String title, List<T> rows, Class<T> rowType) {
-    byte[] workbookBytes = writeWorkbook(sheetName, title, rows, rowType);
-    InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
+    // R2-P1-9: workbook 直接写到响应流，不缓 byte[]。
+    StreamingResponseBody body = out -> writeWorkbookTo(out, sheetName, title, rows, rowType);
     String fileName = filePrefix + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
     return ResponseEntity.ok()
         .header(
@@ -225,9 +223,13 @@ public class DefaultConsoleReportExcelApplicationService
         .body(body);
   }
 
-  private <T> byte[] writeWorkbook(String sheetName, String title, List<T> rows, Class<T> rowType) {
-    try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
-        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+  /**
+   * R2-P1-9 流式 workbook 写入：SXSSF 内部 50 行窗口 + 临时磁盘 spool，整体堆压力恒定； 不再 buffer 完整 byte[] 给
+   * InputStreamResource 二次拷贝。
+   */
+  private <T> void writeWorkbookTo(
+      java.io.OutputStream out, String sheetName, String title, List<T> rows, Class<T> rowType) {
+    try (SXSSFWorkbook workbook = new SXSSFWorkbook(50)) {
       Sheet dataSheet = workbook.createSheet(sheetName);
       dataSheet.createFreezePane(0, 1, 0, 1);
       CellStyle headerStyle = createHeaderStyle(workbook);
@@ -244,7 +246,6 @@ public class DefaultConsoleReportExcelApplicationService
       setWidths(dataSheet, headers);
       createReadmeSheet(workbook, title);
       workbook.write(out);
-      return out.toByteArray();
     } catch (Exception exception) {
       throw BizException.of(
           ResultCode.SYSTEM_ERROR,

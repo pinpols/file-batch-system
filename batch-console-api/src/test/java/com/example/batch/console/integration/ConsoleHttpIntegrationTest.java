@@ -104,9 +104,11 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldExportConfigReleasesReportViaHttp() {
     byte[] content = "config-releases-report".getBytes(StandardCharsets.UTF_8);
+    // R2-P1-9: 应用服务签名已切到 StreamingResponseBody，直接 lambda 写响应流
+    org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody body =
+        out -> out.write(content);
     when(reportExcelApplicationService.exportConfigReleases(any()))
-        .thenReturn(
-            ResponseEntity.ok().body(new InputStreamResource(new ByteArrayInputStream(content))));
+        .thenReturn(ResponseEntity.ok().body(body));
 
     webTestClient
         .get()

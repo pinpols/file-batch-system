@@ -9,14 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
-import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 class ConsoleReportExcelControllerTest {
 
@@ -34,12 +33,12 @@ class ConsoleReportExcelControllerTest {
   void shouldExportConfigReleasesAndSchedulerSnapshotExcel() throws Exception {
     byte[] configBytes = "config-releases".getBytes(StandardCharsets.UTF_8);
     byte[] snapshotBytes = "scheduler-snapshot".getBytes(StandardCharsets.UTF_8);
-    when(reportService.exportConfigReleases(any()))
-        .thenReturn(
-            ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(configBytes))));
+    // R2-P1-9: 返回类型已切到 StreamingResponseBody（lambda 流式写入响应流）
+    StreamingResponseBody configBody = out -> out.write(configBytes);
+    StreamingResponseBody snapshotBody = out -> out.write(snapshotBytes);
+    when(reportService.exportConfigReleases(any())).thenReturn(ResponseEntity.ok(configBody));
     when(reportService.exportSchedulerSnapshot(anyString()))
-        .thenReturn(
-            ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(snapshotBytes))));
+        .thenReturn(ResponseEntity.ok(snapshotBody));
 
     mockMvc
         .perform(get("/api/console/reports/excel/config-releases").param("tenantId", "t1"))

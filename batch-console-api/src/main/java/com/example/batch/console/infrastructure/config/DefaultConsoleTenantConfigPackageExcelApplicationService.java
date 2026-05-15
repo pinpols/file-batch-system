@@ -82,11 +82,11 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.context.MessageSource;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
  * 租户配置包 Excel 的全生命周期管理：export / template / upload → preview → apply。
@@ -166,8 +166,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportPackage(String tenantId) {
+  public ResponseEntity<StreamingResponseBody> exportPackage(String tenantId) {
     String tid = tenantGuard.resolveTenant(tenantId);
+    // R2-P1-9: 数据快照在请求线程里取（事务上下文），但 workbook 写入流的动作推迟到
+    // StreamingResponseBody 阶段——Spring 在响应渲染时调用 lambda，避免堆里 buffer 整份 byte[]。
     List<Map<String, Object>> resourceQueues =
         resourceQueueMapper.selectByQuery(tid, null, null, null, null);
     List<Map<String, Object>> businessCalendars =
@@ -188,33 +190,34 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities);
     List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
     List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
+    List<List<Map<String, Object>>> sheets =
+        List.of(
+            resourceQueues,
+            businessCalendars,
+            batchWindows,
+            jobs,
+            channels,
+            fileTemplates,
+            pipelines,
+            steps,
+            wfDefs,
+            wfNodes,
+            wfEdges);
+    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    byte[] bytes =
-        writer.buildExportWorkbook(
-            List.of(
-                resourceQueues,
-                businessCalendars,
-                batchWindows,
-                jobs,
-                channels,
-                fileTemplates,
-                pipelines,
-                steps,
-                wfDefs,
-                wfNodes,
-                wfEdges),
-            loadRegisteredImplCodesByModule());
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
-    return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
+    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+        fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> downloadTemplate() {
+  public ResponseEntity<StreamingResponseBody> downloadTemplate() {
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    byte[] bytes = writer.buildTemplateWorkbook(loadRegisteredImplCodesByModule());
-    return ConsoleSingleSheetExcelImportSupport.excelResponse(
-        "tenant-config-package-template.xlsx", bytes);
+    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
+    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+        "tenant-config-package-template.xlsx",
+        out -> writer.writeTemplateWorkbook(out, implRegistry));
   }
 
   /**
@@ -297,13 +300,14 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
+  public ResponseEntity<StreamingResponseBody> downloadPreviewWorkbook(String uploadToken) {
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
+    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    byte[] bytes = writer.buildPreviewWorkbook(session, result, loadRegisteredImplCodesByModule());
-    return ConsoleSingleSheetExcelImportSupport.excelResponse(
-        ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), bytes);
+    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+        ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()),
+        out -> writer.writePreviewWorkbook(out, session, result, implRegistry));
   }
 
   @Override
