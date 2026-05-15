@@ -2,7 +2,6 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
@@ -33,8 +32,6 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class ConsoleResultVersionController {
 
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
-  private final RestClient.Builder restClientBuilder;
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleResponseFactory responseFactory;
