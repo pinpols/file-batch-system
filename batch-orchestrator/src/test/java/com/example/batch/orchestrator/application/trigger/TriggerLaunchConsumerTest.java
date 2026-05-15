@@ -214,6 +214,14 @@ class TriggerLaunchConsumerTest {
   }
 
   private double failed(String reason) {
-    return meterRegistry.counter("batch.trigger.launch.failed.total", "reason", reason).count();
+    // R3-P0-11 后，部分失败路径（rate_limited / http_* / runtime）counter 同时带 tenant + reason；
+    // 早期路径（deserialize / empty_envelope）只带 reason。Mockito 测试需聚合两种命名下的同 reason series。
+    return meterRegistry
+        .find("batch.trigger.launch.failed.total")
+        .tag("reason", reason)
+        .counters()
+        .stream()
+        .mapToDouble(io.micrometer.core.instrument.Counter::count)
+        .sum();
   }
 }

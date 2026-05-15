@@ -72,36 +72,60 @@ CREATE INDEX IF NOT EXISTS idx_workflow_run_def_bizdate
 -- ─── 6. batch_day_replay_session 枚举 CHECK (R3-P1-5) ──────────────────────
 -- result_policy / config_version_policy 直写 DB 非法值会进未定义状态机分支。
 -- 用 NOT VALID 让存量数据不阻塞；运维 backfill 后 VALIDATE CONSTRAINT。
-ALTER TABLE batch.batch_day_replay_session
-    ADD CONSTRAINT ck_replay_session_result_policy
-    CHECK (result_policy IS NULL
-           OR result_policy IN ('CREATE_NEW_VERSION', 'KEEP_BOTH', 'MANUAL_CONFIRM_EFFECTIVE'))
-    NOT VALID;
-
-ALTER TABLE batch.batch_day_replay_session
-    ADD CONSTRAINT ck_replay_session_config_version_policy
-    CHECK (config_version_policy IS NULL
-           OR config_version_policy IN ('LATEST', 'PINNED', 'AS_SOURCE'))
-    NOT VALID;
+-- PG 不支持 ADD CONSTRAINT IF NOT EXISTS for CHECK/FK；用 DO 块保证 idempotent（Flyway 重跑或 docker test 环境重复迁移不挂）。
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_replay_session_result_policy') THEN
+        ALTER TABLE batch.batch_day_replay_session
+            ADD CONSTRAINT ck_replay_session_result_policy
+            CHECK (result_policy IS NULL
+                   OR result_policy IN ('CREATE_NEW_VERSION', 'KEEP_BOTH', 'MANUAL_CONFIRM_EFFECTIVE'))
+            NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_replay_session_config_version_policy') THEN
+        -- 真实业务枚举（见 BatchDayReplayService / DefaultLaunchService）：
+        --   USE_ORIGINAL_CONFIG（默认，复用原始 config 快照）
+        --   SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE（创建时快照当前 job_definition 版本）
+        -- 之前的 'LATEST'/'PINNED'/'AS_SOURCE' 是文档臆造值，与代码不匹配。
+        ALTER TABLE batch.batch_day_replay_session
+            ADD CONSTRAINT ck_replay_session_config_version_policy
+            CHECK (config_version_policy IS NULL
+                   OR config_version_policy IN (
+                       'USE_ORIGINAL_CONFIG',
+                       'SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE'))
+            NOT VALID;
+    END IF;
+END $$;
 
 -- ─── 7. result_version.dq_gate_status CHECK (R3-P1-6) ──────────────────────
-ALTER TABLE batch.result_version
-    ADD CONSTRAINT ck_result_version_dq_gate_status
-    CHECK (dq_gate_status IS NULL OR dq_gate_status IN ('PASS', 'WARN', 'BLOCKED'))
-    NOT VALID;
-
-ALTER TABLE archive.result_version_archive
-    ADD CONSTRAINT ck_result_version_archive_dq_gate_status
-    CHECK (dq_gate_status IS NULL OR dq_gate_status IN ('PASS', 'WARN', 'BLOCKED'))
-    NOT VALID;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_result_version_dq_gate_status') THEN
+        ALTER TABLE batch.result_version
+            ADD CONSTRAINT ck_result_version_dq_gate_status
+            CHECK (dq_gate_status IS NULL OR dq_gate_status IN ('PASS', 'WARN', 'BLOCKED'))
+            NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_result_version_archive_dq_gate_status') THEN
+        ALTER TABLE archive.result_version_archive
+            ADD CONSTRAINT ck_result_version_archive_dq_gate_status
+            CHECK (dq_gate_status IS NULL OR dq_gate_status IN ('PASS', 'WARN', 'BLOCKED'))
+            NOT VALID;
+    END IF;
+END $$;
 
 -- ─── 8. data_quality_check FK + updated_at (R3-P0-4) ────────────────────────
 -- rule_id 不再悬空；rule 删除时 SET NULL（保留审计行但解除引用）。
 -- 加 updated_at 让 archive retention scheduler 有 timestamp 决策依据。
-ALTER TABLE batch.data_quality_check
-    ADD CONSTRAINT fk_dq_check_rule_id
-    FOREIGN KEY (rule_id) REFERENCES batch.data_quality_rule(id) ON DELETE SET NULL
-    NOT VALID;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_dq_check_rule_id') THEN
+        ALTER TABLE batch.data_quality_check
+            ADD CONSTRAINT fk_dq_check_rule_id
+            FOREIGN KEY (rule_id) REFERENCES batch.data_quality_rule(id) ON DELETE SET NULL
+            NOT VALID;
+    END IF;
+END $$;
 
 ALTER TABLE batch.data_quality_check
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
@@ -110,10 +134,15 @@ ALTER TABLE archive.data_quality_check_archive
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- ─── 9. calendar_holiday.scope=GROUP 强制 group_code (R3-P2-7) ──────────────
-ALTER TABLE batch.calendar_holiday
-    ADD CONSTRAINT ck_calendar_holiday_group_code_required
-    CHECK (scope <> 'GROUP' OR group_code IS NOT NULL)
-    NOT VALID;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_calendar_holiday_group_code_required') THEN
+        ALTER TABLE batch.calendar_holiday
+            ADD CONSTRAINT ck_calendar_holiday_group_code_required
+            CHECK (scope <> 'GROUP' OR group_code IS NOT NULL)
+            NOT VALID;
+    END IF;
+END $$;
 
 -- =============================================================================
 -- 上线指南（DBA 操作）：

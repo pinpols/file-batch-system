@@ -97,6 +97,13 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   @Test
   void reclaimTask_innerCommitSurvivesOuterRollback() {
     LaunchedJob job = launchAndClaim("RECLAIM_BOUNDARY");
+    // D4 修复：resetForDispatch 现在守护 lease_expire_at < now 防止 reclaim 抢答活 worker。
+    // 测试场景模拟"lease 真实过期后被 scheduler 回收"——手动把 lease 过期掉。
+    jdbcTemplate.update(
+        "update batch.job_partition set lease_expire_at = now() - interval '1 minute' where"
+            + " tenant_id = ? and id = (select job_partition_id from batch.job_task where id = ?)",
+        TENANT,
+        job.taskId);
 
     long outboxBefore = countOutbox();
 
