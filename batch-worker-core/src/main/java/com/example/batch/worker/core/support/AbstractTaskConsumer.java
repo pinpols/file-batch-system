@@ -144,7 +144,19 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
             result.message());
         return true;
       } catch (Exception ex) {
-        // D-3: 发送至 DLQ 并确认偏移量，防止毒丸消息阻塞队列；运维可从 DLQ 查看并重放
+        // R1-P2-7 / S1-7：区分 orchestrator 5xx（transient，不该进 DLQ）vs 业务 4xx/不可恢复（DLQ）。
+        // 5xx / 网络异常通常因 orchestrator rolling restart / DB 短暂不可达，要走 listener 自然重试；
+        // 进 DLQ 的话静默把任务丢到死信里，触发任务卡住（lease reclaim 兜底，但是 detection 延迟大）。
+        if (isTransientOrchestratorFailure(ex)) {
+          log.warn(
+              "{} task transient failure (5xx/network) — NOT entering DLQ, will retry: taskId={},"
+                  + " error={}",
+              workerConfiguration().workerType(),
+              message.taskId(),
+              ex.getMessage());
+          return false; // 不 commit offset，Kafka listener 重投
+        }
+        // 不可恢复 / 业务 4xx → DLQ + commit offset
         log.error(
             "{} task execution failed — publishing to DLQ: taskId={}, error={}",
             workerConfiguration().workerType(),
@@ -188,6 +200,32 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
           StructuredLogField.WORKER_ID,
           StructuredLogField.RUN_MODE);
     }
+  }
+
+  /**
+   * R1-P2-7 / S1-7：判定异常是否为 orchestrator transient 故障（5xx / 网络层），不该进 DLQ。
+   *
+   * <p>覆盖：
+   *
+   * <ul>
+   *   <li>{@code HttpServerErrorException}（4xx Spring 包装类是 ClientError，不在此范畴）— orchestrator 5xx
+   *   <li>{@code ResourceAccessException} — 网络层异常（连接拒绝 / 读超时 / DNS 失败）
+   *   <li>{@code ConnectException} / {@code SocketTimeoutException} 通过 cause chain 找到
+   * </ul>
+   *
+   * <p>其它（4xx 业务拒绝、序列化错误、代码缺陷 RuntimeException）按"不可恢复"走 DLQ。
+   */
+  private boolean isTransientOrchestratorFailure(Throwable t) {
+    for (Throwable cur = t; cur != null; cur = cur.getCause()) {
+      if (cur instanceof org.springframework.web.client.HttpServerErrorException
+          || cur instanceof org.springframework.web.client.ResourceAccessException
+          || cur instanceof java.net.ConnectException
+          || cur instanceof java.net.SocketTimeoutException
+          || cur instanceof java.net.UnknownHostException) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** #4-3: 安全发布到 DLQ，返回是否成功。DLQ 写入失败时返回 false，调用方据此决定是否提交偏移量。 */

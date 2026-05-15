@@ -1,8 +1,68 @@
 # Release Flow / 版本发布流程
 
-> 适用：本仓库 `batch-platform` 9 模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch} / batch-console-api）
+> 适用：本仓库 `batch-platform` 9 模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch} / batch-console-api）+ batch-config-defaults（共享配置 resources-only 模块）。
 >
 > 维护规则：发布操作 = 改 `<revision>` + 打 git tag + 更新 `CHANGELOG.md`。Maven 版本入口在根 pom 单点 `<revision>`，所有模块共版（CI-friendly placeholder + flatten-maven-plugin）。
+
+## 0. 运行时硬性前提
+
+| 组件 | 最低版本 | 备注 |
+|---|---|---|
+| **PostgreSQL** | **≥ 11** | V100+ 多个 Flyway 迁移依赖 PG 11 的"`ADD COLUMN ... DEFAULT 常量`不重写行"优化；< 11 会触发全表 rewrite + 长时间 AccessExclusiveLock |
+| **Kafka** | ≥ 3.5（推荐 4.x） | KRaft / ZK 都兼容；ADR-010 trigger outbox topic 需要支持 idempotent producer |
+| **Redis** | ≥ 6.2 | quota Lua / ShedLock / cache pub-sub 用到的命令均在此版本可用 |
+| **JDK** | 25 | 见根 pom `<java.version>` |
+
+## 0.1 V124 上线前置检查（partial unique 改造）
+
+V124 把 4 张表的 UNIQUE 改为 partial unique index（消除 PG NULL ≠ NULL bypass）。
+**若存量数据已经存在重复 NULL 行，迁移会失败**。上线前必须用以下 SQL 在生产灰度库扫一遍，
+有结果就先清理（业务侧填充 idempotency_key / checksum_value 或物理删冗余行）再跑迁移：
+
+```sql
+-- job_partition：tenant_id + idempotency_key 是否有重复（仅非 NULL 行）
+SELECT tenant_id, idempotency_key, COUNT(*)
+FROM batch.job_partition WHERE idempotency_key IS NOT NULL
+GROUP BY 1,2 HAVING COUNT(*) > 1;
+
+-- file_record：含 checksum 的行是否有重复 path
+SELECT tenant_id, checksum_value, storage_path, COUNT(*)
+FROM batch.file_record WHERE checksum_value IS NOT NULL
+GROUP BY 1,2,3 HAVING COUNT(*) > 1;
+
+-- job_task：有 partition_id 时 (partition, seq) 是否唯一
+SELECT job_partition_id, task_seq, COUNT(*)
+FROM batch.job_task WHERE job_partition_id IS NOT NULL
+GROUP BY 1,2 HAVING COUNT(*) > 1;
+
+-- pipeline_instance：related_job_instance_id 是否唯一
+SELECT related_job_instance_id, COUNT(*)
+FROM batch.pipeline_instance WHERE related_job_instance_id IS NOT NULL
+GROUP BY 1 HAVING COUNT(*) > 1;
+
+-- workflow_run：同 (tenant, def, biz_date) 是否有多个非终态 run
+SELECT tenant_id, workflow_definition_id, biz_date, COUNT(*)
+FROM batch.workflow_run WHERE run_status IN ('CREATED','RUNNING')
+GROUP BY 1,2,3 HAVING COUNT(*) > 1;
+```
+
+V124 的 CHECK / FK 约束用 `NOT VALID` 模式，不扫描存量，但运维窗口期内需要手动 VALIDATE：
+
+```sql
+ALTER TABLE batch.batch_day_replay_session VALIDATE CONSTRAINT ck_replay_session_result_policy;
+ALTER TABLE batch.batch_day_replay_session VALIDATE CONSTRAINT ck_replay_session_config_version_policy;
+ALTER TABLE batch.result_version VALIDATE CONSTRAINT ck_result_version_dq_gate_status;
+ALTER TABLE archive.result_version_archive VALIDATE CONSTRAINT ck_result_version_archive_dq_gate_status;
+ALTER TABLE batch.data_quality_check VALIDATE CONSTRAINT fk_dq_check_rule_id;
+ALTER TABLE batch.calendar_holiday VALIDATE CONSTRAINT ck_calendar_holiday_group_code_required;
+```
+
+## 0.2 V119 历史注释（rolling deploy 已过期）
+
+V119 把 `job_execution_log` / `job_step_instance` 的 FK 改为 `ON DELETE CASCADE`，并同 commit 调整了
+`DefaultJobOpsService.deleteJobPartitionsByInstanceIds` 的删除顺序。schema 迁移和代码部署严格同时上线
+（标准 rolling deploy 单一 commit），上线后回退**只回退代码 + 保留 schema** 是安全的（CASCADE 关系新代码用、
+旧代码不依赖）。该问题在 V119 上线时已经过窗口，**仅作历史记录**，无需修复。
 
 ## 1. 版本号规范（SemVer 2.0.0）
 
