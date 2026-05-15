@@ -106,6 +106,10 @@ public class BatchDayTimePolicyResolver {
     if (transition == null) {
       return localDateTime.atZone(zoneId).toInstant();
     }
+    // S2-2 / R4-P2-7：spring-forward gap 时 ZoneOffsetTransition.getInstant() 按 JDK 契约
+    // ("the first instant after the discontinuity, when the new offset applies") 返回 gap 之后
+    // 第一个合法 Instant，即 RUN_AT_NEXT_VALID_TIME 想要的语义。原 R4 audit 报告的"取 pre-transition"
+    // 描述与 JDK 实际行为不符，无需修改逻辑——加注释固化该意图，防止以后误改。
     return transition.getInstant();
   }
 
