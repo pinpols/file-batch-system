@@ -1,5 +1,6 @@
 package com.example.batch.trigger.infrastructure;
 
+import com.example.batch.common.enums.ScheduleType;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.TriggerStatusInfo;
@@ -227,15 +228,25 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     }
   }
 
+  /**
+   * R7-A5: 用 ScheduleType.code() 替代字面量 + Map 路由替代 if-chain（CLAUDE.md §分支消除 + §领域字典）。 EVENT / MANUAL
+   * 不在 map 内即静默跳过（无 Quartz 注册）。
+   */
+  private final java.util.Map<String, java.util.function.Consumer<TriggerDescriptor>>
+      scheduleHandlers =
+          java.util.Map.of(
+              ScheduleType.CRON.code(), this::scheduleCronDescriptor,
+              ScheduleType.FIXED_RATE.code(), this::scheduleFixedRateDescriptor);
+
   private void scheduleDescriptor(TriggerDescriptor descriptor) {
     try {
       String scheduleType = descriptor.getScheduleType();
-      if ("CRON".equalsIgnoreCase(scheduleType)) {
-        scheduleCronDescriptor(descriptor);
-      } else if ("FIXED_RATE".equalsIgnoreCase(scheduleType)) {
-        scheduleFixedRateDescriptor(descriptor);
+      if (scheduleType != null) {
+        var handler = scheduleHandlers.get(scheduleType.toUpperCase(java.util.Locale.ROOT));
+        if (handler != null) {
+          handler.accept(descriptor);
+        }
       }
-      // EVENT / MANUAL: 无 Quartz 注册，静默跳过
     } catch (IllegalArgumentException e) {
       log.warn(
           "skipping invalid trigger descriptor for job={}/{}: {}",

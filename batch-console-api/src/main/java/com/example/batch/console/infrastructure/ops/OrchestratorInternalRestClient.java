@@ -3,7 +3,10 @@ package com.example.batch.console.infrastructure.ops;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -33,11 +36,27 @@ public class OrchestratorInternalRestClient {
   private final BatchSecurityProperties batchSecurityProperties;
   private final Environment environment;
 
-  /** 构造一个新的 {@link RestClient}，已绑定 baseUrl 与 internal-secret header。 */
+  /**
+   * R7-A2-P1: connect / read 超时。JDK 默认 HttpURLConnection 是 ∞，orchestrator GC 暂停 / DB stall /
+   * 网络黑洞时，Tomcat worker 线程会无限阻塞，整个 console UI 雪崩。这里给一个保守的默认值， 后续可改为 properties 注入。
+   */
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+  private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
+
+  /** 构造一个新的 {@link RestClient}，已绑定 baseUrl + internal-secret header + connect/read 超时。 */
   public RestClient build() {
     String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
     String secret = batchSecurityProperties.getInternalSecret();
-    RestClient.Builder builder = restClientBuilder.baseUrl(baseUrl);
+    RestClient.Builder builder =
+        restClientBuilder
+            .baseUrl(baseUrl)
+            .requestFactory(
+                ClientHttpRequestFactoryBuilder.detect()
+                    .build(
+                        HttpClientSettings.defaults()
+                            .withConnectTimeout(CONNECT_TIMEOUT)
+                            .withReadTimeout(READ_TIMEOUT)));
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }

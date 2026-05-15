@@ -16,6 +16,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -53,8 +54,7 @@ public class TriggerLaunchConsumer {
   // 用 ConcurrentHashMap.newKeySet 缓存已观测 tenantId，超过阈值后新 tenant 统一归一化为 "other"。
   // 256 是 Prom 单 metric 系列上限的实用阈值（足够区分常见租户 + 容忍误差）。
   private static final int MAX_TENANT_TAG_CARDINALITY = 256;
-  private static final Set<String> OBSERVED_TENANTS =
-      java.util.concurrent.ConcurrentHashMap.newKeySet();
+  private static final Set<String> OBSERVED_TENANTS = ConcurrentHashMap.newKeySet();
 
   private String normalizeTenantTag(String tenantId) {
     if (tenantId == null || tenantId.isBlank()) {

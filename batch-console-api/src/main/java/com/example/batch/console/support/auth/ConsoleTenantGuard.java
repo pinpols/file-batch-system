@@ -5,6 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.support.ScopeNotActiveException;
 import org.springframework.security.core.Authentication;
@@ -34,8 +35,7 @@ public class ConsoleTenantGuard {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   /** S-1.3 加固：只允许字母 / 数字 / 下划线 / 连字符；防止 requestTenantId 带路径字符（如 {@code ../x}）或特殊字符绕过后续 DB 查询语义。 */
-  private static final java.util.regex.Pattern TENANT_ID_PATTERN =
-      java.util.regex.Pattern.compile("^[a-zA-Z0-9_\\-]+$");
+  private static final Pattern TENANT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-]+$");
 
   public String resolveTenant(String requestTenantId) {
     String normalized = sanitizeTenantId(requestTenantId);

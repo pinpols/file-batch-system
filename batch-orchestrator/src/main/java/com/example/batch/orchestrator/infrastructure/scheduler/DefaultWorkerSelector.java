@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.Tags;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -128,7 +129,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
   }
 
   private List<WorkerRegistryEntity> findCandidates(String tenantId, String workerGroup) {
-    java.util.function.Supplier<List<WorkerRegistryEntity>> loader =
+    Supplier<List<WorkerRegistryEntity>> loader =
         () ->
             Texts.hasText(workerGroup)
                 ? workerRegistryMapper.selectByTenantAndWorkerGroupAndStatus(

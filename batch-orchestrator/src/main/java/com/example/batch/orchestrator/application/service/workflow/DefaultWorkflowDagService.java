@@ -17,11 +17,13 @@ import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -112,7 +114,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (matched.isEmpty()) {
       return List.of();
     }
-    Map<String, WorkflowNodeEntity> nodeByCode = java.util.Collections.emptyMap();
+    Map<String, WorkflowNodeEntity> nodeByCode = Collections.emptyMap();
     if (!wantedCodes.isEmpty()) {
       List<WorkflowNodeEntity> nodes =
           workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(
@@ -144,7 +146,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     } finally {
       io.micrometer.core.instrument.Timer timer = readyCheckTimer();
       if (timer != null) {
-        timer.record(System.nanoTime() - t0, java.util.concurrent.TimeUnit.NANOSECONDS);
+        timer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
       }
     }
   }
@@ -195,7 +197,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         fromCodes.add(edge.getFromNodeCode());
       }
     }
-    Map<String, WorkflowNodeRunEntity> latestRunByCode = java.util.Collections.emptyMap();
+    Map<String, WorkflowNodeRunEntity> latestRunByCode = Collections.emptyMap();
     if (!fromCodes.isEmpty()) {
       List<WorkflowNodeRunEntity> runs =
           workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(workflowRunId, fromCodes);
@@ -286,7 +288,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         fromCodes.add(edge.getFromNodeCode());
       }
     }
-    Map<String, WorkflowNodeRunEntity> latestRunByCode = java.util.Collections.emptyMap();
+    Map<String, WorkflowNodeRunEntity> latestRunByCode = Collections.emptyMap();
     if (!fromCodes.isEmpty()) {
       List<WorkflowNodeRunEntity> runs =
           workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(workflowRunId, fromCodes);
