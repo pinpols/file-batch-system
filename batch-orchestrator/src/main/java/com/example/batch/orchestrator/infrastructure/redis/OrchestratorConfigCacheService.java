@@ -13,6 +13,8 @@ import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +33,32 @@ import org.springframework.stereotype.Service;
 public class OrchestratorConfigCacheService {
 
   private static final Duration CONFIG_CACHE_TTL = Duration.ofMinutes(5);
+  // R3-P2-9 / S1-3：DB 也返回 null 时（配置被 disabled / 不存在）记录"已知缺失"时间戳，
+  // 在 NEGATIVE_TTL_MS 内直接返回 null，不再 hit DB。scheduler 每秒 tick 配置 disabled 不再
+  // 把 DB 打满。本地 map 即可（每个 orchestrator 实例独立，命中率自然降低也是可接受降级）。
+  private static final long NEGATIVE_TTL_MS = 30_000L;
+  // 容量上限保护，避免 leaked tenant/code 导致 map 无界增长；上限到达后整体重置。
+  private static final int NEGATIVE_CACHE_MAX = 10_000;
+  private final ConcurrentMap<String, Long> negativeCache = new ConcurrentHashMap<>();
+
+  private boolean isNegativeCached(String key) {
+    Long ts = negativeCache.get(key);
+    if (ts == null) {
+      return false;
+    }
+    if (System.currentTimeMillis() - ts > NEGATIVE_TTL_MS) {
+      negativeCache.remove(key);
+      return false;
+    }
+    return true;
+  }
+
+  private void markNegative(String key) {
+    if (negativeCache.size() >= NEGATIVE_CACHE_MAX) {
+      negativeCache.clear();
+    }
+    negativeCache.put(key, System.currentTimeMillis());
+  }
 
   private final OrchestratorRedisSupport redis;
   private final JobDefinitionMapper jobDefinitionMapper;
@@ -48,10 +76,15 @@ public class OrchestratorConfigCacheService {
     if (cached != null) {
       return cached;
     }
+    if (isNegativeCached(key)) {
+      return null;
+    }
     JobDefinitionEntity loaded =
         jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+    } else {
+      markNegative(key);
     }
     return loaded;
   }
@@ -66,10 +99,15 @@ public class OrchestratorConfigCacheService {
     if (cached != null) {
       return cached;
     }
+    if (isNegativeCached(key)) {
+      return null;
+    }
     WorkflowDefinitionEntity loaded =
         workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, workflowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+    } else {
+      markNegative(key);
     }
     return loaded;
   }
@@ -83,10 +121,15 @@ public class OrchestratorConfigCacheService {
     if (cached != null) {
       return cached;
     }
+    if (isNegativeCached(key)) {
+      return null;
+    }
     BusinessCalendarEntity loaded =
         businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+    } else {
+      markNegative(key);
     }
     return loaded;
   }
@@ -100,10 +143,15 @@ public class OrchestratorConfigCacheService {
     if (cached != null) {
       return cached;
     }
+    if (isNegativeCached(key)) {
+      return null;
+    }
     BatchWindowEntity loaded =
         batchWindowMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, windowCode, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+    } else {
+      markNegative(key);
     }
     return loaded;
   }
@@ -117,10 +165,15 @@ public class OrchestratorConfigCacheService {
     if (cached != null) {
       return cached;
     }
+    if (isNegativeCached(key)) {
+      return null;
+    }
     TenantQuotaPolicyEntity loaded =
         tenantQuotaPolicyMapper.selectFirstEnabledByTenantId(tenantId, true);
     if (loaded != null) {
       redis.setJson(key, loaded, CONFIG_CACHE_TTL);
+    } else {
+      markNegative(key);
     }
     return loaded;
   }
@@ -152,6 +205,9 @@ public class OrchestratorConfigCacheService {
     if (!Texts.hasText(tenantId) || !Texts.hasText(code)) {
       return;
     }
-    redis.delete(BatchRedisKeys.config(tenantId, type, code));
+    String key = BatchRedisKeys.config(tenantId, type, code);
+    redis.delete(key);
+    // R3-P2-9：失效 positive cache 时也清 negative，避免开启 disabled 配置时仍命中"已知缺失"残留
+    negativeCache.remove(key);
   }
 }

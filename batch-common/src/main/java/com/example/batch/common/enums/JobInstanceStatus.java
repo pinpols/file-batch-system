@@ -43,4 +43,15 @@ public enum JobInstanceStatus implements DictEnum {
   public boolean isDryRunTerminal() {
     return this == SUCCESS_DRY_RUN || this == FAILED_DRY_RUN;
   }
+
+  /**
+   * R4-Flyway-2 / S1-5：从 code 字符串解析为枚举；未知 code 返回 {@code null}（不抛）。
+   *
+   * <p>关键 rolling-rollback 兼容性：V117 增加了 SUCCESS_DRY_RUN / FAILED_DRY_RUN 后， 一旦回退到不含这两值的旧镜像，旧代码读到 DB
+   * 里 dry-run 状态行，{@link DictEnum#fromCode} 返回 null。 调用方必须用 null-safe 路径（如 lifecycle 推断走 {@link
+   * BatchLifecycleStatus#UNKNOWN}）兜底， 不允许直接对结果 {@code .lifecycle()} 解引用导致 NPE。
+   */
+  public static JobInstanceStatus fromCodeOrNull(String code) {
+    return DictEnum.fromCode(JobInstanceStatus.class, code);
+  }
 }

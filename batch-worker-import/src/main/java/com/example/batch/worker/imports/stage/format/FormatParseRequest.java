@@ -54,8 +54,19 @@ public record FormatParseRequest(
           cs.newDecoder()
               .onMalformedInput(CodingErrorAction.REPORT)
               .onUnmappableCharacter(CodingErrorAction.REPORT);
+      // S1-6 / R2-P2-7：InputStreamReader ctor 罕见情况下抛异常时，原始 InputStream 未关闭 → fd 泄漏。
+      // 包一层 try-catch 在中间环节失败时显式关 in。正常路径下 BufferedReader.close 会向下关闭。
       InputStream in = Files.newInputStream(spoolPath);
-      return new BufferedReader(new InputStreamReader(in, decoder));
+      try {
+        return new BufferedReader(new InputStreamReader(in, decoder));
+      } catch (RuntimeException | Error ex) {
+        try {
+          in.close();
+        } catch (IOException closeEx) {
+          ex.addSuppressed(closeEx);
+        }
+        throw ex;
+      }
     }
     return new BufferedReader(new StringReader(payloadText == null ? "" : payloadText));
   }
