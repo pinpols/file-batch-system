@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -105,7 +106,7 @@ public class ConsoleJwtService {
         NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
     java.time.Duration skew = properties.getJwtClockSkew();
     if (skew == null || skew.isNegative()) {
-      skew = java.time.Duration.ofMinutes(1);
+      skew = Duration.ofMinutes(1);
     }
     decoder.setJwtValidator(
         new org.springframework.security.oauth2.jwt.JwtTimestampValidator(skew));

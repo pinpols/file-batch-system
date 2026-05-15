@@ -1,7 +1,6 @@
 package com.example.batch.console.infrastructure.ops;
 
 import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotHistoryResponse;
@@ -21,10 +20,8 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestratorProxyService {
 
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private static final String PARAM_TENANT_ID = "tenantId";
 
-  private final RestClient.Builder restClientBuilder;
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;

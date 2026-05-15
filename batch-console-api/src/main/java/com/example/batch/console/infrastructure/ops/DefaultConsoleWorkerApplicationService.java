@@ -2,7 +2,6 @@ package com.example.batch.console.infrastructure.ops;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.application.ops.ConsoleWorkerApplicationService;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
@@ -49,9 +48,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
   private static final String KEY_WORKERS = "workers";
   private static final String KEY_TENANT_ID = "tenantId";
 
-  private final RestClient.Builder restClientBuilder;
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;

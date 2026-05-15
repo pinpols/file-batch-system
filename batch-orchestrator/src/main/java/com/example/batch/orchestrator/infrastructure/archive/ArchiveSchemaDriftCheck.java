@@ -55,7 +55,11 @@ public class ArchiveSchemaDriftCheck {
           "result_version",
           // V110 (ADR-020) — batch_day_replay 聚合 + 子项；archive 镜像同样 LIKE INCLUDING ALL
           "batch_day_replay_session",
-          "batch_day_replay_entry");
+          "batch_day_replay_entry",
+          // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
+          // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
+          "data_quality_rule",
+          "data_quality_check");
 
   private final InformationSchemaMapper informationSchemaMapper;
 

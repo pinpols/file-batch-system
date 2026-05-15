@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -975,8 +976,7 @@ public class ConfigPackageExcelValidator {
     return normalize(row.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + v;
   }
 
-  private static final java.util.regex.Pattern DSL_NODE_REF =
-      java.util.regex.Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.");
+  private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.");
 
   private void validateWorkflowGraph(WfGraphCtx g, List<WorkbookIssue> issues) {
     // 索引:nodeCode -> row(取首个,duplicate 已在 validateWfNodeRow 报过)

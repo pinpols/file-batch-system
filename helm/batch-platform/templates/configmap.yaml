@@ -39,6 +39,12 @@ data:
   # ── Cross-service ──────────────────────────────────────────────────────────
   BATCH_ORCHESTRATOR_BASE_URL: {{ .Values.orchestratorBaseUrl | quote }}
   BATCH_SECURITY_BYPASS_MODE: {{ .Values.security.bypassMode | quote }}
+
+  # R7-A4-P0: orchestrator 限流 + DB 池规模（之前 .env.prod 写了但 Helm 漂移）。
+  BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: {{ .Values.orchestrator.platformDb.maxPoolSize | default 30 | quote }}
+  BATCH_RATE_LIMIT_ENABLED: {{ .Values.orchestrator.rateLimit.enabled | default false | quote }}
+  BATCH_RATE_LIMIT_MAX_NEW_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxNewPerTenantPerMinute | default 0 | quote }}
+  BATCH_RATE_LIMIT_MAX_RELEASE_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxReleasePerTenantPerMinute | default 0 | quote }}
   BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: {{ .Values.consoleApi.realtime.replayMaxEntries | quote }}
   BATCH_CONSOLE_REALTIME_REPLAY_TTL: {{ .Values.consoleApi.realtime.replayTtl | quote }}
   BATCH_TIMEZONE_DEFAULT_ZONE: {{ .Values.batchTimezoneDefaultZone | quote }}

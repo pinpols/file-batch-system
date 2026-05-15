@@ -73,7 +73,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   @PostConstruct
   void initMetrics() {
     giveUpCounter =
-        Counter.builder("batch.outbox.events.giveup.total")
+        // R7-A6-P1：与 trigger 端 batch.trigger.outbox.give_up.total + 领域字典 GIVE_UP 命名对齐。
+        Counter.builder("batch.outbox.events.give_up.total")
             .description(
                 "Outbox events transitioned to GIVE_UP terminal state — should be 0 in steady"
                     + " state; non-zero rate triggers ops alert.")
@@ -123,9 +124,14 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     }
 
     // ── 阶段二：等待本批所有 Kafka ACK（并行等待，耗时 ≈ 单条最长 RTT）────────
+    // R7-A2-P0：用 exceptionally 吞掉单条 future 的异常，否则 allOf.join() 抛 CompletionException
+    // 会让整个 try 块上抛、阶段三完全跳过，整批事件原地停在 PUBLISHING 状态，要等 stale TTL
+    // (`resetStalePublishing`) 才能回收 — 实测会让 trigger 高峰积压瞬间放大。阶段三里的
+    // `future.getNow(false)` 已经对失败结果（false / 仍未完成）做正确处理，这里只负责等齐。
     if (!inFlight.isEmpty()) {
       CompletableFuture.allOf(
               inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new))
+          .exceptionally(ex -> null)
           .join();
     }
 

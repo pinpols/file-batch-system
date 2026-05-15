@@ -218,6 +218,14 @@ orchestrator:
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
+  # R7-A4-P0：之前 .env.prod 写了但 ConfigMap 未渲染 → K8s 部署用默认 pool=30 / 限流 disabled
+  # 撑不住 .env.prod 注释里承诺的 500-1000 req/s。
+  platformDb:
+    maxPoolSize: 50
+  rateLimit:
+    enabled: true
+    maxNewPerTenantPerMinute: 300
+    maxReleasePerTenantPerMinute: 600
 
 # ── worker-import ──────────────────────────────────────────────────────────────
 

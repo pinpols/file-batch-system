@@ -7,7 +7,6 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.file.ConsoleFileApplicationService;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
@@ -51,9 +50,7 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleFileApplicationService implements ConsoleFileApplicationService {
 
-  private final RestClient.Builder restClientBuilder;
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final Environment environment;
   // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；

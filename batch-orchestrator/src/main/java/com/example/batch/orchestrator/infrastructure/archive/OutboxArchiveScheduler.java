@@ -4,6 +4,7 @@ import com.example.batch.orchestrator.application.archive.OutboxArchiveService;
 import com.example.batch.orchestrator.application.archive.OutboxArchiveService.ArchiveBatchResult;
 import com.example.batch.orchestrator.config.OutboxArchiveProperties;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -62,8 +63,7 @@ public class OutboxArchiveScheduler {
     }
   }
 
-  private long drain(
-      java.util.function.Supplier<ArchiveBatchResult> archiver, int batchSize, String label) {
+  private long drain(Supplier<ArchiveBatchResult> archiver, int batchSize, String label) {
     long total = 0;
     for (int i = 0; i < MAX_BATCHES_PER_TICK; i++) {
       ArchiveBatchResult result = archiver.get();

@@ -47,9 +47,17 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# R7-A4-P0：runtime stage 改为非 root 运行（uid/gid 1000=batch），与 Helm
+# podSecurityContext.runAsNonRoot:true / runAsUser:1000 对齐；
+# 同时 chown /app 让 readOnlyRootFilesystem 场景仍能写 entrypoint 自身。
+RUN groupadd --system --gid 1000 batch \
+    && useradd --system --uid 1000 --gid batch --home-dir /app --shell /sbin/nologin batch
+
 COPY --from=builder /tmp/app.jar /app/app.jar
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh && chown -R batch:batch /app
+
+USER 1000
 
 ENV JAVA_OPTS=""
 

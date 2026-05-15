@@ -4,13 +4,12 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -19,10 +18,10 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class ConsoleSelfServiceJobService {
 
-  private final RestClient.Builder restClientBuilder;
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
+  // R7-A1-P1：原来自建 RestClient 漏 X-Internal-Secret，生产关 bypass-mode 时
+  // /internal/approvals/submit 直接 401；改走标准入口 OrchestratorInternalRestClient.
+  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
-  private final Environment environment;
 
   public String requestRerun(RerunParam param, String operator, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(param.tenantId());
@@ -70,8 +69,7 @@ public class ConsoleSelfServiceJobService {
 
   @SuppressWarnings("unchecked")
   private String submitApproval(SubmitApprovalParam param) {
-    String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
-    RestClient client = restClientBuilder.baseUrl(baseUrl).build();
+    RestClient client = orchestratorInternalRestClient.build();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("tenantId", param.tenantId());
     body.put("approvalType", "SELF_SERVICE");
@@ -103,10 +101,6 @@ public class ConsoleSelfServiceJobService {
       String payloadJson,
       String operator,
       String idempotencyKey) {}
-
-  private String resolveUrl(String url) {
-    return environment.resolveRequiredPlaceholders(url);
-  }
 
   public record RerunParam(
       String tenantId, String jobCode, String bizDate, String targetInstanceNo, String reason) {}

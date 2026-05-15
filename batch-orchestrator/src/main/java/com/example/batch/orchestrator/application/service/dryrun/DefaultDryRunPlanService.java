@@ -33,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -249,9 +250,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       findings.add(DryRunFinding.warn("WF_NO_END", "workflow", "workflow missing END node", null));
     }
     Set<String> nodeCodes =
-        nodes.stream()
-            .map(WorkflowNodeEntity::getNodeCode)
-            .collect(java.util.stream.Collectors.toSet());
+        nodes.stream().map(WorkflowNodeEntity::getNodeCode).collect(Collectors.toSet());
     if (edges != null) {
       for (WorkflowEdgeEntity edge : edges) {
         if (!nodeCodes.contains(edge.getFromNodeCode())) {
@@ -354,7 +353,20 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     return DryRunPlanResult.of(DryRunLevel.EXECUTION_PLAN, findings, summary);
   }
 
-  /** L3-1: 对 params 中匹配 SQL_PARAM_KEYS 的字符串调用 jdbcTemplate.execute("EXPLAIN " + sql)。 */
+  /**
+   * R7-A1-P0：拒绝任何以 {@code EXPLAIN } / {@code EXPLAIN(} 起头的 payload。
+   *
+   * <p>原因：PG 下 {@code EXPLAIN (ANALYZE) <DML>} 会真正执行 DML/DDL；如果调用方提交 {@code params.sql = "(ANALYZE)
+   * DELETE FROM job_definition"}，本服务拼出来就是 {@code "EXPLAIN (ANALYZE) DELETE FROM
+   * job_definition"}，DELETE 真删表。
+   *
+   * <p>除了拒绝 EXPLAIN 关键字，还使用 {@code EXPLAIN (ANALYZE FALSE, COSTS FALSE)} 显式 双保险：即使后续语法变更，ANALYZE
+   * FALSE 也强制 planner 只计划不执行。
+   */
+  private static final Pattern EXPLAIN_PREFIX =
+      Pattern.compile("^\\s*EXPLAIN\\b", Pattern.CASE_INSENSITIVE);
+
+  /** L3-1: 对 params 中匹配 SQL_PARAM_KEYS 的字符串调用 EXPLAIN(ANALYZE FALSE)，仅做计划探测。 */
   private int probeSqlExplain(Map<String, Object> params, List<DryRunFinding> findings) {
     JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
     if (jdbcTemplate == null) return 0;
@@ -363,8 +375,22 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       Object raw = params.get(key);
       if (!(raw instanceof String sql) || !Texts.hasText(sql)) continue;
       probed++;
+      String trimmed = sql.trim();
+      if (EXPLAIN_PREFIX.matcher(trimmed).find()) {
+        // R7-A1-P0：拒绝调用方手动塞 EXPLAIN（含 EXPLAIN (ANALYZE) <DML>），避免被嵌套执行 DML。
+        findings.add(
+            DryRunFinding.error(
+                "EXEC_SQL_EXPLAIN_REJECTED",
+                SCOPE_EXECUTION,
+                "payload starts with EXPLAIN — refusing to nest a second EXPLAIN; submit raw"
+                    + " SELECT",
+                key));
+        continue;
+      }
       try {
-        jdbcTemplate.execute("EXPLAIN " + sql);
+        // R7-A1-P0：ANALYZE FALSE + COSTS FALSE 显式强制 planner-only，零侧效；
+        // 即使 SQL 是 DML 也不会真正执行（与裸 EXPLAIN 不同，可对抗未来 PG 默认行为变化）。
+        jdbcTemplate.execute("EXPLAIN (ANALYZE FALSE, COSTS FALSE) " + trimmed);
         findings.add(
             DryRunFinding.pass(
                 "EXEC_SQL_EXPLAIN_OK", SCOPE_EXECUTION, "EXPLAIN passed for " + key));

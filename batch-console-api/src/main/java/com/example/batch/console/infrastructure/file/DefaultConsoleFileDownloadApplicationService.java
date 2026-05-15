@@ -8,7 +8,6 @@ import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.file.ConsoleFileDownloadApplicationService;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.query.FileErrorRecordQuery;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
@@ -66,9 +65,7 @@ public class DefaultConsoleFileDownloadApplicationService
   private final MinioClient minioClient;
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties batchSecurityProperties;
-  private final RestClient.Builder restClientBuilder;
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final Environment environment;
 
   @Override
