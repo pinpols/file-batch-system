@@ -19,7 +19,6 @@
     <description>Batch scheduling platform multi-module engineering skeleton</description>
 
     <modules>
-        <module>batch-config-defaults</module>
         <module>batch-common</module>
         <module>batch-trigger</module>
         <module>batch-orchestrator</module>

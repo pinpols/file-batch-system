@@ -10,13 +10,14 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * OSS（对象存储）渠道分发适配器，将文件上传至 MinIO/S3 兼容存储桶。
+ * OSS(对象存储)渠道分发适配器,将文件上传至 MinIO / S3 兼容存储桶。
  *
- * <p>{@code @Profile("!local & !test")}：local / test profile 下让位给 {@link
- * StubRemoteFilesystemDispatchChannelAdapter}，避免本机连真实 OSS。
+ * <p>{@code @Profile("!local")}:仅 local profile(开发者 IDE 沙箱)让位给 {@link
+ * StubRemoteFilesystemDispatchChannelAdapter};test profile 下 IT 通过 MinIOContainer 提供真实
+ * OSS,本适配器需要参与才能验端到端。
  */
 @Component
-@Profile("!local & !test")
+@Profile("!local")
 @Order(20)
 @RequiredArgsConstructor
 public class OssDispatchChannelAdapter implements DispatchChannelAdapter {

@@ -13,16 +13,6 @@
     <name>batch-worker-core</name>
 
     <dependencies>
-        <!--
-          ADR-029 §D2: 显式声明对 batch-config-defaults 的依赖（而非依赖 batch-common 传递引入）。
-          作用：未来若 batch-common 被拆分或移除该依赖，本模块 spring.config.import: "classpath:batch-defaults.yml"
-          会在编译期失败而非启动期 ConfigDataResourceNotFoundException 静默挂掉。
-        -->
-        <dependency>
-            <groupId>com.example.batch</groupId>
-            <artifactId>batch-config-defaults</artifactId>
-            <version>${project.version}</version>
-        </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
             <artifactId>batch-common</artifactId>
