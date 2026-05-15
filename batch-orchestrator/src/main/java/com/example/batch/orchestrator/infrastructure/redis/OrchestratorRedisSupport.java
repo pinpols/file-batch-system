@@ -4,6 +4,7 @@ import com.example.batch.common.redis.BatchRedisKeys;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -101,23 +102,58 @@ public class OrchestratorRedisSupport {
     }
   }
 
+  // R3-P0-9：HSET + EXPIRE 两次 round-trip 非原子；连接中断时 hash 无 TTL → stale 缓存永久。
+  // 改用 HSET 全字段 + PEXPIRE 同 Lua 一次原子执行；额外加 try-catch 走 cacheWrite 的 fail-open 路径。
+  private static final String LUA_HSET_EXPIRE =
+      "for i = 1, #ARGV - 1, 2 do redis.call('HSET', KEYS[1], ARGV[i], ARGV[i+1]) end\n"
+          + "redis.call('PEXPIRE', KEYS[1], ARGV[#ARGV])\n"
+          + "return 1";
+
   public void putHashAll(String key, Map<String, String> fields, Duration ttl) {
-    redisTemplate.opsForHash().putAll(key, fields);
-    redisTemplate.expire(key, ttl);
+    cacheWrite(
+        key,
+        () -> {
+          if (fields == null || fields.isEmpty()) {
+            return;
+          }
+          List<String> args = new ArrayList<>(fields.size() * 2 + 1);
+          for (Map.Entry<String, String> e : fields.entrySet()) {
+            args.add(e.getKey());
+            args.add(e.getValue() == null ? "" : e.getValue());
+          }
+          args.add(String.valueOf(ttl.toMillis()));
+          redisTemplate.execute(
+              new DefaultRedisScript<>(LUA_HSET_EXPIRE, Long.class), List.of(key), args.toArray());
+        });
   }
 
+  // R3-P2-8：entries 也走 best-effort 包装；Redis 不可达时返回空 map 让上游 fallback DB，
+  // 不再让 governance 接口因 Redis 故障整条挂掉。
   public Map<Object, Object> entries(String key) {
-    return redisTemplate.opsForHash().entries(key);
+    Map<Object, Object> result = cacheRead(key, () -> redisTemplate.opsForHash().entries(key));
+    return result == null ? Map.of() : result;
   }
+
+  // R3-P0-10：INCR + EXPIRE 非原子；首次 INCR 成功后 expire 失败 → counter 永不过期，租户被永久 rate-limit。
+  // 改 Lua：INCR 返回 1 时立即 PEXPIRE，单次往返保证原子。
+  private static final String LUA_INCR_EXPIRE =
+      "local v = redis.call('INCR', KEYS[1])\n"
+          + "if v == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end\n"
+          + "return v";
 
   public Long incrementWithinWindow(
       String tenantId, String action, long windowStartEpochSecond, Duration ttl) {
     String key = BatchRedisKeys.rateLimit(tenantId, action, windowStartEpochSecond);
-    Long value = redisTemplate.opsForValue().increment(key);
-    if (value != null && value == 1L) {
-      redisTemplate.expire(key, ttl);
+    try {
+      return redisTemplate.execute(
+          new DefaultRedisScript<>(LUA_INCR_EXPIRE, Long.class),
+          List.of(key),
+          String.valueOf(ttl.toMillis()));
+    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+      // fail-open：Redis 不可达时返回 null，调用方按 "未命中限流" 处理；与原 cacheWrite 一致语义
+      log.warn("Redis rate-limit unavailable; fail-open: key={}, cause={}", key, ex.getMessage());
+      return null;
     }
-    return value;
   }
 
   public Long evalLong(String script, String key, String... args) {

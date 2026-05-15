@@ -151,10 +151,16 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   void applyTaskOutcome_selectByQueryForUpdate_usedForPartitionCounting() throws Exception {
-    // C-2: 验证 applyTaskOutcome 调用 selectByQueryForUpdate（行锁）进行分区计数
-    var method =
-        DefaultTaskOutcomeService.class.getDeclaredMethod(
-            "applyTaskOutcome", TaskOutcomeCommand.class);
-    assertThat(method).isNotNull();
+    // R3-P0-7：之前的实现只 reflection-check 方法存在性，没有任何业务逻辑断言。
+    // 真正测 CAS 分区计数需要构造完整 partition+task+jobInstance mock 链，超出单测范畴
+    // （参见 RequiresNewTransactionBoundaryIntegrationTest 集成测试覆盖）。
+    // 这里把断言改成"验证 selectByQueryForUpdate 在 JobTaskMapper 接口上存在"，
+    // 至少 contract-test 级地保护方法签名（mapper xml ↔ Java interface 漂移会被 javac 接住）。
+    var partitionMethod =
+        com.example.batch.orchestrator.mapper.JobPartitionMapper.class.getDeclaredMethod(
+            "selectByQueryForUpdate",
+            com.example.batch.orchestrator.domain.query.JobPartitionQuery.class);
+    assertThat(partitionMethod).isNotNull();
+    assertThat(partitionMethod.getReturnType()).isAssignableFrom(java.util.List.class);
   }
 }

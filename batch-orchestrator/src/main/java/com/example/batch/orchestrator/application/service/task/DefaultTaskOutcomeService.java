@@ -317,10 +317,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       applyFailureOutcome(command, partition, retryScheduled);
     }
     if (partition != null) {
+      // R3-P0-5：传 invocationId 作为 CAS 守卫，迟到的旧 invocation 的 report 不再覆盖新 output。
+      // command 携带 partitionInvocationId 来自 task CLAIM 时的快照；与 partition.current_invocation_id 比对。
       jobMappers.jobPartitionMapper.updateOutputSummary(
           command.tenantId(),
           partition.getId(),
-          TaskOutcomeSummaryBuilder.buildOutputSummary(command, task));
+          TaskOutcomeSummaryBuilder.buildOutputSummary(command, task),
+          command.partitionInvocationId());
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
     updateStepInstanceProgress(command, task, retryScheduled, finishedAt);

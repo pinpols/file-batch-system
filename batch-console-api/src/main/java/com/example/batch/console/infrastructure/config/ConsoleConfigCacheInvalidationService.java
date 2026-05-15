@@ -66,9 +66,25 @@ public class ConsoleConfigCacheInvalidationService {
     evictAfterCommit(configKey(tenantId, "tenant-quota-policy", "enabled-first"));
   }
 
-  /** 配置变更后同步清除 meta 查询缓存（队列/日历/窗口等下拉选项）。 */
+  /**
+   * 配置变更后同步清除 meta 查询缓存（队列/日历/窗口等下拉选项）。
+   *
+   * <p>R3-P1-14：之前直接调 evict，事务回滚窗口内会让并发读者拿到 pre-rollback 数据回填缓存； 与其他 evictXxx 一致改走 afterCommit，DB
+   * 提交后才删缓存。
+   */
   public void evictMetaOptions(String tenantId) {
-    queryCacheService.evictMetaOptions(tenantId);
+    Runnable evict = () -> queryCacheService.evictMetaOptions(tenantId);
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              evict.run();
+            }
+          });
+      return;
+    }
+    evict.run();
   }
 
   private void evictByPatternAfterCommit(String pattern) {
