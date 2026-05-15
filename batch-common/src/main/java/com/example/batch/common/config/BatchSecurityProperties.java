@@ -66,8 +66,8 @@ public class BatchSecurityProperties {
   }
 
   /** 已知占位符前缀（大小写不敏感、忽略下划线/连字符）。 */
-  private static final java.util.Set<String> PLACEHOLDER_PREFIXES =
-      java.util.Set.of("changeme", "change", "placeholder", "todo", "secret", "yoursecret");
+  private static final Set<String> PLACEHOLDER_PREFIXES =
+      Set.of("changeme", "change", "placeholder", "todo", "secret", "yoursecret");
 
   /** 内部 / JWT 密钥的最小长度——短于此值即使非占位符也拒绝。 */
   private static final int MIN_SECRET_LENGTH = 16;
