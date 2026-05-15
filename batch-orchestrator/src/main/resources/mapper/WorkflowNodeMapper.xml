@@ -41,4 +41,14 @@
           and enabled = true
         order by node_order asc, id asc
     </select>
+
+    <!-- S3 / R3-P1-1：批量 IN 查询；调用方需保证 nodeCodes 非空 -->
+    <select id="selectByWorkflowDefinitionIdAndNodeCodesIn" resultMap="WorkflowNodeResultMap">
+        select *
+        from batch.workflow_node
+        where workflow_definition_id = #{workflowDefinitionId}
+          and enabled = true
+          and node_code in
+        <foreach collection="nodeCodes" item="c" open="(" separator="," close=")">#{c}</foreach>
+    </select>
 </mapper>

@@ -96,14 +96,35 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (outgoingEdges == null || outgoingEdges.isEmpty()) {
       return List.of();
     }
-    List<DagNodeResolution> resolutions = new ArrayList<>();
+    // S3 / R3-P1-1：批量预取 — 把所有 match 的 toNodeCode 一次性查回来，替代每条 edge 一次 SQL 的 N+1。
+    // 先过 matchesOutgoingEdge 过滤再聚合 codes，避免拉无关节点。
+    List<WorkflowEdgeEntity> matched = new ArrayList<>(outgoingEdges.size());
+    java.util.Set<String> wantedCodes = new java.util.LinkedHashSet<>();
     for (WorkflowEdgeEntity edge : outgoingEdges) {
       if (!matchesOutgoingEdge(edge, success, payloadJson)) {
         continue;
       }
-      WorkflowNodeEntity nextNode =
-          workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
-              workflowDefinitionId, edge.getToNodeCode());
+      matched.add(edge);
+      if (edge.getToNodeCode() != null) {
+        wantedCodes.add(edge.getToNodeCode());
+      }
+    }
+    if (matched.isEmpty()) {
+      return List.of();
+    }
+    Map<String, WorkflowNodeEntity> nodeByCode = java.util.Collections.emptyMap();
+    if (!wantedCodes.isEmpty()) {
+      List<WorkflowNodeEntity> nodes =
+          workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(
+              workflowDefinitionId, wantedCodes);
+      nodeByCode = new java.util.HashMap<>(nodes.size() * 2);
+      for (WorkflowNodeEntity node : nodes) {
+        nodeByCode.put(node.getNodeCode(), node);
+      }
+    }
+    List<DagNodeResolution> resolutions = new ArrayList<>(matched.size());
+    for (WorkflowEdgeEntity edge : matched) {
+      WorkflowNodeEntity nextNode = nodeByCode.get(edge.getToNodeCode());
       if (nextNode == null) {
         resolutions.add(new DagNodeResolution(edge.getToNodeCode(), WorkflowNodeType.END.code()));
         continue;
@@ -166,12 +187,27 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       }
       return true;
     }
+    // S3 / R3-P1-2：批量预取所有 fromNodeCode 的 latest run_seq 行，替代 N 次
+    // selectLatestByWorkflowRunIdAndNodeCode。
+    java.util.Set<String> fromCodes = new java.util.LinkedHashSet<>();
+    for (WorkflowEdgeEntity edge : incomingEdges) {
+      if (edge.getFromNodeCode() != null) {
+        fromCodes.add(edge.getFromNodeCode());
+      }
+    }
+    Map<String, WorkflowNodeRunEntity> latestRunByCode = java.util.Collections.emptyMap();
+    if (!fromCodes.isEmpty()) {
+      List<WorkflowNodeRunEntity> runs =
+          workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(workflowRunId, fromCodes);
+      latestRunByCode = new java.util.HashMap<>(runs.size() * 2);
+      for (WorkflowNodeRunEntity r : runs) {
+        latestRunByCode.put(r.getNodeCode(), r);
+      }
+    }
     int matchedCount = 0;
     int terminalCount = 0;
     for (WorkflowEdgeEntity edge : incomingEdges) {
-      var predecessorRun =
-          workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-              workflowRunId, edge.getFromNodeCode());
+      var predecessorRun = latestRunByCode.get(edge.getFromNodeCode());
       if (predecessorRun == null || !isTerminal(predecessorRun.getNodeStatus())) {
         continue;
       }
@@ -243,10 +279,24 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (incoming == null || incoming.isEmpty()) {
       return false;
     }
+    // S3 / R3-P1-2：批量预取替代 N 次 selectLatestByWorkflowRunIdAndNodeCode
+    java.util.Set<String> fromCodes = new java.util.LinkedHashSet<>();
     for (WorkflowEdgeEntity edge : incoming) {
-      var pred =
-          workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
-              workflowRunId, edge.getFromNodeCode());
+      if (edge.getFromNodeCode() != null) {
+        fromCodes.add(edge.getFromNodeCode());
+      }
+    }
+    Map<String, WorkflowNodeRunEntity> latestRunByCode = java.util.Collections.emptyMap();
+    if (!fromCodes.isEmpty()) {
+      List<WorkflowNodeRunEntity> runs =
+          workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(workflowRunId, fromCodes);
+      latestRunByCode = new java.util.HashMap<>(runs.size() * 2);
+      for (WorkflowNodeRunEntity r : runs) {
+        latestRunByCode.put(r.getNodeCode(), r);
+      }
+    }
+    for (WorkflowEdgeEntity edge : incoming) {
+      var pred = latestRunByCode.get(edge.getFromNodeCode());
       if (pred == null || !isTerminal(pred.getNodeStatus())) {
         return false;
       }
