@@ -31,7 +31,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <ol>
  *   <li><b>SSE ticket</b>（{@code ?ticket=xxx}）：{@link SseTicketService} 签发的一次性凭证， 专为浏览器 EventSource
  *       而设（EventSource 不能带 Authorization header）。
- *   <li><b>JWT</b>（{@code Authorization: Bearer}）：主认证方式，走 {@link ConsoleJwtService#authenticate}。
+ *   <li><b>JWT</b>（HttpOnly cookie {@code batch_console_token}）：主认证方式，走 {@link
+ *       ConsoleJwtService#authenticate}。ADR-030 §D7 Stage B 收尾（2026-05-15）后已删 Authorization Bearer
+ *       header fallback —— 前端 axios {@code withCredentials=true} 自动带 cookie；运维脚本用 curl {@code
+ *       --cookie}。
  *   <li><b>bypass-mode</b>：仅测试 profile 使用，可从 header 读 username/tenant/roles，放行任意角色 （生产禁用，由 {@code
  *       batchSecurityProperties.bypass-mode} 控制）。
  * </ol>

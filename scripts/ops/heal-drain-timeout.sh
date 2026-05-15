@@ -46,13 +46,16 @@ psql_query() {
 console_post() {
   local path="$1"
   local body="${2:-{}}"
-  local auth_header=()
+  # ADR-030 §D7: console 端 HttpOnly cookie 是唯一鉴权方式；脚本通过 --cookie 把
+  # JWT 写到与浏览器同名的 batch_console_token cookie，复用 filter 的 cookie 解析路径。
+  # 不再注入 Authorization header（filter 已无 header fallback，2026-05-15 commit 起）。
+  local cookie_arg=()
   if [[ -n "${BATCH_CONSOLE_TOKEN}" ]]; then
-    auth_header=(-H "Authorization: Bearer ${BATCH_CONSOLE_TOKEN}")
+    cookie_arg=(--cookie "batch_console_token=${BATCH_CONSOLE_TOKEN}")
   fi
   curl -fsS -X POST \
     -H "Content-Type: application/json" \
-    "${auth_header[@]}" \
+    "${cookie_arg[@]}" \
     -d "${body}" \
     "${BATCH_CONSOLE_URL%/}${path}"
 }

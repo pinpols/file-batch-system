@@ -105,12 +105,13 @@ class ConsoleSecurityConfigurationTest {
   }
 
   @Test
-  void shouldAuthenticateWithJwtBearerToken() throws Exception {
+  void shouldAuthenticateWithHttpOnlyCookie() throws Exception {
+    // ADR-030 §D7 Stage B 收尾：JWT 通过 HttpOnly cookie batch_console_token 入站
     String token = jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN"), 9L).accessToken();
     Mockito.when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
 
     MockHttpServletRequest request = baseRequest();
-    request.addHeader("Authorization", "Bearer " + token);
+    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", token));
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicBoolean chainCalled = new AtomicBoolean(false);
 
