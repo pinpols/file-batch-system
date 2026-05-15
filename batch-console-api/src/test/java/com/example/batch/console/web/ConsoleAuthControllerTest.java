@@ -44,7 +44,8 @@ class ConsoleAuthControllerTest {
                 new ConsoleAuthController(
                     authApplicationService,
                     new ConsoleResponseFactory(requestMetadataResolver),
-                    Mockito.mock(SseTicketService.class)))
+                    Mockito.mock(SseTicketService.class),
+                    securityProperties))
             .build();
   }
 
