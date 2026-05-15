@@ -317,7 +317,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | Workflow 节点间参数无显式串联 | ADR-009 受限 JSONPath DSL: `$.nodes.<X>.output.<key>` + V72 `workflow_node_run.output` 列 + `WorkflowParamResolver`。详 `docs/architecture/workflow-dependency-guide.md §10` |
 | trigger → orchestrator 同步 HTTP 桥（鲁棒性短板） | ADR-010 trigger_outbox + Kafka 异步路径（2026-05-02 固化）：V80 `trigger_outbox_event` + `TriggerOutboxRelay` + `KafkaTriggerEventPublisher` + `TriggerLaunchConsumer`；同步 HTTP 桥已删除，无开关 |
 | 架构决策无记录 | ADR 目录建成：`docs/architecture/adr/` 落地 30 个 ADR（ADR-001 ~ ADR-030），覆盖事务/幂等/失败分类/Tracing/result_version/批量日重放/Sensor/共享配置基线/Verifier SPI 等核心决策；本文件 §10 索引同步 |
-| 配置 drift（多模块重复配置） | ADR-029 落地：抽取独立模块 `batch-config-defaults`（仅承载 `batch-defaults.yml` + marker AutoConfiguration），由 `batch-common` 传递依赖；`ConfigDriftGuardTest` 守护 OWNED_KEYS 防止后续模块复刻基线键 |
+| 配置 drift（多模块重复配置） | ADR-029(2026-05-16 修订)：`batch-defaults.yml` 放在 `batch-common/src/main/resources/`,由 `ConfigDriftGuardTest` 守护 classpath 存在性 + OWNED_KEYS 漂移;不再单建模块(原方案过度抽象,被驳回) |
 | 产物内容验收无框架 | ADR-030 落地：`batch-common` 新增 `ContentVerifier` SPI + `ContentVerifierRegistry`，Micrometer `batch.verifier.duration` Timer / `batch.verifier.failures` Counter；首个实现 `ExportFileNonEmptyVerifier`（worker-export）。Stage hot path 接入与硬中止策略由后续 PR 按需开 |
 
 ### 未关闭（P2，当前优先级）
@@ -369,5 +369,5 @@ _本节当前无待办项。新增 P2 差距请追加表格行。_
 | [ADR-026](./adr/ADR-026-dry-run-mode.md) | 演练 / Dry-run 模式 | Accepted | 2026-05-09 |
 | [ADR-027](./adr/ADR-027-resource-affinity.md) | 资源亲和性 / 地理调度 | Accepted | 2026-05-10 |
 | [ADR-028](./adr/ADR-028-sensor-wait-node.md) | Sensor WAIT 节点 | Accepted | 2026-05-12 |
-| [ADR-029](./adr/ADR-029-shared-config-defaults-module.md) | 共享配置基线独立模块（`batch-config-defaults`） | Accepted | 2026-05-14 |
+| [ADR-029](./adr/ADR-029-shared-config-defaults-module.md) | 共享配置基线 `batch-defaults.yml`(batch-common 内) | Revised:Accepted | 2026-05-16 |
 | [ADR-030](./adr/ADR-030-content-verifier-spi.md) | 产物内容验收 SPI（`ContentVerifier`） | Accepted | 2026-05-14 |

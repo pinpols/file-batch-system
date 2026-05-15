@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-05-16
+- **CLAUDE.md §模块边界**:`batch-config-defaults` 从固定模块列表中**移除**(ADR-029 修订版反向重构,业界主流不为单个 yml 单建模块)。共享配置基线 `batch-defaults.yml` 回到 `batch-common/src/main/resources/`,由 `ConfigDriftGuardTest` 守护 classpath 存在性 + OWNED_KEYS 漂移。9 模块 pom 全部移除显式 dep,reactor 不再含 `batch-config-defaults`。
+
 ### 2026-05-15
 - **CLAUDE.md §模块边界**：补 `batch-config-defaults` 到固定模块列表（ADR-029 新增的 resources-only 共享配置基线模块，R2 已落地但 CLAUDE.md 漏更）。R4-P1-10 修复。
 

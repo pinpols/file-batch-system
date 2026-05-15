@@ -300,11 +300,11 @@ public enum XxxType implements DictEnum {
 ## 模块边界
 
 模块结构固定，不可擅自增删：
-`batch-config-defaults` / `batch-common` / `batch-trigger` / `batch-orchestrator` /
+`batch-common` / `batch-trigger` / `batch-orchestrator` /
 `batch-worker-core` / `batch-worker-import` / `batch-worker-export` /
 `batch-worker-process` / `batch-worker-dispatch` / `batch-console-api`
 
-- `batch-config-defaults`（ADR-029）：纯 resources 模块，只提供 `batch-defaults.yml` 共享配置基线，被所有运行时模块通过 `spring.config.import` 引入。无 Java 源码。
+- 共享配置基线 `batch-defaults.yml` 直接放在 `batch-common/src/main/resources/`，由 `ConfigDriftGuardTest` 守护 classpath 存在性与服务模块 overlay 漂移。ADR-029 修订版(2026-05-16):取消原独立 `batch-config-defaults` 模块,业界主流不为单个 yml 单建模块,改用"测试守护+主流位置"的轻量方案。
 
 ## ADR 实施范围纪律（防越界）
 

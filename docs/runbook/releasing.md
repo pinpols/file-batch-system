@@ -1,6 +1,6 @@
 # Release Flow / 版本发布流程
 
-> 适用：本仓库 `batch-platform` 9 模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch} / batch-console-api）+ batch-config-defaults（共享配置 resources-only 模块）。
+> 适用：本仓库 `batch-platform` 9 模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch} / batch-console-api）。共享配置基线 `batch-defaults.yml` 位于 `batch-common/src/main/resources/`,详见 ADR-029 修订版。
 >
 > 维护规则：发布操作 = 改 `<revision>` + 打 git tag + 更新 `CHANGELOG.md`。Maven 版本入口在根 pom 单点 `<revision>`，所有模块共版（CI-friendly placeholder + flatten-maven-plugin）。
 

@@ -17,13 +17,18 @@ import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
 
 /**
- * ADR-029 守护测试：服务模块的 application.yml 只能 overlay 共享基线，不能复刻基线已经写过的 "唯一来源"键。
+ * ADR-029 守护测试:两件事。
  *
- * <p>判定规则：把 {@code batch-config-defaults/.../batch-defaults.yml} 加载为 flat-key 视图 （{@code
- * spring.kafka.bootstrap-servers} 之类），再对每个服务模块的 application.yml 做同样 展平；若有 key 在两侧同时出现，且该 key
- * 属于"OWNED_KEYS"（基线明确负责的项），则视为 drift 失败。模块独有键（端口、application.name、模块 properties）不受约束。
+ * <p>(1) {@code batch-defaults.yml} 必须存在于 {@code batch-common/src/main/resources/}。ADR-029
+ * 修订版的"轻量化"决策依赖这个 classpath 锚点稳定;若被静默移动/删除,任何服务模块的 {@code spring.config.import:
+ * "classpath:batch-defaults.yml"} 都会在启动时 fail-fast。
  *
- * <p>豁免：当模块 overlay 是为了走 module-specific env var（如各 worker 的 hikari pool size） 时，对应 key 不进
+ * <p>(2) 服务模块的 application.yml 只能 overlay 共享基线,不能复刻基线已经写过的"唯一来源"键。 判定规则:把 {@code
+ * batch-defaults.yml} 加载为 flat-key 视图(如 {@code spring.kafka.bootstrap-servers}), 再对每个服务模块的
+ * application.yml 同样展平;若有 key 两侧同时出现且属于 {@code OWNED_KEYS} (基线负责的项),则 drift
+ * 失败。模块独有键(端口、application.name、模块 properties)不受约束。
+ *
+ * <p>豁免:当模块 overlay 是为了走 module-specific env var(如各 worker 的 hikari pool size)时, 对应 key 不进
  * OWNED_KEYS。每加一个白名单需在 ADR-029 留 PR 痕迹。
  */
 class ConfigDriftGuardTest {
@@ -66,21 +71,34 @@ class ConfigDriftGuardTest {
 
   private static Path repoRoot() {
     Path here = Paths.get("").toAbsolutePath();
-    // 测试可能从 batch-common 子目录或仓库根目录运行；定位到根
-    while (here != null && !Files.exists(here.resolve("batch-config-defaults"))) {
+    // 测试可能从 batch-common 子目录或仓库根目录运行;定位到含 batch-common + batch-orchestrator 的根
+    while (here != null
+        && !(Files.exists(here.resolve("batch-common"))
+            && Files.exists(here.resolve("batch-orchestrator")))) {
       here = here.getParent();
     }
     return here;
   }
 
+  private static Path baselineYml() {
+    return repoRoot().resolve("batch-common/src/main/resources/batch-defaults.yml");
+  }
+
   @Test
-  void baselineYamlIsLocatedInDedicatedModule() {
-    Path baseline =
-        repoRoot().resolve("batch-config-defaults/src/main/resources/batch-defaults.yml");
-    assertThat(baseline).as("batch-defaults.yml 应位于 batch-config-defaults 模块").exists();
-    // 顺便守护：旧位置不能再有同名文件，防止双源
-    Path oldLocation = repoRoot().resolve("batch-common/src/main/resources/batch-defaults.yml");
-    assertThat(oldLocation).as("batch-common/resources/batch-defaults.yml 已搬走，不可恢复").doesNotExist();
+  void baselineYamlExistsAtCanonicalLocation() {
+    assertThat(baselineYml())
+        .as("batch-defaults.yml 必须位于 batch-common/src/main/resources/(ADR-029 修订版)")
+        .exists()
+        .isRegularFile();
+  }
+
+  @Test
+  void baselineYamlIsReachableFromClasspath() {
+    // 任何继承了 batch-common 的模块在测试 classpath 上都应能 resolve 到这个 resource。
+    // 这是 spring.config.import: "classpath:batch-defaults.yml" 启动时的最终判据。
+    assertThat(getClass().getClassLoader().getResource("batch-defaults.yml"))
+        .as("batch-defaults.yml 必须在 classpath 上可见,否则 spring.config.import 启动失败")
+        .isNotNull();
   }
 
   @Test

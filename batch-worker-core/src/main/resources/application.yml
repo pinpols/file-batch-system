@@ -1,6 +1,6 @@
 # batch-worker-core 是库模块（无 @SpringBootApplication），本文件仅承载 worker 子域的默认值。
 # Kafka bootstrap-servers / batch.security.internal-secret / actuator exposure 等共享键
-# 已在 batch-config-defaults/batch-defaults.yml 由各 worker-* 模块通过 spring.config.import 引入；
+# 已在 batch-common/src/main/resources/batch-defaults.yml 由各 worker-* 模块通过 spring.config.import 引入；
 # 不再在此重复声明（详见 ADR-029）。
 spring:
   application:

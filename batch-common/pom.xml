@@ -14,14 +14,10 @@
 
     <dependencies>
         <!--
-          共享配置基线（batch-defaults.yml）。所有服务模块通过 batch-common 传递引入，
-          避免在每个模块单独声明依赖；模块自身 application.yml 只做 overlay。详见 ADR-029。
+          共享配置基线 batch-defaults.yml 直接放在 src/main/resources/,所有服务模块通过
+          batch-common 传递引入(application.yml 只 overlay)。基线缺失由
+          BatchDefaultsClasspathPresenceTest 守护,见 ADR-029。
         -->
-        <dependency>
-            <groupId>com.example.batch</groupId>
-            <artifactId>batch-config-defaults</artifactId>
-            <version>${project.version}</version>
-        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
