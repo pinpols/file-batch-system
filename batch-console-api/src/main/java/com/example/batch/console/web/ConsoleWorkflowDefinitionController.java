@@ -3,11 +3,13 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.workflow.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.application.workflow.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
+import com.example.batch.console.infrastructure.workflow.WorkflowMermaidRenderer;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.job.EnabledPatchRequest;
 import com.example.batch.console.web.request.workflow.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.web.response.workflow.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.web.response.workflow.WorkflowMermaidResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -69,5 +71,20 @@ public class ConsoleWorkflowDefinitionController {
   public CommonResponse<DagValidationResult> validate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionApplicationService.validate(id, tenantId));
+  }
+
+  /**
+   * 把 workflow 渲染为 mermaid flowchart 文本,可贴入 GitHub README / PR / 文档站。运行时 viewer 与 docs/PR review
+   * 两种场景共享同一图形语言。
+   */
+  @GetMapping("/{id}/mermaid")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+  public CommonResponse<WorkflowMermaidResponse> mermaid(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    WorkflowDefinitionDetailResponse detail =
+        workflowDefinitionApplicationService.getById(id, tenantId);
+    return responseFactory.success(
+        new WorkflowMermaidResponse(WorkflowMermaidRenderer.render(detail)));
   }
 }
