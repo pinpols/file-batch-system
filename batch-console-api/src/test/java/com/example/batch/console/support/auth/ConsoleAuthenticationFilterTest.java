@@ -93,12 +93,13 @@ class ConsoleAuthenticationFilterTest {
   }
 
   @Test
-  void filter_authenticatesViaBearerToken() throws Exception {
+  void filter_authenticatesViaHttpOnlyCookie() throws Exception {
+    // ADR-030 §D7 Stage B 收尾：JWT 只能通过 HttpOnly cookie 入站，Authorization header 已不识别。
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
     when(jwtService.authenticate("valid-jwt")).thenReturn(principal);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("Authorization", "Bearer valid-jwt");
+    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "valid-jwt"));
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
@@ -109,12 +110,12 @@ class ConsoleAuthenticationFilterTest {
   }
 
   @Test
-  void filter_returns401WhenBearerTokenInvalid() throws Exception {
+  void filter_returns401WhenCookieJwtInvalid() throws Exception {
     when(jwtService.authenticate(anyString())).thenThrow(new RuntimeException("expired"));
     doNothing().when(responseWriter).write(any(), any(), any(), anyString());
 
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("Authorization", "Bearer bad-jwt");
+    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "bad-jwt"));
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
@@ -122,6 +123,21 @@ class ConsoleAuthenticationFilterTest {
 
     verify(responseWriter).write(eq(response), eq(HttpStatus.UNAUTHORIZED), any(), anyString());
     verify(chain, never()).doFilter(any(), any());
+  }
+
+  @Test
+  void filter_ignoresAuthorizationHeader_afterStageBCleanup() throws Exception {
+    // 验证 Authorization header 已不再被识别（D7 Stage B 收尾后只接 cookie）
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("Authorization", "Bearer legacy-jwt");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter.doFilterInternal(request, response, chain);
+
+    // Filter 把请求当未认证放行，下游 @PreAuthorize 会拒绝。jwtService 不应被调用
+    verify(chain).doFilter(request, response);
+    verify(jwtService, never()).authenticate(anyString());
   }
 
   @Test
@@ -170,27 +186,27 @@ class ConsoleAuthenticationFilterTest {
 
   @Test
   void filter_validatesSseTicketAndCachesResultForAsyncDispatch() throws Exception {
-    when(sseTicketService.validate("ticket-1")).thenReturn("alice:t1");
+    // R4-P1-1：validate 返回 TicketPayload，含签发时角色集
+    com.example.batch.console.support.SseTicketService.TicketPayload payload =
+        new com.example.batch.console.support.SseTicketService.TicketPayload(
+            "alice", "t1", java.util.Set.of("ROLE_USER"));
+    when(sseTicketService.validate("ticket-1")).thenReturn(payload);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.setParameter("ticket", "ticket-1");
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
-    // 首轮 REQUEST 分派：consume ticket，缓存到 attribute
     filter.doFilterInternal(request, response, chain);
     verify(sseTicketService, times(1)).validate("ticket-1");
     verify(chain, times(1)).doFilter(request, response);
     assertThat(request.getAttribute(ConsoleAuthenticationFilter.TICKET_PRINCIPAL_ATTR))
-        .isEqualTo("alice:t1");
+        .isEqualTo(payload);
 
-    // 模拟 ASYNC/ERROR 分派：ticket 已被消费，validate 必须不被再次调用，认证仍要建立
     when(sseTicketService.validate("ticket-1")).thenReturn(null);
     filter.doFilterInternal(request, response, chain);
 
-    // validate 仍只调用过一次（首轮）
     verify(sseTicketService, times(1)).validate("ticket-1");
-    // 第二轮 chain 也被调用，证明走到了认证成功路径
     verify(chain, times(2)).doFilter(request, response);
   }
 

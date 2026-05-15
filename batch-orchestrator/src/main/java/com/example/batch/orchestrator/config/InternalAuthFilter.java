@@ -33,6 +33,16 @@ public class InternalAuthFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
 
+    // R4-P0-1：双层防御 — 即使 ServletContext URL pattern 解释不一致（例如某些容器在 `/internal/*`
+    // 与 `/internal/**` 的处理上有差异），过滤器自己再做一次前缀检查。所有 /internal/ 开头路径必须带 secret，
+    // 包括深层 /internal/orchestrator/dry-run/plan 这类多段路径。
+    String uri = request.getRequestURI();
+    if (uri == null || !uri.startsWith("/internal/")) {
+      // 不应到这里（URL pattern 已限制），防御性放行
+      chain.doFilter(request, response);
+      return;
+    }
+
     if (securityProperties.isBypassMode()) {
       chain.doFilter(request, response);
       return;

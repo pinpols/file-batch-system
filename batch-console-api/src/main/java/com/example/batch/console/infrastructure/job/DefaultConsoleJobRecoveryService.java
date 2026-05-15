@@ -1,5 +1,7 @@
 package com.example.batch.console.infrastructure.job;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.job.ConsoleJobRecoveryService;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
@@ -152,9 +154,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
   private void validateRerunPolicy(RerunRequest request) {
     if ("USE_SPECIFIED_VERSION".equals(request.getConfigVersionPolicy())
         && request.getConfigVersion() == null) {
-      throw com.example.batch.common.exception.BizException.of(
-          com.example.batch.common.enums.ResultCode.INVALID_ARGUMENT,
-          "error.rerun.config_version_required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.rerun.config_version_required");
     }
   }
 

@@ -1,7 +1,8 @@
 # ADR-010: Trigger → Orchestrator 异步解耦(trigger_outbox + Kafka)
 
-- **状态**: 提案,待落地(Stage 1 设计 + Stage 2-5 实施分多 PR)
-- **日期**: 2026-04-30
+- **状态**: 已实施（Accepted & Implemented，2026-05-02 全量上线 + 同步 HTTP 桥物理删除）
+- **日期**: 2026-04-30（提案），2026-05-02（实施收尾），2026-05-15（状态修订 R4-P1-9）
+- **实施后记**: 异步路径已固化，`batch.trigger.async-launch.enabled` 开关与 `HttpOrchestratorTriggerAdapter` 已同步删除。下文 §灰度开关 / §验收标准 仅作历史参考。
 - **决策人**: 后端平台团队
 - **关联**: [ADR-002 transactional-outbox](./ADR-002-transactional-outbox.md)(本 ADR 直接复用其模式)
 - **解决问题**: [`docs/analysis/deep-issue-analysis.md` §5.7](../../analysis/deep-issue-analysis.md)

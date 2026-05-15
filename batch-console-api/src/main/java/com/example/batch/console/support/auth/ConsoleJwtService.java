@@ -93,17 +93,23 @@ public class ConsoleJwtService {
     }
     SecretKey key = signingKey();
     this.cachedEncoder = new NimbusJwtEncoder(new ImmutableSecret<>(key));
+    this.cachedDecoder = buildDecoder(key);
+  }
+
+  /**
+   * R4-P2-6：提取 decoder 构建逻辑，让 @PostConstruct 路径和 decoder() lazy-init fallback 共用同一套构造， 包括 clock
+   * skew validator。之前 lazy fallback 不带 skew validator，test/非-Spring 场景行为漂移。
+   */
+  private JwtDecoder buildDecoder(SecretKey key) {
     NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-    // P2-9 (ADR audit 2026-05-14): 配置 clock skew validator，否则
-    // ConsoleSecurityProperties.jwtClockSkew 是死配置，运维调整不会生效。
     java.time.Duration skew = properties.getJwtClockSkew();
     if (skew == null || skew.isNegative()) {
       skew = java.time.Duration.ofMinutes(1);
     }
     decoder.setJwtValidator(
         new org.springframework.security.oauth2.jwt.JwtTimestampValidator(skew));
-    this.cachedDecoder = decoder;
+    return decoder;
   }
 
   private boolean isProductionProfile() {
@@ -203,7 +209,8 @@ public class ConsoleJwtService {
       synchronized (this) {
         d = cachedDecoder;
         if (d == null) {
-          d = NimbusJwtDecoder.withSecretKey(signingKey()).macAlgorithm(MacAlgorithm.HS256).build();
+          // R4-P2-6：fallback 路径走 buildDecoder，与 @PostConstruct 一致带 clock skew validator
+          d = buildDecoder(signingKey());
           cachedDecoder = d;
         }
       }

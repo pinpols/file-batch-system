@@ -300,9 +300,11 @@ public enum XxxType implements DictEnum {
 ## 模块边界
 
 模块结构固定，不可擅自增删：
-`batch-common` / `batch-trigger` / `batch-orchestrator` /
+`batch-config-defaults` / `batch-common` / `batch-trigger` / `batch-orchestrator` /
 `batch-worker-core` / `batch-worker-import` / `batch-worker-export` /
 `batch-worker-process` / `batch-worker-dispatch` / `batch-console-api`
+
+- `batch-config-defaults`（ADR-029）：纯 resources 模块，只提供 `batch-defaults.yml` 共享配置基线，被所有运行时模块通过 `spring.config.import` 引入。无 Java 源码。
 
 ## ADR 实施范围纪律（防越界）
 

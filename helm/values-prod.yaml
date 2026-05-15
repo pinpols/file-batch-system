@@ -4,7 +4,9 @@
 #     --set postgresql.platform.password=$DB_PASS \
 #     --set postgresql.business.password=$DB_PASS \
 #     --set minio.accessKey=$MINIO_AK \
-#     --set minio.secretKey=$MINIO_SK
+#     --set minio.secretKey=$MINIO_SK \
+#     --set security.internalSecret=$BATCH_INTERNAL_SECRET \
+#     --set security.consoleJwtSecret=$BATCH_CONSOLE_JWT_SECRET
 
 image:
   registry: "registry.example.com/batch-platform"
@@ -30,10 +32,21 @@ minio:
   endpoint: "http://minio.minio.svc.cluster.local:9000"
   bucket: "batch-prod"
 
-orchestratorBaseUrl: "http://batch-platform-orchestrator.batch.svc.cluster.local:8082"
+security:
+  bypassMode: "false"
+  internalSecret: ""
+  consoleJwtSecret: ""
+
+# R4-P0-4：K8s Service 实际端口 18082（见 chart values orchestrator.port），之前误用 docker-compose 内部端口 8082。
+# 修复后 worker / console-api 才能正确连到 orchestrator。
+orchestratorBaseUrl: "http://batch-platform-orchestrator.batch.svc.cluster.local:18082"
 
 consoleApi:
   replicaCount: 2
+  # R4-P2-5：与 .env.prod 一致的 SSE 重放容量（默认 chart 是 dev 量 20000/24h）
+  realtime:
+    replayMaxEntries: 50000
+    replayTtl: "48h"
   ingress:
     enabled: true
     className: "nginx"
