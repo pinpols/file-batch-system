@@ -9,22 +9,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.CompensationParam;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.RerunParam;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.env.Environment;
 import org.springframework.web.client.RestClient;
 
 class ConsoleSelfServiceJobServiceTest {
 
-  private RestClient.Builder restClientBuilder;
-  private ConsoleOrchestratorClientProperties orchestratorClientProperties;
+  private OrchestratorInternalRestClient orchestratorInternalRestClient;
   private ConsoleTenantGuard tenantGuard;
-  private Environment environment;
   private ConsoleSelfServiceJobService service;
 
   private RestClient restClient;
@@ -34,20 +31,15 @@ class ConsoleSelfServiceJobServiceTest {
 
   @BeforeEach
   void setUp() {
-    restClientBuilder = mock(RestClient.Builder.class);
-    orchestratorClientProperties = mock(ConsoleOrchestratorClientProperties.class);
+    orchestratorInternalRestClient = mock(OrchestratorInternalRestClient.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
-    environment = mock(Environment.class);
 
     restClient = mock(RestClient.class);
     bodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
     bodySpec = mock(RestClient.RequestBodySpec.class);
     responseSpec = mock(RestClient.ResponseSpec.class);
 
-    when(orchestratorClientProperties.getBaseUrl()).thenReturn("http://localhost:8080");
-    when(environment.resolveRequiredPlaceholders(anyString())).thenReturn("http://localhost:8080");
-    when(restClientBuilder.baseUrl(anyString())).thenReturn(restClientBuilder);
-    when(restClientBuilder.build()).thenReturn(restClient);
+    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
     when(restClient.post()).thenReturn(bodyUriSpec);
     when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
     // varargs: header(String, String...) — use doReturn with explicit String[] cast
@@ -55,9 +47,7 @@ class ConsoleSelfServiceJobServiceTest {
     when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
     when(bodySpec.retrieve()).thenReturn(responseSpec);
 
-    service =
-        new ConsoleSelfServiceJobService(
-            restClientBuilder, orchestratorClientProperties, tenantGuard, environment);
+    service = new ConsoleSelfServiceJobService(orchestratorInternalRestClient, tenantGuard);
   }
 
   @Test

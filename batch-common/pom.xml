@@ -196,6 +196,13 @@
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
+            <!-- R7-followup: 显式硬编码 version。flatten-maven-plugin 的 resolveCiFriendliesOnly
+                 模式只展开 ${revision}，其它 ${} property 保留字面量；downstream 解析
+                 batch-common.pom 拿不到 ${archunit.version} → 整个 POM invalidates →
+                 所有 transitive deps (shedlock / OTEL / Jackson jsr310) 在 trigger / worker
+                 测试 classpath 上全部失踪，造成大批假阴失败。
+                 与根 pom <archunit.version> 手工保持同步。 -->
+            <version>1.3.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

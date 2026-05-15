@@ -26,8 +26,10 @@ class BatchDayTimePolicyResolverTest {
     Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, 3, 7));
 
     assertThat(cutoffAt).isEqualTo(Instant.parse("2026-03-08T07:00:00Z"));
+    // R4-P1-5 后 DEFAULT_OVERLAP_POLICY 改成 RUN_ONCE_LATER_OFFSET（保护未配置 tenant 不被早 1h 触发误判
+    // late arrival）；test snapshot 同步对齐。
     assertThat(resolver.snapshot(calendar))
-        .isEqualTo("gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET");
+        .isEqualTo("gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_LATER_OFFSET");
   }
 
   @Test
@@ -54,12 +56,13 @@ class BatchDayTimePolicyResolverTest {
     BusinessCalendarEntity calendar =
         calendar("America/New_York", LocalTime.of(1, 30), null, "RUN_TWICE");
 
-    // RUN_TWICE 不支持用于 cutoff, 必须降级到 RUN_ONCE_EARLIER_OFFSET
+    // RUN_TWICE 不支持用于 cutoff, 必须降级到 DEFAULT_OVERLAP_POLICY；R4-P1-5 后默认是 RUN_ONCE_LATER_OFFSET，
+    // 对应秋令 overlap 选标准时 offset → 2026-11-01 01:30 本地（标准时 -05:00）= 06:30Z。
     Instant cutoffAt = resolver.resolveCutoffAt(calendar, LocalDate.of(2026, 10, 31));
 
-    assertThat(cutoffAt).isEqualTo(Instant.parse("2026-11-01T05:30:00Z"));
+    assertThat(cutoffAt).isEqualTo(Instant.parse("2026-11-01T06:30:00Z"));
     assertThat(resolver.snapshot(calendar))
-        .isEqualTo("gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_EARLIER_OFFSET");
+        .isEqualTo("gap=RUN_AT_NEXT_VALID_TIME;overlap=RUN_ONCE_LATER_OFFSET");
   }
 
   private BusinessCalendarEntity calendar(
