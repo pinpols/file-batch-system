@@ -60,4 +60,11 @@ public class ConsoleSecurityProperties {
 
   /** Redis 中 session state（单点登录、踢人）TTL。 */
   private Duration sessionStateTtl = Duration.ofDays(30);
+
+  /**
+   * R7-A1-P2：HttpOnly cookie {@code batch_console_token} 的 Secure 标志。生产默认 true（强制 HTTPS）， 本地 /
+   * docker-compose 调试时用 application-local.yml 覆盖为 false。原本硬编码 false 依赖反代改写， 反代 misconfig 即明文 HTTP
+   * 暴露 token，没有强制约束。
+   */
+  private boolean cookieSecure = true;
 }
