@@ -33,6 +33,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
@@ -81,6 +82,22 @@ public final class ConsoleSingleSheetExcelImportSupport {
             ContentDisposition.attachment().filename(fileName).build().toString())
         .contentType(EXCEL_MEDIA_TYPE)
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
+  }
+
+  /**
+   * R2-P1-9 流式 Excel 响应：调用方传入"写到给定 OutputStream"的 writer，Spring 在响应渲染阶段 调用该 writer，workbook 不在堆里完整
+   * buffer 一份 byte[]，避免大文件 OOM。
+   *
+   * <p>writer 抛 {@link IOException} 由 Spring 处理为 5xx；其它 RuntimeException 透传给 ControllerAdvice。
+   */
+  public static ResponseEntity<StreamingResponseBody> excelStreamingResponse(
+      String fileName, StreamingResponseBody writer) {
+    return ResponseEntity.ok()
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(fileName).build().toString())
+        .contentType(EXCEL_MEDIA_TYPE)
+        .body(writer);
   }
 
   public static ParsedWorkbook parseWorkbook(

@@ -5,23 +5,23 @@ import com.example.batch.console.web.response.config.TenantConfigPackageExcelApp
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelPreviewResponse;
 import com.example.batch.console.web.response.config.TenantConfigPackageExcelUploadResponse;
 import java.io.IOException;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /** 租户配置包 Excel（8 Sheet）：job_definition / file_channel / alert_routing / pipeline / workflow。 */
 public interface ConsoleTenantConfigPackageExcelApplicationService {
 
-  ResponseEntity<InputStreamResource> exportPackage(String tenantId);
+  ResponseEntity<StreamingResponseBody> exportPackage(String tenantId);
 
-  ResponseEntity<InputStreamResource> downloadTemplate();
+  ResponseEntity<StreamingResponseBody> downloadTemplate();
 
   TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String tenantId)
       throws IOException;
 
   TenantConfigPackageExcelPreviewResponse preview(String uploadToken);
 
-  ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
+  ResponseEntity<StreamingResponseBody> downloadPreviewWorkbook(String uploadToken);
 
   TenantConfigPackageExcelApplyResponse apply(
       String uploadToken, TenantConfigPackageExcelApplyRequest request);

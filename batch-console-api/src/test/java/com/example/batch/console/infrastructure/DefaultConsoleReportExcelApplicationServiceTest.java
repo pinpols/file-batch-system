@@ -21,8 +21,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
 class DefaultConsoleReportExcelApplicationServiceTest {
@@ -69,10 +67,13 @@ class DefaultConsoleReportExcelApplicationServiceTest {
                     BatchDateTimeSupport.utcNow(),
                     BatchDateTimeSupport.utcNow())));
 
-    ResponseEntity<InputStreamResource> response =
-        service.exportConfigReleases(new ConfigReleaseQueryRequest());
+    // R2-P1-9: 返回类型已切到 StreamingResponseBody；通过 lambda 写出到 ByteArrayOutputStream 再校验
+    var response = service.exportConfigReleases(new ConfigReleaseQueryRequest());
     assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-    try (Workbook workbook = WorkbookFactory.create(response.getBody().getInputStream())) {
+    java.io.ByteArrayOutputStream sink = new java.io.ByteArrayOutputStream();
+    response.getBody().writeTo(sink);
+    try (Workbook workbook =
+        WorkbookFactory.create(new java.io.ByteArrayInputStream(sink.toByteArray()))) {
       assertThat(workbook.getNumberOfSheets()).isEqualTo(2);
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("config_releases");
       Row header = workbook.getSheetAt(0).getRow(0);

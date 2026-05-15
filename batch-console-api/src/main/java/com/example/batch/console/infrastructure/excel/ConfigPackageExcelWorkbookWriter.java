@@ -33,6 +33,7 @@ import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -223,13 +224,33 @@ public class ConfigPackageExcelWorkbookWriter {
     return buildExportWorkbook(sheetDataList, Map.of());
   }
 
+  /**
+   * R2-P1-9 兼容入口：保留 byte[] 签名给老调用方；底层走 streaming 路径，但仍在内存里 buffer 一次。 新代码请改用 {@link
+   * #writeExportWorkbook(OutputStream, List, Map)} 避免 double-copy。
+   */
   public byte[] buildExportWorkbook(
       List<List<Map<String, Object>>> sheetDataList,
       Map<String, List<String>> registeredImplCodesByModule) {
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      writeExportWorkbook(out, sheetDataList, registeredImplCodesByModule);
+      return out.toByteArray();
+    } catch (IOException e) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.export_workbook_failed");
+    }
+  }
+
+  /**
+   * R2-P1-9 流式导出：直接把 SXSSF workbook 写到调用方的 {@link OutputStream}（通常是 HTTP response）， 不在堆里缓
+   * byte[]。SXSSF 自己用 50 行窗口 + 临时磁盘 spool，内存压力恒定。
+   */
+  public void writeExportWorkbook(
+      OutputStream out,
+      List<List<Map<String, Object>>> sheetDataList,
+      Map<String, List<String>> registeredImplCodesByModule)
+      throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
-    try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
-        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+    try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
       for (int i = 0; i < sheetDefs.size(); i++) {
         SheetDef def = sheetDefs.get(i);
         writeDataSheet(wb, def, sheetDataList.get(i), locale, implRegistry);
@@ -238,9 +259,6 @@ public class ConfigPackageExcelWorkbookWriter {
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
-      return out.toByteArray();
-    } catch (IOException e) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.export_workbook_failed");
     }
   }
 
@@ -248,11 +266,22 @@ public class ConfigPackageExcelWorkbookWriter {
     return buildTemplateWorkbook(Map.of());
   }
 
+  /** R2-P1-9 兼容入口：底层走 streaming。新代码请改用 {@link #writeTemplateWorkbook(OutputStream, Map)}。 */
   public byte[] buildTemplateWorkbook(Map<String, List<String>> registeredImplCodesByModule) {
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      writeTemplateWorkbook(out, registeredImplCodesByModule);
+      return out.toByteArray();
+    } catch (IOException e) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.template_workbook_failed");
+    }
+  }
+
+  /** R2-P1-9 流式模板导出，直接把 workbook 写到调用方 stream。 */
+  public void writeTemplateWorkbook(
+      OutputStream out, Map<String, List<String>> registeredImplCodesByModule) throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
-    try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
-        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+    try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
       for (SheetDef def : sheetDefs) {
         writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
@@ -260,9 +289,6 @@ public class ConfigPackageExcelWorkbookWriter {
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
-      return out.toByteArray();
-    } catch (IOException e) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.template_workbook_failed");
     }
   }
 
@@ -270,10 +296,29 @@ public class ConfigPackageExcelWorkbookWriter {
     return buildPreviewWorkbook(session, result, Map.of());
   }
 
+  /** R2-P1-9 兼容入口：底层走 streaming。新代码请改用 {@link #writePreviewWorkbook}。 */
   public byte[] buildPreviewWorkbook(
       PackageExcelSession session,
       PackageValidationResult result,
       Map<String, List<String>> registeredImplCodesByModule) {
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      writePreviewWorkbook(out, session, result, registeredImplCodesByModule);
+      return out.toByteArray();
+    } catch (IOException e) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_failed");
+    }
+  }
+
+  /**
+   * R2-P1-9 流式预览导出。XSSFWorkbook 内部仍 buffer（预览需 cell comment，不能用 SXSSF）， 但消除外层 byte[] 拷贝；workbook 直接
+   * write 到响应流。
+   */
+  public void writePreviewWorkbook(
+      OutputStream out,
+      PackageExcelSession session,
+      PackageValidationResult result,
+      Map<String, List<String>> registeredImplCodesByModule)
+      throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     List<List<Map<String, String>>> sessionData =
@@ -309,9 +354,7 @@ public class ConfigPackageExcelWorkbookWriter {
             wb, def, sessionData.get(i), results.get(i).issues(), locale, implRegistry);
       }
       ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(wb, result.allIssues());
-      return ConsoleExcelPreviewWorkbookSupport.toBytes(wb);
-    } catch (IOException e) {
-      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_failed");
+      wb.write(out);
     }
   }
 
