@@ -17,7 +17,11 @@ import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -70,11 +74,26 @@ public class TenantSchedulerSnapshotService {
     List<SchedulerSnapshotResponse.PolicySnapshot> policies = new ArrayList<>();
     List<TenantQuotaPolicyEntity> quotaRows =
         tenantQuotaPolicyMapper.selectByTenantAndEnabled(tenantId, true);
+    // R7-A3-P1: 把 N 条 countActiveByFairShareGroup 单查改成 1 条 GROUP BY 预聚合。
+    Set<String> groups = new LinkedHashSet<>();
     for (TenantQuotaPolicyEntity p : quotaRows) {
-      long groupJobs = 0L;
       if (Texts.hasText(p.fairShareGroup())) {
-        groupJobs = jobInstanceMapper.countActiveByFairShareGroup(p.fairShareGroup());
+        groups.add(p.fairShareGroup());
       }
+    }
+    Map<String, Long> groupCountMap = new HashMap<>();
+    if (!groups.isEmpty()) {
+      for (Map<String, Object> row : jobInstanceMapper.countActiveByFairShareGroups(groups)) {
+        groupCountMap.put(
+            String.valueOf(row.get("fairShareGroup")),
+            ((Number) row.getOrDefault("cnt", 0L)).longValue());
+      }
+    }
+    for (TenantQuotaPolicyEntity p : quotaRows) {
+      long groupJobs =
+          Texts.hasText(p.fairShareGroup())
+              ? groupCountMap.getOrDefault(p.fairShareGroup(), 0L)
+              : 0L;
       int baseJobs = p.maxRunningJobsPerTenant() == null ? 0 : p.maxRunningJobsPerTenant();
       int burst = p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit());
       int effJobs = baseJobs > 0 ? baseJobs + burst : 0;
@@ -114,8 +133,24 @@ public class TenantSchedulerSnapshotService {
 
   private List<SchedulerSnapshotResponse.QueueSnapshot> buildQueueSnapshot(String tenantId) {
     List<SchedulerSnapshotResponse.QueueSnapshot> queues = new ArrayList<>();
-    for (ResourceQueueEntity q : resourceQueueMapper.selectByTenantAndEnabled(tenantId, true)) {
-      long qj = jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, q.queueCode());
+    List<ResourceQueueEntity> queueRows =
+        resourceQueueMapper.selectByTenantAndEnabled(tenantId, true);
+    // R7-A3-P1: queue 同样从 N 条 countActiveByTenantAndQueueCode 改 1 条 GROUP BY 预聚合。
+    Set<String> queueCodes = new LinkedHashSet<>();
+    for (ResourceQueueEntity q : queueRows) {
+      queueCodes.add(q.queueCode());
+    }
+    Map<String, Long> queueCountMap = new HashMap<>();
+    if (!queueCodes.isEmpty()) {
+      for (Map<String, Object> row :
+          jobInstanceMapper.countActiveByTenantAndQueueCodes(tenantId, queueCodes)) {
+        queueCountMap.put(
+            String.valueOf(row.get("queueCode")),
+            ((Number) row.getOrDefault("cnt", 0L)).longValue());
+      }
+    }
+    for (ResourceQueueEntity q : queueRows) {
+      long qj = queueCountMap.getOrDefault(q.queueCode(), 0L);
       int qmax = q.maxRunningJobs() == null ? 0 : q.maxRunningJobs();
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
       int qeff = qmax > 0 ? qmax + qburst : 0;

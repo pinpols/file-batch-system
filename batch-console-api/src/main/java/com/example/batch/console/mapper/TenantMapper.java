@@ -2,6 +2,7 @@ package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.console.domain.param.TenantUpsertParam;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
@@ -16,6 +17,9 @@ public interface TenantMapper {
   long countByQuery(@Param("keyword") String keyword, @Param("status") String status);
 
   Map<String, Object> selectByTenantId(@Param("tenantId") String tenantId);
+
+  /** R7-A3-P1：批量按 tenant_id 取，替代 batch create / precheck 循环 N+1。 */
+  List<Map<String, Object>> selectByTenantIds(@Param("tenantIds") Collection<String> tenantIds);
 
   int insert(TenantUpsertParam param);
 

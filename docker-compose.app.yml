@@ -1,6 +1,8 @@
 # 与 docker-compose.yml 叠加以 `--profile apps` 启动 Java 服务。
 # 宿主机端口由 .env 中
-# CONSOLE_API_PORT / TRIGGER_PORT / ORCHESTRATOR_PORT 及 worker 端口变量映射；容器内仍为 8080–8085。
+# CONSOLE_API_PORT / TRIGGER_PORT / ORCHESTRATOR_PORT 及 worker 端口变量映射。
+# R7-A4-P1: 容器内端口统一 18080–18086，与 Helm values.yaml 对齐；之前是 8080–8086 → 18080–18086 host-only 重映射，
+# 排障/管理脚本在 compose vs K8s 行为分叉。统一后 actuator / logs / SSH 进容器排查所有指向 1808X。
 # 库地址、Kafka、MinIO 使用 Docker 网络名（postgres:5432、kafka:29092、minio:9000）；15432 仅宿主机映射。
 x-app-runtime-env: &app-runtime-env
   BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
@@ -44,27 +46,27 @@ services:
       BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-console-api.log
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      SERVER_PORT: 8080
+      SERVER_PORT: 18080
       # S2-1 / R4-P2-3：docker-compose 本地开发刻意共享 management 与 business 端口，避免 port mapping 复杂化。
       # K8s prod 走 application-prod.yml 的 ${BATCH_MANAGEMENT_PORT:0}（random port），actuator 与业务端口
       # 真正分离；外部探针仍走业务端口的 /actuator/health（actuator endpoint 在 random port 上由 K8s pod
       # 内部访问，不暴露给 Service）。详见 application-prod.yml 注释。
-      MANAGEMENT_SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 18080
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     volumes:
       - ./logs/docker:/app/logs
     ports:
-      - "${CONSOLE_API_PORT:-18080}:8080"
+      - "${CONSOLE_API_PORT:-18080}:18080"
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18080/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -102,22 +104,22 @@ services:
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       # ADR-010 Stage 4: trigger 通过 Kafka topic batch.trigger.launch.v1 异步发布 launch 事件,
       # 容器内必须用容器网络名 kafka:29092 而非宿主机 localhost:19092。
       BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
-      SERVER_PORT: 8081
-      MANAGEMENT_SERVER_PORT: 8081
+      SERVER_PORT: 18081
+      MANAGEMENT_SERVER_PORT: 18081
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     ports:
-      - "${TRIGGER_PORT:-18081}:8081"
+      - "${TRIGGER_PORT:-18081}:18081"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18081/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -148,7 +150,7 @@ services:
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
@@ -158,17 +160,17 @@ services:
       BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
-      SERVER_PORT: 8082
-      MANAGEMENT_SERVER_PORT: 8082
+      SERVER_PORT: 18082
+      MANAGEMENT_SERVER_PORT: 18082
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     ports:
-      - "${ORCHESTRATOR_PORT:-18082}:8082"
+      - "${ORCHESTRATOR_PORT:-18082}:18082"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18082/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -200,7 +202,7 @@ services:
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
       BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
@@ -213,16 +215,16 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
       LOGGING_FILE_NAME: /app/logs/batch-worker-import.log
-      SERVER_PORT: 8083
-      MANAGEMENT_SERVER_PORT: 8083
+      SERVER_PORT: 18083
+      MANAGEMENT_SERVER_PORT: 18083
     ports:
-      - "${WORKER_IMPORT_PORT:-18083}:8083"
+      - "${WORKER_IMPORT_PORT:-18083}:18083"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18083/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -256,7 +258,7 @@ services:
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
       BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
@@ -269,16 +271,16 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
       LOGGING_FILE_NAME: /app/logs/batch-worker-export.log
-      SERVER_PORT: 8084
-      MANAGEMENT_SERVER_PORT: 8084
+      SERVER_PORT: 18084
+      MANAGEMENT_SERVER_PORT: 18084
     ports:
-      - "${WORKER_EXPORT_PORT:-18084}:8084"
+      - "${WORKER_EXPORT_PORT:-18084}:18084"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18084/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -312,7 +314,7 @@ services:
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
       BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
@@ -325,16 +327,16 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
       LOGGING_FILE_NAME: /app/logs/batch-worker-process.log
-      SERVER_PORT: 8086
-      MANAGEMENT_SERVER_PORT: 8086
+      SERVER_PORT: 18086
+      MANAGEMENT_SERVER_PORT: 18086
     ports:
-      - "${WORKER_PROCESS_PORT:-18086}:8086"
+      - "${WORKER_PROCESS_PORT:-18086}:18086"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8086/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18086/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -368,7 +370,7 @@ services:
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
       BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
@@ -381,16 +383,16 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
       LOGGING_FILE_NAME: /app/logs/batch-worker-dispatch.log
-      SERVER_PORT: 8085
-      MANAGEMENT_SERVER_PORT: 8085
+      SERVER_PORT: 18085
+      MANAGEMENT_SERVER_PORT: 18085
     ports:
-      - "${WORKER_DISPATCH_PORT:-18085}:8085"
+      - "${WORKER_DISPATCH_PORT:-18085}:18085"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18085/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
