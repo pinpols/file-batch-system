@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -51,7 +50,11 @@ public class ConsoleSecurityConfiguration {
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .headers(headers -> headers.addHeaderWriter(securityHeadersWriter))
-        .httpBasic(Customizer.withDefaults())
+        // R6 P0-3：禁用 Spring Security HTTP Basic。
+        // console 走 ADR-030 §D7 HttpOnly cookie JWT 单一认证路径，HTTP Basic 会让 401 响应附带
+        // WWW-Authenticate: Basic realm=...，浏览器弹原生登录框 + 还允许 Authorization: Basic
+        // 直接绕过 cookie filter 链。生产环境不可暴露。
+        .httpBasic(AbstractHttpConfigurer::disable)
         .exceptionHandling(
             exceptionHandling ->
                 exceptionHandling

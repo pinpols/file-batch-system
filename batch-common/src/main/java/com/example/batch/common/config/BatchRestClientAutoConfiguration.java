@@ -1,10 +1,12 @@
 package com.example.batch.common.config;
 
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
@@ -23,8 +25,19 @@ import tools.jackson.databind.json.JsonMapper;
 @ConditionalOnBean(JsonMapper.class)
 public class BatchRestClientAutoConfiguration {
 
+  /**
+   * R6 audit 2026-05-15：必须 {@code @Scope("prototype")}。Spring 7.0 {@code
+   * DefaultRestClientBuilder.baseUrl()} 等方法是 mutate-in-place（{@code this.baseUrl = ...; return
+   * this}）， 不是 clone-and-modify。如果按 singleton 注入，14+ 调用方共享同一个 builder 实例， 任何一方调 {@code
+   * restClientBuilder.baseUrl(X).build()} 都会把 baseUrl 改写到所有人看到的实例上 —— 高并发下 baseUrl 互相覆盖，请求被发到错误
+   * host。
+   *
+   * <p>prototype scope 让每次注入或 {@code getBean()} 都拿到新 builder 实例；message converter 配置 在工厂方法里独立 apply
+   * 到每个新实例，与并发隔离。
+   */
   @Bean
   @ConditionalOnMissingBean
+  @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
   public RestClient.Builder restClientBuilder(JsonMapper jsonMapper) {
     return RestClient.builder()
         .configureMessageConverters(

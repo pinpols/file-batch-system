@@ -1,7 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
@@ -18,10 +17,12 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
-/** Worker → Orchestrator HTTP 的弹性测试：5xx / I/O 错误有限重试；429 立即失败。 */
+/**
+ * Worker → Orchestrator HTTP 的弹性测试：5xx / I/O 错误 / 429 均按退避重试，R6 P0-7 起 429 不再立即失败， 避免高峰期 worker
+ * REPORT 数据被静默丢弃。
+ */
 class HttpTaskExecutionClientTest {
 
   @Test
@@ -69,10 +70,14 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void reportDoesNotRetryOn429() throws Exception {
+  void reportRetriesOn429AndSucceedsWhenLimitClears() throws Exception {
+    // R6 P0-7：429 = orchestrator sliding-window 限流的瞬时拒绝，过去 worker 直接放弃 REPORT 等于把
+    // task 数据丢掉（orchestrator 端只能等 lease 过期回收）。改为按退避重试，与 5xx / I/O 同处理。
     MockWebServer server = new MockWebServer();
     try {
       server.enqueue(new MockResponse().setResponseCode(429).setBody("slow down"));
+      server.enqueue(new MockResponse().setResponseCode(429).setBody("slow down"));
+      server.enqueue(new MockResponse().setResponseCode(200));
       server.start();
 
       OrchestratorTaskClientProperties props = clientProperties(server.getPort());
@@ -93,17 +98,16 @@ class HttpTaskExecutionClientTest {
               noopCoordinator,
               256);
 
-      assertThatThrownBy(() -> client.report(report(7L)))
-          .isInstanceOf(HttpClientErrorException.class);
+      client.report(report(7L));
 
-      assertThat(server.getRequestCount()).isEqualTo(1);
+      assertThat(server.getRequestCount()).isEqualTo(3);
       assertThat(
               registry
                   .find("worker.report.failed.total")
                   .tag("reason", "RATE_LIMITED")
                   .counter()
                   .count())
-          .isEqualTo(1.0d);
+          .isEqualTo(2.0d);
     } finally {
       server.shutdown();
     }

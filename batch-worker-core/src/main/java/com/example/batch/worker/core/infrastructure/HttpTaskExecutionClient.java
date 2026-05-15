@@ -304,7 +304,12 @@ public class HttpTaskExecutionClient
           continue;
         }
         if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
-          failReportImmediately("RATE_LIMITED", state, ex);
+          // R6 P0-7：429 是 orchestrator 端 sliding-window 限流的瞬时拒绝，绝不是终态错误。
+          // 之前直接 failReportImmediately 等于把 worker 的 REPORT 数据扔掉，task 在 orchestrator
+          // 视角永远卡 RUNNING — 只能靠 lease 过期 + 重 CLAIM 兜底，rolling 高峰会把整批 task 都丢丢。
+          // 改为按可重试路径走退避：与 503 / IO 超时一致，让 worker 退避后重投 REPORT。
+          state = handleRetryableReportFailure("RATE_LIMITED", "rate limited", state, ex);
+          continue;
         }
         failReportImmediately("CLIENT_ERROR", state, ex);
       } catch (HttpServerErrorException ex) {

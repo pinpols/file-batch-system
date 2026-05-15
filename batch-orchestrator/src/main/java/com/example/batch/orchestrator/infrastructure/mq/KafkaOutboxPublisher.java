@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -126,6 +127,35 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
               deliveryLogExecutor);
     }
 
+    // R6 P0-4：ADR-030 §F verifier.failure.v1 走专用 topic，运维告警 / SLO 直接订阅，
+    // 不再混入通用 outbox fallback 桶（之前会被 ops 默认 ACL 屏蔽，告警系统拿不到）。
+    String dedicatedTopic = resolveDedicatedTopic(event.getEventType());
+    if (dedicatedTopic != null) {
+      return kafkaTemplate
+          .send(dedicatedTopic, event.getEventKey(), event.getPayloadJson())
+          .toCompletableFuture()
+          .handleAsync(
+              (result, ex) -> {
+                if (ex == null) {
+                  recordDelivery(
+                      event,
+                      dedicatedTopic,
+                      null,
+                      OutboxPublishStatus.PUBLISHED.code(),
+                      LocalizedError.EMPTY);
+                  return true;
+                }
+                recordDelivery(
+                    event,
+                    dedicatedTopic,
+                    null,
+                    OutboxPublishStatus.FAILED.code(),
+                    BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
+                throw new CompletionException(ex);
+              },
+              deliveryLogExecutor);
+    }
+
     // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
     String fallbackTopic = governance.outbox().getDefaultTopic();
     BatchEventMessage message =
@@ -171,6 +201,20 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
               throw new CompletionException(ex);
             },
             deliveryLogExecutor);
+  }
+
+  /**
+   * R6 P0-4：event_type → 专用 topic 映射。命中即走专用 topic，未命中走 fallback。
+   *
+   * <p>当前覆盖：{@code verifier.failure.v1}（ADR-030 §F 失败事件，运维告警面板独立订阅）。
+   */
+  private static final Set<String> VERIFIER_FAILURE_EVENT_TYPES = Set.of("verifier.failure.v1");
+
+  private static String resolveDedicatedTopic(String eventType) {
+    if (eventType != null && VERIFIER_FAILURE_EVENT_TYPES.contains(eventType)) {
+      return BatchTopics.VERIFIER_FAILURE_V1;
+    }
+    return null;
   }
 
   // #5-2: 敏感字段关键词，delivery log 中的 payload 需对这些字段脱敏
