@@ -83,12 +83,15 @@
           and publish_status in (#{pendingStatus1}, #{pendingStatus2})
     </update>
 
+    <!-- R3-P0-6：与 markPublishing 对称加 publish_status='PUBLISHING' 守卫。
+         之前缺守卫，并发场景下能把已 PUBLISHED 行回退到 PUBLISHED 之外的状态。 -->
     <update id="markPublished">
         update batch.outbox_event
         set publish_status = #{status},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and publish_status = #{publishingStatus}
     </update>
 
     <update id="markFailed">

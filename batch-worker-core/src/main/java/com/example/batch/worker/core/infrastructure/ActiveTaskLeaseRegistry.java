@@ -75,12 +75,14 @@ public class ActiveTaskLeaseRegistry {
       shutdownLock.writeLock().unlock();
     }
     lostLeases.remove(taskId);
-    // R-4.5: 每次 remove 后唤醒 awaitDrain 的等待者。放在 unlock 之后，
-    // 避免 monitor 竞争时持有 shutdownLock 产生不必要的阻塞。
-    if (activeTaskLeases.isEmpty()) {
-      synchronized (drainMonitor) {
-        drainMonitor.notifyAll();
-      }
+    // R-4.5 + R3-P2-2: 每次 remove 都 notifyAll（不再仅在 isEmpty 时通知）。
+    // 之前的"仅 isEmpty 时通知"在 awaitDrain 还没 wait 之前 notifyAll 会丢失，
+    // awaitDrain 进入 wait 后只能等下一个 remove；如果当前 remove 已经让 map 空了，
+    // awaitDrain 会等满 waitMillis 才再次检查，drain 报 timeout 假阴。
+    // 改为每次 remove 都通知：所有等待者醒来后通过 while(!isEmpty) 循环重检，map
+    // 仍非空就回到 wait；map 空就退出。多余的唤醒成本可忽略。
+    synchronized (drainMonitor) {
+      drainMonitor.notifyAll();
     }
   }
 

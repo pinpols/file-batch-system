@@ -143,7 +143,10 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         if (published) {
           publishSucceeded++;
           outboxEventMapper.markPublished(
-              event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
+              event.getTenantId(),
+              event.getId(),
+              OutboxPublishStatus.PUBLISHED.code(),
+              OutboxPublishStatus.PUBLISHING.code());
         } else {
           publishFailed++;
           int publishAttemptNo =

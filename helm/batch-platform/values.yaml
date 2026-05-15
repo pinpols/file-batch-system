@@ -48,6 +48,12 @@ orchestratorBaseUrl: "http://batch-orchestrator:18082"
 
 security:
   bypassMode: "false"
+  # Internal service-to-service secret for /internal/** APIs.
+  # Leave empty in default chart values so application defaults still apply in non-prod.
+  # Production must set this via --set, values overlay, or external secret manager.
+  internalSecret: ""
+  # Console JWT HMAC secret. Production must provide a strong value.
+  consoleJwtSecret: ""
 
 # 注入 ConfigMap 键 BATCH_TIMEZONE_DEFAULT_ZONE（与 batch-defaults / .env.example 一致）
 batchTimezoneDefaultZone: "Asia/Shanghai"
@@ -183,7 +189,7 @@ orchestrator:
     pollingInterval: 30
     cooldownPeriod: 120
     # Postgres scaler：统计 outbox backlog（NEW + FAILED），超过阈值扩容
-    backlogQuery: "SELECT COUNT(*) FROM biz.outbox_event WHERE publish_status IN ('NEW','FAILED')"
+    backlogQuery: "SELECT COUNT(*) FROM batch.outbox_event WHERE publish_status IN ('NEW','FAILED')"
     backlogThreshold: "200"
     # TriggerAuth 的 Secret 名字（承载 POSTGRES_CONNECTION_STRING）
     connectionStringSecretName: "batch-keda-postgres"
@@ -272,8 +278,10 @@ workerExport:
   port: 18084
   # Export 任务通常更长（生成大文件），给更宽窗口；超时未完成的 task 由 orchestrator
   # PartitionLeaseReclaimScheduler 兜底重派。
+  # R3-P0-8：之前 180s < preStop(15) + spring drain(120) + awaitDrain(120) = 255s
+  # → SIGKILL 中断进行中的 GB 文件导出。新值 = 15+120+120+30(buffer) = 285s。
   gracefulShutdown:
-    terminationGracePeriodSeconds: 180
+    terminationGracePeriodSeconds: 285
     preStopSleepSeconds: 15
   resources:
     requests:
@@ -320,8 +328,9 @@ workerProcess:
   replicaCount: 2
   port: 18086
   # PROCESS 任务可能很长(SQL 加工 / staging publish);需要充分的优雅停机时间。
+  # R3-P0-8：同 workerExport，285s 覆盖 preStop + spring drain + awaitDrain 全程。
   gracefulShutdown:
-    terminationGracePeriodSeconds: 180
+    terminationGracePeriodSeconds: 285
     preStopSleepSeconds: 15
   resources:
     requests:

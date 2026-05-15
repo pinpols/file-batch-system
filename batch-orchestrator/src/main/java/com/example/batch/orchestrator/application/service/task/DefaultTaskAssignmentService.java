@@ -137,7 +137,17 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (workerCode == null || !workerCode.equals(current.getAssignedWorkerCode())) {
       return false;
     }
-    String expectedInvocation = Texts.hasText(partitionInvocationId) ? partitionInvocationId : null;
+    // R3-P1-10：invocationId 强制非空，避免多副本同 workerCode 续他人 lease。
+    if (!Texts.hasText(partitionInvocationId)) {
+      log.warn(
+          "renewLease rejected: partitionInvocationId required (R3-P1-10): tenant={} taskId={}"
+              + " workerCode={}",
+          tenantId,
+          taskId,
+          workerCode);
+      return false;
+    }
+    String expectedInvocation = partitionInvocationId;
     return jobPartitionMapper.renewLease(
             RenewLeaseParam.builder()
                 .tenantId(tenantId)

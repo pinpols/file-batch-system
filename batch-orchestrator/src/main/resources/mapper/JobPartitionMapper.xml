@@ -127,6 +127,9 @@
           and version = #{expectedVersion}
     </update>
 
+    <!-- R3-P1-10：current_invocation_id 改为强制条件（不再 <if> 可选）。
+         之前多副本同 workerCode 部署时 invocationId=null 可让任意持有该 workerCode 的实例续他人 lease。
+         调用方 (DefaultTaskAssignmentService.renewLease) 在传入前 Guard 非空。 -->
     <update id="renewLease">
         update batch.job_partition
         set lease_expire_at = #{leaseExpireAt},
@@ -134,9 +137,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and worker_code = #{workerCode}
-          <if test="expectedInvocationId != null and expectedInvocationId != ''">
           and current_invocation_id = #{expectedInvocationId}
-          </if>
     </update>
 
     <update id="markRetrying">
@@ -155,12 +156,18 @@
           and version = #{expectedVersion}
     </update>
 
+    <!-- R3-P0-5: updateOutputSummary 加 current_invocation_id 守卫，防止 RETRYING 后旧 invocation
+         迟到的 report 覆盖新 invocation 的 output。expectedInvocationId 为 null 时不带条件
+         （兼容首次写入路径，partition 尚未 CLAIM）。 -->
     <update id="updateOutputSummary">
         update batch.job_partition
         set output_summary = #{outputSummary,jdbcType=VARCHAR}::jsonb,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+        <if test="expectedInvocationId != null">
+            and (current_invocation_id is null or current_invocation_id = #{expectedInvocationId})
+        </if>
     </update>
 
     <update id="updateInputSnapshot">
@@ -169,6 +176,9 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+        <if test="expectedInvocationId != null">
+            and (current_invocation_id is null or current_invocation_id = #{expectedInvocationId})
+        </if>
     </update>
 
     <update id="markStatus">

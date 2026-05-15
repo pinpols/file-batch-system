@@ -4,6 +4,8 @@ import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.common.logging.BatchMdc;
+import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.LaunchApplicationService;
 import com.example.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
@@ -13,6 +15,7 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -45,6 +48,24 @@ public class TriggerLaunchConsumer {
   private static final String METRIC_CONSUMED = "batch.trigger.launch.consumed.total";
   private static final String METRIC_DEDUPED = "batch.trigger.launch.deduped.total";
   private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
+
+  // R3-P0-11：Kafka 消息可注入任意 tenantId 字符串 → Prometheus TSDB cardinality 爆炸。
+  // 用 ConcurrentHashMap.newKeySet 缓存已观测 tenantId，超过阈值后新 tenant 统一归一化为 "other"。
+  // 256 是 Prom 单 metric 系列上限的实用阈值（足够区分常见租户 + 容忍误差）。
+  private static final int MAX_TENANT_TAG_CARDINALITY = 256;
+  private static final Set<String> OBSERVED_TENANTS =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  private String normalizeTenantTag(String tenantId) {
+    if (tenantId == null || tenantId.isBlank()) {
+      return "unknown";
+    }
+    if (OBSERVED_TENANTS.size() < MAX_TENANT_TAG_CARDINALITY) {
+      OBSERVED_TENANTS.add(tenantId);
+      return tenantId;
+    }
+    return OBSERVED_TENANTS.contains(tenantId) ? tenantId : "other";
+  }
 
   private final LaunchApplicationService launchApplicationService;
   private final MeterRegistry meterRegistry;
@@ -93,6 +114,11 @@ public class TriggerLaunchConsumer {
     }
     LaunchRequest request = envelope.launchRequest();
     String tenantId = request.tenantId() == null ? "unknown" : request.tenantId();
+    String tenantTag = normalizeTenantTag(tenantId);
+    // R3-P1-2：Kafka listener 入口注入 MDC，让 launch 失败的 ERROR 日志可按 tenant/trace 过滤。
+    BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+    BatchMdc.put(StructuredLogField.TRACE_ID, request.traceId());
+    BatchMdc.put(StructuredLogField.REQUEST_ID, request.requestId());
     try {
       LaunchResponse response = launchApplicationService.launch(request);
       log.info(
@@ -100,36 +126,30 @@ public class TriggerLaunchConsumer {
           tenantId,
           request.requestId(),
           response == null ? null : response.instanceNo());
-      counter(METRIC_CONSUMED, "tenant", tenantId, "outcome", "ok").increment();
-      // 2026-05-02 ADR-010 闭环:回写 trigger_request.LAUNCHED + relatedJobInstanceId,
-      // 让审计 / SLA 报表能从 trigger_request 单表判定"job 是否真跑了"。best-effort,失败仅
-      // log warn — 主路径已 ack,落地由 ad-hoc reconciler 兜底,绝不让回写失败回滚 launch。
+      counter(METRIC_CONSUMED, "tenant", tenantTag, "outcome", "ok").increment();
+      // 2026-05-02 ADR-010 闭环:回写 trigger_request.LAUNCHED + relatedJobInstanceId
       writeBackTriggerRequestLaunched(tenantId, request.requestId(), response);
       ack.acknowledge();
     } catch (ResponseStatusException ex) {
-      // 409 = uk_job_instance_tenant_dedup 兜底命中,视为已处理(同 requestId 已落库一次)
       if (ex.getStatusCode().value() == 409) {
         log.info(
             "TriggerLaunchConsumer 重复 requestId 被 dedup 兜底,视为成功: tenantId={} requestId={}",
             tenantId,
             request.requestId());
-        counter(METRIC_DEDUPED, "tenant", tenantId).increment();
+        counter(METRIC_DEDUPED, "tenant", tenantTag).increment();
         ack.acknowledge();
         return;
       }
-      // 429 = 限流;不 ack,让 Kafka listener container 自然重投。
-      // 之前的旧注释 "由 outbox 重发" 不成立——trigger_outbox_event 早已 PUBLISHED 不会再发,
-      // 仅依赖 TriggerRequestLaunchReconciler 60s 对账拉起,期间 launch 静默丢失。
       if (ex.getStatusCode().value() == 429) {
         log.warn(
             "TriggerLaunchConsumer 限流被拒,不 ack 让 Kafka 重投: tenantId={} requestId={}",
             tenantId,
             request.requestId());
-        counter(METRIC_FAILED, "reason", "rate_limited").increment();
+        counter(METRIC_FAILED, "tenant", tenantTag, "reason", "rate_limited").increment();
         throw ex;
       }
-      // 其它 5xx / 4xx 异常 → 抛出走 listener container 重试
-      counter(METRIC_FAILED, "reason", "http_" + ex.getStatusCode().value()).increment();
+      counter(METRIC_FAILED, "tenant", tenantTag, "reason", "http_" + ex.getStatusCode().value())
+          .increment();
       throw ex;
     } catch (RuntimeException ex) {
       log.error(
@@ -137,9 +157,11 @@ public class TriggerLaunchConsumer {
           tenantId,
           request.requestId(),
           ex);
-      counter(METRIC_FAILED, "reason", "runtime").increment();
-      // 抛出异常,Spring Kafka SeekToCurrentErrorHandler 默认重试
+      counter(METRIC_FAILED, "tenant", tenantTag, "reason", "runtime").increment();
       throw ex;
+    } finally {
+      BatchMdc.removeAll(
+          StructuredLogField.TENANT_ID, StructuredLogField.TRACE_ID, StructuredLogField.REQUEST_ID);
     }
   }
 

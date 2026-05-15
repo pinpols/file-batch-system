@@ -9,7 +9,6 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -87,14 +86,39 @@ public class TriggerOutboxRelay {
   private final AtomicLong stalePublishingEvents = new AtomicLong();
   private ScheduledExecutorService executor;
   private Counter giveUpCounter;
+  // R3-P1-3：单条 outbox 事件 NEW→PUBLISHED 端到端延迟分位，按 result tag (ok/fail) 拆分。
+  // 之前只有积压 gauge，无法区分 Kafka 慢 vs relay 调度慢。
+  private io.micrometer.core.instrument.Timer publishLatencyOk;
+  private io.micrometer.core.instrument.Timer publishLatencyFail;
 
-  @PostConstruct
+  /**
+   * R3-P1-9：从 {@code @PostConstruct} 改为 {@code @EventListener(ApplicationReadyEvent.class)}， 与
+   * {@code auditOnReady} 一致 — 之前 PostConstruct 阶段 Flyway 迁移可能未完成， 第一轮 poll 访问 {@code
+   * trigger_outbox_event} 表的新列会抛 schema 错误（被吞为 noise）。 注意：本类内有两个 ApplicationReady 监听器（start +
+   * auditOnReady），Spring 顺序无保证但都会执行。
+   */
+  @EventListener(ApplicationReadyEvent.class)
   public void start() {
+    if (executor != null) {
+      return; // 已启动（防 dev tools 重启场景）
+    }
     meterRegistry.gauge("batch.trigger.outbox.pending.events", pendingEvents);
     meterRegistry.gauge("batch.trigger.outbox.publishing.stale.events", stalePublishingEvents);
     giveUpCounter =
         Counter.builder("batch.trigger.outbox.give_up.total")
             .description("trigger_outbox_event rows transitioned to GIVE_UP")
+            .register(meterRegistry);
+    publishLatencyOk =
+        io.micrometer.core.instrument.Timer.builder("batch.trigger.outbox.publish.latency")
+            .description("trigger_outbox publishOne latency (single event)")
+            .tags("result", "ok")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .register(meterRegistry);
+    publishLatencyFail =
+        io.micrometer.core.instrument.Timer.builder("batch.trigger.outbox.publish.latency")
+            .description("trigger_outbox publishOne latency (single event)")
+            .tags("result", "fail")
+            .publishPercentiles(0.5, 0.95, 0.99)
             .register(meterRegistry);
     executor =
         Executors.newSingleThreadScheduledExecutor(
@@ -205,6 +229,20 @@ public class TriggerOutboxRelay {
   }
 
   private void publishOne(TriggerOutboxEventEntity event) {
+    long startNanos = System.nanoTime();
+    boolean ok = false;
+    try {
+      ok = publishOneInternal(event);
+    } finally {
+      if (publishLatencyOk != null) {
+        io.micrometer.core.instrument.Timer timer = ok ? publishLatencyOk : publishLatencyFail;
+        timer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);
+      }
+    }
+  }
+
+  /** R3-P1-3: 主逻辑提取，外层 publishOne 负责耗时记录 */
+  private boolean publishOneInternal(TriggerOutboxEventEntity event) {
     int claimed =
         mapper.markPublishing(
             event.getId(),
@@ -213,7 +251,7 @@ public class TriggerOutboxRelay {
             OutboxPublishStatus.FAILED.code());
     if (claimed == 0) {
       // 已被其它 relay 实例 / 之前的 hung-process 抢走或状态已变,本轮跳过
-      return;
+      return false;
     }
     LaunchEnvelope envelope;
     try {
@@ -233,13 +271,14 @@ public class TriggerOutboxRelay {
       if (giveUpCounter != null) {
         giveUpCounter.increment();
       }
-      return;
+      return false;
     }
     String messageKey = event.getTenantId() + ":" + event.getRequestId();
     TriggerEventPublisher.PublishResult result =
         publisher.publish(event.getTopic(), messageKey, envelope, event.getTraceId());
     if (result.success()) {
       mapper.markPublished(event.getId(), OutboxPublishStatus.PUBLISHED.code());
+      return true;
     } else {
       int nextAttempt = event.getPublishAttempt() + 1;
       if (nextAttempt >= Math.max(1, maxPublishAttempts)) {
@@ -251,7 +290,7 @@ public class TriggerOutboxRelay {
         if (giveUpCounter != null) {
           giveUpCounter.increment();
         }
-        return;
+        return false;
       }
       Instant retryAt = BatchDateTimeSupport.utcNow().plusSeconds(backoffSeconds(nextAttempt));
       mapper.markFailed(
@@ -259,6 +298,7 @@ public class TriggerOutboxRelay {
           OutboxPublishStatus.FAILED.code(),
           truncate(result.errorMessage()),
           retryAt);
+      return false;
     }
   }
 

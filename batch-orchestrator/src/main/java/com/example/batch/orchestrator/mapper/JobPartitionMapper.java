@@ -41,12 +41,14 @@ public interface JobPartitionMapper {
   int updateOutputSummary(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
-      @Param("outputSummary") String outputSummary);
+      @Param("outputSummary") String outputSummary,
+      @Param("expectedInvocationId") String expectedInvocationId);
 
   int updateInputSnapshot(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
-      @Param("inputSnapshot") String inputSnapshot);
+      @Param("inputSnapshot") String inputSnapshot,
+      @Param("expectedInvocationId") String expectedInvocationId);
 
   int markStatus(MarkPartitionStatusParam param);
 
