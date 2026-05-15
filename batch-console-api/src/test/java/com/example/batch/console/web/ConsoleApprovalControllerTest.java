@@ -1,5 +1,6 @@
 package com.example.batch.console.web;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -44,9 +45,16 @@ class ConsoleApprovalControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
+    // R4-P0-2：Controller 现在依赖 ConsoleTenantGuard 强校验请求体 tenantId。
+    // 测试用 mock guard，resolveTenant 简单返回入参（与原 body 直传等价）。
+    com.example.batch.console.support.auth.ConsoleTenantGuard tenantGuard =
+        mock(com.example.batch.console.support.auth.ConsoleTenantGuard.class);
+    when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
+
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleApprovalController(approvalApplicationService, responseFactory))
+                new ConsoleApprovalController(
+                    approvalApplicationService, responseFactory, tenantGuard))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();

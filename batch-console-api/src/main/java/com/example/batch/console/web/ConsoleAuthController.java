@@ -128,7 +128,10 @@ public class ConsoleAuthController {
     if (!(raw instanceof ConsolePrincipal principal)) {
       throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.principal_missing");
     }
-    String ticket = sseTicketService.issue(principal.username(), principal.tenantId());
+    // R4-P1-1：签发时带上当前 JWT 的真实角色集，消费端按此还原 ConsolePrincipal，
+    // 不再从配置的 defaultAuthorities 兜底（防止低权用户拿 ticket 后被提权）。
+    String ticket =
+        sseTicketService.issue(principal.username(), principal.tenantId(), principal.authorities());
     return responseFactory.success(Map.of("ticket", ticket));
   }
 }

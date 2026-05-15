@@ -26,7 +26,11 @@ import org.springframework.stereotype.Component;
 public class BatchDayTimePolicyResolver {
 
   public static final String DEFAULT_GAP_POLICY = "RUN_AT_NEXT_VALID_TIME";
-  public static final String DEFAULT_OVERLAP_POLICY = "RUN_ONCE_EARLIER_OFFSET";
+  // R4-P1-5：cutoff 语义是"到这个本地时刻后日切"。秋令 overlap（本地时间 1:00 出现两次）时：
+  // - RUN_ONCE_EARLIER_OFFSET 选夏令时 offset → 实际比标准时配置早 1h 触发 → 误判 late arrival
+  // - RUN_ONCE_LATER_OFFSET  选标准时 offset → 与运营配置"06:00 标准时"语义一致
+  // 默认改 LATER_OFFSET，保护没显式配置的 tenant；显式配 EARLIER_OFFSET 仍可保留旧语义。
+  public static final String DEFAULT_OVERLAP_POLICY = "RUN_ONCE_LATER_OFFSET";
 
   /**
    * cutoff 是批量日唯一边界,模型不支持双 cutoff;若 calendar 配 {@code RUN_TWICE} 由 cutoff 路径降级到 {@code

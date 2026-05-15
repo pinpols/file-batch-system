@@ -36,6 +36,9 @@ public class ConsoleApprovalController {
 
   private final ConsoleApprovalApplicationService approvalApplicationService;
   private final ConsoleResponseFactory responseFactory;
+  // R4-P0-2：所有 approve/reject 入口必须用 tenantGuard 校验请求体 tenantId 是否与 JWT 持有的 tenantId 一致，
+  // 防止租户角色用户改 body tenantId 批准其他租户的 approvalNo。
+  private final com.example.batch.console.support.auth.ConsoleTenantGuard tenantGuard;
 
   /** 审批通过。 */
   @PostMapping("/{approvalNo}/approve")
@@ -43,9 +46,10 @@ public class ConsoleApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String approvalNo,
       @Valid @RequestBody ApprovalActionRequest request) {
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     return responseFactory.success(
         approvalApplicationService.approve(
-            request.getTenantId(), approvalNo, request.getOperatorId(), request.getReason()));
+            tenantId, approvalNo, request.getOperatorId(), request.getReason()));
   }
 
   /** 审批拒绝。 */
@@ -54,9 +58,10 @@ public class ConsoleApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String approvalNo,
       @Valid @RequestBody ApprovalActionRequest request) {
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     return responseFactory.success(
         approvalApplicationService.reject(
-            request.getTenantId(), approvalNo, request.getOperatorId(), request.getReason()));
+            tenantId, approvalNo, request.getOperatorId(), request.getReason()));
   }
 
   /** 批量审批通过。 */
@@ -64,9 +69,10 @@ public class ConsoleApprovalController {
   public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchApprove(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
+    String tenantId = tenantGuard.resolveTenant(request.tenantId());
     return responseFactory.success(
         approvalApplicationService.batchApprove(
-            request.tenantId(), request.approvalNos(), request.operatorId(), request.reason()));
+            tenantId, request.approvalNos(), request.operatorId(), request.reason()));
   }
 
   /** 批量审批拒绝。 */
@@ -74,8 +80,9 @@ public class ConsoleApprovalController {
   public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchReject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
+    String tenantId = tenantGuard.resolveTenant(request.tenantId());
     return responseFactory.success(
         approvalApplicationService.batchReject(
-            request.tenantId(), request.approvalNos(), request.operatorId(), request.reason()));
+            tenantId, request.approvalNos(), request.operatorId(), request.reason()));
   }
 }

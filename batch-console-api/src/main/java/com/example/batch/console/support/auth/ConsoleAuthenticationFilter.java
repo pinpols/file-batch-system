@@ -93,23 +93,22 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
       if (Texts.hasText(sseTicket)) {
         // ASYNC/ERROR 分派复用 REQUEST 阶段已消费的 ticket 解析结果，避免二次 validate
         // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
-        String ticketValue = (String) request.getAttribute(TICKET_PRINCIPAL_ATTR);
-        if (ticketValue == null) {
-          ticketValue = sseTicketService.validate(sseTicket);
-          if (ticketValue != null) {
-            request.setAttribute(TICKET_PRINCIPAL_ATTR, ticketValue);
+        SseTicketService.TicketPayload payload =
+            (SseTicketService.TicketPayload) request.getAttribute(TICKET_PRINCIPAL_ATTR);
+        if (payload == null) {
+          payload = sseTicketService.validate(sseTicket);
+          if (payload != null) {
+            request.setAttribute(TICKET_PRINCIPAL_ATTR, payload);
           }
         }
-        if (ticketValue != null) {
-          String[] parts = ticketValue.split(":", 2);
-          String ticketUser = parts[0];
-          String ticketTenant = parts.length > 1 ? parts[1] : "";
+        if (payload != null) {
+          // R4-P1-1：用 ticket 签发时绑定的真实角色集；空角色（旧数据兼容）走配置默认值兜底。
+          LinkedHashSet<String> authorities =
+              payload.authorities().isEmpty()
+                  ? new LinkedHashSet<>(properties.getDefaultAuthorities())
+                  : new LinkedHashSet<>(payload.authorities());
           ConsolePrincipal principal =
-              new ConsolePrincipal(
-                  ticketUser,
-                  ticketTenant,
-                  properties.getDefaultAuthorities().stream()
-                      .collect(Collectors.toCollection(LinkedHashSet::new)));
+              new ConsolePrincipal(payload.username(), payload.tenantId(), authorities);
           setAuthentication(principal, "sse-ticket");
           filterChain.doFilter(request, response);
           return;
@@ -182,18 +181,24 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   /** ADR-030 §D7：HttpOnly cookie 名（与登录响应 Set-Cookie 同步）。 */
   private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
 
+  /**
+   * ADR-030 §D7 Stage B 收尾（2026-05-15）：HttpOnly cookie 是 console 端唯一 JWT 入口。
+   *
+   * <p>Authorization Bearer header fallback 已删除，所有客户端统一走 cookie：
+   *
+   * <ul>
+   *   <li>前端：axios {@code withCredentials=true}，浏览器自动带 cookie
+   *   <li>运维脚本：curl {@code --cookie "batch_console_token=${BATCH_CONSOLE_TOKEN}"}
+   *       （heal-drain-timeout.sh / trigger-compensation.sh 同步迁移）
+   * </ul>
+   *
+   * <p>orchestrator {@code /internal/**} 走另一个 {@code X-Internal-Secret} 通道， 不在本 filter 范围内，5 个
+   * heal-* 脚本不受影响。
+   *
+   * <p>Header 入站不再被识别为 token：保留 method 签名是为了上游 SSE-ticket 路径 fallthrough 调用方便。
+   */
   private String resolveBearerToken(HttpServletRequest request) {
-    // D7 优先：HttpOnly cookie（JS 不可读，XSS 无法外泄 token）
-    // 5.4 兼容：fallback 到 Authorization header，给老客户端 / SSE / SDK 一段过渡期
-    String cookieToken = resolveCookieToken(request);
-    if (Texts.hasText(cookieToken)) {
-      return cookieToken;
-    }
-    String authorization = request.getHeader("Authorization");
-    if (Texts.hasText(authorization) && authorization.startsWith("Bearer ")) {
-      return authorization.substring(7).trim();
-    }
-    return null;
+    return resolveCookieToken(request);
   }
 
   private String resolveCookieToken(HttpServletRequest request) {

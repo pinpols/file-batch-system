@@ -1,5 +1,7 @@
 package com.example.batch.orchestrator.application.service.workflow;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import java.math.BigDecimal;
@@ -26,9 +28,7 @@ public class WorkflowConditionEvaluator {
     // 旧行为 "blank → true" 让空表达式静默退化成 ALWAYS，无法区分用户意图。
     // 现在抛出 BizException，让运维在静态校验 / 配置 save 期间就发现问题。
     if (conditionExpr == null || conditionExpr.isBlank()) {
-      throw com.example.batch.common.exception.BizException.of(
-          com.example.batch.common.enums.ResultCode.INVALID_ARGUMENT,
-          "error.workflow.condition_expr_blank");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.condition_expr_blank");
     }
     Map<String, Object> payload = Collections.emptyMap();
     if (payloadJson != null && !payloadJson.isBlank()) {

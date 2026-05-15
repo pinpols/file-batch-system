@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-05-15
+- **CLAUDE.md §模块边界**：补 `batch-config-defaults` 到固定模块列表（ADR-029 新增的 resources-only 共享配置基线模块，R2 已落地但 CLAUDE.md 漏更）。R4-P1-10 修复。
+
 ### 2026-05-07
 - **CLAUDE.md §版本管理重写**：从"默认 1.0.0 非 SNAPSHOT"改为完整 SemVer 2.0.0 + `${revision}` 模型；约定 `MAJOR.MINOR.PATCH[-PRERELEASE]` / `-SNAPSHOT` 是 main 分支默认形态 / git tag 用 annotated `v<version>` / 描述性 tag 与版本 tag 共存。新增 [`docs/runbook/releasing.md`](runbook/releasing.md) 落地完整 release flow（标准 / hotfix / RC / patch / Maven 命令速查 / SemVer 判定提问 / FAQ）。明确**不抄 Spring Cloud Release Train / CalVer**：单 repo 单 PR 单部署 → 9 模块共 `${revision}` 已是主流；BOM 模块也不引入。当前 GA = `v1.0.0` @ commit `525e60f0`，main 默认 `1.1.0-SNAPSHOT`。
 - **CLAUDE.md 新增 §ADR 实施范围纪律（防越界）**：写死系统定位"批量运行控制面 + 文件 / 任务交付闭环"，**不**扩张为数据治理 / K8s scheduler / 合规审计平台；列三阶段优先级（P0 ADR-012/023/025；P1 ADR-021/022/026；P2 ADR-024/027 暂缓）；列 4 个最高越界风险 ADR（021/022/026/027）的判定提问 + 一句话越界红线；PR 评审硬规则要求实施方答判定提问 + 引用 ❌ 不做清单。权威源 = 各 ADR 顶部"范围边界（Scope Discipline）"小节 + `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md` §5。
