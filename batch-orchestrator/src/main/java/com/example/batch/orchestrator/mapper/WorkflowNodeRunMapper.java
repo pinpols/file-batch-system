@@ -13,6 +13,15 @@ public interface WorkflowNodeRunMapper {
   WorkflowNodeRunEntity selectLatestByWorkflowRunIdAndNodeCode(
       @Param("workflowRunId") Long workflowRunId, @Param("nodeCode") String nodeCode);
 
+  /**
+   * S3 / R3-P1-2：按 (workflowRunId, nodeCodes IN) 批量取每个 node_code 的最新 run_seq 行， 消除
+   * isNodeReadyForDispatch / canNeverFire 循环里的 N+1。 实现：postgres DISTINCT ON (node_code) ORDER BY
+   * node_code, run_seq DESC。 调用方需保证 nodeCodes 非空。
+   */
+  List<WorkflowNodeRunEntity> selectLatestByWorkflowRunIdAndNodeCodesIn(
+      @Param("workflowRunId") Long workflowRunId,
+      @Param("nodeCodes") java.util.Collection<String> nodeCodes);
+
   // C-1/C-3: pessimistic lock to serialize concurrent recordNodeRunFinish /
   // isNodeAlreadyActivated
   WorkflowNodeRunEntity selectLatestForUpdate(

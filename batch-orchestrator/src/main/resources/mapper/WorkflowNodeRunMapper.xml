@@ -97,6 +97,16 @@
         order by run_seq asc
     </select>
 
+    <!-- S3 / R3-P1-2：每个 node_code 取最新 run_seq 行，一次查询替代 N 次 selectLatestByWorkflowRunIdAndNodeCode -->
+    <select id="selectLatestByWorkflowRunIdAndNodeCodesIn" resultMap="WorkflowNodeRunResultMap">
+        select distinct on (node_code) *
+        from batch.workflow_node_run
+        where workflow_run_id = #{workflowRunId}
+          and node_code in
+        <foreach collection="nodeCodes" item="c" open="(" separator="," close=")">#{c}</foreach>
+        order by node_code, run_seq desc
+    </select>
+
     <select id="selectByNodeStatus" resultMap="WorkflowNodeRunResultMap">
         select *
         from batch.workflow_node_run

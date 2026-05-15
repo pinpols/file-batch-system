@@ -2,8 +2,10 @@ package com.example.batch.orchestrator.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,6 +46,45 @@ class DefaultWorkflowDagServiceTest {
     dagService =
         new DefaultWorkflowDagService(
             edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator, meterProvider);
+
+    // S3：原 tests 用 selectLatestByWorkflowRunIdAndNodeCode 单条 stub；
+    // service 内已切换为 selectLatestByWorkflowRunIdAndNodeCodesIn 批量。
+    // 在这里把批量 method 转发到单条 stub，原测试逻辑无需逐个改写。
+    lenient()
+        .when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(anyLong(), any()))
+        .thenAnswer(
+            inv -> {
+              Long runId = inv.getArgument(0);
+              @SuppressWarnings("unchecked")
+              java.util.Collection<String> codes = inv.getArgument(1);
+              java.util.List<WorkflowNodeRunEntity> out = new java.util.ArrayList<>();
+              for (String c : codes) {
+                WorkflowNodeRunEntity e =
+                    nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(runId, c);
+                if (e != null) {
+                  out.add(e);
+                }
+              }
+              return out;
+            });
+
+    // 同样转发节点定义批量查询（resolveNextNodes 路径）
+    lenient()
+        .when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(any(), any()))
+        .thenAnswer(
+            inv -> {
+              Long defId = inv.getArgument(0);
+              @SuppressWarnings("unchecked")
+              java.util.Collection<String> codes = inv.getArgument(1);
+              java.util.List<WorkflowNodeEntity> out = new java.util.ArrayList<>();
+              for (String c : codes) {
+                WorkflowNodeEntity e = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(defId, c);
+                if (e != null) {
+                  out.add(e);
+                }
+              }
+              return out;
+            });
   }
 
   // ── resolveNextNodes ──────────────────────────────────────────────────────
