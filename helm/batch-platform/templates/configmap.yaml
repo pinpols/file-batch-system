@@ -54,7 +54,12 @@ data:
   LC_ALL: {{ .Values.batchLocale | quote }}
 
   # ── OpenTelemetry ──────────────────────────────────────────────────────────
+  # R7-A4-P1: 只在 otelCollector.enabled=true 时输出 endpoint，否则 OTLP exporter
+  # 解析不到 service 持续报 "no such host" / 启动时 DNS 探测超时。日志格式与采样
+  # 始终输出（即使 collector 关，logback JSON / 日志采样阈值仍要生效）。
+  {{- if .Values.otelCollector.enabled }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.endpoint | quote }}
+  {{- end }}
   OTEL_SAMPLING_PROBABILITY: {{ .Values.otel.samplingProbability | quote }}
   BATCH_LOG_FORMAT: {{ .Values.otel.logFormat | quote }}
 

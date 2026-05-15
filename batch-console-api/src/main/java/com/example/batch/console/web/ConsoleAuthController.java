@@ -70,7 +70,8 @@ public class ConsoleAuthController {
         HttpHeaders.SET_COOKIE,
         ResponseCookie.from("batch_console_token", "")
             .httpOnly(true)
-            .secure(false) // 与 buildTokenCookie 一致；生产由前端反代加 secure
+            // R7-A1-P2：与 buildTokenCookie 一致，由 cookie-secure 配置开关。
+            .secure(securityProperties.isCookieSecure())
             .sameSite("Lax")
             .path("/")
             .maxAge(0)

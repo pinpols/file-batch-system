@@ -16,6 +16,7 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -338,9 +339,16 @@ public class BatchDayReplayService {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.outputs_only_version_ids_required");
     }
+    // R7-A3-P1: 一次批量取所有 versionId，避免 N+1 selectById 循环。
+    List<ResultVersionEntity> versions =
+        resultVersionMapper.selectByIds(command.tenantId(), command.versionIds());
+    Map<Long, ResultVersionEntity> byId = new HashMap<>(versions.size() * 2);
+    for (ResultVersionEntity v : versions) {
+      byId.put(v.id(), v);
+    }
     List<BatchDayReplayEntryEntity> entries = new ArrayList<>(command.versionIds().size());
     for (Long versionId : command.versionIds()) {
-      ResultVersionEntity version = resultVersionMapper.selectById(command.tenantId(), versionId);
+      ResultVersionEntity version = byId.get(versionId);
       if (version == null) {
         throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
       }

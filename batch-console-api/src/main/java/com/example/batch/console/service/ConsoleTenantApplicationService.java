@@ -23,7 +23,9 @@ import com.example.batch.console.web.response.config.TenantConfigBatchInitRespon
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -118,17 +120,25 @@ public class ConsoleTenantApplicationService {
 
   private List<ConsoleTenantResponse> doBatchCreateTenants(BatchCreateTenantCommand cmd) {
     String prefix = cmd.usernamePrefix();
+    // R7-A3-P1: 预检从 N 条单查改成 1 条 IN 查询；插入后 response 也 1 条批量取，整体 SELECT 数固定 = 2 + N。
+    List<String> requestedTenantIds = cmd.tenants().stream().map(TenantSpec::tenantId).toList();
+    Set<String> conflictingTenantIds =
+        tenantMapper.selectByTenantIds(requestedTenantIds).stream()
+            .map(row -> str(row, "tenant_id"))
+            .collect(Collectors.toSet());
     for (TenantSpec spec : cmd.tenants()) {
-      if (tenantMapper.selectByTenantId(spec.tenantId()) != null) {
+      if (conflictingTenantIds.contains(spec.tenantId())) {
         throw BizException.of(ResultCode.CONFLICT, "error.tenant.already_exists", spec.tenantId());
       }
+    }
+    // username 单查暂保留（ConsoleUserAccountMapper 未暴露 batch 接口；命中冲突即拒绝整批）。
+    for (TenantSpec spec : cmd.tenants()) {
       String username = prefix + spec.tenantId();
       if (userAccountMapper.selectByUsername(username) != null) {
         throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
       }
     }
     String passwordHash = passwordHasher.encode(cmd.plainPassword());
-    List<ConsoleTenantResponse> created = new ArrayList<>();
     for (TenantSpec spec : cmd.tenants()) {
       insertTenantWithAccount(
           spec.tenantId(),
@@ -137,7 +147,17 @@ public class ConsoleTenantApplicationService {
           prefix + spec.tenantId(),
           passwordHash,
           cmd.operator());
-      created.add(toResponse(tenantMapper.selectByTenantId(spec.tenantId())));
+    }
+    Map<String, Map<String, Object>> insertedRows =
+        tenantMapper.selectByTenantIds(requestedTenantIds).stream()
+            .collect(Collectors.toMap(row -> str(row, "tenant_id"), row -> row, (a, b) -> a));
+    List<ConsoleTenantResponse> created = new ArrayList<>(cmd.tenants().size());
+    for (TenantSpec spec : cmd.tenants()) {
+      Map<String, Object> row = insertedRows.get(spec.tenantId());
+      if (row == null) {
+        throw BizException.of(ResultCode.NOT_FOUND, "error.tenant.not_found", spec.tenantId());
+      }
+      created.add(toResponse(row));
     }
     return created;
   }

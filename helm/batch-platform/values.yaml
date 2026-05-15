@@ -483,3 +483,18 @@ otel:
   endpoint: "http://batch-platform-otel-collector:4318"  # within cluster
   samplingProbability: "0.1"
   logFormat: "ecs"                                        # structured JSON
+
+# ── Prometheus ServiceMonitor (R7-A6-P1) ────────────
+# 需要集群安装 prometheus-operator (CRD: monitoring.coreos.com/v1)。enabled=false 时
+# templates/servicemonitor.yaml 直接跳过渲染，不影响 plain Prometheus 用 file_sd 抓取。
+# 启用方式：helm install/upgrade 加 --set serviceMonitor.enabled=true。
+serviceMonitor:
+  enabled: false
+  # 与 prometheus-operator 的 Prometheus CR `serviceMonitorSelector` 匹配；
+  # 一般用 `release: prometheus` 标签，按本集群 operator 部署调整。
+  labels: {}
+  # Prometheus 抓取间隔 / 超时。
+  interval: 30s
+  scrapeTimeout: 10s
+  # /actuator/prometheus path（Spring Boot Micrometer 默认）。
+  path: /actuator/prometheus

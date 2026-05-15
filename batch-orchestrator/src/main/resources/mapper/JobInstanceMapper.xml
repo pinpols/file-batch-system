@@ -325,6 +325,36 @@
           )
     </select>
 
+    <!-- R7-A3-P1: 批量预聚合 group → count，替代 service 层 N+1 单条查询。 -->
+    <select id="countActiveByFairShareGroups" resultType="java.util.Map">
+        select tqp.fair_share_group as "fairShareGroup",
+               count(1) as "cnt"
+        from batch.job_instance ji
+        join batch.tenant_quota_policy tqp
+          on tqp.tenant_id = ji.tenant_id
+         and tqp.enabled = true
+         and tqp.fair_share_group in
+             <foreach collection="fairShareGroups" item="g" open="(" separator="," close=")">
+                 #{g}
+             </foreach>
+        where ji.instance_status in ('READY', 'RUNNING')
+        group by tqp.fair_share_group
+    </select>
+
+    <!-- R7-A3-P1: 批量预聚合 (tenant, queueCode) → count；替代 buildQueueSnapshot 循环单查。 -->
+    <select id="countActiveByTenantAndQueueCodes" resultType="java.util.Map">
+        select queue_code as "queueCode",
+               count(1) as "cnt"
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and queue_code in
+             <foreach collection="queueCodes" item="q" open="(" separator="," close=")">
+                 #{q}
+             </foreach>
+          and instance_status in ('READY', 'RUNNING')
+        group by queue_code
+    </select>
+
     <select id="countActiveAll" resultType="long">
         select count(1)
         from batch.job_instance

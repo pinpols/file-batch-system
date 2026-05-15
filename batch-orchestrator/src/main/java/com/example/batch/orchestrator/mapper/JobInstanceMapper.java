@@ -7,7 +7,9 @@ import com.example.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import com.example.batch.orchestrator.domain.query.JobInstanceQuery;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface JobInstanceMapper {
@@ -74,6 +76,22 @@ public interface JobInstanceMapper {
       @Param("tenantId") String tenantId, @Param("queueCode") String queueCode);
 
   long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
+
+  /**
+   * R7-A3-P1：批量预聚合多个 fair_share_group → count，替代 N+1 单条查询。
+   *
+   * @return {@code Map<{fairShareGroup,cnt}>} 列表；未出现的 group = 0。
+   */
+  List<Map<String, Object>> countActiveByFairShareGroups(
+      @Param("fairShareGroups") Collection<String> fairShareGroups);
+
+  /**
+   * R7-A3-P1：批量预聚合多个 queue_code → count，替代 N+1 单条查询。
+   *
+   * @return {@code Map<{queueCode,cnt}>} 列表；未出现的 queue = 0。
+   */
+  List<Map<String, Object>> countActiveByTenantAndQueueCodes(
+      @Param("tenantId") String tenantId, @Param("queueCodes") Collection<String> queueCodes);
 
   /** 统计所有租户的运行中任务总量（WAITING/READY/RUNNING）。 */
   long countActiveAll();

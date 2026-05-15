@@ -48,6 +48,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            # R7-A4-P1: pin management server port 到业务端口；application-prod.yml 默认 0 (ephemeral)
+            # 会让 livenessProbe / Prometheus scrape 找不到管理 endpoint。
+            - name: BATCH_MANAGEMENT_PORT
+              value: {{ $svc.port | quote }}
           {{- with $svc.startupProbe }}
           startupProbe:
             {{- toYaml . | nindent 12 }}

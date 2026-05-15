@@ -30,6 +30,7 @@ import com.example.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -176,40 +177,45 @@ public class DefaultCompensationService implements CompensationService {
     }
   }
 
+  /**
+   * R7-A5-P2 / CLAUDE.md §分支消除：把 JOB/STEP/PARTITION 三种 target 类型抽成 Map 路由表， 每种类型只描述"如何拿到归属
+   * jobInstanceId"，公共的"按 jobInstanceId → JobInstanceEntity → traceId"模板共用。 通过方法返回（而非 field
+   * initializer），避免与 {@code @RequiredArgsConstructor} 注入字段 {@code jobMappers} 的初始化顺序冲突。
+   */
+  private Map<String, Function<CompensationSubmitCommand, Long>> jobInstanceIdResolvers() {
+    return Map.of(
+        "JOB", cmd -> cmd.targetId(),
+        "STEP",
+            cmd -> {
+              JobStepInstanceEntity step =
+                  jobMappers.jobStepInstanceMapper.selectById(cmd.tenantId(), cmd.targetId());
+              return step == null ? null : step.getJobInstanceId();
+            },
+        "PARTITION",
+            cmd -> {
+              JobPartitionEntity partition =
+                  jobMappers.jobPartitionMapper.selectById(cmd.tenantId(), cmd.targetId());
+              return partition == null ? null : partition.getJobInstanceId();
+            });
+  }
+
   private String resolveTraceIdFromTarget(
       CompensationSubmitCommand command, String normalizedType) {
     if (!Texts.hasText(command.tenantId()) || command.targetId() == null) {
       return null;
     }
-    return switch (normalizedType) {
-      case "JOB" -> {
-        JobInstanceEntity sourceInstance = resolveJobInstance(command);
-        yield sourceInstance == null ? null : sourceInstance.getTraceId();
-      }
-      case "STEP" -> {
-        JobStepInstanceEntity stepInstance =
-            jobMappers.jobStepInstanceMapper.selectById(command.tenantId(), command.targetId());
-        if (stepInstance == null) {
-          yield null;
-        }
-        JobInstanceEntity inst =
-            jobMappers.jobInstanceMapper.selectById(
-                command.tenantId(), stepInstance.getJobInstanceId());
-        yield inst == null ? null : inst.getTraceId();
-      }
-      case "PARTITION" -> {
-        JobPartitionEntity partition =
-            jobMappers.jobPartitionMapper.selectById(command.tenantId(), command.targetId());
-        if (partition == null) {
-          yield null;
-        }
-        JobInstanceEntity inst =
-            jobMappers.jobInstanceMapper.selectById(
-                command.tenantId(), partition.getJobInstanceId());
-        yield inst == null ? null : inst.getTraceId();
-      }
-      default -> null;
-    };
+    Function<CompensationSubmitCommand, Long> resolver =
+        jobInstanceIdResolvers().get(normalizedType);
+    if (resolver == null) {
+      return null;
+    }
+    Long jobInstanceId = resolver.apply(command);
+    if (jobInstanceId == null) {
+      return null;
+    }
+    JobInstanceEntity inst =
+        jobMappers.jobInstanceMapper.selectById(command.tenantId(), jobInstanceId);
+    return inst == null ? null : inst.getTraceId();
   }
 
   private Map<String, Object> execute(

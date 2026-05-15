@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.ResultVersionEntity;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -52,6 +53,14 @@ public interface ResultVersionMapper {
 
   /** 按 (tenantId, id) 反查；console / promote 入口用。 */
   ResultVersionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /**
+   * R7-A3-P1：批量按 (tenantId, ids) 反查；替代 N+1 单条循环（BatchDayReplay materialize 等）。
+   *
+   * <p>调用方必须确保 ids 非空，mybatis foreach 空列表会产生 {@code IN ()} 语法错误。
+   */
+  List<ResultVersionEntity> selectByIds(
+      @Param("tenantId") String tenantId, @Param("ids") Collection<Long> ids);
 
   /** PENDING → EFFECTIVE：CAS 到 EFFECTIVE，写 effective_at。 */
   int promoteToEffective(

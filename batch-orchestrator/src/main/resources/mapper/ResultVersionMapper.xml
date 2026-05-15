@@ -126,6 +126,17 @@
           and id = #{id}
     </select>
 
+    <!-- R7-A3-P1: 批量按 (tenant, ids) 取，替代 BatchDayReplay materialize N+1。 -->
+    <select id="selectByIds" resultMap="ResultVersionResultMap">
+        select *
+        from batch.result_version
+        where tenant_id = #{tenantId}
+          and id in
+            <foreach collection="ids" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+    </select>
+
     <update id="promoteToEffective">
         update batch.result_version
         set status         = 'EFFECTIVE',

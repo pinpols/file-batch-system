@@ -43,6 +43,16 @@
         limit 1
     </select>
 
+    <!-- R7-A3-P1: 批量按 tenant_id 取，替代 batch create N+1。 -->
+    <select id="selectByTenantIds" resultType="map">
+        select id, tenant_id, tenant_name, status, description, created_at, updated_at, created_by
+        from batch.tenant
+        where tenant_id in
+            <foreach collection="tenantIds" item="t" open="(" separator="," close=")">
+                #{t}
+            </foreach>
+    </select>
+
     <insert id="insert" parameterType="com.example.batch.console.domain.param.TenantUpsertParam">
         insert into batch.tenant (tenant_id, tenant_name, status, description, created_by)
         values (#{tenantId}, #{tenantName}, #{status}, #{description}, #{createdBy})

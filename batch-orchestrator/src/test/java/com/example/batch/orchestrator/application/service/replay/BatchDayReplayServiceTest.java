@@ -152,10 +152,12 @@ class BatchDayReplayServiceTest {
 
   @Test
   void submitOutputsOnlyMaterializesFromVersionIds() {
-    when(resultVersionMapper.selectById("t1", 11L))
-        .thenReturn(resultVersion(11L, "job:JOB_A:2026-05-04", 100L));
-    when(resultVersionMapper.selectById("t1", 12L))
-        .thenReturn(resultVersion(12L, "job:JOB_B:2026-05-04", 101L));
+    // R7-A3-P1: materializeOutputsOnlyEntries 改用 selectByIds 批量预取替代 N+1。
+    when(resultVersionMapper.selectByIds(eq("t1"), any()))
+        .thenReturn(
+            List.of(
+                resultVersion(11L, "job:JOB_A:2026-05-04", 100L),
+                resultVersion(12L, "job:JOB_B:2026-05-04", 101L)));
     when(sessionMapper.insert(any(BatchDayReplaySessionEntity.class))).thenReturn(1);
     when(sessionMapper.selectActiveByCalendarBizDate("t1", "CAL", LocalDate.of(2026, 5, 4)))
         .thenReturn(sessionAt("t1", 5L, "RUNNING", "OUTPUTS_ONLY"));
