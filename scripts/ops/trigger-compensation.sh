@@ -57,15 +57,16 @@ if [[ "${BATCH_COMPENSATION_DRY_RUN}" == "true" ]]; then
   exit 0
 fi
 
-auth_header=()
+# ADR-030 §D7: 走 HttpOnly cookie，复用 console 同名 batch_console_token；filter 已无 header fallback。
+cookie_arg=()
 if [[ -n "${BATCH_CONSOLE_TOKEN}" ]]; then
-  auth_header=(-H "Authorization: Bearer ${BATCH_CONSOLE_TOKEN}")
+  cookie_arg=(--cookie "batch_console_token=${BATCH_CONSOLE_TOKEN}")
 fi
 
 curl -fsS -X POST \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: ${BATCH_COMPENSATION_IDEMPOTENCY_KEY}" \
-  "${auth_header[@]}" \
+  "${cookie_arg[@]}" \
   -d "${BATCH_COMPENSATION_JSON}" \
   "${BATCH_CONSOLE_URL%/}${path}"
 
