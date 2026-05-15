@@ -66,7 +66,11 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   private final WorkerExecutionTimeoutProperties timeoutProperties;
   private final Counter timeoutCounter;
   private final Counter threadLeakedCounter;
-  private final Timer executionTimer;
+  // R3-P2-5：之前 executionTimer 用 Tags.empty()，4 类 worker 共享一条时间序列。
+  // 改为按 workerType 维度懒加载 cache → Grafana 可分别看 import/export/process/dispatch 各自分位。
+  private final MeterRegistry meterRegistry;
+  private final java.util.Map<String, Timer> executionTimerByType =
+      new java.util.concurrent.ConcurrentHashMap<>();
 
   private ScheduledExecutorService watchdog;
 
@@ -83,10 +87,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     this.executionPool = executionPool;
     this.timeoutProperties = timeoutProperties;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    this.meterRegistry = registry;
     if (registry == null) {
       this.timeoutCounter = null;
       this.threadLeakedCounter = null;
-      this.executionTimer = null;
     } else {
       this.timeoutCounter =
           Counter.builder("worker.task.execution.timeout.total")
@@ -96,13 +100,23 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
           Counter.builder("worker.task.execution.thread.leaked.total")
               .description("超时后 cancelGraceSeconds 内仍未退出的执行线程数 (业务线程不响应 interrupt)")
               .register(registry);
-      this.executionTimer =
-          Timer.builder("worker.task.execution.duration")
-              .description("worker task 执行耗时分位")
-              .tags(Tags.empty())
-              .publishPercentiles(0.5, 0.95, 0.99)
-              .register(registry);
     }
+  }
+
+  /** R3-P2-5：按 workerType 懒注册 Timer；同一 type 复用同一实例避免 cardinality 爆炸。 */
+  private Timer resolveExecutionTimer(String workerType) {
+    if (meterRegistry == null) {
+      return null;
+    }
+    String tag = workerType == null || workerType.isBlank() ? "unknown" : workerType;
+    return executionTimerByType.computeIfAbsent(
+        tag,
+        t ->
+            Timer.builder("worker.task.execution.duration")
+                .description("worker task 执行耗时分位")
+                .tags(Tags.of("workerType", t))
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry));
   }
 
   @PostConstruct
@@ -165,8 +179,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       return new WorkerExecutionResult(task.getTaskId(), response.success(), response.message());
     } finally {
       activeTaskLeaseRegistry.remove(task.getTaskId());
-      if (executionTimer != null) {
-        executionTimer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);
+      Timer timer = resolveExecutionTimer(task.getTaskType());
+      if (timer != null) {
+        timer.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS);
       }
     }
   }

@@ -98,6 +98,12 @@ public class WaitingPartitionDispatchScheduler {
     List<WaitingDispatchCandidate> candidates = new ArrayList<>();
     for (JobPartitionEntity partition : waitingPartitions) {
       WaitingDispatchCandidate candidate;
+      // R3-P2-3：@Scheduled 后台线程默认 MDC 空，多 tenant 循环里的 log 行不带 tenantId/traceId
+      // 字段，无法按 tenant 过滤。每个 per-tenant 迭代用 BatchMdc.withTenantAndTrace 套一层。
+      // partition 持有 tenantId；jobInstance.traceId 此处暂未取，传 null（BatchMdc 会跳过空值）。
+      String tenantTag = partition == null ? null : partition.getTenantId();
+      com.example.batch.common.logging.BatchMdc.put(
+          com.example.batch.common.logging.StructuredLogField.TENANT_ID, tenantTag);
       try {
         candidate = buildCandidate(partition);
       } catch (RuntimeException exception) {
@@ -115,6 +121,9 @@ public class WaitingPartitionDispatchScheduler {
       if (candidate != null) {
         candidates.add(candidate);
       }
+      // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick
+      com.example.batch.common.logging.BatchMdc.remove(
+          com.example.batch.common.logging.StructuredLogField.TENANT_ID);
     }
     Comparator<WaitingDispatchCandidate> comparator =
         Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore)
