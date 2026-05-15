@@ -34,6 +34,41 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_file_record_with_checksum
     ON batch.file_record (tenant_id, checksum_value, storage_path)
     WHERE checksum_value IS NOT NULL;
 
+-- 历史脏数据 dedup:某些 dev / 联调环境老 import 测试在 checksum 启用前留下了
+-- (tenant_id, storage_path) 重复 file_record 行(全部 checksum_value IS NULL),
+-- 会让下方 UNIQUE INDEX 创建失败。每组按 id 保留最新(最大)一行,删 id 更小的旧副本。
+-- 干净库下两段都是 no-op(EXISTS / JOIN 0 命中)。
+--
+-- (1) 把指向"将删副本"的 file_audit_log 重指到每组保留的 winner id,避免 FK 阻挡
+UPDATE batch.file_audit_log fal
+SET file_id = winner.winner_id
+FROM (
+  SELECT a.id AS loser_id, MAX(b.id) AS winner_id
+  FROM batch.file_record a
+  JOIN batch.file_record b ON b.tenant_id = a.tenant_id
+    AND b.storage_path = a.storage_path
+    AND b.checksum_value IS NULL
+  WHERE a.checksum_value IS NULL
+    AND EXISTS (
+      SELECT 1 FROM batch.file_record c
+      WHERE c.tenant_id = a.tenant_id
+        AND c.storage_path = a.storage_path
+        AND c.checksum_value IS NULL
+        AND c.id > a.id
+    )
+  GROUP BY a.id
+) winner
+WHERE fal.file_id = winner.loser_id;
+
+-- (2) 删 file_record 重复行(保留每组 id 最大者)
+DELETE FROM batch.file_record a
+USING batch.file_record b
+WHERE a.checksum_value IS NULL
+  AND b.checksum_value IS NULL
+  AND a.tenant_id = b.tenant_id
+  AND a.storage_path = b.storage_path
+  AND a.id < b.id;
+
 -- 无 checksum 时退化为 (tenant, path) 唯一，至少防同路径重复
 CREATE UNIQUE INDEX IF NOT EXISTS uk_file_record_no_checksum
     ON batch.file_record (tenant_id, storage_path)
