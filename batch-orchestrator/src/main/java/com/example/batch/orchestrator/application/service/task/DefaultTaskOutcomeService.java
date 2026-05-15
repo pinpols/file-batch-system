@@ -750,9 +750,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       }
       Object value = ((Map<String, Object>) effectiveMap).get("_parentVirtualTaskId");
       return TaskOutcomePayloadSupport.toPositiveLong(value);
-    } catch (Exception ignored) {
-      SwallowedExceptionLogger.warn(DefaultTaskOutcomeService.class, "catch:Exception", ignored);
-
+    } catch (IllegalArgumentException badJson) {
+      // 真·"数据格式问题"：JsonUtils 把 Jackson 的 JsonProcessingException 包成 IllegalArgumentException。
+      // 静默是 OK 的（payload 由上游写入，bad data 触发数据修复路径而非崩溃）。
+      SwallowedExceptionLogger.warn(DefaultTaskOutcomeService.class, "catch:bad_json", badJson);
+      return null;
+    } catch (RuntimeException unexpected) {
+      // R2-P2-6 子项：宽 catch + warn 把代码缺陷（NPE/ClassCastException 等 map navigation 错误）
+      // 掩盖成"数据问题"，调用方 null 返回后父 workflow node 永远等不到完成信号 → 卡死。
+      // 升级到 ERROR + 完整 stack，让运维直接定位真正 bug。
+      log.error(
+          "extractParentVirtualTaskId failed unexpectedly (likely code defect, not bad data):"
+              + " paramsSnapshot length={}",
+          paramsSnapshot == null ? -1 : paramsSnapshot.length(),
+          unexpected);
       return null;
     }
   }

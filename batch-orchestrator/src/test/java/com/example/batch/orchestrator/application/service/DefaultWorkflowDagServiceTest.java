@@ -37,8 +37,13 @@ class DefaultWorkflowDagServiceTest {
     nodeMapper = mock(WorkflowNodeMapper.class);
     nodeRunMapper = mock(WorkflowNodeRunMapper.class);
     conditionEvaluator = mock(WorkflowConditionEvaluator.class);
+    // R3-P2-4：DagService 新增 MeterRegistry ObjectProvider 依赖；测试用空 provider（getIfAvailable→null）
+    @SuppressWarnings("unchecked")
+    org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>
+        meterProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
     dagService =
-        new DefaultWorkflowDagService(edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator);
+        new DefaultWorkflowDagService(
+            edgeMapper, nodeMapper, nodeRunMapper, conditionEvaluator, meterProvider);
   }
 
   // ── resolveNextNodes ──────────────────────────────────────────────────────

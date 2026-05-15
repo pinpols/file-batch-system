@@ -81,16 +81,27 @@ class ActiveTaskLeaseRegistryTest {
 
   @Test
   void awaitDrain_shouldReturnTrueAfterLeasesRemoved() throws Exception {
+    // R3-P1-11：原 Thread.sleep(200) 在 CI 低 CPU 环境下不保证 awaitDrain 线程已进入 wait()，
+    // 导致 R3-P2-2 修复（remove 总是 notifyAll）尚未引入前可能 missed-notify 假阴超时。
+    // 改用 CountDownLatch 同步：awaitDrain 任务启动后 latch.countDown，主线程 await 后再 remove，
+    // 保证 remove 总在 awaitDrain 已实际进入 wait/检查循环后发生，结果确定。
     registry.register("task-1", "t1", "w1");
 
+    java.util.concurrent.CountDownLatch awaitStarted = new java.util.concurrent.CountDownLatch(1);
     ExecutorService pool = Executors.newSingleThreadExecutor();
-    Future<Boolean> f = pool.submit(() -> registry.awaitDrain(Duration.ofSeconds(2)));
+    Future<Boolean> f =
+        pool.submit(
+            () -> {
+              awaitStarted.countDown();
+              return registry.awaitDrain(Duration.ofSeconds(2));
+            });
 
-    // 模拟进行中任务完成
-    Thread.sleep(200);
+    awaitStarted.await(1, java.util.concurrent.TimeUnit.SECONDS);
+    // 给 awaitDrain 线程从 countDown 到进入 monitor wait 的极短窗口（不再依赖 200ms 业务等待）
+    Thread.yield();
     registry.remove("task-1");
 
-    Boolean drained = f.get();
+    Boolean drained = f.get(3, java.util.concurrent.TimeUnit.SECONDS);
     pool.shutdown();
     assertThat(drained).isTrue();
     assertThat(registry.snapshot()).isEmpty();

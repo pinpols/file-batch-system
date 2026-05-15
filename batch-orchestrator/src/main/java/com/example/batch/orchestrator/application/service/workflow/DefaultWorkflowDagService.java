@@ -54,6 +54,30 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;
   private final WorkflowConditionEvaluator workflowConditionEvaluator;
+  // R3-P2-4：可选注入 MeterRegistry；DAG advance 热点的 isNodeReadyForDispatch 加 Timer，
+  // 可在 Grafana 上观察 N+1 退化（regression on workflow_node_run 索引 / batch size）。
+  private final org.springframework.beans.factory.ObjectProvider<
+          io.micrometer.core.instrument.MeterRegistry>
+      meterRegistryProvider;
+  private volatile io.micrometer.core.instrument.Timer cachedReadyCheckTimer;
+
+  private io.micrometer.core.instrument.Timer readyCheckTimer() {
+    io.micrometer.core.instrument.Timer t = cachedReadyCheckTimer;
+    if (t != null) {
+      return t;
+    }
+    io.micrometer.core.instrument.MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null) {
+      return null;
+    }
+    cachedReadyCheckTimer =
+        io.micrometer.core.instrument.Timer.builder("batch.workflow.dag.ready_check.duration")
+            .description(
+                "DefaultWorkflowDagService.isNodeReadyForDispatch latency (DAG advance hot path)")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .register(registry);
+    return cachedReadyCheckTimer;
+  }
 
   @Override
   public List<DagNodeResolution> resolveInitialNodes(
@@ -91,6 +115,20 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
   @Override
   public boolean isNodeReadyForDispatch(
+      Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson) {
+    long t0 = System.nanoTime();
+    try {
+      return isNodeReadyForDispatchInternal(
+          workflowRunId, workflowDefinitionId, nodeCode, payloadJson);
+    } finally {
+      io.micrometer.core.instrument.Timer timer = readyCheckTimer();
+      if (timer != null) {
+        timer.record(System.nanoTime() - t0, java.util.concurrent.TimeUnit.NANOSECONDS);
+      }
+    }
+  }
+
+  private boolean isNodeReadyForDispatchInternal(
       Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson) {
     if (workflowRunId == null
         || workflowDefinitionId == null
