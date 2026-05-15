@@ -136,6 +136,11 @@
             <artifactId>kafka</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <!-- macOS：补齐 Netty DNS 原生解析，消除 DnsServerAddressStreamProviders 的 WARN -->
