@@ -11,6 +11,7 @@ import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -131,15 +132,26 @@ public class ConsoleApiExceptionHandler {
 
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
   public ResponseEntity<?> handleMethodNotSupported(
-      HttpRequestMethodNotSupportedException exception) {
-    log.warn("console method not supported", exception);
+      HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
+    // 405 是客户端调用方法错误，**非 server bug**。打印请求行 + 支持的方法即可，
+    // 不打 stack trace（避免 console.log 噪音 + 让运维一眼看出问题）。
+    log.warn(
+        "console method not supported: {} {} (supported: {})",
+        request.getMethod(),
+        request.getRequestURI(),
+        exception.getSupportedHttpMethods());
     return ResponseEntity.status(405)
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }
 
   @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
-  public ResponseEntity<?> handleAccessDenied(Exception exception) {
-    log.warn("console access denied", exception);
+  public ResponseEntity<?> handleAccessDenied(Exception exception, HttpServletRequest request) {
+    // 403 同样是 client / config 问题非 server bug，打印请求行 + 异常 message。
+    log.warn(
+        "console access denied: {} {} - {}",
+        request.getMethod(),
+        request.getRequestURI(),
+        exception.getMessage());
     return ResponseEntity.status(ResultCode.FORBIDDEN.httpStatus())
         .body(responseFactory.failure(ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
   }
