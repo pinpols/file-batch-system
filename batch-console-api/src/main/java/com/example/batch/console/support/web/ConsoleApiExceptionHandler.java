@@ -76,7 +76,8 @@ public class ConsoleApiExceptionHandler {
 
   @ExceptionHandler(BizException.class)
   public ResponseEntity<?> handleBizException(BizException exception) {
-    log.warn("console biz exception", exception);
+    log.warn(
+        "console biz exception: code={} message={}", exception.getCode(), exception.getMessage());
     String message =
         bizMessageResolver == null ? exception.getMessage() : bizMessageResolver.resolve(exception);
     return ResponseEntity.status(exception.getCode().httpStatus())
@@ -93,7 +94,7 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<?> handleMethodArgumentNotValidException(
       MethodArgumentNotValidException exception) {
-    log.warn("console validation exception", exception);
+    log.warn("console validation exception: {}", exception.getMessage());
     String message =
         exception.getBindingResult().getFieldErrors().stream()
             .map(FieldError::getDefaultMessage)
@@ -108,7 +109,7 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(ConstraintViolationException.class)
   public ResponseEntity<?> handleConstraintViolationException(
       ConstraintViolationException exception) {
-    log.warn("console constraint violation exception", exception);
+    log.warn("console constraint violation exception: {}", exception.getMessage());
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, exception.getMessage()));
   }
@@ -116,7 +117,7 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(MissingRequestHeaderException.class)
   public ResponseEntity<?> handleMissingRequestHeaderException(
       MissingRequestHeaderException exception) {
-    log.warn("console missing request header exception", exception);
+    log.warn("console missing request header exception: header={}", exception.getHeaderName());
     ResultCode code =
         CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
             ? ResultCode.MISSING_IDEMPOTENCY_KEY
@@ -236,7 +237,7 @@ public class ConsoleApiExceptionHandler {
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
-    log.warn("console data integrity violation", exception);
+    log.warn("console data integrity violation: {}", exception.getMostSpecificCause().getMessage());
     String message = "数据约束错误";
     Throwable root = exception.getMostSpecificCause();
     if (root != null && root.getMessage() != null) {
