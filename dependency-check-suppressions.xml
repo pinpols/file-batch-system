@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+  <!--
+    R7 安全扫描 2026-05-16 — OWASP dependency-check 已知假阳性白名单。
+    抑制条件需要 packageUrl 精确匹配，并附人工核查 notes + 评审日期，每年至少 review 一次。
+    详见 docs/analysis/security-scan-2026-05-16.md §2。
+  -->
+  <suppress>
+    <notes><![CDATA[
+      OpenTelemetry-Go 专属漏洞，CPE 模糊匹配命中 Java semconv jar。
+      Java 的 opentelemetry-semconv 是纯数据 jar（语义约定常量），不含 Go 代码路径。
+      参考: https://github.com/open-telemetry/opentelemetry-java/discussions
+      下次复审: 2027-05-16
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/io\.opentelemetry\.semconv/opentelemetry-semconv@.*$</packageUrl>
+    <cve>CVE-2026-29181</cve>
+    <cve>CVE-2026-39883</cve>
+  </suppress>
+
+  <suppress>
+    <notes><![CDATA[
+      Log4j Log4j1XmlLayout 桥接器 XML 转义漏洞。本项目通过 SLF4J + Logback 日志，
+      未使用 log4j-1.2-api 兼容桥也未配置 XmlLayout，攻击面为 0。
+      下次复审: 2027-05-16
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/log4j-api@.*$</packageUrl>
+    <cve>CVE-2026-34479</cve>
+  </suppress>
+</suppressions>

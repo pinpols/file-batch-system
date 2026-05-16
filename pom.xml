@@ -63,6 +63,15 @@
         <!-- ArchUnit:守护 CLAUDE.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.3.0</archunit.version>
+        <!-- R7 安全扫描 2026-05-16: trivy fs 命中 11 个 HIGH CVE 组件。下列 version 覆盖
+             Spring Boot 4.0.6 默认传递依赖，强制升到安全 patch 版本。
+             - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
+             - bcprov-jdk18on 1.81 → 1.84: CVE-2026-5598 私钥泄漏 (非常量时间比较)
+             - postgresql 42.7.10 → 42.7.11: CVE-2026-42198
+             SpringBoot 升级到 4.0.7+ 时这些可能不再需要，届时 review 移除。 -->
+        <netty.version>4.2.13.Final</netty.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
+        <postgresql.version>42.7.11</postgresql.version>
     </properties>
 
     <dependencyManagement>

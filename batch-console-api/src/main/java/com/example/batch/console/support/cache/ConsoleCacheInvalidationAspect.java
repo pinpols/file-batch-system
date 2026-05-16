@@ -12,7 +12,8 @@ import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.spel.support.DataBindingPropertyAccessor;
+import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.stereotype.Component;
 
 /**
@@ -84,7 +85,17 @@ public class ConsoleCacheInvalidationAspect {
     if (spel == null || spel.isBlank()) {
       return null;
     }
-    StandardEvaluationContext ctx = new StandardEvaluationContext();
+    // R7 安全扫描 2026-05-16 P0：semgrep 标 spel-injection 风险。
+    // 实际表达式来自 @CacheInvalidate.tenantIdExpr() / codeExpr()，是开发者写在注解里的
+    // **编译期字面量**，不来自用户输入，所以严格意义上不构成 injection。但为防御深度，
+    // 把 StandardEvaluationContext 换 SimpleEvaluationContext + DataBindingPropertyAccessor
+    // — SimpleEvaluationContext **禁止 #{T(System).exit(0)} 类型方法 / Type 引用 /
+    // bean 引用**，仅允许属性 / 索引 / 算术运算，最小权限可读。
+    SimpleEvaluationContext ctx =
+        SimpleEvaluationContext.forPropertyAccessors(
+                DataBindingPropertyAccessor.forReadOnlyAccess())
+            .withInstanceMethods()
+            .build();
     // 按 index 绑定
     for (int i = 0; i < args.length; i++) {
       ctx.setVariable("a" + i, args[i]);

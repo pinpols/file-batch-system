@@ -1,0 +1,4 @@
+# R7 安全扫描 2026-05-16 — trivy 已知假阳性白名单
+# 详见 docs/analysis/security-scan-2026-05-16.md
+# Helm secret.yaml 渲染期需 --set 强密钥（设计如此），templates 默认值故意空缺以强制 prod 显式注入
+# Trivy helm scanner 检测此空值报错，非真 misconfig
