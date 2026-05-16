@@ -98,20 +98,19 @@ jobs:
             --with-inspection
 
       - name: Security scan — DAST
-        continue-on-error: true
         shell: bash
+        # P1-4(2026-05-16):去掉 --skip-build。详见 pr-gate.yml 同名 step 注释。
         run: |
-          bash scripts/ci/security-scan.sh --skip-build -- \
+          bash scripts/ci/security-scan.sh -- \
             --mode=dast \
             --target-url=http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:8080
 
       - name: K8s manifest security — Checkov
-        continue-on-error: true
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: helm/batch-platform
           framework: helm
-          soft_fail: true
+          soft_fail: false
           output_format: cli
 
       - name: Upload Surefire Reports

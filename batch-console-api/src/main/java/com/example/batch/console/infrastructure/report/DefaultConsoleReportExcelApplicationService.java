@@ -70,7 +70,7 @@ public class DefaultConsoleReportExcelApplicationService
   private final ConsoleConfigApplicationService configApplicationService;
   private final ConsoleQueryApplicationService queryApplicationService;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
-  private final RestClient.Builder restClientBuilder;
+  // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(死注入,本类只走 OrchestratorInternalRestClient)。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final Environment environment;
   private final BatchDateTimeSupport dateTimeSupport;

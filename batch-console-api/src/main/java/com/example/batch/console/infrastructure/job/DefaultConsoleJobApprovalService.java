@@ -11,7 +11,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.console.application.job.ConsoleJobApprovalService;
-import com.example.batch.console.config.ConsoleTriggerClientProperties;
+import com.example.batch.console.infrastructure.ops.TriggerInternalRestClient;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;
 import com.example.batch.console.mapper.BatchDayMapper;
@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -39,12 +38,13 @@ import org.springframework.web.client.RestClient;
 public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalService {
 
   private final ConsoleJobOpsSupport ops;
-  private final RestClient.Builder restClientBuilder;
-  private final ConsoleTriggerClientProperties triggerClientProperties;
+
+  /** P0-1(2026-05-16):同 ConsoleJobOpsSupport 一起切到带 secret 的 trigger client。 */
+  private final TriggerInternalRestClient triggerInternalRestClient;
+
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final BatchDayMapper batchDayMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
-  private final Environment environment;
 
   @Override
   public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
@@ -146,8 +146,8 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
       ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
+    // P0-1(2026-05-16):同 ConsoleJobOpsSupport.delegateLaunch — 走带 X-Internal-Secret 的 client
+    RestClient restClient = triggerInternalRestClient.build();
     CommonResponse<LaunchResponse> response =
         restClient
             .post()
@@ -184,10 +184,6 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
 
   private String stringValue(Object value) {
     return value == null ? null : String.valueOf(value);
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 
   private record CatchUpApprovalPayload(String tenantId, String requestId, String reason) {}

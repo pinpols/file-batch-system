@@ -27,6 +27,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -64,7 +65,10 @@ public class WebhookDispatcher {
 
   private final ConsoleWebhookService webhookService;
   private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
-  private final RestClient.Builder restClientBuilder;
+
+  /** P2-1(2026-05-16):见 OrchestratorInternalRestClient 同名字段注释,改 ObjectProvider 避免复用 prototype。 */
+  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
+
   // 5.11: 改用有界队列 + CallerRunsPolicy 替代无界队列
   private final ExecutorService executor =
       new ThreadPoolExecutor(
@@ -220,7 +224,8 @@ public class WebhookDispatcher {
 
     // 5.11: 显式设置 HTTP 超时，避免慢回调长期占用线程
     RestClient client =
-        restClientBuilder
+        restClientBuilderProvider
+            .getObject()
             .requestFactory(
                 new SimpleClientHttpRequestFactory() {
                   {
