@@ -10,21 +10,27 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.client.RestClient;
 
 class WebhookDispatcherTest {
 
   private ConsoleWebhookService webhookService;
   private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
-  private RestClient.Builder restClientBuilder;
+  private ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private WebhookDispatcher dispatcher;
 
   @BeforeEach
+  @SuppressWarnings("unchecked")
   void setUp() {
     webhookService = mock(ConsoleWebhookService.class);
     deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
-    restClientBuilder = mock(RestClient.Builder.class);
-    dispatcher = new WebhookDispatcher(webhookService, deliveryLogRepository, restClientBuilder);
+    // P2-1 (2026-05-16) 改 ObjectProvider 避免复用 prototype RestClient.Builder;
+    // 测试只验证 dispatch 路径不真发 HTTP，provider 返 mock builder 即可。
+    restClientBuilderProvider = mock(ObjectProvider.class);
+    when(restClientBuilderProvider.getObject()).thenReturn(mock(RestClient.Builder.class));
+    dispatcher =
+        new WebhookDispatcher(webhookService, deliveryLogRepository, restClientBuilderProvider);
   }
 
   @Test
