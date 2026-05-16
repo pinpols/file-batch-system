@@ -182,7 +182,7 @@ make observability-down
 scripts/data/load-system-test-data.sh
 ```
 
-详见 [docs/sql/system-test/README.md](docs/sql/system-test/README.md)。
+系统测试数据脚本位于 `scripts/data/`，测试策略详见 [docs/testing/README.md](docs/testing/README.md)。
 
 ## 架构约束
 
@@ -234,8 +234,8 @@ DB (job_task: READY)
 
 | 文档 | 说明 |
 |------|------|
-| [设计说明书](批量调度系统设计说明书（完整版）-20260321.md) | 系统完整设计，含数据模型、流程、接口定义 |
-| [AGENT.md](AGENT.md) | 工程基线约束，供 AI 辅助开发时参考 |
+| [设计文档索引](docs/design/README.md) | 系统设计文档入口，含数据模型、流程、接口与专题设计 |
+| [AGENTS.md](AGENTS.md) | 工程基线约束，供 AI 辅助开发时参考 |
 | [LICENSE](LICENSE) | Apache-2.0 许可声明 |
 | [NOTICE](NOTICE) | 第三方声明和合规入口 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献和提交约定 |
@@ -245,17 +245,17 @@ DB (job_task: READY)
 | [API 文档索引](docs/api/README.md) | 控制台接口协议、OpenAPI 和对接说明 |
 | [本地开发](docs/runbook/local-development.md) | 环境搭建、调试、常见问题 |
 | [安全扫描](docs/runbook/security-scan.md) | 本地漏洞自测组合：secret、依赖、SAST、镜像、ZAP |
-| [Docker 部署](docs/deployment/docker-deployment.md) | 容器化部署指南 |
-| [控制台侧边栏菜单树](docs/architecture/console-sidebar-menu-tree.md) | 前端 sidebar 分组、页面可见角色与操作权限边界 |
-| [观测栈 Docker 环境](docs/deployment/observability-docker/README.md) | Prometheus / Exporter / OTel Collector / Jaeger / Loki / Grafana 的独立启动与管理 |
+| [Docker 部署](docs/runbook/docker-deployment.md) | 容器化部署指南 |
+| [控制台侧边栏菜单树](docs/design/console-sidebar-menu-tree.md) | 前端 sidebar 分组、页面可见角色与操作权限边界 |
+| [观测栈 Docker 环境](docker/observability/README.md) | Prometheus / Exporter / OTel Collector / Tempo / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
-| [设计差距审计](docs/architecture/design-gap-audit.md) | 当前实现与设计文档的差距分析 |
-| [默认运行参数](docs/architecture/runtime-default-parameters.md) | 调度器、Worker、Outbox 等默认参数说明 |
-| [Flyway 迁移](docs/sql/flyway/README.md) | 数据库迁移脚本说明 |
+| [设计差距审计](docs/archive/architecture/design-gap-audit-2026-04-09.md) | 当前实现与设计文档的差距分析 |
+| [默认运行参数](docs/design/runtime-default-parameters.md) | 调度器、Worker、Outbox 等默认参数说明 |
+| [Flyway 迁移脚本](db/migration) | 数据库迁移脚本目录 |
 
 ## 贡献指南
 
-1. 遵守 `AGENT.md` 中的工程基线约束
+1. 遵守 `AGENTS.md` 中的工程基线约束
 2. 新功能必须附带对应的集成测试
 3. 修改持久层时只维护 Flyway 迁移（`db/migration/`）；`platform-init.sql` 仅含与 V1 等价的 schema，勿再复制表 DDL
 4. 不得引入 JPA/Hibernate 依赖
