@@ -594,12 +594,12 @@ INSERT INTO batch.workflow_node
 SELECT wd.tenant_id, wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
 FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_pipeline','START','Start','START',NULL::text,0,'{"entry":true}'),
-  ('wf_probe_pipeline','PROBE_TASK','Probe Task','TASK','exp_settlement_daily',1,'{"step":"probe"}'),
+  ('wf_probe_pipeline','PROBE_TASK','Probe Task','TASK','export_settlement_job',1,'{"step":"probe"}'),
   ('wf_probe_pipeline','END','End','END',NULL::text,2,'{"entry":false}'),
   ('wf_probe_gateway','START','Start','START',NULL::text,0,'{"entry":true}'),
   ('wf_probe_gateway','FORK','Fork Gateway','GATEWAY',NULL::text,1,'{}'),
-  ('wf_probe_gateway','BRANCH_A','Branch A','TASK','exp_settlement_daily',2,'{"step":"branchA"}'),
-  ('wf_probe_gateway','BRANCH_B','Branch B','TASK','exp_settlement_daily',3,'{"step":"branchB"}'),
+  ('wf_probe_gateway','BRANCH_A','Branch A','TASK','export_settlement_job',2,'{"step":"branchA"}'),
+  ('wf_probe_gateway','BRANCH_B','Branch B','TASK','export_settlement_job',3,'{"step":"branchB"}'),
   ('wf_probe_gateway','MERGE','Merge Gateway','GATEWAY',NULL::text,4,'{"joinMode":"ANY"}'),
   ('wf_probe_gateway','END','End','END',NULL::text,5,'{"entry":false}')
 ) AS v(wc,nc,nn,nt,rjc,no_,np)
@@ -642,9 +642,9 @@ INSERT INTO batch.workflow_node
 SELECT wd.tenant_id, wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
 FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_mixed','START','Start','START',NULL::text,0,'{"entry":true}'),
-  ('wf_probe_mixed','PROCESS','Process Task','TASK','exp_settlement_daily',1,'{"step":"process"}'),
+  ('wf_probe_mixed','PROCESS','Process Task','TASK','export_settlement_job',1,'{"step":"process"}'),
   -- ADR-009: REPORT 节点演示用 $.nodes.<X>.output.<key> DSL 引用上游 PROCESS 节点产出
-  ('wf_probe_mixed','REPORT','Generate Report','FILE_STEP','exp_settlement_daily',2,
+  ('wf_probe_mixed','REPORT','Generate Report','FILE_STEP','export_settlement_job',2,
    '{"step":"report","upstreamProcessedCount":"$.nodes.PROCESS.output.processedCount","bizDate":"$.workflowRun.bizDate"}'),
   ('wf_probe_mixed','END','End','END',NULL::text,3,'{"entry":false}')
 ) AS v(wc,nc,nn,nt,rjc,no_,np)
