@@ -1,6 +1,7 @@
 package com.example.batch.common.i18n;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -40,7 +41,7 @@ public class BatchI18nAutoConfiguration {
     ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
     source.setBasename("classpath:messages");
     // R7-A5-P2: 走 StandardCharsets 常量来源，避免字面量 "UTF-8"（CLAUDE.md §字符编码）。
-    source.setDefaultEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
+    source.setDefaultEncoding(StandardCharsets.UTF_8.name());
     source.setFallbackToSystemLocale(false);
     // useCodeAsDefaultMessage=false:key 不存在时返回 null,让 ExceptionHandler 走 fallback 字面量,
     // 不会把 key 字符串当 message 暴露给前端。

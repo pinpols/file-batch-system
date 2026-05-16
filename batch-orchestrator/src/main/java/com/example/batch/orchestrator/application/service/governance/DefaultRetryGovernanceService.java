@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -598,8 +599,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       return delaySeconds;
     }
     double range = delaySeconds * Math.min(jitterRatio, 1.0);
-    double offset =
-        (java.util.concurrent.ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * range;
+    double offset = (ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * range;
     return Math.max(1L, delaySeconds + (long) offset);
   }
 

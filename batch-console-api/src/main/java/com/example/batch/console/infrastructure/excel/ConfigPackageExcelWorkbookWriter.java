@@ -556,27 +556,26 @@ public class ConfigPackageExcelWorkbookWriter {
    * <p>Worker 缩写：I=IMPORT / E=EXPORT / P=PROCESS / D=DISPATCH / G=GENERAL / W=WORKFLOW；ALL = 全部。
    */
   private static String appliesToFor(String sheetName, String colName) {
-    String override = APPLIES_TO_OVERRIDE.getOrDefault(sheetName, java.util.Map.of()).get(colName);
+    String override = APPLIES_TO_OVERRIDE.getOrDefault(sheetName, Map.of()).get(colName);
     if (override != null) return override;
     return APPLIES_TO_SHEET_DEFAULT.getOrDefault(sheetName, "ALL");
   }
 
   /** Per-sheet 默认「适用 Worker」（覆盖大多数列）。 */
   private static final java.util.Map<String, String> APPLIES_TO_SHEET_DEFAULT =
-      java.util.Map.ofEntries(
-          java.util.Map.entry(RESOURCE_QUEUE_SHEET, "ALL（任意 Job 引用时必填）"),
-          java.util.Map.entry(BUSINESS_CALENDAR_SHEET, "ALL（任意 Job 引用时必填）"),
-          java.util.Map.entry(BATCH_WINDOW_SHEET, "ALL（任意 Job/Node 引用时必填）"),
-          java.util.Map.entry(JOB_SHEET, "ALL（5 类 Worker + WORKFLOW 共用）"),
-          java.util.Map.entry(CHANNEL_SHEET, "DISPATCH 主；IMPORT.RECEIVE 次"),
-          java.util.Map.entry(FILE_TEMPLATE_SHEET, "IMPORT / EXPORT（DISPATCH 引用上游产物时间接用）"),
-          java.util.Map.entry(
-              PIPELINE_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type）"),
-          java.util.Map.entry(
+      Map.ofEntries(
+          Map.entry(RESOURCE_QUEUE_SHEET, "ALL（任意 Job 引用时必填）"),
+          Map.entry(BUSINESS_CALENDAR_SHEET, "ALL（任意 Job 引用时必填）"),
+          Map.entry(BATCH_WINDOW_SHEET, "ALL（任意 Job/Node 引用时必填）"),
+          Map.entry(JOB_SHEET, "ALL（5 类 Worker + WORKFLOW 共用）"),
+          Map.entry(CHANNEL_SHEET, "DISPATCH 主；IMPORT.RECEIVE 次"),
+          Map.entry(FILE_TEMPLATE_SHEET, "IMPORT / EXPORT（DISPATCH 引用上游产物时间接用）"),
+          Map.entry(PIPELINE_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type）"),
+          Map.entry(
               STEP_SHEET, "IMPORT / EXPORT / PROCESS / DISPATCH（按 pipeline_type 收窄 stage_code）"),
-          java.util.Map.entry(WF_DEF_SHEET, "WORKFLOW（编排层，可组合其他 4 类 Job）"),
-          java.util.Map.entry(WF_NODE_SHEET, "WORKFLOW"),
-          java.util.Map.entry(WF_EDGE_SHEET, "WORKFLOW"));
+          Map.entry(WF_DEF_SHEET, "WORKFLOW（编排层，可组合其他 4 类 Job）"),
+          Map.entry(WF_NODE_SHEET, "WORKFLOW"),
+          Map.entry(WF_EDGE_SHEET, "WORKFLOW"));
 
   /**
    * Per-column 覆盖（少数 worker-specific 字段，比 sheet 默认更精确）。
@@ -584,38 +583,35 @@ public class ConfigPackageExcelWorkbookWriter {
    * <p>没有列在这里的字段一律走 {@link #APPLIES_TO_SHEET_DEFAULT}。
    */
   private static final java.util.Map<String, java.util.Map<String, String>> APPLIES_TO_OVERRIDE =
-      java.util.Map.ofEntries(
-          java.util.Map.entry(
+      Map.ofEntries(
+          Map.entry(
               JOB_SHEET,
-              java.util.Map.of(
+              Map.of(
                   COL_JOB_TYPE,
                   "决定本作业 Worker：GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW",
                   COL_EXECUTION_HANDLER,
                   "GENERAL（普通任务）执行 bean 名；其他 worker 不用",
                   COL_DEFAULT_PARAMS,
                   "IMPORT/EXPORT：用 templateCode 引用 file_template_config")),
-          java.util.Map.entry(
+          Map.entry(
               PIPELINE_SHEET,
-              java.util.Map.of(
-                  COL_PIPELINE_TYPE, "决定 Worker 类型和 stage 候选集（IMPORT/EXPORT/PROCESS/DISPATCH）")),
-          java.util.Map.entry(
-              STEP_SHEET,
-              java.util.Map.of(COL_STAGE_CODE, "按 pipeline_type 收窄；填非法 stage preview 报错")),
-          java.util.Map.entry(
+              Map.of(COL_PIPELINE_TYPE, "决定 Worker 类型和 stage 候选集（IMPORT/EXPORT/PROCESS/DISPATCH）")),
+          Map.entry(STEP_SHEET, Map.of(COL_STAGE_CODE, "按 pipeline_type 收窄；填非法 stage preview 报错")),
+          Map.entry(
               FILE_TEMPLATE_SHEET,
-              java.util.Map.of(
+              Map.of(
                   "default_query_sql", "EXPORT only（单条 SELECT）",
                   "query_param_schema", "IMPORT 用 jdbcMappedImport / EXPORT 用 jdbcMappedExport",
                   "field_mappings", "IMPORT 用",
                   "naming_rule", "EXPORT 用",
                   "header_template", "EXPORT 用",
                   "trailer_template", "EXPORT 用")),
-          java.util.Map.entry(
+          Map.entry(
               CHANNEL_SHEET,
-              java.util.Map.of("config_json", "DISPATCH 用（endpoint + 凭据）；IMPORT.RECEIVE 用源凭据")),
-          java.util.Map.entry(
+              Map.of("config_json", "DISPATCH 用（endpoint + 凭据）；IMPORT.RECEIVE 用源凭据")),
+          Map.entry(
               WF_NODE_SHEET,
-              java.util.Map.of(
+              Map.of(
                   "node_type", "WORKFLOW 内部分类：START/END/TASK/GATEWAY/FILE_STEP/JOB",
                   "related_job_code", "WORKFLOW 节点引用的其他 Job（任意 worker 类型）",
                   "related_pipeline_code", "WORKFLOW FILE_STEP 节点引用的 pipeline")));
