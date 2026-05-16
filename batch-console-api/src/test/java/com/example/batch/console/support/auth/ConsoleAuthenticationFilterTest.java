@@ -126,6 +126,27 @@ class ConsoleAuthenticationFilterTest {
   }
 
   @Test
+  void filter_passThroughOnInvalidCookie_forPublicAuthPaths() throws Exception {
+    // D7 Stage B 切 cookie 后浏览器对 /auth/login 也会自动带过期 cookie。
+    // 失效 cookie 不应在 permitAll 端点上 401,否则用户陷死无法重新登录。
+    when(jwtService.authenticate(anyString())).thenThrow(new RuntimeException("expired"));
+
+    for (String path : new String[] {"/api/console/auth/login", "/api/console/auth/logout"}) {
+      MockHttpServletRequest request = new MockHttpServletRequest();
+      request.setRequestURI(path);
+      request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "bad-jwt"));
+      MockHttpServletResponse response = new MockHttpServletResponse();
+      FilterChain chain = mock(FilterChain.class);
+
+      filter.doFilterInternal(request, response, chain);
+
+      verify(chain).doFilter(request, response);
+      verify(responseWriter, never())
+          .write(eq(response), eq(HttpStatus.UNAUTHORIZED), any(), anyString());
+    }
+  }
+
+  @Test
   void filter_ignoresAuthorizationHeader_afterStageBCleanup() throws Exception {
     // 验证 Authorization header 已不再被识别（D7 Stage B 收尾后只接 cookie）
     MockHttpServletRequest request = new MockHttpServletRequest();
