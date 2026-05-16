@@ -272,7 +272,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       SwallowedExceptionLogger.info(
           DefaultConsoleAiApplicationService.class, "catch:NoSuchAlgorithmException", exception);
 
-      return Integer.toHexString(value.hashCode());
+      // R7 安全扫描 2026-05-16 P1：原 Integer.toHexString(hashCode) 漏前导 0
+      // (semgrep bad-hexa-conversion)；改 %08x 保留 8 字符全长。
+      // 注：SHA-256 在现代 JDK 必定可用，这条 catch 实际不可达，做兜底而已。
+      return String.format("%08x", value.hashCode());
     }
   }
 
