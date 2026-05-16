@@ -10,7 +10,10 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.TimeZone;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -232,17 +235,16 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
    * R7-A5: 用 ScheduleType.code() 替代字面量 + Map 路由替代 if-chain（CLAUDE.md §分支消除 + §领域字典）。 EVENT / MANUAL
    * 不在 map 内即静默跳过（无 Quartz 注册）。
    */
-  private final java.util.Map<String, java.util.function.Consumer<TriggerDescriptor>>
-      scheduleHandlers =
-          java.util.Map.of(
-              ScheduleType.CRON.code(), this::scheduleCronDescriptor,
-              ScheduleType.FIXED_RATE.code(), this::scheduleFixedRateDescriptor);
+  private final java.util.Map<String, Consumer<TriggerDescriptor>> scheduleHandlers =
+      Map.of(
+          ScheduleType.CRON.code(), this::scheduleCronDescriptor,
+          ScheduleType.FIXED_RATE.code(), this::scheduleFixedRateDescriptor);
 
   private void scheduleDescriptor(TriggerDescriptor descriptor) {
     try {
       String scheduleType = descriptor.getScheduleType();
       if (scheduleType != null) {
-        var handler = scheduleHandlers.get(scheduleType.toUpperCase(java.util.Locale.ROOT));
+        var handler = scheduleHandlers.get(scheduleType.toUpperCase(Locale.ROOT));
         if (handler != null) {
           handler.accept(descriptor);
         }

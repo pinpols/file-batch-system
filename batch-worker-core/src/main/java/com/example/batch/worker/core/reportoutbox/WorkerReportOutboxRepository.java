@@ -8,6 +8,7 @@ import com.example.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
 import com.example.batch.worker.core.reportoutbox.sqlite.WorkerReportOutboxSqliteMapper;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -178,10 +179,7 @@ public class WorkerReportOutboxRepository {
     } else {
       long backoff = computeBackoffMillis(nextAttempts);
       long jitterMax = Math.max(0L, props.getJitterMillis());
-      long jitter =
-          jitterMax == 0
-              ? 0L
-              : java.util.concurrent.ThreadLocalRandom.current().nextLong(0, jitterMax + 1);
+      long jitter = jitterMax == 0 ? 0L : ThreadLocalRandom.current().nextLong(0, jitterMax + 1);
       long nextAt = nowEpochMillis + backoff + jitter;
       if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
         pgMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
