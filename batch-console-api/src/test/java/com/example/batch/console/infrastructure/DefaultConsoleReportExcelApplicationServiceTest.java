@@ -21,7 +21,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
-import org.springframework.web.client.RestClient;
 
 class DefaultConsoleReportExcelApplicationServiceTest {
 
@@ -31,7 +30,6 @@ class DefaultConsoleReportExcelApplicationServiceTest {
     ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);
     ConsoleOrchestratorClientProperties properties =
         mock(ConsoleOrchestratorClientProperties.class);
-    RestClient.Builder builder = mock(RestClient.Builder.class);
     com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient
         orchestratorInternalRestClient =
             mock(com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient.class);
@@ -41,7 +39,6 @@ class DefaultConsoleReportExcelApplicationServiceTest {
             configService,
             queryService,
             properties,
-            builder,
             orchestratorInternalRestClient,
             environment,
             dateTimeSupport());
