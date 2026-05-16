@@ -63,4 +63,32 @@ class WorkerControllerTest {
 
     verify(workerDrainGovernanceService).startDrain("t1", "worker-1", 1);
   }
+
+  @Test
+  void shouldRouteWarmupToGovernanceService() throws Exception {
+    when(workerDrainGovernanceService.warmup(eq("t1"), eq("worker-1")))
+        .thenReturn(
+            new WorkerRegistryEntity(
+                1L,
+                "t1",
+                "worker-1",
+                "import",
+                null,
+                null,
+                "ONLINE",
+                BatchDateTimeSupport.utcNow(),
+                0,
+                10,
+                BatchDateTimeSupport.utcNow(),
+                BatchDateTimeSupport.utcNow()));
+
+    mockMvc
+        .perform(
+            post("/internal/workers/worker-1/warmup")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\"}"))
+        .andExpect(status().isOk());
+
+    verify(workerDrainGovernanceService).warmup("t1", "worker-1");
+  }
 }

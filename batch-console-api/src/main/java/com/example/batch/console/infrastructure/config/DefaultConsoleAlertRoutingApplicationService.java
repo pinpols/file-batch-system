@@ -79,8 +79,37 @@ public class DefaultConsoleAlertRoutingApplicationService
       }
     }
     AlertRoutingConfigUpsertParam param = toParam(id, tenantId, request);
+    // PATCH 语义:request 没传的字段保留 existing 值,避免 NOT NULL 违反 (BE-ISSUE-6)
+    mergeWithExisting(param, request, existing);
     alertRoutingConfigMapper.updateById(param);
     return alertRoutingConfigMapper.selectById(tenantId, id);
+  }
+
+  private static void mergeWithExisting(
+      AlertRoutingConfigUpsertParam param,
+      AlertRoutingSaveRequest request,
+      Map<String, Object> existing) {
+    if (request.getRouteName() == null) {
+      param.setRouteName((String) existing.get("route_name"));
+    }
+    if (request.getTeam() == null) {
+      param.setTeam((String) existing.get("team"));
+    }
+    if (request.getAlertGroup() == null) {
+      param.setAlertGroup((String) existing.get("alert_group"));
+    }
+    if (request.getSeverity() == null) {
+      param.setSeverity((String) existing.get("severity"));
+    }
+    if (request.getReceiver() == null) {
+      param.setReceiver((String) existing.get("receiver"));
+    }
+    if (request.getGroupBy() == null) {
+      param.setGroupBy((String) existing.get("group_by"));
+    }
+    if (request.getDescription() == null) {
+      param.setDescription((String) existing.get("description"));
+    }
   }
 
   @Override

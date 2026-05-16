@@ -88,6 +88,27 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
   }
 
   @Override
+  @Transactional
+  public WorkerRegistryEntity warmup(String tenantId, String workerCode) {
+    validateTenant(tenantId);
+    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
+    String current = registry.status();
+    if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(current)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
+    }
+    if (WorkerRegistryStatus.DRAINING.code().equals(current)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.draining");
+    }
+    if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
+      return registry;
+    }
+    registry =
+        registry.withStatus(WorkerRegistryStatus.ONLINE.code(), BatchDateTimeSupport.utcNow());
+    workerRegistryMapper.updateById(registry);
+    return registry;
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode) {
     validateTenant(tenantId);

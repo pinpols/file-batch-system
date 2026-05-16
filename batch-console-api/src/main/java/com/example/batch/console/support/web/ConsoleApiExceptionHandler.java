@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -227,6 +228,43 @@ public class ConsoleApiExceptionHandler {
   public void handleAsyncResponseUnusable(AsyncRequestNotUsableException exception) {
     log.debug("console async response unusable (client disconnected): {}", exception.getMessage());
     // 不写任何 response 内容：客户端早已断开，response 也被锁住，任何写入都会再次失败。
+  }
+
+  /**
+   * DB 约束违反统一转 400 + 人话提示,避免暴露成 500 SYSTEM_ERROR。 覆盖: check constraint / not-null / unique /
+   * foreign key 四类常见违反。
+   */
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+    log.warn("console data integrity violation", exception);
+    String message = "数据约束错误";
+    Throwable root = exception.getMostSpecificCause();
+    if (root != null && root.getMessage() != null) {
+      String msg = root.getMessage();
+      if (msg.contains("violates check constraint")) {
+        int idx = msg.indexOf("\"", msg.indexOf("constraint"));
+        if (idx > 0) {
+          int end = msg.indexOf("\"", idx + 1);
+          if (end > idx) {
+            message = "字段值不合法,违反约束: " + msg.substring(idx + 1, end);
+          }
+        }
+      } else if (msg.contains("violates unique constraint")) {
+        message = "记录已存在(唯一键冲突)";
+      } else if (msg.contains("violates foreign key constraint")) {
+        message = "关联数据缺失或无法删除(外键约束)";
+      } else if (msg.contains("violates not-null constraint")) {
+        int colStart = msg.indexOf("\"");
+        int colEnd = msg.indexOf("\"", colStart + 1);
+        if (colStart >= 0 && colEnd > colStart) {
+          message = "必填字段缺失: " + msg.substring(colStart + 1, colEnd);
+        } else {
+          message = "必填字段缺失";
+        }
+      }
+    }
+    return ResponseEntity.badRequest()
+        .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, message));
   }
 
   @ExceptionHandler(Exception.class)

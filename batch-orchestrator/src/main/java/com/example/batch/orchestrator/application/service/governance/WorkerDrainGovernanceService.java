@@ -21,6 +21,14 @@ public interface WorkerDrainGovernanceService {
 
   WorkerRegistryEntity takeover(String tenantId, String workerCode);
 
+  /**
+   * 预热:把心跳超时被标 OFFLINE 的 worker 翻回 ONLINE,让 orchestrator 立即重新派发任务, 不必等下一轮心跳。
+   *
+   * <p>状态转移:OFFLINE → ONLINE;ONLINE 幂等返回;DRAINING / DECOMMISSIONED 抛 STATE_CONFLICT(需重新注册或等排空完成)。
+   * 调用方应在确认 worker 进程实际仍存活(刚重启 / 网络瞬断恢复)时使用; 若 worker 真死,下一轮心跳超时检测会把它重新标回 OFFLINE。
+   */
+  WorkerRegistryEntity warmup(String tenantId, String workerCode);
+
   List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode);
 
   void takeoverAfterDrainTimeout(String tenantId, String workerCode);
