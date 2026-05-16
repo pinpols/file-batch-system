@@ -17,7 +17,6 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -301,10 +300,6 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    * non-zero retry budget must schedule partition retries and eventually emit a dead-letter row.
    */
   @Test
-  @Disabled(
-      "TODO[retry-dlq-backlog 2026-05-16]: 与 ExportStorageFailureE2eIT 同源 — retry-exhaustion → "
-          + "dead_letter_task 路径在 e2e profile 下 180s 内不产 DLQ。schema / 调度器配置看似正常,"
-          + "需 RetryGovernance 专项排查。Pre-existing(初始 commit 起),非 ADR-029 回归。")
   void scenarioC_retryBudgetExhaustedCreatesDeadLetter() {
     LaunchSeed seed =
         E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
