@@ -462,36 +462,55 @@ public class PlatformFileRuntimeRepository {
             traceId,
             "metadataJson",
             toJson(metadata));
-    // R7 log-audit-bug R2：V124 加了 partial unique
+    // R7 log-audit-bug R2 (v2 fix)：V124 加了 partial unique
     //   uk_file_record_no_checksum (tenant_id, storage_path) WHERE checksum_value IS NULL
-    // 之前 IMPORT 路径 RECEIVE 阶段没算 checksum 就直接 INSERT；任务重试 / lease 过期 reCLAIM /
-    // DLQ 重投时同 (tenant_id, storage_path) 会撞约束，整个 RECEIVE 阶段抛 DuplicateKeyException
-    // 失败，import 卡死。
-    // 改幂等：撞 partial unique 即按 storage_path 反查已有 fileId 返回，让任务复用前一次的 file_record
-    // 继续后续 stage；checksum 已填的真正业务冲突 path 仍走原异常路径。
-    try {
-      platformFileRuntimeMapper.insertFileRecord(paramMap);
-      return toLong(paramMap.get(KEY_ID));
-    } catch (DuplicateKeyException ex) {
-      if (!Texts.hasText(checksumValue)) {
-        Map<String, Object> existing =
-            platformFileRuntimeMapper.selectFileRecordByStoragePath(
-                params(
-                    KEY_TENANT_ID,
-                    tenantId,
-                    "storageBucket",
-                    storageBucket,
-                    "storagePath",
-                    storagePath));
-        if (existing != null && existing.get(KEY_ID) != null) {
-          log.warn(
-              "file_record dedup hit on retry (tenant={} storage_path={}), reuse existing"
+    // IMPORT RECEIVE 阶段没算 checksum 就直接 INSERT；任务重试 / lease 过期 reCLAIM / DLQ 重投时
+    // 同 (tenant_id, storage_path) 会撞约束，整个 RECEIVE 阶段抛 DuplicateKeyException 失败。
+    //
+    // **第一版**用 try/catch + 反查 — 但忽略了 PG 在 @Transactional 内 INSERT 抛错后整个事务被
+    // 标记 aborted，后续 SELECT 直接抛 "current transaction is aborted" (SQLState 25P02)，
+    // 反查路径被吞掉，import 仍然卡死。日志显示 worker-import 持续 10+/分钟同样异常。
+    //
+    // **正确做法**：INSERT 之前 pre-check (tenant_id, storage_path) WHERE checksum_value IS NULL，
+    // 命中即直接复用 fileId；不命中再 INSERT。撞约束（极小概率并发场景）仍 catch 但只记 warn，
+    // 不再尝试 select（事务已 aborted）。
+    if (!Texts.hasText(checksumValue)) {
+      Map<String, Object> existing =
+          platformFileRuntimeMapper.selectFileRecordByStoragePath(
+              params(
+                  KEY_TENANT_ID,
+                  tenantId,
+                  "storageBucket",
+                  storageBucket,
+                  "storagePath",
+                  storagePath));
+      if (existing != null && existing.get(KEY_ID) != null) {
+        Object existingChecksumObj = existing.get("checksum_value");
+        String existingChecksum =
+            existingChecksumObj == null ? null : existingChecksumObj.toString();
+        if (existingChecksum == null || existingChecksum.isBlank()) {
+          log.info(
+              "file_record dedup pre-check hit (tenant={} storage_path={}), reuse existing"
                   + " fileId={}",
               tenantId,
               storagePath,
               existing.get(KEY_ID));
           return toLong(existing.get(KEY_ID));
         }
+      }
+    }
+    try {
+      platformFileRuntimeMapper.insertFileRecord(paramMap);
+      return toLong(paramMap.get(KEY_ID));
+    } catch (DuplicateKeyException ex) {
+      // 极小概率：pre-check 没命中但 INSERT 撞约束（两个并发 worker 同一 storage_path）。
+      // 事务已 aborted 不能 select，记 warn 让任务回退到 outer retry / DLQ 处置。
+      if (!Texts.hasText(checksumValue)) {
+        log.warn(
+            "file_record dedup race lost (tenant={} storage_path={}): another transaction"
+                + " inserted concurrently — current task will retry via outer mechanism",
+            tenantId,
+            storagePath);
       }
       throw ex;
     }
