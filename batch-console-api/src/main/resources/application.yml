@@ -81,6 +81,19 @@ batch:
       jwt-ttl: ${BATCH_CONSOLE_JWT_TTL:PT2H}
       # Redis 中会话状态保留时长
       session-state-ttl: ${BATCH_CONSOLE_SESSION_STATE_TTL:P30D}
+    # PWA Web Push (VAPID) — 移动端告警/审批推送。VAPID 公私钥需先 generate 再注入。
+    push:
+      enabled: ${BATCH_CONSOLE_PUSH_ENABLED:false}
+      # 生成命令(任选其一):
+      #   npx web-push generate-vapid-keys
+      #   (或) java -jar web-push-cli.jar generate-key-pair
+      # 公钥可入仓(本就要 GET 端点暴露);私钥用 Vault / env 注入,不要 commit
+      public-key: ${BATCH_CONSOLE_PUSH_PUBLIC_KEY:}
+      private-key: ${BATCH_CONSOLE_PUSH_PRIVATE_KEY:}
+      # VAPID JWT 的 sub claim,推送服务出问题时知道找谁
+      subject: ${BATCH_CONSOLE_PUSH_SUBJECT:mailto:ops@example.com}
+      # 浏览器推送服务超时未送达则丢弃(秒);默认 12h
+      ttl-seconds: ${BATCH_CONSOLE_PUSH_TTL_SECONDS:43200}
     ai:
       # Console AI 功能开关（仅在开启并满足白名单时生效）
       enabled: ${BATCH_CONSOLE_AI_ENABLED:false}
