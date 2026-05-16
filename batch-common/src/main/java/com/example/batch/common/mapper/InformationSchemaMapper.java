@@ -27,4 +27,11 @@ public interface InformationSchemaMapper {
   /** 给定 (schema, table) 的所有列名（无序）。表不存在时返空列表。 */
   List<String> listColumns(
       @Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
+  /**
+   * 列出 pg_constraint 里所有 {@code convalidated=false} 的约束（即 ADD CONSTRAINT NOT VALID 后未补 VALIDATE 的）。
+   *
+   * <p>仅 PostgreSQL 支持；其它方言下 mapper 实现可返空列表跳过。
+   */
+  List<String> listInvalidConstraints();
 }
