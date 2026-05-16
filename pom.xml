@@ -6,7 +6,10 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.3</version>
+        <!-- R7 OSS 扫描：4.0.3 命中 8 个 CVE（3 个 CRITICAL，含 CVE-2026-40974 Cassandra
+             SSL hostname verify / CVE-2026-40976 默认 web 安全失效 / CVE-2026-40971
+             RabbitMQ SSL hostname verify）。4.0.6 修复全部 8 项。 -->
+        <version>4.0.6</version>
         <relativePath/>
     </parent>
 
