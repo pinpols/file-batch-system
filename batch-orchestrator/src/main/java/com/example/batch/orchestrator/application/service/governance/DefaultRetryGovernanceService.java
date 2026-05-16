@@ -154,7 +154,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       retrySchedule.setDedupKey(
           task.getTenantId() + ":" + partition.getId() + ":" + nextRetryCount);
       retrySchedule.setLastErrorCode(errorCode);
-      retrySchedule.setLastErrorMessage(errorMessage);
+      // retry_schedule.last_error_message 是 varchar(1024)。worker 链路错误消息有时含嵌套
+      // SQL detail / stack 摘要,容易越界。Java 侧防御性截断到 1023 字节,加 "…" 标记,
+      // 避免 INSERT 失败导致整条重试链卡死。
+      retrySchedule.setLastErrorMessage(truncateErrorMessage(errorMessage, 1023));
       retryScheduleMapper.insert(retrySchedule);
       log.info(
           "retry scheduled: tenantId={}, partitionId={}, retryCount={}",
@@ -666,7 +669,25 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private String buildDeadLetterReason(String errorCode, String errorMessage) {
     String code = errorCode == null ? "UNKNOWN" : errorCode;
     String message = errorMessage == null ? "retry exhausted" : errorMessage;
-    return code + ": " + message;
+    // dead_letter_task.dead_letter_reason 是 varchar(1024)。code 通常 ≤64 char,
+    // 给 message 留 ~950 字节安全余量;超长一律截断+"…",避免 INSERT 失败把整个 retry
+    // → DLQ 链路撑死。
+    String reason = code + ": " + message;
+    return truncateErrorMessage(reason, 1023);
+  }
+
+  /**
+   * 限制错误消息长度,防止超长 worker 异常 stack / SQL 报错把 varchar(1024) 列撑爆, 进而把整个 retry insert 事务回滚成"死循环"。多余字节用
+   * "…" 单字符标记。
+   */
+  private static String truncateErrorMessage(String message, int maxLength) {
+    if (message == null) {
+      return null;
+    }
+    if (message.length() <= maxLength) {
+      return message;
+    }
+    return message.substring(0, maxLength - 1) + "…";
   }
 
   private DefaultRetryGovernanceService replayTransactionalShell() {

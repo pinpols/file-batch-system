@@ -86,6 +86,12 @@
         )
     </insert>
 
+    <!--
+      重试时 worker 会对同一 job_instance 再次进 doExecute → 又调本 INSERT,
+      但 uk_pipeline_instance_job_instance UNIQUE(related_job_instance_id) WHERE NOT NULL
+      会拒绝。改 ON CONFLICT 复用现有行:把状态重置到 RUNNING、清掉旧错误、
+      把 id 通过 RETURNING 回填给 useGeneratedKeys,调用方不需感知。
+    -->
     <insert id="insertPipelineInstance" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.pipeline_instance (
             tenant_id, pipeline_definition_id, job_code, pipeline_type,
@@ -96,6 +102,16 @@
             #{fileId}, #{relatedJobInstanceId}, #{currentStage}, #{runStatus},
             #{traceId}, current_timestamp, current_timestamp, current_timestamp
         )
+        on conflict (related_job_instance_id)
+          where related_job_instance_id is not null
+          do update set
+            current_stage = excluded.current_stage,
+            last_success_stage = null,
+            run_status = excluded.run_status,
+            trace_id = excluded.trace_id,
+            started_at = current_timestamp,
+            finished_at = null,
+            updated_at = current_timestamp
     </insert>
 
     <update id="bindFileToPipelineInstance">
