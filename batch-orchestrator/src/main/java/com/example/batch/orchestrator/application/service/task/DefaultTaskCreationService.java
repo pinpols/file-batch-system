@@ -1,5 +1,7 @@
 package com.example.batch.orchestrator.application.service.task;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -34,6 +36,16 @@ public class DefaultTaskCreationService implements TaskCreationService {
   public JobTaskEntity createTask(JobTaskEntity task) {
     if (task != null && task.getVersion() == null) {
       task.setVersion(0L);
+    }
+    // R7 log-audit defensive：job_task.task_type 列 NOT NULL，但历史发现 workflow
+    // dispatch 路径在 targetJobCode 解析不到 jobDefinition 时会传 null，撞 PSQLException
+    // 导致 TriggerLaunchConsumer 死循环。上游 DefaultWorkflowNodeDispatchService 已经
+    // fail-fast，这里再加一层兜底，把 DB 抛错前置成业务异常，错误信息更可读。
+    if (task != null && (task.getTaskType() == null || task.getTaskType().isBlank())) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.job_task.task_type_required",
+          task.getJobInstanceId());
     }
     jobTaskMapper.insert(task);
     createStepInstance(task);
