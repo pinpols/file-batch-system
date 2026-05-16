@@ -72,6 +72,12 @@ public class WorkerController {
     return workerDrainGovernanceService.takeover(request.tenantId(), workerCode);
   }
 
+  @PostMapping("/{workerCode}/warmup")
+  public WorkerRegistryEntity warmup(
+      @PathVariable String workerCode, @RequestBody WorkerTenantRequest request) {
+    return workerDrainGovernanceService.warmup(request.tenantId(), workerCode);
+  }
+
   @GetMapping("/{workerCode}/claimed-tasks")
   public List<JobTaskEntity> claimedTasks(
       @PathVariable String workerCode, @RequestParam String tenantId) {

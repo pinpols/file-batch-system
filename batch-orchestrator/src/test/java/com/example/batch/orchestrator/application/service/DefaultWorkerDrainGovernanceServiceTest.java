@@ -257,6 +257,66 @@ class DefaultWorkerDrainGovernanceServiceTest {
     verify(retryGovernanceService).reclaimTask(eq("t1"), eq(302L), anyString());
   }
 
+  // ── warmup ────────────────────────────────────────────────────────────────
+
+  @Test
+  void warmup_flipsOfflineToOnline() {
+    WorkerRegistryEntity registry =
+        onlineWorker("t1", "w1")
+            .withStatus(WorkerRegistryStatus.OFFLINE.code(), BatchDateTimeSupport.utcNow());
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+    when(workerRegistryMapper.updateById(any())).thenReturn(1);
+
+    WorkerRegistryEntity result = service.warmup("t1", "w1");
+
+    assertThat(result.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    verify(workerRegistryMapper).updateById(any());
+  }
+
+  @Test
+  void warmup_idempotentWhenAlreadyOnline() {
+    WorkerRegistryEntity registry = onlineWorker("t1", "w1");
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+
+    WorkerRegistryEntity result = service.warmup("t1", "w1");
+
+    assertThat(result.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    verify(workerRegistryMapper, never()).updateById(any());
+  }
+
+  @Test
+  void warmup_rejectsDraining() {
+    WorkerRegistryEntity registry =
+        onlineWorker("t1", "w1")
+            .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+
+    assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);
+    verify(workerRegistryMapper, never()).updateById(any());
+  }
+
+  @Test
+  void warmup_rejectsDecommissioned() {
+    WorkerRegistryEntity registry =
+        onlineWorker("t1", "w1")
+            .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), BatchDateTimeSupport.utcNow());
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(registry);
+
+    assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);
+    verify(workerRegistryMapper, never()).updateById(any());
+  }
+
+  @Test
+  void warmup_throwsWhenWorkerNotFound() {
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(null);
+    assertThatThrownBy(() -> service.warmup("t1", "w1")).isInstanceOf(BizException.class);
+  }
+
+  @Test
+  void warmup_throwsWhenTenantBlank() {
+    assertThatThrownBy(() -> service.warmup("", "w1")).isInstanceOf(BizException.class);
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static WorkerRegistryEntity onlineWorker(String tenantId, String workerCode) {

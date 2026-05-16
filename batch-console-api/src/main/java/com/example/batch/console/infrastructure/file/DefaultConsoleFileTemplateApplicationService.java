@@ -124,19 +124,21 @@ public class DefaultConsoleFileTemplateApplicationService
     format.setFileFormatType(request.getFileFormatType());
     format.setCharset(request.getCharset());
     format.setTargetCharset(request.getTargetCharset());
-    format.setWithBom(request.getWithBom());
+    // 以下字段 DB NOT NULL 但允许 DEFAULT;BE create 显式塞 null 会触发 not-null violation,
+    // 这里补与 V6 迁移一致的默认值(BE-ISSUE-4)。
+    format.setWithBom(request.getWithBom() != null ? request.getWithBom() : Boolean.FALSE);
     format.setLineSeparator(request.getLineSeparator());
     format.setDelimiter(request.getDelimiter());
     format.setQuoteChar(request.getQuoteChar());
     format.setEscapeChar(request.getEscapeChar());
-    format.setRecordLength(request.getRecordLength());
-    format.setHeaderRows(request.getHeaderRows());
-    format.setFooterRows(request.getFooterRows());
+    format.setRecordLength(request.getRecordLength() != null ? request.getRecordLength() : 0);
+    format.setHeaderRows(request.getHeaderRows() != null ? request.getHeaderRows() : 0);
+    format.setFooterRows(request.getFooterRows() != null ? request.getFooterRows() : 0);
     format.setHeaderTemplateJson(request.getHeaderTemplateJson());
     format.setTrailerTemplateJson(request.getTrailerTemplateJson());
-    format.setChecksumType(request.getChecksumType());
-    format.setCompressType(request.getCompressType());
-    format.setEncryptType(request.getEncryptType());
+    format.setChecksumType(request.getChecksumType() != null ? request.getChecksumType() : "NONE");
+    format.setCompressType(request.getCompressType() != null ? request.getCompressType() : "NONE");
+    format.setEncryptType(request.getEncryptType() != null ? request.getEncryptType() : "NONE");
     format.setNamingRule(request.getNamingRule());
     format.setFieldMappingsJson(request.getFieldMappingsJson());
     format.setValidationRuleSetJson(request.getValidationRuleSetJson());
@@ -146,20 +148,22 @@ public class DefaultConsoleFileTemplateApplicationService
             request.getDefaultQueryCode(),
             request.getDefaultQuerySql(),
             request.getQueryParamSchemaJson()));
+    // Runtime: DB 默认 streaming=true / page=1000 / fetch=1000 / chunk=500,补一致默认
     param.setRuntime(
         runtimeOptions(
-            request.getStreamingEnabled(),
-            request.getPageSize(),
-            request.getFetchSize(),
-            request.getChunkSize()));
+            request.getStreamingEnabled() != null ? request.getStreamingEnabled() : Boolean.TRUE,
+            request.getPageSize() != null ? request.getPageSize() : 1000,
+            request.getFetchSize() != null ? request.getFetchSize() : 1000,
+            request.getChunkSize() != null ? request.getChunkSize() : 500));
+    // Security: DB 全部 NOT NULL DEFAULT FALSE,补默认避免 not-null violation
     SecurityOptionsInput securityInput =
         SecurityOptionsInput.builder()
-            .previewMaskingEnabled(request.getPreviewMaskingEnabled())
-            .errorLineMaskingEnabled(request.getErrorLineMaskingEnabled())
-            .logMaskingEnabled(request.getLogMaskingEnabled())
-            .contentEncryptionEnabled(request.getContentEncryptionEnabled())
+            .previewMaskingEnabled(coalesceFalse(request.getPreviewMaskingEnabled()))
+            .errorLineMaskingEnabled(coalesceFalse(request.getErrorLineMaskingEnabled()))
+            .logMaskingEnabled(coalesceFalse(request.getLogMaskingEnabled()))
+            .contentEncryptionEnabled(coalesceFalse(request.getContentEncryptionEnabled()))
             .encryptionKeyRef(request.getEncryptionKeyRef())
-            .downloadRequiresApproval(request.getDownloadRequiresApproval())
+            .downloadRequiresApproval(coalesceFalse(request.getDownloadRequiresApproval()))
             .maskingRuleSet(request.getMaskingRuleSet())
             .build();
     param.setSecurity(securityOptions(securityInput));
@@ -273,6 +277,10 @@ public class DefaultConsoleFileTemplateApplicationService
                 req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
         .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
         .build();
+  }
+
+  private static Boolean coalesceFalse(Boolean v) {
+    return v != null ? v : Boolean.FALSE;
   }
 
   private static String coalesceString(String preferred, Map<String, Object> existing, String key) {

@@ -70,9 +70,11 @@ public class DefaultConsoleFileChannelApplicationService
     param.setChannelType(request.getChannelType());
     param.setTargetEndpoint(request.getTargetEndpoint());
     param.setAuthType(request.getAuthType());
-    param.setConfigJson(request.getConfigJson());
-    param.setReceiptPolicy(request.getReceiptPolicy());
-    param.setTimeoutSeconds(request.getTimeoutSeconds());
+    // DB 这两列 NOT NULL,FE 不传时给安全默认
+    param.setConfigJson(request.getConfigJson() != null ? request.getConfigJson() : "{}");
+    param.setReceiptPolicy(
+        request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
+    param.setTimeoutSeconds(request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 30);
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
