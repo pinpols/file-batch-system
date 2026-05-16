@@ -80,6 +80,20 @@ public class WheelTriggerReconciler {
       if (!d.isEnabled() || d.getJobDefinitionId() == null) {
         continue;
       }
+      // R7 log-audit-bug R3：早期前置校验，避免 cron 表达式格式错（比如 Linux 5 字段 "0 3 * * *"，
+      // Quartz 要 6/7 字段）导致 computeNext 抛 IllegalArgumentException 让整个 reconcile pass 失败，
+      // 30s/次循环堆出几百条 WARN 噪音。表达式坏的 trigger 直接跳过 + 单条 WARN 一次/pass，
+      // 由运维表层去改 trigger / job_definition 的 schedule_expr。
+      if ("CRON".equalsIgnoreCase(d.getScheduleType())
+          && !cronAdapter.isValid(d.getScheduleExpression())) {
+        log.warn(
+            "wheel reconcile skip trigger with invalid CRON expression: tenantId={} jobCode={}"
+                + " expr=[{}] (Quartz needs 6 or 7 fields; Linux 5-field form rejected)",
+            d.getTenantId(),
+            d.getJobCode(),
+            d.getScheduleExpression());
+        continue;
+      }
       wantedById.put(d.getJobDefinitionId(), d);
     }
 
@@ -92,8 +106,16 @@ public class WheelTriggerReconciler {
       TriggerRuntimeStateEntity existing =
           stateMapper.selectByJobDefinitionId(d.getJobDefinitionId());
       if (existing == null) {
-        if (insertRuntimeState(d)) {
-          inserted++;
+        // 单条 trigger 处理失败时不应中断整个 pass，吞异常 + WARN
+        try {
+          if (insertRuntimeState(d)) {
+            inserted++;
+          }
+        } catch (RuntimeException single) {
+          log.warn(
+              "wheel reconcile single trigger insert failed (jobCode={}): {}",
+              d.getJobCode(),
+              single.getMessage());
         }
         continue;
       }

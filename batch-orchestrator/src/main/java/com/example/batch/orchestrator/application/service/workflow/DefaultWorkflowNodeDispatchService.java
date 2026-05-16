@@ -1,10 +1,12 @@
 package com.example.batch.orchestrator.application.service.workflow;
 
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
@@ -263,6 +265,24 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload)));
     if (plan == null || plan.getPartitions() == null || plan.getPartitions().isEmpty()) {
       return 0;
+    }
+    // R7 log-audit-bug: 当 targetJobCode 在 job_definition 不存在 / 已 disabled 时，
+    // SchedulePlanBuilder 仍会返回 plan 但 defaultWorkerType=null（jobDefinition 未命中）；
+    // 之前会照常进入 createTask → INSERT job_task → 撞 NOT NULL 抛 PSQLException
+    // → 整个 TriggerLaunchConsumer 死循环重试 → DLQ 跳过。这里 fail-fast 拒绝派发，
+    // 把节点 ready 状态留给重试 / 运维补 job_definition 后再次触发。
+    if (plan.getDefaultWorkerType() == null || plan.getDefaultWorkerType().isBlank()) {
+      log.error(
+          "workflow node task_type unresolved (job_definition missing or disabled): "
+              + "tenantId={} workflowRunId={} nodeCode={} targetJobCode={}",
+          jobInstance.getTenantId(),
+          workflowRun.getId(),
+          node.nodeCode(),
+          targetJobCode);
+      throw BizException.of(
+          ResultCode.NOT_FOUND,
+          "error.workflow_node.related_job_definition_missing",
+          targetJobCode);
     }
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     plan.setWindowCode(

@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.Set;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Repository
 @RequiredArgsConstructor
+@Slf4j
 public class PlatformFileRuntimeRepository {
 
   // ── duplicate literal constants ─────────────────────────────────────────
@@ -459,8 +462,39 @@ public class PlatformFileRuntimeRepository {
             traceId,
             "metadataJson",
             toJson(metadata));
-    platformFileRuntimeMapper.insertFileRecord(paramMap);
-    return toLong(paramMap.get(KEY_ID));
+    // R7 log-audit-bug R2：V124 加了 partial unique
+    //   uk_file_record_no_checksum (tenant_id, storage_path) WHERE checksum_value IS NULL
+    // 之前 IMPORT 路径 RECEIVE 阶段没算 checksum 就直接 INSERT；任务重试 / lease 过期 reCLAIM /
+    // DLQ 重投时同 (tenant_id, storage_path) 会撞约束，整个 RECEIVE 阶段抛 DuplicateKeyException
+    // 失败，import 卡死。
+    // 改幂等：撞 partial unique 即按 storage_path 反查已有 fileId 返回，让任务复用前一次的 file_record
+    // 继续后续 stage；checksum 已填的真正业务冲突 path 仍走原异常路径。
+    try {
+      platformFileRuntimeMapper.insertFileRecord(paramMap);
+      return toLong(paramMap.get(KEY_ID));
+    } catch (DuplicateKeyException ex) {
+      if (!Texts.hasText(checksumValue)) {
+        Map<String, Object> existing =
+            platformFileRuntimeMapper.selectFileRecordByStoragePath(
+                params(
+                    KEY_TENANT_ID,
+                    tenantId,
+                    "storageBucket",
+                    storageBucket,
+                    "storagePath",
+                    storagePath));
+        if (existing != null && existing.get(KEY_ID) != null) {
+          log.warn(
+              "file_record dedup hit on retry (tenant={} storage_path={}), reuse existing"
+                  + " fileId={}",
+              tenantId,
+              storagePath,
+              existing.get(KEY_ID));
+          return toLong(existing.get(KEY_ID));
+        }
+      }
+      throw ex;
+    }
   }
 
   public void updateFileStatus(Long fileId, String fileStatus, Object metadata) {
