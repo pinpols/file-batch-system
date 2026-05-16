@@ -129,6 +129,15 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
           SwallowedExceptionLogger.warn(
               ConsoleAuthenticationFilter.class, "catch:Exception", exception);
 
+          // D7 Stage B 切到 HttpOnly cookie 后,浏览器对任何同源请求都自动带 cookie
+          // (含 /auth/login、/auth/logout)。失效 cookie 在公开认证端点不应阻塞请求,
+          // 否则用户陷死:cookie 一旦过期,连重新登录换新 cookie 的机会都没有。
+          // 这些端点本来就在 SecurityConfig 标了 permitAll,放行给下游 controller 自处理。
+          if (isPublicAuthPath(request)) {
+            filterChain.doFilter(request, response);
+            return;
+          }
+
           responseWriter.write(
               response,
               HttpStatus.UNAUTHORIZED,
@@ -183,6 +192,17 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
   /** ADR-030 §D7：HttpOnly cookie 名（与登录响应 Set-Cookie 同步）。 */
   private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
+
+  /**
+   * 与 {@code ConsoleSecurityConfiguration} permitAll 列表对齐的公开认证端点。 失效 cookie 命中这些路径时不应 401,放行给
+   * controller 处理凭证校验和换发新 cookie。
+   */
+  private static final Set<String> PUBLIC_AUTH_PATHS =
+      Set.of("/api/console/auth/login", "/api/console/auth/logout");
+
+  private boolean isPublicAuthPath(HttpServletRequest request) {
+    return PUBLIC_AUTH_PATHS.contains(request.getRequestURI());
+  }
 
   /**
    * ADR-030 §D7 Stage B 收尾（2026-05-15）：HttpOnly cookie 是 console 端唯一 JWT 入口。
