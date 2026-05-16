@@ -34,7 +34,23 @@ public enum ScanStep {
             case DEPS -> List.of(new ExternalCommand(
                     this,
                     "dependency-check",
-                    list(options.mvnCommand(), "-P", "compliance", "org.owasp:dependency-check-maven:check", "-DfailBuildOnCVSS=7", "-DoutputDirectory=" + options.reportDir().resolve("dependency-check"), "-Dformat=HTML,JSON"),
+                    // R7 OSS 扫描 followup：纯 Java backend 不需要 JS / Node / Ruby analyzer。
+                    // 关掉它们避免 RetireJS 拉 raw.githubusercontent.com（VPN/代理 DNS 劫持时整个扫描 abort）
+                    // 以及 NodeJS / Ruby 等 noise，同时显著降低扫描耗时。
+                    list(options.mvnCommand(), "-P", "compliance", "org.owasp:dependency-check-maven:check",
+                            "-DfailBuildOnCVSS=7",
+                            "-DoutputDirectory=" + options.reportDir().resolve("dependency-check"),
+                            // dependency-check 12.x 把 -Dformat 的 CSV 写法当单一模板名解析（HTML,JSON.vsl
+                            // 文件找不到），必须改用 -Dformats 重复传 或 ALL。这里用 ALL 一次生成全格式报告。
+                            "-Dformats=ALL",
+                            "-DretireJsAnalyzerEnabled=false",
+                            "-DnodeAnalyzerEnabled=false",
+                            "-DnodeAuditAnalyzerEnabled=false",
+                            "-DyarnAuditAnalyzerEnabled=false",
+                            "-DpnpmAuditAnalyzerEnabled=false",
+                            "-DrubygemsAnalyzerEnabled=false",
+                            "-DbundleAuditAnalyzerEnabled=false",
+                            "-DassemblyAnalyzerEnabled=false"),
                     root
             ));
             case SAST -> List.of(new ExternalCommand(
