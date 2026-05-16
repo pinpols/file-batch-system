@@ -7513,13 +7513,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelApply'
 
-  # 注:Web Push 3 端点(/api/console/push/*)2026-05-16 从 OpenAPI 移除。
-  # 原因:OpenAPI 声明了端点但 backend 未实装,前端 useWebPush.ts 调用会 404。
-  # 复活路径:等正式做 Web Push 后,补 Controller + Service + Storage + 鉴权 +
-  # 测试,然后把以下 schema/端点都加回来:
-  #   GET  /api/console/push/vapid-public-key  → ConsolePushVapidPublicKey
-  #   POST /api/console/push/subscribe         → ConsolePushSubscribeRequest
-  #   POST /api/console/push/unsubscribe       → ConsolePushUnsubscribeRequest
+  # 2026-05-16 Web Push 后端实装合并(原 batch-console/backend-patch/),3 端点恢复声明。
+  /api/console/push/vapid-public-key:
+    get:
+      tags: [push]
+      summary: Return VAPID public key for browser PushManager.subscribe()
+      operationId: getConsolePushVapidPublicKey
+      responses:
+        '200':
+          description: VAPID public key (base64-url)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsolePushVapidPublicKey'
+        '404':
+          description: Push module disabled (BATCH_CONSOLE_PUSH_ENABLED=false)
+  /api/console/push/subscribe:
+    post:
+      tags: [push]
+      summary: Register a browser PushSubscription for the current user
+      operationId: subscribeConsolePush
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsolePushSubscribeRequest'
+      responses:
+        '201':
+          description: Subscription stored (or refreshed via upsert)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBase'
+  /api/console/push/unsubscribe:
+    post:
+      tags: [push]
+      summary: Remove a single browser PushSubscription by endpoint
+      operationId: unsubscribeConsolePush
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsolePushUnsubscribeRequest'
+      responses:
+        '204':
+          description: Subscription removed (or already absent)
 
 components:
   securitySchemes:
@@ -8069,6 +8121,52 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/WorkflowMermaidResponse'
+    # ─── Web Push schemas (2026-05-16 实装合并) ─────────────────────────────────
+    ConsolePushSubscribeRequest:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint:
+          type: string
+          maxLength: 1024
+          description: 浏览器 PushManager.subscribe() 返回的 endpoint URL。
+        expirationTime:
+          type: integer
+          format: int64
+          nullable: true
+        keys:
+          $ref: '#/components/schemas/ConsolePushSubscribeRequestKeys'
+    ConsolePushSubscribeRequestKeys:
+      type: object
+      required: [p256dh, auth]
+      properties:
+        p256dh:
+          type: string
+          maxLength: 256
+        auth:
+          type: string
+          maxLength: 64
+    ConsolePushUnsubscribeRequest:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint:
+          type: string
+          maxLength: 1024
+    ConsolePushVapidPublicKey:
+      type: object
+      required: [publicKey]
+      properties:
+        publicKey:
+          type: string
+          description: base64-url VAPID public key,前端传入 PushManager.subscribe()。
+    CommonResponseConsolePushVapidPublicKey:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsolePushVapidPublicKey'
     CommonResponseObjectArray:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
