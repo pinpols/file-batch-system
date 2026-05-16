@@ -10,8 +10,8 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
-import com.example.batch.console.config.ConsoleTriggerClientProperties;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
+import com.example.batch.console.infrastructure.ops.TriggerInternalRestClient;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
@@ -62,9 +62,13 @@ public class ConsoleJobOpsSupport {
 
   private static final String JOB_TYPE_COMPENSATION = "COMPENSATION";
 
-  private final RestClient.Builder restClientBuilder;
+  // P2-1(2026-05-16):删除 RestClient.Builder 字段直接注入 — 所有 client 构造都走专用
+  // OrchestratorInternalRestClient / TriggerInternalRestClient,后者已是 ObjectProvider 模式。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleTriggerClientProperties triggerClientProperties;
+
+  /** P0-1(2026-05-16):trigger 调用统一走带 X-Internal-Secret 的 client,prod bypass=false 不再 401。 */
+  private final TriggerInternalRestClient triggerInternalRestClient;
+
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleTenantGuard tenantGuard;
@@ -95,8 +99,10 @@ public class ConsoleJobOpsSupport {
       Map<String, Object> params,
       String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient =
-        restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
+    // P0-1(2026-05-16):此前直接 restClientBuilder.baseUrl(...).build() 漏装
+    // X-Internal-Secret,生产 bypass=false 后 trigger 侧 401。换走
+    // TriggerInternalRestClient 统一注入 secret + 超时。
+    RestClient restClient = triggerInternalRestClient.build();
     CommonResponse<LaunchResponse> response =
         restClient
             .post()

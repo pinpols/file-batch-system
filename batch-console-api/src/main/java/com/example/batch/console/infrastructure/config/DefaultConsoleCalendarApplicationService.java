@@ -127,6 +127,10 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
             .map(
                 item -> {
                   Map<String, Object> m = new HashMap<>();
+                  // P0-2(2026-05-16): V92 后 calendar_holiday.tenant_id NOT NULL;
+                  // batchInsert 取 #{item.tenantId},此前 map 漏写整条 INSERT 抛
+                  // NOT NULL 违反,日历节假日导入 API 不可用。
+                  m.put("tenantId", tenantId);
                   m.put("calendarId", id);
                   m.put("bizDate", item.getBizDate());
                   m.put("dayType", item.getDayType());
@@ -147,6 +151,10 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
     Map<String, Object> existing =
         Guard.requireFound(holidayMapper.selectById(holidayId), "holiday not found");
+    // P1-1(2026-05-16):service 层 owner-check 防跨日历/跨租户改 holiday。
+    // 父 calendar 已由上面 selectById(tenantId, id) 验证;此处再 enforce holiday.calendar_id == id,
+    // 透传地保证 holiday 也属于该 tenant。Mapper SQL 维持按 id 操作,服务层守住归属。
+    requireHolidayBelongsToCalendar(existing, id);
     Map<String, Object> params = new HashMap<>();
     params.put("id", holidayId);
     params.put("bizDate", request.getBizDate());
@@ -164,11 +172,28 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> calendar =
         Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
+    // P1-1(2026-05-16):删除前 owner-check,见 updateHoliday 注释。
+    Map<String, Object> existing =
+        Guard.requireFound(holidayMapper.selectById(holidayId), "holiday not found");
+    requireHolidayBelongsToCalendar(existing, id);
     int rows = holidayMapper.deleteById(holidayId);
     if (rows == 0) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.holiday.not_found");
     }
     cacheInvalidationService.evictBusinessCalendar(
         resolved, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));
+  }
+
+  /**
+   * P1-1:校验 holiday 的 calendar_id 与请求的 calendar id 一致。selectById 已 SELECT calendar_id as
+   * "calendarId" (CalendarHolidayMapper.xml :18),取出后做 number 等值比较。不一致按 NOT_FOUND 报,不泄露归属信息。
+   */
+  private static void requireHolidayBelongsToCalendar(
+      Map<String, Object> existing, Long calendarId) {
+    Object existingCalId = existing.get("calendarId");
+    if (existingCalId == null
+        || !String.valueOf(existingCalId).equals(String.valueOf(calendarId))) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.holiday.not_found");
+    }
   }
 }

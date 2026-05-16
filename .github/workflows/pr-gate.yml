@@ -208,9 +208,10 @@ jobs:
 
       - name: Security scan — secrets
         if: steps.scope.outputs.maven_scope != 'skip'
-        continue-on-error: true
         shell: bash
-        run: bash scripts/ci/security-scan.sh --skip-build -- --mode=secret
+        # P1-4(2026-05-16):去掉 --skip-build。security-scan 不在根 reactor,fresh CI runner
+        # 没有预构建的 jar,带 --skip-build 会直接 exit 1。让脚本内部 mvn package。
+        run: bash scripts/ci/security-scan.sh -- --mode=secret
 
       - name: Verify generated dicts in sync
         shell: bash

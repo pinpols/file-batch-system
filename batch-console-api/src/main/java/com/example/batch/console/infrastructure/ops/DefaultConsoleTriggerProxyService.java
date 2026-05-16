@@ -1,38 +1,30 @@
 package com.example.batch.console.infrastructure.ops;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
-import com.example.batch.console.config.ConsoleTriggerClientProperties;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-/** {@link ConsoleTriggerProxyService} 的默认实现：通过 RestClient 转发请求到触发器管理接口。 */
+/**
+ * {@link ConsoleTriggerProxyService} 的默认实现:通过 RestClient 转发请求到触发器管理接口。
+ *
+ * <p>P2-1(2026-05-16):trigger client 构造下沉到 {@link TriggerInternalRestClient}, 该类用 ObjectProvider
+ * 拿独立 builder + 加 5s/30s 超时 + 注入 secret。本类专注路由 + tenant guard。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxyService {
 
-  /** batch-trigger / batch-orchestrator 的 /api/triggers/management/** 接口要求的 shared-secret 头名。 */
-  private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
-
-  private final ConsoleTriggerClientProperties triggerClientProperties;
-  private final RestClient.Builder restClientBuilder;
+  private final TriggerInternalRestClient triggerInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
-  private final Environment environment;
-  private final BatchSecurityProperties securityProperties;
 
-  /** 构造带 X-Internal-Secret 头的 RestClient。 缺失此头，batch-trigger 侧 InternalSecretFilter 会直接 401。 */
   private RestClient newClient() {
-    return restClientBuilder
-        .baseUrl(resolveUrl(triggerClientProperties.getBaseUrl()))
-        .defaultHeader(INTERNAL_SECRET_HEADER, securityProperties.getInternalSecret())
-        .build();
+    return triggerInternalRestClient.build();
   }
 
   @Override
@@ -108,9 +100,5 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
               .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
     }
     return resp != null ? resp.data() : Map.of();
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 }

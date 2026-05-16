@@ -3662,6 +3662,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseDagValidationResult'
 
+  /api/console/workflow-definitions/{id}/mermaid:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: Render workflow DAG as mermaid flowchart text
+      description: |
+        Returns the workflow's nodes + edges rendered as a mermaid flowchart
+        string. Used by the read-only viewer and for embedding in PR/Wiki/docs.
+      operationId: renderWorkflowMermaid
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rendered mermaid text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowMermaidResponse'
+
   # ─── P0: Instance operations ──────────────────────────────────────────────────
   /api/console/instances/{id}/cancel:
     post:
@@ -7483,6 +7513,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelApply'
 
+  # 注:Web Push 3 端点(/api/console/push/*)2026-05-16 从 OpenAPI 移除。
+  # 原因:OpenAPI 声明了端点但 backend 未实装,前端 useWebPush.ts 调用会 404。
+  # 复活路径:等正式做 Web Push 后,补 Controller + Service + Storage + 鉴权 +
+  # 测试,然后把以下 schema/端点都加回来:
+  #   GET  /api/console/push/vapid-public-key  → ConsolePushVapidPublicKey
+  #   POST /api/console/push/subscribe         → ConsolePushSubscribeRequest
+  #   POST /api/console/push/unsubscribe       → ConsolePushUnsubscribeRequest
+
 components:
   securitySchemes:
     basicAuth:
@@ -8015,6 +8053,22 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/DagValidationResult'
+    WorkflowMermaidResponse:
+      type: object
+      required: [mermaid]
+      properties:
+        mermaid:
+          type: string
+          description: |
+            Workflow 渲染后的 mermaid flowchart 文本。可直接贴入 GitHub README /
+            PR description / 文档站,前端用 mermaid.js 渲染。
+    CommonResponseWorkflowMermaidResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WorkflowMermaidResponse'
     CommonResponseObjectArray:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'

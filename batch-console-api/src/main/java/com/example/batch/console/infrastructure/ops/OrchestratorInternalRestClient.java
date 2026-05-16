@@ -5,6 +5,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
@@ -31,7 +32,12 @@ public class OrchestratorInternalRestClient {
   /** orchestrator-side {@code InternalAuthFilter} 期望的鉴权 header 名（保持单一字面量来源）。 */
   public static final String X_INTERNAL_SECRET_HEADER = "X-Internal-Secret";
 
-  private final RestClient.Builder restClientBuilder;
+  /**
+   * P2-1(2026-05-16):RestClient.Builder bean 是 prototype,但字段注入只解析一次, 整个单例生命周期内复用同一 builder,并发
+   * mutate baseUrl/header/requestFactory 会串。 改注入 ObjectProvider,build() 时每次 getObject() 拿独立实例。
+   */
+  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
+
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final BatchSecurityProperties batchSecurityProperties;
   private final Environment environment;
@@ -49,7 +55,8 @@ public class OrchestratorInternalRestClient {
     String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
     String secret = batchSecurityProperties.getInternalSecret();
     RestClient.Builder builder =
-        restClientBuilder
+        restClientBuilderProvider
+            .getObject()
             .baseUrl(baseUrl)
             .requestFactory(
                 ClientHttpRequestFactoryBuilder.detect()

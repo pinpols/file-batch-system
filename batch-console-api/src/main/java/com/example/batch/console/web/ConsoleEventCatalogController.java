@@ -49,16 +49,22 @@ public class ConsoleEventCatalogController {
   @GetMapping("/topics")
   public CommonResponse<List<Map<String, String>>> topics() {
     Locale locale = LocaleContextHolder.getLocale();
+    // P2-3(2026-05-16):补 TASK_DISPATCH_PROCESS / TRIGGER_LAUNCH_V1 / VERIFIER_FAILURE_V1。
+    // 这 3 个 topic 在 BatchTopics.java 都是 active 常量,运维 UI 需要看到完整 topic 列表
+    // (订阅告警/排障时不能漏);测试可加 catalog-vs-BatchTopics 同步守护。
     List<Map<String, String>> topicList =
         List.of(
             topic(BatchTopics.TASK_DISPATCH_IMPORT, "TASK_DISPATCH_IMPORT", locale),
             topic(BatchTopics.TASK_DISPATCH_EXPORT, "TASK_DISPATCH_EXPORT", locale),
+            topic(BatchTopics.TASK_DISPATCH_PROCESS, "TASK_DISPATCH_PROCESS", locale),
             topic(BatchTopics.TASK_DISPATCH_DISPATCH, "TASK_DISPATCH_DISPATCH", locale),
             topic(BatchTopics.TASK_RESULT, "TASK_RESULT", locale),
             topic(BatchTopics.TASK_RETRY, "TASK_RETRY", locale),
             topic(BatchTopics.TASK_DEAD_LETTER, "TASK_DEAD_LETTER", locale),
             topic(BatchTopics.OUTBOX_EVENT, "OUTBOX_EVENT", locale),
-            topic(BatchTopics.WORKER_HEARTBEAT, "WORKER_HEARTBEAT", locale));
+            topic(BatchTopics.WORKER_HEARTBEAT, "WORKER_HEARTBEAT", locale),
+            topic(BatchTopics.TRIGGER_LAUNCH_V1, "TRIGGER_LAUNCH_V1", locale),
+            topic(BatchTopics.VERIFIER_FAILURE_V1, "VERIFIER_FAILURE_V1", locale));
     return responseFactory.success(topicList);
   }
 

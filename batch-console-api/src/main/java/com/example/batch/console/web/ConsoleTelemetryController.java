@@ -1,7 +1,6 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.auth.FrontendTelemetryRequest;
 import com.example.batch.console.web.request.auth.FrontendTelemetryRequest.Event;
@@ -36,17 +35,24 @@ public class ConsoleTelemetryController {
         MDC.put("frontendEventType", event.type());
         MDC.put("frontendPage", event.page() != null ? event.page() : "");
         try {
-          String propsStr = event.props() != null ? JsonUtils.toJson(event.props()) : "";
+          // P2-2(2026-05-16):不再把 props 整体序列化进结构化日志,只记 props key 数量。
+          // 原写法 props={整个 JSON} 让登录用户任意撑大日志,且潜在把 token/密码等敏感字段
+          // 顺手写进 Loki。结构化追踪如确需 props,可加专门的 telemetry table / OTLP 出口,
+          // 不要再 piggyback 应用日志。
+          int propsKeys = event.props() == null ? 0 : event.props().size();
           if ("error".equals(event.type())) {
             log.error(
-                "[frontend:error] {} | page={} props={}", event.name(), event.page(), propsStr);
+                "[frontend:error] {} | page={} propsKeys={}",
+                event.name(),
+                event.page(),
+                propsKeys);
           } else {
             log.info(
-                "[frontend:{}] {} | page={} props={}",
+                "[frontend:{}] {} | page={} propsKeys={}",
                 event.type(),
                 event.name(),
                 event.page(),
-                propsStr);
+                propsKeys);
           }
         } finally {
           MDC.remove("frontendEventType");

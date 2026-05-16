@@ -57,7 +57,7 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleApprovalApplicationService implements ConsoleApprovalApplicationService {
 
-  private final RestClient.Builder restClientBuilder;
+  // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(原本就是空注入,死代码)。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
