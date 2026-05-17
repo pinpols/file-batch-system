@@ -21,11 +21,12 @@
         where id = #{id}
     </select>
 
+    <!-- bizDate 入参 String,PG date 列要求显式 cast::date,否则 "column biz_date is of type date" -->
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.calendar_holiday (
             calendar_id, biz_date, day_type, holiday_name, description
         ) values (
-            #{calendarId}, #{bizDate}, #{dayType}, #{holidayName}, #{description}
+            #{calendarId}, #{bizDate}::date, #{dayType}, #{holidayName}, #{description}
         )
     </insert>
 
@@ -34,13 +35,13 @@
             tenant_id, calendar_id, biz_date, day_type, holiday_name, description
         ) values
         <foreach collection="list" item="item" separator=",">
-            (#{item.tenantId}, #{item.calendarId}, #{item.bizDate}, #{item.dayType}, #{item.holidayName}, #{item.description})
+            (#{item.tenantId}, #{item.calendarId}, #{item.bizDate}::date, #{item.dayType}, #{item.holidayName}, #{item.description})
         </foreach>
     </insert>
 
     <update id="update" parameterType="map">
         update batch.calendar_holiday
-        set biz_date = #{bizDate},
+        set biz_date = #{bizDate}::date,
             day_type = #{dayType},
             holiday_name = #{holidayName},
             description = #{description},
