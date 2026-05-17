@@ -14,6 +14,7 @@ import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -52,6 +53,14 @@ public class WheelTriggerReconciler {
   private final BatchTimezoneProvider timezoneProvider;
   private final WheelSchedulerProperties props;
 
+  /**
+   * 每个 (tenant, jobCode, expr) 唯一组合的"已警告过"记录。同一坏 cron 在 30s/次的 reconcile 循环里 只在<b>首次发现 +
+   * 表达式变更</b>时打 WARN，避免上千条相同日志噪音。
+   *
+   * <p>当 trigger 被改正或禁用，键自然失效（不再出现在循环里就停止累计）。本 Map 不限大小： 平台 trigger 总数 ≪ 10k，单进程内存影响可忽略。
+   */
+  private final ConcurrentHashMap<String, String> warnedInvalidCron = new ConcurrentHashMap<>();
+
   @EventListener(ApplicationReadyEvent.class)
   public void onApplicationReady() {
     log.info("wheel trigger reconciler initial run on application ready");
@@ -86,17 +95,24 @@ public class WheelTriggerReconciler {
         continue;
       }
       // R7 log-audit-bug R3：早期前置校验，避免 cron 表达式格式错（比如 Linux 5 字段 "0 3 * * *"，
-      // Quartz 要 6/7 字段）导致 computeNext 抛 IllegalArgumentException 让 reconcile pass 失败，
-      // 30s/次循环堆出几百条 WARN 噪音。表达式坏的 trigger 直接跳过 + 单条 WARN 一次/pass。
+      // Quartz 要 6/7 字段）导致 computeNext 抛 IllegalArgumentException 让 reconcile pass 失败。
+      // 同一坏 cron 只在首次发现 / 表达式变更时打 WARN，避免 30s 循环堆出千条相同日志（之前 5 个
+      // e2e 测试 trigger 累计 4800 行 WARN）。
       if (!cronAdapter.isValid(d.getScheduleExpression())) {
-        log.warn(
-            "wheel reconcile skip trigger with invalid CRON expression: tenantId={} jobCode={}"
-                + " expr=[{}] (Quartz needs 6 or 7 fields; Linux 5-field form rejected)",
-            d.getTenantId(),
-            d.getJobCode(),
-            d.getScheduleExpression());
+        String key = d.getTenantId() + ":" + d.getJobCode();
+        String previousExpr = warnedInvalidCron.put(key, d.getScheduleExpression());
+        if (!d.getScheduleExpression().equals(previousExpr)) {
+          log.warn(
+              "wheel reconcile skip trigger with invalid CRON expression: tenantId={} jobCode={}"
+                  + " expr=[{}] (Quartz needs 6 or 7 fields; Linux 5-field form rejected)",
+              d.getTenantId(),
+              d.getJobCode(),
+              d.getScheduleExpression());
+        }
         continue;
       }
+      // 表达式已恢复 → 清掉去重缓存（下次再失效时仍能打 WARN）
+      warnedInvalidCron.remove(d.getTenantId() + ":" + d.getJobCode());
       wantedById.put(d.getJobDefinitionId(), d);
     }
 
