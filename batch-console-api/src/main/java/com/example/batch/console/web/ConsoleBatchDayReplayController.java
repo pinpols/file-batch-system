@@ -149,7 +149,6 @@ public class ConsoleBatchDayReplayController {
     return orchestratorInternalRestClient.build();
   }
 
-  @SuppressWarnings("unused")
   private static ParameterizedTypeReference<Map<String, Object>> unwrapToMap() {
     return new ParameterizedTypeReference<>() {};
   }
