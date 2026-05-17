@@ -2,6 +2,7 @@ package com.example.batch.console.web.request.job;
 
 import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -16,9 +17,23 @@ public class JobDefinitionCreateRequest {
   @Size(max = 256)
   private String jobName;
 
-  @NotBlank private String jobType;
+  // 与 batch_common JobType enum + DB ck_job_definition_job_type CHECK 对齐，
+  // 之前没限制取值，console 接受任意字符串就 INSERT 撞 CHECK 返 500 数据完整性异常。
+  @NotBlank
+  @Pattern(
+      regexp = "^(GENERAL|IMPORT|EXPORT|PROCESS|DISPATCH|WORKFLOW)$",
+      message = "jobType must be one of: GENERAL/IMPORT/EXPORT/PROCESS/DISPATCH/WORKFLOW")
+  private String jobType;
+
   private String bizType;
-  @NotBlank private String scheduleType;
+
+  // 与 ScheduleType enum (CRON/FIXED_RATE/MANUAL) + DB CHECK 对齐
+  @NotBlank
+  @Pattern(
+      regexp = "^(CRON|FIXED_RATE|MANUAL)$",
+      message = "scheduleType must be one of: CRON/FIXED_RATE/MANUAL")
+  private String scheduleType;
+
   private String scheduleExpr;
   private String timezone;
   private String triggerMode;
