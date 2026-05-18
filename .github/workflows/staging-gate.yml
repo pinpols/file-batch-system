@@ -99,10 +99,15 @@ jobs:
 
       - name: Security scan — DAST
         shell: bash
+        env:
+          # 形如: batch_console_token=<staging JWT cookie>; 由仓库/环境 secret 提供。
+          BATCH_DAST_AUTH_HEADER_NAME: Cookie
+          BATCH_DAST_AUTH_HEADER_VALUE: ${{ secrets.STAGING_DAST_AUTH_COOKIE }}
         # P1-4(2026-05-16):去掉 --skip-build。详见 pr-gate.yml 同名 step 注释。
         run: |
           bash scripts/ci/security-scan.sh -- \
             --mode=dast \
+            --require-zap-auth \
             --target-url=http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:8080
 
       - name: K8s manifest security — Checkov

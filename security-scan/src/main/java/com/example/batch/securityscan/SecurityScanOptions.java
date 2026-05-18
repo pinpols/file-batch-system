@@ -13,6 +13,9 @@ public record SecurityScanOptions(
         String imageName,
         String zapImage,
         String zapReport,
+        String zapAuthHeaderName,
+        String zapAuthHeaderValue,
+        boolean requireZapAuth,
         Path reportDir,
         String mvnCommand,
         String gitleaksCommand,
@@ -32,6 +35,11 @@ public record SecurityScanOptions(
         String zapImage = "ghcr.io/zaproxy/zaproxy:stable";
         Path reportDir = defaultReportDir(root);
         String zapReport = reportDir.resolve("zap-report.html").toString();
+        String zapAuthHeaderName = envOrDefault("BATCH_DAST_AUTH_HEADER_NAME", "Authorization");
+        String zapAuthHeaderValue = firstNonBlank(
+                System.getenv("BATCH_DAST_AUTH_HEADER_VALUE"),
+                System.getenv("ZAP_AUTH_HEADER_VALUE"));
+        boolean requireZapAuth = false;
         String mvnCommand = "mvn";
         String gitleaksCommand = "gitleaks";
         String semgrepCommand = "semgrep";
@@ -53,6 +61,10 @@ public record SecurityScanOptions(
                 dryRun = true;
                 continue;
             }
+            if ("--require-zap-auth".equals(arg)) {
+                requireZapAuth = true;
+                continue;
+            }
 
             int separator = arg.indexOf('=');
             if (!arg.startsWith("--") || separator < 0) {
@@ -67,6 +79,8 @@ public record SecurityScanOptions(
                 case "target-url" -> targetUrl = value;
                 case "image-name" -> imageName = value;
                 case "zap-image" -> zapImage = value;
+                case "zap-auth-header-name" -> zapAuthHeaderName = value;
+                case "zap-auth-header-value" -> zapAuthHeaderValue = value;
                 case "report-dir" -> {
                     reportDir = Paths.get(value).toAbsolutePath().normalize();
                     zapReport = reportDir.resolve("zap-report.html").toString();
@@ -81,6 +95,12 @@ public record SecurityScanOptions(
             }
         }
 
+        if (requireZapAuth && isBlank(zapAuthHeaderValue)) {
+            throw new IllegalArgumentException(
+                    "--require-zap-auth set but no DAST auth header value was provided. "
+                            + "Set BATCH_DAST_AUTH_HEADER_VALUE or pass --zap-auth-header-value=...");
+        }
+
         return new SecurityScanOptions(
                 help,
                 mode,
@@ -89,6 +109,9 @@ public record SecurityScanOptions(
                 imageName,
                 zapImage,
                 zapReport,
+                zapAuthHeaderName,
+                zapAuthHeaderValue,
+                requireZapAuth,
                 reportDir,
                 mvnCommand,
                 gitleaksCommand,
@@ -117,5 +140,21 @@ public record SecurityScanOptions(
             throw new IllegalStateException("Failed to create report directory: " + reportDir, e);
         }
         return reportDir;
+    }
+
+    private static String envOrDefault(String name, String fallback) {
+        String value = System.getenv(name);
+        return isBlank(value) ? fallback : value;
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (!isBlank(first)) {
+            return first;
+        }
+        return isBlank(second) ? null : second;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

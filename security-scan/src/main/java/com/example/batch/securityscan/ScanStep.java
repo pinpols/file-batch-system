@@ -82,10 +82,36 @@ public enum ScanStep {
             case DAST -> List.of(new ExternalCommand(
                     this,
                     "zap-baseline",
-                    list(options.dockerCommand(), "run", "--rm", "-t", "-v", options.reportDir().toString() + ":/zap/wrk", options.zapImage(), "zap-baseline.py", "-t", options.targetUrl(), "-r", Path.of(options.zapReport()).getFileName().toString()),
+                    dastCommand(options),
                     root
             ));
         };
+    }
+
+    private static List<String> dastCommand(SecurityScanOptions options) {
+        List<String> command = new ArrayList<>(list(
+                options.dockerCommand(),
+                "run",
+                "--rm",
+                "-t",
+                "-v",
+                options.reportDir().toString() + ":/zap/wrk",
+                options.zapImage(),
+                "zap-baseline.py",
+                "-t",
+                options.targetUrl(),
+                "-r",
+                Path.of(options.zapReport()).getFileName().toString()));
+        if (options.zapAuthHeaderValue() != null && !options.zapAuthHeaderValue().isBlank()) {
+            command.add("-z");
+            command.add(
+                    "-config replacer.full_list(0).description=batch-console-auth"
+                            + " -config replacer.full_list(0).enabled=true"
+                            + " -config replacer.full_list(0).matchtype=REQ_HEADER"
+                            + " -config replacer.full_list(0).matchstr=" + options.zapAuthHeaderName()
+                            + " -config replacer.full_list(0).replacement=" + options.zapAuthHeaderValue());
+        }
+        return command;
     }
 
     private static List<String> list(String first, String... rest) {

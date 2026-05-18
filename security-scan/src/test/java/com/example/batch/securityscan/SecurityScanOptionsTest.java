@@ -17,4 +17,17 @@ class SecurityScanOptionsTest {
         assertTrue(options.continueOnError());
         assertTrue(options.dryRun());
     }
+
+    @Test
+    void parseDastAuthOptions() {
+        SecurityScanOptions options = SecurityScanOptions.parse(new String[]{
+                "--mode=dast",
+                "--zap-auth-header-name=Cookie",
+                "--zap-auth-header-value=batch_console_token=test"
+        });
+
+        assertEquals(ScanMode.DAST, options.mode());
+        assertEquals("Cookie", options.zapAuthHeaderName());
+        assertEquals("batch_console_token=test", options.zapAuthHeaderValue());
+    }
 }
