@@ -65,7 +65,8 @@ public class ReadReplicaDataSourceConfiguration {
       ReadReplicaProperties props,
       @Qualifier("consolePrimaryDataSource") DataSource primary,
       @Qualifier("consoleReplicaDataSource") DataSource replica,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      ReplicaLagMonitor lagMonitor) {
     Map<Object, Object> routes = new HashMap<>();
     routes.put(ReadReplicaRoutingDataSource.Route.PRIMARY, primary);
     routes.put(ReadReplicaRoutingDataSource.Route.REPLICA, replica);
@@ -79,13 +80,19 @@ public class ReadReplicaDataSourceConfiguration {
     routing.setTargetDataSources(routes);
     routing.setDefaultTargetDataSource(primary);
     routing.afterPropertiesSet();
+
+    // 接通 lag-aware quarantine:lagMonitor 采到的 lag > 阈值 或 streaming replica = 0 时
+    // 主动触发 quarantine。补 SQLException-only 的旧 fail-open 检测漏洞。
+    lagMonitor.enableLagAwareQuarantine(routing, props.getLagThresholdSeconds());
+
     log.info(
         "console read-replica enabled: primary={}, replica={}, failureThreshold={},"
-            + " quarantineSeconds={}",
+            + " quarantineSeconds={}, lagThresholdSeconds={}",
         props.getPrimary().getUrl(),
         props.getReplica().getUrl(),
         props.getFailureThreshold(),
-        props.getQuarantineSeconds());
+        props.getQuarantineSeconds(),
+        props.getLagThresholdSeconds());
     return new LazyConnectionDataSourceProxy(routing);
   }
 
