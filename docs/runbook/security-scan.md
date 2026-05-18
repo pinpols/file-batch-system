@@ -178,12 +178,18 @@ trivy image batch-console-api:local
 docker pull ghcr.io/zaproxy/zaproxy:stable
 ```
 
+生产 / staging 验收必须带认证态，避免只扫到 401 / health 页面：
+
 ```bash
-docker run --rm -t ghcr.io/zaproxy/zaproxy:stable \
-  zap-baseline.py -t http://localhost:18080 -r zap-report.html
+export BATCH_DAST_AUTH_HEADER_NAME=Cookie
+export BATCH_DAST_AUTH_HEADER_VALUE='batch_console_token=<staging-jwt-cookie>'
+bash scripts/ci/security-scan.sh -- \
+  --mode=dast \
+  --require-zap-auth \
+  --target-url=http://localhost:18080
 ```
 
-如果要扫更完整的控制台路径，建议先登录或配置上下文，再做 authenticated scan。
+`--require-zap-auth` 会在认证头缺失时直接失败，防止无认证 baseline 被误当作 Console API 安全门禁。
 
 ## 推荐阈值
 
