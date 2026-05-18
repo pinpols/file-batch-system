@@ -157,6 +157,25 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     return BatchDateTimeSupport.utcEpochMillis() < quarantineUntilMillis;
   }
 
+  /**
+   * 外部触发 quarantine(连接层之外的故障,如 WAL replay lag 过大、replica 全断)。
+   *
+   * <p>由 {@link ReplicaLagMonitor} 在采样到 lag > 阈值 或 streaming replica 数=0 时调用。 老的 fail-open 只看
+   * SQLException,识别不出「连得上但 stale」的情况。
+   *
+   * @param reason 触发原因 tag(如 lag_exceeded / no_streaming_replicas),进 Prometheus counter
+   */
+  public void markQuarantined(String reason) {
+    long until = BatchDateTimeSupport.utcEpochMillis() + quarantineMillis;
+    // 只在比当前更晚时更新,避免短暂故障被 lag-aware 频繁延长
+    if (until > quarantineUntilMillis) {
+      quarantineUntilMillis = until;
+      quarantineEverEntered = true;
+      log.warn("replica externally quarantined for {}ms (reason={})", quarantineMillis, reason);
+      incrementCounter(METRIC_FAILOVER, "reason", reason);
+    }
+  }
+
   /** 当前连续失败计数（用于测试）。 */
   public int currentConsecutiveFailures() {
     return consecutiveFailures.get();

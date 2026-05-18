@@ -380,3 +380,61 @@ groups:
         annotations:
           summary: "Webhook delivery rows marked GIVE_UP"
           description: "{{ $value | humanize }} webhook_delivery_log 行在过去 1h 进入 GIVE_UP 状态. 检查对应 subscription_id 的 callback URL 健康 + last response_body. 必要时 disable 订阅或修业务方接收端."
+
+      # ── PostgreSQL Replication ──────────────────────────────────────────
+      # 本地 dev env 主从断了 11 天没人发现(BE 一直读旧数据),pg_stat_replication 空 +
+      # replay_lag 巨大 → 必须主动监控。postgres-exporter 已采集 pg_replication_lag_seconds
+      # 和 pg_replication_slots metrics(v0.16+ 默认开启)。
+      #
+      # 触发场景:
+      #   - 主库重启后 replica 连不回来
+      #   - WAL 段被清(主从断开太久) → recovery 永久卡
+      #   - 网络阻塞 / 从库 disk 慢
+
+      - alert: PostgresReplicationStopped
+        # 主库 pg_stat_replication 表为空 = 没有任何 active replica 连接
+        # 持续 1min 视为真断(避免 reconnect 抖动误报)
+        expr: pg_stat_replication_count == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication has zero active replicas"
+          description: "主库无任何 active replica 连接超过 1min。从库可能断连、WAL 已被清、network 阻塞。读写分离会持续提供 stale 数据。立刻查 docker logs postgres-replica + 重建从库 base backup。"
+
+      - alert: PostgresReplicationLagHigh
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication lag > 30s on {{ $labels.instance }}"
+          description: "从库 {{ $labels.instance }} 落后主库 {{ $value | humanize }}s,持续 5min。可能 disk IO 慢 / 大事务复制中。BE 应回退读主库(已配 lag-aware circuit breaker 兜底,验证生效)。"
+
+      - alert: PostgresReplicationLagCritical
+        # replay_lag > 5min = read 严重过期,业务读到旧数据有风险
+        expr: pg_replication_lag > 300
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication lag > 5min on {{ $labels.instance }}"
+          description: "从库严重滞后 {{ $value | humanize }}s,业务可能读到 5min 前的数据。立刻让 BE 全切主库读 + 排查从库 IO/CPU/network。"
+
+      - alert: PostgresReplicationSlotInactive
+        # replication slot 存在但 active=false:从库连接断了但 slot 还在保留 WAL → 主库 WAL 堆积风险
+        expr: pg_replication_slots_active == 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: db
+        annotations:
+          summary: "PostgreSQL replication slot {{ $labels.slot_name }} inactive"
+          description: "Slot {{ $labels.slot_name }} 存在但无 active replica 连接,主库 WAL 会持续累积到 slot 被 drop。检查从库连接 + 必要时 SELECT pg_drop_replication_slot('{{ $labels.slot_name }}')。"
