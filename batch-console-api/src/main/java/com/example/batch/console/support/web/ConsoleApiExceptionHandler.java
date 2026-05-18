@@ -23,6 +23,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -31,6 +32,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -223,9 +226,9 @@ public class ConsoleApiExceptionHandler {
   //   - HttpMediaTypeNotSupportedException:Content-Type 完全不匹配
   //     (例:application/json 调 multipart/form-data 接口)
   @ExceptionHandler({
-    org.springframework.web.multipart.support.MissingServletRequestPartException.class,
-    org.springframework.web.multipart.MultipartException.class,
-    org.springframework.web.HttpMediaTypeNotSupportedException.class,
+    MissingServletRequestPartException.class,
+    MultipartException.class,
+    HttpMediaTypeNotSupportedException.class,
   })
   public ResponseEntity<?> handleMultipart(Exception exception) {
     log.warn("console multipart/media-type error: {}", exception.getMessage());
@@ -255,34 +258,76 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
     log.warn("console data integrity violation: {}", exception.getMostSpecificCause().getMessage());
-    String message = "数据约束错误";
     Throwable root = exception.getMostSpecificCause();
-    if (root != null && root.getMessage() != null) {
-      String msg = root.getMessage();
-      if (msg.contains("violates check constraint")) {
+    String rawMsg = root == null ? null : root.getMessage();
+    String message = PgConstraintViolation.translate(rawMsg);
+    return ResponseEntity.badRequest()
+        .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, message));
+  }
+
+  /**
+   * PG DataIntegrityViolation 子串路由表（CLAUDE.md §分支消除规则 row 1）。 每个分支按 substring 命中并产出客户端可读的中文
+   * message。
+   */
+  private enum PgConstraintViolation {
+    CHECK("violates check constraint") {
+      @Override
+      String render(String msg) {
         int idx = msg.indexOf("\"", msg.indexOf("constraint"));
         if (idx > 0) {
           int end = msg.indexOf("\"", idx + 1);
           if (end > idx) {
-            message = "字段值不合法,违反约束: " + msg.substring(idx + 1, end);
+            return "字段值不合法,违反约束: " + msg.substring(idx + 1, end);
           }
         }
-      } else if (msg.contains("violates unique constraint")) {
-        message = "记录已存在(唯一键冲突)";
-      } else if (msg.contains("violates foreign key constraint")) {
-        message = "关联数据缺失或无法删除(外键约束)";
-      } else if (msg.contains("violates not-null constraint")) {
+        return DEFAULT_MESSAGE;
+      }
+    },
+    UNIQUE("violates unique constraint") {
+      @Override
+      String render(String msg) {
+        return "记录已存在(唯一键冲突)";
+      }
+    },
+    FOREIGN_KEY("violates foreign key constraint") {
+      @Override
+      String render(String msg) {
+        return "关联数据缺失或无法删除(外键约束)";
+      }
+    },
+    NOT_NULL("violates not-null constraint") {
+      @Override
+      String render(String msg) {
         int colStart = msg.indexOf("\"");
         int colEnd = msg.indexOf("\"", colStart + 1);
         if (colStart >= 0 && colEnd > colStart) {
-          message = "必填字段缺失: " + msg.substring(colStart + 1, colEnd);
-        } else {
-          message = "必填字段缺失";
+          return "必填字段缺失: " + msg.substring(colStart + 1, colEnd);
+        }
+        return "必填字段缺失";
+      }
+    };
+
+    private static final String DEFAULT_MESSAGE = "数据约束错误";
+
+    private final String marker;
+
+    PgConstraintViolation(String marker) {
+      this.marker = marker;
+    }
+
+    abstract String render(String msg);
+
+    static String translate(String rawMsg) {
+      if (rawMsg == null) {
+        return DEFAULT_MESSAGE;
+      }
+      for (PgConstraintViolation kind : values()) {
+        if (rawMsg.contains(kind.marker)) {
+          return kind.render(rawMsg);
         }
       }
+      return DEFAULT_MESSAGE;
     }
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, message));
   }
 
   @ExceptionHandler(Exception.class)

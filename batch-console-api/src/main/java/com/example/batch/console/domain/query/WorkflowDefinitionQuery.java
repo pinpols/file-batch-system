@@ -1,7 +1,8 @@
 package com.example.batch.console.domain.query;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
-import java.util.Objects;
 import lombok.Builder;
 
 @Builder
@@ -19,9 +20,8 @@ public record WorkflowDefinitionQuery(
    * canonical 构造期就拦截 null/blank, 把跨租漏洞失败前移到构造点而非 SQL 触发点。
    */
   public WorkflowDefinitionQuery {
-    Objects.requireNonNull(tenantId, "tenantId");
-    if (tenantId.isBlank()) {
-      throw new IllegalArgumentException("tenantId must not be blank");
+    if (tenantId == null || tenantId.isBlank()) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.tenant_id_required");
     }
   }
 
