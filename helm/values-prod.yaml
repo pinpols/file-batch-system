@@ -36,6 +36,16 @@ security:
   bypassMode: "false"
   internalSecret: ""
   consoleJwtSecret: ""
+  # 2026-05-18 console 登录请求体 RSA+AES 混合加密(BE ConsoleLoginKeyPairService)。
+  # prod 强制 required=true(BE @PostConstruct 守护);multi-replica 必须显式注入
+  # keypair —— 单副本启动期生成在多副本会导致 FE 公钥不匹配解密私钥。
+  # 推荐外部密钥管理(Vault / KMS / sealed-secrets)注入,本文件留空,deploy 时
+  # --set security.loginEncryption.privateKeyPem=$(cat priv.pem) 或 values overlay。
+  loginEncryption:
+    enabled: "true"
+    required: "true"
+    privateKeyPem: ""   # 必填 (helm/Secret fail-fast 守卫)
+    publicKeyPem: ""    # 必填 (helm/Secret fail-fast 守卫)
 
 # R4-P0-4：K8s Service 实际端口 18082（见 chart values orchestrator.port），之前误用 docker-compose 内部端口 8082。
 # 修复后 worker / console-api 才能正确连到 orchestrator。
