@@ -2,7 +2,24 @@
 
 审计日期：2026-05-18 13:04 CST  
 范围：`file-batch-system` 后端全仓库、Helm/CI/安全脚本、配对前端 `../batch-console` 中与 Console API 直接相关的调用点。  
-结论：核心批量调度主链路已经具备灰度上线候选条件；全量生产上线前需要先处理 Push 契约、Webhook 可靠性、Telemetry payload 上限与 DAST 有效性问题。
+原始结论：核心批量调度主链路已经具备灰度上线候选条件；全量生产上线前需要先处理 Push 契约、Webhook 可靠性、Telemetry payload 上限与 DAST 有效性问题。
+
+## 2026-05-18 整改复核更新
+
+本报告原始 P1/P2/P3 建议项已完成代码整改：
+
+- Web Push：VAPID 公钥接口已放行，订阅/取消订阅不再强制 URL tenant 参数，配对前端改为使用统一 API client 并透传当前 tenant。
+- Webhook：事件派发先落 `webhook_delivery_log(PENDING)`，再执行异步即时投递；线程池拒绝或进程重启后由 relay 扫描 `PENDING/EXHAUSTED` 继续补偿。
+- Telemetry：`props` 已增加单事件字节数、字段数、嵌套深度与数组长度限制。
+- DAST：staging gate 已支持并强制认证态 ZAP baseline，未提供认证头会失败退出。
+- HTTP 渠道健康探测：已改为 DNS guard 解析校验后固定解析 IP 发起探测，和实际 dispatch 防护模型一致。
+- 日历假日管理：holiday 更新/删除 mapper 层已带 `calendar_id` 条件，避免只靠 service 层约束。
+- Worker HTTP client：不再复用可变 `RestClient.Builder` 单例，每次请求获取新的 builder。
+
+复核验证：
+
+- 通过：后端相关模块 compile、security-scan 单测、Web Push 前端 typecheck、错误码字典同步、Flyway/OpenAPI 校验、Webhook/worker client/dispatch 窄测。
+- 未完全通过：`batch-console-api,batch-worker-core,batch-worker-dispatch` 全量测试在 worker-dispatch 集成测试启动 Testcontainers Kafka `apache/kafka:4.1.2` 时超时，错误集中在容器未进入 `RECOVERY to RUNNING` 日志等待条件；本轮未见业务断言失败。上线前仍建议在 CI 或稳定 Docker 环境重跑全量集成测试。
 
 ## 0. 上线结论
 
