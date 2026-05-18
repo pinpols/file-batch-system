@@ -10,6 +10,9 @@ public interface CalendarHolidayMapper {
 
   Map<String, Object> selectById(@Param("id") Long id);
 
+  Map<String, Object> selectByCalendarIdAndId(
+      @Param("calendarId") Long calendarId, @Param("id") Long id);
+
   int insert(Map<String, Object> params);
 
   int batchInsert(@Param("list") List<Map<String, Object>> list);
@@ -19,4 +22,6 @@ public interface CalendarHolidayMapper {
   int deleteByCalendarId(@Param("calendarId") Long calendarId);
 
   int deleteById(@Param("id") Long id);
+
+  int deleteByCalendarIdAndId(@Param("calendarId") Long calendarId, @Param("id") Long id);
 }
