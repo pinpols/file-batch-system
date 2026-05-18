@@ -21,6 +21,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableMethodSecurity
@@ -35,7 +36,7 @@ public class ConsoleSecurityConfiguration {
       SlidingWindowRateLimiter rateLimiter,
       ConsoleRateLimitProperties rateLimitProperties,
       ConsoleSecurityResponseWriter responseWriter) {
-    return new ConsoleRateLimitFilter(rateLimiter, rateLimitProperties, responseWriter);
+    return new ConsoleRateLimitFilter(rateLimiter, rateLimitProperties, responseWriter, properties);
   }
 
   @Bean
@@ -44,9 +45,11 @@ public class ConsoleSecurityConfiguration {
       ConsoleAuthenticationFilter consoleAuthenticationFilter,
       ConsoleRateLimitFilter consoleRateLimitFilter,
       ConsoleSecurityResponseWriter responseWriter,
-      ConsoleSecurityHeadersWriter securityHeadersWriter)
+      ConsoleSecurityHeadersWriter securityHeadersWriter,
+      CorsConfigurationSource consoleCorsConfigurationSource)
       throws Exception {
-    return http.csrf(AbstractHttpConfigurer::disable)
+    return http.cors(cors -> cors.configurationSource(consoleCorsConfigurationSource))
+        .csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .headers(headers -> headers.addHeaderWriter(securityHeadersWriter))

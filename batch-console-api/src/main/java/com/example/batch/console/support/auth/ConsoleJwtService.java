@@ -9,19 +9,25 @@ import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -31,6 +37,8 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * 控制台 JWT 签发与校验（HS256，含租户与角色声明）。
@@ -50,6 +58,7 @@ import org.springframework.stereotype.Service;
  *       secret 长度不足导致 HS256 初始化失败。
  * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ConsoleJwtService {
@@ -59,6 +68,9 @@ public class ConsoleJwtService {
   private static final String CLAIM_AUTHORITIES = "authorities";
   private static final String CLAIM_TOKEN_TYPE = "tokenType";
   private static final String CLAIM_SESSION_VERSION = "sessionVersion";
+  private static final String CLAIM_JTI = "jti";
+  private static final String CLAIM_IP_HASH = "ipHash";
+  private static final String CLAIM_UA_HASH = "uaHash";
 
   // 与 BatchSecurityProperties.PROD_LIKE_PROFILES 对齐：staging / uat / preprod 也强制校验密钥占位符
   private static final Set<String> PROD_LIKE_PROFILES =
@@ -67,6 +79,13 @@ public class ConsoleJwtService {
   private final ConsoleSecurityProperties properties;
   private final ConsoleSessionRegistry sessionRegistry;
   private final Environment environment;
+
+  // P0-3 / P2-2:可选注入,SlidingWindowRateLimiter / SseTicketService 已建 StringRedisTemplate bean;
+  // 非 Spring 单测场景 null,authenticate() / revoke() 自动降级跳过 revocation 检查。
+  @Autowired(required = false)
+  private StringRedisTemplate redisTemplate;
+
+  private static final String REVOKED_KEY_PREFIX = "console:revoked:jti:";
 
   // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
   // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
@@ -138,17 +157,31 @@ public class ConsoleJwtService {
     }
     Instant issuedAt = BatchDateTimeSupport.utcNow();
     Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
-    JwtClaimsSet claims =
+    String jti = UUID.randomUUID().toString();
+    HttpServletRequest currentRequest = currentRequest();
+    JwtClaimsSet.Builder claimsBuilder =
         JwtClaimsSet.builder()
             .issuer(properties.getJwtIssuer())
             .subject(username)
             .issuedAt(issuedAt)
             .expiresAt(expiresAt)
+            .id(jti)
             .claim(CLAIM_TENANT_ID, tenantId)
             .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
             .claim(CLAIM_SESSION_VERSION, sessionVersion)
-            .claim(CLAIM_AUTHORITIES, authorities == null ? List.of() : List.copyOf(authorities))
-            .build();
+            .claim(CLAIM_JTI, jti)
+            .claim(CLAIM_AUTHORITIES, authorities == null ? List.of() : List.copyOf(authorities));
+    if (currentRequest != null) {
+      String ipHash = hashClientIp(currentRequest);
+      String uaHash = hashUserAgent(currentRequest);
+      if (ipHash != null) {
+        claimsBuilder.claim(CLAIM_IP_HASH, ipHash);
+      }
+      if (uaHash != null) {
+        claimsBuilder.claim(CLAIM_UA_HASH, uaHash);
+      }
+    }
+    JwtClaimsSet claims = claimsBuilder.build();
     String token =
         encoder()
             .encode(
@@ -184,9 +217,106 @@ public class ConsoleJwtService {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
       }
     }
+    // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
+    String jti = jwt.getClaimAsString(CLAIM_JTI);
+    if (jti != null && redisTemplate != null) {
+      Boolean revoked = redisTemplate.hasKey(REVOKED_KEY_PREFIX + jti);
+      if (Boolean.TRUE.equals(revoked)) {
+        throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+      }
+    }
+    // P2-2:IP/UA 软绑定。签发时绑定 hash,异地异机访问只打 WARN(不 deny)— 移动网 IP 抖动 / UA
+    // 升级会误伤,真要 deny 需配合风控规则。空 claim = 旧 token 兼容,跳过比对。
+    auditClientBindingDrift(jwt, username, tenantId);
     List<String> authorities = jwt.getClaimAsStringList(CLAIM_AUTHORITIES);
     return new ConsolePrincipal(
         username, tenantId, authorities == null ? Set.of() : new LinkedHashSet<>(authorities));
+  }
+
+  /**
+   * P0-3:把当前 token 加入 revocation 黑名单,TTL = token 剩余生命。 调用方:登出 endpoint 拿到当前 cookie 中的 token 后传入。
+   */
+  public void revoke(String token) {
+    if (redisTemplate == null) {
+      return;
+    }
+    Jwt jwt;
+    try {
+      jwt = decoder().decode(token);
+    } catch (RuntimeException ignored) {
+      return; // 解析失败的 token 没必要再 revoke
+    }
+    String jti = jwt.getClaimAsString(CLAIM_JTI);
+    if (jti == null) {
+      return; // 旧版 token 无 jti,跳过
+    }
+    Instant exp = jwt.getExpiresAt();
+    if (exp == null) {
+      return;
+    }
+    long ttlSeconds = exp.getEpochSecond() - BatchDateTimeSupport.utcNow().getEpochSecond();
+    if (ttlSeconds <= 0) {
+      return; // 已过期,无需占用 Redis
+    }
+    redisTemplate.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", Duration.ofSeconds(ttlSeconds));
+  }
+
+  private void auditClientBindingDrift(Jwt jwt, String username, String tenantId) {
+    HttpServletRequest req = currentRequest();
+    if (req == null) {
+      return;
+    }
+    String storedIp = jwt.getClaimAsString(CLAIM_IP_HASH);
+    String storedUa = jwt.getClaimAsString(CLAIM_UA_HASH);
+    if (storedIp == null && storedUa == null) {
+      return;
+    }
+    String currentIp = hashClientIp(req);
+    String currentUa = hashUserAgent(req);
+    if (storedIp != null && currentIp != null && !storedIp.equals(currentIp)) {
+      log.warn(
+          "JWT IP binding drift: username={} tenantId={} (token issued from different network)",
+          username,
+          tenantId);
+    }
+    if (storedUa != null && currentUa != null && !storedUa.equals(currentUa)) {
+      log.warn(
+          "JWT UA binding drift: username={} tenantId={} (token issued from different browser)",
+          username,
+          tenantId);
+    }
+  }
+
+  private HttpServletRequest currentRequest() {
+    if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
+      return attrs.getRequest();
+    }
+    return null;
+  }
+
+  private String hashClientIp(HttpServletRequest req) {
+    // 软绑定不信任 XFF(即便 trustForwardedHeaders=true 也只取 RemoteAddr 防伪造):
+    // 这里是审计用途,假 XFF 反而让攻击者主动选定 token 绑定的 hash。
+    String ip = req.getRemoteAddr();
+    return ip == null ? null : sha256Short(ip);
+  }
+
+  private String hashUserAgent(HttpServletRequest req) {
+    String ua = req.getHeader("User-Agent");
+    return ua == null ? null : sha256Short(ua);
+  }
+
+  private String sha256Short(String raw) {
+    try {
+      byte[] full =
+          MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
+      // 取前 8 字节 (16 hex chars) — 防碰撞需求低,只用作 drift 比对
+      byte[] head = new byte[8];
+      System.arraycopy(full, 0, head, 0, 8);
+      return HexFormat.of().formatHex(head);
+    } catch (NoSuchAlgorithmException e) {
+      return null;
+    }
   }
 
   private NimbusJwtEncoder encoder() {
