@@ -55,7 +55,7 @@ public class ConsolePushController {
   @PostMapping("/subscribe")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<CommonResponse<Void>> subscribe(
-      @RequestParam("tenantId") String tenantId,
+      @RequestParam(value = "tenantId", required = false) String tenantId,
       @Valid @RequestBody ConsolePushSubscribeRequest request,
       HttpServletRequest httpRequest) {
     String username = requestMetadataResolver.current().operatorId();
@@ -68,7 +68,7 @@ public class ConsolePushController {
   @PostMapping("/unsubscribe")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<CommonResponse<Void>> unsubscribe(
-      @RequestParam("tenantId") String tenantId,
+      @RequestParam(value = "tenantId", required = false) String tenantId,
       @Valid @RequestBody ConsolePushUnsubscribeRequest request) {
     String username = requestMetadataResolver.current().operatorId();
     subscriptionService.unsubscribe(tenantId, username, request.endpoint());
