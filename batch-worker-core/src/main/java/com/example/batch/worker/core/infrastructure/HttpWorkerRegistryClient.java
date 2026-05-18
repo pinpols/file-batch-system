@@ -10,6 +10,7 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
@@ -27,7 +28,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
   private final OrchestratorWorkerClientProperties properties;
   private final BatchSecurityProperties securityProperties;
-  private final RestClient.Builder builder;
+  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private final Environment environment;
   // T-1：DCL 必须 volatile，否则另一线程可能读到未完全构造的 RestClient 对象引用
   private volatile RestClient restClient;
@@ -79,7 +80,8 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     synchronized (this) {
       if (this.restClient == null) {
         this.restClient =
-            builder
+            restClientBuilderProvider
+                .getObject()
                 .baseUrl(resolveBaseUrl())
                 .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
                 // R7-A2-P1：JDK 默认 HttpURLConnection 无超时。worker loop 单线程调

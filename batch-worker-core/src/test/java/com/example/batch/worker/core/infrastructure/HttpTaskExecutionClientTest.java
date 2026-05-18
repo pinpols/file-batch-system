@@ -47,7 +47,7 @@ class HttpTaskExecutionClientTest {
           new HttpTaskExecutionClient(
               props,
               new BatchSecurityProperties(),
-              jsonRestClientBuilder(),
+              restClientBuilderProvider(),
               new MockEnvironment(),
               registry,
               noopCoordinator,
@@ -92,7 +92,7 @@ class HttpTaskExecutionClientTest {
           new HttpTaskExecutionClient(
               props,
               new BatchSecurityProperties(),
-              jsonRestClientBuilder(),
+              restClientBuilderProvider(),
               new MockEnvironment(),
               registry,
               noopCoordinator,
@@ -136,7 +136,7 @@ class HttpTaskExecutionClientTest {
           new HttpTaskExecutionClient(
               props,
               new BatchSecurityProperties(),
-              jsonRestClientBuilder(),
+              restClientBuilderProvider(),
               new MockEnvironment(),
               null,
               noopCoordinator,
@@ -161,6 +161,30 @@ class HttpTaskExecutionClientTest {
             b ->
                 b.configureMessageConvertersList(
                     converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
+  }
+
+  private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {
+    return new ObjectProvider<>() {
+      @Override
+      public RestClient.Builder getObject(Object... args) {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getObject() {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getIfAvailable() {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getIfUnique() {
+        return jsonRestClientBuilder();
+      }
+    };
   }
 
   private static OrchestratorTaskClientProperties clientProperties(int port) {

@@ -46,7 +46,7 @@ public class HttpTaskExecutionClient
 
   private final OrchestratorTaskClientProperties properties;
   private final BatchSecurityProperties securityProperties;
-  private final RestClient.Builder builder;
+  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private final Environment environment;
   private final Optional<MeterRegistry> meterRegistry;
   private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator;
@@ -57,14 +57,14 @@ public class HttpTaskExecutionClient
   public HttpTaskExecutionClient(
       OrchestratorTaskClientProperties properties,
       BatchSecurityProperties securityProperties,
-      RestClient.Builder builder,
+      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
       Environment environment,
       @Autowired(required = false) MeterRegistry meterRegistry,
       ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator,
       @Value("${batch.worker.lease.renew-batch-max-items:256}") int renewBatchMaxItems) {
     this.properties = properties;
     this.securityProperties = securityProperties;
-    this.builder = builder;
+    this.restClientBuilderProvider = restClientBuilderProvider;
     this.environment = environment;
     this.meterRegistry = Optional.ofNullable(meterRegistry);
     this.reportOutboxCoordinator = reportOutboxCoordinator;
@@ -467,7 +467,8 @@ public class HttpTaskExecutionClient
                     .build());
         factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
         this.restClient =
-            builder
+            restClientBuilderProvider
+                .getObject()
                 .baseUrl(resolveBaseUrl())
                 .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
                 .requestFactory(factory)
