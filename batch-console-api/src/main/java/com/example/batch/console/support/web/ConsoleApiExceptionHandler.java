@@ -216,6 +216,23 @@ public class ConsoleApiExceptionHandler {
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }
 
+  // Multipart upload 缺 part / 错 content-type 应 400 而非 500。
+  // 触发场景:
+  //   - MissingServletRequestPartException:Content-Type 是 multipart 但没带 file part
+  //   - MultipartException:multipart 解析失败
+  //   - HttpMediaTypeNotSupportedException:Content-Type 完全不匹配
+  //     (例:application/json 调 multipart/form-data 接口)
+  @ExceptionHandler({
+    org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+    org.springframework.web.multipart.MultipartException.class,
+    org.springframework.web.HttpMediaTypeNotSupportedException.class,
+  })
+  public ResponseEntity<?> handleMultipart(Exception exception) {
+    log.warn("console multipart/media-type error: {}", exception.getMessage());
+    return ResponseEntity.badRequest()
+        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+  }
+
   /**
    * SSE / 异步响应在客户端断开后再次写入会抛 {@link AsyncRequestNotUsableException}。 此时 response Content-Type 已锁为
    * {@code text/event-stream}，再回写 {@code CommonResponse} 反而触发 {@code
