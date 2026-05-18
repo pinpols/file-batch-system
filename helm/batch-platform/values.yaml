@@ -54,6 +54,16 @@ security:
   internalSecret: ""
   # Console JWT HMAC secret. Production must provide a strong value.
   consoleJwtSecret: ""
+  # Console 登录请求体 RSA+AES 混合加密(对应 BE ConsoleLoginKeyPairService)。
+  # multi-replica prod 必须显式提供 keypair —— 否则每个 pod 启动期各自生成,
+  # FE 取到的公钥可能不匹配本次解密的私钥,登录概率性失败。
+  loginEncryption:
+    enabled: "true"
+    required: "false"     # prod-like profile 强制 true(BE @PostConstruct 守护);此处留 false 让 dev/staging 灵活
+    # PEM 字符串。values-prod.yaml 应 set + helm Secret 走外部密钥管理。
+    # 留空时 BE 启动期生成单实例密钥(单副本 dev OK)。
+    privateKeyPem: ""
+    publicKeyPem: ""
 
 # 注入 ConfigMap 键 BATCH_TIMEZONE_DEFAULT_ZONE（与 batch-defaults / .env.example 一致）
 batchTimezoneDefaultZone: "Asia/Shanghai"
