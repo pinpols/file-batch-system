@@ -42,15 +42,15 @@ public class ConsoleAuthController {
   /**
    * 使用平台库中的控制台账号进行登录并签发 JWT。
    *
-   * <p>ADR-030 §D7 双轨：响应 body 仍带 accessToken 兼容老客户端；同时下发 HttpOnly cookie {@code
-   * batch_console_token}，新前端不再读 localStorage，XSS 也拿不到 token。
+   * <p>ADR-030 §D7：token 走 HttpOnly cookie {@code batch_console_token}。P1-1 (pre-launch audit
+   * 2026-05-18) 收尾:响应 body 不再带明文 accessToken,防止 JS / XSS 读取抵消 cookie 防护。
    */
   @PostMapping("/login")
   public CommonResponse<ConsoleAuthTokenResponse> login(
       @Valid @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
     ConsoleAuthTokenResponse body = authApplicationService.login(request);
     response.addHeader(HttpHeaders.SET_COOKIE, buildTokenCookie(body));
-    return responseFactory.success(body);
+    return responseFactory.success(body.withoutToken());
   }
 
   /** 为当前已认证用户签发 JWT。 */
@@ -60,7 +60,7 @@ public class ConsoleAuthController {
       Authentication authentication, HttpServletResponse response) {
     ConsoleAuthTokenResponse body = authApplicationService.issueToken(authentication);
     response.addHeader(HttpHeaders.SET_COOKIE, buildTokenCookie(body));
-    return responseFactory.success(body);
+    return responseFactory.success(body.withoutToken());
   }
 
   /** 登出：把 cookie 设置成 Max-Age=0 立即失效（前端调用此端点替代手动清 localStorage）。 */

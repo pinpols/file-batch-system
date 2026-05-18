@@ -1,8 +1,11 @@
 package com.example.batch.console.infrastructure.realtime;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.console.config.ConsoleRealtimeProperties;
 import com.example.batch.console.web.response.ops.ConsoleSseEventResponse;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
@@ -48,26 +51,41 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Slf4j
 public class ConsoleRealtimeEventHub {
 
-  private static final long DEFAULT_TIMEOUT_MILLIS = 0L;
   private static final long DEFAULT_HEARTBEAT_MILLIS = 25_000L;
   private static final String DEFAULT_STREAM = "pipeline-definitions";
 
   private final ConsoleRealtimeReplayStore replayStore;
   private final ConsoleRealtimeMetrics realtimeMetrics;
+  private final ConsoleRealtimeProperties realtimeProperties;
   private final List<Subscription> subscriptions = new CopyOnWriteArrayList<>();
   private final ScheduledExecutorService scheduler =
       Executors.newScheduledThreadPool(1, new RealtimeThreadFactory());
 
   public ConsoleRealtimeEventHub(
-      ConsoleRealtimeReplayStore replayStore, ConsoleRealtimeMetrics realtimeMetrics) {
+      ConsoleRealtimeReplayStore replayStore,
+      ConsoleRealtimeMetrics realtimeMetrics,
+      ConsoleRealtimeProperties realtimeProperties) {
     this.replayStore = replayStore;
     this.realtimeMetrics = realtimeMetrics;
+    this.realtimeProperties = realtimeProperties;
   }
 
   public SseEmitter subscribe(
       String tenantId, String stream, String eventType, String cursor, Long heartbeatMillis) {
+    // P1-5：超出单实例 SSE 上限时拒绝,防止僵尸连接累积击穿进程。前端拿到 503 后退避重试。
+    int max = realtimeProperties.getMaxSubscriptions();
+    if (max > 0 && subscriptions.size() >= max) {
+      throw BizException.of(
+          ResultCode.SERVICE_UNAVAILABLE,
+          "error.realtime.subscription_limit_exceeded",
+          String.valueOf(max));
+    }
     String resolvedStream = normalizeStream(stream);
-    SseEmitter emitter = new SseEmitter(DEFAULT_TIMEOUT_MILLIS);
+    long emitterTimeoutMillis =
+        realtimeProperties.getEmitterTimeout() != null
+            ? realtimeProperties.getEmitterTimeout().toMillis()
+            : 0L;
+    SseEmitter emitter = new SseEmitter(emitterTimeoutMillis);
     Subscription subscription =
         new Subscription(tenantId, resolvedStream, normalizeFilter(eventType), cursor, emitter);
     subscriptions.add(subscription);

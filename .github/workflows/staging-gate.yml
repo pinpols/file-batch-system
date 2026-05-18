@@ -43,7 +43,9 @@ jobs:
       PGPORT: "5432"
       PGDATABASE: "batch_platform"
       PGUSER: "batch_user"
-      BATCH_OBSERVABILITY_BASE_URLS: "http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:8080,http://batch-platform-staging-orchestrator.batch-staging.svc.cluster.local:8082"
+      # P0-6 (pre-launch audit 2026-05-18)：端口对齐 chart 实际 Service 端口
+      # (consoleApi.port:18080 / orchestrator.port:18082)；原 8080/8082 是 docker-compose 内部端口,K8s 探活永远失败。
+      BATCH_OBSERVABILITY_BASE_URLS: "http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:18080,http://batch-platform-staging-orchestrator.batch-staging.svc.cluster.local:18082"
       BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
     steps:
       - name: Checkout
@@ -108,7 +110,7 @@ jobs:
           bash scripts/ci/security-scan.sh -- \
             --mode=dast \
             --require-zap-auth \
-            --target-url=http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:8080
+            --target-url=http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:18080
 
       - name: K8s manifest security — Checkov
         uses: bridgecrewio/checkov-action@v12

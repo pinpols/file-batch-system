@@ -47,6 +47,13 @@ consoleApi:
   realtime:
     replayMaxEntries: 50000
     replayTtl: "48h"
+  # P0-5 (pre-launch audit 2026-05-18)：Spring lazy-init 端口 bind 晚于 livenessProbe initialDelay
+  # 20s + 18 * 10s = 200s 窗口给冷启动；HPA 扩容场景频繁触发,无 startupProbe 必 CrashLoop。
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18080}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
   ingress:
     enabled: true
     className: "nginx"
@@ -63,8 +70,21 @@ consoleApi:
         hosts:
           - batch-console.example.com
 
+# P0-5: trigger 在 base values 有 livenessProbe 但缺 startupProbe,prod 补齐
+trigger:
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18081}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
+
 orchestrator:
   replicaCount: 2
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18082}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
 
 workerImport:
   replicaCount: 3
@@ -73,6 +93,11 @@ workerImport:
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18083}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
 
 workerExport:
   replicaCount: 3
@@ -81,6 +106,11 @@ workerExport:
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18084}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
 
 workerProcess:
   replicaCount: 3
@@ -89,6 +119,11 @@ workerProcess:
     minReplicas: 2
     maxReplicas: 8
     targetCPUUtilizationPercentage: 70
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18086}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
 
 workerDispatch:
   replicaCount: 2
@@ -97,5 +132,10 @@ workerDispatch:
     minReplicas: 2
     maxReplicas: 6
     targetCPUUtilizationPercentage: 70
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18085}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
 
 javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.profiles.active=prod"
