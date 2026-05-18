@@ -59,4 +59,22 @@ public class ConsoleMetaController {
       @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(queryService.bizTypes(tenantId));
   }
+
+  /**
+   * Pipeline 9 stages 白名单（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 一致）。 用于 FE
+   * PipelineDefinitionList 步骤编辑器把 stageCode 改成下拉选择。
+   */
+  @GetMapping("/pipeline-stages")
+  public CommonResponse<Map<String, List<String>>> pipelineStages() {
+    return responseFactory.success(queryService.pipelineStages());
+  }
+
+  /**
+   * step_registry 已注册 impl_code 白名单。传 module（IMPORT / EXPORT / PROCESS / DISPATCH）按模块过滤； 缺省返回全部。
+   */
+  @GetMapping("/step-impls")
+  public CommonResponse<List<String>> stepImpls(
+      @RequestParam(value = "module", required = false) String module) {
+    return responseFactory.success(queryService.stepImpls(module));
+  }
 }

@@ -14,7 +14,7 @@ public class JdbcMappedImportSecurityProperties {
 
   /**
    * A-3.5：严格幂等模式。开启后 {@code jdbc_mapped_import} 模板必须声明 {@code conflictColumns}， 否则 {@code
-   * JdbcMappedImportSpec.parse} 抛 IllegalArgumentException 拒绝加载。
+   * JdbcMappedImportSpec.parse} 抛 WorkerConfigException 拒绝加载。
    *
    * <p><b>默认 false</b>（兼容模式），配合 {@code GenericJdbcMappedImportLoadPlugin} 输出 {@code
    * idempotency=OFF} WARN 日志让运维扫出"未开幂等"模板；逐个补 conflict_columns 后可在生产 profile 把 {@code

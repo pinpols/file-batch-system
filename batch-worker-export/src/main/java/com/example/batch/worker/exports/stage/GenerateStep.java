@@ -1,6 +1,7 @@
 package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
@@ -125,10 +126,11 @@ public class GenerateStep implements ExportStageStep {
       SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ex);
 
       deleteQuietly(generatedFile);
+      boolean configError = ex instanceof WorkerConfigException;
       return ExportStageResult.failure(
           stage(),
-          "EXPORT_GENERATE_FAILED",
-          "error.export.generate.failed",
+          configError ? "EXPORT_GENERATE_CONFIG_INVALID" : "EXPORT_GENERATE_FAILED",
+          configError ? "error.export.generate.config_invalid" : "error.export.generate.failed",
           new Object[] {ex.getMessage()},
           ex.getMessage(),
           objectMapper);

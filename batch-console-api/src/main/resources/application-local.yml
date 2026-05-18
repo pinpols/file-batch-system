@@ -74,6 +74,52 @@ batch:
       session-state-ttl: P30D
       # R7-A1-P2：本地 HTTP 调试关掉 cookie Secure（默认 true，生产 HTTPS 强制）。
       cookie-secure: false
+      # 本地固定 RSA 密钥对：默认 ConsoleLoginKeyPairService 启动期生成内存密钥,重启即变,
+      # FE localStorage 缓存的公钥会失效 → 触发 error.auth.encryption_failed。
+      # 这里给本地写死一对仅 dev 用的 keypair,重启后 FE 缓存仍然有效（fp 不变）。
+      # 生产由 Helm Secret 注入 BATCH_CONSOLE_LOGIN_ENCRYPTION_{PRIVATE,PUBLIC}_KEY_PEM 覆盖。
+      login-encryption:
+        enabled: true
+        required: false
+        private-key-pem: |
+          -----BEGIN PRIVATE KEY-----
+          MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCtCt/Vh3R2LYAO
+          /CLL2HF9vuosXeDUsI7E+RzsoadgL8otEIkzRj8tJurZhXVIeJK0KeVwgM5CLqrn
+          fJYtxN4FTLbNemUOmyM7DHyMm8WQOW9E+XBQjDUgikbWZTr7oKnA9d1dwkyE/TGn
+          9fsERhExIKrxxdVhZYtsPXNyZstXZyG8WBVH8UkDZK4vJ0ceJLAQUrCO2u50J7ub
+          zpMpeo/8qnhvJqfHgaMzdMHvF6ivc6dUmyvwzKUKhDyGhxTuxmQbdapjBZuCRqGo
+          1G6HLy91qVl6fk3s+cy7R4GhnIaMRyvOFBqV03HfURx7PyZiC6U0WCwKU0gw6Bhu
+          KnkbbpA7AgMBAAECggEAEU/HseiRxarqp1UhNAyM2hwp+FNSBWU+e0VC2AeaI5zU
+          WKrRVxBdjKpaj3VzFNN/NcgFPLqeJ+/cSDlmGuEZpyUUGr12c74gia1HnpeM7c9Z
+          KujbjCtiu0UqLhPFkVvy76uJQHKKTjm4aInK2ZQa7zPJ9lMo9EwA5UzGinjvOeic
+          mIrfKDs1wf197V7OKGHaeDjV1KwjMhEx90KWTkJLcI4bs+FO4+uR8cFDUt+/FLvU
+          03VsMGncKjJVht3tsePFkNH7R869y5B8JLcbf9hso/RS41R5ogKoBH1LD4UpnjPr
+          kFnh8v++NigUVfrmqVS25yL7m0PoNF8gd4EB/N/EkQKBgQDpVi5nU58vvRpG12u9
+          Lo84eAlWYMHC/x4oR5a89QEZSglSxGdQHN1lb3eQf310TYKwLPcZD7I99jtN9+vC
+          qWZCApz9wsg26MAgepAxPovUbrMVmVO+xuHU/S+3uCnpIh6XLe86Byjkrwy/JLs9
+          IlvsT0JQ1jXk49z5Cv5VfpSv0QKBgQC92YDwEsz5duRmuS4sq0YYEVqWsypp0u0I
+          O2wdn+xJtDp8uAC7jgrgfk4Dfm/SojaPrHaKjy8w8Nn05OD+wqdGe8391CZLMFie
+          TPdA27R1OzS0YeJYs2gRY7rq7pLNYxIAhDWTqY+VI17qZ/CRhk32oZSlaLpK1AeE
+          aWuvfy+uSwKBgBjNNkV5V/RFD2P0Rdln94UzDRsHUdEeOOBjK5yOFj3P5snLYofb
+          aZT8kiLjyjvweTGstd8OEg4P/CG/dmnMg7gEexdl+s4LU1Cgdm8ljMtZsONc1s/y
+          Z9Kxzr6ibqH/JG1BTqpGVIxqJtqyVsyauFaX3h6lhjj8F2LJTltcBwXhAoGBAIj8
+          /d29IyxKjspUiq3utDg/pWciRtNvQFv1TLEfqUcRhjZiKx0qhEyytqYswJFzPP10
+          y2B1qu6cjBj6YiNR35OrV9r1DuCoNPmcvbiOD+ubWg9ipgmtAsWxebl1hnYvK1k2
+          DNbMve82Q5HOiDbpey4gL3sfU3UVA4uW6f4LPyN7AoGAfDz7lObcCM52Gm5DTSxi
+          +VTX60DmFjqftazYIrBbeynzFhyO9P2XLRwkAFm+2wkR0IGDAr8XYDlje1FzV2D+
+          kOEpUX0yWcj7XfnR9EmTj05GpugnmtWM6nfgAKz7tsC6vhHZN1NdmUw3pAXlVjm/
+          pXLFojYNzdlaXsgTtORdhCI=
+          -----END PRIVATE KEY-----
+        public-key-pem: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArQrf1Yd0di2ADvwiy9hx
+          fb7qLF3g1LCOxPkc7KGnYC/KLRCJM0Y/LSbq2YV1SHiStCnlcIDOQi6q53yWLcTe
+          BUy2zXplDpsjOwx8jJvFkDlvRPlwUIw1IIpG1mU6+6CpwPXdXcJMhP0xp/X7BEYR
+          MSCq8cXVYWWLbD1zcmbLV2chvFgVR/FJA2SuLydHHiSwEFKwjtrudCe7m86TKXqP
+          /Kp4byanx4GjM3TB7xeor3OnVJsr8MylCoQ8hocU7sZkG3WqYwWbgkahqNRuhy8v
+          dalZen5N7PnMu0eBoZyGjEcrzhQaldNx31Ecez8mYgulNFgsClNIMOgYbip5G26Q
+          OwIDAQAB
+          -----END PUBLIC KEY-----
     ai:
       enabled: false
       model: gpt-4o-mini
