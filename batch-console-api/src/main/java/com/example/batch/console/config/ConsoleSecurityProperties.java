@@ -1,11 +1,15 @@
 package com.example.batch.console.config;
 
 import com.example.batch.console.support.auth.ConsoleRoles;
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.core.env.Environment;
 
 /**
  * Console-API 安全配置（{@code batch.console.security}）。
@@ -67,4 +71,32 @@ public class ConsoleSecurityProperties {
    * 暴露 token，没有强制约束。
    */
   private boolean cookieSecure = true;
+
+  @Autowired(required = false)
+  private transient Environment environment;
+
+  // 与 BatchSecurityProperties 对齐的 prod-like profile 列表。
+  private static final Set<String> PROD_LIKE_PROFILES =
+      Set.of("prod", "production", "staging", "uat", "preprod", "pre-prod", "pre-production");
+
+  /**
+   * P0-1 (pre-launch audit 2026-05-18)：prod-like profile 下禁止 {@code enabled=false}。
+   *
+   * <p>未加守护前 Helm values 误改 {@code batch.console.security.enabled=false} 即可裸奔 —— filter 短路放行所有
+   * /api/console/**，JWT / bypass / SSE 全跳过。
+   */
+  @PostConstruct
+  void validateEnabledInProdProfile() {
+    if (environment == null || enabled) {
+      return;
+    }
+    for (String profile : environment.getActiveProfiles()) {
+      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase())) {
+        throw new IllegalStateException(
+            "FATAL: batch.console.security.enabled=false 在 prod-like profile ('"
+                + profile
+                + "') 下被禁止。如需联调请用 batch.security.bypass-mode 单一开关。");
+      }
+    }
+  }
 }
