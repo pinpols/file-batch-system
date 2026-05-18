@@ -85,4 +85,13 @@ public class FileTemplateUpdateRequest {
 
   @Size(max = 512)
   private String description;
+
+  // V29 引入的 plugin ref 字段。之前 DTO 未暴露 → FE/API 无法更新 → 部分 e2e
+  // 种子租户(如 ta)的 IMPORT 模板 load_target_ref 残缺,worker-import 报
+  // "jdbc_mapped_import spec missing"。补字段并通过 Service 透传。
+  @Size(max = 128)
+  private String loadTargetRef;
+
+  @Size(max = 128)
+  private String exportDataRef;
 }
