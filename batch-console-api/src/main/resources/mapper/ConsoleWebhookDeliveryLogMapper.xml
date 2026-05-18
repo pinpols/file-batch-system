@@ -49,10 +49,23 @@
         )
     </insert>
 
+    <select id="insertReturningId" resultType="long">
+        insert into batch.webhook_delivery_log (
+            tenant_id, subscription_id, event_type, payload_json, http_status,
+            response_body, delivery_status, attempt, next_retry_at
+        ) values (
+            #{p.tenantId}, #{p.subscriptionId}, #{p.eventType},
+            cast(#{p.payloadJson} as jsonb),
+            #{p.httpStatus}, #{p.responseBody}, #{p.deliveryStatus},
+            #{p.attempt}, #{p.nextRetryAt}
+        )
+        returning id
+    </select>
+
     <select id="findEligibleRetries" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
           from batch.webhook_delivery_log
-         where delivery_status = 'EXHAUSTED'
+         where delivery_status in ('PENDING', 'EXHAUSTED')
            and next_retry_at is not null
            and next_retry_at &lt;= #{now}
          order by next_retry_at asc
@@ -71,7 +84,7 @@
         update batch.webhook_delivery_log
            set next_retry_at = null
          where id = #{id}
-           and delivery_status = 'EXHAUSTED'
+           and delivery_status in ('PENDING', 'EXHAUSTED')
            and next_retry_at is not null
     </update>
 
@@ -90,6 +103,7 @@
            set attempt        = #{attempt},
                http_status    = #{httpStatus},
                response_body  = #{responseBody},
+               delivery_status = 'EXHAUSTED',
                next_retry_at  = #{nextRetryAt}
          where id = #{id}
     </update>
