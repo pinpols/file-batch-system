@@ -47,6 +47,8 @@ public class ConsoleLoginService {
 
   public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
     Guard.require(request != null, "login request is required");
+    Guard.requireText(request.getUsername(), "username is required");
+    Guard.requireText(request.getPassword(), "password is required");
     // 用户名全局唯一，直接按 username 查找，租户从账号记录中获取
     ConsoleUserAccount account =
         userAccountService
