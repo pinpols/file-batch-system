@@ -420,3 +420,50 @@ DispatchCommand
 2. 生产 Redis/Kafka/PostgreSQL/MinIO 密钥由 Secret 管理，不从默认值继承。
 3. 首批灰度只开核心批量链路；Push/Webhook 若未整改，功能开关关闭或标注 best-effort。
 4. 上线当天重点看 outbox backlog、worker lease renew failure、worker report outbox give_up、webhook dropped/failed、console 4xx/5xx。
+
+## 6. 附录：4 路并行审计 21 项 finding 处置(原 pre-launch-backend-deep-scan 折叠)
+
+2026-05-18 14:14 在本报告之外另启了 4 路并行子 agent(安全/数据/异步/部署),独立交叉
+审计同一 commit,共得 21 项 finding。该结果与本报告 §1/§2 互补,关注点更侧重 backend
+代码 hot-path(filter / @Async / SSE / Mapper / @Timed / GIVE_UP 告警 / Hikari pool)。
+为单一权威源,fold 入本节,原 `pre-launch-backend-deep-scan-2026-05-18.md` 删除。
+
+### 6.1 处置一览
+
+| # | 类别 | 状态 | commit / 说明 |
+|---|---|---|---|
+| P0-1 | 安全 | ✅ 修 | `ConsoleSecurityProperties` @PostConstruct prod 守护拦截 `enabled=false`,与 `BatchSecurityProperties.bypass-mode` 守护对齐 |
+| P0-2 | 数据 | ⏭ 接受风险 | V124 已部署 + fresh prod 空表 → runbook §9 规则已存(`docs/runbook/db-migration-checklist.md`) |
+| P0-3 | 数据 | ⏭ 接受风险 | V127 同上,空表 VALIDATE 瞬时 → runbook §1 |
+| P0-4 | 异步 | ✅ 修 | `ConsoleAsyncConfiguration` + `ThreadPoolTaskExecutor("pushTaskExecutor")`(core=4/max=16/queue=200/CallerRunsPolicy),`@Async` 全部显式绑定 executor |
+| P0-5 | 部署 | ✅ 修 | `values-prod.yaml` 7 个模块加 `startupProbe`(20s + 18×10s = 200s 窗口);trigger 单独补一节 |
+| P0-6 | CI | ✅ 修 | `staging-gate.yml` `BATCH_OBSERVABILITY_BASE_URLS` 端口 8080/8082 → 18080/18082;DAST `--target-url` 同步 |
+| P1-1 | 安全 | ✅ 修 | `ConsoleAuthTokenResponse#withoutToken()` + `@JsonInclude(NON_NULL)`,login/token 响应 body 不再带 accessToken;OpenAPI schema 同步标记 nullable + 移出 required |
+| P1-2 | 部署 | ✅ 修 | `secret.yaml` 加 length ≥ 16 守卫(`required` + `len` 双重),与 `BatchSecurityProperties.MIN_SECRET_LENGTH` 对齐;helm template 短密钥直接 fail |
+| P1-3/4 | 数据 | ⏭ 接受风险 | 同 P0-2/P0-3,空表 prod cutover 无锁竞争 |
+| P1-5 | 异步 | ✅ 修 | `ConsoleRealtimeProperties.maxSubscriptions=1000` + `emitterTimeout=30m`;hub 加 503 上限守卫 + 新 i18n key `error.realtime.subscription_limit_exceeded`(en/zh) |
+| P1-6 | 异步 | ✅ 修 | `TriggerOutboxRelay` GIVE_UP 分支补 `log.error`(attempts/topic/error),配套 Prometheus 告警规则 `increase(batch_trigger_outbox_give_up_total[5m]) > 0` |
+| P1-7 | 异步 | ⏭ 误报 | `OrchestratorKafkaConsumerConfiguration:97` 已显式 `DefaultErrorHandler` + `addNotRetryableExceptions(BizException, IllegalArgumentException)`,审计漏看 |
+| P1-8 | 部署 | ✅ 修 | `configmap.yaml` 补 `BATCH_CONSOLE_PRIMARY_POOL` / `BATCH_CONSOLE_REPLICA_POOL`,`values.yaml` 暴露 `consoleApi.primaryPool/replicaPool`(默认 16+16) |
+| P1-9 | 监控 | ✅ 修 | `DefaultTaskOutcomeService.applyTaskOutcome` 加 `@Timed("batch.task.report")`,与 CLAIM 路径 `@Timed` 对称,Grafana REPORT 延时 panel 取到数据 |
+| P1-10 | 安全 | ✅ 修 | `WorkflowDefinitionMapper.xml` SQL `where tenant_id = #{tenantId}` 强制非可选;`WorkflowDefinitionQuery` canonical ctor 拒绝 null/blank,失败前移到构造点 |
+| P2-1 | 性能 | 📝 技术债 | `DefaultWorkflowDagService` N+1 登记,触发条件 = DAG ≥ 20 节点 + 50 并发 run |
+| P2-2 | 异步 | 📝 技术债 | `ConsoleRealtimeEventHub` 心跳单线程,触发条件 = 连接数 > 200 改为全局批扫 |
+| P2-3 | 异步 | 📝 文档化 | `OutboxPollScheduler` DYNAMIC rebalance 重叠依赖业务幂等兜底,代码已注释 |
+| P2-4 | 部署 | ✅ 修 | `values-prod.yaml` 显式 `otelCollector.enabled=false` + 外部 Collector 引导注释 |
+| P2-5 | CI | ⏭ 误报 | `staging-gate` 验证 OK,无 `-Dmaven.test.skip=true` 残留 |
+
+### 6.2 关键修复 commit
+
+- `bf010e4b` fix(pre-launch): P1/P2 收尾 — tenant_id 强制 + REPORT @Timed + GIVE_UP 告警 + console pool wiring
+- `18235e55` fix(pre-launch): auth body 抹 token + SSE 订阅上限 + helm secret/probe + staging-gate 端口
+- `3d7d3554` fix(push): @Async 显式绑定 pushTaskExecutor
+- `52294884` feat(async): @Async 走有界 pushTaskExecutor + 复核报告同步
+- `203d6a35` fix(security): prod profile 守护 + push vapid public key 放行
+
+### 6.3 回归验证
+
+- `mvn compile` 全 5 模块绿
+- 测试:`ConsoleAuthControllerTest`(1) / `ConsoleAuthenticationFilterTest`(11) / `DefaultTaskOutcomeServiceTest`(4) / `TriggerOutboxRelayTest`(9) / `TriggerLaunchConsumerTest`(9) / `ConfigDriftGuardTest`(3) 全绿
+- `helm template` 7 个 startupProbe 正确渲染;短密钥(`internalSecret=tooshort`)被 length guard 拒绝 ✓
+- 全量 IT 受 worker-dispatch Testcontainers Kafka 启动超时阻塞(非业务断言),建议稳定 CI 环境重跑
