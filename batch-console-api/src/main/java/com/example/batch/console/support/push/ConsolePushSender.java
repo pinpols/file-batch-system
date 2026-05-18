@@ -79,7 +79,7 @@ public class ConsolePushSender {
   }
 
   /** 给某租户某用户全部设备推送。失败的 endpoint 自动按规则清理。 */
-  @Async
+  @Async("pushTaskExecutor")
   public void sendToUser(String tenantId, String username, PushPayload payload) {
     if (pushService == null) return;
     List<ConsolePushSubscriptionEntity> subs = repository.findByTenantAndUser(tenantId, username);
@@ -87,7 +87,7 @@ public class ConsolePushSender {
   }
 
   /** 给整个租户全部用户全部设备广播(罕用,系统级公告) */
-  @Async
+  @Async("pushTaskExecutor")
   public void broadcastToTenant(String tenantId, PushPayload payload) {
     if (pushService == null) return;
     List<ConsolePushSubscriptionEntity> subs = repository.findByTenant(tenantId);
