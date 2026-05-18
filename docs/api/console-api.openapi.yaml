@@ -10288,9 +10288,15 @@ components:
       required: [id, tenantId, workerCode, workerGroup, status, heartbeatAt]
     ConsoleAuthTokenResponse:
       type: object
+      description: |
+        登录 / 换 token 响应。P1-1 (pre-launch audit 2026-05-18) 后 accessToken 不再出现在 response body,
+        token 走 HttpOnly cookie `batch_console_token`。schema 保留 accessToken 字段为可选(向后兼容旧客户端
+        反序列化),但服务端固定写 null,Jackson 配合 @JsonInclude(NON_NULL) 直接抹除该字段。
       properties:
         accessToken:
           type: string
+          nullable: true
+          description: 已废弃,固定为 null。客户端读 HttpOnly cookie batch_console_token,不再从 body 取。
         tokenType:
           type: string
           example: Bearer
@@ -10308,7 +10314,7 @@ components:
           type: array
           items:
             type: string
-      required: [accessToken, tokenType, issuedAt, expiresAt, username, tenantId, authorities]
+      required: [tokenType, issuedAt, expiresAt, username, tenantId, authorities]
     ConsoleSseTicketResponse:
       type: object
       description: 一次性 SSE ticket（5min TTL），用作 EventSource 连接的 `?ticket=` 查询参数。
