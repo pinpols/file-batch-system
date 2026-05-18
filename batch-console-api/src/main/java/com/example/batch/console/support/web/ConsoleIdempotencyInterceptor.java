@@ -8,6 +8,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Locale;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -19,7 +21,7 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * POST 幂等去重拦截器（5.5 重写版）。
+ * Console 写接口幂等去重拦截器（5.5 重写版）。
  *
  * <p>Redis key 绑定 {@code tenant + method + uri + idempotencyKey}，避免跨接口/跨租户的假冲突。
  *
@@ -36,6 +38,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
   private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
+  private static final Set<String> MUTATING_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
   private static final String KEY_PREFIX = "console:idempotency:";
   private static final String PENDING = "PENDING";
   private static final String DONE = "DONE";
@@ -70,7 +73,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
       throws IOException {
 
-    if (!"POST".equalsIgnoreCase(request.getMethod())) {
+    String method = request.getMethod().toUpperCase(Locale.ROOT);
+    if (!MUTATING_METHODS.contains(method)) {
       return true;
     }
 
@@ -97,7 +101,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         KEY_PREFIX
             + tenantId
             + ":"
-            + request.getMethod()
+            + method
             + ":"
             + request.getRequestURI()
             + ":"
