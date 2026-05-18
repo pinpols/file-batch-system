@@ -34,6 +34,18 @@ public class ReadReplicaProperties {
   /** quarantine 持续秒数：进入隔离期内所有读查询走主库；期满后下次请求重试从库。默认 30s。 */
   private int quarantineSeconds = 30;
 
+  /**
+   * lag-aware quarantine 阈值(秒)。从库 replay_lag 超过此值视为「连得上但数据严重过期」, 触发 quarantine。0 = 禁用 lag
+   * 检查(只看连接失败,默认 30s)。
+   *
+   * <p>背景:2026-05 本地 dev env 主从断了 11 天,旧的 connection-failure-only circuit breaker 检测不出来(replica
+   * 一直能响应,只是 replay 停滞)。
+   */
+  private int lagThresholdSeconds = 30;
+
+  /** lag 检查间隔(秒)。0 = 禁用定期 lag 检查。默认 10s。 */
+  private int lagCheckIntervalSeconds = 10;
+
   private Pool primary = new Pool();
 
   private Pool replica = new Pool();
