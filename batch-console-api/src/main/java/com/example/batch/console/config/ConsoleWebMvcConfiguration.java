@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/** 注册 {@link ConsoleIdempotencyInterceptor} 到 POST {@code /api/console/**} 路径。 */
+/** 注册 {@link ConsoleIdempotencyInterceptor} 到 Console API 路径；拦截器内部只处理写方法。 */
 @Configuration
 @RequiredArgsConstructor
 public class ConsoleWebMvcConfiguration implements WebMvcConfigurer {
