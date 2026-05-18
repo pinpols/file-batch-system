@@ -22,7 +22,7 @@
 
 ### Layer 1 — Console HTTP 拦截器(`ConsoleIdempotencyInterceptor`)
 
-**职责**:在控制层对**重复 POST 请求**做去重,只拦截"在短时间窗口内重复提交"。**不**承担最终业务幂等。
+**职责**:在控制层对**重复写请求**(POST/PUT/PATCH/DELETE)做去重,只拦截"在短时间窗口内重复提交"。**不**承担最终业务幂等。
 
 **实现要点**:
 
@@ -32,7 +32,7 @@
   - `afterCompletion` 根据 HTTP 响应:2xx → 升级 `DONE`(24h TTL,长期防重复);非 2xx → DELETE,允许调用方安全重试。
 - 失败时**显式释放**占位,不再让"业务异常 / 5xx"把 key 锁 24h。
 - Redis 不可达:fail-closed 503(与限流的 fail-open 形成对照,前者保可用,后者保安全)。
-- 仅 POST 生效;`@Idempotent` 标注的 endpoint 缺 header 直接 400。
+- 写方法(POST/PUT/PATCH/DELETE)生效,GET / HEAD / OPTIONS 直接放行;`@Idempotent` 标注的 endpoint 缺 header 直接 400。
 
 **SLA**:同 key 在 24h 内重复提交 → 第二次返回 409 `CONFLICT_DONE`(已处理)或 `CONFLICT_PENDING`(处理中)。
 
@@ -64,10 +64,10 @@
 ## 三层关系图
 
 ```
-HTTP POST + Idempotency-Key
+HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
         ↓
 ┌──────────────────────────────────────────┐
-│ Layer 1: ConsoleIdempotencyInterceptor   │  防"30s-24h 内重复 POST",scoped to (tenant+uri+method+key)
+│ Layer 1: ConsoleIdempotencyInterceptor   │  防"30s-24h 内重复写请求",scoped to (tenant+uri+method+key)
 │   ✓ 失败释放,允许安全重试                  │
 │   ✓ Redis fail-closed (503)              │
 └──────────────────────────────────────────┘
