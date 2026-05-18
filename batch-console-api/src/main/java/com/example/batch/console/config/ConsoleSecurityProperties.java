@@ -1,11 +1,11 @@
 package com.example.batch.console.config;
 
+import com.example.batch.common.config.BatchProfileSupport;
 import com.example.batch.console.support.auth.ConsoleRoles;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -116,10 +116,6 @@ public class ConsoleSecurityProperties {
   @Autowired(required = false)
   private transient Environment environment;
 
-  // 与 BatchSecurityProperties 对齐的 prod-like profile 列表。
-  private static final Set<String> PROD_LIKE_PROFILES =
-      Set.of("prod", "production", "staging", "uat", "preprod", "pre-prod", "pre-production");
-
   /**
    * P0-1 (pre-launch audit 2026-05-18)：prod-like profile 下禁止 {@code enabled=false}。
    *
@@ -128,17 +124,12 @@ public class ConsoleSecurityProperties {
    */
   @PostConstruct
   void validateEnabledInProdProfile() {
-    if (environment == null || enabled) {
+    if (enabled || !BatchProfileSupport.isProductionProfile(environment)) {
       return;
     }
-    for (String profile : environment.getActiveProfiles()) {
-      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase())) {
-        throw new IllegalStateException(
-            "FATAL: batch.console.security.enabled=false 在 prod-like profile ('"
-                + profile
-                + "') 下被禁止。如需联调请用 batch.security.bypass-mode 单一开关。");
-      }
-    }
+    throw new IllegalStateException(
+        "FATAL: batch.console.security.enabled=false 在 prod-like profile 下被禁止。"
+            + "如需联调请用 batch.security.bypass-mode 单一开关。");
   }
 
   /**
@@ -147,17 +138,7 @@ public class ConsoleSecurityProperties {
    */
   @PostConstruct
   void validateLoginEncryptionInProdProfile() {
-    if (environment == null) {
-      return;
-    }
-    boolean prodLike = false;
-    for (String profile : environment.getActiveProfiles()) {
-      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase())) {
-        prodLike = true;
-        break;
-      }
-    }
-    if (!prodLike) {
+    if (!BatchProfileSupport.isProductionProfile(environment)) {
       return;
     }
     if (!loginEncryption.isEnabled()) {

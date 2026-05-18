@@ -97,20 +97,7 @@ public class BatchSecurityProperties {
     }
   }
 
-  // 与 prod 同等严格度的 profile 列表：staging / uat / preprod 都不允许 bypass-mode=true
-  // 也不允许默认密钥占位符，避免预生产环境 role-escalation。
-  private static final Set<String> PROD_LIKE_PROFILES =
-      Set.of("prod", "production", "staging", "uat", "preprod", "pre-prod", "pre-production");
-
   private boolean isProductionProfile() {
-    if (environment == null) {
-      return false;
-    }
-    for (String profile : environment.getActiveProfiles()) {
-      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase())) {
-        return true;
-      }
-    }
-    return false;
+    return BatchProfileSupport.isProductionProfile(environment);
   }
 }

@@ -12,6 +12,8 @@ import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.SseTicketService;
+import com.example.batch.console.support.auth.ConsoleJwtService;
+import com.example.batch.console.support.auth.ConsoleLoginKeyPairService;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
@@ -45,7 +47,9 @@ class ConsoleAuthControllerTest {
                     authApplicationService,
                     new ConsoleResponseFactory(requestMetadataResolver),
                     Mockito.mock(SseTicketService.class),
-                    securityProperties))
+                    securityProperties,
+                    Mockito.mock(ConsoleJwtService.class),
+                    Mockito.mock(ConsoleLoginKeyPairService.class)))
             .build();
   }
 
