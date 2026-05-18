@@ -1,5 +1,6 @@
 package com.example.batch.console.support.auth;
 
+import com.example.batch.common.config.BatchProfileSupport;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
@@ -34,6 +35,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.stereotype.Service;
@@ -71,10 +73,6 @@ public class ConsoleJwtService {
   private static final String CLAIM_JTI = "jti";
   private static final String CLAIM_IP_HASH = "ipHash";
   private static final String CLAIM_UA_HASH = "uaHash";
-
-  // 与 BatchSecurityProperties.PROD_LIKE_PROFILES 对齐：staging / uat / preprod 也强制校验密钥占位符
-  private static final Set<String> PROD_LIKE_PROFILES =
-      Set.of("prod", "production", "staging", "uat", "preprod", "pre-prod", "pre-production");
 
   private final ConsoleSecurityProperties properties;
   private final ConsoleSessionRegistry sessionRegistry;
@@ -123,22 +121,16 @@ public class ConsoleJwtService {
   private JwtDecoder buildDecoder(SecretKey key) {
     NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-    java.time.Duration skew = properties.getJwtClockSkew();
+    Duration skew = properties.getJwtClockSkew();
     if (skew == null || skew.isNegative()) {
       skew = Duration.ofMinutes(1);
     }
-    decoder.setJwtValidator(
-        new org.springframework.security.oauth2.jwt.JwtTimestampValidator(skew));
+    decoder.setJwtValidator(new JwtTimestampValidator(skew));
     return decoder;
   }
 
   private boolean isProductionProfile() {
-    for (String profile : environment.getActiveProfiles()) {
-      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase(Locale.ROOT))) {
-        return true;
-      }
-    }
-    return false;
+    return BatchProfileSupport.isProductionProfile(environment);
   }
 
   /** 签发访问令牌及过期时间。 */
