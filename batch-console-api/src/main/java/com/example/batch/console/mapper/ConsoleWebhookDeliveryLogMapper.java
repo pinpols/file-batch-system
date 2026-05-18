@@ -23,7 +23,9 @@ public interface ConsoleWebhookDeliveryLogMapper {
 
   void insert(@Param("p") WebhookDeliveryLogInsertParam p);
 
-  /** Relay 候选扫描：取 EXHAUSTED 且到期需重投的行，{@code FOR UPDATE SKIP LOCKED} 防止多 relay 实例抢同一批。 */
+  Long insertReturningId(@Param("p") WebhookDeliveryLogInsertParam p);
+
+  /** Relay 候选扫描：取 PENDING/EXHAUSTED 且到期需投递的行，{@code FOR UPDATE SKIP LOCKED} 防止多 relay 实例抢同一批。 */
   List<WebhookDeliveryLogEntity> findEligibleRetries(
       @Param("now") Instant now, @Param("limit") int limit);
 

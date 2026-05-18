@@ -34,8 +34,8 @@ import org.springframework.stereotype.Component;
  * <p>循环步骤(每轮持 ShedLock 串行,多 console-api 实例间互斥):
  *
  * <ol>
- *   <li>{@code findEligibleRetries} 拿一批 EXHAUSTED + {@code next_retry_at <= now()} 的行 (FOR UPDATE
- *       SKIP LOCKED 防多实例重发)
+ *   <li>{@code findEligibleRetries} 拿一批 PENDING/EXHAUSTED + {@code next_retry_at <= now()} 的行 (FOR
+ *       UPDATE SKIP LOCKED 防多实例重发)
  *   <li>逐行 {@code claimForRetry}(CAS 把 next_retry_at 置 null,失败跳过)
  *   <li>反序列化 payload + 加载 subscription → {@link WebhookDispatcher#attemptDelivery} 单次同步重投
  *   <li>成功 → {@code markRetrySuccess};失败且 attempt 未达上限 → {@code markRetryFailure} 退避后再 schedule;
