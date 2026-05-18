@@ -21,6 +21,16 @@
         where id = #{id}
     </select>
 
+    <select id="selectByCalendarIdAndId" resultType="map">
+        select
+            id, calendar_id as "calendarId", biz_date as "bizDate",
+            day_type as "dayType", holiday_name as "holidayName",
+            description, created_at as "createdAt", updated_at as "updatedAt"
+        from batch.calendar_holiday
+        where calendar_id = #{calendarId}
+          and id = #{id}
+    </select>
+
     <!-- bizDate 入参 String,PG date 列要求显式 cast::date,否则 "column biz_date is of type date" -->
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.calendar_holiday (
@@ -47,6 +57,7 @@
             description = #{description},
             updated_at = current_timestamp
         where id = #{id}
+          and calendar_id = #{calendarId}
     </update>
 
     <delete id="deleteByCalendarId">
@@ -56,5 +67,11 @@
 
     <delete id="deleteById">
         delete from batch.calendar_holiday where id = #{id}
+    </delete>
+
+    <delete id="deleteByCalendarIdAndId">
+        delete from batch.calendar_holiday
+         where calendar_id = #{calendarId}
+           and id = #{id}
     </delete>
 </mapper>
