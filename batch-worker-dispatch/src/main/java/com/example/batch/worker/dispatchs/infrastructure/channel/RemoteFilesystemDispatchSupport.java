@@ -17,14 +17,12 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -37,6 +35,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
  * 远程文件系统派发的静态工具类，封装 NAS、OSS、SFTP、SMTP（EMAIL）、HTTP 五种渠道的 文件上传（dispatch*）与连通性探测（probe*）逻辑。
@@ -374,26 +375,28 @@ final class RemoteFilesystemDispatchSupport {
       if (!Texts.hasText(endpoint)) {
         return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
       }
-      // S-2.6: resolve-then-validate — 校验目标 IP 不在受限网段
+      // S-2.6: resolve-then-connect — 校验目标 IP 后把 HTTP 客户端 DNS 钉到该地址,
+      // 与真实 API/API_PUSH dispatch 的 SSRF 防护保持一致。
+      OkHttpClient client =
+          new OkHttpClient.Builder()
+              .connectTimeout(Duration.ofSeconds(5))
+              .readTimeout(Duration.ofSeconds(5))
+              .build();
       if (dnsGuardEnabled) {
         String probeHost = URI.create(endpoint).getHost();
-        DnsResolveGuard.resolveAndValidate(probeHost);
+        var resolved = DnsResolveGuard.resolveAndValidate(probeHost);
+        client = client.newBuilder().dns(hostname -> List.of(resolved)).build();
       }
-      HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(endpoint))
-              .timeout(Duration.ofSeconds(5))
-              .method("HEAD", HttpRequest.BodyPublishers.noBody())
-              .build();
-      HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
-      int status = response.statusCode();
-      if (status >= 200 && status < 500) {
+      Request request = new Request.Builder().url(endpoint).head().build();
+      try (Response response = client.newCall(request).execute()) {
+        int status = response.code();
+        if (status >= 200 && status < 500) {
+          return new DispatchChannelProbeResult(
+              true, "http probe ok (status=" + status + ")", endpoint);
+        }
         return new DispatchChannelProbeResult(
-            true, "http probe ok (status=" + status + ")", endpoint);
+            false, "http probe failed (status=" + status + ")", endpoint);
       }
-      return new DispatchChannelProbeResult(
-          false, "http probe failed (status=" + status + ")", endpoint);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 

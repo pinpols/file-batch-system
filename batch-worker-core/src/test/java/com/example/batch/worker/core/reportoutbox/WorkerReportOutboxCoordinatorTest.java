@@ -82,7 +82,7 @@ class WorkerReportOutboxCoordinatorTest {
           new HttpTaskExecutionClient(
               httpProps,
               new BatchSecurityProperties(),
-              jsonRestClientBuilder(),
+              restClientBuilderProvider(),
               new MockEnvironment(),
               null,
               coordinatorProvider,
@@ -126,6 +126,30 @@ class WorkerReportOutboxCoordinatorTest {
             b ->
                 b.configureMessageConvertersList(
                     converters -> converters.add(0, new JacksonJsonHttpMessageConverter())));
+  }
+
+  private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {
+    return new ObjectProvider<>() {
+      @Override
+      public RestClient.Builder getObject(Object... args) {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getObject() {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getIfAvailable() {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getIfUnique() {
+        return jsonRestClientBuilder();
+      }
+    };
   }
 
   private static TaskExecutionReport report() {
