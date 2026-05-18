@@ -100,16 +100,42 @@ public class ConsoleMetaQueryService {
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleQueryCacheService cacheService;
   private final MessageSource messageSource;
+  private final com.example.batch.console.mapper.StepRegistryQueryMapper stepRegistryQueryMapper;
 
   public ConsoleMetaQueryService(
       ConsoleMetaQueryMapper repository,
       ConsoleTenantGuard tenantGuard,
       ConsoleQueryCacheService cacheService,
-      MessageSource messageSource) {
+      MessageSource messageSource,
+      com.example.batch.console.mapper.StepRegistryQueryMapper stepRegistryQueryMapper) {
     this.repository = repository;
     this.tenantGuard = tenantGuard;
     this.cacheService = cacheService;
     this.messageSource = messageSource;
+    this.stepRegistryQueryMapper = stepRegistryQueryMapper;
+  }
+
+  /**
+   * Pipeline 固定 9 stages 按 jobType 分组（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 保持一致；该
+   * Map 是导入校验白名单的事实源）。
+   */
+  private static final Map<String, List<String>> PIPELINE_STAGES =
+      Map.of(
+          "IMPORT", List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
+          "EXPORT", List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
+          "PROCESS", List.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
+          "DISPATCH", List.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
+
+  public Map<String, List<String>> pipelineStages() {
+    return PIPELINE_STAGES;
+  }
+
+  public List<String> stepImpls(String module) {
+    if (module == null || module.isBlank()) {
+      return stepRegistryQueryMapper.selectAllImplCodes();
+    }
+    return stepRegistryQueryMapper.selectImplCodesByModule(
+        module.toUpperCase(java.util.Locale.ROOT));
   }
 
   @SuppressWarnings("unchecked")

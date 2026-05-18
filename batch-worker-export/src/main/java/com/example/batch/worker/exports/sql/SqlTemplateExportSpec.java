@@ -1,5 +1,6 @@
 package com.example.batch.worker.exports.sql;
 
+import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
@@ -27,7 +28,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
   public static SqlTemplateExportSpec parse(
       Map<String, Object> templateConfig, ObjectMapper objectMapper) {
     if (templateConfig == null || templateConfig.isEmpty()) {
-      throw new IllegalArgumentException("template config missing");
+      throw new WorkerConfigException("template config missing");
     }
     String detailSql =
         textValue(
@@ -37,7 +38,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
                 templateConfig.get("detail_query_sql"),
                 templateConfig.get("detailQuerySql")));
     if (!Texts.hasText(detailSql)) {
-      throw new IllegalArgumentException("default_query_sql is required for sql_template_export");
+      throw new WorkerConfigException("default_query_sql is required for sql_template_export");
     }
 
     Map<String, Object> schemaMap = toMap(templateConfig.get("query_param_schema"), objectMapper);

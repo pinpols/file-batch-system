@@ -141,6 +141,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuthTokenResponse'
+  /api/console/auth/public-key:
+    get:
+      tags: [Auth]
+      summary: Get login encryption public key
+      operationId: getConsoleLoginPublicKey
+      security: []
+      description: |
+        Returns RSA-OAEP-256 public key metadata for encrypted login payloads.
+        When login encryption is disabled, the backend returns 404 and the frontend may use plain login.
+      responses:
+        '200':
+          description: Login encryption public key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
+        '404':
+          description: Login encryption is unavailable
   /api/console/auth/token:
     post:
       tags: [Auth]
@@ -3527,6 +3545,79 @@ paths:
       responses:
         '200':
           description: Cloned job definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/jobs/bundle/create:
+    post:
+      tags: [Jobs]
+      summary: Create job bundle
+      description: Creates one job definition and optional related workflow/file/alert/resource config in one backend transaction.
+      operationId: createJobBundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobBundleCreateRequest'
+      responses:
+        '200':
+          description: Bundle creation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/jobs/bundle/export:
+    get:
+      tags: [Jobs]
+      summary: Export job bundle
+      description: Exports one job definition and directly related config as a reusable bundle payload.
+      operationId: exportJobBundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: jobCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bundle export result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/jobs/bundle/import:
+    post:
+      tags: [Jobs]
+      summary: Import job bundle
+      description: Imports one job bundle into one or more target tenants in one backend transaction.
+      operationId: importJobBundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobBundleImportRequest'
+      responses:
+        '200':
+          description: Bundle import result
           content:
             application/json:
               schema:
@@ -11755,6 +11846,96 @@ components:
         "JOB" → JOB_DEFINITION / "WORKFLOW" → WORKFLOW_DEFINITION /
         "PIPELINE" → PIPELINE_DEFINITION（仅 *_DEFINITION 三类支持简写）。
         其余类型必须传完整名称。
+
+    ConfigSyncBundlePayload:
+      type: object
+      description: |
+        Reusable job/config bundle payload. All lists are optional; omitted lists are not imported.
+      properties:
+        jobDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobDefinitionSpec'
+        workflowDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowDefinitionSpec'
+        pipelineDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineDefinitionSpec'
+        fileChannels:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileChannelSpec'
+        fileTemplates:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileTemplateSpec'
+        resourceQueues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceQueueSpec'
+        batchWindows:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchWindowSpec'
+        businessCalendars:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusinessCalendarSpec'
+        quotaPolicies:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantQuotaPolicySpec'
+        alertRoutings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertRoutingSpec'
+
+    JobBundleCreateRequest:
+      type: object
+      required: [tenantId, bundle]
+      properties:
+        tenantId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        mode:
+          type: string
+          enum: [SKIP_EXISTING, UPSERT]
+          default: SKIP_EXISTING
+        dryRun:
+          type: boolean
+          default: false
+        bundle:
+          $ref: '#/components/schemas/ConfigSyncBundlePayload'
+
+    JobBundleImportRequest:
+      type: object
+      required: [tenantId, targetTenantIds, bundle]
+      properties:
+        tenantId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        targetTenantIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        mode:
+          type: string
+          enum: [SKIP_EXISTING, UPSERT]
+          default: UPSERT
+        dryRun:
+          type: boolean
+          default: false
+        bundle:
+          $ref: '#/components/schemas/ConfigSyncBundlePayload'
 
     JobDefinitionSpec:
       type: object

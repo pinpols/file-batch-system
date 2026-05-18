@@ -13,12 +13,15 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.HexFormat;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -107,7 +110,12 @@ public class ConsoleLoginKeyPairService {
       byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
 
       Cipher rsa = Cipher.getInstance(RSA_TRANSFORM);
-      rsa.init(Cipher.DECRYPT_MODE, privateKey);
+      // 显式指定 MGF1 hash = SHA-256，否则 JDK 默认 MGF1-SHA-1，与 Web Crypto
+      // RSA-OAEP(SHA-256) 不匹配，密文解不开。
+      OAEPParameterSpec oaep =
+          new OAEPParameterSpec(
+              "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
+      rsa.init(Cipher.DECRYPT_MODE, privateKey, oaep);
       byte[] aesKeyBytes = rsa.doFinal(wrappedKey);
 
       Cipher aes = Cipher.getInstance(AES_TRANSFORM);

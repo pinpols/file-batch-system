@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.exception.WorkerConfigException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,7 @@ class JdbcMappedImportSpecTest {
   @Test
   void shouldRejectMissingSpec() {
     assertThatThrownBy(() -> JdbcMappedImportSpec.parse(Map.of(), objectMapper))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(WorkerConfigException.class)
         .hasMessageContaining("jdbc_mapped_import spec missing");
   }
 

@@ -306,7 +306,7 @@ else
 fi
 
 echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
-docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILES[@]}" up -d
+docker compose --env-file "$COMPOSE_ENV_FILE" ${COMPOSE_PROFILES[@]+"${COMPOSE_PROFILES[@]}"} up -d
 
 # postgres / minio / redis / kafka-topics 相互无依赖，并发 wait 节省 5-10s
 # minio-init 依赖 minio，仍需串行于 minio healthy 之后

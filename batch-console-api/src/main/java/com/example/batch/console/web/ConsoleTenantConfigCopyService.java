@@ -136,6 +136,42 @@ public class ConsoleTenantConfigCopyService {
     return bundle;
   }
 
+  public ConfigSyncBundlePayload buildJobBundle(String sourceTenantId, String jobCode) {
+    ConfigSyncBundlePayload all = buildBundle(sourceTenantId, Set.of());
+    List<JobDefinitionSpec> jobs =
+        filter(all.getJobDefinitions(), j -> jobCode.equals(j.getJobCode()));
+    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+    bundle.setJobDefinitions(jobs);
+    if (jobs.isEmpty()) {
+      return bundle;
+    }
+
+    JobDefinitionSpec job = jobs.get(0);
+    bundle.setPipelineDefinitions(
+        filter(all.getPipelineDefinitions(), p -> jobCode.equals(p.getJobCode())));
+    bundle.setWorkflowDefinitions(
+        filter(
+            all.getWorkflowDefinitions(),
+            w ->
+                w.getNodes() != null
+                    && w.getNodes().stream().anyMatch(n -> jobCode.equals(n.getRelatedJobCode()))));
+    bundle.setResourceQueues(
+        filter(all.getResourceQueues(), q -> equalsNullable(job.getQueueCode(), q.getQueueCode())));
+    bundle.setBatchWindows(
+        filter(all.getBatchWindows(), w -> equalsNullable(job.getWindowCode(), w.getWindowCode())));
+    bundle.setBusinessCalendars(
+        filter(
+            all.getBusinessCalendars(),
+            c -> equalsNullable(job.getCalendarCode(), c.getCalendarCode())));
+    bundle.setFileTemplates(
+        filter(all.getFileTemplates(), t -> equalsNullable(job.getBizType(), t.getBizType())));
+    bundle.setFileChannels(
+        filter(all.getFileChannels(), c -> equalsNullable(job.getBizType(), c.getChannelCode())));
+    bundle.setQuotaPolicies(all.getQuotaPolicies());
+    bundle.setAlertRoutings(all.getAlertRoutings());
+    return bundle;
+  }
+
   /** 构建 10 条传输描述符。每次按需创建；方法引用是懒求值，不会在此处调用 mapper。 */
   private List<ConfigTypeTransfer<?>> typeTransfers() {
     return List.of(
@@ -557,5 +593,16 @@ public class ConsoleTenantConfigCopyService {
       return n.intValue();
     }
     return null;
+  }
+
+  private static boolean equalsNullable(String left, String right) {
+    return left != null && !left.isBlank() && left.equals(right);
+  }
+
+  private static <T> List<T> filter(List<T> source, java.util.function.Predicate<T> predicate) {
+    if (source == null || source.isEmpty()) {
+      return List.of();
+    }
+    return source.stream().filter(predicate).toList();
   }
 }

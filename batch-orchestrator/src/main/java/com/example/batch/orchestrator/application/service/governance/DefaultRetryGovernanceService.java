@@ -82,6 +82,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           "DISPATCH_PREPARE_INVALID",
           "DISPATCH_PREPARE_PARSE_FAILED",
           "EXPORT_GENERATE_NO_PAYLOAD",
+          // Worker WorkerConfigException → 模板/参数配置缺字段, 等多久也不自愈
+          "IMPORT_LOAD_CONFIG_INVALID",
+          "EXPORT_GENERATE_CONFIG_INVALID",
           "STEP_NOT_FOUND");
 
   private final RetryScheduleMapper retryScheduleMapper;

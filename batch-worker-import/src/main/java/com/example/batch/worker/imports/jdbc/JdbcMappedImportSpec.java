@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.jdbc;
 
+import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.PostgresqlJsonbTexts;
@@ -31,7 +32,7 @@ public record JdbcMappedImportSpec(
       Map<String, Object> templateConfig, ObjectMapper objectMapper) {
     Map<String, Object> root = extractJdbcMappedImport(templateConfig, objectMapper);
     if (root.isEmpty()) {
-      throw new IllegalArgumentException(
+      throw new WorkerConfigException(
           "jdbc_mapped_import spec missing (use query_param_schema.jdbcMappedImport or"
               + " jdbc_mapped_import)");
     }
@@ -40,7 +41,7 @@ public record JdbcMappedImportSpec(
     String tenantColumn = required(root, "tenantColumn");
     List<ColumnMapping> mappings = parseMappings(root.get("columnMappings"));
     if (mappings.isEmpty()) {
-      throw new IllegalArgumentException("jdbc_mapped_import.columnMappings is required");
+      throw new WorkerConfigException("jdbc_mapped_import.columnMappings is required");
     }
     List<String> conflicts = parseStringList(root.get("conflictColumns"));
     Map<String, String> system = parseSystemBindings(root.get("systemBindings"));
@@ -50,7 +51,7 @@ public record JdbcMappedImportSpec(
   private static String required(Map<String, Object> root, String key) {
     Object v = root.get(key);
     if (v == null || !Texts.hasText(String.valueOf(v))) {
-      throw new IllegalArgumentException("jdbc_mapped_import." + key + " is required");
+      throw new WorkerConfigException("jdbc_mapped_import." + key + " is required");
     }
     return String.valueOf(v).trim();
   }
@@ -159,7 +160,7 @@ public record JdbcMappedImportSpec(
   public void validateIdentifiers(Collection<String> allowedSchemas, boolean strictIdempotency) {
     validateIdentifiers(allowedSchemas);
     if (strictIdempotency && (conflictColumns == null || conflictColumns.isEmpty())) {
-      throw new IllegalArgumentException(
+      throw new WorkerConfigException(
           "jdbc-mapped-import template missing conflictColumns under strictIdempotency: "
               + "schema="
               + schema
@@ -182,7 +183,7 @@ public record JdbcMappedImportSpec(
     for (String c : conflictColumns) {
       JdbcMappedSqlValidator.requireIdentifier(c, "conflictColumn");
       if (!allCols.contains(c)) {
-        throw new IllegalArgumentException("conflictColumns must appear in tenant/mappings: " + c);
+        throw new WorkerConfigException("conflictColumns must appear in tenant/mappings: " + c);
       }
     }
     for (String dbCol : systemBindings.keySet()) {

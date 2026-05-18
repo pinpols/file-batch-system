@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage;
 
+import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.plugin.ImportLoadContext;
 import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
@@ -155,10 +156,11 @@ public class LoadStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           ex.getMessage(),
           ex);
+      boolean configError = ex instanceof WorkerConfigException;
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_LOAD_FAILED",
-          "error.import.load.failed",
+          configError ? "IMPORT_LOAD_CONFIG_INVALID" : "IMPORT_LOAD_FAILED",
+          configError ? "error.import.load.config_invalid" : "error.import.load.failed",
           new Object[] {ex.getMessage()},
           ex.getMessage(),
           objectMapper);
@@ -240,10 +242,11 @@ public class LoadStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           ex.getMessage(),
           ex);
+      boolean configError = ex instanceof WorkerConfigException;
       return ImportStageResult.failure(
           stage(),
-          "IMPORT_LOAD_FAILED",
-          "error.import.load.failed",
+          configError ? "IMPORT_LOAD_CONFIG_INVALID" : "IMPORT_LOAD_FAILED",
+          configError ? "error.import.load.config_invalid" : "error.import.load.failed",
           new Object[] {ex.getMessage()},
           ex.getMessage(),
           objectMapper);
