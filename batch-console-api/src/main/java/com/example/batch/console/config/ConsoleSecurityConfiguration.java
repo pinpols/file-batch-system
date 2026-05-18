@@ -71,6 +71,7 @@ public class ConsoleSecurityConfiguration {
                     .requestMatchers(
                         "/api/console/auth/login",
                         "/api/console/auth/logout",
+                        "/api/console/auth/public-key",
                         "/api/console/push/vapid-public-key",
                         "/console-login.html",
                         "/favicon.ico")

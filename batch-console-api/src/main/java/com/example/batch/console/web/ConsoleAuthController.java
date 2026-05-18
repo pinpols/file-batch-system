@@ -3,11 +3,13 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.SseTicketService;
 import com.example.batch.console.support.auth.ConsoleJwtService;
+import com.example.batch.console.support.auth.ConsoleLoginKeyPairService;
 import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
 import com.example.batch.console.web.response.auth.ConsoleAuthProfileResponse;
@@ -15,7 +17,6 @@ import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -42,6 +43,7 @@ public class ConsoleAuthController {
   private final SseTicketService sseTicketService;
   private final ConsoleSecurityProperties securityProperties;
   private final ConsoleJwtService jwtService;
+  private final ConsoleLoginKeyPairService loginKeyPairService;
 
   private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
 
@@ -50,13 +52,55 @@ public class ConsoleAuthController {
    *
    * <p>ADR-030 §D7：token 走 HttpOnly cookie {@code batch_console_token}。P1-1 (pre-launch audit
    * 2026-05-18) 收尾:响应 body 不再带明文 accessToken,防止 JS / XSS 读取抵消 cookie 防护。
+   *
+   * <p>2026-05-18 加密路径:FE 走 axios interceptor 用 RSA-OAEP-SHA256 + AES-256-GCM 加密 body, 此处先 decrypt
+   * 拿到 {@code {username,password}} 再走原 service。配置守护见 {@code
+   * ConsoleSecurityProperties.LoginEncryption} + prod 强制 required=true。
    */
   @PostMapping("/login")
   public CommonResponse<ConsoleAuthTokenResponse> login(
-      @Valid @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
-    ConsoleAuthTokenResponse body = authApplicationService.login(request);
+      @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
+    ConsoleLoginRequest resolved = resolveLoginRequest(request);
+    ConsoleAuthTokenResponse body = authApplicationService.login(resolved);
     response.addHeader(HttpHeaders.SET_COOKIE, buildTokenCookie(body));
     return responseFactory.success(body.withoutToken());
+  }
+
+  private ConsoleLoginRequest resolveLoginRequest(ConsoleLoginRequest request) {
+    if (request == null) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.auth.invalid_credentials");
+    }
+    boolean required = securityProperties.getLoginEncryption().isRequired();
+    if (request.isEncrypted()) {
+      String plaintext =
+          loginKeyPairService.decrypt(
+              request.getEncryptedKey(), request.getIv(), request.getCiphertext());
+      ConsoleLoginRequest decoded = JsonUtils.fromJson(plaintext, ConsoleLoginRequest.class);
+      if (decoded == null) {
+        throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
+      }
+      return decoded;
+    }
+    if (required) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_required");
+    }
+    return request;
+  }
+
+  /**
+   * 返回 RSA 公钥（PEM）供 FE 加密 login body。配 {@code
+   * batch.console.security.login-encryption.enabled=false} 时该端点返回 404,FE 走明文路径。
+   */
+  @GetMapping("/public-key")
+  public CommonResponse<Map<String, String>> publicKey() {
+    if (!securityProperties.getLoginEncryption().isEnabled()) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.auth.encryption_unavailable");
+    }
+    return responseFactory.success(
+        Map.of(
+            "algorithm", "RSA-OAEP-256",
+            "publicKey", loginKeyPairService.publicKeyPem(),
+            "fingerprint", loginKeyPairService.fingerprint()));
   }
 
   /** 为当前已认证用户签发 JWT。 */

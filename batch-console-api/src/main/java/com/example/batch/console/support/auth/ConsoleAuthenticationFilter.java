@@ -198,7 +198,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
    * controller 处理凭证校验和换发新 cookie。
    */
   private static final Set<String> PUBLIC_AUTH_PATHS =
-      Set.of("/api/console/auth/login", "/api/console/auth/logout");
+      Set.of("/api/console/auth/login", "/api/console/auth/logout", "/api/console/auth/public-key");
 
   private boolean isPublicAuthPath(HttpServletRequest request) {
     return PUBLIC_AUTH_PATHS.contains(request.getRequestURI());

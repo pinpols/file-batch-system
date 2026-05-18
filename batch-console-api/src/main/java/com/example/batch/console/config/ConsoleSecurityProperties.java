@@ -85,6 +85,34 @@ public class ConsoleSecurityProperties {
    */
   private List<String> corsAllowedOrigins = new ArrayList<>();
 
+  /**
+   * 登录请求体加密（RSA-2048 OAEP-SHA256 包装 AES-256-GCM key）。FE 加密 {@code {username,password}}, BE 解密后走原
+   * {@link com.example.batch.console.support.auth.ConsoleLoginService}。
+   *
+   * <p>双模式 + prod 守护:
+   *
+   * <ul>
+   *   <li>{@code enabled=true / required=false}（dev / local / CI 默认）—— BE 同时接受 加密 / 明文两种 body
+   *   <li>{@code enabled=true / required=true}（prod-like profile 强制）—— 仅接受加密;明文 401
+   * </ul>
+   */
+  private LoginEncryption loginEncryption = new LoginEncryption();
+
+  @lombok.Data
+  public static class LoginEncryption {
+    /** 总开关。false = /auth/public-key endpoint 不暴露,仅明文路径。 */
+    private boolean enabled = true;
+
+    /** 严格模式:true 时 BE 仅接受加密 body,明文 401;false 时两种都接受(e2e 友好)。 */
+    private boolean required = false;
+
+    /** PEM 编码 RSA 私钥;空时启动期生成内存密钥对(单实例 OK,helm 多副本需 set)。 */
+    private String privateKeyPem = "";
+
+    /** PEM 编码 RSA 公钥;若 privateKeyPem 提供则必填。 */
+    private String publicKeyPem = "";
+  }
+
   @Autowired(required = false)
   private transient Environment environment;
 
@@ -110,6 +138,36 @@ public class ConsoleSecurityProperties {
                 + profile
                 + "') 下被禁止。如需联调请用 batch.security.bypass-mode 单一开关。");
       }
+    }
+  }
+
+  /**
+   * Prod-like profile 强制 {@code loginEncryption.enabled=true} 且 {@code required=true}。 dev / local
+   * / test 下用户自由配,以保证 e2e / API direct 测试不破。
+   */
+  @PostConstruct
+  void validateLoginEncryptionInProdProfile() {
+    if (environment == null) {
+      return;
+    }
+    boolean prodLike = false;
+    for (String profile : environment.getActiveProfiles()) {
+      if (profile != null && PROD_LIKE_PROFILES.contains(profile.toLowerCase())) {
+        prodLike = true;
+        break;
+      }
+    }
+    if (!prodLike) {
+      return;
+    }
+    if (!loginEncryption.isEnabled()) {
+      throw new IllegalStateException(
+          "FATAL: batch.console.security.login-encryption.enabled=false 在 prod-like profile 下被禁止");
+    }
+    if (!loginEncryption.isRequired()) {
+      throw new IllegalStateException(
+          "FATAL: batch.console.security.login-encryption.required=false 在 prod-like profile 下被禁止"
+              + "（仅 dev / test profile 可关以兼容 API direct e2e）");
     }
   }
 }
