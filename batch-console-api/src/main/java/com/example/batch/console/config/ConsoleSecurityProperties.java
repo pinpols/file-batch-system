@@ -72,6 +72,19 @@ public class ConsoleSecurityProperties {
    */
   private boolean cookieSecure = true;
 
+  /**
+   * 是否信任反代下发的 {@code X-Forwarded-For} / {@code X-Real-IP}。默认 false（生产应让反代/Ingress 通过 PROXY protocol
+   * 或固定下发 trusted header 后再开启）。 应用直接挂公网时一旦开启，攻击者可 {@code curl -H "X-Forwarded-For: 1.2.3.4"} 轮换源 IP
+   * 绕过限流。
+   */
+  private boolean trustForwardedHeaders = false;
+
+  /**
+   * CORS 允许的 origin 白名单（{@code https://console.example.com}）。空 = 不发 CORS 头（同源场景）。 若需要跨域部署前后端,
+   * 必须显式列出来 —— 不允许通配符 {@code *} + {@code allowCredentials=true} 的组合（浏览器规范拒绝）。
+   */
+  private List<String> corsAllowedOrigins = new ArrayList<>();
+
   @Autowired(required = false)
   private transient Environment environment;
 

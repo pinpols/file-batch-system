@@ -7,10 +7,13 @@ import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.SseTicketService;
+import com.example.batch.console.support.auth.ConsoleJwtService;
 import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
 import com.example.batch.console.web.response.auth.ConsoleAuthProfileResponse;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -38,6 +41,9 @@ public class ConsoleAuthController {
   private final ConsoleResponseFactory responseFactory;
   private final SseTicketService sseTicketService;
   private final ConsoleSecurityProperties securityProperties;
+  private final ConsoleJwtService jwtService;
+
+  private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
 
   /**
    * 使用平台库中的控制台账号进行登录并签发 JWT。
@@ -63,12 +69,21 @@ public class ConsoleAuthController {
     return responseFactory.success(body.withoutToken());
   }
 
-  /** 登出：把 cookie 设置成 Max-Age=0 立即失效（前端调用此端点替代手动清 localStorage）。 */
+  /**
+   * 登出：把 cookie 设置成 Max-Age=0 立即失效（前端调用此端点替代手动清 localStorage）。
+   *
+   * <p>P0-3 (2026-05-18)：把当前 token 的 jti 加入 Redis revocation list,TTL = token 剩余生命; 防止"复制 cookie
+   * 到别处继续用"——logout 后服务端立即拒绝该 token。
+   */
   @PostMapping("/logout")
-  public ResponseEntity<Void> logout(HttpServletResponse response) {
+  public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+    String currentToken = extractTokenFromCookie(request);
+    if (currentToken != null) {
+      jwtService.revoke(currentToken);
+    }
     response.addHeader(
         HttpHeaders.SET_COOKIE,
-        ResponseCookie.from("batch_console_token", "")
+        ResponseCookie.from(CONSOLE_TOKEN_COOKIE, "")
             .httpOnly(true)
             // R7-A1-P2：与 buildTokenCookie 一致，由 cookie-secure 配置开关。
             .secure(securityProperties.isCookieSecure())
@@ -78,6 +93,20 @@ public class ConsoleAuthController {
             .build()
             .toString());
     return ResponseEntity.noContent().build();
+  }
+
+  private String extractTokenFromCookie(HttpServletRequest request) {
+    Cookie[] cookies = request.getCookies();
+    if (cookies == null) {
+      return null;
+    }
+    for (Cookie cookie : cookies) {
+      if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
+        String value = cookie.getValue();
+        return value == null || value.isBlank() ? null : value.trim();
+      }
+    }
+    return null;
   }
 
   /**

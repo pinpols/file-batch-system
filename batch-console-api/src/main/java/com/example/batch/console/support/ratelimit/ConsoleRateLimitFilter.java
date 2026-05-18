@@ -3,6 +3,7 @@ package com.example.batch.console.support.ratelimit;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleRateLimitProperties;
+import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -41,6 +42,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
   private final SlidingWindowRateLimiter rateLimiter;
   private final ConsoleRateLimitProperties properties;
   private final ConsoleSecurityResponseWriter responseWriter;
+  private final ConsoleSecurityProperties securityProperties;
 
   @Override
   protected void doFilterInternal(
@@ -105,18 +107,21 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
   }
 
   /**
-   * 解析客户端真实 IP，优先取反向代理头 {@code X-Forwarded-For} 的第一个地址， 其次取 {@code X-Real-IP}，最后取 {@code
-   * RemoteAddr}。
+   * 解析客户端真实 IP。仅当 {@code batch.console.security.trust-forwarded-headers=true} 时才信任反代下发的 {@code
+   * X-Forwarded-For} / {@code X-Real-IP}（应用挂在受信反代/Ingress 之后才该开），否则直接走 {@code RemoteAddr},防 {@code
+   * curl -H 'X-Forwarded-For: 1.2.3.4'} 伪造源 IP 绕过限流。
    */
   private String resolveClientIp(HttpServletRequest request) {
-    String xff = request.getHeader("X-Forwarded-For");
-    if (Texts.hasText(xff)) {
-      int comma = xff.indexOf(',');
-      return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-    }
-    String realIp = request.getHeader("X-Real-IP");
-    if (Texts.hasText(realIp)) {
-      return realIp.trim();
+    if (securityProperties.isTrustForwardedHeaders()) {
+      String xff = request.getHeader("X-Forwarded-For");
+      if (Texts.hasText(xff)) {
+        int comma = xff.indexOf(',');
+        return (comma > 0 ? xff.substring(0, comma) : xff).trim();
+      }
+      String realIp = request.getHeader("X-Real-IP");
+      if (Texts.hasText(realIp)) {
+        return realIp.trim();
+      }
     }
     return request.getRemoteAddr();
   }
