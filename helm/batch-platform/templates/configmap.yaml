@@ -42,6 +42,9 @@ data:
 
   # R7-A4-P0: orchestrator 限流 + DB 池规模（之前 .env.prod 写了但 Helm 漂移）。
   BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: {{ .Values.orchestrator.platformDb.maxPoolSize | default 30 | quote }}
+  # P1-8 (pre-launch audit 2026-05-18)：console 主/从库池暴露,默认 16+16 应对 2 replicas * 64 共 128 上限。
+  BATCH_CONSOLE_PRIMARY_POOL: {{ .Values.consoleApi.primaryPool | default 16 | quote }}
+  BATCH_CONSOLE_REPLICA_POOL: {{ .Values.consoleApi.replicaPool | default 16 | quote }}
   BATCH_RATE_LIMIT_ENABLED: {{ .Values.orchestrator.rateLimit.enabled | default false | quote }}
   BATCH_RATE_LIMIT_MAX_NEW_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxNewPerTenantPerMinute | default 0 | quote }}
   BATCH_RATE_LIMIT_MAX_RELEASE_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxReleasePerTenantPerMinute | default 0 | quote }}

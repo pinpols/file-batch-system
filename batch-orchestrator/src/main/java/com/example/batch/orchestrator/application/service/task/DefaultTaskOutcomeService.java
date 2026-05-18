@@ -38,6 +38,7 @@ import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.service.failure.FailureClassifier;
+import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -226,6 +227,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   @Override
   @Transactional
+  @Timed(
+      value = "batch.task.report",
+      description = "worker REPORT → orchestrator 状态机推进的端到端延时(含 lookup + 重试入队 + 父级 join)")
   public JobTaskEntity applyTaskOutcome(TaskOutcomeCommand command) {
     // 入口语义：worker report → orchestrator 在单事务内完成"任务完成 +（可选）重试入队 + 状态机推进"。
     if (command == null) {

@@ -132,6 +132,31 @@
 
 ---
 
+## 修复执行记录(2026-05-18)
+
+| # | 状态 | commit / 说明 |
+|---|---|---|
+| P0-1 | ✅ 修 | ConsoleSecurityProperties + @PostConstruct prod 守护拦截 enabled=false |
+| P0-2 | ⏭ 接受 | V124 已部署 + fresh prod 空表 → runbook §9 规则已存在 |
+| P0-3 | ⏭ 接受 | V127 同上,空表 VALIDATE 瞬时 → runbook §1 |
+| P0-4 | ✅ 修 | ConsoleAsyncConfiguration + ThreadPoolTaskExecutor "pushTaskExecutor",@Async 全部显式指定 |
+| P0-5 | ✅ 修 | values-prod.yaml 6 个模块加 startupProbe(20s+18×10s = 200s 窗口) |
+| P0-6 | ✅ 修 | staging-gate.yml 端口 8080/8082 → 18080/18082 |
+| P1-1 | ✅ 修 | ConsoleAuthTokenResponse#withoutToken() + @JsonInclude(NON_NULL),body 不再带 token |
+| P1-2 | ✅ 修 | secret.yaml 加 length ≥ 16 守卫(required + len 双重) |
+| P1-3/4 | ⏭ 接受 | 同 P0-2/P0-3 |
+| P1-5 | ✅ 修 | ConsoleRealtimeProperties.maxSubscriptions=1000 + emitterTimeout=30m,hub 加上限守卫 |
+| P1-6 | ✅ 修 | TriggerOutboxRelay GIVE_UP 补 ERROR 日志(含 attempts/topic/error) |
+| P1-7 | ⏭ 误报 | OrchestratorKafkaConsumerConfiguration:97 已显式配 DefaultErrorHandler + not-retryable |
+| P1-8 | ✅ 修 | configmap 加 BATCH_CONSOLE_PRIMARY_POOL/REPLICA_POOL,values 暴露 primaryPool/replicaPool |
+| P1-9 | ✅ 修 | DefaultTaskOutcomeService.applyTaskOutcome 加 @Timed("batch.task.report") |
+| P1-10 | ✅ 修 | WorkflowDefinitionMapper.xml tenant_id 改强制条件 + WorkflowDefinitionQuery canonical 拒绝 null/blank |
+| P2-1 | 📝 技术债 | DefaultWorkflowDagService N+1 登记,等 DAG ≥ 20 节点 + 50 并发 run 时治理 |
+| P2-2 | 📝 技术债 | ConsoleRealtimeEventHub 心跳单线程,等连接数 > 200 改为统一全局批扫 |
+| P2-3 | 📝 文档化 | OutboxPollScheduler DYNAMIC rebalance 重叠依赖业务幂等兜底,已注释 |
+| P2-4 | ✅ 修 | values-prod.yaml 显式 otelCollector.enabled=false + 文档注释 |
+| P2-5 | ⏭ 误报 | staging-gate 验证 OK,无 maven.test.skip 残留 |
+
 ## 上线 cutover 检查表
 
 - [ ] P0-1 删 `enabled` 开关或补 prod 守护

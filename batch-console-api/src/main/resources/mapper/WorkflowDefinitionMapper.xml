@@ -17,10 +17,9 @@
     <select id="selectByQuery" resultMap="WorkflowDefinitionResultMap">
         select *
         from batch.workflow_definition
-        where 1 = 1
-        <if test="tenantId != null and tenantId != ''">
-            and tenant_id = #{tenantId}
-        </if>
+        <!-- P1-10 (pre-launch audit 2026-05-18)：tenant_id 强制非可选,与 JobDefinitionMapper 对齐;
+             tenantId 为空时让 SQL 显式失败而非全表扫,杜绝防御深度漏洞。 -->
+        where tenant_id = #{tenantId}
         <if test="workflowCode != null and workflowCode != ''">
             and workflow_code like concat('%', #{workflowCode}, '%')
         </if>
@@ -45,10 +44,9 @@
     <select id="countByQuery" resultType="long">
         select count(1)
         from batch.workflow_definition
-        where 1 = 1
-        <if test="tenantId != null and tenantId != ''">
-            and tenant_id = #{tenantId}
-        </if>
+        <!-- P1-10 (pre-launch audit 2026-05-18)：tenant_id 强制非可选,与 JobDefinitionMapper 对齐;
+             tenantId 为空时让 SQL 显式失败而非全表扫,杜绝防御深度漏洞。 -->
+        where tenant_id = #{tenantId}
         <if test="workflowCode != null and workflowCode != ''">
             and workflow_code like concat('%', #{workflowCode}, '%')
         </if>
