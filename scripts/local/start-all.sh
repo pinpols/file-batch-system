@@ -46,10 +46,13 @@ export LC_ALL="$BATCH_LOCALE"
 #   UseSerialGC          本地负载小，Serial 比 G1 启动开销更低
 # （JDK 13+ 已弃用 -Xverify:none / -noverify，默认不再注入，避免告警）
 # 用户可在外部 export LOCAL_FAST_JVM_OPTS="" 禁用；JAVA_OPTS 追加在后面，同 flag 以后者为准。
-LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC}"
+LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off}"
 
-# AppCDS：dump 与 run 的 JVM 开关必须一致；指纹变化后强制重训。
-CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v2-native-access}"
+# AppCDS：JDK 25 + Spring Boot 4 下 dump/runtime 的 jdk.module.enable.native.access 状态会错位，
+# 导致 MyBatis ExceptionUtil / Spring MVC PartialMatchHelper / Tomcat RequestUtil 等内部类
+# 运行时 NoClassDefFoundError。统一关 CDS 规避；待 JDK / Spring Boot 修复后再恢复。
+SKIP_CDS="${SKIP_CDS:-1}"
+CDS_ARCHIVE_STAMP="${CDS_ARCHIVE_STAMP:-v3-share-off}"
 
 LOG_ROOT="$ROOT/logs"
 DOCKER_LOG_DIR="$LOG_ROOT/docker"
