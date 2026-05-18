@@ -282,6 +282,16 @@ public class TriggerOutboxRelay {
     } else {
       int nextAttempt = event.getPublishAttempt() + 1;
       if (nextAttempt >= Math.max(1, maxPublishAttempts)) {
+        // P1-6 (pre-launch audit 2026-05-18)：GIVE_UP = 调度请求永久丢失,P0 级业务损失。
+        // 原来只有 counter 被动监控,补 ERROR 让 oncall 日志告警直接命中。
+        // 告警规则: increase(batch_trigger_outbox_give_up_total[5m]) > 0
+        log.error(
+            "TriggerOutboxRelay GIVE_UP after {} attempts: id={} requestId={} topic={} error={}",
+            nextAttempt,
+            event.getId(),
+            event.getRequestId(),
+            event.getTopic(),
+            result.errorMessage());
         mapper.markFailed(
             event.getId(),
             OutboxPublishStatus.GIVE_UP.code(),

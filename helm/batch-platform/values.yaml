@@ -65,6 +65,10 @@ batchLocale: "C.UTF-8"
 
 consoleApi:
   replicaCount: 2
+  # P1-8 (pre-launch audit 2026-05-18)：Hikari 池大小通过 ConfigMap env 暴露给 application.yml,
+  # 默认 16+16 配 2 replicas 共 64 连接,加 orchestrator 30 * 2 = 60,留出 100+ 头部给 trigger/worker。
+  primaryPool: 16
+  replicaPool: 16
   # SSE 客户端断开 + Spring graceful shutdown drain；preStop sleep 让 k8s Service endpoints
   # 收敛后再发 SIGTERM，避免 SLB 把新流量打到正退出的 pod。
   gracefulShutdown:

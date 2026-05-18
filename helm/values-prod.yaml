@@ -139,3 +139,10 @@ workerDispatch:
     failureThreshold: 18
 
 javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.profiles.active=prod"
+
+# P2-4 (pre-launch audit 2026-05-18)：prod 默认不部署 chart 内 OTel Collector(由集群 ops 提供独立 Collector)。
+# batch-defaults.yml 中 OTLP endpoint 默认 http://otel-collector:4318 仅在 Collector 存在时有效;
+# prod 必须通过外部 ExternalSecret / ConfigMap 注入 OTEL_EXPORTER_OTLP_ENDPOINT 指向真实 Collector,
+# 否则 OTLP exporter 持续投递失败产生噪音日志。
+otelCollector:
+  enabled: false
