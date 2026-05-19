@@ -7,6 +7,7 @@ import com.example.batch.console.config.RoutingHints;
 import com.example.batch.testing.AbstractIntegrationTest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Collection;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -202,7 +203,10 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
   }
 
   private double currentFailoverCount() {
-    Counter counter = meterRegistry.find("batch.console.replica.failover.count").counter();
-    return counter == null ? 0d : counter.count();
+    // 同名 counter 按 reason tag 拆成多个实例（connection_failure / no_streaming_replicas / lag_exceeded），
+    // find().counter() 只返回第一个，需要按 name 汇总所有 tagged 实例
+    Collection<Counter> counters =
+        meterRegistry.find("batch.console.replica.failover.count").counters();
+    return counters.stream().mapToDouble(Counter::count).sum();
   }
 }

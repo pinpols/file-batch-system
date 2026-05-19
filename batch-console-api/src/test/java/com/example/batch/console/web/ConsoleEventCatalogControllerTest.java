@@ -66,6 +66,6 @@ class ConsoleEventCatalogControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].name").exists())
-        .andExpect(jsonPath("$.data.length()").value(8));
+        .andExpect(jsonPath("$.data.length()").value(11));
   }
 }
