@@ -2590,6 +2590,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
+  /api/console/admin/test-data:
+    delete:
+      tags: [Admin]
+      summary: Cleanup e2e/test data by prefix (admin-only, cascading delete across 11 tables)
+      description: |
+        按 prefix 级联清理测试数据,解决 e2e 测试只 INSERT 不 DELETE 导致业务表 60-85% 是
+        e2e-* 残留的问题。通常由 playwright globalTeardown 自动调用,也可运维手动触发。
+
+        **安全约束**:
+        - ROLE_ADMIN only
+        - prefix 强制 `^[a-zA-Z][a-zA-Z0-9_-]{2,32}$` 正则(空 prefix / SQL 通配符 / 含
+          `'`/`;`/`%`/`_`/`\` 都 400)
+        - SQL LIKE 强制 `prefix-%`,只匹配 `prefix-xxx` 不会误删 `prefixer` 这种合法资源
+        - @Transactional 全表事务,任何一段失败整体回滚
+        - @AuditAction 留痕到 console_operation_audit
+
+        清理覆盖 11 张表(按 FK 反向):job_partition → job_instance → workflow_node →
+        workflow_edge → workflow_definition → job_definition → file_channel_config →
+        file_template_config → console_user_account → archive_policy → tenant。
+      operationId: cleanupTestData
+      parameters:
+        - name: prefix
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z][a-zA-Z0-9_-]{2,32}$'
+            example: e2e
+          description: 资源前缀(必须字母开头,3-33 字符,只含字母/数字/_/-)
+      responses:
+        '200':
+          description: Cleanup result, map of table → row count deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTestDataCleanupResult'
+        '400':
+          description: prefix validation failed
+        '403':
+          description: not ROLE_ADMIN
   /api/console/queries/operation-audits:
     get:
       tags: [Queries]
@@ -11347,7 +11387,7 @@ components:
       required: [id, tenantId, aggregateType, aggregateId, action, result, eventVersion, createdAt]
     CommonResponseConsoleOperationAuditList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponse'
+        - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
@@ -11360,6 +11400,29 @@ components:
                   type: array
                   items:
                     $ref: '#/components/schemas/ConsoleOperationAuditResponse'
+    CommonResponseTestDataCleanupResult:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: object
+              description: 各表删除行数(键为表名,值为 affected rows)
+              additionalProperties:
+                type: integer
+                format: int32
+              example:
+                job_partition: 0
+                job_instance: 201
+                workflow_node: 0
+                workflow_edge: 0
+                workflow_definition: 6
+                job_definition: 98
+                file_channel_config: 13
+                file_template_config: 10
+                console_user_account: 38
+                archive_policy: 20
+                tenant: 20
     ConsoleSseEventResponse:
       type: object
       properties:
