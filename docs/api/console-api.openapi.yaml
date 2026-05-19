@@ -2986,6 +2986,12 @@ paths:
           schema:
             type: integer
           description: Minimum runtime threshold in seconds. Only returns instances running >= this value.
+        - name: slaBreached
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, only returns instances with deadline_at < now and still in active status (CREATED/WAITING/READY/RUNNING/PARTIAL_FAILED). Matches the slaBreaches metric on OpsSummary.
       responses:
         '200':
           description: Job instance list

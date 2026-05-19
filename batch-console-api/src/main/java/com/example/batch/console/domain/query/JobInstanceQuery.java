@@ -16,4 +16,5 @@ public record JobInstanceQuery(
     Instant startedTo,
     String sortBy,
     Integer minDurationSeconds,
+    Boolean slaBreached,
     PageRequest pageRequest) {}

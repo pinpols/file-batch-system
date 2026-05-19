@@ -61,6 +61,11 @@
         <if test="minDurationSeconds != null">
             and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
         </if>
+        <if test="slaBreached != null and slaBreached">
+            and deadline_at is not null
+            and deadline_at &lt; current_timestamp
+            and instance_status in ('CREATED','WAITING','READY','RUNNING','PARTIAL_FAILED')
+        </if>
         <choose>
             <when test="sortBy == 'duration'">
                 order by (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at)) desc
@@ -110,6 +115,11 @@
         </if>
         <if test="minDurationSeconds != null">
             and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
+        </if>
+        <if test="slaBreached != null and slaBreached">
+            and deadline_at is not null
+            and deadline_at &lt; current_timestamp
+            and instance_status in ('CREATED','WAITING','READY','RUNNING','PARTIAL_FAILED')
         </if>
     </select>
 
