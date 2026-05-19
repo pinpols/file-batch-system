@@ -20,8 +20,8 @@ import java.lang.annotation.Target;
  *
  * <ul>
  *   <li>不拦读操作 — access log 和 Loki 已经覆盖,审计表只关心写
- *   <li>Aspect 在方法**成功返回后**才写 audit(失败也写,result=FAILED 标记);跟业务在同 一个事务,业务回滚 → audit 也回滚,**业务 commit
- *       才有 audit**,保证强一致
+ *   <li>Aspect 成功路径**同业务事务**写 audit(强一致:业务 rollback → audit rollback)
+ *   <li>**失败路径**走 {@code REQUIRES_NEW} 新事务写 result=FAILED + errorCode/Message, 不被业务回滚带走,合规取证可见
  *   <li>aggregateId 用 SpEL 表达式从入参取(支持 {@code #id} / {@code #request.alertId})
  *   <li>params 由 Aspect 收集所有非敏感入参的 JSON 摘要(< 2KB)
  * </ul>
