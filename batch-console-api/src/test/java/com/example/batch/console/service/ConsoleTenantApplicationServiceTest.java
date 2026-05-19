@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
@@ -37,6 +38,8 @@ class ConsoleTenantApplicationServiceTest {
   @Mock private ConsoleTriggerProxyService triggerProxyService;
   @Mock private ConsoleTenantConfigCopyService configCopyService;
 
+  private final BatchSecurityProperties securityProperties = new BatchSecurityProperties();
+
   private ConsoleTenantApplicationService service;
 
   private static final Map<String, Object> ACTIVE_TENANT =
@@ -61,7 +64,8 @@ class ConsoleTenantApplicationServiceTest {
             filePipelineMapper,
             workflowRunMapper,
             triggerProxyService,
-            configCopyService);
+            configCopyService,
+            securityProperties);
   }
 
   @Test

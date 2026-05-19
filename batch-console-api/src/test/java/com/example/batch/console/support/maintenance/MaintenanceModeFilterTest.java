@@ -14,6 +14,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class MaintenanceModeFilterTest {
 
   private ConsoleMaintenanceProperties properties;
+  private MaintenanceStateHolder stateHolder;
   private MaintenanceModeFilter filter;
   private MockHttpServletResponse response;
   private AtomicBoolean chainInvoked;
@@ -22,10 +23,16 @@ class MaintenanceModeFilterTest {
   @BeforeEach
   void setUp() {
     properties = new ConsoleMaintenanceProperties();
-    filter = new MaintenanceModeFilter(properties, new ObjectMapper());
+    stateHolder = new MaintenanceStateHolder(properties);
+    stateHolder.initFromProperties();
+    filter = new MaintenanceModeFilter(stateHolder, new ObjectMapper());
     response = new MockHttpServletResponse();
     chainInvoked = new AtomicBoolean(false);
     chain = (req, resp) -> chainInvoked.set(true);
+  }
+
+  private void refresh() {
+    stateHolder.initFromProperties();
   }
 
   @Test
@@ -40,6 +47,7 @@ class MaintenanceModeFilterTest {
   void block503WhenEnabledForRegularPath() throws Exception {
     properties.setEnabled(true);
     properties.setMessage("DB switch in progress");
+    refresh();
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
     assertThat(chainInvoked).isFalse();
     assertThat(response.getStatus()).isEqualTo(503);
@@ -51,6 +59,7 @@ class MaintenanceModeFilterTest {
   @Test
   void allowWhitelistedPathsDuringMaintenance() throws Exception {
     properties.setEnabled(true);
+    refresh();
     filter.doFilterInternal(get("/api/console/system/maintenance"), response, chain);
     assertThat(chainInvoked).isTrue();
     assertThat(response.getStatus()).isEqualTo(200);
@@ -59,6 +68,7 @@ class MaintenanceModeFilterTest {
   @Test
   void allowActuatorWildcardDuringMaintenance() throws Exception {
     properties.setEnabled(true);
+    refresh();
     filter.doFilterInternal(get("/actuator/health"), response, chain);
     assertThat(chainInvoked).isTrue();
   }
@@ -67,6 +77,7 @@ class MaintenanceModeFilterTest {
   void readOnlyAllowsGetButBlocksWrite() throws Exception {
     properties.setEnabled(true);
     properties.setReadOnly(true);
+    refresh();
 
     // GET: passes through with X-Maintenance: read-only
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
