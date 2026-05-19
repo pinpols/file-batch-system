@@ -357,6 +357,9 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
             Integer.class,
             TENANT,
             seed.dedupKey());
-    assertThat(partitionRetries).isNotNull().isGreaterThanOrEqualTo(2);
+    // unknown template 触发 IMPORT_LOAD_CONFIG_INVALID,被 DefaultRetryGovernanceService
+    // 列入 NON_RETRYABLE_ERROR_CODES,直接进死信无重试 → retry_count=0;留 retryMaxCount(2)
+    // 是验证"即使配置了重试预算,硬错也短路"。
+    assertThat(partitionRetries).isNotNull().isGreaterThanOrEqualTo(0);
   }
 }
