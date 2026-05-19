@@ -221,6 +221,13 @@ jobs:
         shell: bash
         run: python3 scripts/ci/check-config-defaults-sync.py --check
 
+      - name: Verify Console controller ↔ OpenAPI route sync
+        shell: bash
+        # 拦 BE 加 controller 端点但漏更 docs/api/console-api.openapi.yaml 的漂移。
+        # 历史上多次出现:Web Push / Mermaid / admin/test-data 等端点写了 controller
+        # 但 yaml 漏更,FE 跑 gen:api 拿不到 type,联调时才发现。
+        run: python3 scripts/ci/check-console-openapi-paths.py
+
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@v4

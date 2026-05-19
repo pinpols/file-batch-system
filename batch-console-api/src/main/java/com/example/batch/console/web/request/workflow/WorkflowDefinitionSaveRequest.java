@@ -1,6 +1,8 @@
 package com.example.batch.console.web.request.workflow;
 
+import com.example.batch.common.validation.ValidResourceCode;
 import com.example.batch.common.validation.ValidTenantId;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -10,21 +12,19 @@ import lombok.Data;
 public class WorkflowDefinitionSaveRequest {
   @ValidTenantId private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String workflowCode;
+  @ValidResourceCode private String workflowCode;
 
   @Size(max = 256)
   private String workflowName;
 
   private String workflowType;
   private Boolean enabled;
-  private List<NodeItem> nodes;
-  private List<EdgeItem> edges;
+  @Valid private List<NodeItem> nodes;
+  @Valid private List<EdgeItem> edges;
 
   @Data
   public static class NodeItem {
-    @NotBlank private String nodeCode;
+    @ValidResourceCode private String nodeCode;
     private String nodeName;
     @NotBlank private String nodeType;
     private String relatedJobCode;
@@ -41,8 +41,8 @@ public class WorkflowDefinitionSaveRequest {
 
   @Data
   public static class EdgeItem {
-    @NotBlank private String fromNodeCode;
-    @NotBlank private String toNodeCode;
+    @ValidResourceCode private String fromNodeCode;
+    @ValidResourceCode private String toNodeCode;
     private String edgeType;
     private String conditionExpr;
     private Boolean enabled;

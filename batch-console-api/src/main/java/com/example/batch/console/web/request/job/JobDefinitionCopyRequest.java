@@ -1,7 +1,7 @@
 package com.example.batch.console.web.request.job;
 
+import com.example.batch.common.validation.ValidResourceCode;
 import com.example.batch.common.validation.ValidTenantId;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -10,9 +10,7 @@ import lombok.Data;
 public class JobDefinitionCopyRequest {
   @ValidTenantId private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String newJobCode;
+  @ValidResourceCode private String newJobCode;
 
   @Size(max = 256)
   private String jobName;
