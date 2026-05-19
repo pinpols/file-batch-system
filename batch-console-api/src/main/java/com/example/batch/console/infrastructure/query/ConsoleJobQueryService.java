@@ -66,6 +66,7 @@ public class ConsoleJobQueryService {
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getJobCode(),
             request.getInstanceStatus(),
+            parseCsv(request.getInstanceStatuses()),
             request.getInstanceNo(),
             request.getBizDate(),
             request.getTraceId(),
@@ -231,5 +232,16 @@ public class ConsoleJobQueryService {
         display(errorMessage),
         entity.getStartedAt(),
         entity.getFinishedAt());
+  }
+
+  /** Comma-separated -> trimmed list,null/空 → null。供「多状态过滤」入口复用。 */
+  private static List<String> parseCsv(String csv) {
+    if (csv == null || csv.isBlank()) return null;
+    List<String> out =
+        java.util.Arrays.stream(csv.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toList();
+    return out.isEmpty() ? null : out;
   }
 }

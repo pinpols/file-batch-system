@@ -40,9 +40,17 @@
         <if test="jobCode != null and jobCode != ''">
             and job_code like concat('%', #{jobCode}, '%')
         </if>
-        <if test="instanceStatus != null and instanceStatus != ''">
-            and instance_status = #{instanceStatus}
-        </if>
+        <choose>
+            <when test="instanceStatuses != null and instanceStatuses.size() &gt; 0">
+                and instance_status in
+                <foreach collection="instanceStatuses" item="st" open="(" close=")" separator=",">
+                    #{st}
+                </foreach>
+            </when>
+            <when test="instanceStatus != null and instanceStatus != ''">
+                and instance_status = #{instanceStatus}
+            </when>
+        </choose>
         <if test="instanceNo != null and instanceNo != ''">
             and instance_no = #{instanceNo}
         </if>
@@ -95,9 +103,17 @@
         <if test="jobCode != null and jobCode != ''">
             and job_code like concat('%', #{jobCode}, '%')
         </if>
-        <if test="instanceStatus != null and instanceStatus != ''">
-            and instance_status = #{instanceStatus}
-        </if>
+        <choose>
+            <when test="instanceStatuses != null and instanceStatuses.size() &gt; 0">
+                and instance_status in
+                <foreach collection="instanceStatuses" item="st" open="(" close=")" separator=",">
+                    #{st}
+                </foreach>
+            </when>
+            <when test="instanceStatus != null and instanceStatus != ''">
+                and instance_status = #{instanceStatus}
+            </when>
+        </choose>
         <if test="instanceNo != null and instanceNo != ''">
             and instance_no = #{instanceNo}
         </if>
