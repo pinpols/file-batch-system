@@ -3,6 +3,7 @@ package com.example.batch.console.application.audit;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.mapper.OperationAuditMapper;
 import com.example.batch.console.mapper.OperationAuditMapper.AuditRow;
+import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.query.OperationAuditQueryRequest;
 import com.example.batch.console.web.response.ops.ConsoleOperationAuditResponse;
 import java.util.List;
@@ -14,21 +15,27 @@ import org.springframework.transaction.annotation.Transactional;
  * 通用控制台用户操作审计查询服务。
  *
  * <p>读路径走只读副本(`@Transactional(readOnly = true)` + 默认 DataSource 路由策略)。
+ *
+ * <p><b>租户隔离</b>:必须经 {@link ConsoleTenantGuard#resolveTenant(String)} 解析后再下发 Mapper, 否则租户用户传
+ * null/blank tenantId 即可绕过 SQL 租户过滤拿全租户审计(P0 越权)。 全局角色(ADMIN/AUDITOR/CONFIG_ADMIN)必须显式传
+ * tenantId,租户角色 JWT 强制覆盖请求值。
  */
 @Service
 @RequiredArgsConstructor
 public class OperationAuditQueryService {
 
   private final OperationAuditMapper mapper;
+  private final ConsoleTenantGuard tenantGuard;
 
   @Transactional(readOnly = true)
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {
+    String tenantId = tenantGuard.resolveTenant(req.getTenantId());
     int pageNo = req.getPageNo() == null ? 1 : req.getPageNo();
     int pageSize = req.getPageSize() == null ? 20 : req.getPageSize();
     int offset = (pageNo - 1) * pageSize;
     long total =
         mapper.count(
-            req.getTenantId(),
+            tenantId,
             req.getAggregateType(),
             req.getAggregateId(),
             req.getAction(),
@@ -39,7 +46,7 @@ public class OperationAuditQueryService {
             req.getEndTime());
     List<AuditRow> rows =
         mapper.query(
-            req.getTenantId(),
+            tenantId,
             req.getAggregateType(),
             req.getAggregateId(),
             req.getAction(),

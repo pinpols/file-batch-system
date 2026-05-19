@@ -13,6 +13,7 @@
 | 05 | [positional-args-cleanup-plan.md](./positional-args-cleanup-plan.md) | 位置参数构造臃肿治理方案 v4（已闭环）：CLAUDE.md "调用方约束" 子节由本方案沉淀 | review 该治理范围 / 历史决策溯源 |
 | 06 | [system-scope-boundary.md](./system-scope-boundary.md) | 系统职责范围基准：批量调度 + 文件交付闭环的边界守护 | 判定新功能是否越界、季度复盘 |
 | 07 | [todo-master.md](./todo-master.md) | 全仓待办整合：跨 docs/ 与代码注解的统一 backlog | 想知道"还有什么没干" |
+| 08 | [frontend-backend-contract-cleanup-2026-05-19.md](./frontend-backend-contract-cleanup-2026-05-19.md) | 前后端契约与文档整理记录：OpenAPI 路径漂移、Job Bundle 事务语义、前端导入闭环 | 修 Console API / Job Bundle / 前端联调前 |
 
 ## 工作循环
 

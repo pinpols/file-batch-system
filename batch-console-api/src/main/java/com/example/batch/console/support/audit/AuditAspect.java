@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ public class AuditAspect {
 
   private final OperationAuditMapper mapper;
   private final ObjectMapper objectMapper;
+  private final PlatformTransactionManager transactionManager;
 
   private final ExpressionParser spel = new SpelExpressionParser();
   private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
@@ -79,15 +81,42 @@ public class AuditAspect {
       record(ann, aggregateId, paramsJson, null, null);
       return result;
     } catch (Throwable ex) {
-      // 业务事务回滚 → 同事务的 audit 也回滚,不会有 FAILED 留痕。这里只是 best-effort 记 warn,
-      // 真要捕获失败需要 @Transactional(propagation = REQUIRES_NEW) 新开事务 —— 阶段 2 不引入。
-      log.warn(
-          "[audit] action={} aggregateId={} failed but rollback also drops audit row",
-          ann.action(),
-          aggregateId,
-          ex);
+      // 业务事务回滚会带走同事务 audit。用 REQUIRES_NEW 新事务写 FAILED 留痕,保证合规取证可见。
+      // 写失败本身只 warn,不影响业务 exception 继续抛出。
+      String errorCode = resolveErrorCode(ex);
+      String errorMsg = ex.getMessage();
+      recordInNewTransaction(ann, aggregateId, paramsJson, errorCode, errorMsg);
       throw ex;
     }
+  }
+
+  /**
+   * 用 PROPAGATION_REQUIRES_NEW 新开事务写 FAILED 审计,避免被业务事务回滚带走。 失败本身吞掉(warn) — 业务异常已在 catch 外被
+   * rethrow,审计写不写都不影响业务路径。
+   */
+  private void recordInNewTransaction(
+      AuditAction ann, String aggregateId, String paramsJson, String errorCode, String errorMsg) {
+    try {
+      TransactionTemplate tmpl = new TransactionTemplate(transactionManager);
+      tmpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+      tmpl.executeWithoutResult(
+          status -> record(ann, aggregateId, paramsJson, errorCode, errorMsg));
+    } catch (Exception writeFail) {
+      log.warn(
+          "[audit] FAILED audit write also failed action={} aggregateId={}",
+          ann.action(),
+          aggregateId,
+          writeFail);
+    }
+  }
+
+  /** 业务异常抽取 errorCode:BizException 走 ResultCode.name(),其他 → 异常类 simpleName。 */
+  private static String resolveErrorCode(Throwable ex) {
+    if (ex instanceof com.example.batch.common.exception.BizException biz
+        && biz.getCode() != null) {
+      return biz.getCode().name();
+    }
+    return ex.getClass().getSimpleName();
   }
 
   private void record(
@@ -164,9 +193,20 @@ public class AuditAspect {
     if (snapshot.isEmpty()) return null;
     try {
       String json = objectMapper.writeValueAsString(snapshot);
-      return json.length() <= MAX_PARAMS_JSON_BYTES
-          ? json
-          : json.substring(0, MAX_PARAMS_JSON_BYTES - 14) + "\",\"_trunc\":1}";
+      if (json.length() <= MAX_PARAMS_JSON_BYTES) {
+        return json;
+      }
+      // 超长截断:原 substring 拼 `","_trunc":1}` 可能截在字符串转义/数组/对象中间,
+      // 写 jsonb 直接 invalid_text_representation → 审计静默丢失。
+      // 改为构造合法 JSON,保留 preview(纯文本字段)+ 显式标记 truncated=true
+      int previewLen = Math.max(64, MAX_PARAMS_JSON_BYTES - 64);
+      String preview = json.substring(0, Math.min(previewLen, json.length()));
+      Map<String, Object> truncated = new LinkedHashMap<>();
+      truncated.put("_truncated", true);
+      truncated.put("_originalLength", json.length());
+      truncated.put("_preview", preview);
+      truncated.put("_keys", new ArrayList<>(snapshot.keySet()));
+      return objectMapper.writeValueAsString(truncated);
     } catch (Exception e) {
       return null;
     }
