@@ -1,5 +1,6 @@
 package com.example.batch.console.web.request.file;
 
+import com.example.batch.common.validation.ValidResourceCode;
 import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -13,9 +14,7 @@ import lombok.Data;
 public class PipelineDefinitionSaveRequest {
   @ValidTenantId private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String jobCode;
+  @ValidResourceCode private String jobCode;
 
   @NotBlank
   @Size(max = 256)

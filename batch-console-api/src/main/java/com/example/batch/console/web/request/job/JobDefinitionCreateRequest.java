@@ -1,5 +1,6 @@
 package com.example.batch.console.web.request.job;
 
+import com.example.batch.common.validation.ValidResourceCode;
 import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -10,14 +11,7 @@ import lombok.Data;
 public class JobDefinitionCreateRequest {
   @ValidTenantId private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  @Pattern(
-      regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,127}$",
-      message =
-          "jobCode must start with a letter and contain only letters, digits, underscore or"
-              + " hyphen (no spaces / Chinese / special chars), length ≤ 128")
-  private String jobCode;
+  @ValidResourceCode private String jobCode;
 
   @Size(max = 256)
   private String jobName;
