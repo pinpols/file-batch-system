@@ -4,7 +4,8 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.config.ConsoleMaintenanceProperties;
+import com.example.batch.console.support.maintenance.MaintenanceStateHolder;
+import com.example.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import com.example.batch.console.web.response.CronPreviewResponse;
 import com.example.batch.console.web.response.MaintenanceStatusResponse;
 import java.text.ParseException;
@@ -31,7 +32,7 @@ public class ConsoleSystemController {
   /** cron-preview 默认返回的执行时刻数。 */
   private static final int CRON_PREVIEW_DEFAULT_COUNT = 3;
 
-  private final ConsoleMaintenanceProperties maintenance;
+  private final MaintenanceStateHolder maintenanceStateHolder;
   private final BatchTimezoneProvider timezoneProvider;
 
   /**
@@ -41,12 +42,14 @@ public class ConsoleSystemController {
    */
   @GetMapping("/maintenance")
   public CommonResponse<MaintenanceStatusResponse> maintenanceStatus() {
+    MaintenanceState state = maintenanceStateHolder.current();
     MaintenanceStatusResponse response =
         new MaintenanceStatusResponse(
-            maintenance.isEnabled(),
-            maintenance.isReadOnly(),
-            maintenance.getMessage(),
-            maintenance.getEtaAt() != null ? maintenance.getEtaAt().toString() : null);
+            state.enabled(),
+            state.readOnly(),
+            state.message(),
+            state.etaAt() != null ? state.etaAt().toString() : null,
+            state.affectedServices());
     return CommonResponse.success(response);
   }
 

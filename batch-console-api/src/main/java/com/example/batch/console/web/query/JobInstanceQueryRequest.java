@@ -26,4 +26,12 @@ public class JobInstanceQueryRequest extends PageQueryRequest {
    * 指标使用相同判定,供移动端「SLA 违约」入口跳转复用。
    */
   private Boolean slaBreached;
+
+  /**
+   * 多状态过滤(CSV,如 "FAILED,PARTIAL_FAILED"):
+   *
+   * <p>OpsSummary 的「失败任务」卡片同时计入 FAILED + PARTIAL_FAILED,跳转列表需要多值过滤。 instanceStatus 单值字段保留兼容,
+   * instanceStatuses 不为空时优先生效(IN 查询)。
+   */
+  private String instanceStatuses;
 }

@@ -232,12 +232,56 @@ paths:
         1. Render a global banner with `message` + `etaAt` when `enabled=true`.
         2. Switch to read-only UI (disable write buttons) when `readOnly=true`.
         3. Auto-recover by polling (30s) and clearing banner when `enabled=false`.
+        4. List `affectedServices` so users see which features are down vs available.
 
         This endpoint is whitelisted by `MaintenanceModeFilter`, so it returns 200 even
         during maintenance — otherwise the frontend would have no way to detect recovery.
       responses:
         '200':
           description: Maintenance status payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMaintenanceStatus'
+  /api/console/admin/system/maintenance:
+    get:
+      tags: [System]
+      summary: Get current maintenance state (admin)
+      operationId: getAdminMaintenanceState
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current maintenance state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMaintenanceStatus'
+    put:
+      tags: [System]
+      summary: Hot-update maintenance state without restart (admin)
+      operationId: updateAdminMaintenanceState
+      description: |
+        ROLE_ADMIN only. Replaces the runtime maintenance state in
+        `MaintenanceStateHolder` (AtomicReference). Takes effect immediately on next
+        request — no restart needed. Whitelisted by `MaintenanceModeFilter` so admins
+        can disable maintenance even during a maintenance window.
+
+        Typical SOP:
+        - Pre-rollout: PUT `{enabled:true, readOnly:false, message:..., etaAt:...,
+          affectedServices:["job-schedule"]}`
+        - Post-rollout: PUT `{enabled:false}`
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMaintenanceRequest'
+      responses:
+        '200':
+          description: Updated maintenance state
           content:
             application/json:
               schema:
@@ -3138,6 +3182,15 @@ paths:
           schema:
             type: boolean
           description: When true, only returns instances with deadline_at < now and still in active status (CREATED/WAITING/READY/RUNNING/PARTIAL_FAILED). Matches the slaBreaches metric on OpsSummary.
+        - name: instanceStatuses
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Comma-separated status list (e.g. `FAILED,PARTIAL_FAILED`). Takes precedence over
+            `instanceStatus`. Used by OpsSummary "failed jobs" card to match the same
+            FAILED + PARTIAL_FAILED predicate as the counter.
       responses:
         '200':
           description: Job instance list
@@ -8271,6 +8324,34 @@ components:
           type: string
           nullable: true
           description: ISO-8601 estimated recovery timestamp; null when unknown
+        affectedServices:
+          type: array
+          items:
+            type: string
+          description: |
+            Service codes that are down during this maintenance (empty list = whole site).
+            FE renders a per-service availability badge so users see what's still usable.
+    UpdateMaintenanceRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+        readOnly:
+          type: boolean
+          default: false
+        message:
+          type: string
+          maxLength: 2048
+        etaAt:
+          type: string
+          description: ISO-8601 estimated recovery timestamp
+        affectedServices:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            maxLength: 64
     CommonResponseMaintenanceStatus:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
