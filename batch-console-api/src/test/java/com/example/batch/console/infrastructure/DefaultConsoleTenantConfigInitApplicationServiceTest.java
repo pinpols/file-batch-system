@@ -261,6 +261,24 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  void batchInit_strictModeRollsBackOnItemFailure() {
+    // strict=true (Job Bundle 路径): 任一 spec failed 即整体回滚,tenant 结果标 failed
+    TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+    request.setStrict(true);
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
+    when(jobDefinitionMapper.insert(any(JobDefinitionEntity.class)))
+        .thenThrow(new RuntimeException("simulated DB error"));
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.totalTenants()).isEqualTo(1);
+    assertThat(response.failureTenants()).isEqualTo(1);
+    TenantConfigBatchInitResponse.TenantInitResult t1Result = response.results().get(0);
+    assertThat(t1Result.success()).isFalse();
+    assertThat(t1Result.errorMessage()).contains("strict bundle aborted");
+  }
+
+  @Test
   void batchInit_handlesEmptyConfigLists() {
     TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
     request.setTargetTenantIds(List.of("t1", "t2"));

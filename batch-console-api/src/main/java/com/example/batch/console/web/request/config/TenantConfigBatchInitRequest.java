@@ -18,6 +18,12 @@ public class TenantConfigBatchInitRequest {
 
   private boolean dryRun;
 
+  /**
+   * 严格事务模式：true 时任一 spec apply 失败即整体回滚（all-or-nothing），适用于 Job Bundle 跨环境导入； 默认 false 保留 ConfigSync
+   * 路径的"部分成功"语义（单项失败只记 failed 不回滚）。
+   */
+  private boolean strict;
+
   @Valid private List<JobDefinitionSpec> jobDefinitions;
 
   @Valid private List<WorkflowDefinitionSpec> workflowDefinitions;
