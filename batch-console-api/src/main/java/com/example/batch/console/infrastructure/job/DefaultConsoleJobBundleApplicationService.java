@@ -59,6 +59,8 @@ public class DefaultConsoleJobBundleApplicationService
     initRequest.setTargetTenantIds(List.of(tenantId));
     initRequest.setMode(request.getMode());
     initRequest.setDryRun(request.isDryRun());
+    // Job Bundle 严格 all-or-nothing：任一 spec 失败即整体回滚（文档 console-api.openapi.yaml#3557 已声明）
+    initRequest.setStrict(true);
     TenantConfigBatchInitResponse response =
         initApplicationService.batchInit(initRequest, operator(), UUID.randomUUID().toString());
     return mapOf(
@@ -72,6 +74,8 @@ public class DefaultConsoleJobBundleApplicationService
     initRequest.setTargetTenantIds(request.getTargetTenantIds());
     initRequest.setMode(request.getMode());
     initRequest.setDryRun(request.isDryRun());
+    // Job Bundle 严格 all-or-nothing：任一 spec 失败即整体回滚（文档 console-api.openapi.yaml#3557 已声明）
+    initRequest.setStrict(true);
     TenantConfigBatchInitResponse response =
         initApplicationService.batchInit(initRequest, operator(), UUID.randomUUID().toString());
     return mapOf(

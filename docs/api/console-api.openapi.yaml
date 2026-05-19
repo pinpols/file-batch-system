@@ -3554,7 +3554,12 @@ paths:
     post:
       tags: [Jobs]
       summary: Create job bundle
-      description: Creates one job definition and optional related workflow/file/alert/resource config in one backend transaction.
+      description: |
+        Creates one job definition and optional related workflow/file/alert/resource config in
+        a single backend transaction. **Strict all-or-nothing**: if any spec fails to apply
+        the whole transaction is rolled back (no partial commits). The shared
+        `TenantConfigBatchInitRequest.strict` flag is forced to true on this path; the
+        unrelated ConfigSync path keeps `strict=false` and tolerates partial success.
       operationId: createJobBundle
       security:
         - bearerAuth: []
@@ -3603,7 +3608,12 @@ paths:
     post:
       tags: [Jobs]
       summary: Import job bundle
-      description: Imports one job bundle into one or more target tenants in one backend transaction.
+      description: |
+        Imports one job bundle into one or more target tenants. Each target tenant runs in
+        its own backend transaction with **strict all-or-nothing** semantics — any spec
+        failure within a tenant rolls back that tenant's transaction. Other tenants are
+        independent (no cross-tenant rollback). The `TenantConfigBatchInitRequest.strict`
+        flag is forced to true on this path.
       operationId: importJobBundle
       security:
         - bearerAuth: []
@@ -4144,6 +4154,49 @@ paths:
       responses:
         '200':
           description: Biz type list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/meta/pipeline-stages:
+    get:
+      tags: [Meta]
+      summary: Pipeline 9-stage whitelist by pipeline type
+      description: |
+        Returns the canonical 9-stage pipeline whitelist keyed by pipeline type
+        (IMPORT / EXPORT / PROCESS / DISPATCH). Source-of-truth is
+        `ConfigPackageExcelValidator.STAGES_BY_TYPE`. Used by FE PipelineDefinitionList
+        step editor to render stageCode as dropdown.
+      operationId: getMetaPipelineStages
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Map<pipelineType, List<stageCode>>
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/meta/step-impls:
+    get:
+      tags: [Meta]
+      summary: Registered step impl_code whitelist
+      description: |
+        Returns the set of `impl_code` values registered in `step_registry`.
+        Pass `module` to filter by IMPORT / EXPORT / PROCESS / DISPATCH; omit to return all.
+      operationId: getMetaStepImpls
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: module
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [IMPORT, EXPORT, PROCESS, DISPATCH]
+      responses:
+        '200':
+          description: Step impl_code list
           content:
             application/json:
               schema:

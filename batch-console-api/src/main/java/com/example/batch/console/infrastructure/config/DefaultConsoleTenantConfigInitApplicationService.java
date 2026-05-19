@@ -63,6 +63,15 @@ public class DefaultConsoleTenantConfigInitApplicationService
         } else {
           failureCount++;
         }
+      } catch (StrictBundleAbortedException ex) {
+        // strict=true 且任一 spec failed → @Transactional 已回滚,组装 failed 结果让前端看到原因
+        log.warn(
+            "[TenantConfigBatchInit] strict bundle rolled back for tenant={} batchOp={}: {}",
+            tenantId,
+            batchOperationId,
+            ex.getMessage());
+        results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
+        failureCount++;
       } catch (Exception ex) {
         log.error(
             "[TenantConfigBatchInit] unexpected error for tenant={} batchOp={}",
@@ -88,37 +97,70 @@ public class DefaultConsoleTenantConfigInitApplicationService
       String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
     InitMode mode = Nullables.coalesce(request.getMode(), InitMode.SKIP_EXISTING);
     ApplyContext ctx = new ApplyContext(tenantId, mode, operator, dryRun);
+    ItemStats jobStats;
+    ItemStats workflowStats;
+    ItemStats pipelineStats;
+    ItemStats channelStats;
+    ItemStats templateStats;
+    ItemStats queueStats;
+    ItemStats windowStats;
+    ItemStats calendarStats;
+    ItemStats quotaStats;
+    ItemStats alertStats;
     try {
-      ItemStats jobStats = applyHandlers.applyJobDefinitions(request.getJobDefinitions(), ctx);
-      ItemStats workflowStats =
-          applyHandlers.applyWorkflowDefinitions(request.getWorkflowDefinitions(), ctx);
-      ItemStats pipelineStats =
-          applyHandlers.applyPipelineDefinitions(request.getPipelineDefinitions(), ctx);
-      ItemStats channelStats = applyHandlers.applyFileChannels(request.getFileChannels(), ctx);
-      ItemStats templateStats = applyHandlers.applyFileTemplates(request.getFileTemplates(), ctx);
-      ItemStats queueStats = applyHandlers.applyResourceQueues(request.getResourceQueues(), ctx);
-      ItemStats windowStats = applyHandlers.applyBatchWindows(request.getBatchWindows(), ctx);
-      ItemStats calendarStats =
-          applyHandlers.applyBusinessCalendars(request.getBusinessCalendars(), ctx);
-      ItemStats quotaStats = applyHandlers.applyQuotaPolicies(request.getQuotaPolicies(), ctx);
-      ItemStats alertStats = applyHandlers.applyAlertRoutings(request.getAlertRoutings(), ctx);
-      return new TenantInitResult(
-          tenantId,
-          true,
-          null,
-          jobStats,
-          workflowStats,
-          pipelineStats,
-          channelStats,
-          templateStats,
-          queueStats,
-          windowStats,
-          calendarStats,
-          quotaStats,
-          alertStats);
+      jobStats = applyHandlers.applyJobDefinitions(request.getJobDefinitions(), ctx);
+      workflowStats = applyHandlers.applyWorkflowDefinitions(request.getWorkflowDefinitions(), ctx);
+      pipelineStats = applyHandlers.applyPipelineDefinitions(request.getPipelineDefinitions(), ctx);
+      channelStats = applyHandlers.applyFileChannels(request.getFileChannels(), ctx);
+      templateStats = applyHandlers.applyFileTemplates(request.getFileTemplates(), ctx);
+      queueStats = applyHandlers.applyResourceQueues(request.getResourceQueues(), ctx);
+      windowStats = applyHandlers.applyBatchWindows(request.getBatchWindows(), ctx);
+      calendarStats = applyHandlers.applyBusinessCalendars(request.getBusinessCalendars(), ctx);
+      quotaStats = applyHandlers.applyQuotaPolicies(request.getQuotaPolicies(), ctx);
+      alertStats = applyHandlers.applyAlertRoutings(request.getAlertRoutings(), ctx);
     } catch (Exception ex) {
       log.warn("[TenantConfigBatchInit] failed for tenant={}: {}", tenantId, ex.getMessage());
       return TenantInitResult.failed(tenantId, ex.getMessage());
+    }
+    // strict=true (Job Bundle 跨环境导入)：任一 spec failed 即抛出 StrictBundleAbortedException,
+    // 由 @Transactional 触发整体回滚 → all-or-nothing。SKIP_EXISTING 跳过 / UPSERT 覆盖不算 failed。
+    if (request.isStrict()) {
+      int totalFailed =
+          jobStats.failed()
+              + workflowStats.failed()
+              + pipelineStats.failed()
+              + channelStats.failed()
+              + templateStats.failed()
+              + queueStats.failed()
+              + windowStats.failed()
+              + calendarStats.failed()
+              + quotaStats.failed()
+              + alertStats.failed();
+      if (totalFailed > 0) {
+        throw new StrictBundleAbortedException(
+            "strict bundle aborted: " + totalFailed + " spec(s) failed for tenant=" + tenantId);
+      }
+    }
+    return new TenantInitResult(
+        tenantId,
+        true,
+        null,
+        jobStats,
+        workflowStats,
+        pipelineStats,
+        channelStats,
+        templateStats,
+        queueStats,
+        windowStats,
+        calendarStats,
+        quotaStats,
+        alertStats);
+  }
+
+  /** strict 模式下任一 spec failed 触发,@Transactional 自动回滚后由 batchInit 转成 failed result。 */
+  static final class StrictBundleAbortedException extends RuntimeException {
+    StrictBundleAbortedException(String message) {
+      super(message);
     }
   }
 }
