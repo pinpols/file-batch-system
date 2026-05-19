@@ -59,7 +59,7 @@ class ConsoleQueryControllerTest {
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleQueryController(queryApplicationService, responseFactory))
+                new ConsoleQueryController(queryApplicationService, responseFactory, null))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();

@@ -4,6 +4,7 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.monitor.ConsoleAlertApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.ops.AlertActionRequest;
 import com.example.batch.console.web.response.ops.ConsoleAlertActionResponse;
@@ -32,6 +33,7 @@ public class ConsoleAlertController {
 
   /** 确认告警。 */
   @PostMapping("/{alertId}/ack")
+  @AuditAction(action = "alert.ack", aggregateType = "alert", aggregateId = "#alertId")
   public CommonResponse<ConsoleAlertActionResponse> ack(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long alertId,
@@ -41,6 +43,7 @@ public class ConsoleAlertController {
 
   /** 静默告警。 */
   @PostMapping("/{alertId}/silence")
+  @AuditAction(action = "alert.silence", aggregateType = "alert", aggregateId = "#alertId")
   public CommonResponse<ConsoleAlertActionResponse> silence(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long alertId,
@@ -50,6 +53,7 @@ public class ConsoleAlertController {
 
   /** 关闭告警。 */
   @PostMapping("/{alertId}/close")
+  @AuditAction(action = "alert.close", aggregateType = "alert", aggregateId = "#alertId")
   public CommonResponse<ConsoleAlertActionResponse> close(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long alertId,
