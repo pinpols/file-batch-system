@@ -34,6 +34,19 @@ groups:
           summary: "Batch alert events are still being emitted"
           description: "Alert event total increased over the last 10 minutes."
 
+      - alert: BatchJobDefinitionFailingRepeatedly
+        # 同一 (tenant, jobCode) 1h 内失败 >= 5 次 → 配置异常 / 模板坏 / 资源缺,
+        # 持续 trigger 只会生成脏 job_instance + 污染日志,人工介入禁用或修
+        expr: sum by (tenant, jobCode) (increase(batch_job_failure_total[1h])) >= 5
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job
+        annotations:
+          summary: "Job {{ $labels.tenant }}/{{ $labels.jobCode }} 1h 内失败 {{ $value | humanize }} 次"
+          description: "同一 job_definition 短时间持续失败,通常意味着配置错误(模板缺密钥 / 资源不存在 / 数据 schema 不匹配)。请到 console 查看实例日志并禁用该定义,避免 trigger 持续放炮生成脏数据。"
+
       - alert: BatchDispatchCircuitsOpen
         expr: batch_dispatch_circuits_open > 0
         for: 5m
