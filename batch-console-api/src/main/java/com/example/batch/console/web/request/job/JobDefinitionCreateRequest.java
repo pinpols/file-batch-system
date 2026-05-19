@@ -12,6 +12,11 @@ public class JobDefinitionCreateRequest {
 
   @NotBlank
   @Size(max = 128)
+  @Pattern(
+      regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,127}$",
+      message =
+          "jobCode must start with a letter and contain only letters, digits, underscore or"
+              + " hyphen (no spaces / Chinese / special chars), length ≤ 128")
   private String jobCode;
 
   @Size(max = 256)
