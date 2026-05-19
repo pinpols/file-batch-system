@@ -4,6 +4,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.application.config.ConsoleAlertRoutingApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.config.AlertRoutingSaveRequest;
 import jakarta.validation.Valid;
@@ -39,18 +40,21 @@ public class ConsoleAlertRoutingController {
   }
 
   @PostMapping
+  @AuditAction(action = "alertRouting.create", aggregateType = "alert_routing")
   public CommonResponse<Map<String, Object>> create(
       @Valid @RequestBody AlertRoutingSaveRequest request) {
     return responseFactory.success(alertRoutingApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
+  @AuditAction(action = "alertRouting.update", aggregateType = "alert_routing", aggregateId = "#id")
   public CommonResponse<Map<String, Object>> update(
       @PathVariable Long id, @Valid @RequestBody AlertRoutingSaveRequest request) {
     return responseFactory.success(alertRoutingApplicationService.update(id, request));
   }
 
   @PostMapping("/{id}/toggle")
+  @AuditAction(action = "alertRouting.toggle", aggregateType = "alert_routing", aggregateId = "#id")
   public CommonResponse<Void> toggle(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,

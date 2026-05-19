@@ -5,6 +5,7 @@ import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
 import com.example.batch.console.application.ops.ConsoleOutboxOpsApplicationService;
 import com.example.batch.console.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
@@ -70,6 +71,7 @@ public class ConsoleOpsController {
 
   /** 清理已发布 / 已放弃的 outbox 事件（保留最近 retainDays 天）。 */
   @PostMapping("/outbox/cleanup")
+  @AuditAction(action = "outbox.cleanup", aggregateType = "outbox")
   public CommonResponse<ConsoleOutboxCleanupResponse> outboxCleanup(
       @RequestParam @NotBlank String tenantId,
       @RequestParam(defaultValue = "7") @Positive int retainDays) {
@@ -78,6 +80,7 @@ public class ConsoleOpsController {
 
   /** 手动重投指定 outbox 事件（仅 FAILED / GIVE_UP 状态可重投）。 */
   @PostMapping("/outbox/republish")
+  @AuditAction(action = "outbox.republish", aggregateType = "outbox")
   public CommonResponse<ConsoleOutboxRepublishResponse> outboxRepublish(
       @RequestParam @NotBlank String tenantId, @RequestBody @NotEmpty List<Long> ids) {
     return responseFactory.success(outboxOpsService.republish(tenantId, ids));

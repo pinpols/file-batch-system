@@ -70,7 +70,9 @@ public class AuditAspect {
     if (ann == null) return pjp.proceed();
 
     String aggregateId = resolveAggregateId(ann, method, pjp.getArgs());
-    String paramsJson = serializeParams(method, pjp.getArgs());
+    // 敏感操作(login / API Key create)显式 recordParams=false 跳过 params 落库,
+    // 避免 password / 加密载荷 / 明文密钥泄露到审计表
+    String paramsJson = ann.recordParams() ? serializeParams(method, pjp.getArgs()) : null;
 
     try {
       Object result = pjp.proceed();

@@ -41,4 +41,12 @@ public @interface AuditAction {
    * 留空时写「-」占位,适用于无聚合根的操作(如批量、登录)。
    */
   String aggregateId() default "";
+
+  /**
+   * 是否把方法入参序列化到 audit 的 params JSONB 列。默认 true。
+   *
+   * <p>带密码 / 加密载荷 / 密钥的接口必须显式设 {@code false},否则原文落到审计表(比如 login 的 password 字段、API Key 创建的
+   * plaintext)。
+   */
+  boolean recordParams() default true;
 }

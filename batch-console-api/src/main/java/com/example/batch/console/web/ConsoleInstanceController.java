@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -26,12 +27,14 @@ public class ConsoleInstanceController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/{id}/cancel")
+  @AuditAction(action = "instance.cancel", aggregateType = "job_instance", aggregateId = "#id")
   public CommonResponse<Map<String, Object>> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "cancel"));
   }
 
   @PostMapping("/{id}/terminate")
+  @AuditAction(action = "instance.terminate", aggregateType = "job_instance", aggregateId = "#id")
   public CommonResponse<Map<String, Object>> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -39,6 +42,7 @@ public class ConsoleInstanceController {
   }
 
   @PostMapping("/partitions/{id}/cancel")
+  @AuditAction(action = "partition.cancel", aggregateType = "job_partition", aggregateId = "#id")
   public CommonResponse<Map<String, Object>> cancelPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -46,6 +50,7 @@ public class ConsoleInstanceController {
   }
 
   @PostMapping("/partitions/{id}/retry")
+  @AuditAction(action = "partition.retry", aggregateType = "job_partition", aggregateId = "#id")
   public CommonResponse<Map<String, Object>> retryPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(orchestratorProxyService.partitionAction(id, tenantId, "retry"));

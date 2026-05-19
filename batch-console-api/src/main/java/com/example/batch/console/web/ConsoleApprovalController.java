@@ -4,6 +4,7 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ops.ConsoleApprovalApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.ops.ApprovalActionRequest;
 import com.example.batch.console.web.request.ops.BatchApprovalActionRequest;
@@ -49,6 +50,7 @@ public class ConsoleApprovalController {
 
   /** 审批通过。 */
   @PostMapping("/{approvalNo}/approve")
+  @AuditAction(action = "approval.approve", aggregateType = "approval", aggregateId = "#approvalNo")
   public CommonResponse<String> approve(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String approvalNo,
@@ -64,6 +66,7 @@ public class ConsoleApprovalController {
 
   /** 审批拒绝。 */
   @PostMapping("/{approvalNo}/reject")
+  @AuditAction(action = "approval.reject", aggregateType = "approval", aggregateId = "#approvalNo")
   public CommonResponse<String> reject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String approvalNo,
@@ -79,6 +82,7 @@ public class ConsoleApprovalController {
 
   /** 批量审批通过。 */
   @PostMapping("/batch-approve")
+  @AuditAction(action = "approval.batchApprove", aggregateType = "approval")
   public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchApprove(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
@@ -97,6 +101,7 @@ public class ConsoleApprovalController {
 
   /** 批量审批拒绝。 */
   @PostMapping("/batch-reject")
+  @AuditAction(action = "approval.batchReject", aggregateType = "approval")
   public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchReject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
