@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.console.application.audit.OperationAuditQueryService;
 import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
@@ -23,6 +24,7 @@ import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
 import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
+import com.example.batch.console.web.query.OperationAuditQueryRequest;
 import com.example.batch.console.web.query.OutboxDeliveryLogQueryRequest;
 import com.example.batch.console.web.query.OutboxRetryLogQueryRequest;
 import com.example.batch.console.web.query.PendingCatchUpQueryRequest;
@@ -54,6 +56,7 @@ import com.example.batch.console.web.response.ops.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ops.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ops.ConsoleAuditLogResponse;
 import com.example.batch.console.web.response.ops.ConsoleDeadLetterTaskResponse;
+import com.example.batch.console.web.response.ops.ConsoleOperationAuditResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.web.response.ops.ConsolePendingCatchUpResponse;
@@ -88,12 +91,23 @@ public class ConsoleQueryController {
 
   private final ConsoleQueryApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
+  private final OperationAuditQueryService operationAuditQueryService;
 
-  /** GET /audits — 审计日志列表。 */
+  /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */
   @GetMapping("/audits")
   public CommonResponse<PageResponse<ConsoleAuditLogResponse>> audits(
       @Valid @ModelAttribute AuditLogQueryRequest request) {
     return responseFactory.success(applicationService.auditLogs(request));
+  }
+
+  /**
+   * GET /operation-audits — 通用控制台用户操作审计列表(由 @AuditAction Aspect 落库)。 跟 /audits 不同:这是
+   * console_operation_audit 表,覆盖告警/审批/Job/Worker/Outbox 等所有写操作。
+   */
+  @GetMapping("/operation-audits")
+  public CommonResponse<PageResponse<ConsoleOperationAuditResponse>> operationAudits(
+      @Valid @ModelAttribute OperationAuditQueryRequest request) {
+    return responseFactory.success(operationAuditQueryService.query(request));
   }
 
   /** GET /execution-logs — 执行日志列表（审计日志别名）。 */
