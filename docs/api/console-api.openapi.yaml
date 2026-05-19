@@ -2590,6 +2590,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
+  /api/console/queries/operation-audits:
+    get:
+      tags: [Queries]
+      summary: Query console operation audits (general user-action audit, written by @AuditAction Aspect)
+      operationId: queryOperationAudits
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: aggregateType
+          in: query
+          required: false
+          schema: { type: string }
+          description: alert / approval / job_instance / worker / auth / api_key / outbox 等
+        - name: aggregateId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: action
+          in: query
+          required: false
+          schema: { type: string }
+          description: 跟前端埋点 data-track 对齐(alert.close / approval.approve / ...)
+        - name: operatorId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: result
+          in: query
+          required: false
+          schema: { type: string, enum: [SUCCESS, FAILED] }
+        - name: traceId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: startTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Operation audit list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleOperationAuditList'
   /api/console/queries/execution-logs:
     get:
       tags: [Queries]
@@ -11270,6 +11320,46 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, fileId, operationType, operationResult, operatorType, operatorId, traceId, evidenceRef, detailSummary, createdAt]
+    ConsoleOperationAuditResponse:
+      type: object
+      description: |
+        通用控制台用户操作审计(@AuditAction Aspect 落库)。
+        字段顺序对齐 batch.console_operation_audit 表 + 将来 Kafka payload schema,
+        新增字段务必非必填 + 同步升 eventVersion。
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        aggregateType: { type: string, description: 'alert / approval / job_instance / worker / auth / ...' }
+        aggregateId: { type: string, description: '资源 ID,字符串兼容数字 id 和 code' }
+        action: { type: string, description: 'alert.close / approval.approve / ...,与 FE 埋点 data-track 对齐' }
+        operatorId: { type: string, nullable: true }
+        operatorRole: { type: string, nullable: true }
+        result: { type: string, enum: [SUCCESS, FAILED] }
+        errorCode: { type: string, nullable: true }
+        errorMessage: { type: string, nullable: true }
+        params: { type: string, nullable: true, description: 'JSON 字符串(< 2KB),敏感操作 recordParams=false 时为 null' }
+        traceId: { type: string, nullable: true }
+        requestId: { type: string, nullable: true }
+        ipHash: { type: string, nullable: true, description: 'SHA-256 前 8 字节' }
+        uaHash: { type: string, nullable: true }
+        eventVersion: { type: integer, format: int32 }
+        createdAt: { type: string, format: date-time }
+      required: [id, tenantId, aggregateType, aggregateId, action, result, eventVersion, createdAt]
+    CommonResponseConsoleOperationAuditList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                total: { type: integer, format: int64 }
+                pageNo: { type: integer, format: int32 }
+                pageSize: { type: integer, format: int32 }
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ConsoleOperationAuditResponse'
     ConsoleSseEventResponse:
       type: object
       properties:

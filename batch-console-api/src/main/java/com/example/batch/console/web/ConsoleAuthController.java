@@ -8,6 +8,7 @@ import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.SseTicketService;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.auth.ConsoleJwtService;
 import com.example.batch.console.support.auth.ConsoleLoginKeyPairService;
 import com.example.batch.console.support.auth.ConsolePrincipal;
@@ -58,6 +59,11 @@ public class ConsoleAuthController {
    * ConsoleSecurityProperties.LoginEncryption} + prod 强制 required=true。
    */
   @PostMapping("/login")
+  @AuditAction(
+      action = "auth.login",
+      aggregateType = "auth",
+      aggregateId = "#request.username",
+      recordParams = false)
   public CommonResponse<ConsoleAuthTokenResponse> login(
       @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
     ConsoleLoginRequest resolved = resolveLoginRequest(request);
@@ -120,6 +126,7 @@ public class ConsoleAuthController {
    * 到别处继续用"——logout 后服务端立即拒绝该 token。
    */
   @PostMapping("/logout")
+  @AuditAction(action = "auth.logout", aggregateType = "auth")
   public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
     String currentToken = extractTokenFromCookie(request);
     if (currentToken != null) {
