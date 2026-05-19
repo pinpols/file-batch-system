@@ -186,6 +186,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuthProfileResponse'
+  /api/console/system/cron-preview:
+    get:
+      tags: [System]
+      summary: Validate Quartz cron expression and preview next executions
+      operationId: previewCron
+      description: |
+        Parses the expression with the same Quartz `CronExpression` class used by the trigger
+        scheduler, so the previewed times match the real fire times exactly.
+
+        Returns `valid=false` + `error` message when the expression cannot be parsed (200, not 400),
+        or `valid=true` + `nextRuns` (ISO-8601 UTC, ascending) on success.
+
+        Timezone is taken from `batch.timezone.default-zone` (default `Asia/Shanghai`).
+      parameters:
+        - name: expr
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Quartz 6 or 7 field expression (sec min hour dom mon dow [year])
+        - name: count
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3
+            minimum: 1
+            maximum: 20
+          description: How many next executions to compute, clamped to [1, 20]
+      responses:
+        '200':
+          description: Cron preview result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseCronPreview'
   /api/console/system/maintenance:
     get:
       tags: [System]
@@ -8186,6 +8222,37 @@ components:
             data:
               type: integer
               format: int64
+    CronPreview:
+      type: object
+      required: [expr, valid, nextRuns]
+      properties:
+        expr:
+          type: string
+          description: Echo of the input expression (trimmed)
+        valid:
+          type: boolean
+          description: Whether the expression parsed successfully
+        error:
+          type: string
+          nullable: true
+          description: Parse error message when valid=false
+        nextRuns:
+          type: array
+          items:
+            type: string
+            format: date-time
+          description: Up to N next fire times in ISO-8601 UTC, ascending
+        timezone:
+          type: string
+          nullable: true
+          description: IANA timezone id used to compute the times (e.g. "Asia/Shanghai")
+    CommonResponseCronPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/CronPreview'
     MaintenanceStatus:
       type: object
       required: [enabled, readOnly]
