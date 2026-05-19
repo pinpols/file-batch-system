@@ -75,6 +75,7 @@ public class ConsoleJobQueryService {
                 request.getEndDate(), "endDate", timezoneProvider.defaultZone()),
             request.getSortBy(),
             request.getMinDurationSeconds(),
+            request.getSlaBreached(),
             pageRequest);
     List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
     long total = jobMappers.jobInstanceMapper.countByQuery(query);

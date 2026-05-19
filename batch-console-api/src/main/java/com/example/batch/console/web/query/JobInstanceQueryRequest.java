@@ -19,4 +19,11 @@ public class JobInstanceQueryRequest extends PageQueryRequest {
 
   /** 最小运行时长过滤（秒）：仅返回运行时长 ≥ 该值的实例，用于慢任务诊断。 */
   private Integer minDurationSeconds;
+
+  /**
+   * SLA 违约过滤：true 时仅返回 deadline_at &lt; now
+   * 且仍在活跃态(CREATED/WAITING/READY/RUNNING/PARTIAL_FAILED)的实例。 与 OpsSummary 的 slaBreaches
+   * 指标使用相同判定,供移动端「SLA 违约」入口跳转复用。
+   */
+  private Boolean slaBreached;
 }
