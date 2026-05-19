@@ -122,6 +122,19 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Quartz CronExpression 仅用于 /api/console/system/cron-preview 解析 + 计算下次执行,
+             不引 spring-boot-starter-quartz(免拉 Job/Trigger/Scheduler 整套 DI)。 -->
+        <dependency>
+            <groupId>org.quartz-scheduler</groupId>
+            <artifactId>quartz</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.zaxxer</groupId>
+                    <artifactId>HikariCP-java7</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

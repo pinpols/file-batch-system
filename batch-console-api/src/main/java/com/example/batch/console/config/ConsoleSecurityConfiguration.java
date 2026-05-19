@@ -76,6 +76,7 @@ public class ConsoleSecurityConfiguration {
                         "/api/console/auth/public-key",
                         "/api/console/push/vapid-public-key",
                         "/api/console/system/maintenance",
+                        "/api/console/system/cron-preview",
                         "/console-login.html",
                         "/favicon.ico")
                     .permitAll()
