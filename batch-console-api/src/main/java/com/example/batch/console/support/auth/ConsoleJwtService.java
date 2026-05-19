@@ -8,6 +8,8 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
@@ -84,6 +86,12 @@ public class ConsoleJwtService {
   private StringRedisTemplate redisTemplate;
 
   private static final String REVOKED_KEY_PREFIX = "console:revoked:jti:";
+
+  // JWT IP/UA binding drift 日志抑制器:同一 (用户+租户+storedHash→currentHash) 组合
+  // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复刷屏(实测一轮 e2e 8000+ 行噪音)。
+  // 10k 上限够覆盖任何合理量级会话规模。
+  private final Cache<String, Boolean> driftLogSuppressor =
+      Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(5)).maximumSize(10_000).build();
 
   // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
   // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
@@ -266,16 +274,25 @@ public class ConsoleJwtService {
     String currentIp = hashClientIp(req);
     String currentUa = hashUserAgent(req);
     if (storedIp != null && currentIp != null && !storedIp.equals(currentIp)) {
-      log.warn(
-          "JWT IP binding drift: username={} tenantId={} (token issued from different network)",
-          username,
-          tenantId);
+      // 同 (username,tenant,storedIp→currentIp) 组合 5 分钟内只记一次,避免 e2e/同浏览器多 tab 刷屏
+      String key = "ip|" + username + "|" + tenantId + "|" + storedIp + "→" + currentIp;
+      if (driftLogSuppressor.getIfPresent(key) == null) {
+        driftLogSuppressor.put(key, Boolean.TRUE);
+        log.warn(
+            "JWT IP binding drift: username={} tenantId={} (token issued from different network)",
+            username,
+            tenantId);
+      }
     }
     if (storedUa != null && currentUa != null && !storedUa.equals(currentUa)) {
-      log.warn(
-          "JWT UA binding drift: username={} tenantId={} (token issued from different browser)",
-          username,
-          tenantId);
+      String key = "ua|" + username + "|" + tenantId + "|" + storedUa + "→" + currentUa;
+      if (driftLogSuppressor.getIfPresent(key) == null) {
+        driftLogSuppressor.put(key, Boolean.TRUE);
+        log.warn(
+            "JWT UA binding drift: username={} tenantId={} (token issued from different browser)",
+            username,
+            tenantId);
+      }
     }
   }
 

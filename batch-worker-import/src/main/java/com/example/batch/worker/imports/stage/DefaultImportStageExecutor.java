@@ -102,14 +102,18 @@ public class DefaultImportStageExecutor
               ERROR_OBJECT_MAPPER)
           : stageStep.execute(context);
     } catch (BizException exception) {
-      log.error(
-          "import stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+      // 业务级错误(state_conflict / 字段缺失 / 模板未配 等)由 orchestrator 端 retry/dead-letter 政策处理,
+      // worker 这里只是局部失败转 BUSINESS_ERROR,记 WARN 不带 stack 即可;
+      // 真正的 infra 异常走下面的 catch(Exception),仍保留 ERROR + stack
+      log.warn(
+          "import stage business error (will be governed by orchestrator retry policy):"
+              + " stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
           stage,
           step.stepCode(),
           step.implCode(),
           context.getTenantId(),
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception);
+          exception.getMessage());
       return ImportStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {

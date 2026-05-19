@@ -206,8 +206,14 @@ public class ConsoleApiExceptionHandler {
   }
 
   @ExceptionHandler(MissingServletRequestParameterException.class)
-  public ResponseEntity<?> handleMissingParam(MissingServletRequestParameterException exception) {
-    log.warn("console missing request param: {}", exception.getMessage());
+  public ResponseEntity<?> handleMissingParam(
+      MissingServletRequestParameterException exception, HttpServletRequest request) {
+    // 带上请求 URI + method 让排查能定位前端调用点(原日志只有 param name 排查不了)
+    log.warn(
+        "console missing request param: {} {} — {}",
+        request.getMethod(),
+        request.getRequestURI(),
+        exception.getMessage());
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }

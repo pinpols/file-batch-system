@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.trigger;
 import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
@@ -150,6 +151,16 @@ public class TriggerLaunchConsumer {
       }
       counter(METRIC_FAILED, "tenant", tenantTag, "reason", "http_" + ex.getStatusCode().value())
           .increment();
+      throw ex;
+    } catch (BizException ex) {
+      // 业务级拒收(jobCode 不存在 / 跨租 / 字段缺失等),不是系统故障,记 WARN 不带 stack
+      log.warn(
+          "TriggerLaunchConsumer 业务拒收: tenantId={} requestId={} code={} message={}",
+          tenantId,
+          request.requestId(),
+          ex.getCode(),
+          ex.getMessage());
+      counter(METRIC_FAILED, "tenant", tenantTag, "reason", "business").increment();
       throw ex;
     } catch (RuntimeException ex) {
       log.error(
