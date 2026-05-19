@@ -105,20 +105,49 @@ public class OrchestratorKafkaConsumerConfiguration {
   private DefaultErrorHandler triggerLaunchErrorHandler() {
     DefaultErrorHandler handler =
         new DefaultErrorHandler(
-            (record, exception) ->
+            (record, exception) -> {
+              // BizException / IllegalArgumentException 是预期的业务级拒绝(jobCode 不存在/跨租拒/字段缺失),
+              // 用 WARN 即可,不需要 ERROR 占用告警通道;系统级 transient 错误重试到上限才是真 ERROR
+              Throwable cause = unwrap(exception);
+              boolean businessLevel =
+                  cause instanceof BizException || cause instanceof IllegalArgumentException;
+              if (businessLevel) {
+                log.warn(
+                    "TriggerLaunchConsumer 业务错跳过: topic={} partition={} offset={} key={} cause={}",
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.key(),
+                    cause.getMessage());
+              } else {
                 log.error(
-                    "TriggerLaunchConsumer 消息已超出重试上限或业务错跳过: topic={} partition={} offset={}"
+                    "TriggerLaunchConsumer 消息已超出重试上限: topic={} partition={} offset={}"
                         + " key={} value={} cause={}",
                     record.topic(),
                     record.partition(),
                     record.offset(),
                     record.key(),
                     record.value(),
-                    exception.getMessage()),
+                    exception.getMessage());
+              }
+            },
             new FixedBackOff(errorRetryBackoffMs, Math.max(0, errorRetryAttempts - 1)));
     // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
     handler.addNotRetryableExceptions(BizException.class);
     handler.addNotRetryableExceptions(IllegalArgumentException.class);
     return handler;
+  }
+
+  /** Spring Kafka listener 异常会被包成 ListenerExecutionFailedException;剥到真实 cause 判定业务级。 */
+  private static Throwable unwrap(Throwable t) {
+    Throwable current = t;
+    while (current != null
+        && current.getCause() != null
+        && current.getCause() != current
+        && !(current instanceof BizException)
+        && !(current instanceof IllegalArgumentException)) {
+      current = current.getCause();
+    }
+    return current == null ? t : current;
   }
 }

@@ -19,7 +19,7 @@ import org.springframework.web.client.RestClient;
 public class ConsoleSelfServiceJobService {
 
   // R7-A1-P1：原来自建 RestClient 漏 X-Internal-Secret，生产关 bypass-mode 时
-  // /internal/approvals/submit 直接 401；改走标准入口 OrchestratorInternalRestClient.
+  // /internal/approvals 直接 401；改走标准入口 OrchestratorInternalRestClient.
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
 
@@ -81,7 +81,7 @@ public class ConsoleSelfServiceJobService {
     Map<String, Object> response =
         client
             .post()
-            .uri("/internal/approvals/submit")
+            .uri("/internal/approvals")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, param.idempotencyKey())
             .body(body)
             .retrieve()
