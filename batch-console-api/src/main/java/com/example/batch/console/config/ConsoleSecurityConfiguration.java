@@ -7,6 +7,7 @@ import com.example.batch.console.support.auth.ConsoleAuthenticationFilter;
 import com.example.batch.console.support.auth.ConsoleRoles;
 import com.example.batch.console.support.auth.ConsoleSecurityHeadersWriter;
 import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
+import com.example.batch.console.support.maintenance.MaintenanceModeFilter;
 import com.example.batch.console.support.ratelimit.ConsoleRateLimitFilter;
 import com.example.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class ConsoleSecurityConfiguration {
       HttpSecurity http,
       ConsoleAuthenticationFilter consoleAuthenticationFilter,
       ConsoleRateLimitFilter consoleRateLimitFilter,
+      MaintenanceModeFilter maintenanceModeFilter,
       ConsoleSecurityResponseWriter responseWriter,
       ConsoleSecurityHeadersWriter securityHeadersWriter,
       CorsConfigurationSource consoleCorsConfigurationSource)
@@ -73,6 +75,7 @@ public class ConsoleSecurityConfiguration {
                         "/api/console/auth/logout",
                         "/api/console/auth/public-key",
                         "/api/console/push/vapid-public-key",
+                        "/api/console/system/maintenance",
                         "/console-login.html",
                         "/favicon.ico")
                     .permitAll()
@@ -90,7 +93,9 @@ public class ConsoleSecurityConfiguration {
                         ConsoleRoles.USER)
                     .anyRequest()
                     .authenticated())
-        .addFilterBefore(consoleRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+        // MaintenanceModeFilter 必须放最前:维护期不浪费 rate limit / auth / DB 资源
+        .addFilterBefore(maintenanceModeFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
         .addFilterAfter(consoleAuthenticationFilter, ConsoleRateLimitFilter.class)
         .build();
   }

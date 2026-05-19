@@ -31,6 +31,13 @@ mybatis:
 
 batch:
   console:
+    # 维护 / 降级模式开关。默认全部 false,生产灰度切换 / 紧急回滚时由 env 临时开启。
+    # SOP: docs/runbook/maintenance-mode.md
+    maintenance:
+      enabled: ${BATCH_CONSOLE_MAINTENANCE_ENABLED:false}
+      read-only: ${BATCH_CONSOLE_MAINTENANCE_READ_ONLY:false}
+      message: ${BATCH_CONSOLE_MAINTENANCE_MESSAGE:}
+      eta-at: ${BATCH_CONSOLE_MAINTENANCE_ETA_AT:}
     # P2-4: 读写分离 — 默认 true（本地 docker-compose / 生产部署一致；
     # fail-open 已就位，从库挂了自动降级主库；测试用 application-test.yml 覆盖为 false）
     read-replica:

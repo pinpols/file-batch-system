@@ -186,6 +186,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuthProfileResponse'
+  /api/console/system/maintenance:
+    get:
+      tags: [System]
+      summary: Maintenance mode status (always 200, no auth)
+      operationId: getMaintenanceStatus
+      description: |
+        Returns the current maintenance/degradation state so the frontend can:
+        1. Render a global banner with `message` + `etaAt` when `enabled=true`.
+        2. Switch to read-only UI (disable write buttons) when `readOnly=true`.
+        3. Auto-recover by polling (30s) and clearing banner when `enabled=false`.
+
+        This endpoint is whitelisted by `MaintenanceModeFilter`, so it returns 200 even
+        during maintenance — otherwise the frontend would have no way to detect recovery.
+      responses:
+        '200':
+          description: Maintenance status payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMaintenanceStatus'
   /api/console/auth/check:
     get:
       tags: [Auth]
@@ -8076,6 +8096,31 @@ components:
             data:
               type: integer
               format: int64
+    MaintenanceStatus:
+      type: object
+      required: [enabled, readOnly]
+      properties:
+        enabled:
+          type: boolean
+          description: Maintenance mode master switch
+        readOnly:
+          type: boolean
+          description: When true, GET requests pass through but POST/PUT/PATCH/DELETE return 503
+        message:
+          type: string
+          nullable: true
+          description: User-facing reason; rendered verbatim in the FE banner
+        etaAt:
+          type: string
+          nullable: true
+          description: ISO-8601 estimated recovery timestamp; null when unknown
+    CommonResponseMaintenanceStatus:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MaintenanceStatus'
     CommonResponseWorkflowDefinitionDetailResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
