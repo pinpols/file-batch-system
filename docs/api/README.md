@@ -30,6 +30,18 @@
 后端改 controller  →  必须同步更新 01 + 02（CLAUDE.md 硬约束）
 ```
 
+## 本地门禁
+
+改 `batch-console-api` Controller 后，至少运行：
+
+```bash
+python3 scripts/ci/check-console-openapi-paths.py
+```
+
+这个脚本校验 Controller 路径与 OpenAPI path 是否一致。前端的 `npm run gen:api:check` 只能确认生成类型与当前 OpenAPI YAML 同步，不能发现 Controller 已新增但 YAML 漏写的问题。
+
+当前前后端契约整理记录见 [`../analysis/frontend-backend-contract-cleanup-2026-05-19.md`](../analysis/frontend-backend-contract-cleanup-2026-05-19.md)。
+
 ## 相关入口
 
 | 主题 | 文档 |
