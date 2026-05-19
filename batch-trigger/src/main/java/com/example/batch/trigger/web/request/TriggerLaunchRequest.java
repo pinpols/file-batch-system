@@ -1,7 +1,8 @@
 package com.example.batch.trigger.web.request;
 
 import com.example.batch.common.enums.TriggerType;
-import jakarta.validation.constraints.NotBlank;
+import com.example.batch.common.validation.ValidResourceCode;
+import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -11,11 +12,9 @@ import lombok.Data;
 @Data
 public class TriggerLaunchRequest {
 
-  @NotBlank(message = "tenantId is required")
-  private String tenantId;
+  @ValidTenantId private String tenantId;
 
-  @NotBlank(message = "jobCode is required")
-  private String jobCode;
+  @ValidResourceCode private String jobCode;
 
   @NotNull(message = "bizDate is required")
   private LocalDate bizDate;

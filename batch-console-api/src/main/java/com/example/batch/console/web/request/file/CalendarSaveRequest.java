@@ -1,5 +1,6 @@
 package com.example.batch.console.web.request.file;
 
+import com.example.batch.common.validation.ValidResourceCode;
 import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -9,9 +10,7 @@ import lombok.Data;
 public class CalendarSaveRequest {
   @ValidTenantId private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String calendarCode;
+  @ValidResourceCode private String calendarCode;
 
   @NotBlank
   @Size(max = 256)

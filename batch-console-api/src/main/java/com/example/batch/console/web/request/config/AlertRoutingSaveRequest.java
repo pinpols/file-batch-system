@@ -1,5 +1,6 @@
 package com.example.batch.console.web.request.config;
 
+import com.example.batch.common.validation.ValidResourceCode;
 import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -10,9 +11,7 @@ import lombok.Data;
 public class AlertRoutingSaveRequest {
   @ValidTenantId private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String routeCode;
+  @ValidResourceCode private String routeCode;
 
   @Size(max = 128)
   private String routeName;

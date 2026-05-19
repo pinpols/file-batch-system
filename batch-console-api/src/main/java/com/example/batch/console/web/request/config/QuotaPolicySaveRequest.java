@@ -1,8 +1,8 @@
 package com.example.batch.console.web.request.config;
 
+import com.example.batch.common.validation.ValidResourceCode;
 import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -10,9 +10,7 @@ import lombok.Data;
 public class QuotaPolicySaveRequest {
   @ValidTenantId private String tenantId;
 
-  @NotBlank
-  @Size(max = 128)
-  private String policyCode;
+  @ValidResourceCode private String policyCode;
 
   @Min(0)
   private Integer maxRunningJobsPerTenant;
