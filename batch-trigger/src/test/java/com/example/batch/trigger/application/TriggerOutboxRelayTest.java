@@ -19,9 +19,9 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.trigger.config.TriggerOutboxRelayProperties;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Field;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -45,11 +45,14 @@ class TriggerOutboxRelayTest {
   @Mock private LockingTaskExecutor lockingTaskExecutor;
 
   private TriggerOutboxRelay relay;
+  private TriggerOutboxRelayProperties relayProperties;
 
   @BeforeEach
   void setUp() throws Throwable {
+    relayProperties = new TriggerOutboxRelayProperties();
     relay =
-        new TriggerOutboxRelay(mapper, publisher, lockingTaskExecutor, new SimpleMeterRegistry());
+        new TriggerOutboxRelay(
+            mapper, publisher, lockingTaskExecutor, new SimpleMeterRegistry(), relayProperties);
     when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
         .thenReturn(0);
     when(mapper.countByStatuses(any())).thenReturn(0L);
@@ -136,7 +139,7 @@ class TriggerOutboxRelayTest {
 
   @Test
   void poll_publisherFailureAtMaxAttempts_marksGiveUp() throws Exception {
-    setMaxPublishAttempts(relay, 3);
+    relayProperties.setMaxPublishAttempts(3);
     TriggerOutboxEventEntity event = buildPendingEvent(107L, validEnvelopePayload());
     event.setPublishAttempt(2);
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
@@ -250,11 +253,5 @@ class TriggerOutboxRelayTest {
             Map.of());
     return JsonUtils.toJson(
         LaunchEnvelope.of(request, "tenant-a:req-1", BatchDateTimeSupport.utcNow()));
-  }
-
-  private static void setMaxPublishAttempts(TriggerOutboxRelay relay, int value) throws Exception {
-    Field field = TriggerOutboxRelay.class.getDeclaredField("maxPublishAttempts");
-    field.setAccessible(true);
-    field.setInt(relay, value);
   }
 }

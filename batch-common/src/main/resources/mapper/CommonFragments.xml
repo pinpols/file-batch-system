@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+    跨 mapper 复用的 SQL 片段。仅放「与具体表无关」的纯工具型 fragment;表相关的
+    resultMap / sql 仍在各自 mapper.xml 内。
+
+    用法:
+        <select id="..." parameterType="...">
+            select ... from ...
+            <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        </select>
+
+    设计取舍:
+    - 不用 PageHelper 类 ThreadLocal 黑魔法,显式 #{pageRequest.*} 比较好调试
+    - 21 个 mapper.xml 原本每个写 5 行 offset bind,改 1 行 include,减少 80+ LOC 重复
+    - cursor 分页另起 fragment(ADR-031 阶段 1 落地)
+-->
+<mapper namespace="com.example.batch.common.mapper.CommonFragments">
+
+    <!--
+        Offset 分页公共片段。约束:
+        - 调用方参数必须含 `pageRequest`(类型 PageRequest,字段 pageNo + pageSize)
+        - `pageRequest == null` 时本片段不生效(用于 selectAll / count-only 场景共用 SQL)
+        - 必须放在调用方 select 的末尾(`order by` 之后)
+    -->
+    <sql id="offsetPageClause">
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </sql>
+
+</mapper>

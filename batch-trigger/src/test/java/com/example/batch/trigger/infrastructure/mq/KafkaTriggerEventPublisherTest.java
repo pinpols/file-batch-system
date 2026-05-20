@@ -9,7 +9,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.trigger.application.TriggerEventPublisher;
-import java.lang.reflect.Field;
+import com.example.batch.trigger.config.TriggerKafkaProperties;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Map;
@@ -50,8 +50,9 @@ class KafkaTriggerEventPublisherTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    publisher = new KafkaTriggerEventPublisher(kafkaTemplate);
-    setField(publisher, "sendTimeoutSeconds", 1);
+    TriggerKafkaProperties props = new TriggerKafkaProperties();
+    props.setSendTimeoutSeconds(1);
+    publisher = new KafkaTriggerEventPublisher(kafkaTemplate, props);
   }
 
   @Test
@@ -133,11 +134,5 @@ class KafkaTriggerEventPublisherTest {
   private static String headerValue(ProducerRecord<String, String> record, String name) {
     Header header = record.headers().lastHeader(name);
     return header == null ? null : new String(header.value(), StandardCharsets.UTF_8);
-  }
-
-  private static void setField(Object target, String fieldName, Object value) throws Exception {
-    Field field = target.getClass().getDeclaredField(fieldName);
-    field.setAccessible(true);
-    field.set(target, value);
   }
 }

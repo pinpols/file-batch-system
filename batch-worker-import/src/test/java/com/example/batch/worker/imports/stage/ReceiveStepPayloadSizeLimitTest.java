@@ -26,9 +26,13 @@ class ReceiveStepPayloadSizeLimitTest {
 
   @BeforeEach
   void setUp() {
-    receiveStep = new ReceiveStep(runtimeRepository, batchSecurityProperties, new ObjectMapper());
-    // 设置 1 MB 限制
-    ReflectionTestUtils.setField(receiveStep, "maxPayloadSizeMb", 1);
+    com.example.batch.worker.imports.config.WorkerImportPayloadProperties payloadProps =
+        new com.example.batch.worker.imports.config.WorkerImportPayloadProperties();
+    payloadProps.setMaxPayloadSizeMb(1);
+    receiveStep =
+        new ReceiveStep(
+            runtimeRepository, batchSecurityProperties, new ObjectMapper(), payloadProps);
+    // 强制 1 MB（绕开 heap-ratio 计算结果可能更小的情况）
     ReflectionTestUtils.setField(receiveStep, "maxPayloadSizeBytes", 1L * 1024 * 1024);
   }
 
