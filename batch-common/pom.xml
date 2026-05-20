@@ -13,6 +13,12 @@
     <name>batch-common</name>
 
     <dependencies>
+        <!-- JSpecify @NullMarked / @Nullable 标注 — P3 NPE 治理用,见 utils/package-info.java -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>1.0.0</version>
+        </dependency>
         <!--
           共享配置基线 batch-defaults.yml 直接放在 src/main/resources/,所有服务模块通过
           batch-common 传递引入(application.yml 只 overlay)。基线缺失由
