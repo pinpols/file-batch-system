@@ -37,6 +37,7 @@ import com.example.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
+import com.example.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import com.example.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
@@ -111,7 +112,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler,
       ResultVersionWriter resultVersionWriter,
       BatchDayReplayTerminalReconciler batchDayReplayTerminalReconciler,
-      FailureClassifier failureClassifier) {}
+      FailureClassifier failureClassifier,
+      // ⑦ follow-up: worker REPORT 终态写路径也要打 JobLifecycleMetrics,与
+      // JobInstanceTerminalStatusApplicationService 走同一 helper 复用 afterCommit 调度。
+      JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder) {}
 
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
@@ -508,6 +512,16 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
     jobInstance.setInstanceStatus(instanceStatus);
     if (isTerminalJobInstanceStatus(instanceStatus)) {
+      // ⑦ follow-up: worker REPORT 路径的终态切换也要算入 JobLifecycleMetrics,
+      // 与 JobInstanceTerminalStatusApplicationService (运维/超时路径) 走同一 helper。
+      // jobFullyComplete 决定 finishedAt 是否进入实例 — null 时 helper 走 afterCommit 时刻兜底。
+      collaborators
+          .jobLifecycleMetricsRecorder()
+          .recordCompletionAfterCommit(
+              command.tenantId(),
+              jobInstance.getId(),
+              instanceStatus,
+              jobFullyComplete ? finishedAt : null);
       // ADR-012 Stage 5: 失败终态打 failure_class 维度 metric, alert routing / 看板使用。
       if (instanceFailureClass != null) {
         collaborators
