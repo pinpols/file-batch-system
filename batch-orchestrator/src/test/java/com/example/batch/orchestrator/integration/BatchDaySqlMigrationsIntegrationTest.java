@@ -34,7 +34,7 @@ class BatchDaySqlMigrationsIntegrationTest {
 
     Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz")
+        .schemas("batch", "quartz", "archive")
         .defaultSchema("batch")
         .locations("classpath:db/migration")
         .load()
@@ -83,7 +83,7 @@ class BatchDaySqlMigrationsIntegrationTest {
     Flyway configured =
         Flyway.configure()
             .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-            .schemas("batch", "quartz")
+            .schemas("batch", "quartz", "archive")
             .defaultSchema("batch")
             .locations("classpath:db/migration")
             // 飞行目标必须存在真实迁移版本；用 V29 作为 V31 之前的“已升级到尽可能多”
@@ -102,7 +102,7 @@ class BatchDaySqlMigrationsIntegrationTest {
       // 再全量升级到最新版（补齐 V31/V32...）
       Flyway.configure()
           .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-          .schemas("batch", "quartz")
+          .schemas("batch", "quartz", "archive")
           .defaultSchema("batch")
           .locations("classpath:db/migration")
           .load()
@@ -121,7 +121,7 @@ class BatchDaySqlMigrationsIntegrationTest {
       Flyway fullFlyway =
           Flyway.configure()
               .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-              .schemas("batch", "quartz")
+              .schemas("batch", "quartz", "archive")
               .defaultSchema("batch")
               .locations("classpath:db/migration")
               .load();
@@ -141,7 +141,7 @@ class BatchDaySqlMigrationsIntegrationTest {
     Flyway flyway =
         Flyway.configure()
             .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-            .schemas("batch", "quartz")
+            .schemas("batch", "quartz", "archive")
             .defaultSchema("batch")
             .locations("classpath:db/migration")
             .load();
@@ -240,7 +240,7 @@ class BatchDaySqlMigrationsIntegrationTest {
     Flyway resetFlyway =
         Flyway.configure()
             .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-            .schemas("batch", "quartz")
+            .schemas("batch", "quartz", "archive")
             .defaultSchema("batch")
             .locations("classpath:db/migration")
             .cleanDisabled(false)

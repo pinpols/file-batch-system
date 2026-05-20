@@ -61,6 +61,14 @@ WHERE ji.trigger_request_id IS NULL
   AND tr.tenant_id = ji.tenant_id
   AND tr.request_id = 'legacy-job-instance-' || ji.id;
 
+-- archive 冷表没有 trigger_request 外键关系,但 V136 同步加了来源约束。
+-- 对历史归档行补一个稳定的 synthetic 非空值,避免旧冷数据阻断 VALIDATE。
+UPDATE archive.job_instance_archive
+SET trigger_request_id = -id,
+    updated_at = CURRENT_TIMESTAMP
+WHERE trigger_request_id IS NULL
+  AND trigger_type <> 'MANUAL';
+
 ALTER TABLE batch.job_instance
     VALIDATE CONSTRAINT ck_job_instance_trigger_source;
 

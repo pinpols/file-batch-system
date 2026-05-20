@@ -129,8 +129,8 @@ class TaskDispatchOutboxServiceTest {
 
     ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
     verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload().toString())
-        .contains("\"" + SchedulingPriorityBand.HIGH.code() + "\"");
+    assertThat(cap.getValue().payload())
+        .containsEntry("priorityBand", SchedulingPriorityBand.HIGH.code());
   }
 
   @Test
@@ -142,8 +142,8 @@ class TaskDispatchOutboxServiceTest {
 
     ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
     verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload().toString())
-        .contains("\"" + SchedulingPriorityBand.MEDIUM.code() + "\"");
+    assertThat(cap.getValue().payload())
+        .containsEntry("priorityBand", SchedulingPriorityBand.MEDIUM.code());
   }
 
   @Test
@@ -155,8 +155,8 @@ class TaskDispatchOutboxServiceTest {
 
     ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
     verify(domainEventPublisher).publish(cap.capture());
-    assertThat(cap.getValue().payload().toString())
-        .contains("\"" + SchedulingPriorityBand.LOW.code() + "\"");
+    assertThat(cap.getValue().payload())
+        .containsEntry("priorityBand", SchedulingPriorityBand.LOW.code());
   }
 
   // ===== RunMode override 持久化 =====
