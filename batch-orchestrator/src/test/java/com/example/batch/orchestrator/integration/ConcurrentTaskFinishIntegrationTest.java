@@ -51,16 +51,30 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
             jobCode,
             jobCode);
 
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(
+            """
+            INSERT INTO batch.trigger_request (
+                tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
+            ) VALUES ('t1', ?, 'API', ?, ?, 'LAUNCHED')
+            RETURNING id
+            """,
+            Long.class,
+            "REQ_" + suffix,
+            jobCode,
+            "TR_DEDUP_" + suffix);
+
     Long jobInstanceId =
         jdbcTemplate.queryForObject(
             """
             INSERT INTO batch.job_instance (
-                tenant_id, job_definition_id, job_code, instance_no, trigger_type, instance_status, dedup_key
-            ) VALUES ('t1', ?, ?, ?, 'API', 'RUNNING', ?)
+                tenant_id, job_definition_id, trigger_request_id, job_code, instance_no, trigger_type, instance_status, dedup_key
+            ) VALUES ('t1', ?, ?, ?, ?, 'API', 'RUNNING', ?)
             RETURNING id
             """,
             Long.class,
             jobDefinitionId,
+            triggerRequestId,
             jobCode,
             "INST_" + suffix,
             "DEDUP_" + suffix);
@@ -120,6 +134,7 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
     } finally {
       jdbcTemplate.update("DELETE FROM batch.job_task WHERE id = ?", taskId);
       jdbcTemplate.update("DELETE FROM batch.job_instance WHERE id = ?", jobInstanceId);
+      jdbcTemplate.update("DELETE FROM batch.trigger_request WHERE id = ?", triggerRequestId);
       jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", jobDefinitionId);
     }
   }

@@ -47,17 +47,32 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
             jobCode,
             jobCode);
 
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(
+            """
+            INSERT INTO batch.trigger_request (
+                tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
+            ) VALUES (?, ?, 'API', ?, ?, 'LAUNCHED')
+            RETURNING id
+            """,
+            Long.class,
+            tenantId,
+            "REQ_" + suffix,
+            jobCode,
+            "TR_DEDUP_" + suffix);
+
     Long jobInstanceId =
         jdbcTemplate.queryForObject(
             """
             INSERT INTO batch.job_instance (
-                tenant_id, job_definition_id, job_code, instance_no, trigger_type, instance_status, dedup_key
-            ) VALUES (?, ?, ?, ?, 'API', 'RUNNING', ?)
+                tenant_id, job_definition_id, trigger_request_id, job_code, instance_no, trigger_type, instance_status, dedup_key
+            ) VALUES (?, ?, ?, ?, ?, 'API', 'RUNNING', ?)
             RETURNING id
             """,
             Long.class,
             tenantId,
             jobDefinitionId,
+            triggerRequestId,
             jobCode,
             "INST_" + suffix,
             "DEDUP_" + suffix);
@@ -117,6 +132,7 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
     } finally {
       jdbcTemplate.update("DELETE FROM batch.job_partition WHERE id = ?", partitionId);
       jdbcTemplate.update("DELETE FROM batch.job_instance WHERE id = ?", jobInstanceId);
+      jdbcTemplate.update("DELETE FROM batch.trigger_request WHERE id = ?", triggerRequestId);
       jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", jobDefinitionId);
     }
   }

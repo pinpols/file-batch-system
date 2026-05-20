@@ -171,17 +171,29 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
               TENANT,
               JOB_CODE);
     }
+    Long triggerRequestId =
+        jdbcTemplate.queryForObject(
+            "insert into batch.trigger_request (tenant_id, request_id, trigger_type, job_code,"
+                + " biz_date, dedup_key, request_status) values (?, ?, 'SCHEDULED', ?, ?, ?,"
+                + " 'LAUNCHED') returning id",
+            Long.class,
+            TENANT,
+            "REQ:" + JOB_CODE + ":" + instanceNo,
+            JOB_CODE,
+            BIZ_DATE,
+            "TR:" + TENANT + ":" + JOB_CODE + ":" + instanceNo);
     jdbcTemplate.update(
         "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no,"
-            + " biz_date, trigger_type, instance_status, queue_code, worker_group, priority,"
-            + " dedup_key, run_attempt, version, expected_partition_count, success_partition_count,"
-            + " failed_partition_count, params_snapshot) values (?, ?, ?, ?, ?, 'SCHEDULED', ?,"
-            + " 'q', 'wg', 5, ?, 1, 0, 0, 0, 0, '{}'::jsonb)",
+            + " biz_date, trigger_request_id, trigger_type, instance_status, queue_code,"
+            + " worker_group, priority, dedup_key, run_attempt, version, expected_partition_count,"
+            + " success_partition_count, failed_partition_count, params_snapshot) values (?, ?, ?,"
+            + " ?, ?, ?, 'SCHEDULED', ?, 'q', 'wg', 5, ?, 1, 0, 0, 0, 0, '{}'::jsonb)",
         TENANT,
         jobDefId,
         JOB_CODE,
         instanceNo,
         BIZ_DATE,
+        triggerRequestId,
         status,
         TENANT + ":" + JOB_CODE + ":" + instanceNo);
     return jdbcTemplate.queryForObject(

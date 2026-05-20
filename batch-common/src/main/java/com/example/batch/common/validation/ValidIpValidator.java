@@ -21,8 +21,11 @@ public class ValidIpValidator implements ConstraintValidator<ValidIp, String> {
       return true;
     }
     String trimmed = value.trim();
-    // 先做形态过滤:`InetAddress.getByName` 会把纯数字主机名(如 "12345")当作合法 → 必须先校验形态有点 / 冒号
-    if (!trimmed.contains(".") && !trimmed.contains(":")) {
+    if (isStrictIpv4(trimmed)) {
+      return true;
+    }
+    // `InetAddress.getByName` 对 IPv4 过于宽松；IPv6 字面量才交给 JDK 解析。
+    if (!trimmed.contains(":")) {
       return false;
     }
     try {
@@ -30,9 +33,32 @@ public class ValidIpValidator implements ConstraintValidator<ValidIp, String> {
       if (ipv4Only && !(addr instanceof Inet4Address)) {
         return false;
       }
-      return true;
+      return !(addr instanceof Inet4Address);
     } catch (UnknownHostException e) {
       return false;
     }
+  }
+
+  private static boolean isStrictIpv4(String value) {
+    int start = 0;
+    for (int part = 0; part < 4; part++) {
+      int dot = part == 3 ? value.length() : value.indexOf('.', start);
+      if (dot < 0 || dot == start || dot - start > 3) {
+        return false;
+      }
+      int segment = 0;
+      for (int i = start; i < dot; i++) {
+        char c = value.charAt(i);
+        if (c < '0' || c > '9') {
+          return false;
+        }
+        segment = segment * 10 + (c - '0');
+      }
+      if (segment > 255) {
+        return false;
+      }
+      start = dot + 1;
+    }
+    return start == value.length() + 1;
   }
 }

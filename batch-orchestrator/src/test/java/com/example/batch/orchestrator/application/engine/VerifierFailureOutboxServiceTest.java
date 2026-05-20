@@ -53,7 +53,7 @@ class VerifierFailureOutboxServiceTest {
         .extracting(DomainEvent::eventKey)
         .containsExactlyInAnyOrder(
             "t1:verifier:42:EXPORT_FILE_EMPTY:0", "t1:verifier:42:EXPORT_HEADER_INVALID:1");
-    assertThat(events.get(0).payload().toString()).contains("\"schemaVersion\":\"v1\"");
+    assertThat(events.get(0).payload()).containsEntry("schemaVersion", "v1");
   }
 
   @Test
