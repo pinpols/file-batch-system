@@ -223,16 +223,31 @@ public class AuditAspect {
         || cls.startsWith("org.springframework.data.domain.Pageable");
   }
 
+  /**
+   * console_operation_audit.tenant_id NOT NULL。auth.login/auth.logout 等系统级动作 principal.tenantId() 为
+   * null(ROLE_ADMIN 无具体租户),此时 fallback 到 MDC tenant → "system" 兜底,避免审计行被 DB 约束拒绝丢失。
+   */
   private OperatorInfo currentOperator() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !(auth.getPrincipal() instanceof ConsolePrincipal p)) {
-      return new OperatorInfo(null, null, null);
+      return new OperatorInfo(null, null, resolveTenantFallback(null));
     }
     String role =
         p.authorities() == null || p.authorities().isEmpty()
             ? null
             : p.authorities().iterator().next();
-    return new OperatorInfo(p.username(), role, p.tenantId());
+    return new OperatorInfo(p.username(), role, resolveTenantFallback(p.tenantId()));
+  }
+
+  private static String resolveTenantFallback(String principalTenantId) {
+    if (principalTenantId != null && !principalTenantId.isBlank()) {
+      return principalTenantId;
+    }
+    String mdcTenant = MDC.get("tenant");
+    if (mdcTenant != null && !mdcTenant.isBlank()) {
+      return mdcTenant;
+    }
+    return "system";
   }
 
   private RequestInfo currentRequest() {
