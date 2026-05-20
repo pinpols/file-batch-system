@@ -3,6 +3,7 @@ package com.example.batch.securityscan;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public enum ScanStep {
     SECRET("secret"),
@@ -95,13 +96,26 @@ public enum ScanStep {
                 "--rm",
                 "-t",
                 "-v",
-                options.reportDir().toString() + ":/zap/wrk",
-                options.zapImage(),
-                "zap-baseline.py",
-                "-t",
-                options.targetUrl(),
-                "-r",
-                Path.of(options.zapReport()).getFileName().toString()));
+                options.reportDir().toString() + ":/zap/wrk"));
+        String scan = options.zapScan().toLowerCase(Locale.ROOT);
+        if ("api".equals(scan) && isLocalSpec(options.zapApiSpec())) {
+            command.add("-v");
+            command.add(options.root().toString() + ":/zap/src:ro");
+        }
+        command.add(options.zapImage());
+        command.add(switch (scan) {
+            case "api" -> "zap-api-scan.py";
+            case "full" -> "zap-full-scan.py";
+            default -> "zap-baseline.py";
+        });
+        command.add("-t");
+        command.add("api".equals(scan) ? zapApiTarget(options) : options.targetUrl());
+        if ("api".equals(scan)) {
+            command.add("-f");
+            command.add("openapi");
+        }
+        command.add("-r");
+        command.add(Path.of(options.zapReport()).getFileName().toString());
         if (options.zapAuthHeaderValue() != null && !options.zapAuthHeaderValue().isBlank()) {
             command.add("-z");
             command.add(
@@ -112,6 +126,25 @@ public enum ScanStep {
                             + " -config replacer.full_list(0).replacement=" + options.zapAuthHeaderValue());
         }
         return command;
+    }
+
+    private static String zapApiTarget(SecurityScanOptions options) {
+        if (!isLocalSpec(options.zapApiSpec())) {
+            return options.zapApiSpec();
+        }
+        Path root = options.root().toAbsolutePath().normalize();
+        Path spec = Path.of(options.zapApiSpec()).toAbsolutePath().normalize();
+        if (!spec.startsWith(root)) {
+            throw new IllegalArgumentException("Local --zap-api-spec must be under --root: " + spec);
+        }
+        return "/zap/src/" + root.relativize(spec).toString().replace('\\', '/');
+    }
+
+    private static boolean isLocalSpec(String value) {
+        return value != null
+                && !value.startsWith("http://")
+                && !value.startsWith("https://")
+                && !value.startsWith("/zap/");
     }
 
     private static List<String> list(String first, String... rest) {

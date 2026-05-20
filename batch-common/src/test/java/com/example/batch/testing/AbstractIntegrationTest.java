@@ -87,6 +87,16 @@ public abstract class AbstractIntegrationTest {
     return KAFKA.getBootstrapServers();
   }
 
+  protected static void stopKafkaForFaultInjection() {
+    KAFKA.stop();
+  }
+
+  protected static void startKafkaAfterFaultInjection() {
+    if (!KAFKA.isRunning()) {
+      KAFKA.start();
+    }
+  }
+
   protected static String minioEndpoint() {
     return MINIO.getEndpoint();
   }

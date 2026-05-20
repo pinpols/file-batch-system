@@ -185,11 +185,22 @@ export BATCH_DAST_AUTH_HEADER_NAME=Cookie
 export BATCH_DAST_AUTH_HEADER_VALUE='batch_console_token=<staging-jwt-cookie>'
 bash scripts/ci/security-scan.sh -- \
   --mode=dast \
+  --zap-scan=full \
   --require-zap-auth \
   --target-url=http://localhost:18080
 ```
 
 `--require-zap-auth` 会在认证头缺失时直接失败，防止无认证 baseline 被误当作 Console API 安全门禁。
+
+如需按 OpenAPI 合约做 application-level API 扫描，可改用 API scan：
+
+```bash
+bash scripts/ci/security-scan.sh -- \
+  --mode=dast \
+  --zap-scan=api \
+  --zap-api-spec=docs/api/console-api.openapi.yaml \
+  --require-zap-auth
+```
 
 ## 推荐阈值
 
