@@ -102,13 +102,25 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   /**
-   * 提交补偿指令：落库 command → 路由到 handler 执行 → 统一回写 SUCCESS/FAILED 状态与日志。
+   * 提交补偿指令:落库 command → 路由到 handler 执行 → 统一回写 SUCCESS/FAILED 状态与日志。
    *
-   * <p>执行链上 handler 抛异常时，先把 FAILED 状态 + 日志写完再 rethrow——绝不能跳过，否则命令卡在 RUNNING 将永久阻塞同目标的后续补偿提交（见
-   * {@link #assertNoRunningConflict} 与 DB 唯一约束）。
+   * <p><b>事务模型(2026-05-20 review 修正)</b>:之前用 {@code @Transactional(noRollbackFor =
+   * Exception.class)} 让 handler 抛异常时整个外层事务**提交**(包括 handler
+   * 已经做过的任务/分片/重放业务写入),导致**业务半截副作用泄漏到生产数据**。 修正后:
+   *
+   * <ul>
+   *   <li>本 submit() 方法**不再有外层 @Transactional**(纯调度方法)
+   *   <li>INSERT 命令行走 {@link #insertCommandInNewTx} REQUIRES_NEW,独立提交 — handler 失败也留住命令行
+   *   <li>handler 执行 + SUCCESS 状态/日志走 {@link #executeAndMarkSuccessInOwnTx} 默认 @Transactional —
+   *       handler 抛错就**回滚业务写入**,不留垃圾
+   *   <li>FAILED 状态/日志走 {@link #markFailedAndLogInNewTx} REQUIRES_NEW — 即使外层业务事务回滚也独立留痕, 且能 unblock
+   *       后续补偿提交(避免命令卡 RUNNING)
+   * </ul>
+   *
+   * <p>权衡:理论上 INSERT 后 / executeAndMarkSuccessInOwnTx 成功提交前 JVM 崩溃,命令会卡 RUNNING。这通过 ops backlog 的
+   * stale-RUNNING reconciler 兜底(范围外,不在本方法处理)。
    */
   @Override
-  @Transactional(noRollbackFor = Exception.class)
   public String submit(CompensationSubmitCommand command) {
     // 2026-05-01 hardening: pre-insert 阶段(validate / 冲突检查 / insert 唯一约束)失败时
     // 也要落审计 trail。原实现只在 insert 成功后才 log,导致"提交即拒"的请求丢线索。
@@ -130,7 +142,7 @@ public class DefaultCompensationService implements CompensationService {
     }
     CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
     try {
-      compensationCommandMapper.insert(entity);
+      self.insertCommandInNewTx(entity);
     } catch (DataIntegrityViolationException ex) {
       BizException wrapped =
           BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
@@ -138,43 +150,73 @@ public class DefaultCompensationService implements CompensationService {
       throw wrapped;
     }
     try {
-      Map<String, Object> result = execute(command, commandNo, traceId, entity);
-      result.put("hitCount", 1);
-      result.put("conflictCount", 0);
-      compensationCommandMapper.updateStatus(
-          UpdateCompensationStatusParam.builder()
-              .tenantId(command.tenantId())
-              .id(entity.getId())
-              .commandStatus(CompensationCommandStatus.SUCCESS.code())
-              .relatedJobInstanceId(entity.getRelatedJobInstanceId())
-              .relatedFileId(entity.getRelatedFileId())
-              .resultSummary(JsonUtils.toJson(result))
-              .errorCode(null)
-              .errorMessage(null)
-              .finishedAt(BatchDateTimeSupport.utcNow())
-              .build());
-      appendCompensationLog(
-          new CompensationLogContext(
-              command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null));
+      self.executeAndMarkSuccessInOwnTx(command, commandNo, traceId, entity);
       return commandNo;
     } catch (Exception exception) {
-      compensationCommandMapper.updateStatus(
-          UpdateCompensationStatusParam.builder()
-              .tenantId(command.tenantId())
-              .id(entity.getId())
-              .commandStatus(CompensationCommandStatus.FAILED.code())
-              .relatedJobInstanceId(entity.getRelatedJobInstanceId())
-              .relatedFileId(entity.getRelatedFileId())
-              .resultSummary(null)
-              .errorCode(resolveErrorCode(exception))
-              .errorMessage(exception.getMessage())
-              .finishedAt(BatchDateTimeSupport.utcNow())
-              .build());
-      appendCompensationLog(
-          new CompensationLogContext(
-              command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception));
+      // 业务事务已正常回滚 handler 的副作用(任务/分片/重放状态);此处独立 NEW tx 写 FAILED + 日志
+      self.markFailedAndLogInNewTx(command, traceId, entity, exception);
       throw exception;
     }
+  }
+
+  /** INSERT command row in REQUIRES_NEW 独立提交;handler 失败也留住命令行(审计 + unblock 后续提交)。 */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void insertCommandInNewTx(CompensationCommandEntity entity) {
+    compensationCommandMapper.insert(entity);
+  }
+
+  /** Handler 业务写 + SUCCESS 状态/日志,默认 @Transactional:handler 抛错回滚业务写入。 */
+  @Transactional
+  public void executeAndMarkSuccessInOwnTx(
+      CompensationSubmitCommand command,
+      String commandNo,
+      String traceId,
+      CompensationCommandEntity entity) {
+    Map<String, Object> result = execute(command, commandNo, traceId, entity);
+    result.put("hitCount", 1);
+    result.put("conflictCount", 0);
+    compensationCommandMapper.updateStatus(
+        UpdateCompensationStatusParam.builder()
+            .tenantId(command.tenantId())
+            .id(entity.getId())
+            .commandStatus(CompensationCommandStatus.SUCCESS.code())
+            .relatedJobInstanceId(entity.getRelatedJobInstanceId())
+            .relatedFileId(entity.getRelatedFileId())
+            .resultSummary(JsonUtils.toJson(result))
+            .errorCode(null)
+            .errorMessage(null)
+            .finishedAt(BatchDateTimeSupport.utcNow())
+            .build());
+    appendCompensationLog(
+        new CompensationLogContext(
+            command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null));
+  }
+
+  /**
+   * 业务事务失败后独立 NEW tx 写 FAILED + 日志。外层业务回滚不影响命令行(走 insertCommandInNewTx 已独立提交); 这里只是把命令状态从 RUNNING
+   * 推进到 FAILED + 记录失败日志。
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markFailedAndLogInNewTx(
+      CompensationSubmitCommand command,
+      String traceId,
+      CompensationCommandEntity entity,
+      Exception exception) {
+    compensationCommandMapper.updateStatus(
+        UpdateCompensationStatusParam.builder()
+            .tenantId(command.tenantId())
+            .id(entity.getId())
+            .commandStatus(CompensationCommandStatus.FAILED.code())
+            .relatedJobInstanceId(entity.getRelatedJobInstanceId())
+            .relatedFileId(entity.getRelatedFileId())
+            .resultSummary(null)
+            .errorCode(resolveErrorCode(exception))
+            .errorMessage(exception.getMessage())
+            .finishedAt(BatchDateTimeSupport.utcNow())
+            .build());
+    appendCompensationLog(
+        new CompensationLogContext(
+            command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception));
   }
 
   /**

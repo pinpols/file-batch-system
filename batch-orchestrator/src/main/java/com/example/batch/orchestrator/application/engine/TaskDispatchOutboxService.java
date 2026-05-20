@@ -1,9 +1,10 @@
 package com.example.batch.orchestrator.application.engine;
 
 import com.example.batch.common.context.RunModeSupport;
-import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.SchedulingPriorityBand;
+import com.example.batch.common.event.DomainEvent;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
@@ -11,9 +12,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TaskDispatchOutboxService {
 
-  private final OutboxEventMapper outboxEventMapper;
+  private final DomainEventPublisher domainEventPublisher;
   private final JobTaskMapper jobTaskMapper;
 
   @Lazy @Autowired private TaskDispatchOutboxService self;
@@ -103,24 +102,21 @@ public class TaskDispatchOutboxService {
             idempotencyKey,
             BatchDateTimeSupport.utcNow());
 
-    OutboxEventEntity event = new OutboxEventEntity();
-    event.setTenantId(task.getTenantId());
-    event.setAggregateType("JOB_TASK");
-    event.setAggregateId(task.getId());
-    event.setEventType(task.getTaskType());
-    event.setEventKey(
-        eventKey == null || eventKey.isBlank()
-            ? task.getTenantId() + ":" + task.getId()
-            : eventKey);
-    event.setPayloadJson(JsonUtils.toJson(message));
-    event.setPublishStatus(OutboxPublishStatus.NEW.code());
-    event.setPublishAttempt(0);
-    event.setTraceId(traceId);
-    // V88: 拷 priority 到 outbox_event, OutboxPollScheduler 按 priority desc 排序优先派发
-    // 优先级源: task.priority (V88 加列), DefaultPartitionDispatchService.buildTask 设置.
-    // 兜底: jobInstance.priority (老逻辑); 都缺则走 DB DEFAULT 5 (coalesce in INSERT SQL).
-    event.setPriority(task.getPriority() != null ? task.getPriority() : jobInstance.getPriority());
-    outboxEventMapper.insert(event);
+    // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
+    // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
+    // 兜底:jobInstance.priority(老逻辑);都缺走 DomainEvent 不传 → DB DEFAULT 5。
+    Integer priority = task.getPriority() != null ? task.getPriority() : jobInstance.getPriority();
+    String resolvedKey =
+        eventKey == null || eventKey.isBlank() ? task.getTenantId() + ":" + task.getId() : eventKey;
+    domainEventPublisher.publish(
+        DomainEvent.builder(task.getTenantId())
+            .aggregate("JOB_TASK", task.getId())
+            .type(task.getTaskType())
+            .key(resolvedKey)
+            .payload(JsonUtils.toMap(message))
+            .traceId(traceId)
+            .priority(priority)
+            .build());
   }
 
   /**
