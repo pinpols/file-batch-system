@@ -77,4 +77,15 @@ public final class JsonUtils {
       throw new IllegalArgumentException("Failed to parse JSON (strict)", ex);
     }
   }
+
+  /**
+   * POJO → Map(LinkedHashMap)。给 DomainEventPublisher 之类的 payload 抽象用,避免 toJson + fromJson 二次序列化。
+   */
+  @SuppressWarnings("unchecked")
+  public static java.util.Map<String, Object> toMap(Object value) {
+    if (value == null) {
+      return new java.util.LinkedHashMap<>();
+    }
+    return MAPPER.convertValue(value, java.util.LinkedHashMap.class);
+  }
 }

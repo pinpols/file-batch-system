@@ -33,7 +33,11 @@ public record DomainEvent(
     if (eventType == null || eventType.isBlank()) {
       throw new IllegalArgumentException("DomainEvent.eventType must not be blank");
     }
-    payload = payload == null ? Map.of() : Map.copyOf(payload);
+    // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)
+    payload =
+        payload == null
+            ? java.util.Map.of()
+            : java.util.Collections.unmodifiableMap(new LinkedHashMap<>(payload));
     schemaVersion = schemaVersion == null ? "v1" : schemaVersion;
   }
 

@@ -1,11 +1,9 @@
 package com.example.batch.orchestrator.application.engine;
 
-import com.example.batch.common.enums.OutboxPublishStatus;
-import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.event.DomainEvent;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +49,7 @@ public class VerifierFailureOutboxService {
   private static final String EVENT_TYPE = "verifier.failure.v1";
   private static final String AGGREGATE_TYPE = "JOB_TASK";
 
-  private final OutboxEventMapper outboxEventMapper;
+  private final DomainEventPublisher domainEventPublisher;
 
   /** 调用方持有当前事务；本方法 MANDATORY，无事务直接抛。 */
   @Transactional(propagation = Propagation.MANDATORY)
@@ -70,8 +68,7 @@ public class VerifierFailureOutboxService {
         index++;
         continue;
       }
-      OutboxEventEntity event = buildEvent(command, task, failure, index);
-      outboxEventMapper.insert(event);
+      domainEventPublisher.publish(buildEvent(command, task, failure, index));
       written++;
       index++;
     }
@@ -85,7 +82,7 @@ public class VerifierFailureOutboxService {
     return written;
   }
 
-  private OutboxEventEntity buildEvent(
+  private DomainEvent buildEvent(
       TaskOutcomeCommand command, JobTaskEntity task, Map<String, Object> failure, int index) {
     String reason = stringValue(failure.get("code"));
     String message = stringValue(failure.get("message"));
@@ -97,32 +94,29 @@ public class VerifierFailureOutboxService {
     payload.put("taskId", command.taskId());
     payload.put("jobInstanceId", task.getJobInstanceId());
     payload.put("workerId", command.workerId());
-    // verifier 业务码（如 EXPORT_FILE_NON_EMPTY）目前未单独传过来，复用 reason 作为 code，
-    // 避免引入额外字段；告警面板可同时按 reason 过滤。
+    // verifier 业务码（如 EXPORT_FILE_NON_EMPTY）目前未单独传过来,复用 reason 作 code,
+    // 避免引入额外字段;告警面板可同时按 reason 过滤
     payload.put("code", reason);
     payload.put("reason", reason);
     payload.put("message", message);
     payload.put("evidence", evidence);
 
-    OutboxEventEntity event = new OutboxEventEntity();
-    event.setTenantId(command.tenantId());
-    event.setAggregateType(AGGREGATE_TYPE);
-    event.setAggregateId(task.getJobInstanceId());
-    event.setEventType(EVENT_TYPE);
-    // event_key 加 index 后缀：若同一 task 出多个失败且 reason 相同（同 verifier 重跑 / 不同
-    // verifier 撞 code），不会触发 outbox_event 唯一约束冲突导致整事务回滚。
-    event.setEventKey(
+    // event_key 加 index 后缀:若同一 task 出多个失败且 reason 相同(同 verifier 重跑 /
+    // 不同 verifier 撞 code),不会触发 outbox_event 唯一约束冲突导致整事务回滚
+    String eventKey =
         command.tenantId()
             + ":verifier:"
             + command.taskId()
             + ":"
             + (reason == null ? "UNKNOWN" : reason)
             + ":"
-            + index);
-    event.setPayloadJson(JsonUtils.toJson(payload));
-    event.setPublishStatus(OutboxPublishStatus.NEW.code());
-    event.setPublishAttempt(0);
-    return event;
+            + index;
+    return DomainEvent.builder(command.tenantId())
+        .aggregate(AGGREGATE_TYPE, task.getJobInstanceId())
+        .type(EVENT_TYPE)
+        .key(eventKey)
+        .payload(payload)
+        .build();
   }
 
   private static String stringValue(Object value) {

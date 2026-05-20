@@ -7,15 +7,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.SchedulingPriorityBand;
+import com.example.batch.common.event.DomainEvent;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +37,7 @@ import org.mockito.MockitoAnnotations;
  */
 class TaskDispatchOutboxServiceTest {
 
-  @Mock private OutboxEventMapper outboxEventMapper;
+  @Mock private DomainEventPublisher domainEventPublisher;
   @Mock private JobTaskMapper jobTaskMapper;
 
   private TaskDispatchOutboxService service;
@@ -46,7 +45,7 @@ class TaskDispatchOutboxServiceTest {
   @BeforeEach
   void setUp() throws Exception {
     MockitoAnnotations.openMocks(this);
-    service = new TaskDispatchOutboxService(outboxEventMapper, jobTaskMapper);
+    service = new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper);
     // @Lazy self 单测注入指向自己,绕过 Spring 代理
     Field selfField = TaskDispatchOutboxService.class.getDeclaredField("self");
     selfField.setAccessible(true);
@@ -60,9 +59,9 @@ class TaskDispatchOutboxServiceTest {
   void event_key_falls_back_to_tenant_task() {
     service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getEventKey()).isEqualTo("ta:500");
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().eventKey()).isEqualTo("ta:500");
   }
 
   @Test
@@ -70,9 +69,9 @@ class TaskDispatchOutboxServiceTest {
   void event_key_passthrough() {
     service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", "custom-key");
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getEventKey()).isEqualTo("custom-key");
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().eventKey()).isEqualTo("custom-key");
   }
 
   // ===== priority =====
@@ -84,9 +83,9 @@ class TaskDispatchOutboxServiceTest {
     t.setPriority(null);
     service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getPriority()).isEqualTo(7);
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().priority()).isEqualTo(7);
   }
 
   @Test
@@ -96,9 +95,9 @@ class TaskDispatchOutboxServiceTest {
     t.setPriority(2);
     service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getPriority()).isEqualTo(2);
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().priority()).isEqualTo(2);
   }
 
   // ===== aggregate / event type =====
@@ -110,15 +109,13 @@ class TaskDispatchOutboxServiceTest {
     t.setTaskType("EXECUTION");
     service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    OutboxEventEntity e = cap.getValue();
-    assertThat(e.getAggregateType()).isEqualTo("JOB_TASK");
-    assertThat(e.getEventType()).isEqualTo("EXECUTION");
-    assertThat(e.getAggregateId()).isEqualTo(500L);
-    assertThat(e.getPublishStatus()).isEqualTo(OutboxPublishStatus.NEW.code());
-    assertThat(e.getPublishAttempt()).isZero();
-    assertThat(e.getTraceId()).isEqualTo("trace");
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    DomainEvent e = cap.getValue();
+    assertThat(e.aggregateType()).isEqualTo("JOB_TASK");
+    assertThat(e.eventType()).isEqualTo("EXECUTION");
+    assertThat(e.aggregateId()).isEqualTo(500L);
+    assertThat(e.traceId()).isEqualTo("trace");
   }
 
   // ===== payload priorityBand =====
@@ -130,9 +127,9 @@ class TaskDispatchOutboxServiceTest {
     t.setPriority(1);
     service.writeDispatchEvent(instance(100L, 1), t, null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getPayloadJson())
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().payload().toString())
         .contains("\"" + SchedulingPriorityBand.HIGH.code() + "\"");
   }
 
@@ -143,9 +140,9 @@ class TaskDispatchOutboxServiceTest {
     t.setPriority(5);
     service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getPayloadJson())
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().payload().toString())
         .contains("\"" + SchedulingPriorityBand.MEDIUM.code() + "\"");
   }
 
@@ -156,9 +153,9 @@ class TaskDispatchOutboxServiceTest {
     t.setPriority(10);
     service.writeDispatchEvent(instance(100L, 10), t, null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getPayloadJson())
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().payload().toString())
         .contains("\"" + SchedulingPriorityBand.LOW.code() + "\"");
   }
 
@@ -195,10 +192,10 @@ class TaskDispatchOutboxServiceTest {
     t.setJobInstanceId(100L);
     service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
     // idempotencyKey 在 message payload 里,JSON 序列化后应含 "ta:task:500:instance:100"
-    assertThat(cap.getValue().getPayloadJson()).contains("ta:task:500:instance:100");
+    assertThat(cap.getValue().payload().toString()).contains("ta:task:500:instance:100");
   }
 
   @Test
@@ -211,9 +208,9 @@ class TaskDispatchOutboxServiceTest {
 
     service.writeDispatchEvent(instance(100L, 5), t, p, "trace", null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getPayloadJson()).contains("partition-idem-99");
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().payload().toString()).contains("partition-idem-99");
   }
 
   // ===== fixtures =====

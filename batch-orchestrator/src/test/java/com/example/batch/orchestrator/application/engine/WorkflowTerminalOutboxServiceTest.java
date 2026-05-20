@@ -5,11 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.WorkflowRunStatus;
+import com.example.batch.common.event.DomainEvent;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,14 +28,14 @@ import org.mockito.MockitoAnnotations;
  */
 class WorkflowTerminalOutboxServiceTest {
 
-  @Mock private OutboxEventMapper outboxEventMapper;
+  @Mock private DomainEventPublisher domainEventPublisher;
 
   private WorkflowTerminalOutboxService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new WorkflowTerminalOutboxService(outboxEventMapper);
+    service = new WorkflowTerminalOutboxService(domainEventPublisher);
   }
 
   // ===== isTerminal =====
@@ -71,14 +70,14 @@ class WorkflowTerminalOutboxServiceTest {
   @DisplayName("workflowRun=null → 不写表")
   void skip_when_workflow_run_null() {
     service.writeTerminalEvent(null, WorkflowRunStatus.SUCCESS.code(), Instant.now());
-    verify(outboxEventMapper, never()).insert(any());
+    verify(domainEventPublisher, never()).publish(any());
   }
 
   @Test
   @DisplayName("非终态 status → 不写表(白名单守护)")
   void skip_when_status_non_terminal() {
     service.writeTerminalEvent(workflowRun(), WorkflowRunStatus.RUNNING.code(), Instant.now());
-    verify(outboxEventMapper, never()).insert(any());
+    verify(domainEventPublisher, never()).publish(any());
   }
 
   @Test
@@ -88,20 +87,18 @@ class WorkflowTerminalOutboxServiceTest {
     Instant finished = Instant.parse("2026-05-20T10:00:00Z");
     service.writeTerminalEvent(run, WorkflowRunStatus.SUCCESS.code(), finished);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    OutboxEventEntity event = cap.getValue();
-    assertThat(event.getAggregateType()).isEqualTo("WORKFLOW_RUN");
-    assertThat(event.getEventType()).isEqualTo("WORKFLOW_TERMINAL");
-    assertThat(event.getAggregateId()).isEqualTo(100L);
-    assertThat(event.getEventKey()).isEqualTo("ta:workflow:100:terminal");
-    assertThat(event.getPublishStatus()).isEqualTo(OutboxPublishStatus.NEW.code());
-    assertThat(event.getPublishAttempt()).isZero();
-    assertThat(event.getTenantId()).isEqualTo("ta");
-    assertThat(event.getPayloadJson())
-        .contains("\"runStatus\":\"SUCCESS\"")
-        .contains("\"workflowRunId\":100")
-        .contains("\"finishedAt\":\"2026-05-20T10:00:00Z\"");
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    DomainEvent event = cap.getValue();
+    assertThat(event.aggregateType()).isEqualTo("WORKFLOW_RUN");
+    assertThat(event.eventType()).isEqualTo("WORKFLOW_TERMINAL");
+    assertThat(event.aggregateId()).isEqualTo(100L);
+    assertThat(event.eventKey()).isEqualTo("ta:workflow:100:terminal");
+    assertThat(event.tenantId()).isEqualTo("ta");
+    assertThat(event.payload())
+        .containsEntry("runStatus", "SUCCESS")
+        .containsEntry("workflowRunId", 100L)
+        .containsEntry("finishedAt", "2026-05-20T10:00:00Z");
   }
 
   @Test
@@ -110,9 +107,9 @@ class WorkflowTerminalOutboxServiceTest {
     WorkflowRunEntity run = workflowRun();
     service.writeTerminalEvent(run, WorkflowRunStatus.FAILED.code(), null);
 
-    ArgumentCaptor<OutboxEventEntity> cap = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(cap.capture());
-    assertThat(cap.getValue().getPayloadJson()).contains("\"finishedAt\":null");
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    assertThat(cap.getValue().payload()).containsEntry("finishedAt", null);
   }
 
   // ===== fixtures =====

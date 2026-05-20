@@ -6,11 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.event.DomainEvent;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,8 +20,8 @@ class VerifierFailureOutboxServiceTest {
 
   @Test
   void writesOneOutboxRowPerFailure() {
-    OutboxEventMapper mapper = mock(OutboxEventMapper.class);
-    VerifierFailureOutboxService service = new VerifierFailureOutboxService(mapper);
+    DomainEventPublisher publisher = mock(DomainEventPublisher.class);
+    VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> failureA = new LinkedHashMap<>();
     failureA.put("code", "EXPORT_FILE_EMPTY");
     failureA.put("message", "no rows");
@@ -45,27 +44,22 @@ class VerifierFailureOutboxServiceTest {
     int written = service.writeVerifierFailures(command, task);
 
     assertThat(written).isEqualTo(2);
-    ArgumentCaptor<OutboxEventEntity> captor = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(mapper, org.mockito.Mockito.times(2)).insert(captor.capture());
-    List<OutboxEventEntity> events = captor.getAllValues();
+    ArgumentCaptor<DomainEvent> captor = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(publisher, org.mockito.Mockito.times(2)).publish(captor.capture());
+    List<DomainEvent> events = captor.getAllValues();
+    assertThat(events).extracting(DomainEvent::eventType).containsOnly("verifier.failure.v1");
+    assertThat(events).extracting(DomainEvent::aggregateId).containsOnly(7L);
     assertThat(events)
-        .extracting(OutboxEventEntity::getEventType)
-        .containsOnly("verifier.failure.v1");
-    assertThat(events).extracting(OutboxEventEntity::getAggregateId).containsOnly(7L);
-    assertThat(events)
-        .extracting(OutboxEventEntity::getPublishStatus)
-        .containsOnly(OutboxPublishStatus.NEW.code());
-    assertThat(events)
-        .extracting(OutboxEventEntity::getEventKey)
+        .extracting(DomainEvent::eventKey)
         .containsExactlyInAnyOrder(
             "t1:verifier:42:EXPORT_FILE_EMPTY:0", "t1:verifier:42:EXPORT_HEADER_INVALID:1");
-    assertThat(events.get(0).getPayloadJson()).contains("\"schemaVersion\":\"v1\"");
+    assertThat(events.get(0).payload().toString()).contains("\"schemaVersion\":\"v1\"");
   }
 
   @Test
   void eventKeyIncludesIndexSoSameReasonDoesNotCollide() {
-    OutboxEventMapper mapper = mock(OutboxEventMapper.class);
-    VerifierFailureOutboxService service = new VerifierFailureOutboxService(mapper);
+    DomainEventPublisher publisher = mock(DomainEventPublisher.class);
+    VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> a = Map.of("code", "DUP_CODE", "message", "first", "evidence", Map.of());
     Map<String, Object> b = Map.of("code", "DUP_CODE", "message", "second", "evidence", Map.of());
     TaskOutcomeCommand command =
@@ -80,30 +74,30 @@ class VerifierFailureOutboxServiceTest {
 
     service.writeVerifierFailures(command, task);
 
-    ArgumentCaptor<OutboxEventEntity> captor = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(mapper, org.mockito.Mockito.times(2)).insert(captor.capture());
+    ArgumentCaptor<DomainEvent> captor = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(publisher, org.mockito.Mockito.times(2)).publish(captor.capture());
     assertThat(captor.getAllValues())
-        .extracting(OutboxEventEntity::getEventKey)
+        .extracting(DomainEvent::eventKey)
         .containsExactly("t1:verifier:7:DUP_CODE:0", "t1:verifier:7:DUP_CODE:1");
   }
 
   @Test
   void noopWhenFailuresNull() {
-    OutboxEventMapper mapper = mock(OutboxEventMapper.class);
-    VerifierFailureOutboxService service = new VerifierFailureOutboxService(mapper);
+    DomainEventPublisher publisher = mock(DomainEventPublisher.class);
+    VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     TaskOutcomeCommand command =
         TaskOutcomeCommand.builder().tenantId("t1").taskId(1L).success(true).build();
 
     int written = service.writeVerifierFailures(command, new JobTaskEntity());
 
     assertThat(written).isZero();
-    verify(mapper, never()).insert(any());
+    verify(publisher, never()).publish(any());
   }
 
   @Test
   void noopWhenFailuresEmpty() {
-    OutboxEventMapper mapper = mock(OutboxEventMapper.class);
-    VerifierFailureOutboxService service = new VerifierFailureOutboxService(mapper);
+    DomainEventPublisher publisher = mock(DomainEventPublisher.class);
+    VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     TaskOutcomeCommand command =
         TaskOutcomeCommand.builder()
             .tenantId("t1")
@@ -115,13 +109,13 @@ class VerifierFailureOutboxServiceTest {
     int written = service.writeVerifierFailures(command, new JobTaskEntity());
 
     assertThat(written).isZero();
-    verify(mapper, never()).insert(any());
+    verify(publisher, never()).publish(any());
   }
 
   @Test
   void skipsNullFailureEntries() {
-    OutboxEventMapper mapper = mock(OutboxEventMapper.class);
-    VerifierFailureOutboxService service = new VerifierFailureOutboxService(mapper);
+    DomainEventPublisher publisher = mock(DomainEventPublisher.class);
+    VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> good = Map.of("code", "X", "message", "y", "evidence", Map.of());
     TaskOutcomeCommand command =
         TaskOutcomeCommand.builder()
@@ -136,6 +130,6 @@ class VerifierFailureOutboxServiceTest {
     int written = service.writeVerifierFailures(command, task);
 
     assertThat(written).isEqualTo(1);
-    verify(mapper, org.mockito.Mockito.times(1)).insert(any());
+    verify(publisher, org.mockito.Mockito.times(1)).publish(any());
   }
 }
