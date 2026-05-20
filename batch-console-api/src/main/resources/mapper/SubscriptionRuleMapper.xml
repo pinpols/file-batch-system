@@ -16,7 +16,7 @@
                r.severity_filter, r.job_code_filter,
                c.channel_type, c.config_json
           FROM batch.subscription_rule r
-          JOIN batch.notification_channel c ON c.tenant_id = r.tenant_id AND c.channel_code = r.channel_code AND c.enabled = TRUE
+          JOIN batch.notification_channel c ON c.tenant_id = r.tenant_id AND c.channel_code = r.channel_code AND c.enabled = TRUE AND c.is_deleted = FALSE
          WHERE r.tenant_id = #{tenantId}
            AND r.enabled = TRUE
            AND r.event_types LIKE '%' || #{eventType} || '%'

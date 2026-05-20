@@ -21,6 +21,7 @@
             updated_at
         from batch.alert_routing_config
         where tenant_id = #{tenantId}
+          and is_deleted = false
         <if test="routeCode != null and routeCode != ''">
             and route_code like concat('%', #{routeCode}, '%')
         </if>
@@ -43,6 +44,7 @@
         select count(1)
         from batch.alert_routing_config
         where tenant_id = #{tenantId}
+          and is_deleted = false
         <if test="routeCode != null and routeCode != ''">
             and route_code like concat('%', #{routeCode}, '%')
         </if>
@@ -61,6 +63,7 @@
         select *
         from batch.alert_routing_config
         where tenant_id = #{tenantId}
+          and is_deleted = false
           and route_code = #{routeCode}
         limit 1
     </select>
@@ -69,9 +72,19 @@
         select *
         from batch.alert_routing_config
         where tenant_id = #{tenantId}
+          and is_deleted = false
           and id = #{id}
         limit 1
     </select>
+
+    <!--
+        软删除(② 软删除约定):本表 controller 当前无 delete 端点,仅 upsert/toggle 维护;
+        V145 已加 is_deleted 列与 partial index,SELECT 谓词同步,后续若加 delete 路径
+        模板见 FileChannelConfigMapper#deleteById:
+            UPDATE batch.alert_routing_config
+               SET is_deleted = true, updated_at = current_timestamp
+             WHERE tenant_id = #{tenantId} AND id = #{id} AND is_deleted = false
+    -->
 
     <insert id="upsertAlertRoutingConfig">
         insert into batch.alert_routing_config (

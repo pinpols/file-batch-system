@@ -18,6 +18,7 @@
             updated_at
         from batch.file_channel_config
         where tenant_id = #{tenantId}
+          and is_deleted = false
         <if test="channelCode != null and channelCode != ''">
             and channel_code like concat('%', #{channelCode}, '%')
         </if>
@@ -37,6 +38,7 @@
         select count(1)
         from batch.file_channel_config
         where tenant_id = #{tenantId}
+          and is_deleted = false
         <if test="channelCode != null and channelCode != ''">
             and channel_code like concat('%', #{channelCode}, '%')
         </if>
@@ -52,26 +54,34 @@
         select *
         from batch.file_channel_config
         where tenant_id = #{tenantId}
+          and is_deleted = false
           and channel_code = #{channelCode}
         limit 1
     </select>
 
     <select id="selectById" resultType="map">
         select * from batch.file_channel_config
-        where tenant_id = #{tenantId} and id = #{id}
+        where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
         limit 1
     </select>
 
     <update id="toggleEnabled">
         update batch.file_channel_config
         set enabled = #{enabled}, updated_at = current_timestamp
-        where tenant_id = #{tenantId} and id = #{id}
+        where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
     </update>
 
-    <delete id="deleteById">
-        delete from batch.file_channel_config
-        where tenant_id = #{tenantId} and id = #{id}
-    </delete>
+    <!--
+        软删除(② 软删除约定):不物理 DELETE,UPDATE 标记 is_deleted=true。
+        业务 SELECT 全部带 is_deleted=false 谓词过滤(见上方 select)。
+        想撤销:UPDATE batch.file_channel_config SET is_deleted=false WHERE id=?(运维 SQL)。
+    -->
+    <update id="deleteById">
+        update batch.file_channel_config
+        set is_deleted = true,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+    </update>
 
     <insert id="insertFileChannelConfig" useGeneratedKeys="true" keyProperty="id">
         insert into batch.file_channel_config (

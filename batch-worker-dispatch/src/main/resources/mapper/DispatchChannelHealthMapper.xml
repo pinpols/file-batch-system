@@ -6,6 +6,7 @@
         select *
           from batch.file_channel_config
          where enabled = true
+           and is_deleted = false
            and channel_type in
                <foreach item="t" collection="types" open="(" separator="," close=")">
                    #{t}
