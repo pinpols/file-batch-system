@@ -7,6 +7,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.imports.config.WorkerImportPayloadProperties;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
@@ -20,7 +21,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -47,44 +47,36 @@ public class ReceiveStep implements ImportStageStep {
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final BatchSecurityProperties batchSecurityProperties;
   private final ObjectMapper objectMapper;
-
-  @Value("${batch.worker.import.max-payload-size-mb:100}")
-  private int maxPayloadSizeMb;
-
-  /**
-   * payload 相对堆大小的安全比例（默认 20%）。PREPROCESS 阶段会产生 byte[] + String (UTF-16) + decode 副本等多份中间态，留 80% 给
-   * JVM / GC / 其它业务。
-   */
-  @Value("${batch.worker.import.payload-heap-ratio:0.2}")
-  private double payloadHeapRatio;
+  private final WorkerImportPayloadProperties payloadProperties;
 
   private long maxPayloadSizeBytes;
 
   public ReceiveStep(
       PlatformFileRuntimeRepository runtimeRepository,
       BatchSecurityProperties batchSecurityProperties,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      WorkerImportPayloadProperties payloadProperties) {
     this.runtimeRepository = runtimeRepository;
     this.batchSecurityProperties = batchSecurityProperties;
     this.objectMapper = objectMapper;
+    this.payloadProperties = payloadProperties;
   }
 
   @jakarta.annotation.PostConstruct
   void init() {
-    long configured =
-        maxPayloadSizeMb <= 0 ? Long.MAX_VALUE : (long) maxPayloadSizeMb * 1024 * 1024;
+    int maxPayloadMb = payloadProperties.getMaxPayloadSizeMb();
+    double heapRatio = payloadProperties.getPayloadHeapRatio();
+    long configured = maxPayloadMb <= 0 ? Long.MAX_VALUE : (long) maxPayloadMb * 1024 * 1024;
     // 堆联动：JVM 最大堆的 payload-heap-ratio 比例，预留空间给 PREPROCESS 的 byte[] / String / decode 副本
     long heapCap =
-        payloadHeapRatio > 0
-            ? (long) (Runtime.getRuntime().maxMemory() * payloadHeapRatio)
-            : Long.MAX_VALUE;
+        heapRatio > 0 ? (long) (Runtime.getRuntime().maxMemory() * heapRatio) : Long.MAX_VALUE;
     this.maxPayloadSizeBytes = Math.min(configured, heapCap);
     log.info(
         "[ReceiveStep] maxPayloadSizeBytes={} (configured={}MB, heap-cap={}MB @ ratio={})",
         maxPayloadSizeBytes,
-        maxPayloadSizeMb,
+        maxPayloadMb,
         heapCap == Long.MAX_VALUE ? -1 : heapCap / 1024 / 1024,
-        payloadHeapRatio);
+        heapRatio);
   }
 
   @Override

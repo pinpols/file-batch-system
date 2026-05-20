@@ -4,6 +4,7 @@ import com.example.batch.common.exception.BizException;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -40,48 +41,33 @@ import org.springframework.util.backoff.FixedBackOff;
 @Slf4j
 @Configuration(proxyBeanMethods = false)
 @EnableKafka
+@RequiredArgsConstructor
 public class OrchestratorKafkaConsumerConfiguration {
 
   /** Listener factory bean 名称 — 给 @KafkaListener(containerFactory=...) 引用。 */
   public static final String TRIGGER_LISTENER_FACTORY =
       "triggerLaunchKafkaListenerContainerFactory";
 
-  @Value("${spring.kafka.bootstrap-servers}")
-  private String bootstrapServers;
-
-  @Value("${batch.trigger.consumer.group-id:orchestrator-trigger-launch}")
-  private String groupId;
-
-  @Value("${batch.trigger.consumer.auto-offset-reset:earliest}")
-  private String autoOffsetReset;
-
-  @Value("${batch.trigger.consumer.max-poll-records:50}")
-  private int maxPollRecords;
-
-  @Value("${batch.trigger.consumer.max-poll-interval-ms:300000}")
-  private int maxPollIntervalMs;
+  private final TriggerConsumerProperties consumerProperties;
 
   @Bean
-  public ConsumerFactory<String, String> triggerLaunchConsumerFactory() {
+  public ConsumerFactory<String, String> triggerLaunchConsumerFactory(
+      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
     Map<String, Object> properties = new HashMap<>();
     properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    properties.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+    properties.put(ConsumerConfig.GROUP_ID_CONFIG, consumerProperties.getGroupId());
     // earliest 兜底:首次起服 / 重置时不丢消息;正常运行靠 commit offset
-    properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
+    properties.put(
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, consumerProperties.getAutoOffsetReset());
     // 关 auto-commit,走 MANUAL_IMMEDIATE
     properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords);
-    properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
+    properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, consumerProperties.getMaxPollRecords());
+    properties.put(
+        ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, consumerProperties.getMaxPollIntervalMs());
     return new DefaultKafkaConsumerFactory<>(properties);
   }
-
-  @Value("${batch.trigger.consumer.error-handler.retry-attempts:3}")
-  private int errorRetryAttempts;
-
-  @Value("${batch.trigger.consumer.error-handler.retry-backoff-ms:2000}")
-  private long errorRetryBackoffMs;
 
   @Bean(name = TRIGGER_LISTENER_FACTORY)
   public ConcurrentKafkaListenerContainerFactory<String, String>
@@ -103,6 +89,7 @@ public class OrchestratorKafkaConsumerConfiguration {
    * IllegalArgumentException）不重试直接放行。日志记录失败上下文，offset 前进，避免单条卡死 partition。
    */
   private DefaultErrorHandler triggerLaunchErrorHandler() {
+    TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();
     DefaultErrorHandler handler =
         new DefaultErrorHandler(
             (record, exception) -> {
@@ -131,7 +118,7 @@ public class OrchestratorKafkaConsumerConfiguration {
                     exception.getMessage());
               }
             },
-            new FixedBackOff(errorRetryBackoffMs, Math.max(0, errorRetryAttempts - 1)));
+            new FixedBackOff(eh.getRetryBackoffMs(), Math.max(0, eh.getRetryAttempts() - 1)));
     // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
     handler.addNotRetryableExceptions(BizException.class);
     handler.addNotRetryableExceptions(IllegalArgumentException.class);

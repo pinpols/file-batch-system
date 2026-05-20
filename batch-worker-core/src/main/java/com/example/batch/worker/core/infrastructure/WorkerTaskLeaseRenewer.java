@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.worker.core.config.WorkerLeaseProperties;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
 import io.micrometer.core.instrument.Counter;
@@ -16,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -45,6 +45,7 @@ public class WorkerTaskLeaseRenewer {
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
   private final TaskExecutionClient taskExecutionClient;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+  private final WorkerLeaseProperties leaseProperties;
   // R-4.4 a: 按 taskId 维护连续失败计数器；成功 / remove 时清零
   private final Map<String, AtomicInteger> consecutiveFailures = new ConcurrentHashMap<>();
   // P1-8: 进程级熔断 — 整轮 100% renew 失败时 OPEN,跳过后续 tick 直到半开探测;orch 恢复任一成功 → CLOSE
@@ -53,33 +54,29 @@ public class WorkerTaskLeaseRenewer {
   private final AtomicInteger ticksSinceOpen = new AtomicInteger(0);
   private volatile DistributionSummary renewBatchSizeSummary;
 
-  @Value("${batch.worker.lease.consecutive-failure-alert-threshold:3}")
-  private int alertThreshold;
-
-  /** 熔断 OPEN 后每 N 个 tick 强制半开探测一次 (默认 5 = ~50s @ renew 周期 10s) */
-  @Value("${batch.worker.lease.circuit-half-open-tick-interval:5}")
-  private int circuitHalfOpenTickInterval;
-
   public WorkerTaskLeaseRenewer(
       ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
       TaskExecutionClient taskExecutionClient,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      WorkerLeaseProperties leaseProperties) {
     this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
     this.taskExecutionClient = taskExecutionClient;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.leaseProperties = leaseProperties;
   }
 
   @Scheduled(fixedDelayString = "${batch.worker.lease.renew-interval-millis:10000}")
   public void renewActiveTaskLeases() {
     // P1-8 熔断: OPEN 时跳过整 tick (避免持续 hammer 不可达 orch),每 circuitHalfOpenTickInterval
     // 个 tick 强制半开探测一次,任一 lease 成功即 CLOSE (恢复正常 renew)
+    int halfOpenInterval = leaseProperties.getCircuitHalfOpenTickInterval();
     if (circuitOpen.get()) {
       int ticks = ticksSinceOpen.incrementAndGet();
-      if (ticks < Math.max(1, circuitHalfOpenTickInterval)) {
+      if (ticks < Math.max(1, halfOpenInterval)) {
         log.debug(
             "renew skipped: circuit OPEN (tick {}/{}); orch likely unreachable, awaiting cooldown",
             ticks,
-            circuitHalfOpenTickInterval);
+            halfOpenInterval);
         return;
       }
       ticksSinceOpen.set(0);
@@ -140,7 +137,7 @@ public class WorkerTaskLeaseRenewer {
             "renew circuit OPENED: all {} renewals failed in this tick; orch likely unreachable —"
                 + " skipping subsequent renew attempts until half-open probe ({} ticks)",
             failure,
-            circuitHalfOpenTickInterval);
+            halfOpenInterval);
         MeterRegistry registry = meterRegistryProvider.getIfAvailable();
         if (registry != null) {
           Counter.builder(METRIC_CIRCUIT_OPEN).register(registry).increment();
@@ -255,7 +252,7 @@ public class WorkerTaskLeaseRenewer {
         consecutiveFailures
             .computeIfAbsent(lease.getTaskId(), k -> new AtomicInteger())
             .incrementAndGet();
-    if (count >= alertThreshold) {
+    if (count >= leaseProperties.getConsecutiveFailureAlertThreshold()) {
       log.error(
           "task lease renew failed {} times in a row — Orchestrator likely unreachable:"
               + " tenantId={}, taskId={}, workerId={}, lastReason={}",

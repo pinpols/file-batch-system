@@ -6,6 +6,7 @@ import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.trigger.config.TriggerOutboxRelayProperties;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -22,7 +23,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
@@ -68,18 +68,7 @@ public class TriggerOutboxRelay {
   private final TriggerEventPublisher publisher;
   private final LockingTaskExecutor lockingTaskExecutor;
   private final MeterRegistry meterRegistry;
-
-  @Value("${batch.trigger.outbox.poll-interval-millis:200}")
-  private long pollIntervalMillis = 200L;
-
-  @Value("${batch.trigger.outbox.batch-size:100}")
-  private int batchSize = 100;
-
-  @Value("${batch.trigger.outbox.publishing-timeout-seconds:120}")
-  private long publishingTimeoutSeconds = 120L;
-
-  @Value("${batch.trigger.outbox.max-publish-attempts:10}")
-  private int maxPublishAttempts = 10;
+  private final TriggerOutboxRelayProperties properties;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong pendingEvents = new AtomicLong();
@@ -128,11 +117,14 @@ public class TriggerOutboxRelay {
               return t;
             });
     executor.scheduleWithFixedDelay(
-        this::poll, pollIntervalMillis, pollIntervalMillis, TimeUnit.MILLISECONDS);
+        this::poll,
+        properties.getPollIntervalMillis(),
+        properties.getPollIntervalMillis(),
+        TimeUnit.MILLISECONDS);
     log.info(
         "TriggerOutboxRelay 已启动:poll={}ms batch={} backoff_max={}s",
-        pollIntervalMillis,
-        batchSize,
+        properties.getPollIntervalMillis(),
+        properties.getBatchSize(),
         MAX_BACKOFF_SECONDS);
   }
 
@@ -144,7 +136,7 @@ public class TriggerOutboxRelay {
               List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code()));
       long stale =
           mapper.countStalePublishing(
-              OutboxPublishStatus.PUBLISHING.code(), publishingTimeoutSeconds);
+              OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds());
       pendingEvents.set(pending);
       stalePublishingEvents.set(stale);
       if (pending == 0 && stale == 0) {
@@ -208,7 +200,10 @@ public class TriggerOutboxRelay {
     Instant now = BatchDateTimeSupport.utcNow();
     List<TriggerOutboxEventEntity> batch =
         mapper.selectPending(
-            now, batchSize, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
+            now,
+            properties.getBatchSize(),
+            OutboxPublishStatus.NEW.code(),
+            OutboxPublishStatus.FAILED.code());
     if (batch.isEmpty()) {
       return;
     }
@@ -281,7 +276,7 @@ public class TriggerOutboxRelay {
       return true;
     } else {
       int nextAttempt = event.getPublishAttempt() + 1;
-      if (nextAttempt >= Math.max(1, maxPublishAttempts)) {
+      if (nextAttempt >= Math.max(1, properties.getMaxPublishAttempts())) {
         // P1-6 (pre-launch audit 2026-05-18)：GIVE_UP = 调度请求永久丢失,P0 级业务损失。
         // 原来只有 counter 被动监控,补 ERROR 让 oncall 日志告警直接命中。
         // 告警规则: increase(batch_trigger_outbox_give_up_total[5m]) > 0
@@ -335,7 +330,7 @@ public class TriggerOutboxRelay {
             OutboxPublishStatus.PUBLISHING.code(),
             OutboxPublishStatus.FAILED.code(),
             "stale PUBLISHING reset by TriggerOutboxRelay",
-            publishingTimeoutSeconds);
+            properties.getPublishingTimeoutSeconds());
     if (reset > 0) {
       log.warn("TriggerOutboxRelay 重置 {} 条滞留 PUBLISHING 为 FAILED", reset);
     }
@@ -347,7 +342,7 @@ public class TriggerOutboxRelay {
             List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code())));
     stalePublishingEvents.set(
         mapper.countStalePublishing(
-            OutboxPublishStatus.PUBLISHING.code(), publishingTimeoutSeconds));
+            OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds()));
   }
 
   private LockConfiguration lockConfig() {

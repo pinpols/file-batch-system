@@ -12,7 +12,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -47,12 +46,7 @@ public class TriggerRequestLaunchReconciler {
   private final TriggerRequestMapper triggerRequestMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
-
-  @Value("${batch.trigger.launch.reconcile.min-age-seconds:300}")
-  private int minAgeSeconds;
-
-  @Value("${batch.trigger.launch.reconcile.batch-size:200}")
-  private int batchSize;
+  private final TriggerLaunchReconcilerProperties properties;
 
   @Scheduled(fixedDelayString = "${batch.trigger.launch.reconcile.poll-interval-millis:60000}")
   @SchedulerLock(
@@ -63,17 +57,17 @@ public class TriggerRequestLaunchReconciler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    Instant olderThan = BatchDateTimeSupport.utcNow().minusSeconds(Math.max(minAgeSeconds, 0));
+    Instant olderThan =
+        BatchDateTimeSupport.utcNow().minusSeconds(Math.max(properties.getMinAgeSeconds(), 0));
+    int batch = Math.max(properties.getBatchSize(), 1);
     List<TriggerRequestLaunchReconcileRow> rows;
     try {
-      rows =
-          triggerRequestMapper.selectStaleAcceptedWithJobInstance(
-              olderThan, Math.max(batchSize, 1));
+      rows = triggerRequestMapper.selectStaleAcceptedWithJobInstance(olderThan, batch);
     } catch (RuntimeException ex) {
       log.warn(
           "trigger launch reconciler 扫描失败,下轮重试: olderThan={} batchSize={} error={}",
           olderThan,
-          batchSize,
+          batch,
           ex.getMessage());
       return;
     }
