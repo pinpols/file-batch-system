@@ -69,6 +69,10 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       if (tenantId != null && !tenantId.isBlank()) {
         BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
       }
+      // AuditFieldsInterceptor 拦截 insert/update 时读 MDC operatorId 自动填 created_by/updated_by
+      if (operatorId != null && !operatorId.isBlank()) {
+        BatchMdc.put(StructuredLogField.OPERATOR_ID, operatorId);
+      }
       filterChain.doFilter(request, response);
     } finally {
       BatchMdc.clear();
