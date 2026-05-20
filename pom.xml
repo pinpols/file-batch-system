@@ -399,5 +399,90 @@
                 </plugins>
             </build>
         </profile>
+
+        <!--
+          SpotBugs Profile:静态 NPE/null-pointer 缺陷分析。
+          启用方式(手动,不绑 verify 避免空 target/classes 炸):
+              mvn -P spotbugs com.github.spotbugs:spotbugs-maven-plugin:spotbugs
+          失败策略:failOnError=false — baseline 期只产报告,Q3 治理完成后切 true 形成硬门。
+          产物:每模块 target/spotbugsXml.xml + spotbugs.html。
+        -->
+        <profile>
+            <id>spotbugs</id>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>com.github.spotbugs</groupId>
+                            <artifactId>spotbugs-maven-plugin</artifactId>
+                            <version>4.9.3.0</version>
+                            <!--
+                              注意:截至 2026-05-20,SpotBugs core 4.9.3 仅支持到 Java 23 (bytecode v67)。
+                              本项目 maven.compiler.release=25 (v69),SpotBugs 暂无法解析 → 报
+                              "No classes found to analyze"。等 SpotBugs 4.10+ 发布支持 v69 后,
+                              此 profile 即可正常运行,无需改 pom 结构。
+                              短期跑通方案:临时改 maven.compiler.release=23 + 跑 spotbugs(不提交)。
+                            -->
+                            <configuration>
+                                <effort>Max</effort>
+                                <threshold>Medium</threshold>
+                                <failOnError>false</failOnError>
+                                <xmlOutput>true</xmlOutput>
+                                <htmlOutput>true</htmlOutput>
+                                <!-- 聚焦 NP_*(NullPointer) / RCN_*(redundant null check) / UWF_*(unwritten field) -->
+                                <includeFilterFile>${maven.multiModuleProjectDirectory}/build/spotbugs-npe-filter.xml</includeFilterFile>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          NullAway Profile (P3 NPE 治理):ErrorProne + NullAway 编译期 null-safety 检查。
+          先在 batch-common 试点(已加 @NullMarked package-info),逐模块推。
+          启用方式:mvn -P nullaway -pl batch-common compile
+          失败策略:initial -XepDisableAllChecks → -Xep:NullAway:ERROR 收敛。
+          Java 25 注:ErrorProne 截至 2026-05-20 最新 2.36 支持到 Java 24;Java 25 (v69)
+                    bytecode 需 ErrorProne 2.37+。届时 profile 即可直接生效。
+        -->
+        <profile>
+            <id>nullaway</id>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-compiler-plugin</artifactId>
+                            <configuration>
+                                <compilerArgs combine.children="append">
+                                    <arg>-XDcompilePolicy=simple</arg>
+                                    <arg>--should-stop=ifError=FLOW</arg>
+                                    <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:ERROR -XepOpt:NullAway:AnnotatedPackages=com.example.batch</arg>
+                                </compilerArgs>
+                                <annotationProcessorPaths combine.children="append">
+                                    <path>
+                                        <groupId>com.google.errorprone</groupId>
+                                        <artifactId>error_prone_core</artifactId>
+                                        <version>2.36.0</version>
+                                    </path>
+                                    <path>
+                                        <groupId>com.uber.nullaway</groupId>
+                                        <artifactId>nullaway</artifactId>
+                                        <version>0.12.3</version>
+                                    </path>
+                                </annotationProcessorPaths>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
     </profiles>
 </project>
