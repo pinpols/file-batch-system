@@ -39,6 +39,9 @@ public class OutboxDomainEventPublisher implements DomainEventPublisher {
     entity.setPublishStatus(OutboxPublishStatus.NEW.code());
     entity.setPublishAttempt(0);
     entity.setTraceId(event.traceId());
+    if (event.priority() != null) {
+      entity.setPriority(event.priority());
+    }
     outboxEventMapper.insert(entity);
     return entity.getId();
   }

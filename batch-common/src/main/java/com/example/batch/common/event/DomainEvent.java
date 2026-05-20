@@ -20,7 +20,8 @@ public record DomainEvent(
     String eventKey,
     Map<String, Object> payload,
     String traceId,
-    String schemaVersion) {
+    String schemaVersion,
+    Integer priority) {
 
   public DomainEvent {
     if (tenantId == null || tenantId.isBlank()) {
@@ -49,6 +50,7 @@ public record DomainEvent(
     private Map<String, Object> payload = new LinkedHashMap<>();
     private String traceId;
     private String schemaVersion = "v1";
+    private Integer priority;
 
     private Builder(String tenantId) {
       this.tenantId = tenantId;
@@ -90,6 +92,12 @@ public record DomainEvent(
       return this;
     }
 
+    /** outbox 派发优先级(可选);只 orchestrator outbox_event 表用,默认走 DB DEFAULT 5。 */
+    public Builder priority(Integer priority) {
+      this.priority = priority;
+      return this;
+    }
+
     public DomainEvent build() {
       return new DomainEvent(
           tenantId,
@@ -99,7 +107,8 @@ public record DomainEvent(
           eventKey,
           payload,
           traceId,
-          schemaVersion);
+          schemaVersion,
+          priority);
     }
   }
 }
