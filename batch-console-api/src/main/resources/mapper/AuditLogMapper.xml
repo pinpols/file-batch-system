@@ -38,11 +38,7 @@
             and created_at &lt;= #{toTime}
         </if>
         order by id desc
-        <if test="pageRequest != null">
-            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
-            limit #{pageRequest.pageSize}
-            offset #{offset}
-        </if>
+        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
 
     <select id="countByQuery" resultType="long">

@@ -33,11 +33,7 @@
             and n.node_status = #{nodeStatus}
         </if>
         order by n.run_seq desc, n.id desc
-        <if test="pageRequest != null">
-            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
-            limit #{pageRequest.pageSize}
-            offset #{offset}
-        </if>
+        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
 
     <select id="selectById" resultMap="WorkflowNodeRunResultMap">

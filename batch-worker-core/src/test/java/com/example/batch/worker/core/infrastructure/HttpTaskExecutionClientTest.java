@@ -51,7 +51,7 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               noopCoordinator,
-              256);
+              new com.example.batch.worker.core.config.WorkerLeaseProperties());
 
       TaskExecutionReport report = report(42L);
       client.report(report);
@@ -96,7 +96,7 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               noopCoordinator,
-              256);
+              new com.example.batch.worker.core.config.WorkerLeaseProperties());
 
       client.report(report(7L));
 
@@ -140,7 +140,7 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               null,
               noopCoordinator,
-              256);
+              new com.example.batch.worker.core.config.WorkerLeaseProperties());
 
       List<TaskLeaseRenewItem> items =
           List.of(

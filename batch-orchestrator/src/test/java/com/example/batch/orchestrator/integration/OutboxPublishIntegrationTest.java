@@ -18,6 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -36,6 +38,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+// 强制 BEFORE_CLASS 重建 Spring context：上游 OutboxPublishCircuitBreakerKafkaFailureIT 会 stop/start
+// KAFKA 容器，重启后端口变更；其它共享 fingerprint 的缓存 context 仍指向旧端口，发布会 60s metadata 超时。
+@org.springframework.test.annotation.DirtiesContext(
+    classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.BEFORE_CLASS)
 class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -45,6 +51,36 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   @Autowired private OutboxEventMapper outboxEventMapper;
 
   @Autowired private EventDeliveryLogMapper eventDeliveryLogMapper;
+
+  static {
+    // KRaft Apache Kafka 4.x 默认 auto.create.topics.enable=false。topic 必须在 Spring context 加载前
+    // 预创建：放静态块（父类静态先跑、KAFKA 已启动），@BeforeAll 会被 producer 初始化抢跑导致 60s metadata 超时。
+    createOutboxTopicsStaticInit();
+  }
+
+  private static void createOutboxTopicsStaticInit() {
+    try (AdminClient admin =
+        AdminClient.create(
+            Map.of(
+                org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaBootstrapServers()))) {
+      admin
+          .createTopics(
+              List.of(
+                  new NewTopic(BatchTopics.OUTBOX_EVENT, 1, (short) 1),
+                  new NewTopic(BatchTopics.TASK_DISPATCH_IMPORT + ".t1", 1, (short) 1),
+                  new NewTopic(BatchTopics.TASK_DISPATCH_EXPORT + ".t1", 1, (short) 1)))
+          .all()
+          .get();
+    } catch (java.util.concurrent.ExecutionException e) {
+      if (!(e.getCause() instanceof org.apache.kafka.common.errors.TopicExistsException)) {
+        throw new IllegalStateException("failed to pre-create kafka topics", e);
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("interrupted creating kafka topics", e);
+    }
+  }
 
   @Test
   void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() throws Exception {

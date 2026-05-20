@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,11 +42,12 @@ class WorkerTaskLeaseRenewerTest {
     ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider =
         (ObjectProvider<io.micrometer.core.instrument.MeterRegistry>) mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(meter);
-    renewer = new WorkerTaskLeaseRenewer(registry, client, provider);
-
-    Field f = WorkerTaskLeaseRenewer.class.getDeclaredField("alertThreshold");
-    f.setAccessible(true);
-    f.set(renewer, 3);
+    com.example.batch.worker.core.config.WorkerLeaseProperties leaseProps =
+        new com.example.batch.worker.core.config.WorkerLeaseProperties();
+    leaseProps.setConsecutiveFailureAlertThreshold(3);
+    // 用 1 让熔断 OPEN 后每个 tick 都半开探测，单测才能验证连续失败与清理路径
+    leaseProps.setCircuitHalfOpenTickInterval(1);
+    renewer = new WorkerTaskLeaseRenewer(registry, client, provider, leaseProps);
   }
 
   @Test

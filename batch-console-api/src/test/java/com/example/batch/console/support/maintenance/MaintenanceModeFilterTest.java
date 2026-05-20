@@ -6,10 +6,12 @@ import com.example.batch.console.config.ConsoleMaintenanceProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 class MaintenanceModeFilterTest {
 
@@ -22,6 +24,7 @@ class MaintenanceModeFilterTest {
 
   @BeforeEach
   void setUp() {
+    SecurityContextHolder.clearContext();
     properties = new ConsoleMaintenanceProperties();
     stateHolder = new MaintenanceStateHolder(properties);
     stateHolder.initFromProperties();
@@ -29,6 +32,11 @@ class MaintenanceModeFilterTest {
     response = new MockHttpServletResponse();
     chainInvoked = new AtomicBoolean(false);
     chain = (req, resp) -> chainInvoked.set(true);
+  }
+
+  @AfterEach
+  void tearDown() {
+    SecurityContextHolder.clearContext();
   }
 
   private void refresh() {

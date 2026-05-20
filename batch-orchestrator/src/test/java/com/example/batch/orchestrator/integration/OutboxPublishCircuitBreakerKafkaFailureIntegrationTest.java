@@ -34,6 +34,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.test.annotation.DirtiesContext;
 
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
@@ -49,6 +50,9 @@ import org.springframework.kafka.core.ProducerFactory;
     })
 @Import(
     OutboxPublishCircuitBreakerKafkaFailureIntegrationTest.FastFailKafkaProducerConfiguration.class)
+// 该 IT 通过 stop/start Kafka 容器注入故障，重启后端口变化，Spring 缓存的 KafkaTemplate 仍指向旧端口；
+// 标 DirtiesContext 避免污染后续 IT（如 OutboxPublishIntegrationTest）。
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "it-cb";

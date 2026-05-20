@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
@@ -23,6 +24,7 @@ import org.springframework.kafka.core.ProducerFactory;
  * 自带 {@code spring.kafka.bootstrap-servers} 不入 Properties(避免与 Spring KafkaProperties 重复)。
  */
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(TriggerKafkaProperties.class)
 @RequiredArgsConstructor
 public class TriggerKafkaProducerConfiguration {
 

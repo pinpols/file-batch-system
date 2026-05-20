@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Import;
   OrchestratorWorkerClientProperties.class,
   OrchestratorTaskClientProperties.class,
   WorkerExecutionTimeoutProperties.class,
-  WorkerReportOutboxProperties.class
+  WorkerReportOutboxProperties.class,
+  WorkerLeaseProperties.class
 })
 public class WorkerCoreConfiguration {}

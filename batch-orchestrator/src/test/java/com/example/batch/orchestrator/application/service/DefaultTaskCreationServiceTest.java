@@ -34,14 +34,14 @@ class DefaultTaskCreationServiceTest {
 
   @Test
   void createTask_setsVersionToZeroWhenNull() {
-    JobTaskEntity task = buildTask(null, null, null, null);
+    JobTaskEntity task = buildTask(null, null, "IMPORT", null);
     service.createTask(task);
     assertThat(task.getVersion()).isEqualTo(0L);
   }
 
   @Test
   void createTask_doesNotOverrideExistingVersion() {
-    JobTaskEntity task = buildTask(null, null, null, null);
+    JobTaskEntity task = buildTask(null, null, "IMPORT", null);
     task.setVersion(3L);
     service.createTask(task);
     assertThat(task.getVersion()).isEqualTo(3L);

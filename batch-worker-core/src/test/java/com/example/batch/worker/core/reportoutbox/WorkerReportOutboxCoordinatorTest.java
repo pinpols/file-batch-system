@@ -86,7 +86,7 @@ class WorkerReportOutboxCoordinatorTest {
               new MockEnvironment(),
               null,
               coordinatorProvider,
-              256);
+              new com.example.batch.worker.core.config.WorkerLeaseProperties());
 
       @SuppressWarnings("unchecked")
       ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);

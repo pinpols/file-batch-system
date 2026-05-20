@@ -7,7 +7,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@EnableConfigurationProperties({OrchestratorClientProperties.class, TriggerRuntimeProperties.class})
+@EnableConfigurationProperties({
+  OrchestratorClientProperties.class,
+  TriggerRuntimeProperties.class,
+  TriggerOutboxRelayProperties.class
+})
 public class QuartzTriggerConfiguration {
 
   @Bean
