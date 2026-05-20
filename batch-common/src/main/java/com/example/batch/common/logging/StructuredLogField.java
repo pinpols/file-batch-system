@@ -14,6 +14,7 @@ public final class StructuredLogField {
   public static final String RUN_MODE = "runMode";
   public static final String STAGE = "stage";
   public static final String FILE_ID = "fileId";
+  public static final String OPERATOR_ID = "operatorId";
 
   private StructuredLogField() {}
 }
