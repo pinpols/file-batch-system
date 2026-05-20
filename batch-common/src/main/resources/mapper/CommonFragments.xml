@@ -31,4 +31,41 @@
         </if>
     </sql>
 
+    <!--
+        租户隔离谓词。CLAUDE.md §多租隔离:所有业务 SELECT 必须含 tenant_id。
+        用法:WHERE 1=1 <include refid="...tenantPredicate"/> AND other_cond
+        参数:`tenantId`(顶层方法参数或 query record 字段)
+    -->
+    <sql id="tenantPredicate">
+        AND tenant_id = #{tenantId}
+    </sql>
+
+    <!--
+        软删除过滤谓词。**约定**:opt-in 字段,只有显式加了 is_deleted boolean 列的表可用。
+        现有表全部物理删除,新表需要软删除时:
+        1. migration 加 `is_deleted boolean NOT NULL DEFAULT false`
+        2. SELECT/UPDATE 谓词包含 <include refid="...activePredicate"/>
+        3. DELETE 改成 update set is_deleted=true 路径
+        4. 在归档 archive 双表对齐(ArchiveSchemaDriftCheck)同步加列
+    -->
+    <sql id="activePredicate">
+        AND is_deleted = false
+    </sql>
+
+    <!--
+        按 updated_at 倒序常用排序(列表页默认最近更新优先)。
+        要求表含 updated_at 列(批量调度系统所有业务表默认都有,见 AuditFieldsInterceptor)。
+    -->
+    <sql id="orderByUpdatedDesc">
+        ORDER BY updated_at DESC, id DESC
+    </sql>
+
+    <!--
+        按 created_at 倒序(列表页按创建时间倒排,如 job_instance 最近创建优先)。
+        id DESC 作 tiebreaker,确保 ORDER BY 稳定。
+    -->
+    <sql id="orderByCreatedDesc">
+        ORDER BY created_at DESC, id DESC
+    </sql>
+
 </mapper>

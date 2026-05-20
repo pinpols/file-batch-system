@@ -474,6 +474,51 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 - Mapper XML 放在 `classpath:mapper/*.xml`（或模块约定路径）
 - `type-aliases-package` 指向 domain 包
 
+### 9.4 公共 SQL 片段(`CommonFragments.xml`)
+
+`batch-common/.../mapper/CommonFragments.xml` 提供跨表复用片段,避免每个 mapper 重复同样 5 行。
+
+| 片段 ID | 用途 | 参数要求 |
+|---|---|---|
+| `offsetPageClause` | offset 分页 limit/offset bind | 顶层有 `pageRequest`(PageRequest) |
+| `tenantPredicate` | 租户隔离 `AND tenant_id = #{tenantId}` | 顶层有 `tenantId` |
+| `activePredicate` | 软删除过滤 `AND is_deleted = false` | 表含 `is_deleted` 列(opt-in) |
+| `orderByUpdatedDesc` | `ORDER BY updated_at DESC, id DESC` | 表含 `updated_at` 列 |
+| `orderByCreatedDesc` | `ORDER BY created_at DESC, id DESC` | 表含 `created_at` 列 |
+
+用法:
+```xml
+<select id="...">
+  SELECT ... FROM xxx WHERE 1=1
+  <include refid="com.example.batch.common.mapper.CommonFragments.tenantPredicate"/>
+  <include refid="com.example.batch.common.mapper.CommonFragments.activePredicate"/>
+  <include refid="com.example.batch.common.mapper.CommonFragments.orderByUpdatedDesc"/>
+  <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+</select>
+```
+
+### 9.5 审计字段自动填充(`AuditFieldsInterceptor`)
+
+`batch-common/.../persistence/mybatis/AuditFieldsInterceptor` 拦截 `Executor.update`,反射写 entity 的 `createdAt` / `updatedAt` / `createdBy` / `updatedBy` / `tenantId`:
+
+- **INSERT**:字段为 null 才填(用户显式赋值优先)
+- **UPDATE**:`updatedAt` / `updatedBy` 强制刷新最新,`createdAt` / `createdBy` 不动
+- 当前值从 MDC 读(`OPERATOR_ID` / `TENANT_ID`),Console-api 由 `ConsoleRequestContextFilter` 灌入;worker / trigger 后台路径 MDC 空时审计字段保留 null
+- 关闭走配置:`batch.mybatis.audit.enabled=false`
+
+新表设计**不需要**在 Mapper XML 里显式 `#{createdAt}` / `#{updatedAt}`,interceptor 自动注入。
+
+### 9.6 软删除约定(opt-in)
+
+现有表全部物理删除。新表需要软删除时,按以下 4 步:
+
+1. Flyway migration 加 `is_deleted boolean NOT NULL DEFAULT false`
+2. SELECT / UPDATE 谓词 `<include refid="...activePredicate"/>`
+3. 删除路径改成 `UPDATE ... SET is_deleted = true WHERE ...`(不要 DELETE)
+4. 在 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 同步加列(如果该表入归档)
+
+**不做全表迁移** —— 收益(可恢复 / 软回滚)< 成本(全表 schema 改 + 谓词补漏风险)。按需 opt-in。
+
 ---
 
 ## 10. 事务管理
