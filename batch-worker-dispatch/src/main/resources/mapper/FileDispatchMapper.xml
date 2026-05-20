@@ -13,6 +13,7 @@
         from batch.file_channel_config
         where tenant_id = #{tenantId}
           and channel_code = #{channelCode}
+          and is_deleted = false
     </select>
 
     <select id="selectLatestDispatchRecord" resultType="map">

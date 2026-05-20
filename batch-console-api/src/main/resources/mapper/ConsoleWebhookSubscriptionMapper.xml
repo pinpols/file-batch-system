@@ -24,28 +24,28 @@
     <select id="findAllByTenant" resultMap="subscriptionMap">
         select <include refid="selectColumns"/>
           from batch.webhook_subscription
-         where tenant_id = #{tenantId}
+         where tenant_id = #{tenantId} and is_deleted = false
          order by name
     </select>
 
     <select id="findByTenantAndId" resultMap="subscriptionMap">
         select <include refid="selectColumns"/>
           from batch.webhook_subscription
-         where tenant_id = #{tenantId} and id = #{id}
+         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
          limit 1
     </select>
 
     <select id="findByTenantAndName" resultMap="subscriptionMap">
         select <include refid="selectColumns"/>
           from batch.webhook_subscription
-         where tenant_id = #{tenantId} and name = #{name}
+         where tenant_id = #{tenantId} and name = #{name} and is_deleted = false
          limit 1
     </select>
 
     <select id="findEnabledByTenant" resultMap="subscriptionMap">
         select <include refid="selectColumns"/>
           from batch.webhook_subscription
-         where tenant_id = #{tenantId} and enabled = true
+         where tenant_id = #{tenantId} and enabled = true and is_deleted = false
     </select>
 
     <insert id="insert">
@@ -64,10 +64,17 @@
                enabled      = #{enabled},
                updated_by   = #{operator},
                updated_at   = current_timestamp
-         where tenant_id = #{tenantId} and id = #{id}
+         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
     </update>
 
-    <delete id="deleteByTenantAndId">
-        delete from batch.webhook_subscription where tenant_id = #{tenantId} and id = #{id}
-    </delete>
+    <!--
+        软删除(② 软删除约定):不物理 DELETE,UPDATE 标记 is_deleted=true。
+        撤销:UPDATE batch.webhook_subscription SET is_deleted=false WHERE id=?(运维 SQL)。
+    -->
+    <update id="deleteByTenantAndId">
+        update batch.webhook_subscription
+           set is_deleted = true,
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+    </update>
 </mapper>

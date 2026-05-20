@@ -45,6 +45,7 @@
         where tenant_id = #{tenantId}
           and channel_code = #{channelCode}
           and enabled = true
+          and is_deleted = false
     </select>
 
     <select id="selectLatestPipelineDefinitionId" resultType="java.lang.Long">

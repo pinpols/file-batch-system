@@ -313,11 +313,11 @@
     </select>
 
     <select id="countFileChannels" resultType="java.lang.Long">
-        select count(1) from batch.file_channel_config where tenant_id = #{tenantId}
+        select count(1) from batch.file_channel_config where tenant_id = #{tenantId} and is_deleted = false
     </select>
 
     <select id="countFileTemplates" resultType="java.lang.Long">
-        select count(1) from batch.file_template_config where tenant_id = #{tenantId}
+        select count(1) from batch.file_template_config where tenant_id = #{tenantId} and is_deleted = false
     </select>
 
     <!-- ============================================================

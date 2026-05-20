@@ -7,6 +7,7 @@
                enabled, created_by, updated_by, created_at, updated_at
           FROM batch.notification_channel
          WHERE tenant_id = #{tenantId}
+           AND is_deleted = false
          ORDER BY created_at DESC
     </select>
 
@@ -14,7 +15,9 @@
         SELECT id, tenant_id, channel_code, channel_name, channel_type, config_json,
                enabled, created_by, updated_by, created_at, updated_at
           FROM batch.notification_channel
-         WHERE tenant_id = #{tenantId} AND channel_code = #{channelCode}
+         WHERE tenant_id = #{tenantId}
+           AND channel_code = #{channelCode}
+           AND is_deleted = false
     </select>
 
     <insert id="insert">
@@ -32,11 +35,21 @@
                enabled = #{enabled},
                updated_by = #{updatedBy},
                updated_at = CURRENT_TIMESTAMP
-         WHERE tenant_id = #{tenantId} AND channel_code = #{channelCode}
+         WHERE tenant_id = #{tenantId}
+           AND channel_code = #{channelCode}
+           AND is_deleted = false
     </update>
 
-    <delete id="deleteByCode">
-        DELETE FROM batch.notification_channel
-         WHERE tenant_id = #{tenantId} AND channel_code = #{channelCode}
-    </delete>
+    <!--
+        软删除(② 软删除约定):不物理 DELETE,UPDATE 标记 is_deleted=true。
+        撤销:UPDATE batch.notification_channel SET is_deleted=false WHERE id=?(运维 SQL)。
+    -->
+    <update id="deleteByCode">
+        UPDATE batch.notification_channel
+           SET is_deleted = true,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId}
+           AND channel_code = #{channelCode}
+           AND is_deleted = false
+    </update>
 </mapper>
