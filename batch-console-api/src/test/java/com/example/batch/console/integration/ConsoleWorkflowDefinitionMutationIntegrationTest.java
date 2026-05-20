@@ -59,11 +59,11 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractIntegrati
         + "\"workflowType\":\"DAG\","
         + "\"enabled\":false,"
         + "\"nodes\":["
-        + "{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
+        + "{\"nodeCode\":\"start\",\"nodeName\":\"start\",\"nodeType\":\"START\"},"
         + "{\"nodeCode\":\""
         + node1Code
-        + "\",\"nodeType\":\"TASK\"},"
-        + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}"
+        + "\",\"nodeName\":\"t1\",\"nodeType\":\"TASK\"},"
+        + "{\"nodeCode\":\"end\",\"nodeName\":\"end\",\"nodeType\":\"END\"}"
         + "],\"edges\":["
         + "{\"fromNodeCode\":\""
         + fromCode
