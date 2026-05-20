@@ -77,9 +77,42 @@ public class SqlTemplateExportSqlValidator {
       checkAllowedSchemas(statement, security.getAllowedSchemas());
     }
 
+    if (security != null
+        && security.getForbiddenFunctions() != null
+        && !security.getForbiddenFunctions().isEmpty()) {
+      checkNoForbiddenFunctions(sql, security.getForbiddenFunctions());
+    }
+
     checkRequiredParams(sql);
 
     return sql;
+  }
+
+  /**
+   * 子串匹配大小写不敏感地拒禁用函数(dblink / pg_terminate_backend 等),边界检查避免误判同名列。 与
+   * SqlTransformComputeSqlValidator 同语义,保持 Export 与 Process 两条 SQL 路径一致守护。
+   */
+  private static void checkNoForbiddenFunctions(String sql, java.util.List<String> forbidden) {
+    String lower = sql.toLowerCase();
+    for (String fn : forbidden) {
+      String needle = fn.toLowerCase();
+      int idx = 0;
+      while ((idx = lower.indexOf(needle, idx)) >= 0) {
+        int after = idx + needle.length();
+        boolean leftBoundary =
+            idx == 0
+                || !(Character.isLetterOrDigit(lower.charAt(idx - 1))
+                    || lower.charAt(idx - 1) == '_');
+        int p = after;
+        while (p < lower.length() && Character.isWhitespace(lower.charAt(p))) p++;
+        boolean rightCallSite = p < lower.length() && lower.charAt(p) == '(';
+        if (leftBoundary && rightCallSite) {
+          throw new IllegalArgumentException(
+              "sql_template_export SQL calls forbidden function '" + fn + "'");
+        }
+        idx = after;
+      }
+    }
   }
 
   /** 遍历语句中所有 PlainSelect 主体，拒绝 SELECT * 或 SELECT table.*。 */

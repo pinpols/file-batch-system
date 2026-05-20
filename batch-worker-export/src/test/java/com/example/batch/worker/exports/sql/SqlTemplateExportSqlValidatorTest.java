@@ -202,6 +202,34 @@ class SqlTemplateExportSqlValidatorTest {
   }
 
   @Test
+  void validate_rejectsDblinkFunctionCall() {
+    String sql =
+        "SELECT c FROM dblink('host=evil', 'select 1') AS t(c int)"
+            + " WHERE :tenantId IS NOT NULL AND :batchNo IS NOT NULL";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'dblink'");
+  }
+
+  @Test
+  void validate_rejectsPgTerminateBackend() {
+    String sql =
+        "SELECT pg_terminate_backend(pid) AS c FROM biz.t"
+            + " WHERE tenant_id = :tenantId AND batch_no = :batchNo";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("forbidden function 'pg_terminate_backend'");
+  }
+
+  @Test
+  void validate_rejectsCtas() {
+    String sql = "CREATE TABLE biz.foo AS SELECT id FROM biz.t WHERE tenant_id = :tenantId";
+    assertThatThrownBy(() -> validatorWithDefaults().validate(sql))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("only allows SELECT");
+  }
+
+  @Test
   void validate_acceptsJoin() {
     String sql =
         "SELECT sb.batch_no, sd.settlement_no "
