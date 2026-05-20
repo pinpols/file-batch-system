@@ -1,0 +1,51 @@
+package com.example.batch.common.observability;
+
+/**
+ * Micrometer 指标命名规范常量。
+ *
+ * <p>命名约定:{@code batch.<module>.<area>.<metric>.<unit>}
+ *
+ * <ul>
+ *   <li>module = {@code trigger / orchestrator / worker / console}
+ *   <li>area = 业务域(job / outbox / quartz / wheel / dispatch / process / audit ...)
+ *   <li>metric = 计量项(total / duration / failure / lag / count ...)
+ *   <li>unit = 可选,Timer / Histogram 必须带 seconds / ms / bytes;Counter / Gauge 可省
+ * </ul>
+ *
+ * <p>tag 命名:全部 snake_case,优先用 tenantId / jobType / status / errorCode 这些跨模块 通用 tag 名;避免高基数 tag(如
+ * jobInstanceId)直接打。
+ *
+ * <p>本类只放跨模块共享的指标名常量,模块私有指标在各模块 Metrics 类自管。
+ */
+public final class BatchMetricsNames {
+
+  // ─── job 生命周期(orchestrator 主导) ───────────────────────────────
+  public static final String JOB_DURATION_SECONDS = "batch.orchestrator.job.duration.seconds";
+  public static final String JOB_COMPLETION_TOTAL = "batch.orchestrator.job.completion.total";
+  public static final String JOB_FAILURE_TOTAL = "batch.orchestrator.job.failure.total";
+
+  // ─── workflow 生命周期(orchestrator 主导) ──────────────────────────
+  public static final String WORKFLOW_DURATION_SECONDS =
+      "batch.orchestrator.workflow.duration.seconds";
+  public static final String WORKFLOW_COMPLETION_TOTAL =
+      "batch.orchestrator.workflow.completion.total";
+
+  // ─── outbox 共用(各模块自有 outbox 表都用,加 module tag 区分) ─────
+  public static final String OUTBOX_BACKLOG_GAUGE = "batch.outbox.backlog";
+  public static final String OUTBOX_PUBLISH_LATENCY = "batch.outbox.publish.latency";
+  public static final String OUTBOX_GIVE_UP_TOTAL = "batch.outbox.events.give_up.total";
+
+  // ─── claim 链路(worker 抢任务) ────────────────────────────────────
+  public static final String CLAIM_LATENCY_MS = "batch.worker.claim.latency.ms";
+  public static final String CLAIM_FAILURE_TOTAL = "batch.worker.claim.failure.total";
+
+  // ─── tag key 标准化(避免各处 hard-code "tenantId" / "tenant_id" 漂) ───
+  public static final String TAG_TENANT = "tenant_id";
+  public static final String TAG_JOB_TYPE = "job_type";
+  public static final String TAG_STATUS = "status";
+  public static final String TAG_ERROR_CODE = "error_code";
+  public static final String TAG_MODULE = "module";
+  public static final String TAG_WORKER_TYPE = "worker_type";
+
+  private BatchMetricsNames() {}
+}

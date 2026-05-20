@@ -595,6 +595,29 @@ public class ConsoleJobController {
 
 ---
 
+## 11.5 Micrometer 指标命名规范
+
+**命名格式**:`batch.<module>.<area>.<metric>.<unit>`(参见 `batch-common/.../observability/BatchMetricsNames`)
+
+- `<module>` = `trigger / orchestrator / worker / console`
+- `<area>` = 业务域(job / outbox / quartz / wheel / dispatch / process / audit)
+- `<metric>` = 计量项(total / duration / failure / lag / count)
+- `<unit>` = Timer / Histogram **必须**带 seconds / ms / bytes;Counter / Gauge 可省
+
+**tag 命名**:全部 snake_case;优先用 `BatchMetricsNames.TAG_*` 标准 tag 常量(tenant_id / job_type / status / error_code / module / worker_type)。
+
+**禁止高基数 tag**:不要把 jobInstanceId / requestId / traceId 当 tag 打(会爆 cardinality)。这些走 MDC 日志关联,不走 metrics。
+
+**null/空值处理**:tag value 空 / null 必须 fallback 到字符串 `"unknown"`(`JobLifecycleMetrics#safe` 示范),保持 Grafana 维度可枚举。
+
+## 11.6 业务指标集中常量(`BatchMetricsNames`)
+
+跨模块共享的指标名(job 生命周期 / outbox 共用 / claim 链路)集中常量,避免散落字面量漂移。模块私有指标在各自 Metrics 类自管(如 `WheelMetrics` / `ProcessMetrics`)。
+
+`JobLifecycleMetrics`(orchestrator):job_instance 走到终态时调 `recordCompletion(tenantId, jobType, status, duration)` 记录端到端时长 + 完成计数;失败路径额外 `recordFailure(tenantId, jobType, errorCode)`。Histogram percentile 自动启用。
+
+---
+
 ## 12. 日志规范
 
 ### 12.1 日志框架
