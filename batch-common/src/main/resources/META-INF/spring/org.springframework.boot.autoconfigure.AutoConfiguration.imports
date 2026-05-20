@@ -14,3 +14,4 @@ com.example.batch.common.config.BatchObservabilityAutoConfiguration
 com.example.batch.common.config.BatchRestClientAutoConfiguration
 com.example.batch.common.persistence.mybatis.BatchMybatisAuditAutoConfiguration
 com.example.batch.common.health.BatchHealthAutoConfiguration
+com.example.batch.common.lock.BatchDistributedLockAutoConfiguration
