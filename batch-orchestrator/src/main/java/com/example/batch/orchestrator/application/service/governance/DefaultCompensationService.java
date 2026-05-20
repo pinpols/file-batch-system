@@ -108,7 +108,7 @@ public class DefaultCompensationService implements CompensationService {
    * {@link #assertNoRunningConflict} 与 DB 唯一约束）。
    */
   @Override
-  @Transactional
+  @Transactional(noRollbackFor = Exception.class)
   public String submit(CompensationSubmitCommand command) {
     // 2026-05-01 hardening: pre-insert 阶段(validate / 冲突检查 / insert 唯一约束)失败时
     // 也要落审计 trail。原实现只在 insert 成功后才 log,导致"提交即拒"的请求丢线索。

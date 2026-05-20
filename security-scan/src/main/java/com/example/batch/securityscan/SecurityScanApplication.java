@@ -35,6 +35,8 @@ public final class SecurityScanApplication {
               --target-url=http://localhost:8080
               --image-name=batch-console-api:local
               --zap-report=target/zap-report.html
+              --zap-scan=baseline|api|full
+              --zap-api-spec=docs/api/console-api.openapi.yaml
               --continue-on-error
               --dry-run
               --help

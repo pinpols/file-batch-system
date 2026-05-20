@@ -15,6 +15,8 @@ public record SecurityScanOptions(
         String zapReport,
         String zapAuthHeaderName,
         String zapAuthHeaderValue,
+        String zapScan,
+        String zapApiSpec,
         boolean requireZapAuth,
         Path reportDir,
         String mvnCommand,
@@ -39,6 +41,8 @@ public record SecurityScanOptions(
         String zapAuthHeaderValue = firstNonBlank(
                 System.getenv("BATCH_DAST_AUTH_HEADER_VALUE"),
                 System.getenv("ZAP_AUTH_HEADER_VALUE"));
+        String zapScan = "baseline";
+        String zapApiSpec = null;
         boolean requireZapAuth = false;
         String mvnCommand = "mvn";
         String gitleaksCommand = "gitleaks";
@@ -81,6 +85,8 @@ public record SecurityScanOptions(
                 case "zap-image" -> zapImage = value;
                 case "zap-auth-header-name" -> zapAuthHeaderName = value;
                 case "zap-auth-header-value" -> zapAuthHeaderValue = value;
+                case "zap-scan" -> zapScan = value.toLowerCase(Locale.ROOT);
+                case "zap-api-spec" -> zapApiSpec = value;
                 case "report-dir" -> {
                     reportDir = Paths.get(value).toAbsolutePath().normalize();
                     zapReport = reportDir.resolve("zap-report.html").toString();
@@ -100,6 +106,12 @@ public record SecurityScanOptions(
                     "--require-zap-auth set but no DAST auth header value was provided. "
                             + "Set BATCH_DAST_AUTH_HEADER_VALUE or pass --zap-auth-header-value=...");
         }
+        if (!"baseline".equals(zapScan) && !"api".equals(zapScan) && !"full".equals(zapScan)) {
+            throw new IllegalArgumentException("--zap-scan must be one of: baseline, api, full");
+        }
+        if ("api".equals(zapScan) && isBlank(zapApiSpec)) {
+            throw new IllegalArgumentException("--zap-scan=api requires --zap-api-spec=<openapi-file-or-url>");
+        }
 
         return new SecurityScanOptions(
                 help,
@@ -111,6 +123,8 @@ public record SecurityScanOptions(
                 zapReport,
                 zapAuthHeaderName,
                 zapAuthHeaderValue,
+                zapScan,
+                zapApiSpec,
                 requireZapAuth,
                 reportDir,
                 mvnCommand,

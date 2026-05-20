@@ -55,6 +55,8 @@ java -jar target/security-scan-1.0.0.jar --mode=all --root=.. --target-url=http:
 - `--target-url=http://localhost:8080`
 - `--image-name=batch-console-api:local`
 - `--zap-report=target/zap-report.html`
+- `--zap-scan=baseline|api|full`
+- `--zap-api-spec=docs/api/console-api.openapi.yaml`：`--zap-scan=api` 时必填，可传本地 OpenAPI 文件或 URL
 - `--continue-on-error`
 - `--dry-run`
 
