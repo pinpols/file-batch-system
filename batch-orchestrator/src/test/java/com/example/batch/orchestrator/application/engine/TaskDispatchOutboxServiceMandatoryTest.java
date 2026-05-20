@@ -6,11 +6,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 import com.example.batch.common.enums.RunMode;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,14 +25,14 @@ import org.springframework.transaction.annotation.Transactional;
 @ExtendWith(MockitoExtension.class)
 class TaskDispatchOutboxServiceMandatoryTest {
 
-  @Mock private OutboxEventMapper outboxEventMapper;
+  @Mock private DomainEventPublisher domainEventPublisher;
   @Mock private JobTaskMapper jobTaskMapper;
 
   private TaskDispatchOutboxService service;
 
   @BeforeEach
   void setUp() {
-    service = new TaskDispatchOutboxService(outboxEventMapper, jobTaskMapper);
+    service = new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper);
     ReflectionTestUtils.setField(service, "self", service);
   }
 
@@ -58,7 +58,7 @@ class TaskDispatchOutboxServiceMandatoryTest {
 
     service.writeDispatchEvent(jobInstance, task, partition, "trace-1", "evt-key-1");
 
-    verify(outboxEventMapper).insert(any());
+    verify(domainEventPublisher).publish(any());
   }
 
   @Test
@@ -83,7 +83,7 @@ class TaskDispatchOutboxServiceMandatoryTest {
     var payloadCaptor = ArgumentCaptor.forClass(String.class);
     verify(jobTaskMapper).updatePayload(eq("t1"), eq(20L), payloadCaptor.capture());
     assertThat(payloadCaptor.getValue()).contains("run_mode").contains("RETRY").contains("\"key\"");
-    verify(outboxEventMapper).insert(any());
+    verify(domainEventPublisher).publish(any());
   }
 
   @Test

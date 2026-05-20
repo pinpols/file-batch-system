@@ -5,15 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.SchedulingPriorityBand;
+import com.example.batch.common.event.DomainEvent;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,14 +36,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class TaskDispatchOutboxServiceBehaviorTest {
 
-  @Mock private OutboxEventMapper outboxEventMapper;
+  @Mock private DomainEventPublisher domainEventPublisher;
   @Mock private JobTaskMapper jobTaskMapper;
 
   private TaskDispatchOutboxService service;
 
   @BeforeEach
   void setUp() {
-    service = new TaskDispatchOutboxService(outboxEventMapper, jobTaskMapper);
+    service = new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper);
     ReflectionTestUtils.setField(service, "self", service);
   }
 
@@ -79,95 +78,93 @@ class TaskDispatchOutboxServiceBehaviorTest {
     return (Map<String, Object>) JsonUtils.fromJson(json, Map.class);
   }
 
-  private OutboxEventEntity capture() {
-    ArgumentCaptor<OutboxEventEntity> c = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(c.capture());
+  private DomainEvent capture() {
+    ArgumentCaptor<DomainEvent> c = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(c.capture());
     return c.getValue();
   }
 
   @Test
   void priorityHighWhenPriorityLe3() {
     service.writeDispatchEvent(instance(2), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().getPayloadJson());
+    Map<String, Object> msg = parseMsg(capture().payload().toString());
     assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.HIGH.code());
   }
 
   @Test
   void priorityMediumWhenPriorityBetween4And6() {
     service.writeDispatchEvent(instance(5), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().getPayloadJson());
+    Map<String, Object> msg = parseMsg(capture().payload().toString());
     assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.MEDIUM.code());
   }
 
   @Test
   void priorityLowWhenPriorityGe7() {
     service.writeDispatchEvent(instance(9), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().getPayloadJson());
+    Map<String, Object> msg = parseMsg(capture().payload().toString());
     assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.LOW.code());
   }
 
   @Test
   void idempotencyKeyShouldPreferPartitionKey() {
     service.writeDispatchEvent(instance(3), task(null), partition("partition-idem-1"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().getPayloadJson());
+    Map<String, Object> msg = parseMsg(capture().payload().toString());
     assertThat(msg).containsEntry("idempotencyKey", "partition-idem-1");
   }
 
   @Test
   void idempotencyKeyWithoutPartitionShouldUseEventKeyIfPresent() {
     service.writeDispatchEvent(instance(3), task(null), null, "tr", "custom-event-key");
-    Map<String, Object> msg = parseMsg(capture().getPayloadJson());
+    Map<String, Object> msg = parseMsg(capture().payload().toString());
     assertThat(msg).containsEntry("idempotencyKey", "custom-event-key");
   }
 
   @Test
   void idempotencyKeyWithoutPartitionAndBlankEventKeyShouldFallbackToTenantTaskInstance() {
     service.writeDispatchEvent(instance(3), task(null), null, "tr", "");
-    Map<String, Object> msg = parseMsg(capture().getPayloadJson());
+    Map<String, Object> msg = parseMsg(capture().payload().toString());
     assertThat(msg).containsEntry("idempotencyKey", "ta:task:10:instance:1");
   }
 
   @Test
   void eventKeyShouldFallbackToTenantTaskIdWhenBlank() {
     service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "");
-    OutboxEventEntity event = capture();
-    assertThat(event.getEventKey()).isEqualTo("ta:10");
+    DomainEvent event = capture();
+    assertThat(event.eventKey()).isEqualTo("ta:10");
   }
 
   @Test
   void eventKeyShouldUseProvidedWhenSet() {
     service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "custom-event-key");
-    assertThat(capture().getEventKey()).isEqualTo("custom-event-key");
+    assertThat(capture().eventKey()).isEqualTo("custom-event-key");
   }
 
   @Test
   void priorityShouldPreferTaskOverInstance() {
     service.writeDispatchEvent(instance(7), task(2), partition("k"), "tr", "evt");
-    assertThat(capture().getPriority()).isEqualTo(2);
+    assertThat(capture().priority()).isEqualTo(2);
   }
 
   @Test
   void priorityShouldFallbackToInstancePriorityWhenTaskNull() {
     service.writeDispatchEvent(instance(7), task(null), partition("k"), "tr", "evt");
-    assertThat(capture().getPriority()).isEqualTo(7);
+    assertThat(capture().priority()).isEqualTo(7);
   }
 
   @Test
   void publishStatusIsNewAndAttemptZero() {
     service.writeDispatchEvent(instance(3), task(null), partition("k"), "tr", "evt");
-    OutboxEventEntity event = capture();
-    assertThat(event.getPublishStatus()).isEqualTo(OutboxPublishStatus.NEW.code());
-    assertThat(event.getPublishAttempt()).isZero();
-    assertThat(event.getTraceId()).isEqualTo("tr");
-    assertThat(event.getAggregateType()).isEqualTo("JOB_TASK");
-    assertThat(event.getAggregateId()).isEqualTo(10L);
-    assertThat(event.getEventType()).isEqualTo("IMPORT");
+    DomainEvent event = capture();
+    assertThat(event.traceId()).isEqualTo("tr");
+    assertThat(event.aggregateType()).isEqualTo("JOB_TASK");
+    assertThat(event.aggregateId()).isEqualTo(10L);
+    assertThat(event.eventType()).isEqualTo("IMPORT");
   }
 
   @Test
   void noPartitionShouldOmitJobPartitionIdInMessage() {
     service.writeDispatchEvent(instance(3), task(null), null, "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().getPayloadJson());
+    Map<String, Object> msg = parseMsg(capture().payload().toString());
     assertThat(msg.get("jobPartitionId")).isNull();
     assertThat(msg).containsEntry("schemaVersion", "v2");
   }
