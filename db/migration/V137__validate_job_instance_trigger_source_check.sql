@@ -9,7 +9,8 @@
 --
 -- 失败时:
 --   若 VALIDATE 失败说明历史有违例数据(SCHEDULED/API/EVENT/CATCH_UP 触发但
---   trigger_request_id IS NULL),需要先用以下脚本审计并人工补齐再重跑:
+--   trigger_request_id IS NULL),需要先用 scripts/db/preflight-job-instance-trigger-source.sql
+--   审计并人工补齐再重跑。核心查询:
 --     SELECT id, tenant_id, instance_no, trigger_type, created_at
 --       FROM batch.job_instance
 --      WHERE trigger_request_id IS NULL

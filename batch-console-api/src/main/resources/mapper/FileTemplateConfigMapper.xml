@@ -51,6 +51,7 @@
             updated_at
         from batch.file_template_config
         where tenant_id = #{q.tenantId}
+        and is_deleted = false
         <if test="q.keyword != null and q.keyword != ''">
             and (
                 template_code like concat('%', #{q.keyword}, '%')
@@ -83,6 +84,7 @@
         select count(1)
         from batch.file_template_config
         where tenant_id = #{q.tenantId}
+        and is_deleted = false
         <if test="q.keyword != null and q.keyword != ''">
             and (
                 template_code like concat('%', #{q.keyword}, '%')
@@ -119,6 +121,7 @@
         where tenant_id = #{tenantId}
           and template_code = #{templateCode}
           and enabled = true
+          and is_deleted = false
         order by version desc
         limit 1
     </select>
@@ -129,12 +132,14 @@
         where tenant_id = #{tenantId}
           and template_code = #{templateCode}
           and version = #{version}
+          and is_deleted = false
         limit 1
     </select>
 
     <select id="selectById" resultType="map">
         select * from batch.file_template_config
         where tenant_id = #{tenantId} and id = #{id}
+          and is_deleted = false
         limit 1
     </select>
 
@@ -144,10 +149,17 @@
         where tenant_id = #{tenantId} and id = #{id}
     </update>
 
-    <delete id="deleteById">
-        delete from batch.file_template_config
-        where tenant_id = #{tenantId} and id = #{id}
-    </delete>
+    <!--
+        软删除(② 软删除约定):不物理 DELETE,UPDATE 标记 is_deleted=true。
+        业务 SELECT 全部带 is_deleted=false 谓词过滤(见上方 select)。
+        想撤销:UPDATE batch.file_template_config SET is_deleted = false WHERE id = ?(运维 SQL)。
+    -->
+    <update id="deleteById">
+        update batch.file_template_config
+        set is_deleted = true,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+    </update>
 
     <insert id="upsertFileTemplateConfig">
         insert into batch.file_template_config (

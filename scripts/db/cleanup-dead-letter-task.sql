@@ -44,17 +44,60 @@ FROM batch.dead_letter_task
 GROUP BY replay_status
 ORDER BY 1;
 
+-- ⚠️ V140 起 archive_policy 已为 dead_letter_task 种子 archive_enabled=TRUE。
+-- 本脚本默认先 INSERT 到 archive.dead_letter_task_archive 再 DELETE,避免归档调度器尚未跑就
+-- 物理删导致冷库缺数据。可通过 -v skip_archive=1 跳过(已确认调度器先跑过的情况)。
+\if :{?skip_archive}
+  \echo '!! skip_archive=1: 跳过归档前置,直接 DELETE。请确认归档调度器已处理目标范围 !!'
+\else
+  \echo '=== 步骤 1/2: 归档到 archive.dead_letter_task_archive ==='
+  BEGIN;
+  INSERT INTO archive.dead_letter_task_archive
+  SELECT * FROM batch.dead_letter_task
+  WHERE (replay_status = 'SUCCESS'
+         AND created_at < now() - (:dlt_success_retention_days || ' days')::interval)
+     OR (replay_status = 'GIVE_UP'
+         AND created_at < now() - (:dlt_giveup_retention_days || ' days')::interval)
+  ON CONFLICT (id) DO NOTHING;
+  COMMIT;
+\endif
+
+\echo '=== 步骤 2/2: 物理删除热表数据 ==='
 BEGIN;
 
--- 1) SUCCESS 已成功重放,审计价值有限
+-- 1) 先归档到冷表;ON CONFLICT 表示归档调度器已经搬过,本脚本可幂等补齐。
+INSERT INTO archive.dead_letter_task_archive
+SELECT *
+FROM batch.dead_letter_task
+WHERE (
+        replay_status = 'SUCCESS'
+        AND created_at < now() - (:dlt_success_retention_days || ' days')::interval
+      )
+   OR (
+        replay_status = 'GIVE_UP'
+        AND created_at < now() - (:dlt_giveup_retention_days || ' days')::interval
+      )
+ON CONFLICT (id) DO NOTHING;
+
+-- 2) SUCCESS 已成功重放,审计价值有限
 DELETE FROM batch.dead_letter_task
 WHERE replay_status = 'SUCCESS'
-  AND created_at < now() - (:dlt_success_retention_days || ' days')::interval;
+  AND created_at < now() - (:dlt_success_retention_days || ' days')::interval
+  AND EXISTS (
+      SELECT 1
+      FROM archive.dead_letter_task_archive a
+      WHERE a.id = batch.dead_letter_task.id
+  );
 
--- 2) GIVE_UP 重试耗尽,事故复盘保留窗口要按合规
+-- 3) GIVE_UP 重试耗尽,事故复盘保留窗口要按合规
 DELETE FROM batch.dead_letter_task
 WHERE replay_status = 'GIVE_UP'
-  AND created_at < now() - (:dlt_giveup_retention_days || ' days')::interval;
+  AND created_at < now() - (:dlt_giveup_retention_days || ' days')::interval
+  AND EXISTS (
+      SELECT 1
+      FROM archive.dead_letter_task_archive a
+      WHERE a.id = batch.dead_letter_task.id
+  );
 
 COMMIT;
 
