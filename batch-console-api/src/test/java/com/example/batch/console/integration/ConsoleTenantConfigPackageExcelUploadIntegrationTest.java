@@ -8,6 +8,11 @@ import com.example.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,15 +20,10 @@ import java.util.Map;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.MultipartBodyBuilder;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.http.HttpStatus;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
@@ -31,55 +31,67 @@ import org.springframework.web.reactive.function.BodyInserters;
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
 class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractIntegrationTest {
 
+  private static final String EXCEL_CONTENT_TYPE =
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
   @LocalServerPort private int port;
 
-  private WebTestClient client;
-
-  @BeforeEach
-  void setUp() {
-    client =
-        WebTestClient.bindToServer()
-            .baseUrl("http://localhost:" + port)
-            .responseTimeout(Duration.ofSeconds(60))
+  @Test
+  void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() throws Exception {
+    byte[] workbook = tenantPackageWorkbook();
+    String boundary = "excel-upload-it-boundary";
+    HttpRequest request =
+        HttpRequest.newBuilder(
+                URI.create(
+                    "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+            .timeout(Duration.ofSeconds(60))
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-it")
+            .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
             .build();
+
+    HttpResponse<String> response =
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+    assertThat(response.body()).contains("\"code\":\"SUCCESS\"");
+    assertThat(response.body()).contains("\"fileName\":\"tenant-package.xlsx\"");
+    assertThat(response.body()).contains("\"fileChannelRows\":1");
+    assertThat(response.body()).contains("\"fileTemplateRows\":1");
+    assertThat(response.body()).contains("\"jobRows\":0");
+    assertThat(response.body()).contains("\"workflowEdgeRows\":0");
   }
 
-  @Test
-  void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() {
-    byte[] workbook = tenantPackageWorkbook();
-    MultipartBodyBuilder body = new MultipartBodyBuilder();
-    body.part(
-            "file",
-            new ByteArrayResource(workbook) {
-              @Override
-              public String getFilename() {
-                return "tenant-package.xlsx";
-              }
-            })
-        .contentType(
-            MediaType.parseMediaType(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
-    body.part("tenantId", "excel-upload-ta");
+  private static byte[] multipartBody(String boundary, byte[] workbook) throws Exception {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    writePart(
+        out, boundary, "tenantId", null, null, "excel-upload-ta".getBytes(StandardCharsets.UTF_8));
+    writePart(out, boundary, "file", "tenant-package.xlsx", EXCEL_CONTENT_TYPE, workbook);
+    out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+    return out.toByteArray();
+  }
 
-    client
-        .post()
-        .uri("/api/console/config/tenant-package/excel/upload")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-it")
-        .contentType(MediaType.MULTIPART_FORM_DATA)
-        .body(BodyInserters.fromMultipartData(body.build()))
-        .exchange()
-        .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(
-            response -> {
-              assertThat(response).contains("\"code\":\"SUCCESS\"");
-              assertThat(response).contains("\"fileName\":\"tenant-package.xlsx\"");
-              assertThat(response).contains("\"fileChannelRows\":1");
-              assertThat(response).contains("\"fileTemplateRows\":1");
-              assertThat(response).contains("\"jobRows\":0");
-              assertThat(response).contains("\"workflowEdgeRows\":0");
-            });
+  private static void writePart(
+      ByteArrayOutputStream out,
+      String boundary,
+      String name,
+      String filename,
+      String contentType,
+      byte[] content)
+      throws Exception {
+    out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+    out.write(
+        ("Content-Disposition: form-data; name=\"" + name + "\"").getBytes(StandardCharsets.UTF_8));
+    if (filename != null) {
+      out.write(("; filename=\"" + filename + "\"").getBytes(StandardCharsets.UTF_8));
+    }
+    out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    if (contentType != null) {
+      out.write(("Content-Type: " + contentType + "\r\n").getBytes(StandardCharsets.UTF_8));
+    }
+    out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    out.write(content);
+    out.write("\r\n".getBytes(StandardCharsets.UTF_8));
   }
 
   private static byte[] tenantPackageWorkbook() {
