@@ -41,7 +41,8 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_trigger_outbox_event_archive_created
     ON archive.trigger_outbox_event_archive (publish_status, created_at);
 
--- 加入 archive_policy 白名单
+-- 加入 archive_policy 白名单(V139/V140/V141 三次累积扩展,每次仅 ALTER 一次,
+-- archive_policy 是低频写表,ACCESS EXCLUSIVE 锁窗口可忽略)
 ALTER TABLE batch.archive_policy
     DROP CONSTRAINT ck_archive_policy_table;
 

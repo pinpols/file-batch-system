@@ -70,6 +70,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
       // DBA-2026-05-20 P2-4: V124 partial UNIQUE (WHERE NOT NULL) 防 CLAIM 穿透依赖
       // 调用方始终设非空,此处显式 Guard 兜底,任何后续 partitionPlan.partitionNo 为 null 的
       // 退化分支也会立刻 fail-fast,而不是悄悄落库一行 NULL idempotency_key 绕过 UNIQUE。
+      Guard.require(partitionPlan.getPartitionNo() != null, "job_partition.partition_no");
       String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
       Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
       partitionEntity.setIdempotencyKey(partitionIdempotencyKey);

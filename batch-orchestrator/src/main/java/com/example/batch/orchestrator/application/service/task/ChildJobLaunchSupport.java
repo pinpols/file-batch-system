@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.service.task;
 import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
@@ -195,10 +196,10 @@ public class ChildJobLaunchSupport {
             jobInstance.getId(),
             currentExpected + 1,
             jobInstance.getVersion());
-    if (updated <= 0) {
-      throw new IllegalStateException(
-          "job instance expected partition count update conflict for JOB node " + nodeCode);
-    }
+    Guard.require(
+        updated > 0,
+        ResultCode.STATE_CONFLICT,
+        "job instance expected partition count update conflict for JOB node " + nodeCode);
     jobInstance.setExpectedPartitionCount(currentExpected + 1);
     jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
   }

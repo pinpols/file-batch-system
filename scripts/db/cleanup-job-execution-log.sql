@@ -47,22 +47,57 @@ ORDER BY 1, 2;
 
 BEGIN;
 
--- 1) DEBUG / INFO 体量最大噪音最多,7 天后即可清
+-- 1) 先归档到冷表;ON CONFLICT 表示归档调度器已经搬过,本脚本可幂等补齐。
+INSERT INTO archive.job_execution_log_archive
+SELECT *
+FROM batch.job_execution_log
+WHERE (
+        log_level IN ('DEBUG', 'INFO')
+        AND log_type <> 'AUDIT'
+        AND created_at < now() - (:jel_info_retention_days || ' days')::interval
+      )
+   OR (
+        log_level IN ('WARN', 'ERROR')
+        AND log_type <> 'AUDIT'
+        AND created_at < now() - (:jel_error_retention_days || ' days')::interval
+      )
+   OR (
+        log_type = 'AUDIT'
+        AND created_at < now() - (:jel_audit_retention_days || ' days')::interval
+      )
+ON CONFLICT (id) DO NOTHING;
+
+-- 2) DEBUG / INFO 体量最大噪音最多,7 天后即可清
 DELETE FROM batch.job_execution_log
 WHERE log_level IN ('DEBUG', 'INFO')
   AND log_type <> 'AUDIT'
-  AND created_at < now() - (:jel_info_retention_days || ' days')::interval;
+  AND created_at < now() - (:jel_info_retention_days || ' days')::interval
+  AND EXISTS (
+      SELECT 1
+      FROM archive.job_execution_log_archive a
+      WHERE a.id = batch.job_execution_log.id
+  );
 
--- 2) WARN / ERROR 30 天,故障排查与告警链路依赖
+-- 3) WARN / ERROR 30 天,故障排查与告警链路依赖
 DELETE FROM batch.job_execution_log
 WHERE log_level IN ('WARN', 'ERROR')
   AND log_type <> 'AUDIT'
-  AND created_at < now() - (:jel_error_retention_days || ' days')::interval;
+  AND created_at < now() - (:jel_error_retention_days || ' days')::interval
+  AND EXISTS (
+      SELECT 1
+      FROM archive.job_execution_log_archive a
+      WHERE a.id = batch.job_execution_log.id
+  );
 
--- 3) AUDIT 类型独立保留窗口（合规优先）
+-- 4) AUDIT 类型独立保留窗口（合规优先）
 DELETE FROM batch.job_execution_log
 WHERE log_type = 'AUDIT'
-  AND created_at < now() - (:jel_audit_retention_days || ' days')::interval;
+  AND created_at < now() - (:jel_audit_retention_days || ' days')::interval
+  AND EXISTS (
+      SELECT 1
+      FROM archive.job_execution_log_archive a
+      WHERE a.id = batch.job_execution_log.id
+  );
 
 COMMIT;
 

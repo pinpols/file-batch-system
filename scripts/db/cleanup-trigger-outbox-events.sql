@@ -48,15 +48,39 @@ ORDER BY 1;
 
 BEGIN;
 
--- 1) PUBLISHED 已成功投递到 Kafka,仅保留近 N 天供回查
+-- 1) 先归档到冷表;ON CONFLICT 表示归档调度器已经搬过,本脚本可幂等补齐。
+INSERT INTO archive.trigger_outbox_event_archive
+SELECT *
+FROM batch.trigger_outbox_event
+WHERE (
+        publish_status = 'PUBLISHED'
+        AND created_at < now() - (:trigger_outbox_published_retention_days || ' days')::interval
+      )
+   OR (
+        publish_status = 'GIVE_UP'
+        AND created_at < now() - (:trigger_outbox_giveup_retention_days || ' days')::interval
+      )
+ON CONFLICT (id) DO NOTHING;
+
+-- 2) PUBLISHED 已成功投递到 Kafka,仅保留近 N 天供回查
 DELETE FROM batch.trigger_outbox_event
 WHERE publish_status = 'PUBLISHED'
-  AND created_at < now() - (:trigger_outbox_published_retention_days || ' days')::interval;
+  AND created_at < now() - (:trigger_outbox_published_retention_days || ' days')::interval
+  AND EXISTS (
+      SELECT 1
+      FROM archive.trigger_outbox_event_archive a
+      WHERE a.id = batch.trigger_outbox_event.id
+  );
 
--- 2) GIVE_UP 重试耗尽放弃的,多保留一段供事故复盘
+-- 3) GIVE_UP 重试耗尽放弃的,多保留一段供事故复盘
 DELETE FROM batch.trigger_outbox_event
 WHERE publish_status = 'GIVE_UP'
-  AND created_at < now() - (:trigger_outbox_giveup_retention_days || ' days')::interval;
+  AND created_at < now() - (:trigger_outbox_giveup_retention_days || ' days')::interval
+  AND EXISTS (
+      SELECT 1
+      FROM archive.trigger_outbox_event_archive a
+      WHERE a.id = batch.trigger_outbox_event.id
+  );
 
 COMMIT;
 
