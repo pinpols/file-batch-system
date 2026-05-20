@@ -3,6 +3,7 @@ package com.example.batch.console.service;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.console.config.WebhookRelayProperties;
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.mapper.ConsoleWebhookDeliveryLogMapper;
@@ -23,7 +24,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
@@ -70,19 +70,7 @@ public class WebhookDeliveryRelay {
   private final WebhookDispatcher dispatcher;
   private final LockingTaskExecutor lockingTaskExecutor;
   private final Counter giveUpCounter;
-
-  @Value("${batch.webhook.relay.poll-interval-millis:60000}")
-  private long pollIntervalMillis;
-
-  @Value("${batch.webhook.relay.batch-size:50}")
-  private int batchSize;
-
-  /**
-   * Relay 端绝对最大重试次数(含 dispatcher 的 burst attempts)。 默认 8 = dispatcher 3 + relay 5。达到此值 标 GIVE_UP +
-   * 报警。
-   */
-  @Value("${batch.webhook.relay.absolute-max-attempts:8}")
-  private int absoluteMaxAttempts;
+  private final WebhookRelayProperties properties;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private ScheduledExecutorService executor;
@@ -92,11 +80,13 @@ public class WebhookDeliveryRelay {
       ConsoleWebhookSubscriptionMapper subscriptionRepository,
       WebhookDispatcher dispatcher,
       LockingTaskExecutor lockingTaskExecutor,
-      MeterRegistry meterRegistry) {
+      MeterRegistry meterRegistry,
+      WebhookRelayProperties properties) {
     this.deliveryLogRepository = deliveryLogRepository;
     this.subscriptionRepository = subscriptionRepository;
     this.dispatcher = dispatcher;
     this.lockingTaskExecutor = lockingTaskExecutor;
+    this.properties = properties;
     this.giveUpCounter =
         Counter.builder("batch_webhook_delivery_give_up_total")
             .description("Webhook 行被 relay 标 GIVE_UP 的累计次数(达到 absolute-max-attempts)")
@@ -114,12 +104,15 @@ public class WebhookDeliveryRelay {
               return t;
             });
     executor.scheduleWithFixedDelay(
-        this::poll, pollIntervalMillis, pollIntervalMillis, TimeUnit.MILLISECONDS);
+        this::poll,
+        properties.getPollIntervalMillis(),
+        properties.getPollIntervalMillis(),
+        TimeUnit.MILLISECONDS);
     log.info(
         "WebhookDeliveryRelay 已启动:poll={}ms batch={} absoluteMax={}",
-        pollIntervalMillis,
-        batchSize,
-        absoluteMaxAttempts);
+        properties.getPollIntervalMillis(),
+        properties.getBatchSize(),
+        properties.getAbsoluteMaxAttempts());
   }
 
   @PreDestroy
@@ -165,7 +158,7 @@ public class WebhookDeliveryRelay {
   private void pollLocked() {
     Instant now = BatchDateTimeSupport.utcNow();
     List<WebhookDeliveryLogEntity> batch =
-        deliveryLogRepository.findEligibleRetries(now, batchSize);
+        deliveryLogRepository.findEligibleRetries(now, properties.getBatchSize());
     if (batch.isEmpty()) {
       return;
     }
@@ -239,7 +232,7 @@ public class WebhookDeliveryRelay {
       return;
     }
 
-    if (nextAttempt >= absoluteMaxAttempts) {
+    if (nextAttempt >= properties.getAbsoluteMaxAttempts()) {
       deliveryLogRepository.markGiveUp(
           row.getId(), nextAttempt, result.httpStatus(), result.errorSummary());
       giveUpCounter.increment();
@@ -248,7 +241,7 @@ public class WebhookDeliveryRelay {
           row.getId(),
           row.getTenantId(),
           nextAttempt,
-          absoluteMaxAttempts);
+          properties.getAbsoluteMaxAttempts());
       return;
     }
 

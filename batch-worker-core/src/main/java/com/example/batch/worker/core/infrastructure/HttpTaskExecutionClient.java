@@ -8,6 +8,7 @@ import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
+import com.example.batch.worker.core.config.WorkerLeaseProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.example.batch.worker.core.support.TaskExecutionClient;
@@ -27,7 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -61,14 +61,14 @@ public class HttpTaskExecutionClient
       Environment environment,
       @Autowired(required = false) MeterRegistry meterRegistry,
       ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator,
-      @Value("${batch.worker.lease.renew-batch-max-items:256}") int renewBatchMaxItems) {
+      WorkerLeaseProperties leaseProperties) {
     this.properties = properties;
     this.securityProperties = securityProperties;
     this.restClientBuilderProvider = restClientBuilderProvider;
     this.environment = environment;
     this.meterRegistry = Optional.ofNullable(meterRegistry);
     this.reportOutboxCoordinator = reportOutboxCoordinator;
-    this.renewBatchMaxItems = Math.max(1, renewBatchMaxItems);
+    this.renewBatchMaxItems = Math.max(1, leaseProperties.getRenewBatchMaxItems());
   }
 
   /**

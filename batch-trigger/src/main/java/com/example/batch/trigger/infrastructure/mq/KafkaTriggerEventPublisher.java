@@ -4,6 +4,7 @@ import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.application.TriggerEventPublisher;
+import com.example.batch.trigger.config.TriggerKafkaProperties;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -12,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
@@ -35,9 +35,7 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
   private static final String HEADER_ENVELOPE_VERSION = "X-Envelope-Version";
 
   private final KafkaTemplate<String, String> triggerKafkaTemplate;
-
-  @Value("${batch.trigger.kafka.send-timeout-seconds:10}")
-  private int sendTimeoutSeconds;
+  private final TriggerKafkaProperties kafkaProperties;
 
   @Override
   public PublishResult publish(
@@ -78,7 +76,9 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
                 String.valueOf(envelope.envelopeVersion()).getBytes(StandardCharsets.UTF_8)));
     try {
       SendResult<String, String> result =
-          triggerKafkaTemplate.send(record).get(sendTimeoutSeconds, TimeUnit.SECONDS);
+          triggerKafkaTemplate
+              .send(record)
+              .get(kafkaProperties.getSendTimeoutSeconds(), TimeUnit.SECONDS);
       log.debug(
           "KafkaTriggerEventPublisher 发送成功: topic={} key={} partition={} offset={}",
           topic,
@@ -89,7 +89,8 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
     } catch (TimeoutException ex) {
       SwallowedExceptionLogger.info(KafkaTriggerEventPublisher.class, "catch:TimeoutException", ex);
 
-      return PublishResult.fail("kafka send timeout " + sendTimeoutSeconds + "s");
+      return PublishResult.fail(
+          "kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
     } catch (ExecutionException ex) {
       Throwable cause = ex.getCause() == null ? ex : ex.getCause();
       // R2-P2-6：之前完全无日志 → 不可恢复错误（AuthorizationException / RecordTooLarge /
