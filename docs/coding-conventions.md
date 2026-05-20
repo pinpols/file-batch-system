@@ -595,6 +595,23 @@ public class ConsoleJobController {
 
 ---
 
+## 11.4 分布式锁的两种用法
+
+**注解式 `@DistributedLock`(batch-common/lock):业务方法级,acquire-execute-release**
+
+- 适合:防止并发重复执行的业务方法(RERUN / 资源占用 / 防双 submit)
+- SpEL key 解析方法参数,失败降级方法签名兜底
+- 抢锁失败按 `throwOnFailure` 决定抛 `DistributedLockAcquireException` 或静默跳过
+- 配置开关:`batch.lock.distributed.enabled`
+
+**手写 `LockingTaskExecutor.executeWithLock`:scheduler poll 循环,custom error handling**
+
+- 现有 3 处(OutboxPollScheduler / WebhookDeliveryRelay / TriggerOutboxRelay)**保留手写**:
+  - 锁外 `AtomicBoolean running` CAS 防重叠(锁内只是单实例并发,锁外是单实例自身轮询重叠)
+  - 三层 catch:`DataAccessException → WARN`(瞬时,自动退避) / `OOM → rethrow` / `Throwable → ERROR`
+  - `finally` 重置 running flag,确保下轮能继续
+- 这些是 infrastructure 调度器,注解化会丢失语义。**不要**为了「统一」强迁
+
 ## 11.5 Micrometer 指标命名规范
 
 **命名格式**:`batch.<module>.<area>.<metric>.<unit>`(参见 `batch-common/.../observability/BatchMetricsNames`)
