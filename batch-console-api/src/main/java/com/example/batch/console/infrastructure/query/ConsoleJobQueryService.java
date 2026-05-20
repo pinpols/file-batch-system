@@ -60,10 +60,21 @@ public class ConsoleJobQueryService {
   }
 
   public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    // ADR-031 双轨:cursor 非空 → cursor 模式(不查 count,返回 nextCursor);否则 offset
-    Long cursorId = decodeCursorId(request.getCursor());
     boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    // ADR-031:cursor 模式 cursor key 是 id,与 sortBy=duration 互斥(duration 排序 cursor key 应该是 duration)
+    // 不静默忽略 sortBy,直接拒绝,避免「客户端以为按 duration 翻页实际按 id」的隐性 bug
+    if (cursorMode && "duration".equals(request.getSortBy())) {
+      throw com.example.batch.common.exception.BizException.of(
+          com.example.batch.common.enums.ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "sortBy=duration is not supported in cursor mode; remove cursor or use pageNo");
+    }
+    // cursor 模式忽略 pageNo,统一 pageNo=1(防止意外 OFFSET);其它字段保留以拼 WHERE
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
+    Long cursorId = decodeCursorId(request.getCursor());
     JobInstanceQuery query =
         new JobInstanceQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
