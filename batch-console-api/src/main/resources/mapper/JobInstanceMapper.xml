@@ -37,6 +37,11 @@
         select *
         from batch.job_instance
         where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            <!-- ADR-031: cursor 模式 — order by id desc 时 cursor 谓词为 id &lt; lastId
+                 租户过滤永远在前(line above),cursor 谓词绝不能影响租户隔离 -->
+            and id &lt; #{cursorId}
+        </if>
         <if test="jobCode != null and jobCode != ''">
             and job_code like concat('%', #{jobCode}, '%')
         </if>
