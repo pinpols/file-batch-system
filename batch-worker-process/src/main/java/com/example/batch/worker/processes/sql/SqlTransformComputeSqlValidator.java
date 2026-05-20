@@ -67,7 +67,87 @@ public class SqlTransformComputeSqlValidator {
         && !security.getAllowedSchemas().isEmpty()) {
       checkAllowedSchemas(statement, security.getAllowedSchemas());
     }
+    if (security != null
+        && security.getForbiddenFunctions() != null
+        && !security.getForbiddenFunctions().isEmpty()) {
+      checkNoForbiddenFunctions(sql, security.getForbiddenFunctions());
+    }
+    // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
+    if (enforceSchemaAllowlist && security != null && security.isRequireLimit()) {
+      checkTopLevelLimit(select, security.getMaxLimitRows());
+    }
     return sql;
+  }
+
+  /**
+   * 子串匹配大小写不敏感地拒禁用函数(dblink / pg_terminate_backend 等)。比 AST 遍历简单且能覆盖大小写/空格变体。 用 `\bname\b` 边界匹配避免
+   * "dblink" 误命中 "dblink_connect_u" 列名 — 实际上禁用列表都是带括号 调用的函数名,在 SQL 中后跟 '(',我们以此为强信号。
+   */
+  private static void checkNoForbiddenFunctions(String sql, List<String> forbidden) {
+    String lower = sql.toLowerCase();
+    for (String fn : forbidden) {
+      String needle = fn.toLowerCase();
+      int idx = 0;
+      while ((idx = lower.indexOf(needle, idx)) >= 0) {
+        int after = idx + needle.length();
+        boolean leftBoundary = idx == 0 || !isIdentifierPart(lower.charAt(idx - 1));
+        boolean rightCallSite = after < lower.length() && nextIsLParen(lower, after);
+        if (leftBoundary && rightCallSite) {
+          throw new IllegalArgumentException(
+              "sqlTransformCompute SQL calls forbidden function '" + fn + "'");
+        }
+        idx = after;
+      }
+    }
+  }
+
+  private static boolean isIdentifierPart(char c) {
+    return Character.isLetterOrDigit(c) || c == '_';
+  }
+
+  private static boolean nextIsLParen(String s, int from) {
+    int i = from;
+    while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
+    return i < s.length() && s.charAt(i) == '(';
+  }
+
+  /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
+  private static void checkTopLevelLimit(Select select, long maxLimitRows) {
+    SelectBody body = select.getSelectBody();
+    Long limit = topLimitOf(body);
+    if (limit == null) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute SQL must include a top-level LIMIT clause (≤ "
+              + maxLimitRows
+              + " rows)");
+    }
+    if (limit > maxLimitRows) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute SQL LIMIT " + limit + " exceeds max " + maxLimitRows);
+    }
+  }
+
+  private static Long topLimitOf(SelectBody body) {
+    if (body instanceof PlainSelect ps && ps.getLimit() != null) {
+      Object rows = ps.getLimit().getRowCount();
+      if (rows == null) return null;
+      try {
+        return Long.parseLong(rows.toString().trim());
+      } catch (NumberFormatException e) {
+        // 动态 LIMIT 参数 (e.g., LIMIT :pageSize) — 视为通过,上限由调用方参数绑定保障
+        return 0L;
+      }
+    }
+    if (body instanceof SetOperationList sol && sol.getLimit() != null) {
+      Object rows = sol.getLimit().getRowCount();
+      if (rows == null) return null;
+      try {
+        return Long.parseLong(rows.toString().trim());
+      } catch (NumberFormatException e) {
+        return 0L;
+      }
+    }
+    return null;
   }
 
   private Statement parse(String sql) {

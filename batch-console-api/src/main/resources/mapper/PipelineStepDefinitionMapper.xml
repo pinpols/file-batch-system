@@ -46,4 +46,27 @@
         delete from batch.pipeline_step_definition
         where pipeline_definition_id = #{pipelineDefinitionId}
     </delete>
+
+    <!--
+        批量插入 — 与 #insert 单行版本字段顺序 + DEFAULT fallback 一致。
+        调用方传 List<Map<String,Object>>。租户初始化 / Excel 导入大批量场景下,
+        把 N 次往返折成 1 次,降低连接占用 + 事务时长。
+    -->
+    <insert id="insertBatch" parameterType="list">
+        insert into batch.pipeline_step_definition (
+            pipeline_definition_id, step_code, step_name, stage_code,
+            step_order, impl_code, step_params, timeout_seconds,
+            retry_policy, retry_max_count, enabled
+        ) values
+        <foreach collection="list" item="row" separator=",">
+            (
+                #{row.pipeline_definition_id}, #{row.step_code}, #{row.step_name}, #{row.stage_code},
+                #{row.step_order}, #{row.impl_code}, #{row.step_params}::jsonb,
+                <choose><when test="row.timeout_seconds != null">#{row.timeout_seconds}</when><otherwise>0</otherwise></choose>,
+                <choose><when test="row.retry_policy != null and row.retry_policy != ''">#{row.retry_policy}</when><otherwise>'NONE'</otherwise></choose>,
+                <choose><when test="row.retry_max_count != null">#{row.retry_max_count}</when><otherwise>0</otherwise></choose>,
+                <choose><when test="row.enabled != null">#{row.enabled}</when><otherwise>true</otherwise></choose>
+            )
+        </foreach>
+    </insert>
 </mapper>

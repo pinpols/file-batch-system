@@ -40,4 +40,21 @@ public class SqlTemplateExportSecurityProperties {
 
   /** EXPLAIN 预估最大总代价上限，&lt;= 0 表示不限制。 仅在 {@link #explainCheckEnabled} 为 true 时生效。 */
   private double maxPlanCost = -1;
+
+  /**
+   * 禁止在 SQL 中调用的 PG 函数(大小写不敏感子串匹配 + 边界检查)。覆盖跨库 dblink / 系统级 pg_terminate_backend / 文件系统
+   * pg_read_server_files / 任意命令 copy_from_program 等。
+   */
+  private List<String> forbiddenFunctions =
+      new ArrayList<>(
+          List.of(
+              "dblink",
+              "pg_terminate_backend",
+              "pg_cancel_backend",
+              "pg_read_server_files",
+              "pg_read_binary_file",
+              "pg_ls_dir",
+              "copy_from_program",
+              "lo_import",
+              "lo_export"));
 }

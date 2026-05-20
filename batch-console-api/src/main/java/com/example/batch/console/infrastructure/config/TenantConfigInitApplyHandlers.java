@@ -437,9 +437,11 @@ public class TenantConfigInitApplyHandlers {
 
   private void insertPipelineSteps(
       Long pipelineDefinitionId, List<PipelineDefinitionSpec.StepSpec> steps) {
-    if (steps == null) {
+    if (steps == null || steps.isEmpty()) {
       return;
     }
+    // 批量插入: 把 N 次单行往返折成 1 次,租户初始化场景下减少 ~10x DB round trip + 事务时长。
+    List<Map<String, Object>> rows = new java.util.ArrayList<>(steps.size());
     for (PipelineDefinitionSpec.StepSpec step : steps) {
       Map<String, Object> stepParams = new HashMap<>();
       stepParams.put("pipeline_definition_id", pipelineDefinitionId);
@@ -453,8 +455,9 @@ public class TenantConfigInitApplyHandlers {
       stepParams.put("retry_policy", Nullables.coalesce(step.getRetryPolicy(), "NONE"));
       stepParams.put("retry_max_count", Nullables.coalesce(step.getRetryMaxCount(), 0));
       stepParams.put(KEY_ENABLED, Nullables.coalesce(step.getEnabled(), true));
-      pipelineStepDefinitionMapper.insert(stepParams);
+      rows.add(stepParams);
     }
+    pipelineStepDefinitionMapper.insertBatch(rows);
   }
 
   ItemStats applyFileChannels(List<FileChannelSpec> specs, ApplyContext ctx) {

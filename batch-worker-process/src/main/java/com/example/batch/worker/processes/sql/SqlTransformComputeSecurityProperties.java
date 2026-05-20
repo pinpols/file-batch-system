@@ -18,4 +18,32 @@ public class SqlTransformComputeSecurityProperties {
 
   /** 拒绝 {@code SELECT *} / {@code SELECT table.*}，要求配置显式列清单。 */
   private boolean forbidSelectStar = true;
+
+  /**
+   * 禁止在表达式 / FROM / WHERE 中调用的 PG 函数(大小写不敏感子串匹配)。覆盖:连接 dblink / 系统级 pg_terminate_backend / 文件系统
+   * pg_read_server_files / 任意命令 copy_from_program 等。
+   */
+  private List<String> forbiddenFunctions =
+      new ArrayList<>(
+          List.of(
+              "dblink",
+              "pg_terminate_backend",
+              "pg_cancel_backend",
+              "pg_read_server_files",
+              "pg_read_binary_file",
+              "pg_ls_dir",
+              "copy_from_program",
+              "lo_import",
+              "lo_export"));
+
+  /**
+   * 强制源 SQL 在顶层有 LIMIT 子句,防止无界 ResultSet 拖垮连接池/OOM。
+   *
+   * <p>默认 false:历史 pipeline 可能未带 LIMIT,开启会破坏既有配置。逐步治理后,生产 切到 true。开启后未带 LIMIT 或超过 {@link
+   * #maxLimitRows} 的 SQL 拒绝。
+   */
+  private boolean requireLimit = false;
+
+  /** {@link #requireLimit} 开启时,顶层 LIMIT 上限。SQL 中超过此值抛 IllegalArgumentException。 */
+  private long maxLimitRows = 100_000L;
 }
