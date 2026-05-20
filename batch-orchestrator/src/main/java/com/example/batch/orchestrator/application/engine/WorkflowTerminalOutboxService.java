@@ -1,11 +1,9 @@
 package com.example.batch.orchestrator.application.engine;
 
-import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.WorkflowRunStatus;
+import com.example.batch.common.event.DomainEvent;
+import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
-import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
-import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WorkflowTerminalOutboxService {
 
-  private final OutboxEventMapper outboxEventMapper;
+  private final DomainEventPublisher domainEventPublisher;
 
   /** workflow_run 终态枚举集合（白名单），调用方先行判断后再触发本写入。 */
   public static boolean isTerminal(String runStatus) {
@@ -56,16 +54,13 @@ public class WorkflowTerminalOutboxService {
     payload.put("finishedAt", finishedAt == null ? null : finishedAt.toString());
     payload.put("traceId", workflowRun.getTraceId());
 
-    OutboxEventEntity event = new OutboxEventEntity();
-    event.setTenantId(workflowRun.getTenantId());
-    event.setAggregateType("WORKFLOW_RUN");
-    event.setAggregateId(workflowRun.getId());
-    event.setEventType("WORKFLOW_TERMINAL");
-    event.setEventKey(workflowRun.getTenantId() + ":workflow:" + workflowRun.getId() + ":terminal");
-    event.setPayloadJson(JsonUtils.toJson(payload));
-    event.setPublishStatus(OutboxPublishStatus.NEW.code());
-    event.setPublishAttempt(0);
-    event.setTraceId(workflowRun.getTraceId());
-    outboxEventMapper.insert(event);
+    domainEventPublisher.publish(
+        DomainEvent.builder(workflowRun.getTenantId())
+            .aggregate("WORKFLOW_RUN", workflowRun.getId())
+            .type("WORKFLOW_TERMINAL")
+            .key(workflowRun.getTenantId() + ":workflow:" + workflowRun.getId() + ":terminal")
+            .payload(payload)
+            .traceId(workflowRun.getTraceId())
+            .build());
   }
 }
