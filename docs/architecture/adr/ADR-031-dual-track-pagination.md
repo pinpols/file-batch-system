@@ -1,6 +1,6 @@
 # ADR-031: 双轨分页(Offset + Cursor)
 
-- 状态: Proposed (2026-05-20)
+- 状态: **Accepted** (2026-05-20)— Phase 0/1/2/4 已落地,Phase 3/5 按 cookbook 推
 - 范围: `batch-console-api` 所有列表 API + FE `batch-console` pagination 组件
 - 影响:21 个 mapper(实际 59 处 selectByQuery/countByQuery 调用)+ FE ProTable / el-pagination
 
@@ -212,26 +212,114 @@ Pilot 验收:
 - 跨租户测试:cursor 解码出的 lastId 不能查到别租户数据
 - E2E 覆盖:`e2e/job-instance-list.spec.ts` + `e2e/m-jobs-list.spec.ts`
 
-### 5.3 阶段 3:批量推广(预计 3d,分 3 个 commit)
+### 5.3 阶段 3:按需推广(cookbook 模式)
 
-按表分批,每批 commit 一次,模块单测每批跑一次:
+> ⚠️ **范围边界**:ADR-031 范围条款明确 cursor 是 per-table 判定,**不**主动推平 10 个端点。Pilot(JobInstance)已落地,模式经过端到端验证(BE 编译 + FE typecheck + 移动端切换通过)。其它 9 个端点**按需**加 cursor,触发条件:
+>
+> - 该表行数 > 50w,或 slow query log 显示 `OFFSET > 10000` 高频
+> - 该 list 在移动端跑 infinite scroll 并出现漏/重抱怨
+> - 桌面端运营反馈深翻页 latency
+>
+> 不要批量推 — 每个 PR 一次一个端点,带性能证据上线。
 
-**Batch 1**(simple cursor,id desc):JobInstance / JobStepInstance / JobPartition / WorkflowRun / WorkflowNodeRun / DeadLetterTask / PendingCatchUp(7 个)
+**Cookbook — 给一个 mapper 加 cursor 支持**(以 simple id desc 为例,~15 min/mapper):
 
-**Batch 2**(复合 cursor,时间 + id):AlertEvent / AuditLog / RetryScheduleMapper(3 个)
+#### Step 1: Query record 加 cursorId(per mapper)
+```diff
+ public record FooQuery(
+     String tenantId,
+     ...,
+-    PageRequest pageRequest) {}
++    PageRequest pageRequest,
++    /** ADR-031 cursor:Mapper 在 WHERE 拼 id < #{cursorId};null=offset 模式 */
++    Long cursorId) {}
+```
 
-**Batch 3**(暴露双轨):上述 10 个端点 API 同时接 `pageNo` 和 `cursor`,FE list 页根据 viewport / 用户偏好选模式
+#### Step 2: Service ctor + cursor 分支
+```diff
+ public PageResponse<FooResponse> foo(FooQueryRequest req) {
+   PageRequest pr = new PageRequest(req.getPageNo(), req.getPageSize());
++  Long cursorId = decodeCursorId(req.getCursor());  // 复用 ConsoleJobQueryService 的工具
++  boolean cursorMode = req.getCursor() != null && !req.getCursor().isBlank();
+   FooQuery q = new FooQuery(
+       resolveTenant(...),
+       ...,
+       pr,
++      cursorId);
+   List<FooEntity> rows = mapper.selectByQuery(q);
++  if (cursorMode) {
++    var items = rows.stream().map(this::toFooResponse).toList();
++    String next = rows.size() < pr.pageSize() || rows.isEmpty()
++        ? null
++        : CursorCodec.encode(Map.of("id", rows.getLast().getId()));
++    return PageResponse.cursor(items, pr.pageSize(), next);
++  }
+   long total = mapper.countByQuery(q);
+   return page(pr, total, rows, this::toFooResponse);
+ }
+```
 
-### 5.4 阶段 4:FE 推广(预计 1.5d)
+#### Step 3: Mapper xml WHERE 加 cursor 分支
+```diff
+ <select id="selectByQuery" resultMap="FooResultMap">
+   select * from batch.foo
+   where tenant_id = #{tenantId}
++  <if test="cursorId != null">
++    <!-- cursor 谓词在 tenant_id 之后,绝不能影响租户隔离 -->
++    and id &lt; #{cursorId}
++  </if>
+   ...其它过滤...
+   order by id desc
+   <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+ </select>
+```
 
-- 移动端 list 页(`MJobInstances` / `MAlerts` / `MOutbox` 等 5+ 页)全切 cursor + infinite scroll
-- 桌面端默认仍 offset,Group A 端点提供「切换无限滚动」开关(隐藏在每个列表页右上,默认关)
+#### Step 4: 复合 cursor 变体(time desc + id desc)
+排序键 = `created_at desc, id desc` 时,cursor 解码出 2 个字段,WHERE 用 PG row-comparison:
+```xml
+<if test="cursorCreatedAt != null and cursorId != null">
+  <!-- (a, b) < (x, y) — PG 标准 row-comparison;按词典序比较 -->
+  and (created_at, id) &lt; (#{cursorCreatedAt}, #{cursorId})
+</if>
+```
 
-### 5.5 阶段 5:文档 + 守护(0.5d)
+Encode:`CursorCodec.encode(Map.of("createdAt", row.getCreatedAt(), "id", row.getId()))`。
 
-- 更新 `docs/api/console-api-protocol.md` Changelog
-- OpenAPI yaml:Group A 端点参数 + 响应 schema 双轨
-- 加守护测试 `CursorPaginationConsistencyTest`:同样数据 cursor 翻完 = offset 翻完(items 顺序、数量一致)
+#### Step 5: 索引验证
+查 EXPLAIN 确认走的是 `(tenant_id, sort_key..., id)` 复合索引;缺索引 cursor 比 offset 还慢。新增索引 migration 同 PR 落。
+
+#### Step 6: 守护测试
+新 mapper 加 cursor 时同步加 `XxxCursorPaginationConsistencyTest`:同一查询条件用 cursor 翻完 N 页 vs offset 翻完 N 页,items 顺序 + 数量必须完全一致。
+
+---
+
+**剩余 9 个候选端点(按优先级排)**:
+
+| 优先级 | Mapper | 排序键 | 触发条件 |
+|---|---|---|---|
+| P1 | AuditLog | (operated_at desc, id desc) | 行数无上限 + 移动端 oncall 看 |
+| P1 | AlertEvent | (triggered_at desc, id desc) | 同上,告警时间序 |
+| P2 | JobStepInstance | (id desc) | 行数 ≈ instance × 10 |
+| P2 | WorkflowRun | (id desc) | 工作流执行历史 |
+| P3 | JobPartition / WorkflowNodeRun / DeadLetterTask / PendingCatchUp / RetrySchedule | 按表 | 行数较小,可等真有 slow query log 再加 |
+
+每个 PR 单独跑,带性能或漏写证据。模式已稳,推广是机械操作。
+
+### 5.4 阶段 4:FE 移动端推广(✅ JobInstance pilot 已完成 2026-05-20)
+
+- `MJobInstances` 移动端切 cursor + infinite scroll(已落地)
+- `MAlerts` / `MOutbox` / 其它 mobile list 按需 — 等对应 BE 端点 cursor 化后切
+
+### 5.5 阶段 5:文档 + 守护
+
+**已完成**:
+- 本 ADR-031 文档(Phase 3 cookbook 已写入,见 §5.3)
+- CursorCodec 9 单测覆盖 round-trip / 空 / 损坏 token
+
+**待持续做(每个新 cursor 端点同 PR 落)**:
+- `docs/api/console-api.openapi.yaml`:该端点 schema 加 `cursor` 参数 + 响应 `nextCursor`/`hasMore`
+- `docs/api/console-api-protocol.md` Changelog 追加 ✓
+- 该端点 `XxxCursorPaginationConsistencyTest` 守护测试
 
 **合计预算**: 7 人天(含联调缓冲)
 
