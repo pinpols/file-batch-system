@@ -45,10 +45,13 @@ class TriggerRequestLaunchReconcilerTest {
   @BeforeEach
   void setUp() throws Exception {
     meterRegistry = new SimpleMeterRegistry();
+    com.example.batch.orchestrator.application.trigger.TriggerLaunchReconcilerProperties props =
+        new com.example.batch.orchestrator.application.trigger.TriggerLaunchReconcilerProperties();
+    props.setMinAgeSeconds(300);
+    props.setBatchSize(200);
     reconciler =
-        new TriggerRequestLaunchReconciler(triggerRequestMapper, gracefulShutdown, meterRegistry);
-    setField(reconciler, "minAgeSeconds", 300);
-    setField(reconciler, "batchSize", 200);
+        new TriggerRequestLaunchReconciler(
+            triggerRequestMapper, gracefulShutdown, meterRegistry, props);
   }
 
   @Test
