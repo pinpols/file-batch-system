@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-05-20
+- **CLAUDE.md 整体瘦身**(337 → 116 行,-65%):按 Anthropic CLAUDE.md 最佳实践重构 —— 本文件只装「不能从代码推断的约束」+「高频违反的红线」+「关键路径指针」,其余细节(详细规则表 / 反例 / 完整字典清单 / ADR 三阶段优先级表)下沉到 `docs/coding-conventions.md` / `docs/architecture/` / `docs/runbook/` / `docs/design/` 子文档。新增 §模块 / §构建 顶部 2 节(原先缺失关键运行环境信息)。**没有规范变化**,仅收纳位置调整 —— 所有规则的权威源仍是各对应 `docs/*` 子文档(本文件相应章节末以「详见 …」指引)。
+
 ### 2026-05-16
 - **CLAUDE.md §模块边界**:`batch-config-defaults` 从固定模块列表中**移除**(ADR-029 修订版反向重构,业界主流不为单个 yml 单建模块)。共享配置基线 `batch-defaults.yml` 回到 `batch-common/src/main/resources/`,由 `ConfigDriftGuardTest` 守护 classpath 存在性 + OWNED_KEYS 漂移。9 模块 pom 全部移除显式 dep,reactor 不再含 `batch-config-defaults`。
 
