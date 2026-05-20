@@ -1,19 +1,12 @@
 package com.example.batch.orchestrator.application.service.task;
 
 import com.example.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
-import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
-import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
-import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.observability.JobLifecycleMetrics;
-import java.time.Duration;
-import java.time.Instant;
+import com.example.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * job_instance 写入业务终态时与 {@link JobInstanceTerminalChildStateReconciler}
@@ -29,9 +22,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class JobInstanceTerminalStatusApplicationService {
 
   private final JobInstanceMapper jobInstanceMapper;
-  private final JobDefinitionMapper jobDefinitionMapper;
   private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
-  private final JobLifecycleMetrics jobLifecycleMetrics;
+  private final JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
 
   /** CAS 更新实例终态并收口非终态分区/任务；返回受影响行数（0 表示并发抢占或未命中）。 */
   @Transactional
@@ -46,56 +38,9 @@ public class JobInstanceTerminalStatusApplicationService {
     if (rows > 0) {
       terminalChildStateReconciler.reconcile(
           command.tenantId(), command.id(), command.terminalInstanceStatus());
-      registerMetricsAfterCommit(command);
+      jobLifecycleMetricsRecorder.recordCompletionAfterCommit(
+          command.tenantId(), command.id(), command.terminalInstanceStatus(), command.finishedAt());
     }
     return rows;
-  }
-
-  /**
-   * 事务提交后记 JobLifecycleMetrics:回滚不计数,失败也走 recordCompletion(status tag 区分); 再额外 selectById 拿
-   * createdAt/jobDefinitionId 算 duration + 低基数 job_type —— 多 1 次 SELECT 是 metrics 显式成本,
-   * 但只在终态切换发生(rows > 0)才命中,QPS 跟 job 完成速率绑死,可控。
-   */
-  private void registerMetricsAfterCommit(JobInstanceTerminalStatusCommand command) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            try {
-              JobInstanceEntity instance =
-                  jobInstanceMapper.selectById(command.tenantId(), command.id());
-              if (instance == null || instance.getCreatedAt() == null) {
-                return;
-              }
-              Instant finishedAt =
-                  command.finishedAt() != null ? command.finishedAt() : Instant.now();
-              Duration duration = Duration.between(instance.getCreatedAt(), finishedAt);
-              jobLifecycleMetrics.recordCompletion(
-                  command.tenantId(),
-                  resolveJobType(instance),
-                  command.terminalInstanceStatus(),
-                  duration);
-            } catch (RuntimeException ex) {
-              log.warn(
-                  "record job lifecycle metrics failed after commit: tenantId={} jobInstanceId={}",
-                  command.tenantId(),
-                  command.id(),
-                  ex);
-            }
-          }
-        });
-  }
-
-  private String resolveJobType(JobInstanceEntity instance) {
-    if (instance.getJobDefinitionId() == null) {
-      return "unknown";
-    }
-    JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
-    return definition == null || definition.jobType() == null || definition.jobType().isBlank()
-        ? "unknown"
-        : definition.jobType();
   }
 }

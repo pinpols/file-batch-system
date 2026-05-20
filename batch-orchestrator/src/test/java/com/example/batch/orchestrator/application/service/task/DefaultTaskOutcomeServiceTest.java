@@ -27,6 +27,7 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import com.example.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import com.example.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -70,6 +71,7 @@ class DefaultTaskOutcomeServiceTest {
   @Mock private ResultVersionWriter resultVersionWriter;
   @Mock private BatchDayReplayTerminalReconciler batchDayReplayReconciler;
   @Mock private FailureClassifier failureClassifier;
+  @Mock private JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder;
 
   private DefaultTaskOutcomeService service;
 
@@ -99,7 +101,8 @@ class DefaultTaskOutcomeServiceTest {
             terminalChildReconciler,
             resultVersionWriter,
             batchDayReplayReconciler,
-            failureClassifier);
+            failureClassifier,
+            jobLifecycleMetricsRecorder);
     service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
   }
 
