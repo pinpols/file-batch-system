@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.event.DomainEvent;
 import com.example.batch.common.event.DomainEventPublisher;
-import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -73,11 +72,6 @@ class TaskDispatchOutboxServiceBehaviorTest {
     return p;
   }
 
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> parseMsg(String json) {
-    return (Map<String, Object>) JsonUtils.fromJson(json, Map.class);
-  }
-
   private DomainEvent capture() {
     ArgumentCaptor<DomainEvent> c = ArgumentCaptor.forClass(DomainEvent.class);
     verify(domainEventPublisher).publish(c.capture());
@@ -87,42 +81,42 @@ class TaskDispatchOutboxServiceBehaviorTest {
   @Test
   void priorityHighWhenPriorityLe3() {
     service.writeDispatchEvent(instance(2), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().payload().toString());
+    Map<String, Object> msg = capture().payload();
     assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.HIGH.code());
   }
 
   @Test
   void priorityMediumWhenPriorityBetween4And6() {
     service.writeDispatchEvent(instance(5), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().payload().toString());
+    Map<String, Object> msg = capture().payload();
     assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.MEDIUM.code());
   }
 
   @Test
   void priorityLowWhenPriorityGe7() {
     service.writeDispatchEvent(instance(9), task(null), partition("k"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().payload().toString());
+    Map<String, Object> msg = capture().payload();
     assertThat(msg).containsEntry("priorityBand", SchedulingPriorityBand.LOW.code());
   }
 
   @Test
   void idempotencyKeyShouldPreferPartitionKey() {
     service.writeDispatchEvent(instance(3), task(null), partition("partition-idem-1"), "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().payload().toString());
+    Map<String, Object> msg = capture().payload();
     assertThat(msg).containsEntry("idempotencyKey", "partition-idem-1");
   }
 
   @Test
   void idempotencyKeyWithoutPartitionShouldUseEventKeyIfPresent() {
     service.writeDispatchEvent(instance(3), task(null), null, "tr", "custom-event-key");
-    Map<String, Object> msg = parseMsg(capture().payload().toString());
+    Map<String, Object> msg = capture().payload();
     assertThat(msg).containsEntry("idempotencyKey", "custom-event-key");
   }
 
   @Test
   void idempotencyKeyWithoutPartitionAndBlankEventKeyShouldFallbackToTenantTaskInstance() {
     service.writeDispatchEvent(instance(3), task(null), null, "tr", "");
-    Map<String, Object> msg = parseMsg(capture().payload().toString());
+    Map<String, Object> msg = capture().payload();
     assertThat(msg).containsEntry("idempotencyKey", "ta:task:10:instance:1");
   }
 
@@ -164,7 +158,7 @@ class TaskDispatchOutboxServiceBehaviorTest {
   @Test
   void noPartitionShouldOmitJobPartitionIdInMessage() {
     service.writeDispatchEvent(instance(3), task(null), null, "tr", "evt");
-    Map<String, Object> msg = parseMsg(capture().payload().toString());
+    Map<String, Object> msg = capture().payload();
     assertThat(msg.get("jobPartitionId")).isNull();
     assertThat(msg).containsEntry("schemaVersion", "v2");
   }
