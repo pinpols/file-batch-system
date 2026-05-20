@@ -80,14 +80,22 @@
             and instance_status in ('CREATED','WAITING','READY','RUNNING','PARTIAL_FAILED')
         </if>
         <choose>
+            <!-- ADR-031:cursor 模式强制 order by id desc(因为 cursor key 是 id),
+                 且不走 offsetPageClause 避免 cursor 谓词后再 OFFSET 跳过数据。
+                 sortBy=duration 在 cursor 模式不适用,由 service 层 reject。 -->
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
             <when test="sortBy == 'duration'">
                 order by (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at)) desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </when>
             <otherwise>
                 order by id desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </otherwise>
         </choose>
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
 
     <select id="selectById" resultMap="JobInstanceResultMap">
