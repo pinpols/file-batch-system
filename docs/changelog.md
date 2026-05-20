@@ -7,6 +7,7 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-05-20
+- **CLAUDE.md §Java 编码细则补 quick-ref 表**(116 → 128 行):上一轮瘦身把太多规则下沉到 `docs/coding-conventions.md`,但 Claude 只 baseline 加载 CLAUDE.md → 下沉的规则不会自动遵守(实际见到 FQN / 构造器注入 / CommonResponse 包装等高频违反)。本次把**最常被违的 10 条**改成 10 行表格回放(每条 1 行 + 反例片段),细则仍指针化到 `docs/coding-conventions.md`。同时把时区 / 编码 2 条"禁用"红线从分散段落合并到 §Java 编码细则末尾,统一一处可扫。
 - **CLAUDE.md 整体瘦身**(337 → 116 行,-65%):按 Anthropic CLAUDE.md 最佳实践重构 —— 本文件只装「不能从代码推断的约束」+「高频违反的红线」+「关键路径指针」,其余细节(详细规则表 / 反例 / 完整字典清单 / ADR 三阶段优先级表)下沉到 `docs/coding-conventions.md` / `docs/architecture/` / `docs/runbook/` / `docs/design/` 子文档。新增 §模块 / §构建 顶部 2 节(原先缺失关键运行环境信息)。**没有规范变化**,仅收纳位置调整 —— 所有规则的权威源仍是各对应 `docs/*` 子文档(本文件相应章节末以「详见 …」指引)。
 
 ### 2026-05-16
