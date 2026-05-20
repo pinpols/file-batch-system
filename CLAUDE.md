@@ -91,14 +91,26 @@ CI `pr-gate` 拦截漂移。
 
 ## Java 编码细则
 
-完整规则 + 反例表见 [`docs/coding-conventions.md`](docs/coding-conventions.md)。本节只列**最常被违反**的 4 条:
+完整规则 + 反例表见 [`docs/coding-conventions.md`](docs/coding-conventions.md)。**以下每条都常被违,写代码 / 改代码必须先扫一遍**:
 
-- 方法参数 **≤ 6**;≥ 7 必须封装 Command/Param 类
-- `@Builder` 加到普通 class 时**必须配** `@NoArgsConstructor` + `@AllArgsConstructor`(或 `@Tolerate`)兜底空参,否则破坏 Jackson / MyBatis 反射构造路径
-- **禁全限定类名**(FQN),必走 `import`
-- if-chain / switch **≥ 3 分支**必须改 `Map<String, Handler>` 路由表
+| # | 规则 | 反例 |
+|---|---|---|
+| 1 | **禁全限定类名**(FQN),必走 `import` | `java.util.concurrent.TimeUnit.SECONDS` |
+| 2 | 方法参数 **≤ 6**;≥ 7 必须封装 Command/Param 类 | `void f(a,b,c,d,e,f,g)` |
+| 3 | 依赖注入**只用构造器**(`@RequiredArgsConstructor`);**禁** `@Autowired` field / setter 注入 | `@Autowired private Foo foo;` |
+| 4 | `@Transactional` **只放 Service 公共方法**,不放 Controller / Mapper;**禁** `Propagation.NEVER` 之外的非默认传播 | `@Transactional` 在 Controller |
+| 5 | 业务异常一律 `BizException.of(ResultCode.X, "error.<scope>.<reason>", args...)`,**禁** `new BizException(code, literal)` / `throw new RuntimeException(...)` | 抛裸 `IllegalArgumentException` |
+| 6 | Controller 返回值一律 `CommonResponse<T>`(走 `ResponseFactory.success()`),**禁**裸返 DTO 或自封装 envelope | `return user;` |
+| 7 | 日志**用占位符**,不用字符串拼接;ERROR 级必须带 `traceId` / 业务 ID;循环里不打 INFO | `log.info("user=" + u)` |
+| 8 | `@Builder` 加到普通 class 必须配 `@NoArgsConstructor` + `@AllArgsConstructor`(或 `@Tolerate`)兜底空参,否则破坏 Jackson / MyBatis 反射 | 裸 `@Builder` + 隐式空参 class |
+| 9 | if-chain / switch **≥ 3 分支**必须改 `Map<String, Handler>` 路由表 | 4 个 `else if` 散排 |
+| 10 | 集合返回 `List.of()` / `Map.of()` 不可变,**禁**返 `new ArrayList<>(...)` 后又 add | `return new ArrayList<>(list)` |
 
-**红线**:Spring Data JDBC entity / `@Entity` / `@Table` 持久化类**一律不加** `@Builder`(侵入持久化路径);**禁重命名任何字段**。
+**红线**(违反 = 直接 reject):
+- Spring Data JDBC entity / `@Entity` / `@Table` 持久化类**一律不加** `@Builder`(侵入持久化路径)
+- **禁重命名任何字段**(破坏 mybatis xml `#{q.xxx}` / canonical constructor 调用方)
+- **禁** `ZoneId.systemDefault()`(用 `BatchTimezoneProvider`)
+- **禁** `Charset.forName("UTF-8")` / 字面量(用 `StandardCharsets.UTF_8`)
 
 ## ADR 与范围纪律
 
