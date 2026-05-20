@@ -13,7 +13,8 @@
 | ADR 路线图 | 3 | 0 | 2 | 0 | 5 |
 | v2 评估硬化 | 6 | 2 | 0 | 0 | 8 |
 | v5 历史 P0-P3 | 19 | 2 | 0 | 2 | 23 |
-| **合计** | **33** | **5** | **2** | **2** | **42** |
+| DBA 审查 2026-05-20 | 11 | 4 | 0 | 0 | 15 |
+| **合计** | **44** | **9** | **2** | **2** | **57** |
 
 完成率 **33/42 ≈ 79%**；剩余 2 项 follow-up 均为 god class 拆分残余，独立 sprint 排期。
 
@@ -164,6 +165,55 @@
 |---|---|---|
 | V5-P2-1 | 6 类非 SFTP dispatch 渠道单 adapter IT | 业务接入对应渠道时再做 |
 | V5-P2-9 | Workflow PIPELINE / MIXED + GATEWAY / FILE_STEP 节点 | 依赖 V5-P1-1 完整落地 |
+
+---
+
+## 六、DBA Schema 审查（2026-05-20 立项，PR-A/B/C 已落 2026-05-21）
+
+来源：[`dba-schema-review-2026-05-20.md`](./dba-schema-review-2026-05-20.md)。基于 `docker/postgres/init/*` + `db/migration/V*__*.sql`（V1–V133+）+ `scripts/db/*` 的静态审查。
+
+**落地拆分**：PR-A 纯 DDL/脚本（V134-V141 + 3 cleanup）／PR-B 应用层守护（drift check / Guard / ANALYZE）／PR-C UNIQUE + 索引加新 + cutover/索引 runbook。
+
+### P0 — 增长与生命周期红线
+
+| 编号 | 主题 | 状态 | 落地证据 |
+|---|---|---|---|
+| V6-DBA-P0-1 | `outbox_event` 月分区执行 | 🟡 runbook 就绪待 ops | `scripts/db/partition-migration/01-outbox-event-partitioned.sql` + [`runbook/partition-cutover-2026-05.md`](../runbook/partition-cutover-2026-05.md) 4 phase SOP |
+| V6-DBA-P0-2 | `job_instance` biz_date 分区执行 | 🟡 runbook 就绪待 ops | 同上 P0-1 SOP，与 P0-1 合并维护窗口 |
+| V6-DBA-P0-3 | `trigger_outbox_event` 生命周期 | ✅ DDL/script 完成 | V139（archive 镜像 + archive_policy 种子）+ `scripts/db/cleanup-trigger-outbox-events.sql`。relay 游标改造经审计**不需要**（已 SKIP LOCKED + CAS markPublishing + ShedLock + stale reset） |
+| V6-DBA-P0-4 | `dead_letter_task` 生命周期 | ✅ | V140 + `scripts/db/cleanup-dead-letter-task.sql` |
+| V6-DBA-P0-5 | `job_execution_log` 生命周期 | ✅ | V141（archive_policy 种子，archive 表已在 V71）+ `scripts/db/cleanup-job-execution-log.sql` |
+
+### P1 — 索引整合 / 约束守护
+
+| 编号 | 主题 | 状态 | 落地证据 |
+|---|---|---|---|
+| V6-DBA-P1-1 | `job_instance` 索引补强 | 🟡 加新完成，DROP 待取证 | V143 加 partial active + `(tenant_id, biz_date DESC, instance_status)`；DROP 流程见 [`runbook/index-consolidation-2026-05.md`](../runbook/index-consolidation-2026-05.md)（需生产 `pg_stat_user_indexes.idx_scan` 数据再 V144 DROP） |
+| V6-DBA-P1-2 | `workflow_run` 整合 + 兜底 UNIQUE | ✅ UNIQUE 完成 / 🟡 索引整合待取证 | V142 加 `UNIQUE(tenant_id, id)`；DAO 审计：用户路径 7/7 带 tenant_id，2 处 by-design 旁路（`selectByIdAnyTenant` / cluster reconciler），**无穿透 bug** |
+| V6-DBA-P1-3 | `NotValidConstraintGuard` | ✅ 已存在 | `batch-orchestrator/.../startup/NotValidConstraintGuard.java`（R7 DB 审计 P1-5 时落地） |
+| V6-DBA-P1-4 | `ArchiveSchemaDriftCheck` 扩展 | 🟡 表清单已扩，列级比对未做 | `ARCHIVED_TABLES` 追加 `trigger_outbox_event` / `dead_letter_task`；`console_operation_audit` 仍无 archive 表（V132 by design）；列级（类型 / nullability）比对推后到独立条目 |
+
+### P2 — Quick wins
+
+| 编号 | 主题 | 状态 | 落地证据 |
+|---|---|---|---|
+| V6-DBA-P2-1 | `event_delivery_log.outbox_event_id` FK 索引 | ✅ | V134 |
+| V6-DBA-P2-2 | `file_record.storage_path` → TEXT | ✅ | V135 |
+| V6-DBA-P2-3 | `job_instance` CHECK 兜底 | ✅ | V136 NOT VALID + V137 VALIDATE 同 PR |
+| V6-DBA-P2-4 | `job_partition.idempotency_key` 收口 | ✅ | 审计仅 2 处 INSERT，均设确定性非空 key；`DefaultPartitionLifecycleService` + `ChildJobLaunchSupport` 补 `Guard.requireText` 防回归 |
+| V6-DBA-P2-5 | `file_record.metadata_json` 计划稳定性 | ✅ | `scripts/db/analyze-hot-tables.sql` 13 表 ANALYZE + last_analyze 校验；partial GIN 评估推后到取证后 |
+| V6-DBA-P2-6 | `file_dispatch_record.file_id` CASCADE | ✅ | V138 |
+
+### 完成率
+
+| 优先级 | 完成 | 部分 / 待 ops | 合计 |
+|---|:---:|:---:|:---:|
+| P0 | 3 | 2 | 5 |
+| P1 | 2 | 2 | 4 |
+| P2 | 6 | 0 | 6 |
+| **合计** | **11** | **4** | **15** |
+
+剩 4 项：P0-1/P0-2 等 ops 维护窗口 + P1-1/P1-2 索引整合等生产 `idx_scan` 取证 + 一项轻量后续（drift check 列级比对）。无代码级 blocker。
 
 ---
 

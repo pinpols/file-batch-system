@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service.task;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -66,7 +67,12 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
       partitionEntity.setBusinessKey(partitionPlan.getBusinessKey());
       // idempotencyKey 绑定到 jobInstanceId，避免 FIXED_RATE 等同一天多次触发时
       // 不同 job_instance 的分区互相冲突（partitionKey 仅作业务分片键，不作全局唯一约束）
-      partitionEntity.setIdempotencyKey(jobInstanceId + ":" + partitionPlan.getPartitionNo());
+      // DBA-2026-05-20 P2-4: V124 partial UNIQUE (WHERE NOT NULL) 防 CLAIM 穿透依赖
+      // 调用方始终设非空,此处显式 Guard 兜底,任何后续 partitionPlan.partitionNo 为 null 的
+      // 退化分支也会立刻 fail-fast,而不是悄悄落库一行 NULL idempotency_key 绕过 UNIQUE。
+      String partitionIdempotencyKey = jobInstanceId + ":" + partitionPlan.getPartitionNo();
+      Guard.requireText(partitionIdempotencyKey, "job_partition.idempotency_key");
+      partitionEntity.setIdempotencyKey(partitionIdempotencyKey);
       partitionEntity.setInputSnapshot(buildInputSnapshot(plan, partitionPlan, jobInstanceId));
       partitionEntity.setDryRun(plan.isDryRun());
       jobPartitionMapper.insert(partitionEntity);
