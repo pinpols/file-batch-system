@@ -59,7 +59,11 @@ public class ArchiveSchemaDriftCheck {
           // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
           // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
           "data_quality_rule",
-          "data_quality_check");
+          "data_quality_check",
+          // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
+          "trigger_outbox_event",
+          // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
+          "dead_letter_task");
 
   private final InformationSchemaMapper informationSchemaMapper;
 

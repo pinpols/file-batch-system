@@ -8,6 +8,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -148,6 +149,9 @@ public class ChildJobLaunchSupport {
     virtualPartition.setVersion(0L);
     virtualPartition.setRetryCount(0);
     virtualPartition.setBusinessKey(refJobCode + ":" + node.nodeCode());
+    // DBA-2026-05-20 P2-4: V124 partial UNIQUE 防 CLAIM 穿透依赖 idempotencyKey 非空,
+    // 这里属于"上游构造非空,但跨函数边界容易回归"的位置,显式 Guard 兜底。
+    Guard.requireText(idempotencyKey, "job_partition.idempotency_key (workflow virtual)");
     virtualPartition.setIdempotencyKey(idempotencyKey);
     virtualPartition.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     jobMappers.jobPartitionMapper.insert(virtualPartition);
