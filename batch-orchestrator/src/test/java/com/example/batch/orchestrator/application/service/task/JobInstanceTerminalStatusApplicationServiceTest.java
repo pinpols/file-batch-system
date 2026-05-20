@@ -1,21 +1,29 @@
 package com.example.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 守护 job_instance 终态 CAS + 子表收口的事务原子语义:
@@ -28,14 +36,20 @@ import org.mockito.MockitoAnnotations;
 class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Mock private JobInstanceMapper jobInstanceMapper;
+  @Mock private JobDefinitionMapper jobDefinitionMapper;
   @Mock private JobInstanceTerminalChildStateReconciler reconciler;
+
+  @Mock
+  private com.example.batch.orchestrator.observability.JobLifecycleMetrics jobLifecycleMetrics;
 
   private JobInstanceTerminalStatusApplicationService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new JobInstanceTerminalStatusApplicationService(jobInstanceMapper, reconciler);
+    service =
+        new JobInstanceTerminalStatusApplicationService(
+            jobInstanceMapper, jobDefinitionMapper, reconciler, jobLifecycleMetrics);
   }
 
   private JobInstanceTerminalStatusCommand cmd(String terminal) {
@@ -48,12 +62,29 @@ class JobInstanceTerminalStatusApplicationServiceTest {
     when(jobInstanceMapper.updateStatus(
             anyString(), anyLong(), anyString(), org.mockito.ArgumentMatchers.any(), anyLong()))
         .thenReturn(1);
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setCreatedAt(Instant.parse("2026-05-21T00:00:00Z"));
+    instance.setJobDefinitionId(200L);
+    when(jobInstanceMapper.selectById("ta", 100L)).thenReturn(instance);
+    when(jobDefinitionMapper.selectById(200L))
+        .thenReturn(JobDefinitionEntity.builder().jobType("IMPORT").build());
 
-    int rows =
-        service.updateTerminalStatusAndReconcileChildren(cmd(JobInstanceStatus.FAILED.code()));
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      int rows =
+          service.updateTerminalStatusAndReconcileChildren(cmd(JobInstanceStatus.FAILED.code()));
 
-    assertThat(rows).isEqualTo(1);
-    verify(reconciler).reconcile("ta", 100L, JobInstanceStatus.FAILED.code());
+      assertThat(rows).isEqualTo(1);
+      verify(reconciler).reconcile("ta", 100L, JobInstanceStatus.FAILED.code());
+      assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+      TransactionSynchronizationManager.getSynchronizations()
+          .forEach(TransactionSynchronization::afterCommit);
+      verify(jobLifecycleMetrics)
+          .recordCompletion(
+              eq("ta"), eq("IMPORT"), eq(JobInstanceStatus.FAILED.code()), any(Duration.class));
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
   }
 
   @Test
@@ -68,6 +99,8 @@ class JobInstanceTerminalStatusApplicationServiceTest {
 
     assertThat(rows).isZero();
     verify(reconciler, never()).reconcile(anyString(), anyLong(), anyString());
+    verify(jobLifecycleMetrics, never())
+        .recordCompletion(anyString(), anyString(), anyString(), any(Duration.class));
   }
 
   @Test
