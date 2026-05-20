@@ -61,6 +61,9 @@ public class ConsoleJobQueryService {
 
   public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    // ADR-031 双轨:cursor 非空 → cursor 模式(不查 count,返回 nextCursor);否则 offset
+    Long cursorId = decodeCursorId(request.getCursor());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
     JobInstanceQuery query =
         new JobInstanceQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
@@ -77,10 +80,36 @@ public class ConsoleJobQueryService {
             request.getSortBy(),
             request.getMinDurationSeconds(),
             request.getSlaBreached(),
-            pageRequest);
+            pageRequest,
+            cursorId);
     List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
+    if (cursorMode) {
+      List<ConsoleJobInstanceResponse> items =
+          rows.stream().map(this::toJobInstanceResponse).toList();
+      String nextCursor =
+          rows.size() < pageRequest.pageSize() || items.isEmpty()
+              ? null
+              : com.example.batch.common.page.CursorCodec.encode(
+                  java.util.Map.of("id", rows.get(rows.size() - 1).getId()));
+      return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
+    }
     long total = jobMappers.jobInstanceMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobInstanceResponse);
+  }
+
+  /** 把 controller 传来的 cursor token 解码出 id;损坏或缺字段返回 null(WHERE 自然命中 0 行降级)。 */
+  private static Long decodeCursorId(String token) {
+    if (token == null || token.isBlank()) return null;
+    Object raw = com.example.batch.common.page.CursorCodec.decode(token).get("id");
+    if (raw instanceof Number n) return n.longValue();
+    if (raw instanceof String s) {
+      try {
+        return Long.parseLong(s);
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   public ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {

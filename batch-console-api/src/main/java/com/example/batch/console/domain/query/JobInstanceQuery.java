@@ -20,4 +20,9 @@ public record JobInstanceQuery(
     String sortBy,
     Integer minDurationSeconds,
     Boolean slaBreached,
-    PageRequest pageRequest) {}
+    PageRequest pageRequest,
+    /**
+     * 双轨分页 cursor 模式(ADR-031):非 null 时 Mapper 走 cursor 谓词(id &lt; #{cursorId} 或类似),不读
+     * pageRequest.pageNo。 形态:CursorCodec.decode 出来的 {@code id} long 值;null 表示首页或 offset 模式。
+     */
+    Long cursorId) {}
