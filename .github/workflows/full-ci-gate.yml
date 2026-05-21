@@ -14,9 +14,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  full-ci-gate:
+  # ===========================================================================
+  # Job 1: unit + IT(剔除 batch-e2e-tests)+ security scans
+  # 预期 ~14-18 min。e2e suite 拆到 e2e-shard job 并发跑。
+  # ===========================================================================
+  unit-it:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 45
     env:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
@@ -28,10 +32,10 @@ jobs:
         with:
           compile-load-tests: "true"
 
-      - name: Run full CI gate
+      - name: Run unit + IT (skip e2e suite)
         shell: bash
         run: |
-          bash scripts/ci/run-full-regression.sh
+          bash scripts/ci/run-full-regression.sh --skip-it-suite
 
       - name: Install gitleaks
         shell: bash
@@ -79,7 +83,91 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-ci-surefire-reports
+          name: full-ci-unit-it-reports
           path: |
             **/target/surefire-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Job 2: e2e shard matrix。22 个 *E2eIT 按 LPT 均衡分成 4 组,并发跑。
+  # 单 shard 预期 ~6-8 min(含 setup + testcontainers 启动)。
+  # 4 shard 并发:总 wall-clock ~8-10 min,而非串行 25 min。
+  #
+  # 分组 baseline 数据来自 docs/runbook/e2e-it-optimization-2026-05-22.md:
+  #   shard1: 338s   shard2: 292s   shard3: 334s   shard4: 334s
+  # ===========================================================================
+  e2e-shard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - id: 1
+            label: "338s ←最长 shard"
+            tests: >-
+              WorkerProcessRestartRecoveryE2eIT,
+              ExportFailurePipelineE2eIT,
+              WorkerDrainE2eIT,
+              ProcessPipelineE2eIT,
+              OutboxForwarderRetryE2eIT
+          - id: 2
+            label: "292s"
+            tests: >-
+              ImportFailureE2eIT,
+              FullChainTenantPropagationE2eIT,
+              ImportFailurePipelineE2eIT,
+              ExportPipelineE2eIT,
+              TriggerAsyncLaunchFullChainE2eIT
+          - id: 3
+            label: "334s"
+            tests: >-
+              DeadLetterApprovalReplayE2eIT,
+              DispatchFailurePipelineE2eIT,
+              MultiTenantConcurrentE2eIT,
+              ProcessFailurePipelineE2eIT,
+              OutboxForwarderE2eIT,
+              SensorWaitFixtureE2eIT
+          - id: 4
+            label: "334s"
+            tests: >-
+              ExportStorageFailureE2eIT,
+              DispatchPipelineE2eIT,
+              ExportContentVerificationE2eIT,
+              ImportPipelineE2eIT,
+              DedupJobLaunchE2eIT,
+              OutboxPollMarginsYamlE2eIT
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Compile dependencies (skip tests)
+        shell: bash
+        run: |
+          mvn -pl batch-e2e-tests -am test-compile -DskipTests -B
+
+      - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
+        shell: bash
+        run: |
+          # `-Dtest=` 给 surefire 指定要跑的 IT class 列表(逗号分隔)
+          # batch-e2e-tests 用 surefire 而非 failsafe 跑 *E2eIT(见 pom)
+          TESTS="${{ matrix.shard.tests }}"
+          # 去掉 YAML 折行引入的空白
+          TESTS=$(echo "$TESTS" | tr -d ' \n')
+          mvn test -pl batch-e2e-tests \
+            -Dtest="$TESTS" \
+            -Dsurefire.failIfNoSpecifiedTests=false -B
+
+      - name: Upload E2E shard ${{ matrix.shard.id }} reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-ci-e2e-shard-${{ matrix.shard.id }}-reports
+          path: |
+            batch-e2e-tests/target/surefire-reports/**
           retention-days: 14
