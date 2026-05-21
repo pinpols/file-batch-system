@@ -5,3 +5,5 @@ batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHtt
 batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHttpIntegrationIT.java:generic-api-key:146
 docs/runbook/realtime-sse-verification.md:curl-auth-header:24
 batch-worker-import/src/test/resources/fixtures/test-rsa-private-pkcs8.pem:private-key:1
+# application-local.yml 是本地开发 profile,RSA 密钥用于本地登录加密;生产由 Helm Secret 注入覆盖
+batch-console-api/src/main/resources/application-local.yml:private-key:85
