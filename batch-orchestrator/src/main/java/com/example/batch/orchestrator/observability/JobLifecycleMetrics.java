@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.observability;
 import static com.example.batch.common.observability.BatchMetricsNames.JOB_COMPLETION_TOTAL;
 import static com.example.batch.common.observability.BatchMetricsNames.JOB_DURATION_SECONDS;
 import static com.example.batch.common.observability.BatchMetricsNames.JOB_FAILURE_TOTAL;
+import static com.example.batch.common.observability.BatchMetricsNames.TAG_DRY_RUN;
 import static com.example.batch.common.observability.BatchMetricsNames.TAG_ERROR_CODE;
 import static com.example.batch.common.observability.BatchMetricsNames.TAG_JOB_TYPE;
 import static com.example.batch.common.observability.BatchMetricsNames.TAG_STATUS;
@@ -32,9 +33,19 @@ public class JobLifecycleMetrics {
     this.registry = registry;
   }
 
-  /** job 走到终态时记录:end-to-end 时长 + 完成计数(按终态状态打 tag)。 */
+  /**
+   * job 走到终态时记录:end-to-end 时长 + 完成计数(按终态状态打 tag)。
+   *
+   * <p>ADR-026 dry-run:dryRun 维度统一打到 timer + counter,Grafana / 报警必须按
+   * {@code dry_run="false"} 过滤才能看到真实生产 SLA;{@code dry_run="true"} 单独看演练流量,
+   * 不污染真实生产 SLA / 错误率统计。
+   */
   public void recordCompletion(
-      String tenantId, String jobType, String terminalStatus, Duration duration) {
+      String tenantId,
+      String jobType,
+      String terminalStatus,
+      boolean dryRun,
+      Duration duration) {
     Tags tags =
         Tags.of(
             TAG_TENANT,
@@ -42,7 +53,9 @@ public class JobLifecycleMetrics {
             TAG_JOB_TYPE,
             safe(jobType),
             TAG_STATUS,
-            safe(terminalStatus));
+            safe(terminalStatus),
+            TAG_DRY_RUN,
+            Boolean.toString(dryRun));
     Timer.builder(JOB_DURATION_SECONDS)
         .tags(tags)
         .publishPercentileHistogram()
@@ -51,8 +64,12 @@ public class JobLifecycleMetrics {
     Counter.builder(JOB_COMPLETION_TOTAL).tags(tags).register(registry).increment();
   }
 
-  /** 失败专用:除了完成计数,额外打 batch.orchestrator.job.failure.total 带 error_code,便于按错误码分桶报警。 */
-  public void recordFailure(String tenantId, String jobType, String errorCode) {
+  /**
+   * 失败专用:除了完成计数,额外打 batch.orchestrator.job.failure.total 带 error_code,便于按错误码分桶报警。
+   *
+   * <p>同样带 dry_run tag,避免演练 instance 触发 FAILED 时拉爆生产错误率报警。
+   */
+  public void recordFailure(String tenantId, String jobType, String errorCode, boolean dryRun) {
     Tags tags =
         Tags.of(
             TAG_TENANT,
@@ -60,7 +77,9 @@ public class JobLifecycleMetrics {
             TAG_JOB_TYPE,
             safe(jobType),
             TAG_ERROR_CODE,
-            safe(errorCode));
+            safe(errorCode),
+            TAG_DRY_RUN,
+            Boolean.toString(dryRun));
     Counter.builder(JOB_FAILURE_TOTAL).tags(tags).register(registry).increment();
   }
 

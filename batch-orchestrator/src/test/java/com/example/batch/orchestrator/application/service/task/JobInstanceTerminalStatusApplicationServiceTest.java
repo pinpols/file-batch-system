@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -83,7 +84,11 @@ class JobInstanceTerminalStatusApplicationServiceTest {
           .forEach(TransactionSynchronization::afterCommit);
       verify(jobLifecycleMetrics)
           .recordCompletion(
-              eq("ta"), eq("IMPORT"), eq(JobInstanceStatus.FAILED.code()), any(Duration.class));
+              eq("ta"),
+              eq("IMPORT"),
+              eq(JobInstanceStatus.FAILED.code()),
+              eq(false),
+              any(Duration.class));
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
     }
@@ -101,7 +106,8 @@ class JobInstanceTerminalStatusApplicationServiceTest {
     assertThat(rows).isZero();
     verify(reconciler, never()).reconcile(anyString(), anyLong(), anyString());
     verify(jobLifecycleMetrics, never())
-        .recordCompletion(anyString(), anyString(), anyString(), any(Duration.class));
+        .recordCompletion(
+            anyString(), anyString(), anyString(), anyBoolean(), any(Duration.class));
   }
 
   @Test

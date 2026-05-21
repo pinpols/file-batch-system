@@ -46,6 +46,9 @@ public final class BatchMetricsNames {
   public static final String TAG_ERROR_CODE = "error_code";
   public static final String TAG_MODULE = "module";
   public static final String TAG_WORKER_TYPE = "worker_type";
+  // ADR-026 dry-run:job 终态指标按 dry_run 维度切分,避免演练流量污染真实 SLA / 错误率统计。
+  // 值固定 "true" / "false",低基数,可以安全打到 completion + failure 计数器。
+  public static final String TAG_DRY_RUN = "dry_run";
 
   private BatchMetricsNames() {}
 }
