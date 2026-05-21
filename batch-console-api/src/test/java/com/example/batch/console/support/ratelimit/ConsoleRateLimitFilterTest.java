@@ -17,7 +17,6 @@ import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -98,20 +97,43 @@ class ConsoleRateLimitFilterTest {
             contains("频繁"));
   }
 
-  // TODO(pre-existing drift, not part of boundary audit 2026-05-18): 主代码 ConsoleRateLimitFilter
-  // 当前用 remoteAddr 直接作 IP key,X-Forwarded-For 解析逻辑被移除/未启用,与本测试预期不符。
-  // 选择 @Disabled 而非删除断言以保留意图,后续若恢复 XFF 解析直接打开。
-  @Disabled("XFF 解析逻辑与主代码漂移,等代理转发链路决策后再启用")
+  /**
+   * trust-forwarded-headers=true(应用挂在受信反代/Ingress 后)时, XFF 第一段作为客户端真实 IP 作限流 key。
+   *
+   * <p>默认实例(本类大多数 case)是 false,直接走 remoteAddr 防伪造;本 case 单独构造启用 trust 的 filter 实例覆盖 resolveClientIp
+   * 的 XFF 分支。
+   */
   @Test
-  void shouldResolveXForwardedForAsIpKey() throws Exception {
+  void shouldResolveXForwardedForAsIpKeyWhenTrustEnabled() throws Exception {
+    ConsoleSecurityProperties trustProps = new ConsoleSecurityProperties();
+    trustProps.setTrustForwardedHeaders(true);
+    ConsoleRateLimitProperties limitProps = new ConsoleRateLimitProperties();
+    limitProps.setLoginIpLimitPerMinute(3);
+    ConsoleRateLimitFilter trustingFilter =
+        new ConsoleRateLimitFilter(rateLimiter, limitProps, responseWriter, trustProps);
+
     when(rateLimiter.tryAcquire(contains("203.0.113.5"), anyInt())).thenReturn(true);
 
     MockHttpServletRequest request = loginRequest("10.0.0.3");
     request.addHeader("X-Forwarded-For", "203.0.113.5, 10.0.0.1");
 
-    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    trustingFilter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
     verify(rateLimiter).tryAcquire(contains("203.0.113.5"), anyInt());
+  }
+
+  /** 默认 trust=false 时, XFF header 必须被忽略,key 走 remoteAddr 防伪造(curl -H 'XFF: 1.2.3.4' 绕过限流)。 */
+  @Test
+  void shouldIgnoreXForwardedForWhenTrustDisabled() throws Exception {
+    when(rateLimiter.tryAcquire(contains("10.0.0.3"), anyInt())).thenReturn(true);
+
+    MockHttpServletRequest request = loginRequest("10.0.0.3");
+    request.addHeader("X-Forwarded-For", "203.0.113.5"); // 伪造伪客户端 IP — 默认应忽略
+
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(rateLimiter).tryAcquire(contains("10.0.0.3"), anyInt());
+    verify(rateLimiter, never()).tryAcquire(contains("203.0.113.5"), anyInt());
   }
 
   // ── non-login requests not limited ───────────────────────────────────────
