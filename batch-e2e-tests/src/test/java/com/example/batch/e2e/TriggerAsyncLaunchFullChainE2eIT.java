@@ -93,7 +93,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
     //    job_instance 行被 INSERT(uk_job_instance_tenant_dedup 兜底,含 dedup_key)
     await()
         .atMost(Duration.ofSeconds(60))
-        .pollInterval(Duration.ofSeconds(2))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               Integer count =
@@ -136,7 +136,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
     // 等第一次消费创建 job_instance 后,后续重复消费应被 dedup 拦截 — 整体只 1 行
     await()
         .atMost(Duration.ofSeconds(60))
-        .pollInterval(Duration.ofSeconds(2))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               Integer count =

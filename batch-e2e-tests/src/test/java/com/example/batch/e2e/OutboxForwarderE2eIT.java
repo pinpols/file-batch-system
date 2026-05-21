@@ -90,7 +90,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
     // OutboxPollScheduler fires every 500 ms and publishes the pending outbox event automatically.
     await()
         .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofSeconds(5))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               E2eStatusLogger.logJobFlowSnapshot(

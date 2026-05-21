@@ -94,7 +94,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
     // 等待 task 完成
     await()
         .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofSeconds(5))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               String status =
