@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -172,7 +173,7 @@ class TriggerOutboxRelayTest {
         .markFailed(
             eq(103L),
             eq(OutboxPublishStatus.GIVE_UP.code()),
-            org.mockito.ArgumentMatchers.contains("payload deserialize"),
+            contains("payload deserialize"),
             any(Instant.class));
     verify(publisher, never()).publish(any(), any(), any(), any());
   }

@@ -81,7 +81,9 @@ public class ConsoleAdminTestDataController {
       aggregateId = "#prefix")
   public CommonResponse<Map<String, Integer>> cleanup(
       @RequestParam
-          @Pattern(regexp = PREFIX_PATTERN, message = "prefix 必须字母开头,3-33 字符,只能含字母/数字/_/-")
+          @Pattern(
+              regexp = PREFIX_PATTERN,
+              message = "prefix 必须字母开头,3-33 字符,只能含字母/数字/-(禁 _,SQL LIKE 单字符通配符)")
           String prefix) {
     if (prefix == null || prefix.isBlank()) {
       // Spring validation 已拦,这里再硬挡一次,防止反射调用绕过 @Pattern

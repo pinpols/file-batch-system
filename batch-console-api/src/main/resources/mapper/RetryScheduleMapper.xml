@@ -24,6 +24,9 @@
         select *
         from batch.retry_schedule
         where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
         <if test="relatedType != null and relatedType != ''">
             and related_type = #{relatedType}
         </if>
@@ -33,8 +36,16 @@
         <if test="retryStatus != null and retryStatus != ''">
             and retry_status = #{retryStatus}
         </if>
-        order by next_retry_at asc, id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by next_retry_at asc, id desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="countByQuery" resultType="long">

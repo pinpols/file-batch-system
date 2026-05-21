@@ -16,6 +16,9 @@
             created_at
         from batch.file_audit_log
         where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
         <if test="operationType != null and operationType != ''">
             and operation_type = #{operationType}
         </if>
@@ -38,7 +41,14 @@
             and created_at &lt;= #{toTime}
         </if>
         order by id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="countByQuery" resultType="long">

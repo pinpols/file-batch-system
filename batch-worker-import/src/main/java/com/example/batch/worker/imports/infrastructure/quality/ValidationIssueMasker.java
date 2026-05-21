@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * 按 {@code log_masking_enabled=true + masking_rule_set} 对 {@link ValidationIssue} 的错误信息和原始记录脱敏。
  *
- * <p>{@code BatchSecurityProperties#isBypassMode()} = true 时强制关闭脱敏(本地/E2E 调试)。
+ * <p>安全配置启用 bypass mode 时强制关闭脱敏(本地/E2E 调试)。
  */
 @Component
 @RequiredArgsConstructor

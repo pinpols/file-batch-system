@@ -11,6 +11,9 @@
 #   bash scripts/local/be-acceptance.sh --steps=5,6,10   # 只跑选定
 #   bash scripts/local/be-acceptance.sh --skip=3,4       # 全跑但跳过 IT 和 E2E
 #   bash scripts/local/be-acceptance.sh --list           # 列出所有 step
+#   bash scripts/local/be-acceptance.sh --parallel       # 单测/IT/E2E 并发跑(总耗时 25-35 min)
+#   bash scripts/local/be-acceptance.sh --resume         # 续跑上次失败处(读 .be-acceptance-state)
+#   bash scripts/local/be-acceptance.sh --auto-issue     # Step 10 自动调 gh issue create
 #
 # 步骤定义:
 #   0  前置条件检查(docker / 端口 / 磁盘)
@@ -41,6 +44,10 @@ GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' DIM='\033[2m' 
 RUN_STEPS=()   # 实际要跑的步骤号(1-based)
 SKIP_STEPS=()
 FROM_STEP=0
+PARALLEL=0
+RESUME=0
+AUTO_ISSUE=0
+STATE_FILE="$ROOT_DIR/.be-acceptance-state"
 
 step_name() {
   case "$1" in
@@ -72,6 +79,18 @@ while [[ $# -gt 0 ]]; do
     --skip=*)
       IFS=',' read -ra SKIP_STEPS <<< "${1#*=}"
       ;;
+    --parallel)
+      PARALLEL=1
+      ;;
+    --resume)
+      RESUME=1
+      ;;
+    --auto-issue)
+      AUTO_ISSUE=1
+      ;;
+    --auto-issue-dry-run)
+      AUTO_ISSUE=2  # 2 = dry-run,只打印命令不真执行
+      ;;
     --list)
       printf "${BLUE}可用步骤:${RST}\n"
       for n in "${ALL_STEPS[@]}"; do
@@ -90,6 +109,21 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+
+# --resume 优先:读 state 文件,从上次失败 step 续跑
+if (( RESUME == 1 )); then
+  if [[ -f "$STATE_FILE" ]]; then
+    FROM_STEP=$(grep -E "^last_failed=" "$STATE_FILE" | tail -1 | cut -d= -f2)
+    if [[ -z "$FROM_STEP" || "$FROM_STEP" == "0" ]]; then
+      printf "${YELLOW}--resume:state 无失败记录,跑完整流程${RST}\n"
+      FROM_STEP=0
+    else
+      printf "${YELLOW}--resume:从 step %d 续跑(上次失败位置)${RST}\n" "$FROM_STEP"
+    fi
+  else
+    printf "${YELLOW}--resume:无 state 文件,跑完整流程${RST}\n"
+  fi
+fi
 
 # 决定本轮跑哪些
 if (( ${#RUN_STEPS[@]} == 0 )); then
@@ -219,9 +253,26 @@ step_7_fe() {
   sleep 1
   nohup npx vite preview > /tmp/vite-preview.log 2>&1 & disown
   sleep 3
-  curl -sf "http://localhost:$FE_PORT/" -o /dev/null && ok "FE UP local" || ng "FE 起不来"
-  local tcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 https://moisture-melbourne-elder-amp.trycloudflare.com/ 2>/dev/null || echo "000")
-  [[ "$tcode" == "200" ]] && ok "tunnel HTTP=200" || note "tunnel HTTP=$tcode(可能未启动)"
+  curl -sf "http://localhost:$FE_PORT/" -o /dev/null && ok "FE UP local :${FE_PORT}" || ng "FE 起不来"
+
+  # 自动探测 cloudflared tunnel URL(从最近 cloudflared 进程 stdout 找 trycloudflare URL),
+  # 没起 tunnel 跳过;有则探活
+  local tunnel_url=""
+  local cf_pid=$(pgrep -f "cloudflared.*tunnel" | head -1)
+  if [[ -n "$cf_pid" ]]; then
+    # 找 cloudflared 进程的 stdout log(可能在 /tmp 或用户指定)
+    for log_path in /tmp/claude-501/*/tasks/*.output /tmp/cloudflared-*.log /tmp/vite-preview.log; do
+      [[ -f "$log_path" ]] || continue
+      tunnel_url=$(grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" "$log_path" 2>/dev/null | tail -1)
+      [[ -n "$tunnel_url" ]] && break
+    done
+  fi
+  if [[ -n "$tunnel_url" ]]; then
+    local tcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$tunnel_url/" 2>/dev/null || echo "000")
+    [[ "$tcode" == "200" ]] && ok "tunnel UP $tunnel_url" || note "tunnel $tunnel_url HTTP=$tcode"
+  else
+    note "tunnel 未启动(cloudflared 进程不存在,跳过)"
+  fi
   cd "$ROOT_DIR"
 }
 
@@ -279,14 +330,51 @@ gh issue create --title "BE 验收 backlog $(date +%Y-%m-%d)" --body-file "$f" -
 \`\`\`
 EOF
   ok "归档 → $f"
-  note "确认后执行 gh issue create --body-file '$f'"
+
+  if (( AUTO_ISSUE >= 1 )); then
+    if ! command -v gh >/dev/null 2>&1; then
+      ng "gh CLI 不存在(brew install gh)"
+      return 1
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+      ng "gh 未认证(gh auth login)"
+      return 1
+    fi
+    local cmd="gh issue create --title \"BE 验收 backlog $(date +%Y-%m-%d)\" --body-file \"$f\" --label backlog,be-acceptance"
+    if (( AUTO_ISSUE == 2 )); then
+      ok "gh 已就位(--auto-issue-dry-run,不真执行)"
+      note "命令: $cmd"
+    else
+      local url=$(eval "$cmd" 2>&1 | tail -1)
+      if [[ "$url" == https://* ]]; then
+        ok "issue 已创建 → $url"
+      else
+        ng "gh issue create 失败: $url"
+      fi
+    fi
+  else
+    note "确认后执行 gh issue create --body-file '$f' --label backlog,be-acceptance"
+    note "或加 --auto-issue 自动调(--auto-issue-dry-run 打印命令不真执行)"
+  fi
 }
 
-# ── 执行 ────────────────────────────────────────────────────
-START_TS=$(date +%s)
-printf "${BLUE}═════ BE Acceptance — 跑步骤: %s ═════${RST}\n" "${RUN_STEPS[*]}"
-for n in "${RUN_STEPS[@]}"; do
-  should_run "$n" || continue
+# 写 state 文件:记录上次跑到哪步 + 是否失败
+write_state() {
+  local last_step="$1"
+  local last_status="$2"  # ok / fail
+  local last_failed_step=""
+  [[ "$last_status" == "fail" ]] && last_failed_step="$last_step"
+  cat > "$STATE_FILE" <<EOF
+# be-acceptance state — $(date -u +%Y-%m-%dT%H:%M:%SZ)
+last_step=$last_step
+last_status=$last_status
+last_failed=$last_failed_step
+EOF
+}
+
+run_step() {
+  local n="$1"
+  local prev_fail=$SEQ_FAIL
   case "$n" in
     0)  step_0_precheck ;;
     1)  step_1_build_restart ;;
@@ -299,10 +387,62 @@ for n in "${RUN_STEPS[@]}"; do
     8)  step_8_summary ;;
     9)  step_9_restore_mvnd ;;
     10) step_10_backlog ;;
-    *)  echo "未知 step: $n" ;;
+    *)  echo "未知 step: $n" ; return 2 ;;
   esac
-done
+  if (( SEQ_FAIL > prev_fail )); then
+    write_state "$n" "fail"
+  else
+    write_state "$n" "ok"
+  fi
+}
+
+# ── 执行 ────────────────────────────────────────────────────
+START_TS=$(date +%s)
+printf "${BLUE}═════ BE Acceptance — 跑步骤: %s%s ═════${RST}\n" "${RUN_STEPS[*]}" \
+  "$( (( PARALLEL == 1 )) && echo ' (并行: 2/3/4)' )"
+
+if (( PARALLEL == 1 )); then
+  # 2/3/4(单测 / IT / E2E)并发跑;其它步骤照常串行
+  for n in "${RUN_STEPS[@]}"; do
+    should_run "$n" || continue
+    case "$n" in
+      2|3|4) ;;  # 留到并行段
+      *)  run_step "$n" ;;
+    esac
+  done
+  # 并行启 2/3/4
+  PIDS=()
+  for n in 2 3 4; do
+    should_run "$n" || continue
+    (run_step "$n" > "$LOG_DIR/step${n}-parallel.log" 2>&1) &
+    PIDS+=($!)
+    printf "${DIM}   并行启 step %d(pid=$!)${RST}\n" "$n"
+  done
+  # 等所有并行结束
+  if (( ${#PIDS[@]} > 0 )); then
+    for pid in "${PIDS[@]}"; do
+      wait "$pid" || SEQ_FAIL=$((SEQ_FAIL+1))
+    done
+  fi
+  # 汇报并行段输出
+  for n in 2 3 4; do
+    [[ -f "$LOG_DIR/step${n}-parallel.log" ]] || continue
+    printf "\n${BLUE}── step %d 输出 ──${RST}\n" "$n"
+    cat "$LOG_DIR/step${n}-parallel.log"
+  done
+else
+  for n in "${RUN_STEPS[@]}"; do
+    should_run "$n" || continue
+    run_step "$n"
+  done
+fi
+
 END_TS=$(date +%s)
 ELAPSED=$((END_TS - START_TS))
-printf "\n${BLUE}═════ 完成 — 耗时 %d min %d s ═════${RST}\n" $((ELAPSED/60)) $((ELAPSED%60))
-[[ "$SEQ_FAIL" -gt 0 ]] && exit 1 || exit 0
+printf "\n${BLUE}═════ 完成 — 耗时 %d min %d s — PASS %d / FAIL %d ═════${RST}\n" \
+  $((ELAPSED/60)) $((ELAPSED%60)) "$SEQ_PASS" "$SEQ_FAIL"
+[[ "$SEQ_FAIL" -gt 0 ]] && {
+  printf "${YELLOW}失败位置已记入 %s,下次 --resume 续跑${RST}\n" "$STATE_FILE"
+  exit 1
+}
+exit 0

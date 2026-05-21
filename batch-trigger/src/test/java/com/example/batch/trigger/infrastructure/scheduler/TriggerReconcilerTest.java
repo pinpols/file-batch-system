@@ -1,6 +1,8 @@
 package com.example.batch.trigger.infrastructure.scheduler;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -107,13 +109,13 @@ class TriggerReconcilerTest {
     descriptor.setTimezone("Asia/Shanghai");
     JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
 
-    CronTrigger quartzTrigger = org.mockito.Mockito.mock(CronTrigger.class);
+    CronTrigger quartzTrigger = mock(CronTrigger.class);
     when(quartzTrigger.getCronExpression()).thenReturn("0 0 3 * * ?"); // Quartz still has old
     // timezone stub 被 short-circuit 跳过（cron 不同已命中 drift），故不 stub 以避免 strict mode 报错
 
     when(loader.loadAll()).thenReturn(List.of(descriptor));
     when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of(existing));
-    org.mockito.Mockito.doReturn(List.of(quartzTrigger)).when(scheduler).getTriggersOfJob(existing);
+    doReturn(List.of(quartzTrigger)).when(scheduler).getTriggersOfJob(existing);
 
     reconciler.reconcile();
 

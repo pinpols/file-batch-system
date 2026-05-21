@@ -8,7 +8,6 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.common.page.CursorCodec;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.JobInstanceEntity;
 import com.example.batch.console.domain.entity.JobPartitionEntity;
@@ -28,7 +27,6 @@ import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,31 +97,10 @@ public class ConsoleJobQueryService {
             cursorId);
     List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
     if (cursorMode) {
-      List<ConsoleJobInstanceResponse> items =
-          rows.stream().map(this::toJobInstanceResponse).toList();
-      String nextCursor =
-          rows.size() < pageRequest.pageSize() || items.isEmpty()
-              ? null
-              : CursorCodec.encode(Map.of("id", rows.get(rows.size() - 1).getId()));
-      return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
+      return cursorPage(pageRequest, rows, this::toJobInstanceResponse, JobInstanceEntity::getId);
     }
     long total = jobMappers.jobInstanceMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobInstanceResponse);
-  }
-
-  /** 把 controller 传来的 cursor token 解码出 id;损坏或缺字段返回 null(WHERE 自然命中 0 行降级)。 */
-  private static Long decodeCursorId(String token) {
-    if (token == null || token.isBlank()) return null;
-    Object raw = CursorCodec.decode(token).get("id");
-    if (raw instanceof Number n) return n.longValue();
-    if (raw instanceof String s) {
-      try {
-        return Long.parseLong(s);
-      } catch (NumberFormatException ignored) {
-        return null;
-      }
-    }
-    return null;
   }
 
   public ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
@@ -142,7 +119,11 @@ public class ConsoleJobQueryService {
 
   public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
       JobStepInstanceQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     JobStepInstanceQuery query =
         new JobStepInstanceQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
@@ -150,8 +131,13 @@ public class ConsoleJobQueryService {
             request.getJobPartitionId(),
             request.getStepCode(),
             request.getStepStatus(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<JobStepInstanceEntity> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toJobStepInstanceResponse, JobStepInstanceEntity::getId);
+    }
     long total = jobMappers.jobStepInstanceMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobStepInstanceResponse);
   }
@@ -163,14 +149,22 @@ public class ConsoleJobQueryService {
   }
 
   public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     JobPartitionQuery query =
         new JobPartitionQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getJobInstanceId(),
             request.getPartitionStatus(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<JobPartitionEntity> rows = jobMappers.jobPartitionMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(pageRequest, rows, this::toJobPartitionResponse, JobPartitionEntity::getId);
+    }
     long total = jobMappers.jobPartitionMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobPartitionResponse);
   }

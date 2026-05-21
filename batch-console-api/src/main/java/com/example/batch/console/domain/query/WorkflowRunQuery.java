@@ -9,4 +9,5 @@ public record WorkflowRunQuery(
     String runStatus,
     String currentNodeCode,
     String traceId,
-    PageRequest pageRequest) {}
+    PageRequest pageRequest,
+    Long cursorId) {}

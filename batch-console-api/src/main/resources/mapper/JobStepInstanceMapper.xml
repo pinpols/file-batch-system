@@ -25,6 +25,9 @@
         select *
         from batch.job_step_instance
         where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
         <if test="jobInstanceId != null">
             and job_instance_id = #{jobInstanceId}
         </if>
@@ -38,7 +41,14 @@
             and step_status = #{stepStatus}
         </if>
         order by id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="selectById" resultMap="JobStepInstanceResultMap">

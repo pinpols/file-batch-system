@@ -21,6 +21,9 @@
         select *
         from batch.workflow_run
         where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
         <if test="workflowDefinitionId != null">
             and workflow_definition_id = #{workflowDefinitionId}
         </if>
@@ -37,7 +40,14 @@
             and trace_id like concat('%', #{traceId}, '%')
         </if>
         order by id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="selectById" resultMap="WorkflowRunResultMap">

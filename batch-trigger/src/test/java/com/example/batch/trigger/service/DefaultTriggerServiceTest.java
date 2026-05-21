@@ -3,6 +3,7 @@ package com.example.batch.trigger.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -18,6 +19,7 @@ import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import com.example.batch.trigger.event.TriggerOutboxDomainEventPublisher;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TenantStatusMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
@@ -39,7 +41,7 @@ class DefaultTriggerServiceTest {
 
   @Mock private LaunchAdapterService launchAdapterService;
   @Mock private TriggerRequestMapper triggerRequestMapper;
-  @Mock private com.example.batch.trigger.mapper.TriggerOutboxEventMapper triggerOutboxEventMapper;
+  @Mock private TriggerOutboxDomainEventPublisher triggerOutboxPublisher;
   @Mock private BusinessCalendarMapper businessCalendarMapper;
   @Mock private TenantStatusMapper tenantStatusMapper;
   @Mock private PlatformTransactionManager transactionManager;
@@ -55,7 +57,7 @@ class DefaultTriggerServiceTest {
         new DefaultTriggerService(
             launchAdapterService,
             triggerRequestMapper,
-            triggerOutboxEventMapper,
+            triggerOutboxPublisher,
             businessCalendarMapper,
             tenantStatusMapper,
             transactionManager);
@@ -98,7 +100,8 @@ class DefaultTriggerServiceTest {
     assertThat(response).isNotNull();
     assertThat(response.traceId()).isEqualTo("existing-trace");
     verify(triggerRequestMapper, never()).insert(any());
-    verify(triggerOutboxEventMapper, never()).insert(any());
+    verify(triggerOutboxPublisher, never())
+        .publishRaw(anyString(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -129,7 +132,8 @@ class DefaultTriggerServiceTest {
     assertThat(approved.instanceNo()).isEqualTo("req-pending");
     assertThat(approved.traceId()).isEqualTo("trace-pending");
     // 同事务内：CAS PROCESSING → INSERT outbox → 更新 LAUNCHED
-    verify(triggerOutboxEventMapper).insert(any());
+    verify(triggerOutboxPublisher)
+        .publishRaw(eq("t1"), eq("req-pending"), eq("trace-pending"), anyString());
     verify(triggerRequestMapper).updateRequestStatus("t1", "req-pending", "LAUNCHED");
   }
 
@@ -148,7 +152,8 @@ class DefaultTriggerServiceTest {
         .isInstanceOf(BizException.class)
         .hasMessageContaining("not_catch_up");
 
-    verify(triggerOutboxEventMapper, never()).insert(any());
+    verify(triggerOutboxPublisher, never())
+        .publishRaw(anyString(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -177,7 +182,8 @@ class DefaultTriggerServiceTest {
     assertThat(response.instanceNo()).isNull();
     assertThat(response.traceId()).isEqualTo("trace-skip");
     verify(triggerRequestMapper, never()).insert(any());
-    verify(triggerOutboxEventMapper, never()).insert(any());
+    verify(triggerOutboxPublisher, never())
+        .publishRaw(anyString(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -195,7 +201,8 @@ class DefaultTriggerServiceTest {
             args -> assertThat(java.util.Arrays.toString((Object[]) args)).contains("suspended"));
 
     verify(triggerRequestMapper, never()).insert(any());
-    verify(triggerOutboxEventMapper, never()).insert(any());
+    verify(triggerOutboxPublisher, never())
+        .publishRaw(anyString(), anyString(), anyString(), anyString());
   }
 
   @Test

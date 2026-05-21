@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -31,8 +32,7 @@ class WorkerStartupRuntimeAuditTest {
     outbox.setEnabled(true);
     outbox.setPublishingStaleRecoverAfterMillis(120_000);
     WorkerReportOutboxRepository repository = mock(WorkerReportOutboxRepository.class);
-    when(repository.stats(org.mockito.ArgumentMatchers.anyLong()))
-        .thenReturn(new WorkerReportOutboxStats(2, 1, 0, 0));
+    when(repository.stats(anyLong())).thenReturn(new WorkerReportOutboxStats(2, 1, 0, 0));
     WorkerStartupRuntimeAudit audit =
         new WorkerStartupRuntimeAudit(
             provider(workerConfiguration()),

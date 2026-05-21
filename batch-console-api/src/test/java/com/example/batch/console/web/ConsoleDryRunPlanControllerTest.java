@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -109,7 +110,7 @@ class ConsoleDryRunPlanControllerTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"tb\"}"))
         .andExpect(status().isForbidden());
-    verify(orchestratorInternalRestClient, org.mockito.Mockito.never()).build();
+    verify(orchestratorInternalRestClient, never()).build();
   }
 
   @Test

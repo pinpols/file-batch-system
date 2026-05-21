@@ -1,9 +1,12 @@
 package com.example.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
+import com.example.batch.worker.core.config.WorkerLeaseProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
@@ -13,7 +16,6 @@ import java.util.Map;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.mock.env.MockEnvironment;
@@ -40,9 +42,8 @@ class HttpTaskExecutionClientTest {
 
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
       @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator =
-          Mockito.mock(ObjectProvider.class);
-      Mockito.when(noopCoordinator.getIfAvailable()).thenReturn(null);
+      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+      when(noopCoordinator.getIfAvailable()).thenReturn(null);
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
               props,
@@ -51,7 +52,7 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               noopCoordinator,
-              new com.example.batch.worker.core.config.WorkerLeaseProperties());
+              new WorkerLeaseProperties());
 
       TaskExecutionReport report = report(42L);
       client.report(report);
@@ -85,9 +86,8 @@ class HttpTaskExecutionClientTest {
 
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
       @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator =
-          Mockito.mock(ObjectProvider.class);
-      Mockito.when(noopCoordinator.getIfAvailable()).thenReturn(null);
+      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+      when(noopCoordinator.getIfAvailable()).thenReturn(null);
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
               props,
@@ -96,7 +96,7 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               registry,
               noopCoordinator,
-              new com.example.batch.worker.core.config.WorkerLeaseProperties());
+              new WorkerLeaseProperties());
 
       client.report(report(7L));
 
@@ -129,9 +129,8 @@ class HttpTaskExecutionClientTest {
       props.setClaimMaxAttempts(2);
 
       @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator =
-          Mockito.mock(ObjectProvider.class);
-      Mockito.when(noopCoordinator.getIfAvailable()).thenReturn(null);
+      ObjectProvider<WorkerReportOutboxCoordinator> noopCoordinator = mock(ObjectProvider.class);
+      when(noopCoordinator.getIfAvailable()).thenReturn(null);
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
               props,
@@ -140,7 +139,7 @@ class HttpTaskExecutionClientTest {
               new MockEnvironment(),
               null,
               noopCoordinator,
-              new com.example.batch.worker.core.config.WorkerLeaseProperties());
+              new WorkerLeaseProperties());
 
       List<TaskLeaseRenewItem> items =
           List.of(

@@ -35,7 +35,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
                 null,
                 null,
                 null,
-                new PageRequest(1, 10)));
+                new PageRequest(1, 10),
+                null));
 
     assertThat(results).isEmpty();
   }

@@ -20,6 +20,9 @@
 
     <sql id="filters">
         where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
         <if test="jobInstanceId != null">
             and job_instance_id = #{jobInstanceId}
         </if>
@@ -34,8 +37,16 @@
                started_at, finished_at
         from batch.job_partition
         <include refid="filters"/>
-        order by partition_no asc, id asc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by partition_no asc, id asc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="countByQuery" resultType="long">
