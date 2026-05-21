@@ -9,6 +9,7 @@ import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.query.DeadLetterTaskQuery;
 import com.example.batch.console.mapper.DeadLetterTaskMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.example.batch.testing.TestConstants.DeadLetter;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,24 +39,24 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldQueryDeadLettersByTenantAndReplayStatus() {
     String tenantId = "t-dlq-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 100L, "NEW", "trace-dlq-001");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 101L, "FAILED", "trace-dlq-002");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 102L, "SUCCESS", "trace-dlq-003");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 100L, DeadLetter.NEW, "trace-dlq-001");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 101L, DeadLetter.FAILED, "trace-dlq-002");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 102L, DeadLetter.SUCCESS, "trace-dlq-003");
 
     List<DeadLetterTaskEntity> newDlq =
         deadLetterTaskMapper.selectByQuery(
-            DeadLetterTaskQuery.ofReplayStatus(tenantId, "NEW", new PageRequest(1, 10)));
+            DeadLetterTaskQuery.ofReplayStatus(tenantId, DeadLetter.NEW, new PageRequest(1, 10)));
 
     assertThat(newDlq).hasSize(1);
-    assertThat(newDlq.get(0).getReplayStatus()).isEqualTo("NEW");
+    assertThat(newDlq.get(0).getReplayStatus()).isEqualTo(DeadLetter.NEW);
     assertThat(newDlq.get(0).getSourceId()).isEqualTo(100L);
   }
 
   @Test
   void shouldQueryDeadLettersBySourceType() {
     String tenantId = "t-dlq-type-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 200L, "NEW", "trace-type-001");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 201L, "NEW", "trace-type-002");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 200L, DeadLetter.NEW, "trace-type-001");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 201L, DeadLetter.NEW, "trace-type-002");
 
     List<DeadLetterTaskEntity> partitionDlq =
         deadLetterTaskMapper.selectByQuery(
@@ -69,7 +70,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   void shouldQueryDeadLettersByTraceId() {
     String tenantId = "t-dlq-trace-" + BatchDateTimeSupport.utcEpochMillis();
     String uniqueTrace = "unique-trace-dlq-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 300L, "NEW", uniqueTrace);
+    insertDeadLetter(tenantId, "JOB_PARTITION", 300L, DeadLetter.NEW, uniqueTrace);
 
     List<DeadLetterTaskEntity> results =
         deadLetterTaskMapper.selectByQuery(
@@ -82,9 +83,9 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldReturnAllDeadLettersForTenantWithNoFilter() {
     String tenantId = "t-dlq-all-" + BatchDateTimeSupport.utcEpochMillis();
-    insertDeadLetter(tenantId, "JOB_PARTITION", 400L, "NEW", "trace-all-1");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 401L, "FAILED", "trace-all-2");
-    insertDeadLetter(tenantId, "JOB_PARTITION", 402L, "SUCCESS", "trace-all-3");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 400L, DeadLetter.NEW, "trace-all-1");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 401L, DeadLetter.FAILED, "trace-all-2");
+    insertDeadLetter(tenantId, "JOB_PARTITION", 402L, DeadLetter.SUCCESS, "trace-all-3");
 
     List<DeadLetterTaskEntity> all =
         deadLetterTaskMapper.selectByQuery(

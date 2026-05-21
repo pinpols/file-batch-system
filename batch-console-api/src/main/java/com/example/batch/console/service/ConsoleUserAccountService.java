@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.support.auth.ConsolePasswordHasher;
@@ -25,8 +26,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleUserAccountService {
 
-  private static final String COL_TENANT_ID = "tenant_id";
-  private static final String COL_USERNAME = "username";
+  private static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
+  private static final String COL_USERNAME = BatchColumnNames.USERNAME;
 
   /**
    * TENANT_ADMIN 仅可授予的角色集合。授予 ADMIN / AUDITOR / 任何未列出的角色 一律 {@link ResultCode#FORBIDDEN};升 ADMIN

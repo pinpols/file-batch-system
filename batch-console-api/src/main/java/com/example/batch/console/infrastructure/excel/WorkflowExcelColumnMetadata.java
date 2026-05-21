@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure.excel;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
 import static com.example.batch.console.support.excel.ConsoleExcelStyles.requiredColumn;
 
+import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +32,7 @@ public final class WorkflowExcelColumnMetadata {
   // ── 字典字段名 ────────────────────────────────────────────────────────────
   public static final String COL_DESCRIPTION = "description";
   public static final String COL_ENABLED = "enabled";
-  public static final String COL_TENANT_ID = "tenant_id";
+  public static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
   public static final String COL_WORKFLOW_CODE = "workflow_code";
   public static final String COL_NODE_TYPE = "node_type";
   public static final String COL_EDGE_TYPE = "edge_type";
