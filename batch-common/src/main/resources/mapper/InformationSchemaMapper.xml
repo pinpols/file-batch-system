@@ -26,6 +26,21 @@
            AND table_name = #{tableName}
     </select>
 
+    <!-- DBA-2026-05-21 P0:列级类型 / nullable 漂移检测 — ArchiveSchemaDriftCheck 仅比对列名集合
+         无法捕 ALTER COLUMN ... TYPE / DROP NOT NULL 这类语义变更,本查询补足。 -->
+    <select id="listColumnsWithTypes" resultType="java.util.Map">
+        SELECT column_name              AS column_name,
+               data_type                AS data_type,
+               is_nullable              AS is_nullable,
+               column_default           AS column_default,
+               character_maximum_length AS character_maximum_length,
+               numeric_precision        AS numeric_precision,
+               numeric_scale            AS numeric_scale
+          FROM information_schema.columns
+         WHERE table_schema = #{schemaName}
+           AND table_name   = #{tableName}
+    </select>
+
     <!-- R7 DB 审计 P1-5：列出所有 ADD CONSTRAINT ... NOT VALID 后未补 VALIDATE 的约束。
          convalidated=false 的 CHECK / FK 表示 DB 允许新行违反约束直到运维手工 VALIDATE。 -->
     <select id="listInvalidConstraints" resultType="java.lang.String">
