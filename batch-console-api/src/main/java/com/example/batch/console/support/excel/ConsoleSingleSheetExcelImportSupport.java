@@ -2,6 +2,7 @@ package com.example.batch.console.support.excel;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
@@ -40,8 +41,7 @@ import org.xml.sax.XMLReader;
 /** 单 sheet Excel 导入场景的通用能力：解析 workbook、读取临时会话、生成预览错误 workbook。 */
 public final class ConsoleSingleSheetExcelImportSupport {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String COL_TENANT_ID = "tenant_id";
+  private static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
 
   /** 超过此大小（字节）的文件使用 SAX 流式解析，避免大文件 OOM。默认 2 MB。 */
   private static final int SAX_THRESHOLD_BYTES = 2 * 1024 * 1024;

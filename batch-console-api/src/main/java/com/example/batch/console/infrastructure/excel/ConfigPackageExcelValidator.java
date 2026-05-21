@@ -7,6 +7,7 @@ import static com.example.batch.console.support.excel.SheetValidationHelpers.req
 import static com.example.batch.console.support.excel.SheetValidationHelpers.validateJsonField;
 
 import com.example.batch.common.enums.DictEnum;
+import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
@@ -54,7 +55,7 @@ import java.util.stream.Collectors;
  */
 public class ConfigPackageExcelValidator {
 
-  public static final String COL_TENANT_ID = "tenant_id";
+  public static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
   public static final String COL_ENABLED = "enabled";
   public static final String COL_DESCRIPTION = "description";
   public static final String COL_VERSION = "version";
