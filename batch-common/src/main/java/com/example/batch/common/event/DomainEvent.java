@@ -1,5 +1,6 @@
 package com.example.batch.common.event;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -38,9 +39,7 @@ public record DomainEvent(
     }
     // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)
     payload =
-        payload == null
-            ? java.util.Map.of()
-            : java.util.Collections.unmodifiableMap(new LinkedHashMap<>(payload));
+        payload == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(payload));
     schemaVersion = schemaVersion == null ? "v1" : schemaVersion;
   }
 

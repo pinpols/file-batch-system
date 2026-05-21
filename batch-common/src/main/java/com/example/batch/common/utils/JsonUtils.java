@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * JSON 序列化/反序列化工具类。
@@ -82,10 +84,10 @@ public final class JsonUtils {
    * POJO → Map(LinkedHashMap)。给 DomainEventPublisher 之类的 payload 抽象用,避免 toJson + fromJson 二次序列化。
    */
   @SuppressWarnings("unchecked")
-  public static java.util.Map<String, Object> toMap(Object value) {
+  public static Map<String, Object> toMap(Object value) {
     if (value == null) {
-      return new java.util.LinkedHashMap<>();
+      return new LinkedHashMap<>();
     }
-    return MAPPER.convertValue(value, java.util.LinkedHashMap.class);
+    return MAPPER.convertValue(value, LinkedHashMap.class);
   }
 }
