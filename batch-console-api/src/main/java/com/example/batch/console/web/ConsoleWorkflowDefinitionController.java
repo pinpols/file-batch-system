@@ -36,7 +36,7 @@ public class ConsoleWorkflowDefinitionController {
 
   @GetMapping("/{id}")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<WorkflowDefinitionDetailResponse> getById(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionApplicationService.getById(id, tenantId));
@@ -67,7 +67,7 @@ public class ConsoleWorkflowDefinitionController {
   }
 
   @PostMapping("/{id}/validate")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<DagValidationResult> validate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionApplicationService.validate(id, tenantId));
@@ -79,7 +79,7 @@ public class ConsoleWorkflowDefinitionController {
    */
   @GetMapping("/{id}/mermaid")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<WorkflowMermaidResponse> mermaid(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     WorkflowDefinitionDetailResponse detail =

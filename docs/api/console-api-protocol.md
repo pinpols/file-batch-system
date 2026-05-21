@@ -139,13 +139,13 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/auth/me` returns the current authenticated principal, including `menus` — the role-filtered sidebar tree produced by `ConsoleMenuRegistry`. Frontends should render navigation from this field rather than hard-coding menu items.
 - `ROLE_ADMIN` can perform all write actions.
 - `ROLE_AUDITOR` is read-only for operational views and queries.
-- `ROLE_CONFIG_ADMIN` can access config and worker operations, but not all write actions.
+- `ROLE_TENANT_ADMIN` can access config and worker operations, but not all write actions.
 - `ROLE_TENANT_USER` can view job/file/workflow status, trigger jobs, and download exports, but cannot modify configurations or perform ops actions.
 - AI endpoints require both role access and prompt authorization checks.
 
 ### Role Permission Matrix
 
-| Operation | ADMIN | AUDITOR | CONFIG_ADMIN | TENANT_USER |
+| Operation | ADMIN | AUDITOR | TENANT_ADMIN | TENANT_USER |
 |-----------|:-----:|:-------:|:------------:|:-----------:|
 | Dashboard / Query / Meta / Realtime SSE | ✅ | ✅ | ✅ | ✅ |
 | Job/File/Workflow status view | ✅ | ✅ | ✅ | ✅ |
@@ -360,9 +360,9 @@ Default seeded accounts:
 
 | Username | Password | Roles | Description |
 |----------|----------|-------|-------------|
-| `admin` | `admin123` | `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN` | Super admin |
+| `admin` | `admin123` | `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_TENANT_ADMIN` | Super admin |
 | `auditor` | `auditor123` | `ROLE_AUDITOR` | Read-only auditor |
-| `config-admin` | `config123` | `ROLE_CONFIG_ADMIN` | Configuration manager |
+| `config-admin` | `config123` | `ROLE_TENANT_ADMIN` | Configuration manager |
 | `tenant-user` | `tenant123` | `ROLE_TENANT_USER` | Tenant business user |
 
 Username is globally unique. Login requires only `username` + `password`; tenant is resolved from the account record automatically.
@@ -427,7 +427,7 @@ Deployment note:
 - `PATCH /api/console/job-definitions/batch` — batch enable/disable up to 200; body: `BatchEnabledPatchRequest`
 - `POST /api/console/job-definitions/{id}/copy`
 - `POST /api/console/job-definitions/{id}/clone` — clone with field overrides via `JobDefinitionCopyRequest` body (jobName, workerGroup, queueCode, scheduleExpr, retryPolicy, etc.)
-- All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
+- All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR`, `ROLE_TENANT_ADMIN`, and `ROLE_TENANT_USER`.
 - `copy` uses query params `tenantId` (required) and `newJobCode` (required); the cloned definition is created with `enabled=false`.
 - `clone` accepts a JSON body with overridable fields; unset fields inherit from the source definition.
 
@@ -577,7 +577,7 @@ Deployment note:
   | `aiPromptCategory` | AI Prompt 分类 |
 - `queues`, `calendars`, and `windows` return simplified lists (`code` + `name`) for use as dropdown options; all require `tenantId` query param.
 - `worker-groups` returns deduplicated group codes from active worker registrations.
-- All meta endpoints allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
+- All meta endpoints allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_TENANT_ADMIN`, and `ROLE_TENANT_USER`.
 
 ### Queues
 
@@ -658,7 +658,7 @@ Deployment note:
 - `worker-load`: worker status/group distribution + active partition breakdown.
 - `alert-trend`: alert severity distribution + daily trend.
 - `sla-compliance`: violation/on-time counts + average duration + daily trend.
-- Allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
+- Allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_TENANT_ADMIN`, and `ROLE_TENANT_USER`.
 
 ### File Channels
 
@@ -667,7 +667,7 @@ Deployment note:
 - `GET /api/console/file-channels/{id}`
 - `PUT /api/console/file-channels/{id}`
 - `PATCH /api/console/file-channels/{id}` — enable/disable; body: `EnabledPatchRequest { tenantId, enabled }`
-- Read requires `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`, or `ROLE_AUDITOR`. Write requires `ROLE_CONFIG_ADMIN` or above. Delete requires `ROLE_ADMIN`.
+- Read requires `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`, or `ROLE_AUDITOR`. Write requires `ROLE_TENANT_ADMIN` or above. Delete requires `ROLE_ADMIN`.
 
 ### File Templates
 
@@ -806,7 +806,7 @@ Deployment note:
 - Tenant is the platform-level isolation unit. Must exist in `batch.tenant` before any config can be pushed.
 - `tenantId` format: `^[a-z0-9][a-z0-9\-]*[a-z0-9]$` (lowercase, alphanumeric, hyphens).
 - `status` values: `ACTIVE`, `SUSPENDED`.
-- `GET` list and detail require `ROLE_ADMIN` or `ROLE_CONFIG_ADMIN`. All write operations require `ROLE_ADMIN`.
+- `GET` list and detail require `ROLE_ADMIN` or `ROLE_TENANT_ADMIN`. All write operations require `ROLE_ADMIN`.
 - Response fields: `id`, `tenantId`, `tenantName`, `status`, `description`, `createdBy`, `createdAt`, `updatedAt`.
 
 ### User Account Management
@@ -819,7 +819,7 @@ Deployment note:
 - `POST /api/console/users/{id}/disable` — disable account
 - All operations require `ROLE_ADMIN`.
 - `username` is globally unique (case-insensitive). Format: alphanumeric + `.` `_` `-`, min 2 chars.
-- `authoritiesCsv` is a comma-separated list of role names (e.g. `ROLE_CONFIG_ADMIN,ROLE_AUDITOR`); default is `ROLE_USER`.
+- `authoritiesCsv` is a comma-separated list of role names (e.g. `ROLE_TENANT_ADMIN,ROLE_AUDITOR`); default is `ROLE_USER`.
 - Password minimum 8 characters; only the Argon2id hash is stored, raw password is discarded after hashing.
 - Response fields: `id`, `tenantId`, `username`, `displayName`, `authoritiesCsv`, `enabled`, `createdAt`, `updatedAt`. `passwordHash` is never exposed.
 - Create request fields: `tenantId` (required), `username` (required), `displayName`, `password` (required, min 8), `authoritiesCsv`.
@@ -910,7 +910,7 @@ Deployment note:
 - `GET /api/console/webhooks/delivery-logs` — query delivery log history (`subscriptionId` optional, `limit` default 20)
 - Webhook delivery uses HMAC-SHA256 signature in `X-Webhook-Signature` header; payload is JSON with `eventType`, `tenantId`, `payload`, `timestamp`.
 - Delivery retries up to 3 times with exponential backoff (2s, 4s, 8s).
-- Permissions: `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`, `ROLE_TENANT_USER`.
+- Permissions: `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`, `ROLE_TENANT_USER`.
 
 ### Resource Tags
 
@@ -921,7 +921,7 @@ Deployment note:
 - `DELETE /api/console/tags` — delete single tag (`resourceType`, `resourceCode`, `tagKey` required)
 - `DELETE /api/console/tags/all` — delete all tags for a resource
 - Supported `resourceType` values: `JOB`, `WORKFLOW`, `FILE_CHANNEL`, `FILE_TEMPLATE`.
-- Permissions: `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`.
+- Permissions: `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`.
 
 ### API Keys
 
@@ -1077,7 +1077,7 @@ Notes:
 - `PUT /api/console/notifications/rules/{ruleId}` — update rule
 - `DELETE /api/console/notifications/rules/{ruleId}` — delete rule
 - `GET /api/console/notifications/delivery-logs` — list delivery logs (param: `tenantId`, `limit`)
-- Channel CRUD and rule CRUD require `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`, or `ROLE_TENANT_USER`.
+- Channel CRUD and rule CRUD require `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`, or `ROLE_TENANT_USER`.
 - Delivery log view additionally allows `ROLE_AUDITOR`.
 - Channel delete requires `ROLE_ADMIN` or `ROLE_TENANT_USER`.
 - Database tables: `notification_channel`, `subscription_rule`, `notification_delivery_log` (V49 migration).
@@ -1089,7 +1089,7 @@ Notes:
 - `POST /api/console/config/approvals/{approvalId}/approve` — approve (changes release to PUBLISHED)
 - `POST /api/console/config/approvals/{approvalId}/reject` — reject (changes release back to DRAFT)
 - Submit, approve, and reject require `ROLE_ADMIN`.
-- Approval detail view allows `ROLE_ADMIN`, `ROLE_AUDITOR`, and `ROLE_CONFIG_ADMIN`.
+- Approval detail view allows `ROLE_ADMIN`, `ROLE_AUDITOR`, and `ROLE_TENANT_ADMIN`.
 - State machine: `DRAFT → PENDING_APPROVAL → PUBLISHED` (approve) or `DRAFT → PENDING_APPROVAL → DRAFT` (reject).
 - Database table: `config_approval` (V49 migration). Enum `ConfigLifecycleStatus.PENDING_APPROVAL` added.
 

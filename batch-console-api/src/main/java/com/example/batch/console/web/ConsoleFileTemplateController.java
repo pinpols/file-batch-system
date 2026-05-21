@@ -38,7 +38,7 @@ public class ConsoleFileTemplateController {
 
   /** 分页查询文件模板列表。 */
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public CommonResponse<PageResponse<Map<String, Object>>> list(
       @Valid @ModelAttribute FileTemplateQueryRequest request) {
     return responseFactory.success(fileTemplateApplicationService.list(request));
@@ -46,7 +46,7 @@ public class ConsoleFileTemplateController {
 
   /** 获取文件模板详情。 */
   @GetMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public CommonResponse<Map<String, Object>> get(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(fileTemplateApplicationService.get(id, tenantId));
@@ -54,7 +54,7 @@ public class ConsoleFileTemplateController {
 
   /** 新建文件模板。 */
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Map<String, Object>> create(
       @Valid @RequestBody FileTemplateCreateRequest request) {
     return responseFactory.success(fileTemplateApplicationService.create(request));
@@ -62,7 +62,7 @@ public class ConsoleFileTemplateController {
 
   /** 更新文件模板。 */
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Map<String, Object>> update(
       @PathVariable Long id, @Valid @RequestBody FileTemplateUpdateRequest request) {
     return responseFactory.success(fileTemplateApplicationService.update(id, request));
@@ -70,7 +70,7 @@ public class ConsoleFileTemplateController {
 
   /** 启用/禁用文件模板。 */
   @PatchMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> patch(
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
     fileTemplateApplicationService.toggle(id, request.getTenantId(), request.getEnabled());

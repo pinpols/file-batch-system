@@ -32,7 +32,7 @@ import org.springframework.web.client.RestClient;
 @RequestMapping("/api/console/ops/batch-day-replay")
 @RequiredArgsConstructor
 // P0-1: 批次日重放是高危跨实例运维操作，整类要求 ADMIN/CONFIG_ADMIN（GET 详情/进度也限定，避免泄漏跨租户元数据）
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
 public class ConsoleBatchDayReplayController {
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;

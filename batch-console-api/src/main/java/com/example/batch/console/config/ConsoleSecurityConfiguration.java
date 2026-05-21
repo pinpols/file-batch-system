@@ -88,7 +88,7 @@ public class ConsoleSecurityConfiguration {
                     .requestMatchers("/api/console/**")
                     .hasAnyAuthority(
                         ConsoleRoles.ADMIN,
-                        ConsoleRoles.CONFIG_ADMIN,
+                        ConsoleRoles.TENANT_ADMIN,
                         ConsoleRoles.AUDITOR,
                         ConsoleRoles.TENANT_USER,
                         ConsoleRoles.USER)

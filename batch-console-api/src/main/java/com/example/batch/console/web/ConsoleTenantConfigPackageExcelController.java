@@ -54,7 +54,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * <p>R2-P1-9：返回 {@link StreamingResponseBody} 让 workbook 直接写到响应流，不再缓 byte[]。
    */
   @GetMapping("/export")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<StreamingResponseBody> export(
       @RequestParam(required = false) String tenantId) {
     return applicationService.exportPackage(tenantId);
@@ -66,7 +66,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * <p>R2-P1-9：streaming 返回避免 byte[] 双拷贝。
    */
   @GetMapping("/template")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<StreamingResponseBody> template() {
     return applicationService.downloadTemplate();
   }
@@ -75,11 +75,11 @@ public class ConsoleTenantConfigPackageExcelController {
    * 上传租户配置包 Excel，解析 11 个 Sheet 后写入服务端临时会话，返回 {@code uploadToken}。
    *
    * @param file 表单字段名 {@code file}，内容为 xlsx
-   * @param tenantId 目标租户 id。ROLE_ADMIN / ROLE_CONFIG_ADMIN 是全局角色，必须显式指定； 租户级账号可不传（自动沿用 JWT 内
+   * @param tenantId 目标租户 id。ROLE_ADMIN / ROLE_TENANT_ADMIN 是全局角色，必须显式指定； 租户级账号可不传（自动沿用 JWT 内
    *     tenantId）
    */
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<TenantConfigPackageExcelUploadResponse> upload(
       @RequestParam("file") MultipartFile file,
       @RequestParam(value = "tenantId", required = false) String tenantId)
@@ -93,7 +93,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * @param uploadToken {@code /upload} 响应中的令牌
    */
   @GetMapping("/preview/{uploadToken}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<TenantConfigPackageExcelPreviewResponse> preview(
       @PathVariable String uploadToken) {
     return responseFactory.success(applicationService.preview(uploadToken));
@@ -105,7 +105,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * @param uploadToken 与预览阶段相同
    */
   @GetMapping("/preview/{uploadToken}/workbook")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public ResponseEntity<StreamingResponseBody> previewWorkbook(@PathVariable String uploadToken) {
     return applicationService.downloadPreviewWorkbook(uploadToken);
   }

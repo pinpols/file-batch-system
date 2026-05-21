@@ -34,7 +34,7 @@ public class ConsoleNotificationController {
 
   @GetMapping("/channels")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<Map<String, Object>>> listChannels(
       @RequestParam @NotBlank String tenantId) {
     return responseFactory.success(service.listChannels(tenantId));
@@ -42,14 +42,14 @@ public class ConsoleNotificationController {
 
   @GetMapping("/channels/{channelCode}")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<Map<String, Object>> getChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
     return responseFactory.success(service.getChannel(tenantId, channelCode));
   }
 
   @PostMapping("/channels")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<Void> createChannel(
       @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
     service.createChannel(tenantId, params);
@@ -57,7 +57,7 @@ public class ConsoleNotificationController {
   }
 
   @PutMapping("/channels/{channelCode}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<Void> updateChannel(
       @RequestParam @NotBlank String tenantId,
       @PathVariable String channelCode,
@@ -75,7 +75,7 @@ public class ConsoleNotificationController {
   }
 
   @PostMapping("/channels/{channelCode}/test")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<Map<String, Object>> testChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
     return responseFactory.success(service.testChannel(tenantId, channelCode));
@@ -83,7 +83,7 @@ public class ConsoleNotificationController {
 
   @GetMapping("/rules")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<Map<String, Object>>> listRules(
       @RequestParam @NotBlank String tenantId) {
     return responseFactory.success(service.listRules(tenantId));
@@ -91,14 +91,14 @@ public class ConsoleNotificationController {
 
   @GetMapping("/rules/{ruleId}")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<Map<String, Object>> getRule(
       @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
     return responseFactory.success(service.getRule(tenantId, ruleId));
   }
 
   @PostMapping("/rules")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<Void> createRule(
       @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
     service.createRule(tenantId, params);
@@ -106,7 +106,7 @@ public class ConsoleNotificationController {
   }
 
   @PutMapping("/rules/{ruleId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<Void> updateRule(
       @RequestParam @NotBlank String tenantId,
       @PathVariable Long ruleId,
@@ -125,7 +125,7 @@ public class ConsoleNotificationController {
 
   @GetMapping("/delivery-logs")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<Map<String, Object>>> deliveryLogs(
       @RequestParam @NotBlank String tenantId,
       @RequestParam(defaultValue = "100") @Positive int limit) {

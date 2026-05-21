@@ -45,7 +45,7 @@ public class ConsoleSecurityProperties {
 
   /** 默认授权角色（SSE ticket / bypass-mode 未带 role header 时的兜底）。 */
   private List<String> defaultAuthorities =
-      new ArrayList<>(List.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR, ConsoleRoles.CONFIG_ADMIN));
+      new ArrayList<>(List.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR, ConsoleRoles.TENANT_ADMIN));
 
   /** 单点登录（同一用户后登录踢前一个 session）。 */
   private boolean singleSessionEnabled = true;

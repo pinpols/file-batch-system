@@ -28,7 +28,7 @@ public class ConsoleCalendarController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<PageResponse<Map<String, Object>>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "calendarCode", required = false) String calendarCode,
@@ -61,7 +61,7 @@ public class ConsoleCalendarController {
   }
 
   @GetMapping("/{id}/holidays")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<List<Map<String, Object>>> holidays(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(calendarApplicationService.holidays(id, tenantId));

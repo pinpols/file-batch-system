@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/console/ops/dry-run")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN','ROLE_AUDITOR')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN','ROLE_AUDITOR')")
 public class ConsoleDryRunPlanController {
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;

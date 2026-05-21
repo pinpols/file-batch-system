@@ -41,7 +41,7 @@ public class ConsoleConfigApprovalController {
   }
 
   @GetMapping("/releases/{releaseId}/approval")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Map<String, Object>> approvalDetail(
       @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.detail(tenantId, releaseId));
