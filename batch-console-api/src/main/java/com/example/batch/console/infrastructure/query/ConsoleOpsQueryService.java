@@ -73,7 +73,11 @@ public class ConsoleOpsQueryService {
   private final BatchTimezoneProvider timezoneProvider;
 
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     AuditLogQuery query = new AuditLogQuery();
     query.setTenantId(resolveTenant(tenantGuard, request.getTenantId()));
     query.setOperationType(request.getOperationType());
@@ -92,7 +96,11 @@ public class ConsoleOpsQueryService {
             "toTime",
             timezoneProvider.defaultZone()));
     query.setPageRequest(pageRequest);
+    query.setCursorId(decodeCursorId(request.getCursor()));
     List<Map<String, Object>> rows = opsMappers.auditLogMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(pageRequest, rows, this::toAuditLogResponse, row -> longValue(row, "id"));
+    }
     long total = opsMappers.auditLogMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toAuditLogResponse);
   }
@@ -190,43 +198,70 @@ public class ConsoleOpsQueryService {
   }
 
   public PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     DeadLetterTaskQuery query =
         new DeadLetterTaskQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getSourceType(),
             request.getReplayStatus(),
             request.getTraceId(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<DeadLetterTaskEntity> rows = opsMappers.deadLetterTaskMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toDeadLetterTaskResponse, DeadLetterTaskEntity::getId);
+    }
     long total = opsMappers.deadLetterTaskMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toDeadLetterTaskResponse);
   }
 
   public PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     RetryScheduleQuery query =
         new RetryScheduleQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getRelatedType(),
             request.getRetryPolicy(),
             request.getRetryStatus(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<RetryScheduleEntity> rows = opsMappers.retryScheduleMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toRetryScheduleResponse, RetryScheduleEntity::getId);
+    }
     long total = opsMappers.retryScheduleMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toRetryScheduleResponse);
   }
 
   public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
       PendingCatchUpQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     PendingCatchUpQuery query =
         new PendingCatchUpQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getJobCode(),
             request.getRequestId(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<PendingCatchUpEntity> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toPendingCatchUpResponse, PendingCatchUpEntity::getId);
+    }
     long total = opsMappers.pendingCatchUpMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toPendingCatchUpResponse);
   }
@@ -245,15 +280,23 @@ public class ConsoleOpsQueryService {
   }
 
   public PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     AlertEventQuery query =
         new AlertEventQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getSeverity(),
             request.getStatus(),
             request.getAlertType(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<AlertEventEntity> rows = opsMappers.alertEventMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(pageRequest, rows, this::toAlertEventResponse, AlertEventEntity::getId);
+    }
     long total = opsMappers.alertEventMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toAlertEventResponse);
   }

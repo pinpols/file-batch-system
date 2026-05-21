@@ -106,4 +106,21 @@
           and target_id = #{targetId}
           and command_status = #{runningStatus}
     </select>
+
+    <update id="markStaleRunningFailed">
+        update batch.compensation_command
+        set command_status = #{failedStatus},
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            finished_at = CURRENT_TIMESTAMP
+        where id in (
+            select id
+            from batch.compensation_command
+            where command_status = #{runningStatus}
+              and created_at &lt; #{cutoff}
+            order by created_at asc, id asc
+            limit #{limit}
+            for update skip locked
+        )
+    </update>
 </mapper>

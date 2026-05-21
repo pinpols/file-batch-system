@@ -30,12 +30,8 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
   void shouldReturnEmptyWhenNoRetrySchedulesExist() {
     List<RetryScheduleEntity> results =
         retryScheduleMapper.selectByQuery(
-            new RetryScheduleQuery(
-                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(),
-                null,
-                null,
-                null,
-                new PageRequest(1, 10)));
+            RetryScheduleQuery.ofTenant(
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
     assertThat(results).isEmpty();
   }

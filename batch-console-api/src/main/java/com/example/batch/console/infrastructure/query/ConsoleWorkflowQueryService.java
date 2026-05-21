@@ -123,7 +123,11 @@ public class ConsoleWorkflowQueryService {
   }
 
   public PageResponse<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     WorkflowRunQuery query =
         new WorkflowRunQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
@@ -132,8 +136,12 @@ public class ConsoleWorkflowQueryService {
             request.getRunStatus(),
             request.getCurrentNodeCode(),
             request.getTraceId(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<WorkflowRunEntity> rows = workflowMappers.workflowRunMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(pageRequest, rows, this::toWorkflowRunResponse, WorkflowRunEntity::getId);
+    }
     long total = workflowMappers.workflowRunMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toWorkflowRunResponse);
   }
@@ -146,15 +154,24 @@ public class ConsoleWorkflowQueryService {
 
   public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
       WorkflowNodeRunQueryRequest request) {
-    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
     WorkflowNodeRunQuery query =
         new WorkflowNodeRunQuery(
             resolveTenant(tenantGuard, request.getTenantId()),
             request.getWorkflowRunId(),
             request.getNodeCode(),
             request.getNodeStatus(),
-            pageRequest);
+            pageRequest,
+            decodeCursorId(request.getCursor()));
     List<WorkflowNodeRunEntity> rows = workflowMappers.workflowNodeRunMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toWorkflowNodeRunResponse, WorkflowNodeRunEntity::getId);
+    }
     long total = workflowMappers.workflowNodeRunMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toWorkflowNodeRunResponse);
   }
@@ -216,6 +233,7 @@ public class ConsoleWorkflowQueryService {
                       null,
                       null,
                       null,
+                      null,
                       null))
               .stream()
               .filter(item -> request.getWorkflowRunId().equals(item.getId()))
@@ -228,6 +246,7 @@ public class ConsoleWorkflowQueryService {
                 new WorkflowNodeRunQuery(
                     resolveTenant(tenantGuard, request.getTenantId()),
                     request.getWorkflowRunId(),
+                    null,
                     null,
                     null,
                     null));

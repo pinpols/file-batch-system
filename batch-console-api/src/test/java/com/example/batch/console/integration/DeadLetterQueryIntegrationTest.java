@@ -29,12 +29,8 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   void shouldReturnEmptyWhenNoDeadLettersExist() {
     List<DeadLetterTaskEntity> results =
         deadLetterTaskMapper.selectByQuery(
-            new DeadLetterTaskQuery(
-                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(),
-                null,
-                null,
-                null,
-                new PageRequest(1, 10)));
+            DeadLetterTaskQuery.ofTenant(
+                "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
 
     assertThat(results).isEmpty();
   }

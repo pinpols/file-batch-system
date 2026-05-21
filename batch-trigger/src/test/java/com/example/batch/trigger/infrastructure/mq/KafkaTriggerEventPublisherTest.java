@@ -2,6 +2,8 @@ package com.example.batch.trigger.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.dto.LaunchEnvelope;
@@ -68,7 +70,7 @@ class KafkaTriggerEventPublisherTest {
     assertThat(result.success()).isTrue();
     ArgumentCaptor<ProducerRecord<String, String>> captor =
         ArgumentCaptor.forClass(ProducerRecord.class);
-    org.mockito.Mockito.verify(kafkaTemplate).send(captor.capture());
+    verify(kafkaTemplate).send(captor.capture());
     ProducerRecord<String, String> sent = captor.getValue();
     assertThat(sent.topic()).isEqualTo("batch.trigger.launch.v1");
     assertThat(sent.key()).isEqualTo("tenant-a:req-1");
@@ -84,8 +86,7 @@ class KafkaTriggerEventPublisherTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.errorMessage()).contains("null");
-    org.mockito.Mockito.verify(kafkaTemplate, org.mockito.Mockito.never())
-        .send(any(ProducerRecord.class));
+    verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
   }
 
   @Test

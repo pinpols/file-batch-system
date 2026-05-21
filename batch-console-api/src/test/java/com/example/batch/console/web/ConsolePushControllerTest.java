@@ -1,6 +1,7 @@
 package com.example.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -89,9 +90,5 @@ class ConsolePushControllerTest {
                 .content("{\"endpoint\":\"https://push.example/x\"}"))
         .andExpect(status().isNoContent());
     verify(subscriptionService).unsubscribe("ta", "tester", "https://push.example/x");
-  }
-
-  private static <T> T eq(T value) {
-    return org.mockito.ArgumentMatchers.eq(value);
   }
 }

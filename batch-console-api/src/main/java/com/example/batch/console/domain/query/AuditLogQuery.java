@@ -16,4 +16,5 @@ public class AuditLogQuery {
   private Instant fromTime;
   private Instant toTime;
   private PageRequest pageRequest;
+  private Long cursorId;
 }

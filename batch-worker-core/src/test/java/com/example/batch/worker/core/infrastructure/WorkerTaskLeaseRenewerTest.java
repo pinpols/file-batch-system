@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.worker.core.config.WorkerLeaseProperties;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -42,8 +43,7 @@ class WorkerTaskLeaseRenewerTest {
     ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider =
         (ObjectProvider<io.micrometer.core.instrument.MeterRegistry>) mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(meter);
-    com.example.batch.worker.core.config.WorkerLeaseProperties leaseProps =
-        new com.example.batch.worker.core.config.WorkerLeaseProperties();
+    WorkerLeaseProperties leaseProps = new WorkerLeaseProperties();
     leaseProps.setConsecutiveFailureAlertThreshold(3);
     // 用 1 让熔断 OPEN 后每个 tick 都半开探测，单测才能验证连续失败与清理路径
     leaseProps.setCircuitHalfOpenTickInterval(1);

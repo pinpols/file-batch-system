@@ -21,6 +21,9 @@
         select *
         from batch.dead_letter_task
         where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
         <if test="sourceType != null and sourceType != ''">
             and source_type = #{sourceType}
         </if>
@@ -31,7 +34,14 @@
             and trace_id = #{traceId}
         </if>
         order by id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="countByQuery" resultType="long">

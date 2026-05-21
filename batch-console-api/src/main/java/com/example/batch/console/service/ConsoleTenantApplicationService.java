@@ -1,5 +1,6 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
@@ -14,6 +15,7 @@ import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
 import com.example.batch.console.support.auth.ConsolePasswordHasher;
 import com.example.batch.console.support.auth.ConsoleRoles;
+import com.example.batch.console.support.naming.ReservedPrefixGuard;
 import com.example.batch.console.web.ConsoleTenantConfigCopyService;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.InitMode;
 import com.example.batch.console.web.request.config.TenantConfigCopyRequest;
@@ -49,7 +51,7 @@ public class ConsoleTenantApplicationService {
   private final ConsoleTriggerProxyService triggerProxyService;
   private final ConsoleTenantConfigCopyService configCopyService;
   // bypassMode=true(本地/E2E)时关守卫,允许 e2e-/test- 前缀;production 时拒绝
-  private final com.example.batch.common.config.BatchSecurityProperties securityProperties;
+  private final BatchSecurityProperties securityProperties;
 
   public record CreateTenantCommand(
       String tenantId,
@@ -88,8 +90,7 @@ public class ConsoleTenantApplicationService {
   @Transactional
   public ConsoleTenantResponse createTenant(CreateTenantCommand cmd) {
     // 命名规范守卫:非 bypass(生产 / staging)拒绝保留前缀(e2e- / qa- / dev- / system 等)
-    com.example.batch.console.support.naming.ReservedPrefixGuard.checkTenantId(
-        cmd.tenantId(), !securityProperties.isBypassMode());
+    ReservedPrefixGuard.checkTenantId(cmd.tenantId(), !securityProperties.isBypassMode());
     if (tenantMapper.selectByTenantId(cmd.tenantId()) != null) {
       throw BizException.of(ResultCode.CONFLICT, "error.tenant.already_exists", cmd.tenantId());
     }
@@ -139,8 +140,7 @@ public class ConsoleTenantApplicationService {
     // 批量创建也走守卫,任一不合规整批拒绝(strict 模式由 bypassMode 判定)
     boolean strict = !securityProperties.isBypassMode();
     for (TenantSpec spec : cmd.tenants()) {
-      com.example.batch.console.support.naming.ReservedPrefixGuard.checkTenantId(
-          spec.tenantId(), strict);
+      ReservedPrefixGuard.checkTenantId(spec.tenantId(), strict);
     }
     // username 单查暂保留（ConsoleUserAccountMapper 未暴露 batch 接口；命中冲突即拒绝整批）。
     for (TenantSpec spec : cmd.tenants()) {

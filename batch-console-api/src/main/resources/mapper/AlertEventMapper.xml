@@ -41,8 +41,19 @@
         <if test="alertType != null and alertType != ''">
             and alert_type = #{alertType}
         </if>
-        order by last_seen_at desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
+        <choose>
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by last_seen_at desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="countByQuery" resultType="long">

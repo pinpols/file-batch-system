@@ -23,6 +23,9 @@
         from batch.workflow_node_run n
         join batch.workflow_run r on r.id = n.workflow_run_id
         where r.tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and n.id &lt; #{cursorId}
+        </if>
         <if test="workflowRunId != null">
             and n.workflow_run_id = #{workflowRunId}
         </if>
@@ -32,8 +35,16 @@
         <if test="nodeStatus != null and nodeStatus != ''">
             and n.node_status = #{nodeStatus}
         </if>
-        order by n.run_seq desc, n.id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                order by n.id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by n.run_seq desc, n.id desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="selectById" resultMap="WorkflowNodeRunResultMap">

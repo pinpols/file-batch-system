@@ -41,6 +41,9 @@
         where tr.tenant_id = #{tenantId}
           and tr.trigger_type = 'CATCH_UP'
           and tr.request_status = 'ACCEPTED'
+        <if test="cursorId != null">
+            and tr.id &lt; #{cursorId}
+        </if>
         <if test="jobCode != null and jobCode != ''">
             and tr.job_code = #{jobCode}
         </if>
@@ -48,7 +51,14 @@
             and tr.request_id = #{requestId}
         </if>
         order by tr.id desc
-        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+        <choose>
+            <when test="cursorId != null">
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
     </select>
 
     <select id="countByQuery" resultType="long">

@@ -51,7 +51,9 @@ import org.testcontainers.utility.DockerImageName;
     properties = {
       "batch.console.read-replica.enabled=true",
       "batch.console.read-replica.failure-threshold=2",
-      "batch.console.read-replica.quarantine-seconds=2"
+      "batch.console.read-replica.quarantine-seconds=2",
+      "batch.console.replica.lag-monitor-initial-delay-millis=600000",
+      "batch.console.replica.lag-monitor-interval-millis=600000"
     })
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {

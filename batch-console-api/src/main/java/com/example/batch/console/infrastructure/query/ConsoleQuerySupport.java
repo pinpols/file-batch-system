@@ -5,6 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.common.page.CursorCodec;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.sql.Date;
@@ -28,6 +29,35 @@ public final class ConsoleQuerySupport {
       PageRequest pageRequest, long total, List<S> rows, Function<S, T> mapper) {
     return new PageResponse<>(
         total, pageRequest.pageNo(), pageRequest.pageSize(), rows.stream().map(mapper).toList());
+  }
+
+  public static <S, T> PageResponse<T> cursorPage(
+      PageRequest pageRequest, List<S> rows, Function<S, T> mapper, Function<S, Long> idExtractor) {
+    List<T> items = rows.stream().map(mapper).toList();
+    String nextCursor =
+        rows.size() < pageRequest.pageSize() || rows.isEmpty()
+            ? null
+            : CursorCodec.encode(Map.of("id", idExtractor.apply(rows.get(rows.size() - 1))));
+    return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
+  }
+
+  public static Long decodeCursorId(String token) {
+    if (token == null || token.isBlank()) {
+      return null;
+    }
+    Object raw = CursorCodec.decode(token).get("id");
+    if (raw instanceof Number number) {
+      return number.longValue();
+    }
+    if (raw instanceof String string) {
+      try {
+        return Long.parseLong(string);
+      } catch (NumberFormatException ignored) {
+        SwallowedExceptionLogger.info(
+            ConsoleQuerySupport.class, "catch:NumberFormatException", ignored);
+      }
+    }
+    return null;
   }
 
   public static <T> T requireNotNull(T value, String message) {
