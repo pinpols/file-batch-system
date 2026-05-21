@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-05-21
+- **`docs/coding-conventions.md` §1 新增子节 1.1「调用方约束(inline build 提取)」**:CLAUDE.md §Java 编码细则 #2「方法参数 ≤ 6」长期只覆盖签名,调用现场 `f(X.builder().a()...build())` 长链让"参数臃肿从签名搬到调用处"的隐患由 `PositionalArgsConventionTest` 拦白名单 51 个类型,但 return 位置和非白名单类型一直靠 review 隐性把关。本次沉淀判定线为 chain 长度表(≤3 单行禁提取 / 4-6 单行 fluent 禁提取 / 7-9 看场景 / ≥10 必须提取),并明确豁免(SDK args / 短工厂方法 / 声明式注册 / test fixture)。配套治理基线落 commit `76582aef`(11 处 return chain≥10)。守护边界:`PositionalArgsConventionTest` 不变(继续只拦白名单方法实参 inline build),return 位置因每项目语义不同,靠 review 按判定线手工把关。
+
 ### 2026-05-20
 - **CLAUDE.md §Java 编码细则补 quick-ref 表**(116 → 128 行):上一轮瘦身把太多规则下沉到 `docs/coding-conventions.md`,但 Claude 只 baseline 加载 CLAUDE.md → 下沉的规则不会自动遵守(实际见到 FQN / 构造器注入 / CommonResponse 包装等高频违反)。本次把**最常被违的 10 条**改成 10 行表格回放(每条 1 行 + 反例片段),细则仍指针化到 `docs/coding-conventions.md`。同时把时区 / 编码 2 条"禁用"红线从分散段落合并到 §Java 编码细则末尾,统一一处可扫。
 - **CLAUDE.md 整体瘦身**(337 → 116 行,-65%):按 Anthropic CLAUDE.md 最佳实践重构 —— 本文件只装「不能从代码推断的约束」+「高频违反的红线」+「关键路径指针」,其余细节(详细规则表 / 反例 / 完整字典清单 / ADR 三阶段优先级表)下沉到 `docs/coding-conventions.md` / `docs/architecture/` / `docs/runbook/` / `docs/design/` 子文档。新增 §模块 / §构建 顶部 2 节(原先缺失关键运行环境信息)。**没有规范变化**,仅收纳位置调整 —— 所有规则的权威源仍是各对应 `docs/*` 子文档(本文件相应章节末以「详见 …」指引)。
