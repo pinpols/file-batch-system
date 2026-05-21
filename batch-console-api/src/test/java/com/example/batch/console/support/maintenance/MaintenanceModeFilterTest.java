@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 class MaintenanceModeFilterTest {
@@ -79,6 +81,43 @@ class MaintenanceModeFilterTest {
     refresh();
     filter.doFilterInternal(get("/actuator/health"), response, chain);
     assertThat(chainInvoked).isTrue();
+  }
+
+  @Test
+  void adminBypassAllowsWriteEvenInFullBlockMode() throws Exception {
+    // 维护期全屏 503,但 ROLE_ADMIN 可旁路继续操作(运维场景);响应头标 admin-bypass,
+    // 前端 banner 据此显示"当前为维护期 admin 旁路"提示。
+    properties.setEnabled(true);
+    properties.setReadOnly(false);
+    refresh();
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                "ops-admin", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+    MockHttpServletRequest post = new MockHttpServletRequest("POST", "/api/console/jobs");
+    filter.doFilterInternal(post, response, chain);
+
+    assertThat(chainInvoked).as("admin POST 应被放行").isTrue();
+    assertThat(response.getStatus()).isEqualTo(200);
+    assertThat(response.getHeader("X-Maintenance")).isEqualTo("admin-bypass");
+  }
+
+  @Test
+  void nonAdminBlockedEvenWithAuthenticationDuringMaintenance() throws Exception {
+    // 普通登录用户(ROLE_VIEWER 等非 ADMIN)维护期仍被 503;防止 admin 判定逻辑放宽到任何 authority。
+    properties.setEnabled(true);
+    refresh();
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                "viewer", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_VIEWER"))));
+
+    filter.doFilterInternal(get("/api/console/jobs"), response, chain);
+
+    assertThat(chainInvoked).as("非 admin 应被 503").isFalse();
+    assertThat(response.getStatus()).isEqualTo(503);
+    assertThat(response.getHeader("X-Maintenance")).isEqualTo("blocked");
   }
 
   @Test
