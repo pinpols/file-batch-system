@@ -45,18 +45,20 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
     var request = command.request();
     // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 兜底)
-    return LaunchRequest.builder()
-        .tenantId(request.getTenantId())
-        .jobCode(request.getJobCode())
-        .bizDate(request.getBizDate())
-        .triggerType(resolveTriggerType(command))
-        .requestId(command.requestId())
-        .traceId(command.traceId())
-        .params(request.getParams())
-        .dataIntervalStart(request.getDataIntervalStart())
-        .dataIntervalEnd(request.getDataIntervalEnd())
-        .dryRun(Boolean.TRUE.equals(request.getDryRun()))
-        .build();
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(request.getTenantId())
+            .jobCode(request.getJobCode())
+            .bizDate(request.getBizDate())
+            .triggerType(resolveTriggerType(command))
+            .requestId(command.requestId())
+            .traceId(command.traceId())
+            .params(request.getParams())
+            .dataIntervalStart(request.getDataIntervalStart())
+            .dataIntervalEnd(request.getDataIntervalEnd())
+            .dryRun(Boolean.TRUE.equals(request.getDryRun()))
+            .build();
+    return launchRequest;
   }
 
   @Override
@@ -91,17 +93,19 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
             descriptor.getScheduleExpression(),
             zoneId,
             command.fireTime());
-    return LaunchRequest.builder()
-        .tenantId(descriptor.getTenantId())
-        .jobCode(descriptor.getJobCode())
-        .bizDate(bizDate)
-        .triggerType(triggerType)
-        .requestId(command.requestId())
-        .traceId(command.traceId())
-        .params(params)
-        .dataIntervalStart(command.fireTime())
-        .dataIntervalEnd(nextFireAt)
-        .build();
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(descriptor.getTenantId())
+            .jobCode(descriptor.getJobCode())
+            .bizDate(bizDate)
+            .triggerType(triggerType)
+            .requestId(command.requestId())
+            .traceId(command.traceId())
+            .params(params)
+            .dataIntervalStart(command.fireTime())
+            .dataIntervalEnd(nextFireAt)
+            .build();
+    return launchRequest;
   }
 
   /**

@@ -30,22 +30,24 @@ public final class ResourceQueueExcelRowParser {
   public static QueueRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    return QueueRow.builder()
-        .rowNo(rowNo)
-        .tenantId(effectiveTenant)
-        .queueCode(requireText(values, "queue_code", 128, issues))
-        .queueName(requireText(values, "queue_name", 256, issues))
-        .queueType(requireEnum(values, "queue_type", QUEUE_TYPES, 32, issues))
-        .maxRunningJobs(requireInteger(values, "max_running_jobs", 0, issues))
-        .maxRunningPartitions(requireInteger(values, "max_running_partitions", 0, issues))
-        .maxQps(requireInteger(values, "max_qps", 0, issues))
-        .workerGroup(optionalText(values, "worker_group", 128, issues))
-        .resourceTag(optionalText(values, "resource_tag", 64, issues))
-        .priorityPolicy(requireEnum(values, "priority_policy", PRIORITY_POLICIES, 32, issues))
-        .fairShareWeight(requireInteger(values, "fair_share_weight", 1, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
-        .description(optionalText(values, "description", 512, issues))
-        .build();
+    QueueRow row =
+        QueueRow.builder()
+            .rowNo(rowNo)
+            .tenantId(effectiveTenant)
+            .queueCode(requireText(values, "queue_code", 128, issues))
+            .queueName(requireText(values, "queue_name", 256, issues))
+            .queueType(requireEnum(values, "queue_type", QUEUE_TYPES, 32, issues))
+            .maxRunningJobs(requireInteger(values, "max_running_jobs", 0, issues))
+            .maxRunningPartitions(requireInteger(values, "max_running_partitions", 0, issues))
+            .maxQps(requireInteger(values, "max_qps", 0, issues))
+            .workerGroup(optionalText(values, "worker_group", 128, issues))
+            .resourceTag(optionalText(values, "resource_tag", 64, issues))
+            .priorityPolicy(requireEnum(values, "priority_policy", PRIORITY_POLICIES, 32, issues))
+            .fairShareWeight(requireInteger(values, "fair_share_weight", 1, issues))
+            .enabled(optionalBoolean(values, "enabled", true, issues))
+            .description(optionalText(values, "description", 512, issues))
+            .build();
+    return row;
   }
 
   public static ResourceQueueUpsertParam toUpsertParam(QueueRow row, String operatorId) {

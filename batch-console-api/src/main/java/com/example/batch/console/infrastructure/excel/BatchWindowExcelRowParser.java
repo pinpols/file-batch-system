@@ -32,21 +32,23 @@ public final class BatchWindowExcelRowParser {
   public static WindowRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    return WindowRow.builder()
-        .rowNo(rowNo)
-        .tenantId(effectiveTenant)
-        .windowCode(requireText(values, "window_code", 128, issues))
-        .windowName(requireText(values, "window_name", 256, issues))
-        .timezone(requireText(values, "timezone", 64, issues))
-        .startTime(requireTime(values, "start_time", issues))
-        .endTime(requireTime(values, "end_time", issues))
-        .endStrategy(requireEnum(values, "end_strategy", END_STRATEGIES, 32, issues))
-        .outOfWindowAction(
-            requireEnum(values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, issues))
-        .allowCrossDay(optionalBoolean(values, "allow_cross_day", false, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
-        .description(optionalText(values, "description", 512, issues))
-        .build();
+    WindowRow row =
+        WindowRow.builder()
+            .rowNo(rowNo)
+            .tenantId(effectiveTenant)
+            .windowCode(requireText(values, "window_code", 128, issues))
+            .windowName(requireText(values, "window_name", 256, issues))
+            .timezone(requireText(values, "timezone", 64, issues))
+            .startTime(requireTime(values, "start_time", issues))
+            .endTime(requireTime(values, "end_time", issues))
+            .endStrategy(requireEnum(values, "end_strategy", END_STRATEGIES, 32, issues))
+            .outOfWindowAction(
+                requireEnum(values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, issues))
+            .allowCrossDay(optionalBoolean(values, "allow_cross_day", false, issues))
+            .enabled(optionalBoolean(values, "enabled", true, issues))
+            .description(optionalText(values, "description", 512, issues))
+            .build();
+    return row;
   }
 
   public static BatchWindowUpsertParam toUpsertParam(WindowRow row) {

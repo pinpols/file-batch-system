@@ -198,15 +198,17 @@ public class BatchDayOperationService {
     }
     Map<String, Object> payload = JsonUtils.fromJson(entity.launchPayload(), Map.class);
     String triggerType = stringValue(payload.get("triggerType"));
-    return LaunchRequest.builder()
-        .tenantId(stringValue(payload.get("tenantId")))
-        .jobCode(stringValue(payload.get("jobCode")))
-        .bizDate(LocalDate.parse(stringValue(payload.get("bizDate"))))
-        .triggerType(TriggerType.valueOf(triggerType))
-        .requestId(stringValue(payload.get("requestId")))
-        .traceId(stringValue(payload.get("traceId")))
-        .params((Map<String, Object>) payload.getOrDefault("params", Map.of()))
-        .build();
+    LaunchRequest launchRequest =
+        LaunchRequest.builder()
+            .tenantId(stringValue(payload.get("tenantId")))
+            .jobCode(stringValue(payload.get("jobCode")))
+            .bizDate(LocalDate.parse(stringValue(payload.get("bizDate"))))
+            .triggerType(TriggerType.valueOf(triggerType))
+            .requestId(stringValue(payload.get("requestId")))
+            .traceId(stringValue(payload.get("traceId")))
+            .params((Map<String, Object>) payload.getOrDefault("params", Map.of()))
+            .build();
+    return launchRequest;
   }
 
   private void appendAuditLog(
