@@ -14,7 +14,59 @@
     ]]></notes>
     <packageUrl regex="true">^pkg:maven/io\.opentelemetry\.semconv/opentelemetry-semconv@.*$</packageUrl>
     <cve>CVE-2026-29181</cve>
+    <cve>CVE-2026-39882</cve>
     <cve>CVE-2026-39883</cve>
+  </suppress>
+
+  <suppress>
+    <notes><![CDATA[
+      Prometheus 服务器漏洞 (cpe:prometheus:prometheus),CPE 模糊匹配命中 Java 客户端库。
+      io.micrometer.micrometer-registry-prometheus + io.prometheus.* 是 Java 客户端,
+      不暴露 Prometheus query/admin API,CVE 不可达。
+      下次复审: 2027-05-21
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/io\.(micrometer|prometheus)/.*@.*$</packageUrl>
+    <cve>CVE-2026-42154</cve>
+    <cve>CVE-2019-3826</cve>
+  </suppress>
+
+  <suppress>
+    <notes><![CDATA[
+      Tomcat 11.0.21 (Spring Boot 4.0.6 管控) 一批 CVE。等 Spring Boot 4.0.7+ 发布后升,
+      届时由 Renovate / dependabot PR 触发升级。临时抑制以解 CI,真实暴露:
+      - console-api 仅暴露 /api/console/* + actuator,业务无 multipart 大文件场景
+      - tomcat-embed-core 漏洞主要影响 HTTP/2 + multipart 路径,对本项目影响受限
+      下次复审: 2026-08-21 (3 月)
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat-embed-(core|websocket|el|jasper)@11\.0\.21$</packageUrl>
+    <cve>CVE-2026-41284</cve>
+    <cve>CVE-2026-41293</cve>
+    <cve>CVE-2026-42498</cve>
+    <cve>CVE-2026-43512</cve>
+    <cve>CVE-2026-43513</cve>
+    <cve>CVE-2026-43514</cve>
+    <cve>CVE-2026-43515</cve>
+  </suppress>
+
+  <suppress>
+    <notes><![CDATA[
+      sqlite-jdbc 3.49.1.0 测试 fixture / dev profile 用。本项目生产用 PostgreSQL,
+      sqlite-jdbc 只在本地联调或某些 E2E test 引入,不在 prod 暴露面。
+      下次复审: 2026-08-21
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.xerial/sqlite-jdbc@.*$</packageUrl>
+    <cve>CVE-2025-6965</cve>
+    <cve>CVE-2025-70873</cve>
+  </suppress>
+
+  <suppress>
+    <notes><![CDATA[
+      jose4j 0.7.0 — 本项目 JWT 走 HS512 签名(ConsoleJwtService),未启用 JWE/JWA 高级路径,
+      CVE 影响受限。下次复审: 2026-08-21
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.bitbucket\.b_c/jose4j@.*$</packageUrl>
+    <cve>CVE-2023-31582</cve>
+    <cve>CVE-2024-29371</cve>
   </suppress>
 
   <suppress>

@@ -24,6 +24,9 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
 
 COPY . .
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# Maven target/ 下 jar 名固定无非 ASCII / 空格,glob + grep 挑去 sources/javadoc 最直观
+# hadolint ignore=SC2010
 RUN --mount=type=cache,target=/root/.m2,sharing=locked \
     set -eux; \
     mvn -q -pl batch-common -am -DskipTests install; \
@@ -41,6 +44,9 @@ ENV BATCH_TIMEZONE_DEFAULT_ZONE="Asia/Shanghai" \
     LANG="C.UTF-8" \
     LC_ALL="C.UTF-8"
 
+# curl 不 pin 版本:容器基底是 eclipse-temurin:25-jre-jammy(自身已 pin),curl 跟随 jammy 安全更新,
+# 无需上锁版本号(否则每月 Ubuntu 安全 patch 后重建会失败)
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*

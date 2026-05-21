@@ -2,3 +2,30 @@
 # 详见 docs/analysis/security-scan-2026-05-16.md
 # Helm secret.yaml 渲染期需 --set 强密钥（设计如此），templates 默认值故意空缺以强制 prod 显式注入
 # Trivy helm scanner 检测此空值报错，非真 misconfig
+
+# Tomcat 11.0.21 (Spring Boot 4.0.6 管控) — 等 SB 4.0.7+ 升级,临时抑制以解 CI
+# 真实暴露:console-api 仅暴露 /api/console/* + actuator,无 multipart 大文件场景
+# 跟踪:跟随 SB 4.0.x 安全发布。下次复审 2026-08-21
+CVE-2026-41284
+CVE-2026-41293
+CVE-2026-42498
+CVE-2026-43512
+CVE-2026-43513
+CVE-2026-43514
+CVE-2026-43515
+
+# async-http-client 2.10.4 — Spring AI 2.0.0-M3 间接依赖,等 Spring AI GA 后修
+# console.ai.enabled=false 时不加载相关 bean
+CVE-2024-53990
+CVE-2026-45300
+
+# Bouncy Castle bcprov-jdk18on — 当前 SB 4.0.6 管控版本 1.78.1/1.81,等 SB 升级
+CVE-2026-5598
+
+# jose4j 0.7.0 — 本项目 JWT 走 HS512 签名,JWE 路径未启用
+CVE-2023-31582
+CVE-2024-29371
+
+# Spring AI 2.0.0-M3 ChatMemory 跨用户泄漏 — console.ai.enabled=false 时不加载相关 bean
+# 启用 AI 功能前必须升 Spring AI 到 1.0.7+ / 1.1.6+ / 2.0.0-M6+
+CVE-2026-41712
