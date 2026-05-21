@@ -76,7 +76,7 @@
 
 **默认**：
 - application.yml fallback：`true`
-- docker-compose.app.yml：`true`（`${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}`）
+- docker/compose/app.yml：`true`（`${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}`）
 - `.env.example`：`true`
 - 测试 `application-test.yml`：`false`（测试容器不起 replica）
 
@@ -258,7 +258,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 |---|---|
 | 对应模块 `application.yml` | fallback 值 + 注释 |
 | 对应 `@ConfigurationProperties` 类 | Java 字段默认 + javadoc |
-| `docker-compose.app.yml` | 如需显式覆盖（如 read-replica）补 `:-xxx` |
+| `docker/compose/app.yml` | 如需显式覆盖（如 read-replica）补 `:-xxx` |
 | `.env.example` | 列出该开关 + 默认值 + 一行作用说明 |
 | 本文档（`feature-switches.md`） | §1 索引表 + §3 详述节 |
 | `docs/architecture/rework-classification.md` | Phase 2 表格的"开关"列 |
@@ -270,7 +270,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 | # | 待办 | 状态 |
 |---|---|---|
-| 1 | `docker-compose.app.yml` 给 `quartz-datasource` 加显式 `:-false` 兜底 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
+| 1 | `docker/compose/app.yml` 给 `quartz-datasource` 加显式 `:-false` 兜底 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
 | 2 | `rework-classification.md` 第 81 行更新为实际默认表 | ✅ 完成（替换为 5 项开关默认值表 + 引用 `feature-switches.md`） |
 | 3 | `read-replica` 应用层 fail-open | ✅ **本次梳理前已落地**（`ReadReplicaRoutingDataSource` C-3.1：失败计数 + quarantine + micrometer 指标 + `@RouteToPrimary` 注解）；本文档 §3.1 已校准 |
 | 4 | `mq.routing` 切换灰度发布 runbook | ✅ 完成（新增 `docs/runbook/mq-topic-routing-rollout.md`） |

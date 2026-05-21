@@ -3,7 +3,7 @@
 # up-apps.sh - 一键启动本地基础依赖 + 应用容器
 # Notes:
 # 1) 默认使用 .env.local。
-# 2) 默认启动 docker-compose.yml + docker-compose.app.yml 的 apps + replica profile
+# 2) 默认启动 docker-compose.yml + docker/compose/app.yml 的 apps + replica profile
 #    （read-replica 默认 enabled=true，必须把 postgres-replica 一起拉起来才不会 unhealthy）。
 # 3) 可透传额外 docker compose 参数，例如：
 #    ./scripts/docker/up-apps.sh console-api
@@ -35,7 +35,7 @@ mkdir -p "$ROOT/logs/docker"
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
   -f docker-compose.yml \
-  -f docker-compose.app.yml \
+  -f docker/compose/app.yml \
   --profile apps \
   --profile replica \
   up -d --force-recreate --remove-orphans "$@"

@@ -53,7 +53,7 @@
 切默认 `true` 后通过 smoke test 暴露的关键配置 bug,**已修但灰度环境 / 生产部署清单要复核**:
 
 ```yaml
-# docker-compose.app.yml trigger service 必须有:
+# docker/compose/app.yml trigger service 必须有:
 trigger:
   environment:
     BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}  # ← 容器内必须用网络名,不能 localhost

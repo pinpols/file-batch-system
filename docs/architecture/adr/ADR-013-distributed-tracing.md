@@ -11,7 +11,7 @@
 
 排查 "trigger → orchestrator → worker → ack" 全链路问题需要 grep N 个服务日志按 `trace_id` 关联，效率几倍折损。业界主流调度系统（Temporal / Airflow / Argo）都已集成 OpenTelemetry，提供 timeline 视图 + span 树。
 
-落地前已有：业务字段 `trace_id` 透传（V77/V78）；Kafka `setObservationEnabled(true)`；Spring Boot 4.x `ObservationRegistry`；`docker-compose.observability.yml`（Collector / Tempo / Jaeger / Loki / Grafana）。
+落地前已有：业务字段 `trace_id` 透传（V77/V78）；Kafka `setObservationEnabled(true)`；Spring Boot 4.x `ObservationRegistry`；`docker/compose/observability.yml`（Collector / Tempo / Jaeger / Loki / Grafana）。
 
 本 ADR **已实现闭环**（2026-05-03）：
 
@@ -75,14 +75,14 @@ Spring Boot 4.x + 已加依赖后自动获得：
 - `BatchObservabilityAutoConfiguration`：编译 + bean 装配
 - `OtelTraceContextTest`：`currentTraceIdOrNull()` 在有/无 active span 下的行为
 - 业务路径 `@Observed`：测试上下文未启用 AOP 时为 noop，不破坏既有单测
-- **推荐手工验收**：`docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d`，触发一次 launch，在 Jaeger/Tempo 查 `orch.launch` 是否串联 Kafka send/receive
+- **推荐手工验收**：`docker compose -f docker-compose.yml -f docker/compose/observability.yml up -d`，触发一次 launch，在 Jaeger/Tempo 查 `orch.launch` 是否串联 Kafka send/receive
 
 ## 演化时间线
 
 
 | 日期         | 演化                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
-| ~2026-04   | docker-compose.observability.yml 落地（Tempo/Jaeger/Loki/Grafana/OTel Collector）                                           |
+| ~2026-04   | docker/compose/observability.yml 落地（Tempo/Jaeger/Loki/Grafana/OTel Collector）                                           |
 | ~2026-04   | batch-common pom 加 micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp                                         |
 | ~2026-04   | batch-defaults.yml 加 management.tracing 配置                                                                              |
 | 2026-05-03 | **本 ADR**：补 ObservedAspect bean + 3 个种子 manual span，闭环可用                                                                |

@@ -24,7 +24,7 @@
 |------|------|----------|------|
 | S-1.1 | Critical | JWT secret `@PostConstruct` 校验，prod profile 拒绝 `change-me` | `ConsoleJwtService.java` |
 | S-1.2 | Critical | 内部密钥校验扩展，prod 拒绝默认值 `internal-secret` | `BatchSecurityProperties.java` |
-| S-1.3 | Critical | Docker Compose `${VAR:?required}` 替代硬编码密码 | `docker-compose.app.yml` |
+| S-1.3 | Critical | Docker Compose `${VAR:?required}` 替代硬编码密码 | `docker/compose/app.yml` |
 | S-2.2 | High | `legacyHeaderAuthEnabled=false` 时不再检查 sharedToken | `ConsoleAuthenticationFilter.java` |
 | S-2.3 | High | `MessageDigest.isEqual()` 常量时间比较替代 `equals()` | `InternalAuthFilter.java` |
 | S-2.4 | High | IPv6 SSRF 阻断（link-local/unique-local/IPv4-mapped） | `CallbackUrlValidator.java` |
