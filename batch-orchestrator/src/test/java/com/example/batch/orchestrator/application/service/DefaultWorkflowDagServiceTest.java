@@ -22,6 +22,8 @@ import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import java.util.List;
+import com.example.batch.testing.TestConstants.Edge;
+import com.example.batch.testing.TestConstants.Workflow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -108,7 +110,7 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldFollowAlwaysEdgeRegardlessOfSuccess() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", "ALWAYS", null);
+    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.ALWAYS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_B"))
         .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
@@ -122,7 +124,7 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldFollowSuccessEdgeOnlyWhenSuccessTrue() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", "SUCCESS", null);
+    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.SUCCESS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
         .thenReturn(node("NODE_B", WorkflowNodeType.TASK.code()));
@@ -133,7 +135,7 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldFollowFailureEdgeOnlyWhenSuccessFalse() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_ERROR", "FAILURE", null);
+    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_ERROR", Edge.FAILURE, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
         .thenReturn(node("NODE_ERROR", WorkflowNodeType.TASK.code()));
@@ -144,7 +146,7 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldFollowConditionEdgeWhenSuccessAndConditionMet() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", "CONDITION", "amount > 100");
+    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
     when(conditionEvaluator.matches(eq("amount > 100"), anyString())).thenReturn(true);
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
@@ -155,7 +157,7 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldSkipConditionEdgeWhenConditionNotMet() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", "CONDITION", "amount > 100");
+    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
     when(conditionEvaluator.matches(anyString(), anyString())).thenReturn(false);
 
@@ -164,7 +166,7 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldSkipConditionEdgeOnFailure() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", "CONDITION", "x = 1");
+    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "x = 1");
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
 
     // success=false → condition edge is always skipped
@@ -173,7 +175,7 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldReturnEndTypeWhenNextNodeNotInMapper() {
-    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_UNKNOWN", "ALWAYS", null);
+    WorkflowEdgeEntity edge = edge("NODE_A", "NODE_UNKNOWN", Edge.ALWAYS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_UNKNOWN")).thenReturn(null);
 
@@ -213,30 +215,30 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldReturnTrueForAllJoinWhenAllPredecessorsSucceeded() {
-    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", "SUCCESS", null);
-    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", "SUCCESS", null);
+    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
     when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
         .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code())); // no nodeParams → ALL mode
 
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
-        .thenReturn(nodeRun("PRED_1", "SUCCESS"));
+        .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2"))
-        .thenReturn(nodeRun("PRED_2", "SUCCESS"));
+        .thenReturn(nodeRun("PRED_2", Workflow.SUCCESS));
 
     assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
   }
 
   @Test
   void shouldReturnFalseForAllJoinWhenOnePredecessorNotTerminal() {
-    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", "SUCCESS", null);
-    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", "SUCCESS", null);
+    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
     when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
         .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
 
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
-        .thenReturn(nodeRun("PRED_1", "SUCCESS"));
+        .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2"))
         .thenReturn(null); // not yet started
 
@@ -245,8 +247,8 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldReturnTrueForAnyJoinWhenAtLeastOnePredecessorMatches() {
-    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", "SUCCESS", null);
-    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", "SUCCESS", null);
+    WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
     when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(edge1, edge2));
 
     WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
@@ -254,7 +256,7 @@ class DefaultWorkflowDagServiceTest {
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
 
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
-        .thenReturn(nodeRun("PRED_1", "SUCCESS"));
+        .thenReturn(nodeRun("PRED_1", Workflow.SUCCESS));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_2")).thenReturn(null);
 
     assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
@@ -262,9 +264,9 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldReturnTrueForNOfJoinWhenThresholdMet() {
-    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", "SUCCESS", null);
-    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", "SUCCESS", null);
-    WorkflowEdgeEntity e3 = edge("P3", "NODE_A", "SUCCESS", null);
+    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity e3 = edge("P3", "NODE_A", Edge.SUCCESS, null);
     when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2, e3));
 
     WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
@@ -272,9 +274,9 @@ class DefaultWorkflowDagServiceTest {
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
 
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
-        .thenReturn(nodeRun("P1", "SUCCESS"));
+        .thenReturn(nodeRun("P1", Workflow.SUCCESS));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2"))
-        .thenReturn(nodeRun("P2", "SUCCESS"));
+        .thenReturn(nodeRun("P2", Workflow.SUCCESS));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P3")).thenReturn(null);
 
     assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isTrue();
@@ -282,9 +284,9 @@ class DefaultWorkflowDagServiceTest {
 
   @Test
   void shouldReturnFalseForNOfJoinWhenThresholdNotMet() {
-    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", "SUCCESS", null);
-    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", "SUCCESS", null);
-    WorkflowEdgeEntity e3 = edge("P3", "NODE_A", "SUCCESS", null);
+    WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity e3 = edge("P3", "NODE_A", Edge.SUCCESS, null);
     when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(e1, e2, e3));
 
     WorkflowNodeEntity joinNode = node("NODE_A", WorkflowNodeType.TASK.code());
@@ -292,9 +294,9 @@ class DefaultWorkflowDagServiceTest {
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A")).thenReturn(joinNode);
 
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P1"))
-        .thenReturn(nodeRun("P1", "SUCCESS"));
+        .thenReturn(nodeRun("P1", Workflow.SUCCESS));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P2"))
-        .thenReturn(nodeRun("P2", "SUCCESS"));
+        .thenReturn(nodeRun("P2", Workflow.SUCCESS));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "P3")).thenReturn(null);
 
     assertThat(dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null)).isFalse();
@@ -312,13 +314,13 @@ class DefaultWorkflowDagServiceTest {
   @Test
   void cascadeSkipShouldWriteSkippedRowForUnreachableSuccessEdgeDownstream() {
     // FAIL_NODE --SUCCESS--> NEXT (NEXT 仅此一条入边，FAIL_NODE 已 FAILED → NEXT 永远无法触发)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "NEXT", "SUCCESS", null);
-    WorkflowEdgeEntity incoming = edge("FAIL_NODE", "NEXT", "SUCCESS", null);
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
+    WorkflowEdgeEntity incoming = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
     when(edgeMapper.selectIncomingEdges(1L, "NEXT")).thenReturn(List.of(incoming));
     when(edgeMapper.selectOutgoingEdges(1L, "NEXT")).thenReturn(List.of());
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
-        .thenReturn(nodeRun("FAIL_NODE", "FAILED"));
+        .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "NEXT")).thenReturn(null);
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NEXT"))
         .thenReturn(node("NEXT", WorkflowNodeType.TASK.code()));
@@ -333,15 +335,15 @@ class DefaultWorkflowDagServiceTest {
   void cascadeSkipShouldNotSkipWhenJoinNodeStillHasLiveSuccessUpstream() {
     // FAIL_NODE --SUCCESS--> JOIN
     // OK_NODE  --SUCCESS--> JOIN  (OK_NODE 还 RUNNING，JOIN 不应被预先 skip)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "JOIN", "SUCCESS", null);
-    WorkflowEdgeEntity inFromFail = edge("FAIL_NODE", "JOIN", "SUCCESS", null);
-    WorkflowEdgeEntity inFromOk = edge("OK_NODE", "JOIN", "SUCCESS", null);
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "JOIN", Edge.SUCCESS, null);
+    WorkflowEdgeEntity inFromFail = edge("FAIL_NODE", "JOIN", Edge.SUCCESS, null);
+    WorkflowEdgeEntity inFromOk = edge("OK_NODE", "JOIN", Edge.SUCCESS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
     when(edgeMapper.selectIncomingEdges(1L, "JOIN")).thenReturn(List.of(inFromFail, inFromOk));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
-        .thenReturn(nodeRun("FAIL_NODE", "FAILED"));
+        .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "OK_NODE"))
-        .thenReturn(nodeRun("OK_NODE", "RUNNING"));
+        .thenReturn(nodeRun("OK_NODE", Workflow.RUNNING));
 
     List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
 
@@ -352,7 +354,7 @@ class DefaultWorkflowDagServiceTest {
   @Test
   void cascadeSkipShouldNotSkipWhenFailureEdgeMatches() {
     // FAIL_NODE --FAILURE--> CATCH (FAILURE 边匹配 FAILED 上游，CATCH 仍可正常派发)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "CATCH", "FAILURE", null);
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "CATCH", Edge.FAILURE, null);
     when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
 
     List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
@@ -364,8 +366,8 @@ class DefaultWorkflowDagServiceTest {
   @Test
   void cascadeSkipShouldRecurseThroughChain() {
     // FAIL_NODE --SUCCESS--> A --SUCCESS--> B (两条 SUCCESS 边，FAIL_NODE FAILED → A、B 都 skip)
-    WorkflowEdgeEntity failToA = edge("FAIL_NODE", "A", "SUCCESS", null);
-    WorkflowEdgeEntity aToB = edge("A", "B", "SUCCESS", null);
+    WorkflowEdgeEntity failToA = edge("FAIL_NODE", "A", Edge.SUCCESS, null);
+    WorkflowEdgeEntity aToB = edge("A", "B", Edge.SUCCESS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(failToA));
     when(edgeMapper.selectOutgoingEdges(1L, "A")).thenReturn(List.of(aToB));
     when(edgeMapper.selectOutgoingEdges(1L, "B")).thenReturn(List.of());
@@ -373,7 +375,7 @@ class DefaultWorkflowDagServiceTest {
     when(edgeMapper.selectIncomingEdges(1L, "B")).thenReturn(List.of(aToB));
 
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "FAIL_NODE"))
-        .thenReturn(nodeRun("FAIL_NODE", "FAILED"));
+        .thenReturn(nodeRun("FAIL_NODE", Workflow.FAILED));
     when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "A"))
         .thenReturn(null) // canNeverFire 时 A 还没 node_run
         .thenReturn(nodeRun("A", "SKIPPED")); // 级联到 B 时 A 已被插为 SKIPPED
@@ -389,7 +391,7 @@ class DefaultWorkflowDagServiceTest {
   @Test
   void cascadeSkipShouldNotTouchEndNode() {
     // FAIL_NODE --SUCCESS--> END (END 节点不写 SKIPPED 行，由调度路径处理)
-    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "END", "SUCCESS", null);
+    WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "END", Edge.SUCCESS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
 
     List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
