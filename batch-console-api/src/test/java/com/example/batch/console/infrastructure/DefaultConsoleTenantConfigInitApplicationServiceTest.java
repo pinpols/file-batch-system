@@ -42,6 +42,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
  * Unit tests for DefaultConsoleTenantConfigInitApplicationService.
@@ -87,18 +91,17 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
             calendarHolidayMapper,
             tenantQuotaPolicyMapper,
             alertRoutingConfigMapper,
-            new org.springframework.transaction.PlatformTransactionManager() {
+            new PlatformTransactionManager() {
               @Override
-              public org.springframework.transaction.TransactionStatus getTransaction(
-                  org.springframework.transaction.TransactionDefinition definition) {
-                return new org.springframework.transaction.support.SimpleTransactionStatus();
+              public TransactionStatus getTransaction(TransactionDefinition definition) {
+                return new SimpleTransactionStatus();
               }
 
               @Override
-              public void commit(org.springframework.transaction.TransactionStatus status) {}
+              public void commit(TransactionStatus status) {}
 
               @Override
-              public void rollback(org.springframework.transaction.TransactionStatus status) {}
+              public void rollback(TransactionStatus status) {}
             });
     ReflectionTestUtils.setField(handlers, "self", handlers);
     service = new DefaultConsoleTenantConfigInitApplicationService(handlers);

@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -124,8 +125,7 @@ public class ConsoleApprovalController {
    */
   private void auditApprovalAction(
       String action, String tenantId, String target, String operatorId, String reason) {
-    org.springframework.security.core.Authentication auth =
-        SecurityContextHolder.getContext().getAuthentication();
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     String actor = auth == null ? "anonymous" : String.valueOf(auth.getName());
     int reasonLen = reason == null ? 0 : reason.length();
     AUDIT.info(

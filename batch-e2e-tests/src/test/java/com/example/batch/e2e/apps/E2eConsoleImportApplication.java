@@ -16,6 +16,12 @@ import com.example.batch.worker.exports.infrastructure.ExportStepExecutionAdapte
 import com.example.batch.worker.imports.BatchWorkerImportApplication;
 import java.util.concurrent.Executor;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -35,13 +41,12 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableAutoConfiguration(
     exclude = {
       com.example.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
-          .class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration.class
+      OpenAiChatAutoConfiguration.class,
+      OpenAiAudioSpeechAutoConfiguration.class,
+      OpenAiAudioTranscriptionAutoConfiguration.class,
+      OpenAiEmbeddingAutoConfiguration.class,
+      OpenAiImageAutoConfiguration.class,
+      OpenAiModerationAutoConfiguration.class
     })
 @EnableKafka
 @Import({

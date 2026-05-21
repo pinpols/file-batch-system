@@ -1,6 +1,7 @@
 package com.example.batch.common.utils;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,7 +71,7 @@ public final class IdGenerator {
   }
 
   private static final DateTimeFormatter COMPACT_UTC =
-      DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(java.time.ZoneOffset.UTC);
+      DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
   /** {@code yyyyMMddTHHmmssZ} — 一次 format,免 ISO_INSTANT 再 replace 的字符串遍历开销。 */
   private static String compactUtcNow() {
