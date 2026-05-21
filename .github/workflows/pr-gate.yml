@@ -2,6 +2,26 @@ name: pr-gate
 
 on:
   workflow_dispatch:
+  # feature 分支 push 即增量跑(scope 探测 partial/skip/full 三态,reflow 已 handle 非 PR 走 full)。
+  # 让长生命周期 feature 分支 push 即知挂没挂,不用等开 PR 才发现,反馈延迟从 days → 15-25 min。
+  # 同 full-ci-gate 同款 paths-ignore:纯文档/配置 commit 不触发。
+  push:
+    branches-ignore:
+      - main          # main push 由 full-ci-gate 接管,本 workflow 不跑 main
+    paths-ignore:
+      - 'docs/runbook/**'
+      - 'docs/analysis/**'
+      - 'docs/architecture/**'
+      - 'docs/design/**'
+      - 'docs/backlog/**'
+      - 'docs/review/**'
+      - 'docs/changelog.md'
+      - '*.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.gitignore'
+      - '.editorconfig'
+      - '.claude/**'
   pull_request:
     branches:
       - main
@@ -14,6 +34,10 @@ on:
 permissions:
   contents: read
 
+# 同分支同时被 push + pull_request 触发(开了 PR 的 feature 分支再 push)时,
+# 两个事件 ref 不同(push=refs/heads/<branch>, PR=<PR-number>),concurrency group 名也不同,
+# 会跑 2 个并发 run。可接受 — 都用 scope 探测增量模式,实际开销小;cancel-in-progress
+# 保证同事件 / 同 PR 内的旧 run 取消,不会堆积。
 concurrency:
   group: pr-gate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -39,7 +63,9 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # PR 事件:base.sha 是目标分支(main)的最新 commit;push 事件:event.before 是上次 push 的 sha。
+          # workflow_dispatch:无 base 概念,走 full reactor 兜底。
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -57,7 +83,8 @@ jobs:
             batch-e2e-tests
           )
 
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          # workflow_dispatch 手动触发或 BASE_SHA 缺失(分支首次 push, event.before 全 0) → full reactor 兜底
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BASE_SHA" || "$BASE_SHA" == "0000000000000000000000000000000000000000" ]]; then
             echo "maven_scope=full" >> "$GITHUB_OUTPUT"
             echo "maven_modules=$all_modules" >> "$GITHUB_OUTPUT"
             echo "run_load_tests_build=true" >> "$GITHUB_OUTPUT"
@@ -65,13 +92,14 @@ jobs:
               echo "## PR Gate Scope"
               echo
               echo "- Event: $EVENT_NAME"
-              echo "- Scope: full reactor"
+              echo "- Scope: full reactor (no base ref / dispatch)"
               echo "- Modules: $all_modules"
               echo "- load-tests: test-compile"
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
+          # PR + push (feature 分支增量) 都走 scope 探测
           mapfile -t changed_files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
 
           if (( ${#changed_files[@]} == 0 )); then
