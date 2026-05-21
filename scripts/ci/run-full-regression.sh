@@ -497,9 +497,17 @@ if [[ "$RUN_DEFAULT_TESTS" == true ]]; then
 fi
 
 if [[ "$RUN_IT_SUITE" == true ]]; then
+  # CI 上启用 e2e-parallel profile(batch-e2e-tests/pom.xml):forkCount=2 + reuseForks=false
+  # 让 23 个 IT 在 2 个 JVM 上并发,理论 ~25min → 13-15min。
+  # GitHub Actions ubuntu-latest 16GB 内存可承受 2 fork(每 fork ~4GB)。
+  # 自建 runner 内存 < 8GB 时可设 BATCH_E2E_PARALLEL=false 强制串行。
+  e2e_parallel_flag=""
+  if [[ "${BATCH_E2E_PARALLEL:-true}" == "true" ]]; then
+    e2e_parallel_flag="-De2e.parallel=true"
+  fi
   run_step \
     "E2E Suite (batch-e2e-tests, *E2eIT)" \
-    run_mvn test -pl batch-e2e-tests -am -Dsurefire.failIfNoSpecifiedTests=false
+    run_mvn test -pl batch-e2e-tests -am -Dsurefire.failIfNoSpecifiedTests=false $e2e_parallel_flag
 fi
 
 if [[ "$RUN_LOAD_SMOKE" == true ]]; then

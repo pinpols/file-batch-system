@@ -158,6 +158,38 @@
       本模块为 Surefire 设置 api.version=1.44（见上方插件配置）。
     -->
     <profiles>
+        <!--
+          CI 并发跑 e2e:forkCount=2 并发 2 个 JVM(各 1 套 testcontainers,内存 ~8GB)。
+          GitHub Actions linux-runner 7-14GB 可承受,本地 macOS Docker 7.75GB 内存通常不够,
+          且 docker-compose dev 服务还可能占用 1.5GB,所以**仅 CI 开**:
+            mvn -pl batch-e2e-tests verify -Pe2e-parallel
+          或 CI 配置:`-Pe2e-parallel -De2e.parallel=true`(profile 双触发)。
+          预期把 ~25 min E2E 减到 13-15 min。
+        -->
+        <profile>
+            <id>e2e-parallel</id>
+            <activation>
+                <property>
+                    <name>e2e.parallel</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration combine.children="merge">
+                            <forkCount>2</forkCount>
+                            <reuseForks>false</reuseForks>
+                            <!-- 每个 fork JVM 分别启动 testcontainers(PG×2 + Kafka + MinIO + Redis)
+                                 → 2 fork ≈ 12 个 docker container 同时跑,Docker daemon 启动压力大,
+                                 把超时拉到 25min(默认 30s)免 race -->
+                            <forkedProcessTimeoutInSeconds>1500</forkedProcessTimeoutInSeconds>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>mac-docker-testcontainers-socket</id>
             <activation>
