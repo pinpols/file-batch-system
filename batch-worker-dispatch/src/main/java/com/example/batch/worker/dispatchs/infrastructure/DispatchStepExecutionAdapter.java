@@ -61,15 +61,11 @@ public class DispatchStepExecutionAdapter
   protected DispatchJobContext buildContext(
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
     DispatchJobContext context = new DispatchJobContext();
-    context.setTenantId(request.tenantId());
-    context.setJobCode(String.valueOf(contextMap.getOrDefault("jobCode", request.jobCode())));
+    populateCommonFields(context, request, contextMap);
     context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
     context.setDispatchId(
         String.valueOf(
             contextMap.getOrDefault("taskId", contextMap.getOrDefault("dispatchId", ""))));
-    context.setWorkerId(request.workerId());
-    context.setRawPayload(String.valueOf(contextMap.getOrDefault("payload", "")));
-    context.setAttributes(contextMap);
     Object dispatchPayload = contextMap.get("dispatchPayload");
     if (dispatchPayload == null
         && context.getRawPayload() != null
@@ -125,13 +121,4 @@ public class DispatchStepExecutionAdapter
     return new StepExecutionResponse(true, "SUCCESS", "分发阶段执行完毕");
   }
 
-  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
-    if (value == null) {
-      return;
-    }
-    if (value instanceof String text && text.isBlank()) {
-      return;
-    }
-    target.put(key, value);
-  }
 }

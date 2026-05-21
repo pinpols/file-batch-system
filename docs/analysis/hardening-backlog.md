@@ -89,7 +89,7 @@
 | V6-D-1 | ADR-009 Stage 4 业务配 DSL | 现有 seed 节点间 `mergeUpstreamPartitionOutputs` 自动透传 fileId 已够用；业务方设计跨节点参数串联时按 §10 文档配 |
 | V6-D-2 | ADR-010 Stage 6 灰度 operational | staging → canary → prod 按 `trigger-async-launch-rollout.md` SOP 执行（需真部署环境）|
 | V6-D-3 | ADR-010 Stage 7 物理删除旧 HTTP 路径 | 灰度全量切稳定 1 minor 后 |
-| V6-D-4 | I4 `buildContext` 模板抽取 | 等 4 个 `*JobContext` 出现共同基类时 |
+| V6-D-4 | ~~I4 `buildContext` 模板抽取~~ | ✅ 2026-05-21 完成：未抽 `AbstractJobContext`（4 个 context 仅 5 字段共享、`ExecutionContext` 接口已覆盖 getter；剩 2~3 字段抽基类收益 < 继承+`@EqualsAndHashCode(callSuper=true)` 成本），改抽 `populateCommonFields` 模板 + `putIfPresent` helper 到 `AbstractPipelineStepExecutionAdapter`，去掉 4 处 `buildContext` 5 行 setter 重复与 4 处 `putIfPresent` 8 行同字节复制 |
 | V6-D-5 | Worker 4 模块单测密度补齐 | 各 `Default*StageExecutor` + `*StepExecutionAdapter` 加 5-10 单测 |
 
 ---
