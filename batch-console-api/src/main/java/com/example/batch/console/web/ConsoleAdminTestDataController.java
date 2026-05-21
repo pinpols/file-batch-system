@@ -9,6 +9,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.audit.AuditAction;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.constraints.Pattern;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -90,6 +91,34 @@ public class ConsoleAdminTestDataController {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
     Map<String, Integer> result = cleanupService.cleanupByPrefix(prefix);
+    return responseFactory.success(result);
+  }
+
+  /**
+   * 按精确 tenantId 列表清理(prefix 模式无法清纯短名 ID 如 `tx` / `td` 等历史残留时的补刀)。
+   *
+   * <p>**白名单保护**:`system` / `default` / `default-tenant` / `ta` / `tb` / `tc` 任何场景拒删。
+   *
+   * <p>用法:`DELETE /api/console/admin/test-data/by-ids?ids=td,te,tf`
+   */
+  @DeleteMapping("/by-ids")
+  @AuditAction(
+      action = "admin.testDataCleanupByIds",
+      aggregateType = "test_data",
+      aggregateId = "#ids")
+  public CommonResponse<Map<String, Integer>> cleanupByExactIds(
+      @RequestParam
+          @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$", message = "ids 必须字母开头,逗号分隔,长度 3-256")
+          String ids) {
+    if (ids == null || ids.isBlank()) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+    }
+    List<String> tenantIds =
+        java.util.Arrays.stream(ids.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toList();
+    Map<String, Integer> result = cleanupService.cleanupByExactTenantIds(tenantIds);
     return responseFactory.success(result);
   }
 }
