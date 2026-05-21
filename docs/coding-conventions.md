@@ -29,6 +29,63 @@ private record BadRecordContext(ImportJobContext context, ImportStage stage, Lon
 
 **豁免场景：** 构造器（record、DTO、Response、data holder、Spring DI 注入）不受此约束。
 
+### 1.1 调用方约束（inline build 提取）
+
+方法签名压缩到参数对象后,调用现场如果写成 `f(XxxParam.builder().a()...build())` 一长串 fluent 链,
+参数臃肿就从签名搬到调用处了。判定线按链长度 `.xxx()` 调用数:
+
+| chain 长度 | 处理 |
+|---|---|
+| ≤ 3 | 单行 inline,**禁提取**(业界 builder 标准写法) |
+| 4-6 | 单行或 2 行 fluent,**禁提取** |
+| 7-9 | 看场景:在短工厂方法(`static foo() { return X.builder()...build(); }`,整体 ≤ 8 行) → inline;在长函数中间 → 可考虑提取 |
+| ≥ 10 | **必须提取**为局部变量再 return / 传参 |
+
+**正确写法(chain ≥ 10)**：
+
+```java
+// ✅ 调用方提取局部变量,return / 传参语义一眼可读
+LaunchRequest launchRequest =
+    LaunchRequest.builder()
+        .tenantId(request.tenantId())
+        .jobCode(request.jobCode())
+        ...11 个字段...
+        .build();
+return launchRequest;
+```
+
+**禁用写法**：
+
+```java
+// ❌ return 语句被 builder 链淹没,在 if 分支里嵌套时尤其难读
+return LaunchRequest.builder()
+    .tenantId(request.tenantId())
+    .jobCode(request.jobCode())
+    ...11 个字段...
+    .build();
+```
+
+**合理 inline 场景(短链不该提取)**：
+
+```java
+// SDK args(MinIO/AWS),链 ≤ 5,单行即读完 — 不提取
+minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(name).build());
+
+// 短工厂方法,工厂本身就是"避免调用方写长链"的封装 — 内部 inline 是惯例
+public static DryRunFinding pass(String code, String scope, String message) {
+  return DryRunFinding.builder()
+      .code(code).severity(Severity.PASS).scope(scope).message(message)
+      .build();
+}
+```
+
+**豁免**：
+- 声明式注册类(`ConsoleMenuRegistry` / `*SchemaRegistry`):inline new 是声明式数据结构的标准写法
+- test fixture:test-as-spec 模式,inline 让测试可读性更高
+
+**守护**：`PositionalArgsConventionTest` 拦白名单(`GUARDED_TYPES`,当前 51 个类型)的方法实参 inline build;
+return 位置因每个项目语义不同(短工厂方法合理 inline),不全局守护,靠 review 按上述判定线手工把关。
+
 ---
 
 ## 2. 全限定类名（FQN）禁令
