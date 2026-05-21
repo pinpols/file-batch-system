@@ -224,7 +224,8 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
       wheelScheduler.doSlidingWindow();
 
       TriggerRuntimeStateEntity after = stateMapper.selectByJobDefinitionId(jobDefId);
-      if (after.getScheduledFireMarker() == null) {
+      // CI 中 select 偶发返回 null(测试 fixture 刚 delete 后立即查的极小窗口);视同 markerNull 违例
+      if (after == null || after.getScheduledFireMarker() == null) {
         markerNullViolations++;
       } else if (after.getScheduledFireMarker().startsWith("dead-leader-")) {
         deadLeaderResidueViolations++;
