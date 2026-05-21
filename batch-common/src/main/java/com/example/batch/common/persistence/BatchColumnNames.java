@@ -3,11 +3,11 @@ package com.example.batch.common.persistence;
 /**
  * 跨模块共用的 DB / Excel 列名常量。
  *
- * <p>动机:`"tenant_id"` 在 BE 25+ 处出现,Excel 列头(导入/导出)+ SQL Map key + mapper xml `#{q.xxx}` 同名,
- * 之前 `COL_TENANT_ID` 在 4 个类里各自定义,改 1 处漏改其余成残留 → 集中常量化。
+ * <p>动机:`"tenant_id"` 在 BE 25+ 处出现,Excel 列头(导入/导出)+ SQL Map key + mapper xml `#{q.xxx}` 同名, 之前
+ * `COL_TENANT_ID` 在 4 个类里各自定义,改 1 处漏改其余成残留 → 集中常量化。
  *
- * <p>**只放跨模块共用**列名(BatchOps + Console + Worker 都用)。Excel 私有列(`template_type` /
- * `biz_type` 等只在导入/导出某 sheet 出现)继续放各自 Excel schema 类。
+ * <p>**只放跨模块共用**列名(BatchOps + Console + Worker 都用)。Excel 私有列(`template_type` / `biz_type` 等只在导入/导出某
+ * sheet 出现)继续放各自 Excel schema 类。
  *
  * <p>**不放 metrics tag**(`tenant_id` 作为 prometheus tag 维度)—— 那走 `BatchMetricsNames.TAG_TENANT`
  * 分开管理,语义不同(列名 vs 维度名)。

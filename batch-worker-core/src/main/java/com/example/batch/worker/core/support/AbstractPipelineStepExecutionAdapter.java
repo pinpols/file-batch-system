@@ -54,11 +54,11 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   private final PlatformFileRuntimeRepository runtimeRepository;
 
   /**
-   * ADR-030 §C: 可选注入。Spring 在 batch-worker-core 上下文里有 PipelineVerifierHook 时由构造器注入;
-   * 测试 / 无 hook bean 场景为 null,runVerifierHook() 直接跳过。
+   * ADR-030 §C: 可选注入。Spring 在 batch-worker-core 上下文里有 PipelineVerifierHook 时由构造器注入; 测试 / 无 hook
+   * bean 场景为 null,runVerifierHook() 直接跳过。
    *
-   * <p>review 2026-05-21: 之前用 setter + @Autowired(required=false),违反 CLAUDE.md §Java #3
-   * (DI 只用构造器);改为 ObjectProvider 显式构造器注入。
+   * <p>review 2026-05-21: 之前用 setter + @Autowired(required=false),违反 CLAUDE.md §Java #3 (DI
+   * 只用构造器);改为 ObjectProvider 显式构造器注入。
    */
   private final PipelineVerifierHook verifierHook;
 
@@ -440,9 +440,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
       C context, List<R> results, Map<String, Object> attributes);
 
   /**
-   * 4 个 {@code *StepExecutionAdapter#buildContext} 共有的"5 行 setter 模板" — tenantId / jobCode / workerId /
-   * rawPayload / attributes。子类先 {@code new XxxJobContext()} 再调本方法填公共字段，最后按需补自己独有的字段
-   * （如 ExportJobContext.fileId / DispatchJobContext.dispatchId / ProcessJobContext.batchKey）。
+   * 4 个 {@code *StepExecutionAdapter#buildContext} 共有的"5 行 setter 模板" — tenantId / jobCode /
+   * workerId / rawPayload / attributes。子类先 {@code new XxxJobContext()} 再调本方法填公共字段，最后按需补自己独有的字段 （如
+   * ExportJobContext.fileId / DispatchJobContext.dispatchId / ProcessJobContext.batchKey）。
    *
    * <p>{@code bizDate} 不在此处填：4 个 context 里 ProcessJobContext 没有该字段，子类自己设。
    */
@@ -456,8 +456,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   }
 
   /**
-   * 4 个 {@code *StepExecutionAdapter#buildSuccessResponse} 里同字节复制的 NODE_OUTPUTS put helper：
-   * 空值 / 空白字符串视为缺省，不写入。
+   * 4 个 {@code *StepExecutionAdapter#buildSuccessResponse} 里同字节复制的 NODE_OUTPUTS put helper： 空值 /
+   * 空白字符串视为缺省，不写入。
    */
   protected static void putIfPresent(Map<String, Object> target, String key, Object value) {
     if (value == null) {

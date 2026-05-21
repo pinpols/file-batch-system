@@ -106,8 +106,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
     assertThat(rows).isZero();
     verify(reconciler, never()).reconcile(anyString(), anyLong(), anyString());
     verify(jobLifecycleMetrics, never())
-        .recordCompletion(
-            anyString(), anyString(), anyString(), anyBoolean(), any(Duration.class));
+        .recordCompletion(anyString(), anyString(), anyString(), anyBoolean(), any(Duration.class));
   }
 
   @Test

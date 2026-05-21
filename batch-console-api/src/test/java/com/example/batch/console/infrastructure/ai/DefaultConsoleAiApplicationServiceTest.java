@@ -26,7 +26,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
@@ -45,9 +44,9 @@ import org.springframework.beans.factory.ObjectProvider;
  *   <li>拒绝响应消息按 decision 切换文案（4 分支）
  * </ol>
  *
- * <p>注：ChatClient 成功调用路径（fluent API call().content()）需深 stub，框架内已被
- * {@code ConsoleAiControllerTest} 用 mock(ConsoleAiApplicationService.class) 覆盖端到端，
- * 此单测只验受控边界 — 不做 ChatClient happy path 的深 mock，避免脆弱。
+ * <p>注：ChatClient 成功调用路径（fluent API call().content()）需深 stub，框架内已被 {@code ConsoleAiControllerTest}
+ * 用 mock(ConsoleAiApplicationService.class) 覆盖端到端， 此单测只验受控边界 — 不做 ChatClient happy path 的深
+ * mock，避免脆弱。
  */
 @ExtendWith(MockitoExtension.class)
 class DefaultConsoleAiApplicationServiceTest {
@@ -78,7 +77,8 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
-    return new ConsoleRequestMetadata(requestId, traceId, tenantId, "operator-1", "idem-1", "1.1.1.1");
+    return new ConsoleRequestMetadata(
+        requestId, traceId, tenantId, "operator-1", "idem-1", "1.1.1.1");
   }
 
   private static AiChatRequest request(String tenantId, String prompt) {
@@ -94,8 +94,7 @@ class DefaultConsoleAiApplicationServiceTest {
     BizException denied = BizException.of(ResultCode.FORBIDDEN, "error.ai.forbidden");
     org.mockito.Mockito.doThrow(denied).when(authorizationService).assertAllowed();
 
-    assertThatThrownBy(() -> service.chat(request("t-1", "查询失败的作业"), "idem-1"))
-        .isSameAs(denied);
+    assertThatThrownBy(() -> service.chat(request("t-1", "查询失败的作业"), "idem-1")).isSameAs(denied);
     verify(promptGuard, never()).check(any());
     verify(chatClientProvider, never()).getIfAvailable();
     verify(auditService, never()).record(any());
@@ -108,8 +107,7 @@ class DefaultConsoleAiApplicationServiceTest {
 
     assertThatThrownBy(() -> service.chat(request("tenant-BODY", "查询作业"), "idem-1"))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
+        .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
     verify(promptGuard, never()).check(any());
   }
 
@@ -121,13 +119,12 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThatThrownBy(() -> service.chat(request(null, "查询作业"), "idem-1"))
         .isInstanceOf(BizException.class)
         .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getCode())
-                    .isEqualTo(ResultCode.INVALID_ARGUMENT));
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
   }
 
   @Test
-  @DisplayName("Prompt guard REJECTED_SAFETY → refusal 响应 + 审计落库（含 refusalReason，decision=REJECTED_SAFETY）")
+  @DisplayName(
+      "Prompt guard REJECTED_SAFETY → refusal 响应 + 审计落库（含 refusalReason，decision=REJECTED_SAFETY）")
   void shouldReturnRefusalResponse_andRecordAudit_whenSafetyRejected() {
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
     when(promptGuard.check(any()))
@@ -196,8 +193,7 @@ class DefaultConsoleAiApplicationServiceTest {
 
     assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
         .isInstanceOf(BizException.class)
-        .satisfies(
-            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
+        .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
     // 走到 chat client 前不应有 audit（approved 路径只在成功后写 audit）
     verify(auditService, never()).record(any());
   }

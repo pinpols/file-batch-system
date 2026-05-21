@@ -88,14 +88,14 @@ class DryRunGuardConventionTest {
           "batch-worker-dispatch/.*/stage/DispatchStageStep.java");
 
   /**
-   * READ_ONLY_OR_LOCAL plugin 出现以下符号 = 强烈怀疑引入了副作用,需要重新分类到 {@link #SIDE_EFFECTING_GUARDED}
-   * 并补 DryRunGuard。
+   * READ_ONLY_OR_LOCAL plugin 出现以下符号 = 强烈怀疑引入了副作用,需要重新分类到 {@link #SIDE_EFFECTING_GUARDED} 并补
+   * DryRunGuard。
    *
-   * <p>覆盖五类副作用通道:JDBC 模板写、MyBatis insert/update/delete、HTTP client send、MinIO/S3 put、Kafka send。
-   * 用粗 grep 而非 AST 故意宽松:误报 = 让开发者解释,漏报 = dry-run 边界静默失守。
+   * <p>覆盖五类副作用通道:JDBC 模板写、MyBatis insert/update/delete、HTTP client send、MinIO/S3 put、Kafka send。 用粗
+   * grep 而非 AST 故意宽松:误报 = 让开发者解释,漏报 = dry-run 边界静默失守。
    *
-   * <p>需要在 READ_ONLY plugin 里用这些符号(如 staging 表的内部读写)→ 调用方在文件头加注释
-   * {@code "// dry-run-allow-internal: <reason>"} 即可豁免本检查;但凡触达 biz 表或外部 IO 都应迁库存清单。
+   * <p>需要在 READ_ONLY plugin 里用这些符号(如 staging 表的内部读写)→ 调用方在文件头加注释 {@code "// dry-run-allow-internal:
+   * <reason>"} 即可豁免本检查;但凡触达 biz 表或外部 IO 都应迁库存清单。
    */
   private static final List<Pattern> SUSPICIOUS_WRITE_SYMBOLS =
       List.of(
@@ -170,9 +170,7 @@ class DryRunGuardConventionTest {
                   }
                   // READ_ONLY plugin 偷偷长出 jdbc/mybatis/http/minio/kafka 写调用 = dry-run 边界静默裂开。
                   // 文件头加 "// dry-run-allow-internal: <reason>" 才允许豁免(staging 中间态读写场景)。
-                  if (inReadOnly
-                      && !usesGuard
-                      && !content.contains(SUSPICIOUS_ALLOW_MARKER)) {
+                  if (inReadOnly && !usesGuard && !content.contains(SUSPICIOUS_ALLOW_MARKER)) {
                     SUSPICIOUS_WRITE_SYMBOLS.stream()
                         .filter(p -> p.matcher(content).find())
                         .findFirst()
@@ -182,9 +180,9 @@ class DryRunGuardConventionTest {
                                     relative
                                         + " — 命中疑似写调用 ["
                                         + pattern.pattern()
-                                        + "],登记为 READ_ONLY_OR_LOCAL 但出现 jdbc/mybatis/http/minio/kafka"
-                                        + " 写 API。三选一:(1) 迁到 SIDE_EFFECTING_GUARDED + 加 DryRunGuard;"
-                                        + "(2) 文件头加 `// "
+                                        + "],登记为 READ_ONLY_OR_LOCAL 但出现"
+                                        + " jdbc/mybatis/http/minio/kafka 写 API。三选一:(1) 迁到"
+                                        + " SIDE_EFFECTING_GUARDED + 加 DryRunGuard;(2) 文件头加 `// "
                                         + SUSPICIOUS_ALLOW_MARKER
                                         + ": <staging 表写入理由>` 显式豁免;"
                                         + "(3) 换用只读 API"));

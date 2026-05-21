@@ -92,8 +92,7 @@ class ExportFormatStrategyRegistryTest {
     assertThatThrownBy(() -> registry.require("PARQUET"))
         .isInstanceOf(BizException.class)
         .satisfies(
-            ex ->
-                assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
   }
 
   @Test

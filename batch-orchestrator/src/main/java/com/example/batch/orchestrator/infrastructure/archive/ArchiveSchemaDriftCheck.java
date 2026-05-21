@@ -118,15 +118,14 @@ public class ArchiveSchemaDriftCheck {
   /**
    * 列级类型 / nullable 漂移检测 — 独立于 {@link #checkOnStartup()}。
    *
-   * <p>{@link #checkOnStartup()} 只看列名集合,无法捕获 {@code ALTER COLUMN tenant_id TYPE
-   * varchar(128)} / {@code ALTER COLUMN xxx SET NOT NULL} 这类语义变更:列名集合仍然相等,但 archive INSERT 会因类型
-   * 截断 / NULL 违反而失败。本方法对每张 {@link #ARCHIVED_TABLES} 比对核心兼容性:
+   * <p>{@link #checkOnStartup()} 只看列名集合,无法捕获 {@code ALTER COLUMN tenant_id TYPE varchar(128)} /
+   * {@code ALTER COLUMN xxx SET NOT NULL} 这类语义变更:列名集合仍然相等,但 archive INSERT 会因类型 截断 / NULL
+   * 违反而失败。本方法对每张 {@link #ARCHIVED_TABLES} 比对核心兼容性:
    *
    * <ul>
    *   <li>{@code data_type} 必须严格相等 — 类型不一致 INSERT-SELECT 直接失败 / 截断
-   *   <li>{@code is_nullable} 只在「冷比热严格」时报错(cold=NO + hot=YES):热表允许 NULL 但冷表拒,归档 INSERT 会 NULL 违反
-   *       — 反向(hot NOT NULL + cold NULLABLE)是 V91 起的故意设计(archive 是冷库,不强制 NOT NULL,见 V91
-   *       comment),不报错。
+   *   <li>{@code is_nullable} 只在「冷比热严格」时报错(cold=NO + hot=YES):热表允许 NULL 但冷表拒,归档 INSERT 会 NULL 违反 —
+   *       反向(hot NOT NULL + cold NULLABLE)是 V91 起的故意设计(archive 是冷库,不强制 NOT NULL,见 V91 comment),不报错。
    *   <li>{@code column_default} 不参与比对 — INSERT-SELECT 从热表带值,default 不影响行内容。
    * </ul>
    *
@@ -148,14 +147,7 @@ public class ArchiveSchemaDriftCheck {
         ColumnMeta h = hotMeta.get(col);
         ColumnMeta c = coldMeta.get(col);
         if (!Objects.equals(h.dataType(), c.dataType())) {
-          diffs.add(
-              hot
-                  + "."
-                  + col
-                  + " data_type hot="
-                  + h.dataType()
-                  + " cold="
-                  + c.dataType());
+          diffs.add(hot + "." + col + " data_type hot=" + h.dataType() + " cold=" + c.dataType());
         }
         // varchar(N) / numeric(P,S) 的长度/精度差异在 character_maximum_length / numeric_*,
         // data_type 不带,必须显式比对
@@ -185,8 +177,7 @@ public class ArchiveSchemaDriftCheck {
                   + c.numericScale());
         }
         // 只报 "cold 比 hot 严格" 方向 — cold NOT NULL + hot NULLABLE 会让 NULL 行 INSERT 失败
-        if ("NO".equalsIgnoreCase(c.isNullable())
-            && "YES".equalsIgnoreCase(h.isNullable())) {
+        if ("NO".equalsIgnoreCase(c.isNullable()) && "YES".equalsIgnoreCase(h.isNullable())) {
           diffs.add(
               hot
                   + "."
@@ -207,13 +198,11 @@ public class ArchiveSchemaDriftCheck {
               + "add migration to ALTER archive.* to match batch.* before next deploy. "
               + "See logs above for per-column diff.");
     }
-    log.info(
-        "archive column type drift check passed for {} tables", ARCHIVED_TABLES.size());
+    log.info("archive column type drift check passed for {} tables", ARCHIVED_TABLES.size());
   }
 
   private Map<String, ColumnMeta> columnMetaOf(String schema, String table) {
-    List<Map<String, Object>> rows =
-        informationSchemaMapper.listColumnsWithTypes(schema, table);
+    List<Map<String, Object>> rows = informationSchemaMapper.listColumnsWithTypes(schema, table);
     Map<String, ColumnMeta> map = new LinkedHashMap<>();
     for (Map<String, Object> row : rows) {
       // PostgreSQL JDBC 通常以全小写键返回 information_schema 字段;某些驱动会大写,加防御。
@@ -223,8 +212,7 @@ public class ArchiveSchemaDriftCheck {
       }
       String dataType = firstNonNull(row.get("data_type"), row.get("DATA_TYPE"));
       String isNullable = firstNonNull(row.get("is_nullable"), row.get("IS_NULLABLE"));
-      String columnDefault =
-          firstNonNull(row.get("column_default"), row.get("COLUMN_DEFAULT"));
+      String columnDefault = firstNonNull(row.get("column_default"), row.get("COLUMN_DEFAULT"));
       // P0 修复: PostgreSQL `data_type` 对 varchar/numeric 不带长度/精度
       // (varchar(64) 与 varchar(128) 同样返回 'character varying'),长度差别在
       // `character_maximum_length` / `numeric_precision` / `numeric_scale`,
@@ -254,8 +242,7 @@ public class ArchiveSchemaDriftCheck {
   }
 
   /**
-   * 列元数据 — 保留 {@code column_default} 字段仅用于诊断日志,实际比对见 {@link
-   * #checkColumnTypesOnStartup()}:
+   * 列元数据 — 保留 {@code column_default} 字段仅用于诊断日志,实际比对见 {@link #checkColumnTypesOnStartup()}:
    *
    * <ul>
    *   <li>{@code data_type} 严格比

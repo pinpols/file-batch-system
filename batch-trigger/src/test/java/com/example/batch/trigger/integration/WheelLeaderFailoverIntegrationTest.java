@@ -196,10 +196,10 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
   /**
    * stress 套 20 轮 failover,本质是验证 fast-path 不出现双 fire / 漏 fire。
    *
-   * <p>2026-05-21:从 100 轮压减到 20 轮 + 每轮 awaitility 显式等 release+claim 同步窗口,
-   * 而不是 doSlidingWindow 立即 select。CI 慢 IO 下 release_stale_markers UPDATE 与紧跟的
-   * claimForSchedule 不在同一事务,需要给 wheel 调度器毫秒级窗口完成两步 CAS;否则
-   * markerNullViolations 高发(见 docs/analysis/disabled-tests-root-cause-2026-05-21.md §2)。
+   * <p>2026-05-21:从 100 轮压减到 20 轮 + 每轮 awaitility 显式等 release+claim 同步窗口, 而不是 doSlidingWindow 立即
+   * select。CI 慢 IO 下 release_stale_markers UPDATE 与紧跟的 claimForSchedule 不在同一事务,需要给 wheel
+   * 调度器毫秒级窗口完成两步 CAS;否则 markerNullViolations 高发(见
+   * docs/analysis/disabled-tests-root-cause-2026-05-21.md §2)。
    */
   @Test
   void failoverLoop20TimesNoDoubleOrMissedFire() {
@@ -243,15 +243,13 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(markerNullViolations).as("每轮都应被本 leader 重新 claim,不能留 null").isZero();
     assertThat(deadLeaderResidueViolations).as("dead-leader 残留必须每轮释放").isZero();
-    assertThat(leaderAcquireDelta)
-        .as("20 轮 fast-path 各 acquire 一次")
-        .isGreaterThanOrEqualTo(rounds);
+    assertThat(leaderAcquireDelta).as("20 轮 fast-path 各 acquire 一次").isGreaterThanOrEqualTo(rounds);
     assertThat(staleReleasedDelta).as("20 轮 stale marker 各释放一次").isGreaterThanOrEqualTo(rounds);
   }
 
   /**
-   * 等 wheel scheduler 的 release+claim 两步事务真正落盘:轮询 ~2s,若 marker 还是 deadId
-   * 说明 release 没跑完;若 marker null 说明 release 跑了 claim 没跟上。返回最终读到的 marker。
+   * 等 wheel scheduler 的 release+claim 两步事务真正落盘:轮询 ~2s,若 marker 还是 deadId 说明 release 没跑完;若 marker
+   * null 说明 release 跑了 claim 没跟上。返回最终读到的 marker。
    */
   private String awaitMarkerSettled(Long stateId, String deadId) {
     long deadline = System.currentTimeMillis() + 2_000L;

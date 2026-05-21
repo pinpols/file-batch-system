@@ -5,9 +5,9 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import java.util.Set;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -100,8 +100,8 @@ public class JobLifecycleMetricsRecorder {
   }
 
   /**
-   * 失败 error_code:优先 {@code failure_class}(ADR-012 故障分类),为空时回退 "unknown"。
-   * JobInstance 表无显式 error_code 列(error_code 在 job_task 粒度),用 failure_class 作为汇总粒度的错误码。
+   * 失败 error_code:优先 {@code failure_class}(ADR-012 故障分类),为空时回退 "unknown"。 JobInstance 表无显式
+   * error_code 列(error_code 在 job_task 粒度),用 failure_class 作为汇总粒度的错误码。
    */
   private String resolveErrorCode(JobInstanceEntity instance) {
     String fc = instance.getFailureClass();

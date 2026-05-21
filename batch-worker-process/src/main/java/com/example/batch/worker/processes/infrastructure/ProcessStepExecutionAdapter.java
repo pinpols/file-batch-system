@@ -5,9 +5,8 @@ import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
-import com.example.batch.worker.core.support.PipelineVerifierHook;
-import org.springframework.beans.factory.ObjectProvider;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
+import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessPayload;
 import com.example.batch.worker.processes.domain.ProcessStage;
@@ -19,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 

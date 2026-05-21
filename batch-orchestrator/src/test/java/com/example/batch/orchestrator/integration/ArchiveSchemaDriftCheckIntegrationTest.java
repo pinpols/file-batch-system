@@ -29,8 +29,7 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
     // 把测试加的临时列删干净,防污染其他 IT
     jdbcTemplate.execute("alter table batch.outbox_event drop column if exists drift_test_col");
     // 列级类型漂移用例 — 把 tenant_id 类型还原回 varchar(64)
-    jdbcTemplate.execute(
-        "alter table batch.outbox_event alter column tenant_id type varchar(64)");
+    jdbcTemplate.execute("alter table batch.outbox_event alter column tenant_id type varchar(64)");
   }
 
   @Test
@@ -119,8 +118,7 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
     // 模拟:运维 ALTER batch.outbox_event ALTER COLUMN tenant_id TYPE varchar(128),
     // 但 archive.outbox_event_archive.tenant_id 仍是 varchar(64) — 列名集合相等,
     // 但 archive INSERT 在 tenantId 超过 64 字符时会截断 / 失败,checkOnStartup() 看不到。
-    jdbcTemplate.execute(
-        "alter table batch.outbox_event alter column tenant_id type varchar(128)");
+    jdbcTemplate.execute("alter table batch.outbox_event alter column tenant_id type varchar(128)");
 
     assertThatThrownBy(() -> check.checkColumnTypesOnStartup())
         .isInstanceOf(IllegalStateException.class)

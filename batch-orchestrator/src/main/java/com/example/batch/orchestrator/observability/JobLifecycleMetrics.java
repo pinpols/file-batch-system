@@ -36,16 +36,11 @@ public class JobLifecycleMetrics {
   /**
    * job 走到终态时记录:end-to-end 时长 + 完成计数(按终态状态打 tag)。
    *
-   * <p>ADR-026 dry-run:dryRun 维度统一打到 timer + counter,Grafana / 报警必须按
-   * {@code dry_run="false"} 过滤才能看到真实生产 SLA;{@code dry_run="true"} 单独看演练流量,
-   * 不污染真实生产 SLA / 错误率统计。
+   * <p>ADR-026 dry-run:dryRun 维度统一打到 timer + counter,Grafana / 报警必须按 {@code dry_run="false"}
+   * 过滤才能看到真实生产 SLA;{@code dry_run="true"} 单独看演练流量, 不污染真实生产 SLA / 错误率统计。
    */
   public void recordCompletion(
-      String tenantId,
-      String jobType,
-      String terminalStatus,
-      boolean dryRun,
-      Duration duration) {
+      String tenantId, String jobType, String terminalStatus, boolean dryRun, Duration duration) {
     Tags tags =
         Tags.of(
             TAG_TENANT,
