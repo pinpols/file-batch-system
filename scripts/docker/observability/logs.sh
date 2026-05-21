@@ -18,6 +18,6 @@ TAIL_LINES="${TAIL_LINES:-100}"
 
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
-  -f docker-compose.observability.yml \
+  -f docker/compose/observability.yml \
   --profile observability \
   logs -f --tail="$TAIL_LINES" "$@"

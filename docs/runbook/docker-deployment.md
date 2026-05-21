@@ -3,8 +3,8 @@
 仓库现在提供两种 Docker 使用方式：
 
 - `docker-compose.yml`：本地基础依赖
-- `docker-compose.app.yml`：应用容器部署
-- `docker-compose.observability.yml`：可选观测栈叠加层
+- `docker/compose/app.yml`：应用容器部署
+- `docker/compose/observability.yml`：可选观测栈叠加层
 
 建议按环境选择对应的 env 文件：
 

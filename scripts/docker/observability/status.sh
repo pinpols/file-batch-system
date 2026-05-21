@@ -17,6 +17,6 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
-  -f docker-compose.observability.yml \
+  -f docker/compose/observability.yml \
   --profile observability \
   ps "$@"

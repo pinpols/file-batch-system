@@ -1,5 +1,5 @@
 # 观测栈：Prometheus / Grafana / Loki / Jaeger / OTel Collector / Alertmanager / Exporters
-# 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+# 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f docker/compose/observability.yml up -d
 services:
 
   # ── 指标 ──────────────────────────────────────────────────────────

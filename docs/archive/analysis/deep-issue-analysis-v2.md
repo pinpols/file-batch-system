@@ -24,7 +24,7 @@
 |------|------|----------|----------|
 | :red_circle: Critical | S-1.1 | JWT 密钥默认弱值可伪造任意 token | `application.yml` |
 | :red_circle: Critical | S-1.2 | 内部 API 共享密钥默认值 `internal-secret` | `BatchSecurityProperties.java` |
-| :red_circle: Critical | S-1.3 | Docker Compose 硬编码数据库密码 | `docker-compose.app.yml` |
+| :red_circle: Critical | S-1.3 | Docker Compose 硬编码数据库密码 | `docker/compose/app.yml` |
 | :red_circle: Critical | C-2.1 | MANDATORY 传播无编译期保证，未来重构可能丢事务 | `TaskDispatchOutboxService.java` |
 | :red_circle: Critical | C-4.1 | job_instance 无级联删除，孤儿记录无限增长 | DB schema |
 | :red_circle: Critical | C-9.1 | idempotencyKey 含 version 导致 crash 后重复执行 | `TaskDispatchOutboxService.java` |
@@ -67,7 +67,7 @@ private String internalSecret = "internal-secret";
 
 #### S-1.3 Docker Compose 硬编码数据库密码
 
-**文件**：`docker-compose.app.yml:24-25,79`
+**文件**：`docker/compose/app.yml:24-25,79`
 
 ```yaml
 BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}

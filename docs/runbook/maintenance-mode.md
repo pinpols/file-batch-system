@@ -42,7 +42,7 @@ Spring Boot `@ConfigurationProperties` 在容器重启后生效(scope = singleto
 
 ### 3.2 docker-compose / Helm
 
-`docker-compose.app.yml` / Helm values 添加同名 env,滚动重启 console-api。
+`docker/compose/app.yml` / Helm values 添加同名 env,滚动重启 console-api。
 
 ### 3.3 不要在代码里改默认值
 
