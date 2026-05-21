@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 三条 worker 链路（import / export / dispatch）共用的 pipeline 生命周期模板： 确保 pipeline 定义存在 → 创建 pipeline 实例 →
@@ -53,18 +54,19 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   private final PlatformFileRuntimeRepository runtimeRepository;
 
   /**
-   * ADR-030 §C: 可选注入。Spring 在 batch-worker-core 上下文里有 PipelineVerifierHook 时自动通过 setter 注入；测试/单元场景
-   * hook 为 null，runVerifierHook() 直接跳过。
+   * ADR-030 §C: 可选注入。Spring 在 batch-worker-core 上下文里有 PipelineVerifierHook 时由构造器注入;
+   * 测试 / 无 hook bean 场景为 null,runVerifierHook() 直接跳过。
+   *
+   * <p>review 2026-05-21: 之前用 setter + @Autowired(required=false),违反 CLAUDE.md §Java #3
+   * (DI 只用构造器);改为 ObjectProvider 显式构造器注入。
    */
-  private PipelineVerifierHook verifierHook;
+  private final PipelineVerifierHook verifierHook;
 
-  protected AbstractPipelineStepExecutionAdapter(PlatformFileRuntimeRepository runtimeRepository) {
+  protected AbstractPipelineStepExecutionAdapter(
+      PlatformFileRuntimeRepository runtimeRepository,
+      ObjectProvider<PipelineVerifierHook> verifierHookProvider) {
     this.runtimeRepository = runtimeRepository;
-  }
-
-  @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setVerifierHook(PipelineVerifierHook verifierHook) {
-    this.verifierHook = verifierHook;
+    this.verifierHook = verifierHookProvider.getIfAvailable();
   }
 
   // 不能加 final:Spring CGLIB 用 Objenesis 实例化代理(跳过构造器→ runtimeRepository 字段为 null);

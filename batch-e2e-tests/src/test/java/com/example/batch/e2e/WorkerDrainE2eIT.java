@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
+import org.springframework.test.annotation.DirtiesContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,11 +49,10 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
-// TODO(2026-05-21): CI 长 E2E 套件跑到本测试时 Docker 资源近耗尽,
-// testcontainer apache/kafka:4.1.2 tryStart 失败 ContainerLaunchException。
-// 本地稳过;根因可能是前序测试容器 leak 或 runner 资源限制。先 disable 解 CI,根因待查。
-@org.junit.jupiter.api.Disabled(
-    "CI flaky:长 E2E 套件后 Kafka container tryStart 失败,本地稳过;根因待查")
+// CI 上字母序末位测试,前 22 个 E2E @SpringBootTest context cache 持续持有 Kafka consumer
+// 连接,叠加 RANDOM_PORT embedded server 启动到本测试时资源压力撞 GHA runner 上限。
+// 显式 AFTER_CLASS DirtiesContext 让 Spring 在本类结束时释放 context,缓解资源累积。
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

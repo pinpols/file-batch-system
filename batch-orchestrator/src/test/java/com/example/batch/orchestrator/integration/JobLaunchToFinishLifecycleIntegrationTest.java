@@ -124,11 +124,6 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(finishedInstance.getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
   }
 
-  // TODO(2026-05-21): CI 上 isWorkerClaimable() 返 false 导致 assignWorker 一直返回 READY,本地稳定通过;
-  // 怀疑 CI 长 IT 套件中前一个测试的状态(partition lease / worker_registry)污染了本测试的 worker 查询。
-  // 已尝试 5×100ms 重试 + 每轮 refreshAssignableWorkersForTenant 无效。先 disable 解 CI,根因留 backlog。
-  @org.junit.jupiter.api.Disabled(
-      "CI 偶发 assignWorker 返 READY,本地稳过;根因待查,见 docs/analysis/hardening-backlog.md")
   @Test
   void launchThenClaimThenReport_failureTransitionsTaskToFailed() {
     LaunchSeed seed =
@@ -183,19 +178,23 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   }
 
   /**
-   * CI 环境 partition lease claim 与 worker registry 刷新可能竞态:首次 assignWorker 在 partition lease
-   * 还没就绪时 @Transactional 回滚返 READY。每次重试前先刷 worker_registry,最多重试 5 次,每次间隔 100ms。
+   * CI 上 assignWorker 返 READY 根因:partition lease CAS 失败 → setRollbackOnly 拖走 worker_registry
+   * 刷新可见性(见 docs/analysis/disabled-tests-root-cause-2026-05-21.md §1)。
+   *
+   * <p>修复:延长重试 + 每次显式 await partition.status==READY,确保前置状态就绪再 claim,
+   * 减少 lease CAS miss 频次。最长 5s 等待,超时仍返当前 claimed 让断言拿到真实状态。
    */
   private JobTaskEntity assignWorkerWithRetry(Long taskId, String workerCode) {
     JobTaskEntity claimed = null;
-    for (int attempt = 0; attempt < 5; attempt++) {
+    long deadline = System.currentTimeMillis() + 5_000L;
+    while (System.currentTimeMillis() < deadline) {
       LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
       claimed = taskExecutionService.assignWorker(TENANT, taskId, workerCode);
       if (claimed != null && TaskStatus.RUNNING.code().equals(claimed.getTaskStatus())) {
         return claimed;
       }
       try {
-        Thread.sleep(100L);
+        Thread.sleep(50L);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         return claimed;

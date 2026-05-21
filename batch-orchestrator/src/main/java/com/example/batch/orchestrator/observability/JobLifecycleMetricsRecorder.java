@@ -1,9 +1,11 @@
 package com.example.batch.orchestrator.observability;
 
+import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import java.util.Set;
 import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class JobLifecycleMetricsRecorder {
 
+  /** 失败类终态:这些状态要额外打 {@code batch.orchestrator.job.failure.total} + error_code。 */
+  private static final Set<String> FAILED_TERMINAL_STATUSES =
+      Set.of(
+          JobInstanceStatus.FAILED.code(),
+          JobInstanceStatus.PARTIAL_FAILED.code(),
+          JobInstanceStatus.FAILED_DRY_RUN.code());
+
   private final JobInstanceMapper jobInstanceMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final JobLifecycleMetrics jobLifecycleMetrics;
@@ -69,8 +78,15 @@ public class JobLifecycleMetricsRecorder {
               Duration duration = Duration.between(instance.getCreatedAt(), resolvedFinished);
               // ADR-026:dry_run 维度切分指标 — Boolean 字段可能为 null,缺省按 false(非演练)处理
               boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
+              String jobType = resolveJobType(instance);
               jobLifecycleMetrics.recordCompletion(
-                  tenantId, resolveJobType(instance), terminalStatus, dryRun, duration);
+                  tenantId, jobType, terminalStatus, dryRun, duration);
+              // P0 (review 2026-05-21): 失败类终态补打 JOB_FAILURE_TOTAL + error_code,
+              // 否则 batch.orchestrator.job.failure.total 永久为 0,error_code 分桶报警失效。
+              if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
+                jobLifecycleMetrics.recordFailure(
+                    tenantId, jobType, resolveErrorCode(instance), dryRun);
+              }
             } catch (RuntimeException ex) {
               log.warn(
                   "record job lifecycle metrics failed after commit:"
@@ -81,6 +97,15 @@ public class JobLifecycleMetricsRecorder {
             }
           }
         });
+  }
+
+  /**
+   * 失败 error_code:优先 {@code failure_class}(ADR-012 故障分类),为空时回退 "unknown"。
+   * JobInstance 表无显式 error_code 列(error_code 在 job_task 粒度),用 failure_class 作为汇总粒度的错误码。
+   */
+  private String resolveErrorCode(JobInstanceEntity instance) {
+    String fc = instance.getFailureClass();
+    return fc == null || fc.isBlank() ? "unknown" : fc;
   }
 
   private String resolveJobType(JobInstanceEntity instance) {
