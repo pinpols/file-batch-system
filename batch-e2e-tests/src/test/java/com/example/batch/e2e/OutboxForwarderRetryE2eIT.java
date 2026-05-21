@@ -85,7 +85,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 
     await()
         .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofSeconds(5))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               E2eStatusLogger.logOutboxSnapshot(
@@ -128,7 +128,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 
     await()
         .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofSeconds(5))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               E2eStatusLogger.logOutboxSnapshot(

@@ -152,7 +152,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     // 避免 import worker 失败后新生成的同 traceId dead letter 干扰断言。
     await()
         .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofSeconds(2))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               e2eOutboxPublishSupport.publishAllPending(TENANT);

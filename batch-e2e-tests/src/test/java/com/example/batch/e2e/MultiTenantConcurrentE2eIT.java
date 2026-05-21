@@ -179,7 +179,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     await()
         .atMost(Duration.ofSeconds(120))
-        .pollInterval(Duration.ofSeconds(5))
+        .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
             () -> {
               E2eStatusLogger.logJobFlowSnapshot(
