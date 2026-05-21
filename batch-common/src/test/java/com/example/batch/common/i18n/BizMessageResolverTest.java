@@ -32,7 +32,7 @@ class BizMessageResolverTest {
   }
 
   @Test
-  void resolve_legacy_literal_passthrough() {
+  void resolveLegacyLiteralPassthrough() {
     // 老 (code, message) 构造器:messageKey=null,直接透出 message
     BizException ex = new BizException(ResultCode.INVALID_ARGUMENT, "动态错误信息:foo");
 
@@ -57,7 +57,7 @@ class BizMessageResolverTest {
   }
 
   @Test
-  void resolve_null_returns_null() {
+  void resolveNullReturnsNull() {
     assertThat(resolver.resolve((ResultCode) null)).isNull();
     assertThat(resolver.resolve((ResultCode) null, Locale.ENGLISH)).isNull();
   }

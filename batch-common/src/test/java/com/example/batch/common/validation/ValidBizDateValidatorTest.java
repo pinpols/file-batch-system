@@ -44,7 +44,7 @@ class ValidBizDateValidatorTest {
   }
 
   @Test
-  void allows_null_blank_by_design() {
+  void allowsNullBlankByDesign() {
     // 设计:校验只关心格式,是否必填交给 @NotBlank
     assertThat(v.isValid(null, null)).isTrue();
     assertThat(v.isValid("", null)).isTrue();
@@ -52,7 +52,7 @@ class ValidBizDateValidatorTest {
   }
 
   @Test
-  void trims_whitespace() {
+  void trimsWhitespace() {
     assertThat(v.isValid("  2026-05-20  ", null)).isTrue();
   }
 }

@@ -19,6 +19,8 @@ public interface OperationAuditMapper {
    * <p>**注意**:offset 大时性能差;UI 默认 pageSize=15,且 console_operation_audit 量级不会超 千万,常规分页够用。后续真有热查询场景再加
    * (action, created_at DESC) 复合索引并改 keyset pagination。
    */
+  // mapper 多条件分页查询参数列表必要,@Param 一一对应 mybatis xml #{xxx},不可包装成 Param 对象。
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   List<AuditRow> query(
       @Param("tenantId") String tenantId,
       @Param("aggregateType") String aggregateType,
@@ -33,6 +35,8 @@ public interface OperationAuditMapper {
       @Param("limit") int limit);
 
   /** 跟 query 同条件,只数总数。给 UI 算总页数用。 */
+  // 同 query 的参数集（共 9 个),用同一组 @Param 实现 count 查询,不可包装。
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   long count(
       @Param("tenantId") String tenantId,
       @Param("aggregateType") String aggregateType,

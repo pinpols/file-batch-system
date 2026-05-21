@@ -104,7 +104,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("trigger_request 不存在 → NOT_FOUND,且不打 REJECTED(尚未确认 request 存在)")
-  void rejects_when_trigger_request_missing() {
+  void rejectsWhenTriggerRequestMissing() {
     LaunchRequest req = validRequest();
     when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001"))).thenReturn(null);
 
@@ -128,7 +128,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("WORKFLOW 类型缺 workflow_definition → trigger_request 打 REJECTED + 抛 NOT_FOUND")
-  void rejects_when_workflow_type_missing_workflow_def() {
+  void rejectsWhenWorkflowTypeMissingWorkflowDef() {
     LaunchRequest req = validRequest();
     when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001")))
         .thenReturn(triggerRequestEntity());
@@ -143,7 +143,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("非 WORKFLOW 类型不要求 workflow_definition,合法 launch 返回 LaunchLoadResult")
-  void accepts_non_workflow_without_workflow_def() {
+  void acceptsNonWorkflowWithoutWorkflowDef() {
     LaunchRequest req = validRequest();
     TriggerRequestEntity trig = triggerRequestEntity();
     JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.GENERAL.code());
@@ -162,7 +162,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("WORKFLOW 类型 + workflow_definition 存在 → 正常返回")
-  void accepts_workflow_with_workflow_def() {
+  void acceptsWorkflowWithWorkflowDef() {
     LaunchRequest req = validRequest();
     TriggerRequestEntity trig = triggerRequestEntity();
     JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.WORKFLOW.code());

@@ -52,7 +52,7 @@ class LaunchApplicationServiceTest {
 
   @Test
   @DisplayName("限流失败 → 抛 429,LaunchService 不被调用")
-  void throws_429_when_rate_limited() {
+  void throws429WhenRateLimited() {
     LaunchRequest req = request("ta");
     when(rateLimiter.tryConsume(eq("ta"), eq(RateLimitAction.LAUNCH))).thenReturn(false);
 
@@ -66,7 +66,7 @@ class LaunchApplicationServiceTest {
 
   @Test
   @DisplayName("限流通过 → 透传到 LaunchService,返回其结果")
-  void delegates_to_launch_service_when_allowed() {
+  void delegatesToLaunchServiceWhenAllowed() {
     LaunchRequest req = request("ta");
     LaunchResponse expected = new LaunchResponse("inst-001", "trace");
     when(rateLimiter.tryConsume(eq("ta"), eq(RateLimitAction.LAUNCH))).thenReturn(true);
@@ -78,7 +78,7 @@ class LaunchApplicationServiceTest {
 
   @Test
   @DisplayName("限流 key 使用 request.tenantId(不漂移到其他租户)")
-  void rate_limits_by_request_tenant_id() {
+  void rateLimitsByRequestTenantId() {
     LaunchRequest req = request("tenant-X");
     when(rateLimiter.tryConsume(eq("tenant-X"), eq(RateLimitAction.LAUNCH))).thenReturn(false);
 

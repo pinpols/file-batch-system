@@ -87,7 +87,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("concurrency block → dispatchable=false, short-circuit (不再调 partition/worker)")
-  void concurrency_block_short_circuits() {
+  void concurrencyBlockShortCircuits() {
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT", "max running reached"));
 
@@ -100,7 +100,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("partition block → dispatchable=false, short-circuit (不再调 worker)")
-  void partition_block_short_circuits() {
+  void partitionBlockShortCircuits() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("PARTITION_THROTTLE", "throttled"));
@@ -113,7 +113,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("worker 不可用 → blocked + reasonCode=NO_AVAILABLE_WORKER")
-  void no_available_worker_blocks() {
+  void noAvailableWorkerBlocks() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(workerSelector.select(any(), any(), any())).thenReturn(null);
@@ -125,7 +125,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("worker.available=false → 同样 blocked")
-  void worker_unavailable_blocks() {
+  void workerUnavailableBlocks() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();
@@ -139,7 +139,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("全通过 → dispatchable=true + 决策字段齐全")
-  void all_pass_returns_dispatchable() {
+  void allPassReturnsDispatchable() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();
@@ -158,7 +158,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("blocker reasonCode 含 _DEGRADED 后缀 → 决策 priority 降到 1 / band=LOW (fairness 沉到队尾)")
-  void degraded_lowers_priority_to_minimum() {
+  void degradedLowersPriorityToMinimum() {
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT_DEGRADED", "degraded"));
 
@@ -170,7 +170,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("队列字段 windowCode 为空 → 跳过 batch window 检查,允许后续 pipeline")
-  void empty_window_code_skips_window_check() {
+  void emptyWindowCodeSkipsWindowCheck() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();

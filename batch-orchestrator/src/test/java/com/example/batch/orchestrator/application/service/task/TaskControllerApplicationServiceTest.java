@@ -54,7 +54,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: assignWorker 返 null → NOT_FOUND")
-  void claim_throws_not_found_when_assign_returns_null() {
+  void claimThrowsNotFoundWhenAssignReturnsNull() {
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(null);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimRequest("ta", "w1", "inv-1")))
@@ -64,7 +64,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: 状态非 RUNNING → CONFLICT,不返 config")
-  void claim_throws_conflict_when_not_running() {
+  void claimThrowsConflictWhenNotRunning() {
     JobTaskEntity task = task(TaskStatus.READY.code(), "w1");
     when(taskExecutionService.assignWorker(eq("ta"), eq(100L), eq("w1"))).thenReturn(task);
 
@@ -75,7 +75,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: workerId 不匹配 → CONFLICT")
-  void claim_throws_conflict_when_worker_mismatch() {
+  void claimThrowsConflictWhenWorkerMismatch() {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w-other");
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(task);
 
@@ -85,7 +85,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: 状态 RUNNING + workerId 匹配 → 返回 effective config")
-  void claim_succeeds_and_returns_config() {
+  void claimSucceedsAndReturnsConfig() {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w1");
     when(taskExecutionService.assignWorker(eq("ta"), eq(100L), eq("w1"))).thenReturn(task);
     when(taskExecutionService.loadEffectiveConfig(eq("ta"), eq(100L))).thenReturn(null);
@@ -99,7 +99,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=true → errorCode/message 强制 null,即使 DTO 里有")
-  void report_success_clears_error_fields() {
+  void reportSuccessClearsErrorFields() {
     TaskExecutionReportDto dto = new TaskExecutionReportDto();
     dto.setTenantId("ta");
     dto.setWorkerId("w1");
@@ -117,7 +117,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false + errorCode 优先于旧 code 字段")
-  void report_failure_uses_new_field_first() {
+  void reportFailureUsesNewFieldFirst() {
     TaskExecutionReportDto dto = new TaskExecutionReportDto();
     dto.setSuccess(false);
     dto.setErrorCode("NEW_ERR");
@@ -135,7 +135,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false + 仅旧 code 字段 → 回退到 code")
-  void report_failure_falls_back_to_old_field() {
+  void reportFailureFallsBackToOldField() {
     TaskExecutionReportDto dto = new TaskExecutionReportDto();
     dto.setSuccess(false);
     dto.setCode("OLD_ERR");
@@ -151,7 +151,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false 且都没填 → 降级 UNKNOWN")
-  void report_failure_falls_back_to_unknown() {
+  void reportFailureFallsBackToUnknown() {
     TaskExecutionReportDto dto = new TaskExecutionReportDto();
     dto.setSuccess(false);
 
@@ -165,7 +165,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false → verifierFailures 强制 null(失败路径不再带 verifier 信息)")
-  void report_failure_drops_verifier_failures() {
+  void reportFailureDropsVerifierFailures() {
     TaskExecutionReportDto dto = new TaskExecutionReportDto();
     dto.setSuccess(false);
     dto.setVerifierFailures(List.of());
@@ -181,7 +181,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renew: renewTaskLease 返 false → 抛 CONFLICT")
-  void renew_throws_when_lease_rejected() {
+  void renewThrowsWhenLeaseRejected() {
     when(taskExecutionService.renewTaskLease(anyString(), anyLong(), anyString(), any()))
         .thenReturn(false);
     assertThatThrownBy(() -> service.renew(100L, new TaskClaimRequest("ta", "w1", "inv-1")))
@@ -190,7 +190,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renew: 成功 → 不抛")
-  void renew_succeeds_silently() {
+  void renewSucceedsSilently() {
     when(taskExecutionService.renewTaskLease(eq("ta"), eq(100L), eq("w1"), eq("inv-1")))
         .thenReturn(true);
     service.renew(100L, new TaskClaimRequest("ta", "w1", "inv-1"));

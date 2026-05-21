@@ -15,9 +15,10 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护 DefaultWorkerRegistryService 关键不变量:
@@ -28,6 +29,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>updateStatus null/blank 兜底为 ONLINE
  * </ul>
  */
+@ExtendWith(MockitoExtension.class)
 class DefaultWorkerRegistryServiceTest {
 
   @Mock private WorkerRegistryClient client;
@@ -39,7 +41,6 @@ class DefaultWorkerRegistryServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     service = new DefaultWorkerRegistryService(client, dateTimeSupport);
   }
 

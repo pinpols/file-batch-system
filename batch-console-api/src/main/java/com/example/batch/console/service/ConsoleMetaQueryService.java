@@ -134,8 +134,7 @@ public class ConsoleMetaQueryService {
     if (module == null || module.isBlank()) {
       return stepRegistryQueryMapper.selectAllImplCodes();
     }
-    return stepRegistryQueryMapper.selectImplCodesByModule(
-        module.toUpperCase(java.util.Locale.ROOT));
+    return stepRegistryQueryMapper.selectImplCodesByModule(module.toUpperCase(Locale.ROOT));
   }
 
   @SuppressWarnings("unchecked")

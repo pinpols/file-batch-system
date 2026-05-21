@@ -4,16 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.BatchConsoleApiApplication;
-import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Duration;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
  * 写路径端到端集成测试:POST /api/console/quota-policies → batch.tenant_quota_policy。
@@ -24,21 +17,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
-class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractIntegrationTest {
-
-  @LocalServerPort private int port;
-  @Autowired private JdbcTemplate jdbcTemplate;
-
-  private WebTestClient client;
-
-  @BeforeEach
-  void setUp() {
-    client =
-        WebTestClient.bindToServer()
-            .baseUrl("http://localhost:" + port)
-            .responseTimeout(Duration.ofSeconds(60))
-            .build();
-  }
+class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code, int maxJobs) {
     return "{"

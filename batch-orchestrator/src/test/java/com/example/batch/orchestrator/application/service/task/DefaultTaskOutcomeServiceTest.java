@@ -110,7 +110,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunReady: 首次插入 → runSeq=1,状态 READY")
-  void ready_first_insert_sets_run_seq_1() {
+  void readyFirstInsertSetsRunSeq1() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
         .thenReturn(null);
 
@@ -124,7 +124,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunReady: 已有 runSeq=2 → 新 runSeq=3")
-  void ready_subsequent_inserts_increment_run_seq() {
+  void readySubsequentInsertsIncrementRunSeq() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setRunSeq(2);
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
@@ -137,7 +137,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunReady: 并发 insert 撞唯一约束 → 不抛错,返回已有记录")
-  void ready_handles_duplicate_key() {
+  void readyHandlesDuplicateKey() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
         .thenReturn(null) // nextRunSeq 读
         .thenReturn(existingRunSeq(5)); // catch block 重读
@@ -155,7 +155,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunStart: 首次插入 → 状态 RUNNING + startedAt 透传")
-  void start_first_insert_running_with_started_at() {
+  void startFirstInsertRunningWithStartedAt() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
         .thenReturn(null);
 
@@ -169,7 +169,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunStart: 并发 insert 撞唯一约束 → 返回已有记录,不抛")
-  void start_handles_duplicate_key() {
+  void startHandlesDuplicateKey() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(eq(10L), eq("n1")))
         .thenReturn(null)
         .thenReturn(existingRunSeq(2));
@@ -185,7 +185,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunStart: insert 的 entity 字段都齐(nodeCode/nodeType/runSeq)")
-  void start_persists_full_entity() {
+  void startPersistsFullEntity() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(anyLong(), any()))
         .thenReturn(null);
 

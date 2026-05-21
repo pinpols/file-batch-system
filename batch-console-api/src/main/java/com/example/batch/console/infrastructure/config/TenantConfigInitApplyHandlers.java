@@ -441,7 +441,7 @@ public class TenantConfigInitApplyHandlers {
       return;
     }
     // 批量插入: 把 N 次单行往返折成 1 次,租户初始化场景下减少 ~10x DB round trip + 事务时长。
-    List<Map<String, Object>> rows = new java.util.ArrayList<>(steps.size());
+    List<Map<String, Object>> rows = new ArrayList<>(steps.size());
     for (PipelineDefinitionSpec.StepSpec step : steps) {
       Map<String, Object> stepParams = new HashMap<>();
       stepParams.put("pipeline_definition_id", pipelineDefinitionId);

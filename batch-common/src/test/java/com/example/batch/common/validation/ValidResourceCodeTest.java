@@ -88,29 +88,29 @@ class ValidResourceCodeTest {
   }
 
   @Test
-  void rejects_null() {
+  void rejectsNull() {
     assertThat(violations(null)).isNotEmpty();
   }
 
   @Test
-  void rejects_empty() {
+  void rejectsEmpty() {
     assertThat(violations("")).isNotEmpty();
   }
 
   @Test
-  void rejects_blank() {
+  void rejectsBlank() {
     assertThat(violations("   ")).isNotEmpty();
   }
 
   @Test
-  void accepts_max128() {
+  void acceptsMax128() {
     String s = "a" + "0".repeat(127); // 128 字符
     assertThat(s).hasSize(128);
     assertThat(violations(s)).isEmpty();
   }
 
   @Test
-  void rejects_over128() {
+  void rejectsOver128() {
     String s = "a" + "0".repeat(128); // 129 字符
     assertThat(s).hasSize(129);
     assertThat(violations(s)).isNotEmpty();

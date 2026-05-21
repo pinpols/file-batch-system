@@ -841,6 +841,9 @@ public class ConfigPackageExcelValidator {
     }
   }
 
+  // Excel 跨表 cross-reference 校验需要并列接收所有 sheet 的合法行集合 + ctx,
+  // 拆 Param 对象会让调用点失去类型安全（Excel 行是 Map<String,String>）；抑制 PMD。
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   private List<WorkbookIssue> validateCrossReferences(
       String tenantId,
       List<Map<String, String>> validResourceQueues,
@@ -978,6 +981,9 @@ public class ConfigPackageExcelValidator {
 
   private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.([A-Za-z0-9_]+)\\.");
 
+  // workflow graph 校验是一个完整 transaction:索引节点 -> 邻接表 -> 环/可达/终止 一气呵成,
+  // 拆方法会让中间状态(byCode/incoming/outgoing/startCodes/endCodes)散落到字段,牺牲可读性。
+  @SuppressWarnings("PMD.NcssCount")
   private void validateWorkflowGraph(WfGraphCtx g, List<WorkbookIssue> issues) {
     // 索引:nodeCode -> row(取首个,duplicate 已在 validateWfNodeRow 报过)
     Map<String, Map<String, String>> byCode = new LinkedHashMap<>();

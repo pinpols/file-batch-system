@@ -121,7 +121,8 @@ CI `pr-gate` 拦截漂移。
 | 测试框架 | **JUnit5**(`org.junit.jupiter.api.*`),**禁** JUnit4 |
 | 断言库 | **AssertJ** `assertThat`(静态 import),**禁** Hamcrest / `assertEquals`(legacy 文件除外) |
 | Mock 框架 | **Mockito**,**禁** EasyMock / PowerMock |
-| Mock 初始化 | 新单测一律 `@ExtendWith(MockitoExtension.class)` + `@Mock`(声明式);**避免** `MockitoAnnotations.openMocks(this)` 命令式(老代码不强制改) |
+| Mock 初始化 | 新单测一律 `@ExtendWith(MockitoExtension.class)` + `@Mock` + `@InjectMocks`(声明式);**禁** `MockitoAnnotations.openMocks(this)` 命令式与 `private Foo foo = Mockito.mock(Foo.class)` 字段直 mock(改动旧代码时顺带迁) |
+| Mock strictness | 默认 strict(MockitoExtension 自带),**禁** `@MockitoSettings(strictness = Strictness.LENIENT)` 当模板拷贝带入;只有跨方法共享 stub 且部分方法不触发的场景才允许,需注释说明 |
 | 类命名 | 单测 `XxxTest`,集成测 `XxxIT`(Maven failsafe 区分),**禁** `XxxTests` / `XxxSpec` |
 | 方法命名 | **首选** `shouldDoX_whenY()`,**接受** `xxx_when_yyy()` 下划线风格(老代码 ~48%),**禁** `testXxx` / `test1` |
 | `@DisplayName` | 业务复杂或方法名表达不清时**强烈推荐**中文 `@DisplayName`(参考 `SoftDeleteRecoveryIntegrationTest`);简单字段校验可省 |

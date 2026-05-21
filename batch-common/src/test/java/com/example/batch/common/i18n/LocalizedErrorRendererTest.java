@@ -19,7 +19,7 @@ class LocalizedErrorRendererTest {
       new LocalizedErrorRenderer(messageSource, objectMapper);
 
   @Test
-  void render_with_key_and_args_resolves_per_locale() {
+  void renderWithKeyAndArgsResolvesPerLocale() {
     String rendered =
         renderer.render(
             "error.tenant.already_exists",
@@ -31,7 +31,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void render_with_key_resolves_english() {
+  void renderWithKeyResolvesEnglish() {
     String rendered =
         renderer.render("error.tenant.already_exists", "[\"acme\"]", "fallback", Locale.ENGLISH);
 
@@ -39,14 +39,14 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void render_without_key_returns_fallback() {
+  void renderWithoutKeyReturnsFallback() {
     String rendered = renderer.render(null, null, "literal message", Locale.ENGLISH);
 
     assertThat(rendered).isEqualTo("literal message");
   }
 
   @Test
-  void render_with_unknown_key_falls_back_to_message() {
+  void renderWithUnknownKeyFallsBackToMessage() {
     String rendered =
         renderer.render("error.does.not.exist", "[\"x\"]", "fallback message", Locale.ENGLISH);
 
@@ -54,7 +54,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void biz_exception_utils_extracts_key_and_args() {
+  void bizExceptionUtilsExtractsKeyAndArgs() {
     BizException ex = BizException.of(ResultCode.NOT_FOUND, "error.tenant.already_exists", "acme");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -65,7 +65,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void biz_exception_utils_handles_legacy_literal() {
+  void bizExceptionUtilsHandlesLegacyLiteral() {
     BizException ex = new BizException(ResultCode.SYSTEM_ERROR, "db connection refused");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -76,7 +76,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void biz_exception_utils_handles_third_party_throwable() {
+  void bizExceptionUtilsHandlesThirdPartyThrowable() {
     RuntimeException ex = new RuntimeException("kafka producer failed");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -87,7 +87,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void biz_exception_utils_round_trip() {
+  void bizExceptionUtilsRoundTrip() {
     BizException ex = BizException.of(ResultCode.NOT_FOUND, "error.workflow.not_found", "wf-42");
     LocalizedError stored = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
 
@@ -100,7 +100,7 @@ class LocalizedErrorRendererTest {
 
   /** P1-1：render 不应在 args 与占位符不匹配时把 IllegalArgumentException 透传到上层。 */
   @Test
-  void render_with_corrupt_args_falls_back_instead_of_throwing() {
+  void renderWithCorruptArgsFallsBackInsteadOfThrowing() {
     // error.tenant.already_exists 模板含 {0}，但 errorArgsJson 损坏 → parseArgs 返回空数组 →
     // MessageFormat 尝试替换 {0} 时抛 IllegalArgumentException；renderer 应 fallback
     String rendered =
@@ -116,7 +116,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void render_swallows_runtime_exception_and_falls_back() {
+  void renderSwallowsRuntimeExceptionAndFallsBack() {
     // 守护"render 任何 RuntimeException 都 fallback"的契约：注入一个永远抛 IAE 的 messageSource，
     // 模拟 args 与占位符不匹配 / args 类型异常等渲染失败场景
     org.springframework.context.MessageSource faulty =
@@ -136,7 +136,7 @@ class LocalizedErrorRendererTest {
 
   /** P1-2：写入路径 truncate error_message 防 VARCHAR(1024) 超长。 */
   @Test
-  void biz_exception_utils_truncates_long_rendered_message() {
+  void bizExceptionUtilsTruncatesLongRenderedMessage() {
     String longText = "x".repeat(2000);
     BizException ex = new BizException(ResultCode.SYSTEM_ERROR, longText);
 
@@ -147,7 +147,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void biz_exception_utils_short_message_is_unchanged() {
+  void bizExceptionUtilsShortMessageIsUnchanged() {
     BizException ex = new BizException(ResultCode.SYSTEM_ERROR, "short message");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -156,7 +156,7 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void biz_exception_utils_truncates_third_party_throwable_message() {
+  void bizExceptionUtilsTruncatesThirdPartyThrowableMessage() {
     RuntimeException ex = new RuntimeException("y".repeat(3000));
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -166,7 +166,7 @@ class LocalizedErrorRendererTest {
 
   /** P3：args 含复杂对象不阻塞落库（仅 log.warn）；JSON 序列化仍能完成。 */
   @Test
-  void biz_exception_utils_accepts_complex_args_without_throwing() {
+  void bizExceptionUtilsAcceptsComplexArgsWithoutThrowing() {
     BizException ex =
         BizException.of(
             ResultCode.NOT_FOUND,

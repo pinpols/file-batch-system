@@ -102,8 +102,7 @@ public class WaitingPartitionDispatchScheduler {
       // 字段，无法按 tenant 过滤。每个 per-tenant 迭代用 BatchMdc.withTenantAndTrace 套一层。
       // partition 持有 tenantId；jobInstance.traceId 此处暂未取，传 null（BatchMdc 会跳过空值）。
       String tenantTag = partition == null ? null : partition.getTenantId();
-      com.example.batch.common.logging.BatchMdc.put(
-          com.example.batch.common.logging.StructuredLogField.TENANT_ID, tenantTag);
+      BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
       try {
         candidate = buildCandidate(partition);
       } catch (RuntimeException exception) {
@@ -122,8 +121,7 @@ public class WaitingPartitionDispatchScheduler {
         candidates.add(candidate);
       }
       // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick
-      com.example.batch.common.logging.BatchMdc.remove(
-          com.example.batch.common.logging.StructuredLogField.TENANT_ID);
+      BatchMdc.remove(StructuredLogField.TENANT_ID);
     }
     Comparator<WaitingDispatchCandidate> comparator =
         Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore)

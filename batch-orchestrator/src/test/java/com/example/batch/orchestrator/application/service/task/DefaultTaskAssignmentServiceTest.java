@@ -29,8 +29,9 @@ import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护 worker 认领 / 续租关键路径:
@@ -43,6 +44,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>updateTaskStatus: 不存在返 null
  * </ul>
  */
+@ExtendWith(MockitoExtension.class)
 class DefaultTaskAssignmentServiceTest {
 
   @Mock private JobTaskMapper jobTaskMapper;
@@ -59,7 +61,6 @@ class DefaultTaskAssignmentServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     service =
         new DefaultTaskAssignmentService(
             jobTaskMapper,
@@ -77,7 +78,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: task 不存在 → null,不读 worker / 不调 CAS")
-  void assign_task_missing_returns_null() {
+  void assignTaskMissingReturnsNull() {
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(null);
 
     assertThat(service.assignWorker("ta", 100L, "w1")).isNull();
@@ -87,7 +88,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: workerCode 为空 → 返 current,不读 worker")
-  void assign_blank_workercode_returns_current_unchanged() {
+  void assignBlankWorkercodeReturnsCurrentUnchanged() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
 
@@ -98,7 +99,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: worker 不在线 → 返 current,不 CAS")
-  void assign_worker_offline_returns_current() {
+  void assignWorkerOfflineReturnsCurrent() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
     when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
@@ -111,7 +112,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: worker DRAINING → 返 current,不 CAS")
-  void assign_worker_draining_returns_current() {
+  void assignWorkerDrainingReturnsCurrent() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
     when(workerRegistryMapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
@@ -123,7 +124,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: workerGroup 与 partition group 不匹配 → 返 current")
-  void assign_worker_group_mismatch_returns_current() {
+  void assignWorkerGroupMismatchReturnsCurrent() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     task.setJobPartitionId(50L);
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(task);
@@ -140,7 +141,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: CAS 失败 → 重读 DB 返回最新状态")
-  void assign_cas_conflict_returns_refreshed() {
+  void assignCasConflictReturnsRefreshed() {
     JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
     JobTaskEntity refreshed = task(100L, 2L, TaskStatus.RUNNING.code());
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(initial, refreshed);
@@ -156,14 +157,14 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: task 不存在 → false")
-  void renew_task_missing() {
+  void renewTaskMissing() {
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(null);
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
   }
 
   @Test
   @DisplayName("renewTaskLease: task 无 partition → false")
-  void renew_task_without_partition() {
+  void renewTaskWithoutPartition() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(null);
     when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
@@ -172,7 +173,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: task 非 RUNNING → false")
-  void renew_task_not_running() {
+  void renewTaskNotRunning() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.READY.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -182,7 +183,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: workerCode 不匹配 → false(防止跨 worker 续他人租)")
-  void renew_worker_mismatch() {
+  void renewWorkerMismatch() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w-other");
@@ -192,7 +193,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: invocationId 缺失 → false(R3-P1-10)")
-  void renew_missing_invocation() {
+  void renewMissingInvocation() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -205,7 +206,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: 全部前置通过 + mapper 命中 → true")
-  void renew_succeeds_when_all_checks_pass() {
+  void renewSucceedsWhenAllChecksPass() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -217,7 +218,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: mapper 返 0(并发被抢走)→ false")
-  void renew_returns_false_when_mapper_miss() {
+  void renewReturnsFalseWhenMapperMiss() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -231,7 +232,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("updateTaskStatus: task 不存在 → null,不写表")
-  void update_task_missing() {
+  void updateTaskMissing() {
     when(jobTaskMapper.selectById(eq("ta"), anyLong())).thenReturn(null);
 
     assertThat(service.updateTaskStatus("ta", 100L, TaskStatus.SUCCESS.code(), null, null))

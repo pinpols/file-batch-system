@@ -37,6 +37,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 /** S3 Stage 2: TriggerOutboxRelay 单测,覆盖空批 / 成功 / 失败 / 反序列化错误 / 已被抢占 5 类路径 + 退避函数。 */
+// LENIENT 保留:setUp() 预置了 resetStalePublishing / countByStatuses / countStalePublishing /
+// executeWithLock 的共享 stub,但 backoffSeconds 等纯静态用例完全不会触达这些 mock,
+// 严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TriggerOutboxRelayTest {

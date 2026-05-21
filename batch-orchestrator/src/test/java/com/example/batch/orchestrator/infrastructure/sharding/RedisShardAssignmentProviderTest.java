@@ -31,14 +31,14 @@ class RedisShardAssignmentProviderTest {
   }
 
   @Test
-  void heartbeat_writes_score_with_member_id() {
+  void heartbeatWritesScoreWithMemberId() {
     RedisShardAssignmentProvider p = provider("orch-0");
     p.heartbeat();
     verify(zset).add(eq("batch:orchestrator:members"), eq("orch-0"), anyDouble());
   }
 
   @Test
-  void current_with_three_members_returns_correct_index() {
+  void currentWithThreeMembersReturnsCorrectIndex() {
     RedisShardAssignmentProvider p = provider("orch-1");
     // 返回 3 个 member，字典序 orch-0 / orch-1 / orch-2
     Set<TypedTuple<String>> tuples = new LinkedHashSet<>();
@@ -54,7 +54,7 @@ class RedisShardAssignmentProviderTest {
   }
 
   @Test
-  void current_single_member_returns_single() {
+  void currentSingleMemberReturnsSingle() {
     RedisShardAssignmentProvider p = provider("orch-0");
     Set<TypedTuple<String>> tuples = new LinkedHashSet<>();
     tuples.add(new DefaultTypedTuple<>("orch-0", 1.0));
@@ -67,7 +67,7 @@ class RedisShardAssignmentProviderTest {
   }
 
   @Test
-  void current_empty_members_returns_single() {
+  void currentEmptyMembersReturnsSingle() {
     RedisShardAssignmentProvider p = provider("orch-0");
     when(zset.rangeWithScores(anyString(), eq(0L), eq(-1L))).thenReturn(Set.of());
 
@@ -77,7 +77,7 @@ class RedisShardAssignmentProviderTest {
   }
 
   @Test
-  void current_self_not_in_members_returns_single() {
+  void currentSelfNotInMembersReturnsSingle() {
     RedisShardAssignmentProvider p = provider("orch-missing");
     Set<TypedTuple<String>> tuples = new LinkedHashSet<>();
     tuples.add(new DefaultTypedTuple<>("orch-0", 1.0));
@@ -91,7 +91,7 @@ class RedisShardAssignmentProviderTest {
   }
 
   @Test
-  void current_redis_exception_returns_last_known() {
+  void currentRedisExceptionReturnsLastKnown() {
     RedisShardAssignmentProvider p = provider("orch-0");
     // 先成功一次
     Set<TypedTuple<String>> ok = new LinkedHashSet<>();
@@ -112,7 +112,7 @@ class RedisShardAssignmentProviderTest {
   }
 
   @Test
-  void current_cleans_stale_members_before_read() {
+  void currentCleansStaleMembersBeforeRead() {
     RedisShardAssignmentProvider p = provider("orch-0");
     Set<TypedTuple<String>> tuples = new LinkedHashSet<>();
     tuples.add(new DefaultTypedTuple<>("orch-0", 1.0));

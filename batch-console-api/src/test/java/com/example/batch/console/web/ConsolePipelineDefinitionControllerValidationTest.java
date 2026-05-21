@@ -144,7 +144,7 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
-  void accepts_valid_request_with_nested_steps() throws Exception {
+  void acceptsValidRequestWithNestedSteps() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     String body =
         "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","

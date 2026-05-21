@@ -61,7 +61,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Test
   @DisplayName("CAS 成功(rows=1) → 触发 reconcile,返 1")
-  void reconciles_on_cas_hit() {
+  void reconcilesOnCasHit() {
     when(jobInstanceMapper.updateStatus(anyString(), anyLong(), anyString(), any(), anyLong()))
         .thenReturn(1);
     JobInstanceEntity instance = new JobInstanceEntity();
@@ -91,7 +91,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Test
   @DisplayName("CAS miss(rows=0) → 不触发 reconcile,返 0(避免抹掉并发结果)")
-  void skips_reconcile_on_cas_miss() {
+  void skipsReconcileOnCasMiss() {
     when(jobInstanceMapper.updateStatus(anyString(), anyLong(), anyString(), any(), anyLong()))
         .thenReturn(0);
 
@@ -106,7 +106,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Test
   @DisplayName("CAS 成功对 PARTIAL_FAILED / TERMINATED / CANCELLED 等所有终态都触发 reconcile")
-  void reconciles_for_all_terminal_statuses() {
+  void reconcilesForAllTerminalStatuses() {
     when(jobInstanceMapper.updateStatus(anyString(), anyLong(), anyString(), any(), anyLong()))
         .thenReturn(1);
 

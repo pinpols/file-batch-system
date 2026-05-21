@@ -98,7 +98,7 @@ public class ConsoleSecurityProperties {
    */
   private LoginEncryption loginEncryption = new LoginEncryption();
 
-  @lombok.Data
+  @Data
   public static class LoginEncryption {
     /** 总开关。false = /auth/public-key endpoint 不暴露,仅明文路径。 */
     private boolean enabled = true;

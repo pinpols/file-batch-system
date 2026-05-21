@@ -61,6 +61,7 @@ public class WorkflowGraphValidator {
   private static final TypeReference<List<CrossDayDependencySpec>> SPEC_LIST_TYPE =
       new TypeReference<>() {};
   private static final int MAX_RANGE_DAYS = 90;
+  private static final String V16C = "V16-c";
 
   /**
    * ADR-009 §Worker 暴露的 output key（按业务领域）— 内置 contract，避免依赖 worker SPI 上报。
@@ -557,7 +558,7 @@ public class WorkflowGraphValidator {
 
     Object spec = params.get("sensor_spec");
     if (!(spec instanceof Map)) {
-      errors.add(issue("V16-c", "WAIT sensor_spec missing or not an object", node.getNodeCode()));
+      errors.add(issue(V16C, "WAIT sensor_spec missing or not an object", node.getNodeCode()));
     } else {
       validateSensorSpecByType(sensorType, (Map<String, Object>) spec, node.getNodeCode(), errors);
     }
@@ -599,38 +600,38 @@ public class WorkflowGraphValidator {
     switch (sensorType) {
       case "FILE_ARRIVAL" -> {
         if (!Texts.hasText(asString(spec.get("pattern")))) {
-          errors.add(issue("V16-c", "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
+          errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
         }
         Long age = asLong(spec.get("maxAgeSeconds"));
         if (age == null || age <= 0) {
-          errors.add(issue("V16-c", "FILE_ARRIVAL sensor_spec.maxAgeSeconds required", nodeCode));
+          errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.maxAgeSeconds required", nodeCode));
         }
       }
       case "HTTP_POLL" -> {
         if (!Texts.hasText(asString(spec.get("url")))) {
-          errors.add(issue("V16-c", "HTTP_POLL sensor_spec.url required", nodeCode));
+          errors.add(issue(V16C, "HTTP_POLL sensor_spec.url required", nodeCode));
         }
         if (!Texts.hasText(asString(spec.get("matchExpr")))) {
-          errors.add(issue("V16-c", "HTTP_POLL sensor_spec.matchExpr required", nodeCode));
+          errors.add(issue(V16C, "HTTP_POLL sensor_spec.matchExpr required", nodeCode));
         }
       }
       case "KAFKA_OFFSET" -> {
         if (!Texts.hasText(asString(spec.get("topic")))) {
-          errors.add(issue("V16-c", "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
+          errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
         }
         if (asLong(spec.get("partition")) == null) {
-          errors.add(issue("V16-c", "KAFKA_OFFSET sensor_spec.partition required", nodeCode));
+          errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.partition required", nodeCode));
         }
         if (asLong(spec.get("minOffset")) == null) {
-          errors.add(issue("V16-c", "KAFKA_OFFSET sensor_spec.minOffset required", nodeCode));
+          errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.minOffset required", nodeCode));
         }
       }
       case "DB_ROW_EXISTS" -> {
         if (!Texts.hasText(asString(spec.get("schema")))) {
-          errors.add(issue("V16-c", "DB_ROW_EXISTS sensor_spec.schema required", nodeCode));
+          errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.schema required", nodeCode));
         }
         if (!Texts.hasText(asString(spec.get("sql")))) {
-          errors.add(issue("V16-c", "DB_ROW_EXISTS sensor_spec.sql required", nodeCode));
+          errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.sql required", nodeCode));
         }
       }
       default -> {
