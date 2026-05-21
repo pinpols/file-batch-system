@@ -20,6 +20,7 @@ public class AlertRoutingSaveRequest {
   @Size(max = 64)
   private String team;
 
+  @NotBlank
   @Size(max = 64)
   private String alertGroup;
 
