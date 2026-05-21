@@ -112,6 +112,26 @@ CI `pr-gate` 拦截漂移。
 - **禁** `ZoneId.systemDefault()`(用 `BatchTimezoneProvider`)
 - **禁** `Charset.forName("UTF-8")` / 字面量(用 `StandardCharsets.UTF_8`)
 
+## 测试约定
+
+454 单测 + 23 IT,框架层已统一(JUnit5 100% / AssertJ 主流 / Mockito 独占)。新代码按以下约定:
+
+| 维度 | 约定 |
+|---|---|
+| 测试框架 | **JUnit5**(`org.junit.jupiter.api.*`),**禁** JUnit4 |
+| 断言库 | **AssertJ** `assertThat`(静态 import),**禁** Hamcrest / `assertEquals`(legacy 文件除外) |
+| Mock 框架 | **Mockito**,**禁** EasyMock / PowerMock |
+| Mock 初始化 | 新单测一律 `@ExtendWith(MockitoExtension.class)` + `@Mock`(声明式);**避免** `MockitoAnnotations.openMocks(this)` 命令式(老代码不强制改) |
+| 类命名 | 单测 `XxxTest`,集成测 `XxxIT`(Maven failsafe 区分),**禁** `XxxTests` / `XxxSpec` |
+| 方法命名 | **首选** `shouldDoX_whenY()`,**接受** `xxx_when_yyy()` 下划线风格(老代码 ~48%),**禁** `testXxx` / `test1` |
+| `@DisplayName` | 业务复杂或方法名表达不清时**强烈推荐**中文 `@DisplayName`(参考 `SoftDeleteRecoveryIntegrationTest`);简单字段校验可省 |
+| `@Nested` | Controller / Service 测试 ≥ 15 方法时**建议**用 `@Nested` 分组(目前 0 使用,新模块可示范) |
+| Spring 集成测 | **必须** `extends AbstractIntegrationTest`(`batch-common/src/test/.../testing`)复用 Testcontainers PG/Kafka/Redis/MinIO,**禁** 各自 `@Testcontainers @SpringBootTest` |
+| AAA 注释 | 业务逻辑 > 3 行的测试**建议** `// arrange / // act / // assert` 三行注释(目前 0 使用,新代码示范) |
+| Builder / Fixture | 重复构造的 entity / command 抽 `XxxTestBuilder` 静态工厂或 `@Builder` 私有 record(参考 `JobInstanceTerminalStatusCommand` 测试) |
+
+完整测试基础设施(`AbstractIntegrationTest` / `@BatchIntegrationTest` / Testcontainers 端口选择 / Flyway schemas)见 `batch-common/src/test/java/com/example/batch/testing/`。
+
 ## ADR 与范围纪律
 
 系统定位:**批量运行控制面 + 文件 / 任务交付闭环**。**不扩张**为企业数据治理 / 容器资源编排 / 合规审计平台。

@@ -7,6 +7,7 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-05-21
+- **CLAUDE.md §测试约定 新增**:扫 454 单测 + 23 IT(最近 3 天 diff)归纳已成事实的统一项 + 新代码标准:JUnit5 + AssertJ + Mockito 三件套已 100% 统一(无 JUnit4 / Hamcrest / EasyMock 混入);新单测一律 `@ExtendWith(MockitoExtension.class)` 声明式 mock 初始化(避免命令式 `openMocks`);方法命名首选 `shouldX_whenY()`,接受现存 `xxx_when_yyy()` 下划线风格;集成测必须 `extends AbstractIntegrationTest` 复用 Testcontainers base;`@DisplayName` / `@Nested` / AAA 注释推荐但不强制。**不做大规模 rename**(跟平行会话冲突风险高),只锁约定止血。
 - **`docs/coding-conventions.md` §1 新增子节 1.1「调用方约束(inline build 提取)」**:CLAUDE.md §Java 编码细则 #2「方法参数 ≤ 6」长期只覆盖签名,调用现场 `f(X.builder().a()...build())` 长链让"参数臃肿从签名搬到调用处"的隐患由 `PositionalArgsConventionTest` 拦白名单 51 个类型,但 return 位置和非白名单类型一直靠 review 隐性把关。本次沉淀判定线为 chain 长度表(≤3 单行禁提取 / 4-6 单行 fluent 禁提取 / 7-9 看场景 / ≥10 必须提取),并明确豁免(SDK args / 短工厂方法 / 声明式注册 / test fixture)。配套治理基线落 commit `76582aef`(11 处 return chain≥10)。守护边界:`PositionalArgsConventionTest` 不变(继续只拦白名单方法实参 inline build),return 位置因每项目语义不同,靠 review 按判定线手工把关。
 
 ### 2026-05-20
