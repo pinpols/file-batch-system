@@ -165,6 +165,7 @@ public class AuditFieldsInterceptor implements Interceptor {
         f.set(entity, value);
       }
     } catch (IllegalAccessException ignore) {
+      // setAccessible(true) 已设置；走到这里说明 SecurityManager 拒绝,静默跳过保证 SQL 仍能走
     }
   }
 
@@ -175,6 +176,7 @@ public class AuditFieldsInterceptor implements Interceptor {
     try {
       f.set(entity, value);
     } catch (IllegalAccessException ignore) {
+      // setAccessible(true) 已设置；走到这里说明 SecurityManager 拒绝,静默跳过保证 SQL 仍能走
     }
   }
 }
