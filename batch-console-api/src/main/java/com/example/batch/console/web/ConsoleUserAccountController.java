@@ -22,11 +22,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 控制台账号管理 REST 端点（仅平台管理员）。 */
+/**
+ * 控制台账号管理 REST 端点。
+ *
+ * <p>2026-05 角色重设计:类级粗筛允许 ADMIN + TENANT_ADMIN; {@link
+ * com.example.batch.console.service.ConsoleUserAccountService} 在 Service 层强制注入 tenantId / 拒绝越权 /
+ * 拒绝授 ADMIN-AUDITOR 等管控,粗筛只是把无关角色挡在门外。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/users")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleUserAccountController {

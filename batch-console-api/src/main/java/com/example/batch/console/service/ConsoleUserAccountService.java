@@ -25,6 +25,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleUserAccountService {
 
+  private static final String COL_TENANT_ID = "tenant_id";
+  private static final String COL_USERNAME = "username";
+
   /**
    * TENANT_ADMIN 仅可授予的角色集合。授予 ADMIN / AUDITOR / 任何未列出的角色 一律 {@link ResultCode#FORBIDDEN};升 ADMIN
    * 必须由 ADMIN 操作。
@@ -48,7 +51,7 @@ public class ConsoleUserAccountService {
 
   public ConsoleUserAccountResponse get(long id) {
     Map<String, Object> row = assertExists(id);
-    assertSameTenantOrGlobal(str(row, "tenant_id"));
+    assertSameTenantOrGlobal(str(row, COL_TENANT_ID));
     return toResponse(row);
   }
 
@@ -88,7 +91,7 @@ public class ConsoleUserAccountService {
 
   public ConsoleUserAccountResponse update(long id, String displayName, String authoritiesCsv) {
     Map<String, Object> row = assertExists(id);
-    assertSameTenantOrGlobal(str(row, "tenant_id"));
+    assertSameTenantOrGlobal(str(row, COL_TENANT_ID));
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
     userAccountMapper.updateProfile(id, displayName, normalizedAuthorities);
@@ -97,23 +100,23 @@ public class ConsoleUserAccountService {
 
   public void resetPassword(long id, String newPassword) {
     Map<String, Object> account = assertExists(id);
-    assertSameTenantOrGlobal(str(account, "tenant_id"));
+    assertSameTenantOrGlobal(str(account, COL_TENANT_ID));
     userAccountMapper.updatePasswordHash(id, passwordHasher.encode(newPassword));
-    sessionRegistry.invalidateSession(str(account, "username"), str(account, "tenant_id"));
+    sessionRegistry.invalidateSession(str(account, COL_USERNAME), str(account, COL_TENANT_ID));
   }
 
   public ConsoleUserAccountResponse enable(long id) {
     Map<String, Object> row = assertExists(id);
-    assertSameTenantOrGlobal(str(row, "tenant_id"));
+    assertSameTenantOrGlobal(str(row, COL_TENANT_ID));
     userAccountMapper.updateEnabled(id, true);
     return toResponse(userAccountMapper.selectById(id));
   }
 
   public ConsoleUserAccountResponse disable(long id) {
     Map<String, Object> account = assertExists(id);
-    assertSameTenantOrGlobal(str(account, "tenant_id"));
+    assertSameTenantOrGlobal(str(account, COL_TENANT_ID));
     userAccountMapper.updateEnabled(id, false);
-    sessionRegistry.invalidateSession(str(account, "username"), str(account, "tenant_id"));
+    sessionRegistry.invalidateSession(str(account, COL_USERNAME), str(account, COL_TENANT_ID));
     return toResponse(userAccountMapper.selectById(id));
   }
 
@@ -176,8 +179,8 @@ public class ConsoleUserAccountService {
   private ConsoleUserAccountResponse toResponse(Map<String, Object> row) {
     return new ConsoleUserAccountResponse(
         row.get("id") instanceof Number n ? n.longValue() : null,
-        str(row, "tenant_id"),
-        str(row, "username"),
+        str(row, COL_TENANT_ID),
+        str(row, COL_USERNAME),
         str(row, "display_name"),
         str(row, "authorities_csv"),
         Boolean.TRUE.equals(row.get("enabled")),
