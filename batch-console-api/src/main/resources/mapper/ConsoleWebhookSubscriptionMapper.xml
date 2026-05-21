@@ -48,12 +48,24 @@
          where tenant_id = #{tenantId} and enabled = true and is_deleted = false
     </select>
 
+    <!--
+        upsert 语义: 同 name 撞 UNIQUE 时复活软删行(V146 软删 + 复活约定)。
+        纯 INSERT 在软删后 recreate 会撞 UNIQUE, 改 ON CONFLICT 自动覆盖 + is_deleted=false。
+    -->
     <insert id="insert">
         insert into batch.webhook_subscription (
             tenant_id, name, callback_url, event_types, secret, enabled, created_by, updated_by
         ) values (
             #{tenantId}, #{name}, #{callbackUrl}, #{eventTypes}, #{secret}, #{enabled}, #{operator}, #{operator}
         )
+        on conflict (tenant_id, name) do update set
+            callback_url = excluded.callback_url,
+            event_types = excluded.event_types,
+            secret = excluded.secret,
+            enabled = excluded.enabled,
+            updated_by = excluded.updated_by,
+            is_deleted = false,
+            updated_at = current_timestamp
     </insert>
 
     <update id="update">

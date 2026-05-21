@@ -35,7 +35,9 @@
             #{payload,jdbcType=VARCHAR}::jsonb,
             <choose>
                 <when test="publishStatus != null">#{publishStatus}</when>
-                <otherwise>'PENDING'</otherwise>
+                <!-- V80 CHECK 只允许 NEW/PUBLISHING/PUBLISHED/FAILED/GIVE_UP;之前默认 'PENDING' 是
+                     无效枚举,任何漏传调用方都会撞 ck_trigger_outbox_status。改 NEW。 -->
+                <otherwise>'NEW'</otherwise>
             </choose>,
             #{publishAttempt},
             #{traceId},

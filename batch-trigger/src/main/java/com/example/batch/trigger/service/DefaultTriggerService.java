@@ -3,11 +3,9 @@ package com.example.batch.trigger.service;
 import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
-import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.CodeNormalizer;
@@ -17,9 +15,9 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import com.example.batch.trigger.event.TriggerOutboxDomainEventPublisher;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TenantStatusMapper;
-import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import com.example.batch.trigger.support.CalendarHolidayRule;
@@ -64,7 +62,7 @@ public class DefaultTriggerService implements TriggerService {
 
   private final LaunchAdapterService launchAdapterService;
   private final TriggerRequestMapper triggerRequestMapper;
-  private final TriggerOutboxEventMapper triggerOutboxEventMapper;
+  private final TriggerOutboxDomainEventPublisher triggerOutboxPublisher;
   private final BusinessCalendarMapper businessCalendarMapper;
   private final TenantStatusMapper tenantStatusMapper;
   private final PlatformTransactionManager transactionManager;
@@ -170,7 +168,7 @@ public class DefaultTriggerService implements TriggerService {
                   Texts.hasText(pendingRequest.getDedupKey())
                       ? pendingRequest.getDedupKey()
                       : pendingRequest.getRequestId();
-              triggerOutboxEventMapper.insert(buildOutboxEntity(launchRequest, dedupKey));
+              publishLaunchOutbox(launchRequest, dedupKey);
               // 同事务推进到 LAUNCHED — outbox 保证 at-least-once 投递；
               // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再卡死。
               triggerRequestMapper.updateRequestStatus(
@@ -208,24 +206,22 @@ public class DefaultTriggerService implements TriggerService {
             return null;
           }
           triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
-          triggerOutboxEventMapper.insert(buildOutboxEntity(launchRequest, dedupKey));
+          publishLaunchOutbox(launchRequest, dedupKey);
           return null;
         });
     return existingHolder[0];
   }
 
-  private TriggerOutboxEventEntity buildOutboxEntity(LaunchRequest r, String dedupKey) {
-    TriggerOutboxEventEntity entity = new TriggerOutboxEventEntity();
-    entity.setTenantId(r.tenantId());
-    entity.setRequestId(r.requestId());
-    entity.setTopic("batch.trigger.launch.v1");
-    entity.setPayload(
-        JsonUtils.toJson(LaunchEnvelope.of(r, dedupKey, BatchDateTimeSupport.utcNow())));
-    entity.setPublishStatus(OutboxPublishStatus.NEW.code());
-    entity.setPublishAttempt(0);
-    entity.setTraceId(r.traceId());
-    entity.setNextPublishAt(BatchDateTimeSupport.utcNow());
-    return entity;
+  /**
+   * 收口到 {@link TriggerOutboxDomainEventPublisher} 的唯一 trigger_outbox_event 写入入口。
+   *
+   * <p>之前主路径直接 mapper.insert(buildOutboxEntity),抽象未真正收口字段语义会持续漂移。 现在统一走 publisher.publishRaw
+   * 路径(性能等价 — 都是 LaunchEnvelope JSON 一次序列化, 跳过 DomainEvent.payload Map ↔ record 来回转换)。
+   */
+  private void publishLaunchOutbox(LaunchRequest r, String dedupKey) {
+    String payloadJson =
+        JsonUtils.toJson(LaunchEnvelope.of(r, dedupKey, BatchDateTimeSupport.utcNow()));
+    triggerOutboxPublisher.publishRaw(r.tenantId(), r.requestId(), r.traceId(), payloadJson);
   }
 
   private TriggerRequestEntity buildPendingEntity(LaunchRequest r, String dedupKey) {

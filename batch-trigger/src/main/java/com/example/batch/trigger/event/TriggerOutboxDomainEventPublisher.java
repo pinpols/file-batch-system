@@ -49,14 +49,29 @@ public class TriggerOutboxDomainEventPublisher implements DomainEventPublisher {
   @Override
   @Transactional(propagation = Propagation.MANDATORY)
   public Long publish(DomainEvent event) {
+    return publishRaw(
+        event.tenantId(), event.eventKey(), event.traceId(), JsonUtils.toJson(event.payload()));
+  }
+
+  /**
+   * 性能优化入口:调用方已有 JSON 串(如 {@link com.example.batch.common.dto.LaunchEnvelope} 序列化结果) 时直接传入,跳过
+   * DomainEvent.payload Map ↔ record 来回两次序列化。
+   *
+   * <p>语义与 {@link #publish(DomainEvent)} 等价 — 都是同事务写入 trigger_outbox_event 一行。
+   *
+   * <p>同样要求 {@code @Transactional(propagation = MANDATORY)} 守护 — 必须在 trigger_request 同事务内调用,防止
+   * outbox 事件与父记录不一致。
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Long publishRaw(String tenantId, String requestId, String traceId, String payloadJson) {
     TriggerOutboxEventEntity entity = new TriggerOutboxEventEntity();
-    entity.setTenantId(event.tenantId());
-    entity.setRequestId(event.eventKey());
+    entity.setTenantId(tenantId);
+    entity.setRequestId(requestId);
     entity.setTopic(DEFAULT_TOPIC);
-    entity.setPayload(JsonUtils.toJson(event.payload()));
+    entity.setPayload(payloadJson);
     entity.setPublishStatus(OutboxPublishStatus.NEW.code());
     entity.setPublishAttempt(0);
-    entity.setTraceId(event.traceId());
+    entity.setTraceId(traceId);
     entity.setNextPublishAt(BatchDateTimeSupport.utcNow());
     triggerOutboxEventMapper.insert(entity);
     return entity.getId();
