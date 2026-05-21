@@ -59,8 +59,17 @@ class CompleteStepTest {
     ExportJobContext ctx = baseContext();
     ExportPayload payload =
         new ExportPayload(
-            "FC1", "BIZ", "TPL", "B1", "f.json", "obj.json", "2026-05-21",
-            null, Boolean.TRUE, null, Map.of());
+            "FC1",
+            "BIZ",
+            "TPL",
+            "B1",
+            "f.json",
+            "obj.json",
+            "2026-05-21",
+            null,
+            Boolean.TRUE,
+            null,
+            Map.of());
     ctx.getAttributes().put("exportPayload", payload);
     when(runtimeRepository.toLong(any())).thenReturn(501L);
 
@@ -84,8 +93,17 @@ class CompleteStepTest {
     ExportJobContext ctx = baseContext();
     ExportPayload payload =
         new ExportPayload(
-            "FC1", "BIZ", "TPL", "B1", "f.json", "obj.json", "2026-05-21",
-            null, Boolean.FALSE, null, Map.of());
+            "FC1",
+            "BIZ",
+            "TPL",
+            "B1",
+            "f.json",
+            "obj.json",
+            "2026-05-21",
+            null,
+            Boolean.FALSE,
+            null,
+            Map.of());
     ctx.getAttributes().put("exportPayload", payload);
     when(runtimeRepository.toLong(any())).thenReturn(501L);
 

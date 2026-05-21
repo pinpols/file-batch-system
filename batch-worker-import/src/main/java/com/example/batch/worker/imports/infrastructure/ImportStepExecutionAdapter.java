@@ -5,9 +5,8 @@ import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
-import com.example.batch.worker.core.support.PipelineVerifierHook;
-import org.springframework.beans.factory.ObjectProvider;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
+import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
@@ -16,6 +15,7 @@ import com.example.batch.worker.imports.stage.ImportStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
@@ -34,7 +34,8 @@ public class ImportStepExecutionAdapter
   private final ImportStageExecutor importStageExecutor;
 
   public ImportStepExecutionAdapter(
-      ImportStageExecutor importStageExecutor, PlatformFileRuntimeRepository runtimeRepository,
+      ImportStageExecutor importStageExecutor,
+      PlatformFileRuntimeRepository runtimeRepository,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider) {
     super(runtimeRepository, verifierHookProvider);
     this.importStageExecutor = importStageExecutor;
@@ -112,5 +113,4 @@ public class ImportStepExecutionAdapter
     }
     return new StepExecutionResponse(true, "SUCCESS", "imported " + importedCount + " row(s)");
   }
-
 }

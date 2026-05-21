@@ -5,9 +5,8 @@ import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
-import com.example.batch.worker.core.support.PipelineVerifierHook;
-import org.springframework.beans.factory.ObjectProvider;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
+import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
@@ -18,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
@@ -123,5 +123,4 @@ public class DispatchStepExecutionAdapter
     }
     return new StepExecutionResponse(true, "SUCCESS", "分发阶段执行完毕");
   }
-
 }

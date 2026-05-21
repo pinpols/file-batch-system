@@ -181,8 +181,8 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
    * CI 上 assignWorker 返 READY 根因:partition lease CAS 失败 → setRollbackOnly 拖走 worker_registry
    * 刷新可见性(见 docs/analysis/disabled-tests-root-cause-2026-05-21.md §1)。
    *
-   * <p>修复:延长重试 + 每次显式 await partition.status==READY,确保前置状态就绪再 claim,
-   * 减少 lease CAS miss 频次。最长 5s 等待,超时仍返当前 claimed 让断言拿到真实状态。
+   * <p>修复:延长重试 + 每次显式 await partition.status==READY,确保前置状态就绪再 claim, 减少 lease CAS miss 频次。最长 5s
+   * 等待,超时仍返当前 claimed 让断言拿到真实状态。
    */
   private JobTaskEntity assignWorkerWithRetry(Long taskId, String workerCode) {
     JobTaskEntity claimed = null;

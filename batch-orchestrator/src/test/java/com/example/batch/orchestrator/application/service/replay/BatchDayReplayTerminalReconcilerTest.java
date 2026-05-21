@@ -106,7 +106,8 @@ class BatchDayReplayTerminalReconcilerTest {
 
     reconciler.reconcileOnTerminal("t1", 8L, "JOB_X", 2001L, JOB_FAILED);
 
-    verify(entryMapper).updateStatus(eq(20L), eq(ENTRY_FAILED), eq(2001L), any(), any(), any(), any(), any());
+    verify(entryMapper)
+        .updateStatus(eq(20L), eq(ENTRY_FAILED), eq(2001L), any(), any(), any(), any(), any());
     verify(sessionMapper)
         .updateStatus(
             eq("t1"), eq(8L), eq("PARTIAL_FAILED"), anyList(), any(), any(), any(), any());

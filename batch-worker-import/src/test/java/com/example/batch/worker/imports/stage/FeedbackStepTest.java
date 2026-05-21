@@ -64,8 +64,8 @@ class FeedbackStepTest {
     assertThat(audit.getOperatorType()).isEqualTo("SYSTEM");
     assertThat(audit.getOperatorId()).isEqualTo("worker-A");
     assertThat(audit.getTraceId()).isEqualTo("trace-xyz");
-    assertThat(audit.getDetailSummary()).asInstanceOf(
-            org.assertj.core.api.InstanceOfAssertFactories.MAP)
+    assertThat(audit.getDetailSummary())
+        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
         .containsEntry("parsedCount", 100L)
         .containsEntry("validatedCount", 95L)
         .containsEntry("loadedCount", 90L)

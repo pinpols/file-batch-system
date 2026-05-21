@@ -87,7 +87,8 @@ class CommitStepTest {
   }
 
   @Test
-  @DisplayName("null context → 视为 dry-run（DryRunGuard.fromAttributes(null) passThrough）走 plugin null 路径")
+  @DisplayName(
+      "null context → 视为 dry-run（DryRunGuard.fromAttributes(null) passThrough）走 plugin null 路径")
   void shouldReturnSuccess_whenContextIsNull() {
     // DryRunGuard.fromAttributes(null) returns passThrough (not dry-run).
     // CommitStep then dereferences context.getResolvedPlugin() which NPEs.

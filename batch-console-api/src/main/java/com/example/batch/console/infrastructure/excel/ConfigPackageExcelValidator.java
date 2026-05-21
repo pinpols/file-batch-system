@@ -7,7 +7,6 @@ import static com.example.batch.console.support.excel.SheetValidationHelpers.req
 import static com.example.batch.console.support.excel.SheetValidationHelpers.validateJsonField;
 
 import com.example.batch.common.enums.DictEnum;
-import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
@@ -19,6 +18,7 @@ import com.example.batch.common.enums.WorkflowEdgeType;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;

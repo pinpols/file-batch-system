@@ -65,7 +65,8 @@ class DispatchDeliveryMetricsTest {
   }
 
   @Test
-  @DisplayName("circuitRejected=TRUE 优先于 success → result=circuit_open（即使 success=true 也算 circuit_open）")
+  @DisplayName(
+      "circuitRejected=TRUE 优先于 success → result=circuit_open（即使 success=true 也算 circuit_open）")
   void shouldRecordCircuitOpen_whenCircuitRejected() {
     metrics.recordDelivery("API", true, true);
     metrics.recordDelivery("API", false, true);

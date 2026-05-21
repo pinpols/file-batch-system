@@ -33,8 +33,8 @@ public interface InformationSchemaMapper {
    * 给定 (schema, table) 的所有列的类型元数据,每行 map 含 {@code column_name / data_type / is_nullable /
    * column_default}。表不存在时返空列表。
    *
-   * <p>用于 {@code ArchiveSchemaDriftCheck} 列级类型 / nullable 漂移检测 — 仅靠列名集合无法捕获 ALTER COLUMN ... TYPE
-   * / DROP NOT NULL 这类语义变更。
+   * <p>用于 {@code ArchiveSchemaDriftCheck} 列级类型 / nullable 漂移检测 — 仅靠列名集合无法捕获 ALTER COLUMN ... TYPE /
+   * DROP NOT NULL 这类语义变更。
    */
   List<Map<String, Object>> listColumnsWithTypes(
       @Param("schemaName") String schemaName, @Param("tableName") String tableName);

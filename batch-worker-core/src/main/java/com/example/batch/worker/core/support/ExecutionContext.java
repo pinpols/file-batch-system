@@ -22,9 +22,9 @@ public interface ExecutionContext {
   Map<String, Object> getAttributes();
 
   /**
-   * 以下 setter 是 4 个 *JobContext 共有的写路径（已由 Lombok {@code @Data} 自动生成），
-   * 提到接口上让 {@link AbstractPipelineStepExecutionAdapter#populateCommonFields} 能以泛型方式回填，
-   * 避免每个 {@code buildContext} 重复 5 行 setter 模板。
+   * 以下 setter 是 4 个 *JobContext 共有的写路径（已由 Lombok {@code @Data} 自动生成）， 提到接口上让 {@link
+   * AbstractPipelineStepExecutionAdapter#populateCommonFields} 能以泛型方式回填， 避免每个 {@code buildContext}
+   * 重复 5 行 setter 模板。
    *
    * <p>新增非 file 类 ExecutionContext 实现时，照样 {@code @Data} 即可满足这些方法。
    */
