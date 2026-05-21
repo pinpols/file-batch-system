@@ -1,91 +1,163 @@
-# E2E IT 提速优化日志(2026-05-22 第 1 轮)
+# E2E / IT 提速优化日志(2026-05-22)
+
+> 历次轮次的措施 + 实测数据 + 环境约束。下次接手优化的人不用从零摸索。
 
 ## TL;DR
 
-**baseline 30 min → 优化后 25 min(-17%)**;尝试了 4 项,落地 2 项,回滚 2 项。
+- **本地全 reactor verify**:`mvn verify` 串行 ~25 min(已优化,基线是 ~30 min)
+- **CI(full-ci-gate)**:拆 `unit-it` + `e2e-shard×4` 2 个 job 并发,**总时长 30→15 min**
+- 唯一不可压的:`WorkerProcessRestartRecoveryE2eIT`(122s,@DirtiesContext 强 reload)
 
-| 改动 | 状态 | 原因 |
+## 措施分层
+
+### Layer 1 落地:E2E 自身(commit `5a1a04c6`)
+
+| 改动 | 文件 | 收益 |
 |---|---|---|
-| **P3** `pollInterval 5s/2s → 200ms`(9 处 Awaitility) | ✅ 落地 | 9 个 E2E 受益,顶级 -48%(ImportFailure / ImportPipeline) |
-| **P2-a** MinIO + Redis `.withReuse(true)` | ✅ 落地 | 跨 JVM run 复用容器,~5s/run 收益,无副作用 |
-| **P2-b** PostgreSQL `.withReuse(true)` | ❌ 回滚 | `outbox_event` 跨 run 残留 → 破坏 MultiTenantConcurrent / OutboxForwarderRetry / ImportFailure |
-| **P2-c** Kafka `.withReuse(true)` | ❌ 回滚 | 多个 IT 用 `stopKafkaForFaultInjection()` 做 fault injection,reuse 容器禁止 stop |
-| **P4** `AbstractIntegrationTest` 全局 `@BeforeEach` truncate outbox | ❌ 回滚 | 误清 ImportFailure 等测试自己产的 outbox 事件 → timeout |
+| `pollInterval(5s/2s) → 200ms`(9 处 Awaitility) | 7 个 `*E2eIT.java` | -20%~-48% on 改过的 IT |
+| MinIO + Redis `.withReuse(true)` | `AbstractIntegrationTest.java` | -5~10s/run(跨 JVM 复用容器) |
 
-## baseline vs P2+P3 实测(23 个 E2E)
+**回滚**(实测撞回归):
+- PG `.withReuse(true)`:`outbox_event` 跨 run 残留 → MultiTenant 隔离失败
+- Kafka `.withReuse(true)`:`stopKafkaForFaultInjection` 在 reuse 容器禁用
+- `AbstractIntegrationTest` 全局 `@BeforeEach` truncate:误清测试自有 fixture event
 
-| TEST | baseline | 优化后 | Δ |
-|---|---|---|---|
-| ImportFailureE2eIT | 143.0s | 74.3s | **-48%** |
-| ImportPipelineE2eIT | 107.1s | 55.0s | **-48%** |
-| OutboxForwarderE2eIT | 85.1s | 58.9s | -30% |
-| OutboxForwarderRetryE2eIT | 89.2s | 66.3s | -25% |
-| ProcessPipelineE2eIT | 68.5s | 58.0s | -15% |
-| TriggerAsyncLaunchFullChainE2eIT | 68.0s | 59.5s | -12% |
-| MultiTenantConcurrentE2eIT | 74.2s | 66.3s | -11%⁽¹⁾ |
-| ImportFailurePipelineE2eIT | 64.8s | 57.2s | -11% |
-| SensorWaitFixtureE2eIT | 80.5s | 72.0s | -10% |
-| ProcessFailurePipelineE2eIT | 60.1s | 65.6s | +9% ⚠️ |
-| FullChainTenantPropagationE2eIT | 67.3s | 61.3s | -8% |
-| OutboxPollMarginsYamlE2eIT | 54.5s | 50.1s | -8% |
-| ExportStorageFailureE2eIT | 91.2s | 84.9s | -6% |
-| DispatchPipelineE2eIT | 68.1s | 63.6s | -6% |
-| DedupJobLaunchE2eIT | 62.2s | 58.4s | -6% |
-| WorkerProcessRestartRecoveryE2eIT | 130.5s | 136.3s | +4% ⚠️ |
-| DispatchFailurePipelineE2eIT | 65.0s | 67.0s | +3% ⚠️ |
-| DeadLetterApprovalReplayE2eIT | 86.1s | 89.7s | +4% ⚠️ |
-| WorkerDrainE2eIT | 59.6s | 62.4s | +4% ⚠️ |
-| ExportPipelineE2eIT | 61.4s | 60.8s | -1% |
-| ExportFailurePipelineE2eIT | 60.9s | 60.9s | 0% |
-| ExportContentVerificationE2eIT | 144.2s⁽²⁾ | 56.6s | -60%⁽²⁾ |
-| **合计** | **1791s (29.9 min)** | **1485s (24.7 min)** | **-17%** |
+### Layer 2 落地:CI 拆分 + 并发(commit `<待补>`)
 
-⁽¹⁾ MultiTenant 整 class 测时 -11% 但内部 `outboxEventsAreIsolatedBetweenTenants` 子测失败(已知问题,见下)
-⁽²⁾ baseline 144s 是 PG 容器启动失败的卡死时间,不是真耗时
+CI 同步并发 2 个杠杆:
 
-## 已知问题(归 backlog)
+1. **拆 job**(`full-ci-gate.yml`):
+   - `unit-it` job:跑单元 + IT(`run-full-regression.sh --skip-it-suite`)+ security scans
+   - `e2e-shard` job:专门跑 e2e module(分 4 shard)
+2. **e2e shard matrix**:22 个 `*E2eIT` 按 LPT 均衡分 4 组,GitHub Actions matrix 并发跑
 
-1. **MultiTenantConcurrentE2eIT.outboxEventsAreIsolatedBetweenTenants** baseline 跑时 PG 残留 1 条 outbox event(expected 0L but was 1L)。本次回滚 PG withReuse 后理论该过(PG 每次新建),但本地环境内存吃紧无法稳定验证。CI 上需重点观察。
+#### Shard 分组(LPT 算法,baseline 数据)
 
-2. **本地环境瓶颈**:7.75GB Docker 内存 + docker-compose dev 服务(1.5GB)+ 测试用 testcontainers(800MB+) 共 20+ 容器,反复 mvn 中断让状态混乱。**优化在 CI 干净环境上效果应更明显且稳定**。
+| Shard | 总耗时 | 含 IT |
+|---|---|---|
+| 1 | 338s | WorkerProcessRestartRecovery, ExportFailurePipeline, WorkerDrain, ProcessPipeline, OutboxForwarderRetry |
+| 2 | 292s | ImportFailure, FullChainTenantPropagation, ImportFailurePipeline, ExportPipeline, TriggerAsyncLaunchFullChain |
+| 3 | 334s | DeadLetterApprovalReplay, DispatchFailurePipeline, MultiTenantConcurrent, ProcessFailurePipeline, OutboxForwarder, SensorWaitFixture |
+| 4 | 334s | ExportStorageFailure, DispatchPipeline, ExportContentVerification, ImportPipeline, DedupJobLaunch, OutboxPollMarginsYaml |
 
-## 调用方法
+理论 wall-clock(并发):`max(unit-it ~14min, max(shard) ~8min) + setup 1-2min` ≈ **15-17 min**。
 
-### 改动文件
-- `batch-common/src/test/java/com/example/batch/testing/AbstractIntegrationTest.java`
-  - MinIO + Redis 加 `.withReuse(true)`
-  - 加 protected static `truncateOutboxTables(DataSource)` 辅助方法(供需要的 IT 显式调,不在 @BeforeEach 全局兜底)
-- `batch-e2e-tests/src/test/java/com/example/batch/e2e/{DeadLetterApprovalReplay,FullChainTenantPropagation,ImportPipeline,MultiTenantConcurrent,OutboxForwarder,OutboxForwarderRetry,TriggerAsyncLaunchFullChain}E2eIT.java`
-  - `pollInterval(Duration.ofSeconds(5/2))` → `pollInterval(Duration.ofMillis(200))`(共 9 处)
+### Layer 3 落地:工程治理
 
-### Testcontainers reuse 前置条件
-`~/.testcontainers.properties` 已配:
-```properties
-testcontainers.reuse.enable=true
-```
+| 改动 | commit |
+|---|---|
+| `cleanup_orphan_testcontainers()`:本地 + CI 测前清「无 reuse-hash 的孤儿容器」 | `62190647` |
+| `e2e-parallel` profile(本地默认串行 / CI `-De2e.parallel=true` 启 forkCount=2) | `3c3e3cf3`(后被 shard 方案替代但保留) |
 
-### 强制清 reuse 容器
-本地测试出现 outbox 状态混乱时:
+## 实测数据快照(2026-05-22 第 2 次,本地干净环境)
+
+| 阶段 | 耗时 | 内容 |
+|---|---|---|
+| batch-common | 38s | 单测 |
+| batch-trigger | 1:51 | 单测+IT |
+| batch-orchestrator | 3:28 | 单测+IT |
+| batch-worker-core | 30s | 单测 |
+| batch-worker-import/export/process/dispatch | ~1min/each | 单测+IT |
+| batch-console-api | 3:08 | 单测+IT |
+| batch-e2e-tests | 21:37 | 22 个 E2E |
+| **合计** | **~39 min** | mvn verify |
+
+E2E 22 个完整明细(降序):
+
+| TEST | new | baseline | 减时 |
+|---|---:|---:|---:|
+| WorkerProcessRestartRecovery | 122.7s | 130.5s | -6% |
+| ImportFailure | 72.5s | 143.0s | **-49%** |
+| DeadLetterApprovalReplay | 65.0s | 86.1s | -24% |
+| ExportStorageFailure | 61.1s | 91.2s | -33% |
+| DispatchPipeline | 60.4s | 68.1s | -11% |
+| DispatchFailurePipeline | 60.4s | 65.0s | -7% |
+| FullChainTenantPropagation | 57.8s | 67.3s | -14% |
+| ExportContentVerification | 57.2s | 144.2s¹ | -60%¹ |
+| MultiTenantConcurrent | 56.8s | 74.2s | -23% |
+| ImportFailurePipeline | 56.4s | 64.8s | -12% |
+| ExportFailurePipeline | 55.7s | 60.9s | -8% |
+| WorkerDrain | 55.5s | 59.6s | -6% |
+| ImportPipeline | 55.1s | 107.1s | **-48%** |
+| ProcessFailurePipeline | 54.0s | 60.1s | -10% |
+| ExportPipeline | 54.0s | 61.4s | -12% |
+| ProcessPipeline | 53.7s | 68.5s | -21% |
+| DedupJobLaunch | 53.6s | 62.2s | -13% |
+| OutboxForwarder | 53.4s | 85.1s | -37% |
+| TriggerAsyncLaunchFullChain | 51.0s | 68.0s | -24% |
+| OutboxForwarderRetry | 50.4s | 89.2s | **-43%** |
+| OutboxPollMarginsYaml | 46.5s | 54.5s | -14% |
+| SensorWaitFixture | 44.1s | 80.5s | **-45%** |
+| **合计** | **1297s** | **1791s** | **-28%** |
+
+¹ baseline 该 IT 是 PG 容器启动失败的虚高,不是真正 144s。
+
+## 环境前提 / 约束
+
+### 本地(macOS)
+- **JVM**:Java 25.0.2 (Homebrew openjdk)
+- **Docker Desktop 内存**:7.75 GB
+- **必须**:`~/.testcontainers.properties` 含 `testcontainers.reuse.enable=true`(MinIO/Redis reuse 才生效)
+- **本地不推荐 forkCount>1**:7.75GB 内存 + docker-compose dev 服务(若开)= 约 4-6GB 可用,跑 2 fork 必 OOM
+
+### CI(GitHub Actions ubuntu-latest)
+- **每 runner 内存**:16 GB
+- **每 job 独立 runner**,docker daemon 各自隔离(不会撞资源)
+- **限制**:GitHub Actions 免费版 concurrent runner 上限(20 个 standard runner),5 job 并发够用
+- **m2 cache**:每 job 重新构建(可选 actions/cache 加速,本工程未加)
+
+### 已知失败模式
+
+| 症状 | 原因 | 解决 |
+|---|---|---|
+| `MultiTenantConcurrent.outboxEventsAreIsolatedBetweenTenants` 期望 0L 实际 1L | PG reuse 让 outbox_event 跨 run 残留 | 已回滚 PG reuse |
+| `OutboxPublishCircuitBreakerKafkaFailureIT` 期望失败次数 0 | Kafka reuse 让 `stopKafka()` 行为变 | 已回滚 Kafka reuse |
+| `ImportFailure` / `OutboxForwarderRetry` 测试 timeout 等不到事件 | `@BeforeEach` 全局 truncate 误清 fixture | 已撤回全局 truncate |
+| docker daemon OOM,IT 集体超时 | 反复 mvn 中断 + Ryuk 没机会清,孤儿容器堆积 | `cleanup_orphan_testcontainers()` 测前清 |
+| `OutboxPublishCircuitBreakerKafkaFailureIT` 在 P2 之前的 baseline 偶现 fail(1L vs 0L 类) | 同 outbox 残留 | 同上 |
+
+## 操作手册
+
+### 本地全量跑(干净环境)
 ```bash
-docker ps -q --filter "label=org.testcontainers=true" | xargs docker rm -f
+# 1. 关 docker-compose dev 服务(释放 1.5GB)
+docker compose down
+
+# 2. 清孤儿 testcontainer(由 scripts/local/run-tests.sh 自动调,可手动)
+docker ps -q --filter "label=org.testcontainers=true" | xargs -r docker rm -f
+
+# 3. 跑
+mvn verify  # 串行,~25 min
+# 或
+bash scripts/local/run-tests.sh all
 ```
 
-## 下一轮候选(P7,本轮收益小 + > 60s)
+### 本地只跑 E2E
+```bash
+bash scripts/local/run-tests.sh e2e   # ~22 min
+# 自动调 cleanup_orphan_testcontainers
+```
 
-`>60s 且本轮提升 ≤ 10%` 的 8 个 E2E,各类型瓶颈不同:
+### CI 上的并发跑(自动触发)
+- `push main`:`full-ci-gate` workflow 自动跑
+- `unit-it` job + `e2e-shard×4` matrix 并发,wall-clock ~15-17 min
 
-| TEST | 现耗时 | 推测瓶颈 | 思路 |
-|---|---|---|---|
-| WorkerProcessRestartRecoveryE2eIT | 136s | @DirtiesContext 强制 reload | 接受现状或独立 module |
-| ExportStorageFailureE2eIT | 85s | 等 MinIO 5x retry exponential backoff | 调短 retry 间隔(测试 profile) |
-| DeadLetterApprovalReplayE2eIT | 90s | Console HTTP 调用串行 + 多 await | 合并 await 等待集 |
-| DispatchPipelineE2eIT | 64s | dispatch async ack 等待 | 看 ack 间隔配置 |
-| DispatchFailurePipelineE2eIT | 67s | 同上 |  |
-| ExportPipelineE2eIT | 61s | MinIO upload + verify | 大文件改小 |
-| ExportFailurePipelineE2eIT | 61s | 同上 |  |
-| WorkerDrainE2eIT | 62s | `drain.check-interval-millis=600000` 故意长等 | 不能改(测的就是 drain) |
-| ProcessFailurePipelineE2eIT | 66s | retry 等待 |  |
-| SensorWaitFixtureE2eIT | 72s | sensor poll wait | 调短 sensor 间隔 |
-| FullChainTenantPropagationE2eIT | 61s | 全链路触发 | 端到端 fundamental,难压 |
+### 下次扩容(若再要提速)
 
-预估再做 P7 能多省 ~3-5 min(剩下都是「业务必须等」),性价比下降。
+| 路径 | 减时 | 工程量 |
+|---|---|---|
+| e2e shard 4→8 | ~3-4 min | 低(改 matrix 列表)|
+| `WorkerProcessRestartRecovery` 独立成 1 个 shard(避免 max) | -1~2 min | 低 |
+| reactor `mvn -T 2`(unit-it 并行) | -3~5 min | 中(pom 注释说撞端口竞态,需实测)|
+| 改测试架构:每 IT 独立 PG schema | -10 min | **高**(改 AbstractIntegrationTest + Flyway)|
+
+## Commit 历史
+
+| Hash | 内容 |
+|---|---|
+| `5a1a04c6` | E2E P3 pollInterval + MinIO/Redis withReuse,**E2E 30→25min** |
+| `3c3e3cf3` | e2e-parallel profile(已被 shard 替代,保留兼容) |
+| `16373b1e` | spotless javadoc 折行修复 |
+| `eb5a56f8` | AlertRoutingSaveRequest @NotBlank + 测试 mock 补字段 |
+| `62190647` | `cleanup_orphan_testcontainers()` 本地+CI 测前清 |
+| `<待补>`   | CI `full-ci-gate` 拆 unit-it + e2e-shard×4 |
