@@ -42,19 +42,22 @@ public final class BusinessCalendarExcelRowParser {
   public static CalendarRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    return CalendarRow.builder()
-        .rowNo(rowNo)
-        .tenantId(effectiveTenant)
-        .calendarCode(requireText(values, COL_CALENDAR_CODE, 128, issues))
-        .calendarName(requireText(values, COL_CALENDAR_NAME, 256, issues))
-        .timezone(requireText(values, COL_TIMEZONE, 64, issues))
-        .holidayRollRule(requireEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, issues))
-        .catchUpPolicy(requireEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, issues))
-        .catchUpMaxDays(requireInteger(values, COL_CATCH_UP_MAX_DAYS, 0, issues))
-        .holidays(parseHolidays(values.get(COL_HOLIDAYS), issues))
-        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
-        .description(normalize(values.get(COL_DESCRIPTION)))
-        .build();
+    CalendarRow row =
+        CalendarRow.builder()
+            .rowNo(rowNo)
+            .tenantId(effectiveTenant)
+            .calendarCode(requireText(values, COL_CALENDAR_CODE, 128, issues))
+            .calendarName(requireText(values, COL_CALENDAR_NAME, 256, issues))
+            .timezone(requireText(values, COL_TIMEZONE, 64, issues))
+            .holidayRollRule(
+                requireEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, issues))
+            .catchUpPolicy(requireEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, issues))
+            .catchUpMaxDays(requireInteger(values, COL_CATCH_UP_MAX_DAYS, 0, issues))
+            .holidays(parseHolidays(values.get(COL_HOLIDAYS), issues))
+            .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+            .description(normalize(values.get(COL_DESCRIPTION)))
+            .build();
+    return row;
   }
 
   public static BusinessCalendarUpsertParam toUpsertParam(CalendarRow row, String operatorId) {

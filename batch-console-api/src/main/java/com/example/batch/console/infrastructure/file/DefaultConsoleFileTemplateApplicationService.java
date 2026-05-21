@@ -260,23 +260,27 @@ public class DefaultConsoleFileTemplateApplicationService
 
   private SecurityOptionsInput buildSecurityInputForUpdate(
       FileTemplateUpdateRequest req, Map<String, Object> existing) {
-    return SecurityOptionsInput.builder()
-        .previewMaskingEnabled(
-            coalesceBoolean(req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled"))
-        .errorLineMaskingEnabled(
-            coalesceBoolean(
-                req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled"))
-        .logMaskingEnabled(
-            coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled"))
-        .contentEncryptionEnabled(
-            coalesceBoolean(
-                req.getContentEncryptionEnabled(), existing, "content_encryption_enabled"))
-        .encryptionKeyRef(coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref"))
-        .downloadRequiresApproval(
-            coalesceBoolean(
-                req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
-        .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
-        .build();
+    SecurityOptionsInput securityInput =
+        SecurityOptionsInput.builder()
+            .previewMaskingEnabled(
+                coalesceBoolean(
+                    req.getPreviewMaskingEnabled(), existing, "preview_masking_enabled"))
+            .errorLineMaskingEnabled(
+                coalesceBoolean(
+                    req.getErrorLineMaskingEnabled(), existing, "error_line_masking_enabled"))
+            .logMaskingEnabled(
+                coalesceBoolean(req.getLogMaskingEnabled(), existing, "log_masking_enabled"))
+            .contentEncryptionEnabled(
+                coalesceBoolean(
+                    req.getContentEncryptionEnabled(), existing, "content_encryption_enabled"))
+            .encryptionKeyRef(
+                coalesceString(req.getEncryptionKeyRef(), existing, "encryption_key_ref"))
+            .downloadRequiresApproval(
+                coalesceBoolean(
+                    req.getDownloadRequiresApproval(), existing, "download_requires_approval"))
+            .maskingRuleSet(coalesceString(req.getMaskingRuleSet(), existing, "masking_rule_set"))
+            .build();
+    return securityInput;
   }
 
   private static Boolean coalesceFalse(Boolean v) {

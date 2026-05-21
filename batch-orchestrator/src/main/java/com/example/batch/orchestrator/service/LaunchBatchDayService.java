@@ -138,20 +138,22 @@ public class LaunchBatchDayService {
     String dstPolicySnapshot = resolveDstPolicySnapshot(request.tenantId(), calendarCode);
     String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
     boolean hasOperator = Texts.hasText(operatorId);
-    return BatchDayUpsertContext.builder()
-        .calendarCode(calendarCode)
-        .now(now)
-        .cutoffAt(cutoffAt)
-        .timezoneSnapshot(timezoneSnapshot)
-        .dstPolicySnapshot(dstPolicySnapshot)
-        .auditOperatorId(hasOperator ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM)
-        .auditOperatorType(
-            hasOperator
-                ? AuditLogConstants.OPERATOR_TYPE_REQUEST
-                : AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .catchUpLaunch(isCatchUpLaunch(request))
-        .lateAccepted(isLateAccepted(effectiveParams))
-        .build();
+    BatchDayUpsertContext ctx =
+        BatchDayUpsertContext.builder()
+            .calendarCode(calendarCode)
+            .now(now)
+            .cutoffAt(cutoffAt)
+            .timezoneSnapshot(timezoneSnapshot)
+            .dstPolicySnapshot(dstPolicySnapshot)
+            .auditOperatorId(hasOperator ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM)
+            .auditOperatorType(
+                hasOperator
+                    ? AuditLogConstants.OPERATOR_TYPE_REQUEST
+                    : AuditLogConstants.OPERATOR_TYPE_SYSTEM)
+            .catchUpLaunch(isCatchUpLaunch(request))
+            .lateAccepted(isLateAccepted(effectiveParams))
+            .build();
+    return ctx;
   }
 
   private void insertNewBatchDay(
@@ -482,15 +484,17 @@ public class LaunchBatchDayService {
           "lateArrivalToleranceMin",
           resolveLateArrivalToleranceMin(request.tenantId(), calendarCode));
       emitLateArrivalAlert(request, calendarCode, batchDay, "BATCH_DAY_LATE_ACCEPTED", "WARN");
-      return LaunchRequest.builder()
-          .tenantId(request.tenantId())
-          .jobCode(request.jobCode())
-          .bizDate(request.bizDate())
-          .triggerType(TriggerType.EVENT)
-          .requestId(request.requestId())
-          .traceId(request.traceId())
-          .params(routedParams)
-          .build();
+      LaunchRequest lateAcceptedRequest =
+          LaunchRequest.builder()
+              .tenantId(request.tenantId())
+              .jobCode(request.jobCode())
+              .bizDate(request.bizDate())
+              .triggerType(TriggerType.EVENT)
+              .requestId(request.requestId())
+              .traceId(request.traceId())
+              .params(routedParams)
+              .build();
+      return lateAcceptedRequest;
     }
     // late-rejected：先 DB CAS 把当前 trigger_type 翻为 CATCH_UP. P0-2 之前 expected 仅 EVENT,
     // 现在所有非 RERUN/CATCH_UP/SUBJOB 的 triggerType 都可能进入此路径, expected 用 request 自身的 triggerType code.
@@ -516,26 +520,30 @@ public class LaunchBatchDayService {
       if (!TriggerType.CATCH_UP.code().equals(latest.getTriggerType())) {
         return request;
       }
-      return LaunchRequest.builder()
-          .tenantId(request.tenantId())
-          .jobCode(request.jobCode())
-          .bizDate(request.bizDate())
-          .triggerType(TriggerType.CATCH_UP)
-          .requestId(request.requestId())
-          .traceId(request.traceId())
-          .params(routedParams)
-          .build();
+      LaunchRequest catchUpRequest =
+          LaunchRequest.builder()
+              .tenantId(request.tenantId())
+              .jobCode(request.jobCode())
+              .bizDate(request.bizDate())
+              .triggerType(TriggerType.CATCH_UP)
+              .requestId(request.requestId())
+              .traceId(request.traceId())
+              .params(routedParams)
+              .build();
+      return catchUpRequest;
     }
     loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
-    return LaunchRequest.builder()
-        .tenantId(request.tenantId())
-        .jobCode(request.jobCode())
-        .bizDate(request.bizDate())
-        .triggerType(TriggerType.CATCH_UP)
-        .requestId(request.requestId())
-        .traceId(request.traceId())
-        .params(routedParams)
-        .build();
+    LaunchRequest catchUpRequest =
+        LaunchRequest.builder()
+            .tenantId(request.tenantId())
+            .jobCode(request.jobCode())
+            .bizDate(request.bizDate())
+            .triggerType(TriggerType.CATCH_UP)
+            .requestId(request.requestId())
+            .traceId(request.traceId())
+            .params(routedParams)
+            .build();
+    return catchUpRequest;
   }
 
   @Builder
