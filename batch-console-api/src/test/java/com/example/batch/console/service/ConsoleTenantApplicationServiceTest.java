@@ -8,7 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
@@ -38,7 +37,8 @@ class ConsoleTenantApplicationServiceTest {
   @Mock private ConsoleTriggerProxyService triggerProxyService;
   @Mock private ConsoleTenantConfigCopyService configCopyService;
 
-  private final BatchSecurityProperties securityProperties = new BatchSecurityProperties();
+  private final org.springframework.core.env.Environment environment =
+      new org.springframework.mock.env.MockEnvironment();
 
   private ConsoleTenantApplicationService service;
 
@@ -65,7 +65,7 @@ class ConsoleTenantApplicationServiceTest {
             workflowRunMapper,
             triggerProxyService,
             configCopyService,
-            securityProperties);
+            environment);
   }
 
   @Test
