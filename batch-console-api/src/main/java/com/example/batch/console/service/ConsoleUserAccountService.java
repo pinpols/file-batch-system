@@ -125,8 +125,15 @@ public class ConsoleUserAccountService {
   }
 
   /**
-   * 解析当前 principal。无认证上下文(@Async / 内部脚本)返回 null,调用方自行决定是否豁免守卫。 这里不抛异常以保持向后兼容(原 service 允许无
-   * principal 调用)。
+   * 解析当前 principal。
+   *
+   * <p>2026-05-21 调用方审计:本 service 唯一调用方是 {@link
+   * com.example.batch.console.web.ConsoleUserAccountController},类级
+   * {@code @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")} 保证到 Service 时
+   * principal 必已认证。 **无 @Async / 定时任务 / 内部脚本直接调用本 service**(经全仓 grep 确认)。
+   *
+   * <p>所以「principal == null」分支在生产路径下不可达,仅为单测(不 mock SecurityContext)留豁免;
+   * 若未来加新调用方,必须同步审视新路径是否需要绕过守卫,或显式 setAuthentication 后再调。
    */
   private ConsolePrincipal currentPrincipal() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();

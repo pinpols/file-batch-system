@@ -18,7 +18,7 @@
 
 ## 控制台 API（面向运维）
 
-需具备 `ROLE_ADMIN` 或 `ROLE_CONFIG_ADMIN`。请求需带租户上下文；`tenantId` 与当前登录租户不一致时会拒绝。
+需具备 `ROLE_ADMIN` 或 `ROLE_TENANT_ADMIN`。请求需带租户上下文；`tenantId` 与当前登录租户不一致时会拒绝。
 
 | 操作 | 方法 | 路径 |
 |------|------|------|
