@@ -5,6 +5,23 @@ on:
   push:
     branches:
       - main
+    # 纯文档 / 许可证 / 编辑器配置 改动不触发 full reactor(75min) + 后续 staging-gate(90min)。
+    # 注意:docs/api/** 是契约文档(OpenAPI + protocol),不在 ignore 列表 — schema 漂移仍要 CI 兜底。
+    # 注意:db/migration/** / helm/** / scripts/** / pom.xml / .github/workflows/** 都不 ignore。
+    paths-ignore:
+      - 'docs/runbook/**'
+      - 'docs/analysis/**'
+      - 'docs/architecture/**'
+      - 'docs/design/**'
+      - 'docs/backlog/**'
+      - 'docs/review/**'
+      - 'docs/changelog.md'
+      - '*.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.gitignore'
+      - '.editorconfig'
+      - '.claude/**'
 
 permissions:
   contents: read
