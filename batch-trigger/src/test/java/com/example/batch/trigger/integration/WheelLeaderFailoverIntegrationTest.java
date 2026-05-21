@@ -244,7 +244,11 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int getCurrentVersion(Long stateId) {
-    return jdbcTemplate.queryForObject(
-        "select version from batch.trigger_runtime_state where id = ?", Integer.class, stateId);
+    // CI 偶发 trigger_runtime_state 行尚未可见(insert 后 select 的极小窗口),返 0 让 claimForSchedule
+    // 走 CAS miss 路径而非抛 EmptyResultDataAccessException 中断 100 次循环。
+    java.util.List<Integer> rows =
+        jdbcTemplate.queryForList(
+            "select version from batch.trigger_runtime_state where id = ?", Integer.class, stateId);
+    return rows.isEmpty() ? 0 : rows.get(0);
   }
 }
