@@ -49,7 +49,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAdminTestDataController {
 
-  private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9_-]{2,32}$";
+  // 禁用 `_`:SQL LIKE 中 `_` 是单字符通配符,管理员删除接口误删风险高,严格规避。
+  // 改用 hyphen 作为分隔(本就是文档示例: `e2e-suite-A`)。
+  private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
 
   private final ConsoleAdminTestDataCleanupService cleanupService;
   private final ConsoleResponseFactory responseFactory;

@@ -111,6 +111,7 @@
             enabled = excluded.enabled,
             description = excluded.description,
             updated_by = excluded.updated_by,
+            is_deleted = false,
             updated_at = current_timestamp
     </insert>
 
@@ -132,6 +133,7 @@
             updated_at = current_timestamp
         where tenant_id = #{p.tenantId}
           and id = #{p.id}
+          and is_deleted = false
     </update>
 
     <update id="toggleEnabled">
@@ -139,5 +141,6 @@
         set enabled = #{enabled}, updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and is_deleted = false
     </update>
 </mapper>

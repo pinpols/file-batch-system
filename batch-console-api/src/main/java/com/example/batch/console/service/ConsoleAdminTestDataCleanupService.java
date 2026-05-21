@@ -25,15 +25,34 @@ public class ConsoleAdminTestDataCleanupService {
   private final NamedParameterJdbcTemplate jdbc;
 
   /**
-   * 按 prefix 级联清理 11 张业务表 + 子表。
+   * 按 prefix 级联清理 11 张**核心配置 + 运行实例**业务表(不是"零残留"全清):
    *
-   * @param prefix 已由 Controller 层正则约束,本方法不重复校验
+   * <ul>
+   *   <li>**已覆盖**(按 FK 反向): workflow_node_run / workflow_run / workflow_node / workflow_edge /
+   *       workflow_definition / job_partition / job_task / job_step_instance / job_execution_log /
+   *       compensation_command / pipeline_instance / job_instance / job_definition /
+   *       file_channel_config / file_template_config / console_user_account / archive_policy /
+   *       tenant
+   *   <li>**未覆盖(已知残留)**: trigger_request / trigger_outbox_event / outbox_event / event_delivery_log
+   *       / event_outbox_retry / webhook_subscription / webhook_delivery_log / notification_channel
+   *       / alert_routing_config / dead_letter_task / file_record / file_dispatch_record / 各种
+   *       *_audit / *_history 表
+   * </ul>
+   *
+   * <p>CI/E2E 清场场景下,未覆盖表会随每次跑积累 prefix=e2e- 的脏数据。需要彻底"零残留"建议 直接 DROP + recreate schema
+   * 或扩展本方法白名单(每次扩展须配 IT 验证 FK 反向顺序)。
+   *
+   * @param prefix 已由 Controller 层正则约束 (`^[a-zA-Z][a-zA-Z0-9-]{2,32}$`,禁 `_/%/\\`),本方法不重复校验
    * @return 每张表删了多少行的 ordered map(LinkedHashMap 保留依赖顺序)
    */
   @Transactional
   public Map<String, Integer> cleanupByPrefix(String prefix) {
-    String like = prefix + "-%";
-    String opLike = "op-" + prefix + "-%"; // RBAC 测试创建的 op-${prefix}-xxx 用户
+    // Controller 正则 PREFIX_PATTERN 已禁 `_/%/\` 这些 SQL LIKE 元字符,
+    // 此处再做一次 service 层兜底转义(深度防御:Controller 规则未来若放开字符集,
+    // service 仍能阻止"prefix=e2e_A 误匹配 e2eXA-%"这类管理员误删风险)。
+    String escapedPrefix = escapeLike(prefix);
+    String like = escapedPrefix + "-%";
+    String opLike = "op-" + escapedPrefix + "-%"; // RBAC 测试创建的 op-${prefix}-xxx 用户
     Map<String, Integer> result = new LinkedHashMap<>();
 
     // 按 FK 反向清理。每段独立 SQL 便于 audit + 排障。
@@ -42,25 +61,26 @@ public class ConsoleAdminTestDataCleanupService {
     //   job_task / job_step_instance / job_execution_log / compensation_command / pipeline_instance
     // → job_instance
     //   job_partition (CASCADE) / job_instance.parent_instance_id (自引,先 NULL 再删)
-    String jobInstanceSubquery = "SELECT id FROM batch.job_instance WHERE job_code LIKE :p";
+    String jobInstanceSubquery =
+        "SELECT id FROM batch.job_instance WHERE job_code LIKE :p ESCAPE '\\'";
 
     // 1) workflow 运行态
     result.put(
         "workflow_node_run",
         jdbc.update(
-            "DELETE FROM batch.workflow_node_run WHERE workflow_run_id IN ("
-                + "SELECT id FROM batch.workflow_run WHERE workflow_definition_id IN ("
-                + "SELECT id FROM batch.workflow_definition WHERE workflow_code LIKE :p)"
-                + " OR related_job_instance_id IN ("
+            "DELETE FROM batch.workflow_node_run WHERE workflow_run_id IN (SELECT id FROM"
+                + " batch.workflow_run WHERE workflow_definition_id IN (SELECT id FROM"
+                + " batch.workflow_definition WHERE workflow_code LIKE :p ESCAPE '\\') OR"
+                + " related_job_instance_id IN ("
                 + jobInstanceSubquery
                 + "))",
             new MapSqlParameterSource("p", like)));
     result.put(
         "workflow_run",
         jdbc.update(
-            "DELETE FROM batch.workflow_run WHERE workflow_definition_id IN ("
-                + "SELECT id FROM batch.workflow_definition WHERE workflow_code LIKE :p)"
-                + " OR related_job_instance_id IN ("
+            "DELETE FROM batch.workflow_run WHERE workflow_definition_id IN (SELECT id FROM"
+                + " batch.workflow_definition WHERE workflow_code LIKE :p ESCAPE '\\') OR"
+                + " related_job_instance_id IN ("
                 + jobInstanceSubquery
                 + ")",
             new MapSqlParameterSource("p", like)));
@@ -119,58 +139,59 @@ public class ConsoleAdminTestDataCleanupService {
     result.put(
         "job_instance",
         jdbc.update(
-            "DELETE FROM batch.job_instance WHERE job_code LIKE :p",
+            "DELETE FROM batch.job_instance WHERE job_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
 
     // 5) workflow 定义态
     result.put(
         "workflow_node",
         jdbc.update(
-            "DELETE FROM batch.workflow_node WHERE workflow_definition_id IN ("
-                + "SELECT id FROM batch.workflow_definition WHERE workflow_code LIKE :p)",
+            "DELETE FROM batch.workflow_node WHERE workflow_definition_id IN (SELECT id FROM"
+                + " batch.workflow_definition WHERE workflow_code LIKE :p ESCAPE '\\')",
             new MapSqlParameterSource("p", like)));
     result.put(
         "workflow_edge",
         jdbc.update(
-            "DELETE FROM batch.workflow_edge WHERE workflow_definition_id IN ("
-                + "SELECT id FROM batch.workflow_definition WHERE workflow_code LIKE :p)",
+            "DELETE FROM batch.workflow_edge WHERE workflow_definition_id IN (SELECT id FROM"
+                + " batch.workflow_definition WHERE workflow_code LIKE :p ESCAPE '\\')",
             new MapSqlParameterSource("p", like)));
     result.put(
         "workflow_definition",
         jdbc.update(
-            "DELETE FROM batch.workflow_definition WHERE workflow_code LIKE :p",
+            "DELETE FROM batch.workflow_definition WHERE workflow_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
 
     // 6) job_definition:trigger_runtime_state 是 CASCADE,无需显式
     result.put(
         "job_definition",
         jdbc.update(
-            "DELETE FROM batch.job_definition WHERE job_code LIKE :p",
+            "DELETE FROM batch.job_definition WHERE job_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
     result.put(
         "file_channel_config",
         jdbc.update(
-            "DELETE FROM batch.file_channel_config WHERE channel_code LIKE :p",
+            "DELETE FROM batch.file_channel_config WHERE channel_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
     result.put(
         "file_template_config",
         jdbc.update(
-            "DELETE FROM batch.file_template_config WHERE template_code LIKE :p",
+            "DELETE FROM batch.file_template_config WHERE template_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
     result.put(
         "console_user_account",
         jdbc.update(
-            "DELETE FROM batch.console_user_account WHERE username LIKE :p OR username LIKE :op",
+            "DELETE FROM batch.console_user_account WHERE username LIKE :p ESCAPE '\\' OR username"
+                + " LIKE :op ESCAPE '\\'",
             new MapSqlParameterSource("p", like).addValue("op", opLike)));
     result.put(
         "archive_policy",
         jdbc.update(
-            "DELETE FROM batch.archive_policy WHERE tenant_id LIKE :p",
+            "DELETE FROM batch.archive_policy WHERE tenant_id LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
     result.put(
         "tenant",
         jdbc.update(
-            "DELETE FROM batch.tenant WHERE tenant_id LIKE :p",
+            "DELETE FROM batch.tenant WHERE tenant_id LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
 
     int totalDeleted = result.values().stream().mapToInt(Integer::intValue).sum();
@@ -180,5 +201,17 @@ public class ConsoleAdminTestDataCleanupService {
         totalDeleted,
         result);
     return result;
+  }
+
+  /**
+   * 转义 LIKE 元字符,配合 SQL 端 `ESCAPE '\'` 子句。
+   *
+   * <p>转义顺序:`\` 必须先转义(避免后续 `_/%` 被转义后又被吞)。
+   */
+  private static String escapeLike(String input) {
+    if (input == null || input.isEmpty()) {
+      return input;
+    }
+    return input.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 }

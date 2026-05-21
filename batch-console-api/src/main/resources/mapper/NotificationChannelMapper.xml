@@ -20,11 +20,23 @@
            AND is_deleted = false
     </select>
 
+    <!--
+        upsert 语义: 同 channel_code 撞 UNIQUE 时复活软删行(V146 软删 + 复活约定)。
+        纯 INSERT 路径在软删后 recreate 会撞 UNIQUE, 改 ON CONFLICT 自动覆盖+ is_deleted=false。
+    -->
     <insert id="insert">
         INSERT INTO batch.notification_channel (tenant_id, channel_code, channel_name, channel_type,
                                                 config_json, enabled, created_by, updated_by)
         VALUES (#{tenantId}, #{channelCode}, #{channelName}, #{channelType},
                 #{configJson}::jsonb, #{enabled}, #{createdBy}, #{updatedBy})
+        ON CONFLICT (tenant_id, channel_code) DO UPDATE SET
+            channel_name = excluded.channel_name,
+            channel_type = excluded.channel_type,
+            config_json = excluded.config_json,
+            enabled = excluded.enabled,
+            updated_by = excluded.updated_by,
+            is_deleted = false,
+            updated_at = CURRENT_TIMESTAMP
     </insert>
 
     <update id="update">
