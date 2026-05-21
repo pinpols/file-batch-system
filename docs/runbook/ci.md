@@ -31,6 +31,46 @@
 - **`capacity-gate` 例外**:`cancel-in-progress: false`(容量基线跑到一半被打断会污染数据,等跑完才让下一轮启)
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
 
+## pr-gate 增量 vs full-ci-gate 全量(关键区别)
+
+| 维度 | pr-gate(增量) | full-ci-gate(全量) |
+|---|---|---|
+| **范围探测** | ✅ 有 — `Detect affected scope` step 按 changed files 决定 | ❌ 永远 full reactor |
+| **3 态决策** | `skip` / `partial` / `full` 三档 | 永远 `full` |
+| **Maven 范围** | partial 时 `-pl <module> -am -amd` 只跑受影响模块 | 全 10 模块跑 |
+| **E2E suite** | partial 时跳过 batch-e2e-tests | 拆 `e2e-shard` 独立 job 25 min 并发跑 |
+| **Hadolint / Trivy fs** | ❌ 不跑 | ✅ 跑 |
+
+### pr-gate 自动 escalate 到 full 的"敏感路径"
+
+只要 changed files 命中以下任一,pr-gate 立即升级为 full reactor(不再 partial):
+
+```
+pom.xml                    # 根 pom 变 → 全模块依赖可能变
+.mvn/*                     # Maven wrapper / 配置
+.github/workflows/*        # workflow 自身变
+scripts/ci/*               # CI 脚本变
+scripts/local/*            # 本地脚本影响 dev 环境一致性
+helm/*                     # 部署 chart
+docker-compose.yml         # 容器编排
+batch-common/*             # 跨模块基础库,改了全部模块都受影响
+```
+
+其余 `batch-<module>/*` 命中只升级到该模块 + -am -amd 上下游。
+
+## 非代码提交触发吗?
+
+| 提交类型 | pr-gate | full-ci-gate |
+|---|---|---|
+| 纯 `docs/**.md` | ⚠️ workflow 触发但 Detect 判 `skip`,maven 不跑(几秒结束) | ✅ 全跑(无 paths-ignore) |
+| 纯 `.github/workflows/*.yml` | ✅ workflow 触发 + 升级 full(workflow 自身改要全测) | ✅ 全跑 |
+| 纯 `helm/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
+| 纯 `scripts/local/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
+| 纯 `db/migration/*.sql` | ⚠️ workflow 触发但 Detect 不在 case 列表 → `skip`(**潜在漏洞** — DB 改动建议手动触发 full) | ✅ 全跑 |
+| 纯 `docs/api/console-api.openapi.yaml` | ⚠️ 同上 `skip`(但 OpenAPI 漂移在 setup-build-env 已有 `check-console-openapi-paths.py` 守护) | ✅ 全跑 |
+
+**结论**:full-ci-gate 没配 `paths-ignore` — main 任何 push 都触发,**含纯文档 / 配置**。pr-gate 用 scope 探测省 runner,但 db/migration / OpenAPI 这类不在 case 列表里的"会影响运行时但 PR 不会自动升 full"的路径有盲区,改这类时建议手动 `workflow_dispatch` 触发 full-ci-gate 兜底。
+
 ## capacity-gate(单列)
 
 走 staging 真实环境用 Gatling 跑 `CapacityBaselineSimulation`(25→200 users stepped-ramp),内置 SLO 断言:
