@@ -29,6 +29,14 @@ import org.mockito.ArgumentCaptor;
 
 class BatchDayReplayTerminalReconcilerTest {
 
+  // 字面量集中(单文件内,不进 TestConstants 全局):
+  //   ENTRY_* = batch_day_replay_entry.status 状态(SUCCEEDED / FAILED)
+  //   JOB_*   = job_instance 终态(SUCCESS / FAILED)— 传入 reconcileOnTerminal 的 lastInstanceStatus
+  private static final String ENTRY_SUCCEEDED = "SUCCEEDED";
+  private static final String ENTRY_FAILED = "FAILED";
+  private static final String JOB_SUCCESS = "SUCCESS";
+  private static final String JOB_FAILED = "FAILED";
+
   private BatchDayReplaySessionMapper sessionMapper;
   private BatchDayReplayEntryMapper entryMapper;
   private BatchDayReplayTerminalReconciler reconciler;
@@ -60,22 +68,22 @@ class BatchDayReplayTerminalReconcilerTest {
             .sessionId(7L)
             .tenantId("t1")
             .jobCode("JOB_B")
-            .status("SUCCEEDED")
+            .status(ENTRY_SUCCEEDED)
             .build();
     when(entryMapper.selectBySessionId(7L)).thenReturn(List.of(pendingEntry, otherEntry));
-    when(entryMapper.countBySessionAndStatus(7L, "SUCCEEDED")).thenReturn(2L);
-    when(entryMapper.countBySessionAndStatus(7L, "FAILED")).thenReturn(0L);
+    when(entryMapper.countBySessionAndStatus(7L, ENTRY_SUCCEEDED)).thenReturn(2L);
+    when(entryMapper.countBySessionAndStatus(7L, ENTRY_FAILED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(7L, "PENDING")).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(7L, "RUNNING")).thenReturn(0L);
 
-    reconciler.reconcileOnTerminal("t1", 7L, "JOB_A", 1001L, "SUCCESS");
+    reconciler.reconcileOnTerminal("t1", 7L, "JOB_A", 1001L, JOB_SUCCESS);
 
     verify(entryMapper)
-        .updateStatus(eq(11L), eq("SUCCEEDED"), eq(1001L), any(), any(), any(), any(), any());
+        .updateStatus(eq(11L), eq(ENTRY_SUCCEEDED), eq(1001L), any(), any(), any(), any(), any());
     ArgumentCaptor<List<String>> expected = ArgumentCaptor.forClass(List.class);
     verify(sessionMapper)
         .updateStatus(
-            eq("t1"), eq(7L), eq("SUCCEEDED"), expected.capture(), any(), any(), any(), any());
+            eq("t1"), eq(7L), eq(ENTRY_SUCCEEDED), expected.capture(), any(), any(), any(), any());
     assertThat(expected.getValue()).containsExactly("RUNNING");
   }
 
@@ -91,15 +99,14 @@ class BatchDayReplayTerminalReconcilerTest {
             .status("RUNNING")
             .build();
     when(entryMapper.selectBySessionId(8L)).thenReturn(List.of(entry));
-    when(entryMapper.countBySessionAndStatus(8L, "SUCCEEDED")).thenReturn(1L);
-    when(entryMapper.countBySessionAndStatus(8L, "FAILED")).thenReturn(1L);
+    when(entryMapper.countBySessionAndStatus(8L, ENTRY_SUCCEEDED)).thenReturn(1L);
+    when(entryMapper.countBySessionAndStatus(8L, ENTRY_FAILED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(8L, "PENDING")).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(8L, "RUNNING")).thenReturn(0L);
 
-    reconciler.reconcileOnTerminal("t1", 8L, "JOB_X", 2001L, "FAILED");
+    reconciler.reconcileOnTerminal("t1", 8L, "JOB_X", 2001L, JOB_FAILED);
 
-    verify(entryMapper)
-        .updateStatus(eq(20L), eq("FAILED"), eq(2001L), any(), any(), any(), any(), any());
+    verify(entryMapper).updateStatus(eq(20L), eq(ENTRY_FAILED), eq(2001L), any(), any(), any(), any(), any());
     verify(sessionMapper)
         .updateStatus(
             eq("t1"), eq(8L), eq("PARTIAL_FAILED"), anyList(), any(), any(), any(), any());
@@ -117,12 +124,12 @@ class BatchDayReplayTerminalReconcilerTest {
             .status("RUNNING")
             .build();
     when(entryMapper.selectBySessionId(9L)).thenReturn(List.of(entry));
-    when(entryMapper.countBySessionAndStatus(9L, "SUCCEEDED")).thenReturn(1L);
-    when(entryMapper.countBySessionAndStatus(9L, "FAILED")).thenReturn(0L);
+    when(entryMapper.countBySessionAndStatus(9L, ENTRY_SUCCEEDED)).thenReturn(1L);
+    when(entryMapper.countBySessionAndStatus(9L, ENTRY_FAILED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(9L, "PENDING")).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(9L, "RUNNING")).thenReturn(1L);
 
-    reconciler.reconcileOnTerminal("t1", 9L, "JOB_C", 3001L, "SUCCESS");
+    reconciler.reconcileOnTerminal("t1", 9L, "JOB_C", 3001L, JOB_SUCCESS);
 
     verify(sessionMapper, times(1))
         .updateCounts(eq("t1"), eq(9L), eq(1), eq(0), eq(1), eq(2), any());
@@ -134,7 +141,7 @@ class BatchDayReplayTerminalReconcilerTest {
   void unknownReplaySessionIsNoop() {
     when(sessionMapper.selectById("t1", 999L)).thenReturn(null);
 
-    reconciler.reconcileOnTerminal("t1", 999L, "JOB_A", 100L, "SUCCESS");
+    reconciler.reconcileOnTerminal("t1", 999L, "JOB_A", 100L, JOB_SUCCESS);
 
     verify(entryMapper, never()).selectBySessionId(anyLong());
     verify(sessionMapper, never())
@@ -146,7 +153,7 @@ class BatchDayReplayTerminalReconcilerTest {
     when(sessionMapper.selectById("t1", 50L)).thenReturn(session(50L, "RUNNING", 1));
     when(entryMapper.selectBySessionId(50L)).thenReturn(List.of());
 
-    reconciler.reconcileOnTerminal("t1", 50L, "JOB_X", 9999L, "SUCCESS");
+    reconciler.reconcileOnTerminal("t1", 50L, "JOB_X", 9999L, JOB_SUCCESS);
 
     verify(entryMapper, never())
         .updateStatus(anyLong(), anyString(), any(), any(), any(), any(), any(), any());
@@ -156,9 +163,9 @@ class BatchDayReplayTerminalReconcilerTest {
 
   @Test
   void invalidArgumentsShortCircuit() {
-    reconciler.reconcileOnTerminal(null, 1L, "JOB", 1L, "SUCCESS");
-    reconciler.reconcileOnTerminal("t1", null, "JOB", 1L, "SUCCESS");
-    reconciler.reconcileOnTerminal("t1", 1L, null, 1L, "SUCCESS");
+    reconciler.reconcileOnTerminal(null, 1L, "JOB", 1L, JOB_SUCCESS);
+    reconciler.reconcileOnTerminal("t1", null, "JOB", 1L, JOB_SUCCESS);
+    reconciler.reconcileOnTerminal("t1", 1L, null, 1L, JOB_SUCCESS);
     reconciler.reconcileOnTerminal("t1", 1L, "JOB", 1L, null);
 
     verify(sessionMapper, never()).selectById(anyString(), anyLong());
