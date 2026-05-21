@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.console.service.ConsoleAdminTestDataCleanupService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -61,8 +62,10 @@ class ConsoleAdminTestDataControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
+    ConsoleAdminTestDataCleanupService cleanupService =
+        new ConsoleAdminTestDataCleanupService(jdbc);
     ConsoleAdminTestDataController controller =
-        new ConsoleAdminTestDataController(jdbc, responseFactory, environment);
+        new ConsoleAdminTestDataController(cleanupService, responseFactory, environment);
     // PostConstruct 在 standalone setup 下不会自动跑;此处显式调一次走非 prod 路径(test profile)
     ReflectionTestUtils.invokeMethod(controller, "validateProfile");
     mockMvc =
@@ -77,7 +80,8 @@ class ConsoleAdminTestDataControllerTest {
     when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
     ConsoleResponseFactory rf = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleAdminTestDataController prodCtl =
-        new ConsoleAdminTestDataController(jdbc, rf, environment);
+        new ConsoleAdminTestDataController(
+            new ConsoleAdminTestDataCleanupService(jdbc), rf, environment);
     assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(prodCtl, "validateProfile"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("不允许在生产 profile 启用");
