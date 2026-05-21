@@ -1,8 +1,12 @@
 package com.example.batch.orchestrator.infrastructure.archive;
 
 import com.example.batch.common.mapper.InformationSchemaMapper;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import lombok.RequiredArgsConstructor;
@@ -110,4 +114,161 @@ public class ArchiveSchemaDriftCheck {
   public Set<String> columnsOf(String schema, String table) {
     return new HashSet<>(informationSchemaMapper.listColumns(schema, table));
   }
+
+  /**
+   * 列级类型 / nullable 漂移检测 — 独立于 {@link #checkOnStartup()}。
+   *
+   * <p>{@link #checkOnStartup()} 只看列名集合,无法捕获 {@code ALTER COLUMN tenant_id TYPE
+   * varchar(128)} / {@code ALTER COLUMN xxx SET NOT NULL} 这类语义变更:列名集合仍然相等,但 archive INSERT 会因类型
+   * 截断 / NULL 违反而失败。本方法对每张 {@link #ARCHIVED_TABLES} 比对核心兼容性:
+   *
+   * <ul>
+   *   <li>{@code data_type} 必须严格相等 — 类型不一致 INSERT-SELECT 直接失败 / 截断
+   *   <li>{@code is_nullable} 只在「冷比热严格」时报错(cold=NO + hot=YES):热表允许 NULL 但冷表拒,归档 INSERT 会 NULL 违反
+   *       — 反向(hot NOT NULL + cold NULLABLE)是 V91 起的故意设计(archive 是冷库,不强制 NOT NULL,见 V91
+   *       comment),不报错。
+   *   <li>{@code column_default} 不参与比对 — INSERT-SELECT 从热表带值,default 不影响行内容。
+   * </ul>
+   *
+   * <p>仅对冷热两侧都存在的列做对比 — 列名集合差异由 {@link #checkOnStartup()} 负责报错,避免重复噪音。
+   */
+  @EventListener(ApplicationReadyEvent.class)
+  public void checkColumnTypesOnStartup() {
+    List<String> diffs = new ArrayList<>();
+    for (String hot : ARCHIVED_TABLES) {
+      Map<String, ColumnMeta> hotMeta = columnMetaOf("batch", hot);
+      Map<String, ColumnMeta> coldMeta = columnMetaOf("archive", hot + "_archive");
+      if (hotMeta.isEmpty() || coldMeta.isEmpty()) {
+        // 与 checkOnStartup 行为一致:任一侧表缺失,skip(列名集合检查会兜底)
+        continue;
+      }
+      Set<String> shared = new TreeSet<>(hotMeta.keySet());
+      shared.retainAll(coldMeta.keySet());
+      for (String col : shared) {
+        ColumnMeta h = hotMeta.get(col);
+        ColumnMeta c = coldMeta.get(col);
+        if (!Objects.equals(h.dataType(), c.dataType())) {
+          diffs.add(
+              hot
+                  + "."
+                  + col
+                  + " data_type hot="
+                  + h.dataType()
+                  + " cold="
+                  + c.dataType());
+        }
+        // varchar(N) / numeric(P,S) 的长度/精度差异在 character_maximum_length / numeric_*,
+        // data_type 不带,必须显式比对
+        if (!Objects.equals(h.characterMaximumLength(), c.characterMaximumLength())) {
+          diffs.add(
+              hot
+                  + "."
+                  + col
+                  + " character_maximum_length hot="
+                  + h.characterMaximumLength()
+                  + " cold="
+                  + c.characterMaximumLength());
+        }
+        if (!Objects.equals(h.numericPrecision(), c.numericPrecision())
+            || !Objects.equals(h.numericScale(), c.numericScale())) {
+          diffs.add(
+              hot
+                  + "."
+                  + col
+                  + " numeric precision/scale hot="
+                  + h.numericPrecision()
+                  + "/"
+                  + h.numericScale()
+                  + " cold="
+                  + c.numericPrecision()
+                  + "/"
+                  + c.numericScale());
+        }
+        // 只报 "cold 比 hot 严格" 方向 — cold NOT NULL + hot NULLABLE 会让 NULL 行 INSERT 失败
+        if ("NO".equalsIgnoreCase(c.isNullable())
+            && "YES".equalsIgnoreCase(h.isNullable())) {
+          diffs.add(
+              hot
+                  + "."
+                  + col
+                  + " is_nullable hot=YES cold=NO (cold rejects NULL rows hot may produce)");
+        }
+      }
+    }
+    if (!diffs.isEmpty()) {
+      for (String d : diffs) {
+        log.error("archive column type drift: {}", d);
+      }
+      throw new IllegalStateException(
+          "archive column type drift detected on "
+              + diffs.size()
+              + " column(s). "
+              + "Hot vs cold (data_type or restrictive is_nullable) mismatch — "
+              + "add migration to ALTER archive.* to match batch.* before next deploy. "
+              + "See logs above for per-column diff.");
+    }
+    log.info(
+        "archive column type drift check passed for {} tables", ARCHIVED_TABLES.size());
+  }
+
+  private Map<String, ColumnMeta> columnMetaOf(String schema, String table) {
+    List<Map<String, Object>> rows =
+        informationSchemaMapper.listColumnsWithTypes(schema, table);
+    Map<String, ColumnMeta> map = new LinkedHashMap<>();
+    for (Map<String, Object> row : rows) {
+      // PostgreSQL JDBC 通常以全小写键返回 information_schema 字段;某些驱动会大写,加防御。
+      String name = asString(row.get("column_name"));
+      if (name == null) {
+        name = asString(row.get("COLUMN_NAME"));
+      }
+      String dataType = firstNonNull(row.get("data_type"), row.get("DATA_TYPE"));
+      String isNullable = firstNonNull(row.get("is_nullable"), row.get("IS_NULLABLE"));
+      String columnDefault =
+          firstNonNull(row.get("column_default"), row.get("COLUMN_DEFAULT"));
+      // P0 修复: PostgreSQL `data_type` 对 varchar/numeric 不带长度/精度
+      // (varchar(64) 与 varchar(128) 同样返回 'character varying'),长度差别在
+      // `character_maximum_length` / `numeric_precision` / `numeric_scale`,
+      // 必须显式比对,否则 ALTER COLUMN ... TYPE varchar(N) 的漂移会漏检。
+      String charMaxLen =
+          firstNonNull(row.get("character_maximum_length"), row.get("CHARACTER_MAXIMUM_LENGTH"));
+      String numPrec = firstNonNull(row.get("numeric_precision"), row.get("NUMERIC_PRECISION"));
+      String numScale = firstNonNull(row.get("numeric_scale"), row.get("NUMERIC_SCALE"));
+      if (name != null) {
+        map.put(
+            name,
+            new ColumnMeta(dataType, isNullable, columnDefault, charMaxLen, numPrec, numScale));
+      }
+    }
+    return map;
+  }
+
+  private static String asString(Object v) {
+    return v == null ? null : v.toString();
+  }
+
+  private static String firstNonNull(Object a, Object b) {
+    if (a != null) {
+      return a.toString();
+    }
+    return b == null ? null : b.toString();
+  }
+
+  /**
+   * 列元数据 — 保留 {@code column_default} 字段仅用于诊断日志,实际比对见 {@link
+   * #checkColumnTypesOnStartup()}:
+   *
+   * <ul>
+   *   <li>{@code data_type} 严格比
+   *   <li>{@code character_maximum_length} 严格比(覆盖 varchar(N) 长度差异 — PostgreSQL data_type 不带长度)
+   *   <li>{@code numeric_precision} + {@code numeric_scale} 严格比(覆盖 numeric(P,S) 精度差异)
+   *   <li>{@code is_nullable} 单向比(冷比热严格才报)
+   * </ul>
+   */
+  private record ColumnMeta(
+      String dataType,
+      String isNullable,
+      String columnDefault,
+      String characterMaximumLength,
+      String numericPrecision,
+      String numericScale) {}
 }
