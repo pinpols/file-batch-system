@@ -163,16 +163,19 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
-      - name: Compile dependencies (skip tests)
+      - name: Install upstream modules to ~/.m2 (skip tests)
         shell: bash
+        # `test-compile` 不够:e2e-tests 跑 surefire 时 Maven 从 ~/.m2 解析 sibling
+        # module(batch-worker-dispatch / batch-common:tests 等)的 jar/test-jar,
+        # 必须 install 到本地仓库。-DskipTests 跳所有上游测试(unit-it job 已跑过)。
         run: |
-          mvn -pl batch-e2e-tests -am test-compile -DskipTests -B
+          mvn -pl batch-e2e-tests -am -DskipTests install -B
 
       - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
         shell: bash
         run: |
-          # `-Dtest=` 给 surefire 指定要跑的 IT class 列表(逗号分隔)
-          # batch-e2e-tests 用 surefire 而非 failsafe 跑 *E2eIT(见 pom)
+          # `-Dtest=` 给 surefire 指定要跑的 IT class 列表(逗号分隔)。
+          # batch-e2e-tests 用 surefire 而非 failsafe 跑 *E2eIT(见该 module pom)。
           TESTS="${{ matrix.shard.tests }}"
           # 去掉 YAML 折行引入的空白
           TESTS=$(echo "$TESTS" | tr -d ' \n')
