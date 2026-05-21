@@ -145,6 +145,18 @@
                     -->
                     <reuseForks>false</reuseForks>
                     <forkCount>1</forkCount>
+                    <!--
+                      surefire 默认 runOrder=filesystem(类加载顺序,跨机不稳定难预测)。
+                      改 alphabetical:
+                        - 本地全量跑 `mvn test -pl batch-e2e-tests` 时按 A→Z 顺序,
+                          日志可读,失败时一眼知道接下来还有哪些
+                        - 跨开发者 / 跨 OS / 跨 JDK 顺序一致, 排障更稳
+                        - 0 风险:本模块 forkCount=1 + reuseForks=false 每个 IT 独立 JVM,
+                          已无 IT 间隐性依赖,顺序对结果无影响
+                        - CI 用 -Dtest=A,B,C 列表跑(full-ci-gate 拆 4 shard),runOrder
+                          仅在不指定 -Dtest 时生效, CI 不受影响
+                    -->
+                    <runOrder>alphabetical</runOrder>
                 </configuration>
             </plugin>
         </plugins>
