@@ -48,7 +48,7 @@ class ConsoleAiAuthorizationServiceTest {
         .isInstanceOf(BizException.class)
         .satisfies(
             ex ->
-                org.assertj.core.api.Assertions.assertThat(((BizException) ex).getResultCode())
+                org.assertj.core.api.Assertions.assertThat(((BizException) ex).getCode())
                     .isEqualTo(ResultCode.FORBIDDEN));
   }
 
