@@ -29,14 +29,14 @@ import org.springframework.web.bind.annotation.RestController;
  * 控制台审批 REST：单条通过/拒绝与批量审批。
  *
  * <p>P0-1 角色授权（ADR audit 2026-05-14）：审批是高危业务操作，全部要求 {@code ROLE_ADMIN}/{@code
- * ROLE_CONFIG_ADMIN}/{@code ROLE_AUDITOR} 之一。普通租户用户不能审批。
+ * ROLE_TENANT_ADMIN}/{@code ROLE_AUDITOR} 之一。普通租户用户不能审批。
  */
 @RestController
 @Validated
 @RequestMapping("/api/console/approvals")
 @RequiredArgsConstructor
 @Idempotent
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN','ROLE_AUDITOR')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN','ROLE_AUDITOR')")
 public class ConsoleApprovalController {
 
   // R3-P2-6：审计独立 logger。logback.xml 可单独路由 audit 到独立 appender（独立日志文件/SIEM/Kafka）

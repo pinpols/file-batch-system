@@ -46,7 +46,7 @@ public class ConsoleTenantController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
   public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) String status,
@@ -57,7 +57,7 @@ public class ConsoleTenantController {
   }
 
   @GetMapping("/{tenantId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
   public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
     return responseFactory.success(tenantService.getTenant(tenantId));
   }

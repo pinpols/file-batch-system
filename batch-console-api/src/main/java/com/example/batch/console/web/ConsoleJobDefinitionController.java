@@ -29,7 +29,7 @@ public class ConsoleJobDefinitionController {
 
   @GetMapping("/{id}")
   @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<ConsoleJobDefinitionResponse> detail(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(jobDefinitionApplicationService.detail(id, tenantId));

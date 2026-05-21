@@ -43,7 +43,7 @@ public class ConsoleConfigController {
 
   /** 查询配置发布单列表。 */
   @GetMapping("/releases")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<List<ConsoleConfigReleaseResponse>> configReleases(
       @Valid @ModelAttribute ConfigReleaseQueryRequest request) {
     return responseFactory.success(applicationService.configReleases(request));
@@ -90,7 +90,7 @@ public class ConsoleConfigController {
 
   /** 查询密钥版本。 */
   @GetMapping("/secrets")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<List<ConsoleSecretVersionResponse>> secretVersions(
       @Valid @ModelAttribute SecretVersionQueryRequest request) {
     return responseFactory.success(applicationService.secretVersions(request));
@@ -107,14 +107,14 @@ public class ConsoleConfigController {
 
   /** 查询配置变更日志。 */
   @GetMapping("/change-logs")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<List<ConsoleConfigChangeLogResponse>> configChangeLogs(
       @Valid @ModelAttribute ConfigChangeLogQueryRequest request) {
     return responseFactory.success(applicationService.configChangeLogs(request));
   }
 
   @GetMapping("/releases/{releaseId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<ConsoleConfigReleaseResponse> configReleaseDetail(
       @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.configReleaseDetail(tenantId, releaseId));
@@ -122,7 +122,7 @@ public class ConsoleConfigController {
 
   /** 查询配置项的依赖关系。 */
   @GetMapping("/dependencies")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Map<String, Object>> configDependencies(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("configType") String configType,
@@ -133,7 +133,7 @@ public class ConsoleConfigController {
 
   /** 对比两个配置发布版本的差异。 */
   @GetMapping("/releases/diff")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Map<String, Object>> diffConfigReleases(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("releaseIdA") Long releaseIdA,
@@ -143,7 +143,7 @@ public class ConsoleConfigController {
   }
 
   @GetMapping("/secrets/{secretVersionId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<ConsoleSecretVersionResponse> secretVersionDetail(
       @PathVariable Long secretVersionId, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(

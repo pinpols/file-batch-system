@@ -91,7 +91,7 @@ public class ConsoleResultVersionController {
 
   // P0-1: promote/reject 是高危结果版本变更，要求管理员/配置管理员权限；P1-6：强制幂等键
   @PostMapping("/{id}/promote")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
   @Idempotent
   public CommonResponse<Map<String, Object>> promote(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -110,7 +110,7 @@ public class ConsoleResultVersionController {
   }
 
   @PostMapping("/{id}/reject")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
   @Idempotent
   public CommonResponse<Map<String, Object>> reject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,

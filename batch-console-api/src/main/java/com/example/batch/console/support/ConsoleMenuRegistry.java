@@ -5,21 +5,23 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 控制台侧边栏菜单注册表（静态配置，与前端 navigation.ts 对齐）。
+ * 控制台侧边栏菜单注册表(静态配置,与前端 navigation.ts 对齐)。
  *
- * <p>菜单可见性由 {@code minRole} 控制，角色等级：VIEWER &lt; OPERATOR &lt; ADMIN。 后端 authorities 映射规则：
+ * <p>菜单可见性由 {@code minRole} 控制,4 角色 → 菜单等级映射:
  *
  * <ul>
- *   <li>ROLE_ADMIN → ADMIN
- *   <li>ROLE_CONFIG_ADMIN → OPERATOR
- *   <li>ROLE_AUDITOR / ROLE_TENANT_USER / ROLE_USER → VIEWER
+ *   <li>{@code ROLE_ADMIN} → ADMIN(看全部)
+ *   <li>{@code ROLE_TENANT_ADMIN} → TENANT_ADMIN(本租户配置 + 业务)
+ *   <li>{@code ROLE_AUDITOR} / {@code ROLE_TENANT_USER} / {@code ROLE_USER} → VIEWER(只读)
  * </ul>
+ *
+ * <p>历史 {@code ROLE_CONFIG_ADMIN} 已升级为 ADMIN(V149)。
  */
 public final class ConsoleMenuRegistry {
 
-  // 菜单项 minRole 字段值（角色等级：VIEWER < OPERATOR < ADMIN）。提常量避免 26+18+9=53 处字面量散布。
+  // 菜单项 minRole 字段值;层级:VIEWER < TENANT_ADMIN < ADMIN。
   private static final String ROLE_VIEWER = "VIEWER";
-  private static final String ROLE_OPERATOR = "OPERATOR";
+  private static final String ROLE_OPERATOR = "TENANT_ADMIN";
   private static final String ROLE_ADMIN = "ADMIN";
 
   private ConsoleMenuRegistry() {}
@@ -98,7 +100,9 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("批次日与窗口", "/scheduler/batch-days", "Calendar", ROLE_VIEWER),
                   new MenuItem("Catch-up 审批", "/scheduler/catch-up-approvals", "Memo", ROLE_VIEWER),
                   new MenuItem("租户配额", "/governance/quota", "Briefcase", ROLE_OPERATOR),
-                  new MenuItem("队列 & 窗口", "/governance/queues", "Tools", ROLE_ADMIN),
+                  // 队列/窗口/日历是租户级配置 CRUD,与「配置发布」「Excel 维护」同档,
+                  // 让 TENANT_ADMIN 可见;真正影响平台的"运维操作"在 /ops/diagnostic(保 ADMIN)。
+                  new MenuItem("队列 & 窗口", "/governance/queues", "Tools", ROLE_OPERATOR),
                   new MenuItem("Worker 管理", "/workers/management", "Cpu", ROLE_OPERATOR),
                   new MenuItem("Trigger 管理", "/system/triggers", "Timer", ROLE_OPERATOR))),
           new MenuGroup(
@@ -138,7 +142,7 @@ public final class ConsoleMenuRegistry {
     if (authorities.contains("ROLE_ADMIN")) {
       return ROLE_ADMIN;
     }
-    if (authorities.contains("ROLE_CONFIG_ADMIN")) {
+    if (authorities.contains("ROLE_TENANT_ADMIN")) {
       return ROLE_OPERATOR;
     }
     return ROLE_VIEWER;

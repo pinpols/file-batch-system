@@ -1,21 +1,36 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.support.auth.ConsolePasswordHasher;
+import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.example.batch.console.support.auth.ConsoleRoles;
 import com.example.batch.console.support.auth.ConsoleSessionRegistry;
 import com.example.batch.console.web.response.auth.ConsoleUserAccountResponse;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 @Service("consoleUserAccountManagementService")
 @RequiredArgsConstructor
 public class ConsoleUserAccountService {
+
+  /**
+   * TENANT_ADMIN 仅可授予的角色集合。授予 ADMIN / AUDITOR / 任何未列出的角色 一律 {@link ResultCode#FORBIDDEN};升 ADMIN
+   * 必须由 ADMIN 操作。
+   */
+  private static final Set<String> TENANT_ADMIN_GRANTABLE_ROLES =
+      Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER, ConsoleRoles.USER);
 
   private final ConsoleUserAccountMapper userAccountMapper;
   private final ConsolePasswordHasher passwordHasher;
@@ -23,20 +38,29 @@ public class ConsoleUserAccountService {
 
   public PageResponse<ConsoleUserAccountResponse> list(
       String tenantId, String keyword, PageRequest pageRequest) {
+    String effectiveTenantId = enforceTenantScope(tenantId);
     List<Map<String, Object>> rows =
-        userAccountMapper.selectByQuery(tenantId, keyword, pageRequest);
-    long total = userAccountMapper.countByQuery(tenantId, keyword);
+        userAccountMapper.selectByQuery(effectiveTenantId, keyword, pageRequest);
+    long total = userAccountMapper.countByQuery(effectiveTenantId, keyword);
     List<ConsoleUserAccountResponse> items = rows.stream().map(this::toResponse).toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
   public ConsoleUserAccountResponse get(long id) {
-    return toResponse(assertExists(id));
+    Map<String, Object> row = assertExists(id);
+    assertSameTenantOrGlobal(str(row, "tenant_id"));
+    return toResponse(row);
   }
 
   /**
-   * 创建账号。V34 设计意图:由 ROLE_ADMIN 通过 POST /api/console/users 增量添加用户。username 跨租户唯一(V41 索引); 同租户
-   * username 唯一(V34 约束)。authoritiesCsv 为空时落 USER 默认。
+   * 创建账号。TENANT_ADMIN 调用时:
+   *
+   * <ul>
+   *   <li>请求 body 里的 {@code tenantId} 被忽略,强制覆盖为调用者 principal.tenantId
+   *   <li>{@code authoritiesCsv} 只能含 {@code ROLE_TENANT_ADMIN} / {@code ROLE_TENANT_USER};违反 → 403
+   * </ul>
+   *
+   * ADMIN 调用不受限。
    */
   public ConsoleUserAccountResponse create(
       String tenantId,
@@ -46,39 +70,48 @@ public class ConsoleUserAccountService {
       String authoritiesCsv) {
     Guard.require(username != null && !username.isBlank(), "username is required");
     Guard.require(password != null && !password.isBlank(), "password is required");
+    String effectiveTenantId = enforceTenantScope(tenantId);
+    String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
+    enforceGrantableAuthorities(normalizedAuthorities);
     if (userAccountMapper.selectByUsername(username) != null) {
-      throw new IllegalArgumentException("username already exists: " + username);
+      throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
     userAccountMapper.insert(
-        tenantId,
+        effectiveTenantId,
         username,
         displayName,
         passwordHasher.encode(password),
-        normalizeAuthorities(authoritiesCsv),
+        normalizedAuthorities,
         null);
     return toResponse(userAccountMapper.selectByUsername(username));
   }
 
   public ConsoleUserAccountResponse update(long id, String displayName, String authoritiesCsv) {
-    assertExists(id);
-    userAccountMapper.updateProfile(id, displayName, normalizeAuthorities(authoritiesCsv));
+    Map<String, Object> row = assertExists(id);
+    assertSameTenantOrGlobal(str(row, "tenant_id"));
+    String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
+    enforceGrantableAuthorities(normalizedAuthorities);
+    userAccountMapper.updateProfile(id, displayName, normalizedAuthorities);
     return toResponse(userAccountMapper.selectById(id));
   }
 
   public void resetPassword(long id, String newPassword) {
     Map<String, Object> account = assertExists(id);
+    assertSameTenantOrGlobal(str(account, "tenant_id"));
     userAccountMapper.updatePasswordHash(id, passwordHasher.encode(newPassword));
     sessionRegistry.invalidateSession(str(account, "username"), str(account, "tenant_id"));
   }
 
   public ConsoleUserAccountResponse enable(long id) {
-    assertExists(id);
+    Map<String, Object> row = assertExists(id);
+    assertSameTenantOrGlobal(str(row, "tenant_id"));
     userAccountMapper.updateEnabled(id, true);
     return toResponse(userAccountMapper.selectById(id));
   }
 
   public ConsoleUserAccountResponse disable(long id) {
     Map<String, Object> account = assertExists(id);
+    assertSameTenantOrGlobal(str(account, "tenant_id"));
     userAccountMapper.updateEnabled(id, false);
     sessionRegistry.invalidateSession(str(account, "username"), str(account, "tenant_id"));
     return toResponse(userAccountMapper.selectById(id));
@@ -86,6 +119,58 @@ public class ConsoleUserAccountService {
 
   private Map<String, Object> assertExists(long id) {
     return Guard.requireFound(userAccountMapper.selectById(id), "user account not found: " + id);
+  }
+
+  /**
+   * 解析当前 principal。无认证上下文(@Async / 内部脚本)返回 null,调用方自行决定是否豁免守卫。 这里不抛异常以保持向后兼容(原 service 允许无
+   * principal 调用)。
+   */
+  private ConsolePrincipal currentPrincipal() {
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth != null && auth.getPrincipal() instanceof ConsolePrincipal principal) {
+      return principal;
+    }
+    return null;
+  }
+
+  /** principal 含 ADMIN/AUDITOR 跨租户角色返回 true;TENANT_ADMIN/TENANT_USER/匿名返回 false。 */
+  private boolean isGlobalCaller(ConsolePrincipal principal) {
+    return principal != null && ConsoleRoles.hasGlobalRole(principal.authorities());
+  }
+
+  /** 非全局调用方传入的 tenantId 一律覆盖为 principal.tenantId;全局调用方保留入参。 */
+  private String enforceTenantScope(String requestedTenantId) {
+    ConsolePrincipal principal = currentPrincipal();
+    if (principal == null) return requestedTenantId; // 无 principal 上下文,豁免
+    if (isGlobalCaller(principal)) return requestedTenantId;
+    return principal.tenantId();
+  }
+
+  /** 操作目标账号 tenantId 与 principal 不同 → 403,除非 principal 是全局角色。 */
+  private void assertSameTenantOrGlobal(String targetTenantId) {
+    ConsolePrincipal principal = currentPrincipal();
+    if (principal == null) return;
+    if (isGlobalCaller(principal)) return;
+    if (targetTenantId == null || !targetTenantId.equals(principal.tenantId())) {
+      throw BizException.of(ResultCode.FORBIDDEN, "error.account.cross_tenant_denied");
+    }
+  }
+
+  /** TENANT_ADMIN 不可授予 ADMIN/AUDITOR;ADMIN 不受限。 */
+  private void enforceGrantableAuthorities(String authoritiesCsv) {
+    ConsolePrincipal principal = currentPrincipal();
+    if (principal == null) return;
+    if (isGlobalCaller(principal)) return;
+    Set<String> requested =
+        Arrays.stream(authoritiesCsv.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toSet());
+    for (String authority : requested) {
+      if (!TENANT_ADMIN_GRANTABLE_ROLES.contains(authority)) {
+        throw BizException.of(ResultCode.FORBIDDEN, "error.account.role_grant_denied", authority);
+      }
+    }
   }
 
   private ConsoleUserAccountResponse toResponse(Map<String, Object> row) {
@@ -102,7 +187,7 @@ public class ConsoleUserAccountService {
 
   private String normalizeAuthorities(String raw) {
     if (raw == null || raw.isBlank()) {
-      return ConsoleRoles.USER;
+      return ConsoleRoles.TENANT_USER;
     }
     return raw.trim().toUpperCase();
   }
