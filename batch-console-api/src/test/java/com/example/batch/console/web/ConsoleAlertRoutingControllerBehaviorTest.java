@@ -62,6 +62,7 @@ class ConsoleAlertRoutingControllerBehaviorTest {
         + routeCode
         + "\","
         + "\"team\":\"ops\","
+        + "\"alertGroup\":\"default\","
         + "\"severity\":\"WARN\","
         + "\"receiver\":\"ops@example.com\""
         + "}";
