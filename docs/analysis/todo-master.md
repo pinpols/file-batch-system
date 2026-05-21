@@ -12,8 +12,19 @@
 | ✅ **完成** | 62+ | 含 ADR-009/010/011 全栈 / EXCEL-GODCLASS 6/7 / WEBHOOK-DURABILITY / IDEMPOTENCY 三层 / FQN 全清 / Prometheus 告警 / NOISE 治理 / X-Console-Token 物删 / 12 旧 Excel 端点物删 + OpenAPI 同步 / Query factory + 守护测试 / POSITIONAL-ARGS v4 闭环；以及第 1 阶段 P0（ADR-012 / ADR-023 / ADR-025）+ 第 2 阶段 P1（ADR-021 / ADR-022 / ADR-026） |
 | 🟡 **半成** | 3 | ADR-010 Stage 6/7 灰度（灰度门禁未到）· ADR-009 Stage 4 业务方触发 · WF-design-1/2 字段先决条件未就位 |
 | ⏳ **待做** | 9 | 前端待办（ADR-018/020/026 Console UI）/ 横切（CI lint dry-run + audit/metric label）/ Quartz staging 7 项（🔒 ops/DBA/BIZ/staging）/ LIC-2 SBOM（🔒 ops 部分） |
-| 🟡 **暂缓** | 2 | 第 3 阶段 ADR-024 冷热分层 / ADR-027 资源亲和（触发条件未达，priority-scope §5 守红线）|
+| 🟡 **暂缓** | 6 | ADR-024 冷热分层 / ADR-027 资源亲和 / **ADR-033 Quartz→Wheel(2026-05-21 立项)** / ADR-022 v0.2 history 表 / LIC-2 SBOM / CI flaky × 2(`@Disabled`)— 触发条件未达,priority-scope §5 守红线 |
 | ❌ **不做** | 4 | V5-P2-1 / V5-P2-9 / V5-NEW-1 / V5-NEW-2（理由见各项）|
+
+### 🟡 暂缓清单(2026-05-21 集中索引)
+
+| 项 | ADR / 文档 | 触发条件 |
+|---|---|---|
+| ADR-024 冷热分层 | [ADR-024](../architecture/adr/ADR-024-archive-tiering.md) §"实施触发条件" | 数据量 / 备份 / 监管阈值达 |
+| ADR-027 资源亲和 / 地理调度 | [ADR-027](../architecture/adr/ADR-027-resource-affinity.md) | K8s 自研调度需求出现 |
+| ADR-033 Quartz→Wheel 切换 | [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) §3 | fire QPS > 500 万/天 / Quartz 归因事件 / DB 锁红线 / cron SLA |
+| ADR-022 v0.2 `*_history` 影子表 + OSS 对象锁 | [ADR-022](../architecture/adr/ADR-022-forensic-audit-bundle.md) status | 7 年保留合规要求触发 |
+| LIC-2 SBOM 嵌入 artifact | todo-master §H | 合规审计 / 客户 SBOM 要求 |
+| CI flaky × 2 (JobLaunchToFinish / WheelLeaderFailover) | `@Disabled` + commit `9d3c4710` 注释 | testcontainer fast-path 时序根因可重现 |
 
 **环境分布**（可执行性切片）：
 
@@ -104,10 +115,14 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 > 代码线索：`HttpOrchestratorTriggerAdapter.java:27` 已带 `@Deprecated(since="ADR-010 Stage 6", forRemoval=true)`。
 
-### E. Quartz → HashedWheelTimer 切换收尾 · P0/P1
+### E. Quartz → HashedWheelTimer 切换收尾 · 🟡 暂缓(2026-05-21 [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) 立项)
 
-> 现状：phase 1 默认值已切到 `wheel`（changelog 2026-04-26），Quartz 仍保留作 opt-in 回退。要彻底删 codepath 需以下验证齐全。
-> 🔒 本节 7 项需 ops/DBA/BIZ/staging 配合（QZ-pre-1/3 · QZ-prep-3 · QZ-stage-1/2/3 · QZ-rollback-2），其余本地可做 — 见 §九
+> **整体状态:暂缓实施**。[ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) 决策成立但触发条件未达
+> (fire QPS 未到 1000 万/天拐点 + 近 12 月 0 起 Quartz 归因事件 + 机会成本 > DBA 分区/ADR-010 灰度)。
+> 触发实施的条件 4 项见 ADR-033 §3。每季度 review 一次满足度。
+>
+> 现状:phase 1 默认值已切到 `wheel`(changelog 2026-04-26),Quartz 仍保留作 opt-in 回退。要彻底删 codepath 需以下验证齐全(暂缓):
+> 🔒 本节 7 项需 ops/DBA/BIZ/staging 配合(QZ-pre-1/3 · QZ-prep-3 · QZ-stage-1/2/3 · QZ-rollback-2),其余本地可做 — 见 §九
 
 | ID | 主题 | 来源 |
 |---|---|---|
@@ -152,7 +167,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | ID | 主题 | 来源 | 状态 |
 |---|---|---|---|
 | ~~**LIC-1**~~ | NOTICE 文件 copyright + 上游聚合完整化 | license-risk-assessment:171 | ✅ 2026-05-01 NOTICE 升级：从 16 行指针式扩到 ~110 行，聚合 Spring Boot/POI/Kafka/Flyway/MyBatis/MinIO/Logback/SLF4J 等 20+ 主要上游 attribution（满足 Apache-2.0 §4(d)）|
-| **LIC-2** | SBOM 与第三方清单嵌入 artifact | license-risk-assessment:173 | 🔒 部分 ops（本地能改 maven，CI 注入 + artifact 校验需 ops），见 §九 |
+| **LIC-2** | SBOM 与第三方清单嵌入 artifact | license-risk-assessment:173 | 🟡 **暂缓** — 🔒 部分 ops(本地能改 maven,CI 注入 + artifact 校验需 ops);触发条件:合规审计 / 客户 SBOM 要求时启动 |
 | ~~**LIC-3**~~ | 新依赖 license 检查与约束 | license-risk-assessment:174 | ✅ 2026-05-01 `scripts/ci/check-dependency-licenses.sh` 落地 |
 
 ### I. Worker 灰度升级 runbook 验证 · P2
