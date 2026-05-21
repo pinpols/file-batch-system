@@ -2710,6 +2710,45 @@ paths:
           description: prefix validation failed
         '403':
           description: not ROLE_ADMIN
+  /api/console/admin/test-data/by-ids:
+    delete:
+      tags: [Admin]
+      summary: Cleanup tenants by exact ID list (补刀 prefix 模式无法清纯短名残留)
+      description: |
+        按精确 tenantId 列表级联清理,补刀 `/api/console/admin/test-data?prefix=` 无法清纯短名
+        ID(如历史残留 `tx` / `td`,因 prefix 模式强制 `prefix-%` 后缀匹配)。
+
+        **白名单保护**(任何场景拒删):`system` / `default` / `default-tenant` / `ta` / `tb` / `tc`。
+
+        **安全约束**:
+        - ROLE_ADMIN only
+        - ids 必须字母开头,逗号分隔,总长 3-256(同一批最多 ~50 个 ID)
+        - @Transactional 全表事务,任何一段失败整体回滚
+        - @AuditAction 留痕到 console_operation_audit(aggregateId = #ids 整串)
+
+        清理顺序参考 scripts/db/wipe-non-system-tenants.sql:pipeline 运行 → workflow 运行 →
+        job 实例链 → file 相关 → workflow/pipeline/job 定义 → 配置 → 用户 → 租户本体。
+      operationId: cleanupTestDataByIds
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-zA-Z][a-zA-Z0-9_,-]{2,255}$'
+            example: td,te,tf,tg,th,tx
+          description: 精确 tenantId 列表(逗号分隔)
+      responses:
+        '200':
+          description: Cleanup result, map of table → row count deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTestDataCleanupResult'
+        '400':
+          description: ids validation failed / 列表含白名单保护租户
+        '403':
+          description: not ROLE_ADMIN
   /api/console/queries/operation-audits:
     get:
       tags: [Queries]

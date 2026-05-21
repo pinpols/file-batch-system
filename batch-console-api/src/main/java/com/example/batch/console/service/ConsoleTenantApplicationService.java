@@ -1,6 +1,6 @@
 package com.example.batch.console.service;
 
-import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.config.BatchProfileSupport;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
@@ -51,7 +51,7 @@ public class ConsoleTenantApplicationService {
   private final ConsoleTriggerProxyService triggerProxyService;
   private final ConsoleTenantConfigCopyService configCopyService;
   // bypassMode=true(本地/E2E)时关守卫,允许 e2e-/test- 前缀;production 时拒绝
-  private final BatchSecurityProperties securityProperties;
+  private final org.springframework.core.env.Environment environment;
 
   public record CreateTenantCommand(
       String tenantId,
@@ -73,11 +73,29 @@ public class ConsoleTenantApplicationService {
     }
   }
 
+  /**
+   * 永远从「租户切换列表」隐藏的 tenant_id:
+   *
+   * <ul>
+   *   <li>{@code default} — V55 seed 的「配置模板」库,新租户初始化时复制 queue/window/calendar/template,**不是业务租户**,
+   *       展示会让用户误以为可切到此租户查数据。FE 兜底已过滤,BE 再挡一层防御。
+   * </ul>
+   *
+   * <p>注:{@code default-tenant} / {@code system} 保留(local/admin 场景需要),由 FE 按角色决定是否展示。
+   */
+  private static final Set<String> HIDDEN_TENANT_IDS = Set.of("default");
+
   public PageResponse<ConsoleTenantResponse> listTenants(
       String keyword, String status, PageRequest pageRequest) {
     List<Map<String, Object>> rows = tenantMapper.selectByQuery(keyword, status, pageRequest);
     long total = tenantMapper.countByQuery(keyword, status);
-    List<ConsoleTenantResponse> items = rows.stream().map(this::toResponse).toList();
+    List<ConsoleTenantResponse> items =
+        rows.stream()
+            .map(this::toResponse)
+            .filter(t -> !HIDDEN_TENANT_IDS.contains(t.tenantId()))
+            .toList();
+    // total 不精确扣 1:filter 后量级影响 ≤ HIDDEN_TENANT_IDS.size(),分页显示可接受,
+    // 避免再发一次 count 查询。
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
@@ -89,8 +107,12 @@ public class ConsoleTenantApplicationService {
 
   @Transactional
   public ConsoleTenantResponse createTenant(CreateTenantCommand cmd) {
-    // 命名规范守卫:非 bypass(生产 / staging)拒绝保留前缀(e2e- / qa- / dev- / system 等)
-    ReservedPrefixGuard.checkTenantId(cmd.tenantId(), !securityProperties.isBypassMode());
+    // 命名规范守卫双模式(2026-05-21):
+    //   PROD:拒 test prefix(防 test 污染生产)
+    //   NON-PROD:必须 test prefix 或 DEV_FIXTURE 白名单(ta/tb/tc/default-tenant),防裸 ID 残留无主
+    // 之前用 bypassMode 判定会导致 local/e2e 完全跳过校验 → td/te/tx 等残留无主,cleanup 按 prefix 清不掉
+    boolean productionMode = BatchProfileSupport.isProductionProfile(environment);
+    ReservedPrefixGuard.checkTenantId(cmd.tenantId(), productionMode);
     if (tenantMapper.selectByTenantId(cmd.tenantId()) != null) {
       throw BizException.of(ResultCode.CONFLICT, "error.tenant.already_exists", cmd.tenantId());
     }
@@ -137,10 +159,10 @@ public class ConsoleTenantApplicationService {
         throw BizException.of(ResultCode.CONFLICT, "error.tenant.already_exists", spec.tenantId());
       }
     }
-    // 批量创建也走守卫,任一不合规整批拒绝(strict 模式由 bypassMode 判定)
-    boolean strict = !securityProperties.isBypassMode();
+    // 批量创建也走守卫,任一不合规整批拒绝(双模式由 productionProfile 判定)
+    boolean productionMode = BatchProfileSupport.isProductionProfile(environment);
     for (TenantSpec spec : cmd.tenants()) {
-      ReservedPrefixGuard.checkTenantId(spec.tenantId(), strict);
+      ReservedPrefixGuard.checkTenantId(spec.tenantId(), productionMode);
     }
     // username 单查暂保留（ConsoleUserAccountMapper 未暴露 batch 接口；命中冲突即拒绝整批）。
     for (TenantSpec spec : cmd.tenants()) {

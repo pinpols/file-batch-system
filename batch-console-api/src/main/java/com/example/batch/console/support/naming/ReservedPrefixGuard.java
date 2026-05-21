@@ -6,49 +6,81 @@ import java.util.List;
 import lombok.experimental.UtilityClass;
 
 /**
- * 命名空间守卫:拒绝用户用保留前缀创建 tenant / resource code,避免 e2e 测试与生产数据混淆, 也避免普通用户冒用 system / admin 这类高权限标识。
+ * 命名空间守卫:防止 tenant / resource code 命名残留与高权限冲突。
  *
- * <p>校验时机:Service 层的 create 入口(不要放 DTO @Pattern,因为 e2e 自身需要用 `e2e-` 前缀 创建临时租户)。production profile
- * 启用时由 application.yml 注入,本地 / e2e 默认关。
+ * <p><b>校验时机</b>:Service 层 create 入口。不放 DTO @Pattern —— e2e 自身需要 `e2e-` 前缀, prod 反之要拒 `e2e-`
+ * 前缀,环境强相关。
  *
- * <p>策略:**只拒新建**,老数据不动。这样:
+ * <p><b>双模式校验(2026-05-21 改造,移除 bypass-mode 豁免)</b>:
  *
- * <ul>
- *   <li>历史脏 tenant_id(如 `default` / `ta` / `e2e-1779...`)不会被强行 rename
- *   <li>e2e 测试用 `e2e-` 前缀依然合法(测试环境守卫关闭)
- *   <li>生产环境一旦开启,所有新建必须走业务命名(`bank-corp` / `mall-mvp` 这种)
- * </ul>
+ * <pre>
+ * | env       | id 形态                    | 结果      | 原因                                |
+ * |-----------|---------------------------|-----------|-------------------------------------|
+ * | 任何       | system/default/admin      | REJECT    | 永远保留                            |
+ * | PROD      | e2e-/qa-/dev-/local-/test- | REJECT    | 防 test 数据污染生产                |
+ * | PROD      | 业务命名(bank-corp 等)    | ALLOW     | 正常路径                            |
+ * | NON-PROD  | system/default/admin      | REJECT    | 同上                                |
+ * | NON-PROD  | DEV_FIXTURE 白名单         | ALLOW     | ta/tb/tc/default-tenant 团队常用    |
+ * | NON-PROD  | e2e-/qa-/dev-/local-/test- | ALLOW     | 鼓励 test prefix,残留可一键 cleanup |
+ * | NON-PROD  | 裸 ID(tx / mytest)       | REJECT    | 防残留:无前缀 = 清不掉(只能跑全 wipe) |
+ * </pre>
+ *
+ * <p>关键改动:**非 prod 不再放任无前缀创建** —— 之前 `bypass-mode=true` 时跳过校验导致 td/te/tx 等 裸 ID 残留无主,cleanup
+ * endpoint(按 prefix-)无法精确清掉。强制 test prefix 后, e2e 全程 cleanup 链路自闭。
  */
 @UtilityClass
 public class ReservedPrefixGuard {
 
-  /** 测试 / 环境 / 系统保留前缀 — 任何用户(包括 admin)在生产环境创建都拒。 */
+  /** 测试 / 环境 / 系统保留前缀 — prod 拒 / 非 prod 鼓励。 */
   public static final List<String> RESERVED_TENANT_PREFIXES =
       List.of("e2e-", "qa-", "dev-", "local-", "test-", "_internal-");
 
-  /** 完全保留的 tenant_id — 系统占用,不可重名。 */
+  /** 完全保留的 tenant_id — 系统占用,任何环境都不可重名。 */
   public static final List<String> RESERVED_TENANT_IDS = List.of("system", "default", "admin");
+
+  /**
+   * 非 prod 环境 dev fixture 白名单 —— 团队手测 / 部分 e2e 长期复用,允许无 test prefix 直接创建。 增删需评审(参考
+   * scripts/db/wipe-non-system-tenants.sql `:keep` 同步)。
+   */
+  public static final List<String> DEV_FIXTURE_TENANT_IDS =
+      List.of("ta", "tb", "tc", "default-tenant");
 
   /** 资源 code 保留前缀 — 防止业务方误用系统级标识。 */
   public static final List<String> RESERVED_CODE_PREFIXES = List.of("SYSTEM_", "INTERNAL_", "_");
 
   /**
-   * 校验新建租户的 tenantId 不撞保留前缀 / 保留字。
+   * 校验新建租户的 tenantId。
    *
-   * <p>strict=false 时不抛(本地 / e2e 用),strict=true 时拒。
+   * @param tenantId 待校验 ID;null/blank 直接放过(其它校验链负责必填)
+   * @param productionMode true=生产环境(拒 test prefix);false=非 prod(必须 test prefix 或白名单)
    */
-  public static void checkTenantId(String tenantId, boolean strict) {
-    if (!strict || tenantId == null || tenantId.isBlank()) return;
+  public static void checkTenantId(String tenantId, boolean productionMode) {
+    if (tenantId == null || tenantId.isBlank()) return;
     String lower = tenantId.toLowerCase();
+
+    // 永远拒:RESERVED_TENANT_IDS(system / default / admin)
     if (RESERVED_TENANT_IDS.contains(lower)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.reserved_id", tenantId);
     }
-    for (String prefix : RESERVED_TENANT_PREFIXES) {
-      if (lower.startsWith(prefix)) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.tenant.reserved_prefix", tenantId, prefix);
+
+    if (productionMode) {
+      // PROD:拒 test prefix(防 test 数据污染生产)
+      for (String prefix : RESERVED_TENANT_PREFIXES) {
+        if (lower.startsWith(prefix)) {
+          throw BizException.of(
+              ResultCode.INVALID_ARGUMENT, "error.tenant.reserved_prefix", tenantId, prefix);
+        }
       }
+      return;
     }
+
+    // NON-PROD:必须 test prefix 或 DEV_FIXTURE 白名单(防残留无主)
+    if (DEV_FIXTURE_TENANT_IDS.contains(lower)) return;
+    for (String prefix : RESERVED_TENANT_PREFIXES) {
+      if (lower.startsWith(prefix)) return;
+    }
+    throw BizException.of(
+        ResultCode.INVALID_ARGUMENT, "error.tenant.non_prod_require_test_prefix", tenantId);
   }
 
   /**

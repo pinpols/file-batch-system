@@ -1,7 +1,11 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -213,5 +217,131 @@ public class ConsoleAdminTestDataCleanupService {
       return input;
     }
     return input.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+  }
+
+  /** 永远不删的白名单 —— 跟 scripts/db/wipe-non-system-tenants.sql `:keep` 同步。改这里要同步改 SQL。 */
+  private static final Set<String> PROTECTED_TENANT_IDS =
+      Set.of("system", "default", "default-tenant", "ta", "tb", "tc");
+
+  /**
+   * 按精确 tenantId 列表清理。补刀 prefix 模式清不掉的纯短名残留(td/te/tx 这类)。
+   *
+   * <p>白名单(system/default/default-tenant/ta/tb/tc)出现在列表里直接抛拒绝整批,不静默跳过。
+   *
+   * <p>FK 顺序参考 wipe-non-system-tenants.sql:pipeline 运行 → workflow 运行 → job 实例链 → file 相关 → 各种 log →
+   * workflow 定义 → pipeline 定义 → job 定义 → 配置 → 租户本体。
+   */
+  @Transactional
+  public Map<String, Integer> cleanupByExactTenantIds(List<String> tenantIds) {
+    if (tenantIds == null || tenantIds.isEmpty()) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
+    }
+    for (String id : tenantIds) {
+      if (PROTECTED_TENANT_IDS.contains(id.toLowerCase())) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.tenant.protected_cannot_delete", id);
+      }
+    }
+    MapSqlParameterSource params = new MapSqlParameterSource("ids", tenantIds);
+    Map<String, Integer> result = new LinkedHashMap<>();
+
+    // 运行态 → 文件前置(pipeline 运行 + workflow 运行 + job 实例链)
+    result.put(
+        "workflow_node_run",
+        jdbc.update(
+            "DELETE FROM batch.workflow_node_run WHERE workflow_run_id IN "
+                + "(SELECT id FROM batch.workflow_run WHERE tenant_id IN (:ids))",
+            params));
+    result.put(
+        "workflow_run",
+        jdbc.update("DELETE FROM batch.workflow_run WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "pipeline_step_run",
+        jdbc.update(
+            "DELETE FROM batch.pipeline_step_run WHERE pipeline_instance_id IN "
+                + "(SELECT id FROM batch.pipeline_instance WHERE tenant_id IN (:ids))",
+            params));
+    result.put(
+        "pipeline_instance",
+        jdbc.update("DELETE FROM batch.pipeline_instance WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "job_task", jdbc.update("DELETE FROM batch.job_task WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "job_step_instance",
+        jdbc.update("DELETE FROM batch.job_step_instance WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "job_partition",
+        jdbc.update("DELETE FROM batch.job_partition WHERE tenant_id IN (:ids)", params));
+    // job_instance 自引,先 NULL 再删
+    jdbc.update(
+        "UPDATE batch.job_instance SET parent_instance_id = NULL WHERE parent_instance_id IN"
+            + " (SELECT id FROM batch.job_instance WHERE tenant_id IN (:ids))",
+        params);
+    result.put(
+        "job_instance",
+        jdbc.update("DELETE FROM batch.job_instance WHERE tenant_id IN (:ids)", params));
+
+    // 文件相关(必须在 pipeline_instance / job_instance 之后)
+    result.put(
+        "file_error_record",
+        jdbc.update("DELETE FROM batch.file_error_record WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "file_dispatch_record",
+        jdbc.update("DELETE FROM batch.file_dispatch_record WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "file_record",
+        jdbc.update("DELETE FROM batch.file_record WHERE tenant_id IN (:ids)", params));
+
+    // workflow / pipeline / job 定义
+    result.put(
+        "workflow_edge",
+        jdbc.update(
+            "DELETE FROM batch.workflow_edge WHERE workflow_definition_id IN "
+                + "(SELECT id FROM batch.workflow_definition WHERE tenant_id IN (:ids))",
+            params));
+    result.put(
+        "workflow_node",
+        jdbc.update(
+            "DELETE FROM batch.workflow_node WHERE workflow_definition_id IN "
+                + "(SELECT id FROM batch.workflow_definition WHERE tenant_id IN (:ids))",
+            params));
+    result.put(
+        "workflow_definition",
+        jdbc.update("DELETE FROM batch.workflow_definition WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "pipeline_step_definition",
+        jdbc.update(
+            "DELETE FROM batch.pipeline_step_definition WHERE pipeline_definition_id IN "
+                + "(SELECT id FROM batch.pipeline_definition WHERE tenant_id IN (:ids))",
+            params));
+    result.put(
+        "pipeline_definition",
+        jdbc.update("DELETE FROM batch.pipeline_definition WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "job_definition",
+        jdbc.update("DELETE FROM batch.job_definition WHERE tenant_id IN (:ids)", params));
+
+    // 配置 + 用户 + 租户本体
+    result.put(
+        "file_channel_config",
+        jdbc.update("DELETE FROM batch.file_channel_config WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "file_template_config",
+        jdbc.update("DELETE FROM batch.file_template_config WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "archive_policy",
+        jdbc.update("DELETE FROM batch.archive_policy WHERE tenant_id IN (:ids)", params));
+    result.put(
+        "console_user_account",
+        jdbc.update("DELETE FROM batch.console_user_account WHERE tenant_id IN (:ids)", params));
+    result.put("tenant", jdbc.update("DELETE FROM batch.tenant WHERE tenant_id IN (:ids)", params));
+
+    int totalDeleted = result.values().stream().mapToInt(Integer::intValue).sum();
+    log.info(
+        "[admin] test-data cleanup by exact ids={} totalDeleted={} breakdown={}",
+        tenantIds,
+        totalDeleted,
+        result);
+    return result;
   }
 }
