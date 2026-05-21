@@ -61,13 +61,9 @@ public class ImportStepExecutionAdapter
   protected ImportJobContext buildContext(
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) {
     ImportJobContext context = new ImportJobContext();
-    context.setTenantId(request.tenantId());
-    context.setJobCode(String.valueOf(contextMap.getOrDefault("jobCode", request.jobCode())));
+    populateCommonFields(context, request, contextMap);
     context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
-    context.setWorkerId(request.workerId());
-    context.setRawPayload(String.valueOf(contextMap.getOrDefault("payload", "")));
-    context.setAttributes(contextMap);
     return context;
   }
 
@@ -114,13 +110,4 @@ public class ImportStepExecutionAdapter
     return new StepExecutionResponse(true, "SUCCESS", "imported " + importedCount + " row(s)");
   }
 
-  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
-    if (value == null) {
-      return;
-    }
-    if (value instanceof String text && text.isBlank()) {
-      return;
-    }
-    target.put(key, value);
-  }
 }

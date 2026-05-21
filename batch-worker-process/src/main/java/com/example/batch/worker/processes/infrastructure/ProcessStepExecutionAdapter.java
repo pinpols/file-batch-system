@@ -62,12 +62,10 @@ public class ProcessStepExecutionAdapter
   protected ProcessJobContext buildContext(
       StepExecutionRequest request, Map<String, Object> attributes, Long fileId) throws Exception {
     ProcessJobContext context = new ProcessJobContext();
-    context.setTenantId(request.tenantId());
-    context.setJobCode(String.valueOf(attributes.getOrDefault("jobCode", request.jobCode())));
-    context.setWorkerId(request.workerId());
-    context.setRawPayload(String.valueOf(attributes.getOrDefault("payload", "")));
+    populateCommonFields(context, request, attributes);
+    // populateCommonFields 已 setRawPayload + setAttributes，这里再补 enrich（要在 attributes 已挂上后跑，
+    // 保证 enrich 写进去的 key 与 stage 读到的是同一 Map）。
     enrichProcessAttributes(context.getRawPayload(), attributes);
-    context.setAttributes(attributes);
     // payload 显式指定 batchKey 时,保留它做补偿/重跑隔离;否则交给 DefaultProcessStageExecutor 生成。
     // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
     // commit/feedback 的 WHERE 过滤兜住。
@@ -140,16 +138,6 @@ public class ProcessStepExecutionAdapter
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }
     return new StepExecutionResponse(true, "SUCCESS", "加工阶段执行完成");
-  }
-
-  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
-    if (value == null) {
-      return;
-    }
-    if (value instanceof String text && text.isBlank()) {
-      return;
-    }
-    target.put(key, value);
   }
 
   @Override

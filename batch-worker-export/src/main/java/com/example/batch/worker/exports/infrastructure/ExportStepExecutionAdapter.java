@@ -61,13 +61,9 @@ public class ExportStepExecutionAdapter
   protected ExportJobContext buildContext(
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
     ExportJobContext context = new ExportJobContext();
-    context.setTenantId(request.tenantId());
-    context.setJobCode(String.valueOf(contextMap.getOrDefault("jobCode", request.jobCode())));
+    populateCommonFields(context, request, contextMap);
     context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
-    context.setWorkerId(request.workerId());
-    context.setRawPayload(String.valueOf(contextMap.getOrDefault("payload", "")));
-    context.setAttributes(contextMap);
     Object exportPayload = contextMap.get("exportPayload");
     if (exportPayload == null
         && context.getRawPayload() != null
@@ -123,13 +119,4 @@ public class ExportStepExecutionAdapter
         true, "SUCCESS", objectName.isBlank() ? "导出阶段执行完成" : objectName);
   }
 
-  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
-    if (value == null) {
-      return;
-    }
-    if (value instanceof String text && text.isBlank()) {
-      return;
-    }
-    target.put(key, value);
-  }
 }

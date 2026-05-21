@@ -45,7 +45,8 @@ import java.util.UUID;
  *   <li>{@link #handlePipelineFailure} 用于在 pipeline 失败后触发补偿（如错误文件上传、状态回写）。
  * </ul>
  */
-public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements StepExecutionAdapter {
+public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionContext, R>
+    implements StepExecutionAdapter {
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
@@ -435,6 +436,36 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
 
   protected abstract StepExecutionResponse buildSuccessResponse(
       C context, List<R> results, Map<String, Object> attributes);
+
+  /**
+   * 4 个 {@code *StepExecutionAdapter#buildContext} 共有的"5 行 setter 模板" — tenantId / jobCode / workerId /
+   * rawPayload / attributes。子类先 {@code new XxxJobContext()} 再调本方法填公共字段，最后按需补自己独有的字段
+   * （如 ExportJobContext.fileId / DispatchJobContext.dispatchId / ProcessJobContext.batchKey）。
+   *
+   * <p>{@code bizDate} 不在此处填：4 个 context 里 ProcessJobContext 没有该字段，子类自己设。
+   */
+  protected void populateCommonFields(
+      C context, StepExecutionRequest request, Map<String, Object> attributes) {
+    context.setTenantId(request.tenantId());
+    context.setJobCode(String.valueOf(attributes.getOrDefault("jobCode", request.jobCode())));
+    context.setWorkerId(request.workerId());
+    context.setRawPayload(String.valueOf(attributes.getOrDefault("payload", "")));
+    context.setAttributes(attributes);
+  }
+
+  /**
+   * 4 个 {@code *StepExecutionAdapter#buildSuccessResponse} 里同字节复制的 NODE_OUTPUTS put helper：
+   * 空值 / 空白字符串视为缺省，不写入。
+   */
+  protected static void putIfPresent(Map<String, Object> target, String key, Object value) {
+    if (value == null) {
+      return;
+    }
+    if (value instanceof String text && text.isBlank()) {
+      return;
+    }
+    target.put(key, value);
+  }
 
   /**
    * pipeline 失败后的补偿钩子。默认实现：当 attributes 中存在 {@code fileId} 时，把 file_record 状态推进为 FAILED
