@@ -79,24 +79,24 @@ class ValidTenantIdTest {
   }
 
   @Test
-  void rejects_null() {
+  void rejectsNull() {
     assertThat(violations(null)).isNotEmpty();
   }
 
   @Test
-  void rejects_blank() {
+  void rejectsBlank() {
     assertThat(violations("   ")).isNotEmpty();
   }
 
   @Test
-  void accepts_max64() {
+  void acceptsMax64() {
     String s = "a" + "0".repeat(63);
     assertThat(s).hasSize(64);
     assertThat(violations(s)).isEmpty();
   }
 
   @Test
-  void rejects_over64() {
+  void rejectsOver64() {
     String s = "a" + "0".repeat(64); // 65
     assertThat(violations(s)).isNotEmpty();
   }

@@ -24,7 +24,7 @@ class SensorSqlValidatorTest {
   }
 
   @Test
-  void validate_update_throws() {
+  void validateUpdateThrows() {
     assertThatThrownBy(
             () -> SensorSqlValidator.validate("UPDATE biz.signal SET status='X'", ALLOWED))
         .isInstanceOf(IllegalArgumentException.class)

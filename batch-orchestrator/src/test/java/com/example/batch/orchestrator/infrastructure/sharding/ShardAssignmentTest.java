@@ -8,14 +8,14 @@ import org.junit.jupiter.api.Test;
 class ShardAssignmentTest {
 
   @Test
-  void single_returns_total_1_index_0() {
+  void singleReturnsTotal1Index0() {
     ShardAssignment assignment = ShardAssignment.single();
     assertThat(assignment.shardTotal()).isEqualTo(1);
     assertThat(assignment.shardIndex()).isEqualTo(0);
   }
 
   @Test
-  void rejects_zero_or_negative_total() {
+  void rejectsZeroOrNegativeTotal() {
     assertThatThrownBy(() -> new ShardAssignment(0, 0))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("shardTotal");
@@ -24,7 +24,7 @@ class ShardAssignmentTest {
   }
 
   @Test
-  void rejects_index_out_of_range() {
+  void rejectsIndexOutOfRange() {
     assertThatThrownBy(() -> new ShardAssignment(3, -1))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("shardIndex");
@@ -35,7 +35,7 @@ class ShardAssignmentTest {
   }
 
   @Test
-  void accepts_valid_assignment() {
+  void acceptsValidAssignment() {
     ShardAssignment a = new ShardAssignment(4, 2);
     assertThat(a.shardTotal()).isEqualTo(4);
     assertThat(a.shardIndex()).isEqualTo(2);

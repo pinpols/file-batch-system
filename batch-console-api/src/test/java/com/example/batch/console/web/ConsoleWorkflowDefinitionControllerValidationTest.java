@@ -103,7 +103,7 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
   }
 
   @Test
-  void accepts_all_valid_codes() throws Exception {
+  void acceptsAllValidCodes() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     String body =
         "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","

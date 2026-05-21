@@ -31,6 +31,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+// LENIENT 保留:setUp() 预置了 runtimeRepository.toLong / startStepRun 共享 stub,
+// 但 defaultStepDefinitions / 缺 PREPARE bean 直接抛错等用例并不触达这些 stub,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultProcessStageExecutorTest {

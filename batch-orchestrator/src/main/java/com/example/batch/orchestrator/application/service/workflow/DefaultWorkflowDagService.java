@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -101,7 +102,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     // S3 / R3-P1-1：批量预取 — 把所有 match 的 toNodeCode 一次性查回来，替代每条 edge 一次 SQL 的 N+1。
     // 先过 matchesOutgoingEdge 过滤再聚合 codes，避免拉无关节点。
     List<WorkflowEdgeEntity> matched = new ArrayList<>(outgoingEdges.size());
-    java.util.Set<String> wantedCodes = new java.util.LinkedHashSet<>();
+    Set<String> wantedCodes = new LinkedHashSet<>();
     for (WorkflowEdgeEntity edge : outgoingEdges) {
       if (!matchesOutgoingEdge(edge, success, payloadJson)) {
         continue;
@@ -191,7 +192,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     }
     // S3 / R3-P1-2：批量预取所有 fromNodeCode 的 latest run_seq 行，替代 N 次
     // selectLatestByWorkflowRunIdAndNodeCode。
-    java.util.Set<String> fromCodes = new java.util.LinkedHashSet<>();
+    Set<String> fromCodes = new LinkedHashSet<>();
     for (WorkflowEdgeEntity edge : incomingEdges) {
       if (edge.getFromNodeCode() != null) {
         fromCodes.add(edge.getFromNodeCode());
@@ -282,7 +283,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       return false;
     }
     // S3 / R3-P1-2：批量预取替代 N 次 selectLatestByWorkflowRunIdAndNodeCode
-    java.util.Set<String> fromCodes = new java.util.LinkedHashSet<>();
+    Set<String> fromCodes = new LinkedHashSet<>();
     for (WorkflowEdgeEntity edge : incoming) {
       if (edge.getFromNodeCode() != null) {
         fromCodes.add(edge.getFromNodeCode());

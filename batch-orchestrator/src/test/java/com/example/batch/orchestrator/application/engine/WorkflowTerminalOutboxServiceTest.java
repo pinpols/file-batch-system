@@ -42,7 +42,7 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("isTerminal: SUCCESS / FAILED / TERMINATED / *_DRY_RUN 都是终态")
-  void terminal_whitelist() {
+  void terminalWhitelist() {
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS.code())).isTrue();
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED.code())).isTrue();
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.TERMINATED.code()))
@@ -55,7 +55,7 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("isTerminal: RUNNING / CREATED / null / 未知 → 非终态")
-  void non_terminal() {
+  void nonTerminal() {
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.RUNNING.code()))
         .isFalse();
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.CREATED.code()))
@@ -68,21 +68,21 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("workflowRun=null → 不写表")
-  void skip_when_workflow_run_null() {
+  void skipWhenWorkflowRunNull() {
     service.writeTerminalEvent(null, WorkflowRunStatus.SUCCESS.code(), Instant.now());
     verify(domainEventPublisher, never()).publish(any());
   }
 
   @Test
   @DisplayName("非终态 status → 不写表(白名单守护)")
-  void skip_when_status_non_terminal() {
+  void skipWhenStatusNonTerminal() {
     service.writeTerminalEvent(workflowRun(), WorkflowRunStatus.RUNNING.code(), Instant.now());
     verify(domainEventPublisher, never()).publish(any());
   }
 
   @Test
   @DisplayName("SUCCESS 终态 → 落 outbox + payload/aggregate/event_type 完整")
-  void writes_outbox_for_success() {
+  void writesOutboxForSuccess() {
     WorkflowRunEntity run = workflowRun();
     Instant finished = Instant.parse("2026-05-20T10:00:00Z");
     service.writeTerminalEvent(run, WorkflowRunStatus.SUCCESS.code(), finished);
@@ -103,7 +103,7 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("finishedAt=null → payload.finishedAt 为 null,不抛")
-  void handles_null_finished_at() {
+  void handlesNullFinishedAt() {
     WorkflowRunEntity run = workflowRun();
     service.writeTerminalEvent(run, WorkflowRunStatus.FAILED.code(), null);
 

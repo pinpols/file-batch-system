@@ -20,10 +20,13 @@ import com.example.batch.common.enums.FileEncryptType;
 import com.example.batch.common.enums.FileTemplateFormat;
 import com.example.batch.common.enums.FileTemplateType;
 import com.example.batch.common.enums.HolidayRollRule;
+import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.OutOfWindowAction;
+import com.example.batch.common.enums.PipelineType;
 import com.example.batch.common.enums.QueuePriorityPolicy;
 import com.example.batch.common.enums.ResourceQueueType;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.ScheduleType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
@@ -69,19 +72,13 @@ public class ConfigPackageExcelWorkbookWriter {
    * PROCESS / schedule_type 多 EVENT/ONE_TIME / pipeline_type 漏 PROCESS / stage_code 含 TRANSFER
    * 等历史漂移问题已修复，CI 守护后续不再退步）。
    */
-  static final String[] JOB_TYPE_DROPDOWN =
-      com.example.batch.common.enums.DictEnum.codeList(com.example.batch.common.enums.JobType.class)
-          .toArray(String[]::new);
+  static final String[] JOB_TYPE_DROPDOWN = DictEnum.codeList(JobType.class).toArray(String[]::new);
 
   static final String[] SCHEDULE_TYPE_DROPDOWN =
-      com.example.batch.common.enums.DictEnum.codeList(
-              com.example.batch.common.enums.ScheduleType.class)
-          .toArray(String[]::new);
+      DictEnum.codeList(ScheduleType.class).toArray(String[]::new);
 
   static final String[] PIPELINE_TYPE_DROPDOWN =
-      com.example.batch.common.enums.DictEnum.codeList(
-              com.example.batch.common.enums.PipelineType.class)
-          .toArray(String[]::new);
+      DictEnum.codeList(PipelineType.class).toArray(String[]::new);
 
   /**
    * stage_code 在 worker 侧拆 3 enum（ImportStage / ExportStage / DispatchStage / ProcessStage 等模块自管），
@@ -562,7 +559,7 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   /** Per-sheet 默认「适用 Worker」（覆盖大多数列）。 */
-  private static final java.util.Map<String, String> APPLIES_TO_SHEET_DEFAULT =
+  private static final Map<String, String> APPLIES_TO_SHEET_DEFAULT =
       Map.ofEntries(
           Map.entry(RESOURCE_QUEUE_SHEET, "ALL（任意 Job 引用时必填）"),
           Map.entry(BUSINESS_CALENDAR_SHEET, "ALL（任意 Job 引用时必填）"),
@@ -582,7 +579,7 @@ public class ConfigPackageExcelWorkbookWriter {
    *
    * <p>没有列在这里的字段一律走 {@link #APPLIES_TO_SHEET_DEFAULT}。
    */
-  private static final java.util.Map<String, java.util.Map<String, String>> APPLIES_TO_OVERRIDE =
+  private static final Map<String, Map<String, String>> APPLIES_TO_OVERRIDE =
       Map.ofEntries(
           Map.entry(
               JOB_SHEET,

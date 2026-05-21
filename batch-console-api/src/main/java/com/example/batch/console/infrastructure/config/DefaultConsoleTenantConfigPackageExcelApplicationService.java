@@ -660,8 +660,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       if (!stepsForPipeline.isEmpty()) {
         // Excel 导入大批量场景:同一 pipeline 平均 5-10 step,百级 pipeline 导入时
         // 单插循环放大 5-10x;批量插入折成 1 次往返。
-        List<Map<String, Object>> batchStepRows =
-            new java.util.ArrayList<>(stepsForPipeline.size());
+        List<Map<String, Object>> batchStepRows = new ArrayList<>(stepsForPipeline.size());
         for (Map<String, String> step : stepsForPipeline) {
           batchStepRows.add(buildStepInsertParams(pipelineId, step));
         }

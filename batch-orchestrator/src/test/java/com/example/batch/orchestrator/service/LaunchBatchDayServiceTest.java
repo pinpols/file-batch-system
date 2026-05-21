@@ -103,7 +103,7 @@ class LaunchBatchDayServiceTest {
 
   @Test
   @DisplayName("request=null → 早退,不读 batch_day")
-  void null_request_short_circuits() {
+  void nullRequestShortCircuits() {
     service.doUpsertBatchDayInstance(null, jobDef("cal-1"), Map.of(), Instant.now());
     verify(batchDayInstanceMapper, never())
         .selectByTenantCalendarBizDate(anyString(), anyString(), any());
@@ -129,7 +129,7 @@ class LaunchBatchDayServiceTest {
 
   @Test
   @DisplayName("calendarCode 缺失 → 早退,不维护 batch_day")
-  void missing_calendar_code_short_circuits() {
+  void missingCalendarCodeShortCircuits() {
     LaunchRequest r = req("j1", LocalDate.of(2026, 5, 20), TriggerType.SCHEDULED);
     service.doUpsertBatchDayInstance(r, jobDef(null), Map.of(), Instant.now());
     verify(batchDayInstanceMapper, never())
@@ -144,7 +144,7 @@ class LaunchBatchDayServiceTest {
 
   @Test
   @DisplayName("isCatchUpLaunch: 仅 CATCH_UP 视为补跑;其他 trigger 返 false")
-  void catch_up_launch_only_for_catch_up_trigger() {
+  void catchUpLaunchOnlyForCatchUpTrigger() {
     assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.CATCH_UP))).isTrue();
     assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.SCHEDULED)))
         .isFalse();
@@ -157,7 +157,7 @@ class LaunchBatchDayServiceTest {
 
   @Test
   @DisplayName("isLateAccepted: lateArrival=true 且 arrivalStatus=LATE_ACCEPTED 才算迟到接受")
-  void late_accepted_requires_both_flags() {
+  void lateAcceptedRequiresBothFlags() {
     assertThat(
             service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "LATE_ACCEPTED")))
         .isTrue();
@@ -177,7 +177,7 @@ class LaunchBatchDayServiceTest {
 
   @Test
   @DisplayName("isLateAccepted: arrivalStatus 大小写不敏感")
-  void late_accepted_case_insensitive() {
+  void lateAcceptedCaseInsensitive() {
     assertThat(
             service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "late_accepted")))
         .isTrue();

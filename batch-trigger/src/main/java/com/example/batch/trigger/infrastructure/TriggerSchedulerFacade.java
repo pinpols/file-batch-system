@@ -235,7 +235,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
    * R7-A5: 用 ScheduleType.code() 替代字面量 + Map 路由替代 if-chain（CLAUDE.md §分支消除 + §领域字典）。 EVENT / MANUAL
    * 不在 map 内即静默跳过（无 Quartz 注册）。
    */
-  private final java.util.Map<String, Consumer<TriggerDescriptor>> scheduleHandlers =
+  private final Map<String, Consumer<TriggerDescriptor>> scheduleHandlers =
       Map.of(
           ScheduleType.CRON.code(), this::scheduleCronDescriptor,
           ScheduleType.FIXED_RATE.code(), this::scheduleFixedRateDescriptor);

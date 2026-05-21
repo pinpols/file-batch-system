@@ -32,6 +32,9 @@ import org.mockito.quality.Strictness;
  * V6-D-5: DefaultImportStageExecutor 5 路径单测 — success / business-error / infra-error /
  * step-not-found / pipeline-step-missing。和 DefaultExportStageExecutorTest 5 单测保持对称。
  */
+// LENIENT 保留:setUp() 在所有用例之前预置了 runtimeRepository.toLong / startStepRun 以及
+// stubStep() 内部对 stage()/implCode()/stepCode()/stepName() 的共享 stub,
+// 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DefaultImportStageExecutorTest {

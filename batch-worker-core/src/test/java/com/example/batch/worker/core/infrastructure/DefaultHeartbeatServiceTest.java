@@ -14,9 +14,10 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
@@ -29,6 +30,7 @@ import org.springframework.beans.factory.ObjectProvider;
  *   <li>多 LoadProvider → currentLoad 求和
  * </ul>
  */
+@ExtendWith(MockitoExtension.class)
 class DefaultHeartbeatServiceTest {
 
   @Mock private WorkerSelfRegistrationService registrationService;
@@ -39,7 +41,6 @@ class DefaultHeartbeatServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     service = new DefaultHeartbeatService(registrationService, runtimeState, loadProviders);
   }
 

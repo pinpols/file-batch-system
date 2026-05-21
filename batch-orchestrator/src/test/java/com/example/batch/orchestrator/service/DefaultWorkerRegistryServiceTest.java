@@ -63,7 +63,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("heartbeat: DRAINING 状态收到 ONLINE 心跳 → 保持 DRAINING")
-  void heartbeat_does_not_revert_draining_to_online() {
+  void heartbeatDoesNotRevertDrainingToOnline() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(
             entityWithStatus(WorkerRegistryStatus.DRAINING.code()),
@@ -80,7 +80,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("heartbeat: DECOMMISSIONED 状态收到 ONLINE 心跳 → 保持 DECOMMISSIONED")
-  void heartbeat_does_not_revert_decommissioned() {
+  void heartbeatDoesNotRevertDecommissioned() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(
             entityWithStatus(WorkerRegistryStatus.DECOMMISSIONED.code()),
@@ -97,7 +97,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("heartbeat: ONLINE 状态收到 ONLINE 心跳 → 保持 ONLINE(正常路径)")
-  void heartbeat_keeps_online() {
+  void heartbeatKeepsOnline() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(
             entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
@@ -114,7 +114,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("heartbeat: null DTO → 直接返 null,不读 DB")
-  void heartbeat_null_dto_returns_null() {
+  void heartbeatNullDtoReturnsNull() {
     assertThat(service.heartbeat("w1", null)).isNull();
     verify(mapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
   }
@@ -123,7 +123,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("heartbeat: 未注册 → 自动降级走 register(兜底首次 register 丢失)")
-  void heartbeat_falls_back_to_register_when_not_registered() {
+  void heartbeatFallsBackToRegisterWhenNotRegistered() {
     // heartbeat 读 null → 走 register;register 内部也读 null → 走 insert 路径
     // 最后 persist 后重读返回 ONLINE entity
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
@@ -140,7 +140,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("register: 新 worker → insert + 重读")
-  void register_new_worker_inserts() {
+  void registerNewWorkerInserts() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
 
@@ -153,7 +153,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("register: 已存在 worker(同 workerCode) → updateById,不抛错(重启重连场景)")
-  void register_existing_worker_updates() {
+  void registerExistingWorkerUpdates() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(
             entityWithStatus(WorkerRegistryStatus.OFFLINE.code()),
@@ -167,7 +167,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("register: 同 workerCode 重连应能从 DRAINING 改回 ONLINE(register 不受心跳保护规则限制)")
-  void register_can_change_draining_to_online() {
+  void registerCanChangeDrainingToOnline() {
     // 注意:register 走 resolveIncomingStatus(defaultStatus=ONLINE),不走 resolveHeartbeatStatus
     // 所以 DRAINING 在 register 路径下会被覆盖为 ONLINE
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
@@ -194,7 +194,7 @@ class DefaultWorkerRegistryServiceTest {
 
   @Test
   @DisplayName("deactivate: 触发 updateStatus(OFFLINE)")
-  void deactivate_marks_offline() {
+  void deactivateMarksOffline() {
     when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
         .thenReturn(
             entityWithStatus(WorkerRegistryStatus.ONLINE.code()),

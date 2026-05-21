@@ -82,7 +82,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: limit > 100 → clamp 到 100")
-  void history_clamps_upper_bound() {
+  void historyClampsUpperBound() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", 9999);
@@ -94,7 +94,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: limit < 1 → clamp 到 1")
-  void history_clamps_lower_bound() {
+  void historyClampsLowerBound() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", 0);
@@ -106,7 +106,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: 负数 limit → clamp 到 1")
-  void history_negative_clamps_to_one() {
+  void historyNegativeClampsToOne() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", -50);
@@ -118,7 +118,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: 合法范围内 limit 透传")
-  void history_passes_through_valid_limit() {
+  void historyPassesThroughValidLimit() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", 25);
@@ -129,7 +129,7 @@ class TenantSchedulerSnapshotServiceTest {
   @Test
   @DisplayName("history: 返回 mapper 的列表(无需关心 entity 字段)")
   @SuppressWarnings("unchecked")
-  void history_returns_mapper_result() {
+  void historyReturnsMapperResult() {
     @SuppressWarnings("rawtypes")
     List mockList = List.of();
     when(snapshotMapper.listRecent("ta", 10)).thenReturn(mockList);

@@ -820,10 +820,51 @@ public record ConsoleProperties(
 ### 14.1 技术栈
 
 - JUnit 5 + Mockito + AssertJ
-- `@MockitoSettings(strictness = LENIENT)` 按需使用
 - Spring Boot Test（集成测试）
+- 集成测试统一继承 `AbstractIntegrationTest`（`batch-common/src/test/.../testing/`），复用 Testcontainers PG / Kafka / Redis / MinIO；**禁** 各自 `@Testcontainers @SpringBootTest`
 
-### 14.2 命名约定
+### 14.2 Mock 初始化（强约束）
+
+✅ **新单测一律声明式**：
+
+```java
+@ExtendWith(MockitoExtension.class)
+class XxxServiceTest {
+    @Mock private FooMapper fooMapper;
+    @Mock private BarPublisher barPublisher;
+    @InjectMocks private XxxService service;
+
+    @Test
+    void shouldXxx_whenYyy() { ... }
+}
+```
+
+❌ **禁** 以下两种写法（旧代码改动时顺带迁）：
+
+```java
+// 命令式 openMocks
+@BeforeEach
+void setUp() { MockitoAnnotations.openMocks(this); }
+
+// 字段直 mock
+private FooMapper fooMapper = Mockito.mock(FooMapper.class);
+```
+
+构造器有循环引用（`@Lazy self`）的，`@InjectMocks` 后在 `@BeforeEach` 补 `ReflectionTestUtils.setField(service, "self", service);` 一行。
+
+### 14.3 Mock strictness
+
+默认 strict（`MockitoExtension` 自带），**禁** `@MockitoSettings(strictness = Strictness.LENIENT)` 当模板拷贝带入。
+
+只有「跨方法共享 stub 且部分方法不触达全部 stub」时才允许，**必须**在注解上方加中文注释说明原因，例如：
+
+```java
+// LENIENT 原因:setUp 预置了 STEP_NOT_FOUND/PIPELINE_STEP_MISSING 等场景共享 stub,
+// backoffSeconds 静态用例不触达全部 stub,strict 模式会误报。
+@MockitoSettings(strictness = Strictness.LENIENT)
+```
+
+### 14.4 命名约定
 
 ```java
 class ConsoleQueryControllerTest {
@@ -835,16 +876,32 @@ class ConsoleQueryControllerTest {
 }
 ```
 
-格式：`方法名_条件_预期结果`（省略 `should` 也可）。
+格式：`shouldXxx_whenYyy`（首选）或 `方法名_条件_预期结果`（省略 `should` 也可，老代码 ~48% 是此风格）。**禁** `testXxx` / `test1` / `xxx_test` / 全 snake_case 无语义结构。
 
-### 14.3 断言风格
+### 14.5 `@DisplayName`
+
+业务复杂或方法名表达不清时**强烈推荐**中文 `@DisplayName`（参考 `SoftDeleteRecoveryIntegrationTest`）；简单字段校验可省。**不要**只在少数模块用，整模块统一风格。
+
+### 14.6 断言风格
 
 统一使用 AssertJ 流式断言：
 
 ```java
 assertThat(result.code()).isEqualTo(ResultCode.SUCCESS);
 assertThat(list).hasSize(3).extracting("jobCode").contains("JOB_A");
+assertThatThrownBy(() -> service.doSth()).isInstanceOf(BizException.class);
 ```
+
+❌ **禁** JUnit Jupiter `Assertions.assertEquals / assertTrue / assertThrows`（`security-scan` 模块的 legacy 文件除外，下次改动时一并迁移）。
+
+❌ **禁** 反模式 `assertThat(x.equals(y)).isTrue()` —— 直接 `assertThat(x).isEqualTo(y)`。
+
+### 14.7 集成测试 fixture
+
+`*MutationIntegrationTest` 类的 `WebTestClient` 构造与请求体构造由公共基类 / Fixture 提供：
+
+- `AbstractMutationIntegrationTest`（继承 `AbstractIntegrationTest`）统一 `WebTestClient.bindToServer().baseUrl("http://localhost:" + port).responseTimeout(60s).build()`
+- 请求体优先使用 Request DTO + `ObjectMapper.writeValueAsString()`；不要在每个测试类各自维护 `private String body(...)` 字符串拼接
 
 ---
 
