@@ -46,8 +46,8 @@ public enum ScanStep {
                     list(options.mvnCommand(), "-P", "compliance", "org.owasp:dependency-check-maven:check",
                             "-DfailBuildOnCVSS=7",
                             "-DoutputDirectory=" + options.reportDir().resolve("dependency-check"),
-                            // 仓库根 dependency-check-suppressions.xml 已审计 CVE 白名单(OTel semconv / Log4j1 桥),需显式传入
-                            "-DsuppressionFile=" + root.resolve("dependency-check-suppressions.xml"),
+                            // scripts/ci/dependency-check-suppressions.xml 已审计 CVE 白名单(OTel semconv / Log4j1 桥 / Tomcat etc),需显式传入
+                            "-DsuppressionFile=" + root.resolve("scripts/ci/dependency-check-suppressions.xml"),
                             // dependency-check 12.x 把 -Dformat 的 CSV 写法当单一模板名解析（HTML,JSON.vsl
                             // 文件找不到），必须改用 -Dformats 重复传 或 ALL。这里用 ALL 一次生成全格式报告。
                             "-Dformats=ALL",

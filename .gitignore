@@ -44,3 +44,4 @@ reports/sonar/
 
 # Eclipse JDT / vscode-java per-module build output
 **/bin/
+.be-acceptance-state
