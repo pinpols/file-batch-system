@@ -77,13 +77,13 @@ public class ConsoleTenantApplicationService {
    * 永远从「租户切换列表」隐藏的 tenant_id:
    *
    * <ul>
-   *   <li>{@code default} — V55 seed 的「配置模板」库,新租户初始化时复制 queue/window/calendar/template,**不是业务租户**,
-   *       展示会让用户误以为可切到此租户查数据。FE 兜底已过滤,BE 再挡一层防御。
+   *   <li>{@code default} — V55 seed 的「配置模板」库,新租户初始化时复制 queue/window/calendar/template,**不是业务租户**。
+   *   <li>{@code default-tenant} — V42 演示账号 + V50 自动回填的孤儿;V51 已删账号, V148 在无引用时自动清表,残留场景作为防御性兜底。
    * </ul>
    *
-   * <p>注:{@code default-tenant} / {@code system} 保留(local/admin 场景需要),由 FE 按角色决定是否展示。
+   * <p>注:{@code system} 保留(管理员需要切到此租户管理跨租户配置),由 FE 按角色决定是否展示。
    */
-  private static final Set<String> HIDDEN_TENANT_IDS = Set.of("default");
+  private static final Set<String> HIDDEN_TENANT_IDS = Set.of("default", "default-tenant");
 
   public PageResponse<ConsoleTenantResponse> listTenants(
       String keyword, String status, PageRequest pageRequest) {

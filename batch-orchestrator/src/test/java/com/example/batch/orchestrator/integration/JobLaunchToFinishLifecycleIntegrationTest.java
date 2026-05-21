@@ -100,9 +100,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    JobTaskEntity claimed =
-        taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
     assertThat(claimed).isNotNull();
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
@@ -156,9 +154,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
     assertThat(tasks).isNotEmpty();
     JobTaskEntity task = tasks.get(0);
 
-    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    JobTaskEntity claimed =
-        taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
     assertThat(claimed).isNotNull();
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
@@ -179,5 +175,27 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
 
     JobInstanceEntity finishedInstance = jobInstanceMapper.selectById(TENANT, jobInstance.getId());
     assertThat(finishedInstance.getInstanceStatus()).isEqualTo(JobInstanceStatus.FAILED.code());
+  }
+
+  /**
+   * CI 环境 partition lease claim 与 worker registry 刷新可能竞态:首次 assignWorker 在 partition lease
+   * 还没就绪时 @Transactional 回滚返 READY。每次重试前先刷 worker_registry,最多重试 5 次,每次间隔 100ms。
+   */
+  private JobTaskEntity assignWorkerWithRetry(Long taskId, String workerCode) {
+    JobTaskEntity claimed = null;
+    for (int attempt = 0; attempt < 5; attempt++) {
+      LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+      claimed = taskExecutionService.assignWorker(TENANT, taskId, workerCode);
+      if (claimed != null && TaskStatus.RUNNING.code().equals(claimed.getTaskStatus())) {
+        return claimed;
+      }
+      try {
+        Thread.sleep(100L);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return claimed;
+      }
+    }
+    return claimed;
   }
 }
