@@ -28,6 +28,7 @@ import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
+import com.example.batch.testing.TestConstants.DeadLetter;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -209,7 +210,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldThrowWhenDeadLetterReplayConcurrencyConflict() {
-    DeadLetterTaskEntity dl = deadLetter(1L, "t1", "NEW");
+    DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
     when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
     when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
         .thenReturn(0);
@@ -221,7 +222,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldThrowWhenDeadLetterSourceTypeIsNotJobPartition() {
-    DeadLetterTaskEntity dl = deadLetter(1L, "t1", "NEW");
+    DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
     dl.setSourceType("JOB_TASK");
     when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
     when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
@@ -236,7 +237,7 @@ class DefaultRetryGovernanceServiceTest {
 
   @Test
   void shouldGiveUpWhenDeadLetterPartitionRowMissing() {
-    DeadLetterTaskEntity dl = deadLetter(1L, "t1", "NEW");
+    DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
     when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
     when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
         .thenReturn(1);
