@@ -67,8 +67,10 @@ public class JobLifecycleMetricsRecorder {
               }
               Instant resolvedFinished = finishedAt != null ? finishedAt : Instant.now();
               Duration duration = Duration.between(instance.getCreatedAt(), resolvedFinished);
+              // ADR-026:dry_run 维度切分指标 — Boolean 字段可能为 null,缺省按 false(非演练)处理
+              boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
               jobLifecycleMetrics.recordCompletion(
-                  tenantId, resolveJobType(instance), terminalStatus, duration);
+                  tenantId, resolveJobType(instance), terminalStatus, dryRun, duration);
             } catch (RuntimeException ex) {
               log.warn(
                   "record job lifecycle metrics failed after commit:"
