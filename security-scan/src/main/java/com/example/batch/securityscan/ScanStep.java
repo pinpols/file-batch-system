@@ -29,7 +29,11 @@ public enum ScanStep {
             case SECRET -> List.of(new ExternalCommand(
                     this,
                     "gitleaks",
-                    list(options.gitleaksCommand(), "detect", "--source", root.toString(), "--redact", "--no-banner", "--report-format", "json", "--report-path", options.reportDir().resolve("gitleaks.json").toString()),
+                    // 若仓库根存在 .gitleaks.toml,显式 --config 传入(extend useDefault=true + allowlist
+                    // 排除 build artifact / 已审计 fixture);否则 fall back 默认规则。
+                    java.nio.file.Files.exists(root.resolve(".gitleaks.toml"))
+                            ? list(options.gitleaksCommand(), "detect", "--source", root.toString(), "--config", root.resolve(".gitleaks.toml").toString(), "--redact", "--no-banner", "--report-format", "json", "--report-path", options.reportDir().resolve("gitleaks.json").toString())
+                            : list(options.gitleaksCommand(), "detect", "--source", root.toString(), "--redact", "--no-banner", "--report-format", "json", "--report-path", options.reportDir().resolve("gitleaks.json").toString()),
                     root
             ));
             case DEPS -> List.of(new ExternalCommand(

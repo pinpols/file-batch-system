@@ -1,0 +1,20 @@
+# gitleaks 配置:沿用默认规则集,补充本仓库的路径排除。
+# 默认规则集仍生效,这里只通过 allowlist 把已审计的非真实凭据和 build artifact 路径排除。
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "build artifacts + 测试 fixture + 文档示例(已审计,见 docs/analysis/security-scan-2026-05-16.md)"
+paths = [
+    '''(.*/)?target/.*''',
+    '''(.*/)?node_modules/.*''',
+    '''(.*/)?dist/.*''',
+    '''(.*/)?build/.*''',
+    # 本地开发 profile RSA 私钥,生产由 Helm Secret 注入覆盖
+    '''batch-console-api/src/main/resources/application-local\.yml''',
+    # 测试 fixture
+    '''batch-worker-import/src/test/resources/fixtures/test-rsa-private-pkcs8\.pem''',
+    # 文档示例
+    '''docs/runbook/realtime-sse-verification\.md''',
+]
