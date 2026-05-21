@@ -144,6 +144,25 @@ banner() {
   printf '%s\n\n' "$(printf '=%.0s' {1..64})"
 }
 
+# 清理「孤儿」testcontainers 容器(无 reuse-hash label):
+# 反复中断 mvn / kill -9 让 Ryuk 没机会清,withReuse 切换让旧无 hash 容器残留,
+# 累计后 docker daemon 内存吃紧。仅清无 reuse-hash 的孤儿,保留 reuse 容器。
+cleanup_orphan_testcontainers() {
+  command -v docker >/dev/null 2>&1 || return 0
+  local orphans
+  orphans=$(docker ps -q --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
+    if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | grep -q "reuse-hash"; then
+      printf '%s\n' "$cid"
+    fi
+  done)
+  if [[ -n "$orphans" ]]; then
+    local n
+    n=$(printf '%s\n' "$orphans" | wc -l | tr -d ' ')
+    printf '  清理 %d 个孤儿 testcontainer\n' "$n"
+    printf '%s\n' "$orphans" | xargs -r docker rm -f >/dev/null 2>&1 || true
+  fi
+}
+
 run_mvn() {
   local mvn_bin
   local _mvnd_bin="${HOME}/.local/bin/mvnd"
@@ -403,6 +422,7 @@ case "$MODE" in
 
   e2e)
     banner "E2E 测试（*E2eIT）"
+    cleanup_orphan_testcontainers
     {
       maybe_build && \
       run_mvn test -pl batch-e2e-tests \
@@ -418,6 +438,7 @@ case "$MODE" in
 
   default)
     banner "单元 + 集成测试（跳过 E2E）"
+    cleanup_orphan_testcontainers
     {
       maybe_build && \
       run_module_tests "" "${CORE_TEST_MODULES[@]}"
@@ -433,6 +454,7 @@ case "$MODE" in
 
   all)
     banner "全量测试：单元 + 集成 + E2E"
+    cleanup_orphan_testcontainers
 
     {
       maybe_build && \
@@ -447,6 +469,7 @@ case "$MODE" in
     extract_test_results "$LOG_ALL_UNIT_IT" "$LOG_ALL_UNIT_IT_PASSED" "$LOG_ALL_UNIT_IT_FAILED" "${_core_dirs[@]}"
 
     banner "E2E 测试（*E2eIT）"
+    cleanup_orphan_testcontainers
     {
       run_mvn test -pl batch-e2e-tests \
         -Dsurefire.failIfNoSpecifiedTests=false
