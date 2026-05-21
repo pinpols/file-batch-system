@@ -41,7 +41,7 @@ public class ChangePasswordRequest {
 `ConsoleAuthController.java`:
 ```java
 @PostMapping("/api/console/auth/change-password")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER', 'ROLE_USER')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER', 'ROLE_USER')")
 public ResponseEntity<?> changePassword(
   @RequestBody @Validated ChangePasswordRequest req,
   Authentication auth
