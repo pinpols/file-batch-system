@@ -92,7 +92,7 @@ public class SqlTemplateExportSqlValidator {
    * 子串匹配大小写不敏感地拒禁用函数(dblink / pg_terminate_backend 等),边界检查避免误判同名列。 与
    * SqlTransformComputeSqlValidator 同语义,保持 Export 与 Process 两条 SQL 路径一致守护。
    */
-  private static void checkNoForbiddenFunctions(String sql, java.util.List<String> forbidden) {
+  private static void checkNoForbiddenFunctions(String sql, List<String> forbidden) {
     String lower = sql.toLowerCase();
     for (String fn : forbidden) {
       String needle = fn.toLowerCase();
