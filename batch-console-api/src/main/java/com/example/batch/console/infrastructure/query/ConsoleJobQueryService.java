@@ -3,9 +3,12 @@ package com.example.batch.console.infrastructure.query;
 import static com.example.batch.console.infrastructure.query.ConsoleQuerySupport.*;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.common.page.CursorCodec;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.JobInstanceEntity;
 import com.example.batch.console.domain.entity.JobPartitionEntity;
@@ -25,6 +28,7 @@ import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,8 +68,8 @@ public class ConsoleJobQueryService {
     // ADR-031:cursor 模式 cursor key 是 id,与 sortBy=duration 互斥(duration 排序 cursor key 应该是 duration)
     // 不静默忽略 sortBy,直接拒绝,避免「客户端以为按 duration 翻页实际按 id」的隐性 bug
     if (cursorMode && "duration".equals(request.getSortBy())) {
-      throw com.example.batch.common.exception.BizException.of(
-          com.example.batch.common.enums.ResultCode.INVALID_ARGUMENT,
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
           "error.common.invalid_argument_detail",
           "sortBy=duration is not supported in cursor mode; remove cursor or use pageNo");
     }
@@ -100,8 +104,7 @@ public class ConsoleJobQueryService {
       String nextCursor =
           rows.size() < pageRequest.pageSize() || items.isEmpty()
               ? null
-              : com.example.batch.common.page.CursorCodec.encode(
-                  java.util.Map.of("id", rows.get(rows.size() - 1).getId()));
+              : CursorCodec.encode(Map.of("id", rows.get(rows.size() - 1).getId()));
       return PageResponse.cursor(items, pageRequest.pageSize(), nextCursor);
     }
     long total = jobMappers.jobInstanceMapper.countByQuery(query);
@@ -111,7 +114,7 @@ public class ConsoleJobQueryService {
   /** 把 controller 传来的 cursor token 解码出 id;损坏或缺字段返回 null(WHERE 自然命中 0 行降级)。 */
   private static Long decodeCursorId(String token) {
     if (token == null || token.isBlank()) return null;
-    Object raw = com.example.batch.common.page.CursorCodec.decode(token).get("id");
+    Object raw = CursorCodec.decode(token).get("id");
     if (raw instanceof Number n) return n.longValue();
     if (raw instanceof String s) {
       try {
