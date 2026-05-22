@@ -310,9 +310,11 @@ jobs:
       - name: Security scan — secrets
         if: needs.scope-and-validate.outputs.maven_scope != 'skip'
         shell: bash
-        # security-scan 不在根 reactor,fresh CI runner 没预构建 jar,带 --skip-build
-        # 会 exit 1。让脚本内部 mvn package。
-        run: bash scripts/ci/security-scan.sh -- --mode=secret
+        # security-scan 不在根 reactor,fresh runner 没预构建 jar,不能 --skip-build。
+        # --skip-tests:绕开 security-scan 子模块单测(纯内部 orchestrator/options 逻辑,
+        # 跟 scan 业务正确性无关,Java 25 + mockito javaagent 偶发 JVM crash 会让 PR 误挂)。
+        # 单测仍由 main 的 full-ci-gate security-scan job 兜底覆盖。
+        run: bash scripts/ci/security-scan.sh --skip-tests -- --mode=secret
 
       - name: Compile load-tests module
         if: needs.scope-and-validate.outputs.run_load_tests_build == 'true'
