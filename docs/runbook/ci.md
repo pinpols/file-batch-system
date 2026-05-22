@@ -237,6 +237,29 @@ make ops-compensate     # 触发补偿
 
 ---
 
+## PR 自动归并（auto-merge）
+
+两条独立路径，都基于 GitHub 原生 `gh pr merge --auto`（等所有 required check 绿了自动 squash merge），**不跳 check、不无 review merge**。
+
+| 路径 | 触发 | 是否自动 approve | 是否自动 enable auto-merge |
+|---|---|---|---|
+| `dependabot-auto-merge.yml` | Dependabot 开的 PR | patch bump / 安全告警 → ✅ | patch bump → ✅ |
+| `label-automerge.yml` | 任意人开 PR + 打 `automerge` 标签 | ❌（必须有人 review approve） | ✅ |
+
+**用法（label 路径）**：
+1. 开 PR
+2. 自己 review 一遍觉得 OK
+3. 给 PR 贴 `automerge` 标签
+4. Reviewer approve 后，所有 required check 一变绿 GH 自动 squash merge
+
+**撤销**：移除 `automerge` label + 在 PR 页面点 "Disable auto-merge"，或命令 `gh pr merge --disable-auto <PR_URL>`。
+
+**前置条件**（一次性，repo Settings）：
+- General → "Allow auto-merge" 必须勾上
+- Branch protection 必须设了 required status checks（否则 `--auto` 会立即 merge 失去保护）
+
+---
+
 ## 产物归档
 
 | 产物 | 来源流水线 | 保留天数 |

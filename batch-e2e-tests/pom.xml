@@ -150,6 +150,11 @@
                       下每个 IT 独立 JVM, alphabetical 是 class 间顺序的唯一权威 — 详见根
                       pom.xml surefire 段注释。
                     -->
+                    <!--
+                      e2e 单 IT ~5min,根 pom 的 rerunFailingTestsCount=2 在此会让一个 flaky
+                      多耗 10min,撑爆 shard 25min timeout。e2e 不重跑,失败直接看报告根因。
+                    -->
+                    <rerunFailingTestsCount>0</rerunFailingTestsCount>
                 </configuration>
             </plugin>
         </plugins>
