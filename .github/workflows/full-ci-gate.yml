@@ -54,6 +54,30 @@ jobs:
         run: |
           bash scripts/ci/run-full-regression.sh --skip-it-suite
 
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-ci-unit-it-reports
+          path: |
+            **/target/surefire-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Job 2: security scans — 拆独立 job 跟 unit-it 并发跑,省 2-3 min wall-clock。
+  # 4 个扫描串行(单 job 内): gitleaks secret / mvn deps / hadolint / trivy fs。
+  # 不依赖 unit-it 跑结果,失败独立报错不阻塞测试 job 上传 surefire。
+  # ===========================================================================
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
       - name: Install gitleaks
         shell: bash
         run: |
@@ -96,17 +120,8 @@ jobs:
           severity: CRITICAL,HIGH
           scanners: vuln,config
 
-      - name: Upload Surefire Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-ci-unit-it-reports
-          path: |
-            **/target/surefire-reports/**
-          retention-days: 14
-
   # ===========================================================================
-  # Job 2: e2e shard matrix。22 个 *E2eIT 按 LPT 均衡分成 4 组,并发跑。
+  # Job 3: e2e shard matrix。22 个 *E2eIT 按 LPT 均衡分成 4 组,并发跑。
   # 单 shard 预期 ~6-8 min(含 setup + testcontainers 启动)。
   # 4 shard 并发:总 wall-clock ~8-10 min,而非串行 25 min。
   #
