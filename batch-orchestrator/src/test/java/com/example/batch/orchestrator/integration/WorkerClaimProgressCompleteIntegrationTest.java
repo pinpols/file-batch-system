@@ -28,7 +28,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,7 +51,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@Order(2)
 class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
