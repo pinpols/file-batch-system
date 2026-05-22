@@ -1,0 +1,97 @@
+name: build-image
+
+# 镜像构建 + 推送 ghcr.io。
+# main push:每次 commit 都构建 7 个模块,tag = sha + latest。
+# tag(v*) push:发布场景,额外打 release tag(如 v1.2.3)。
+# 不接 K8s,实际部署由 promote-staging.yml + Argo CD 完成。
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  REGISTRY_NAMESPACE: pinpols
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - batch-trigger
+          - batch-orchestrator
+          - batch-console-api
+          - batch-worker-import
+          - batch-worker-export
+          - batch-worker-process
+          - batch-worker-dispatch
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Maven package (skip tests)
+        run: mvn -B -DskipTests -pl ${{ matrix.module }} -am package
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image name
+        id: img
+        run: |
+          name="${{ matrix.module }}"
+          short="${name#batch-}"
+          echo "image=${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/${short}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker meta (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.img.outputs.image }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.app
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            MODULE=${{ matrix.module }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.module }}
+          cache-to: type=gha,scope=${{ matrix.module }},mode=max

@@ -1,0 +1,48 @@
+# values-canary.yaml — 启用 flagger Canary 渐进式发布的覆盖 values。
+#
+# 用法:
+#   helm upgrade --install batch-platform helm/batch-platform/ \
+#     -f helm/batch-platform/values.yaml \
+#     -f helm/batch-platform/values-canary.yaml
+#
+# 仅 console-api 走 Canary(唯一对外 HTTP 入口)。
+# 其他 worker / orchestrator 内部异步消费,不在 mesh 切流范围内。
+
+canary:
+  enabled: true
+
+  # service mesh / ingress provider — 决定 flagger 用什么 CRD 切流量。
+  # 可选:istio / linkerd / contour / nginx / gloo / appmesh / kuma / traefik
+  # TODO ops:根据集群实际 mesh 填写
+  provider: nginx
+
+  # Prometheus 地址(flagger 拉取 metric 用)。
+  # TODO ops:替换成集群内真实 prometheus svc DNS
+  prometheusUrl: http://prometheus-server.monitoring.svc:9090
+
+  # Slack 通知 webhook(canary 进度 / rollback 推送)。
+  # TODO ops:secret 注入,values 里不要存明文
+  # slackUrl: ""
+
+# console-api 在 Canary 模式下的覆盖
+consoleApi:
+  # canary 时建议至少 2 replica,保证 primary + canary 各有冗余
+  replicaCount: 2
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+# ── 监控 ─────────────────────────────────────────────────────────────────────
+# canary 必须配 ServiceMonitor + Prometheus,否则 metric 拿不到自动判失败 → rollback
+serviceMonitor:
+  enabled: true
+
+# ── TODO ops 接入清单 ────────────────────────────────────────────────────────
+# 1. 集群预装 flagger:helm install flagger flagger/flagger -n flagger-system
+# 2. 集群预装 prometheus-operator(或现成 prometheus 实例)
+# 3. 选 mesh provider(本文件默认 nginx ingress,改 istio 需要额外注入 sidecar)
+# 4. ServiceMonitor / PodMonitor 抓到 console-api /actuator/prometheus 端点
+# 5. flagger MetricTemplate 自定义(可选,默认 request-success-rate / request-duration 已内置)
