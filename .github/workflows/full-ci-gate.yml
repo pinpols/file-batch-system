@@ -32,12 +32,32 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # Job 1: unit + IT(剔除 batch-e2e-tests)+ security scans
-  # 预期 ~14-18 min。e2e suite 拆到 e2e-shard job 并发跑。
+  # Job 1: 静态检查(PMD + Spotless + dependency boundary)。
+  # 独立小 job(~3-5 min),跟 unit-it 测试并发跑。
   # ===========================================================================
-  unit-it:
+  static-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: PMD + Spotless + dependency boundary
+        shell: bash
+        run: |
+          # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
+          mvn -DskipTests test-compile pmd:check spotless:check -fae -B
+
+  # ===========================================================================
+  # Job 2: unit-it-a — common + trigger + orchestrator(大头是 orchestrator IT)
+  # 本地 ~6 min,CI ~12-14 min(含 m2 cache cold + testcontainer pull)。
+  # ===========================================================================
+  unit-it-a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
@@ -46,21 +66,74 @@ jobs:
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
-        with:
-          compile-load-tests: "true"
 
-      - name: Run unit + IT (skip e2e suite)
+      - name: Cleanup orphan testcontainers (pre-IT)
         shell: bash
         run: |
-          bash scripts/ci/run-full-regression.sh --skip-it-suite
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Run unit + IT (common + trigger + orchestrator)
+        shell: bash
+        # -am 编译上游(本组无上游,但安全起见)。-fae 让所有 module 跑完再退出。
+        # 跳 PMD/Spotless(已在 static-checks job)。
+        run: |
+          mvn verify -pl batch-common,batch-trigger,batch-orchestrator -am \
+            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+            -fae -B
 
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-ci-unit-it-reports
+          name: full-ci-unit-it-a-reports
           path: |
             **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Job 3: unit-it-b — worker-* + console-api
+  # 本地 ~7:30,CI ~12-14 min。
+  # ===========================================================================
+  unit-it-b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Run unit + IT (worker-* + console-api)
+        shell: bash
+        # -am 让 worker / console-api 上游(common)被编译,不跑上游测试
+        run: |
+          mvn verify -pl batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-console-api -am \
+            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+            -fae -B
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-ci-unit-it-b-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
           retention-days: 14
 
   # ===========================================================================
