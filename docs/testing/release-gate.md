@@ -182,11 +182,11 @@ deploy smoke 现在分两层：
 
 ## Gate 收口状态
 
-当前 `pr-gate.yml`、`full-ci-gate.yml`、`staging-gate.yml` 与 `scripts/ci/run-full-regression.sh` 已形成闭环：
+当前 `pr-gate.yml`、`full-ci-gate.yml` 与 `scripts/ci/run-full-regression.sh` 已形成闭环：
 
 - PR Gate 负责受影响范围的快速回归
-- Full CI Gate 负责仓库级默认测试与 IT / E2E
-- Staging Gate 负责 deploy smoke、部署升级 / 回滚验证、load smoke 和巡检
+- Full CI Gate 负责仓库级默认测试与 IT / E2E + 安全扫(secret/deps/hadolint/trivy/Checkov)
+- ~~Staging Gate 负责 deploy smoke、部署升级 / 回滚验证、load smoke 和巡检~~ **(2026-05-23 删除:hosted runner 连不上 `*.svc.cluster.local`,这部分目前没有自动化兜底;deploy smoke / load smoke / 巡检 走人工 SOP 或未来 self-hosted runner)**
 
 剩余的不是 gate 结构，而是 staging 留档和 `--atomic` 失败观测的补齐。
 

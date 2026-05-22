@@ -2,33 +2,31 @@
 
 ## 概览
 
-项目有 **4 条** CI 流水线,覆盖从 PR 到生产就绪 + 周度容量回归的全流程:
+项目有 **2 条** CI 门禁流水线 + **1 条** ops 同步流水线:
 
 | 流水线 | 触发时机 | 目标 | 超时 |
 |---|---|---|---|
 | `pr-gate` | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈,阻断不合格 PR | 45 min |
-| `full-ci-gate` | push main(合并 PR 或直推) | 主干质量基线 | 75 min |
-| `staging-gate` | full-ci-gate 跑完 success 后**串行链式**触发 / 手动 dispatch | 生产就绪验证(含真实环境) | 90 min |
-| `capacity-gate` | 每周一 03:00 cron / 手动 dispatch | 容量基线回归 | — |
+| `full-ci-gate` | push main(合并 PR 或直推) | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
+| `promote-staging` | full-ci-gate 跑完 success 后 workflow_run 触发 | sync 主仓 sha → `file-batch-system-ops` 仓 | — |
+
+> **2026-05-23 删除 `staging-gate` / `capacity-gate`**:这两条门禁目标地址是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要做真·生产环境验证 / 容量回归,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress。
 
 ## 触发矩阵(开发者视角)
 
-| 场景 | pr-gate | full-ci-gate | staging-gate | capacity-gate |
-|---|:---:|:---:|:---:|:---:|
-| feature 分支自身 push | — | — | — | — |
-| **PR 到 main** | ✅ | — | — | — |
-| **PR 合并 → main 收到 push** | — | ✅ | ✅(等 full 成功) | — |
-| 直推 main(绕 PR) | — | ✅ | ✅(等 full 成功) | — |
-| 每周一 03:00 自动 | — | — | — | ✅ |
-| 手动 `workflow_dispatch` | 可手动 | 可手动 | 可手动 | 可手动 |
+| 场景 | pr-gate | full-ci-gate | promote-staging |
+|---|:---:|:---:|:---:|
+| feature 分支自身 push | — | — | — |
+| **PR 到 main** | ✅ | — | — |
+| **PR 合并 → main 收到 push** | — | ✅ | ✅(等 full 成功) |
+| 直推 main(绕 PR) | — | ✅ | ✅(等 full 成功) |
+| 手动 `workflow_dispatch` | 可手动 | 可手动 | — |
 
 ## 关键设计
 
 - **feature 分支自己 push 不跑任何 gate** — 开发可频繁推送无成本,门禁压力全在 PR 时
-- **`staging-gate` 用 `workflow_run` 等 `full-ci-gate` 完成**(不是并行),`if: workflow_run.conclusion == 'success'` 守护 — full 失败 staging 不会跑,避免浪费 90 min
-- **直推 main 跳过 pr-gate**(无审查),但 `full-ci-gate + staging-gate` 仍兜底回归
-- **`concurrency.group + cancel-in-progress`** 4 个 workflow 全配 — 同分支并发 push / 同 PR 多次推时,旧 run 自动取消省 runner
-- **`capacity-gate` 例外**:`cancel-in-progress: false`(容量基线跑到一半被打断会污染数据,等跑完才让下一轮启)
+- **直推 main 跳过 pr-gate**(无审查),但 `full-ci-gate` 仍兜底回归
+- **`concurrency.group + cancel-in-progress`** 全配 — 同分支并发 push / 同 PR 多次推时,旧 run 自动取消省 runner
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
 
 ## pr-gate 增量 vs full-ci-gate 全量(关键区别)
@@ -71,18 +69,6 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 
 **结论**:full-ci-gate 没配 `paths-ignore` — main 任何 push 都触发,**含纯文档 / 配置**。pr-gate 用 scope 探测省 runner,但 db/migration / OpenAPI 这类不在 case 列表里的"会影响运行时但 PR 不会自动升 full"的路径有盲区,改这类时建议手动 `workflow_dispatch` 触发 full-ci-gate 兜底。
 
-## capacity-gate(单列)
-
-走 staging 真实环境用 Gatling 跑 `CapacityBaselineSimulation`(25→200 users stepped-ramp),内置 SLO 断言:
-
-| SLO | 阈值 |
-|---|---|
-| write p95 | < 500ms |
-| read p99 | < 300ms |
-| 错误率 | < 1% |
-
-失败 = 容量退化,排查并**阻断生产发布**。手动 dispatch 可覆盖参数 `job_code` / `tenant_id`。
-
 ---
 
 ## 检查项汇总
@@ -94,11 +80,8 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | OpenAPI 路径对齐 | `check-console-openapi-paths.py` | 全部（setup-build-env） |
 | 模块依赖边界 | `check-dependency-boundaries.py` | 全部（run-full-regression） |
 | 编译 + 单元测试 | Maven `test` | 全部 |
-| 集成测试 (`*IntegrationTest`) | Maven `test` | full-ci-gate、staging-gate |
-| E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate、staging-gate |
-| Helm lint + template 渲染 | Helm CLI | staging-gate |
-| 部署 smoke（升级 / 回滚） | `run-full-regression.sh --with-deploy-smoke` | staging-gate |
-| 负载 smoke（Gatling） | `run-full-regression.sh --with-load-smoke` | staging-gate |
+| 集成测试 (`*IntegrationTest`) | Maven `test` | full-ci-gate |
+| E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
 
 ### 提醒项（失败只通知，不阻断流水线）
 
@@ -111,8 +94,7 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | 依赖漏洞扫描 | `security-scan.sh --mode=deps` | full-ci-gate | 已知 CVE |
 | Dockerfile lint | Hadolint | full-ci-gate | `docker/Dockerfile.app` |
 | 文件系统安全扫描 | Trivy `fs` | full-ci-gate | CRITICAL/HIGH 漏洞 + IaC 配置 |
-| DAST 动态扫描 | `security-scan.sh --mode=dast` | staging-gate | 目标：staging console-api |
-| K8s manifest 安全 | Checkov | staging-gate | Helm chart 安全基线 |
+| K8s manifest 安全 | Checkov | full-ci-gate | Helm chart 安全基线 |
 
 > **提醒项升阻断策略**：移除对应步骤的 `continue-on-error: true`（workflow）或脚本中的 `|| true`（run-full-regression.sh），
 > 阈值稳定后逐步收紧，不建议一次全部升级。
