@@ -13,10 +13,8 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
-import com.example.batch.trigger.application.TriggerOutboxRelay;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
-import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.service.TriggerService;
 import com.example.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Duration;
@@ -76,8 +74,6 @@ class TriggerAsyncLaunchE2eIT extends AbstractIntegrationTest {
 
   @Autowired private TriggerService triggerService;
   @Autowired private TriggerOutboxEventMapper outboxMapper;
-  @Autowired private TriggerRequestMapper triggerRequestMapper;
-  @Autowired private TriggerOutboxRelay relay;
 
   @Value("${spring.kafka.bootstrap-servers}")
   private String bootstrapServers;

@@ -1,9 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.example.batch.common.config.MinioStorageProperties;
-import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
-import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
@@ -11,7 +9,6 @@ import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -78,31 +75,5 @@ public class DispatchFileContentResolver {
       }
       throw e;
     }
-  }
-
-  private Map<String, Object> fileSecurity(Map<String, Object> fileRecord) {
-    Object metadata = fileRecord.get("metadata_json");
-    if (metadata instanceof Map<?, ?> map) {
-      Map<String, Object> security = new LinkedHashMap<>();
-      map.forEach((k, v) -> security.put(String.valueOf(k), v));
-      return security;
-    }
-    String text = metadata == null ? null : String.valueOf(metadata);
-    if (Texts.hasText(text)) {
-      try {
-        Object parsed = JsonUtils.fromJson(text, Map.class);
-        if (parsed instanceof Map<?, ?> map) {
-          Map<String, Object> security = new LinkedHashMap<>();
-          map.forEach((k, v) -> security.put(String.valueOf(k), v));
-          return security;
-        }
-      } catch (Exception ignored) {
-        SwallowedExceptionLogger.warn(
-            DispatchFileContentResolver.class, "catch:Exception", ignored);
-
-        return Map.of();
-      }
-    }
-    return Map.of();
   }
 }

@@ -182,6 +182,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   /** 把 resolver 返回的 alias map 合并到 sourcePayload 的 {@code crossDay} 字段下，供 ADR-009 DSL 引用。 */
+  @SuppressWarnings("unchecked")
   private String mergeCrossDayPayload(String sourcePayload, Map<String, Object> crossDay) {
     if (crossDay == null || crossDay.isEmpty()) {
       return sourcePayload;
@@ -189,7 +190,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     Map<String, Object> base =
         sourcePayload == null || sourcePayload.isBlank()
             ? new LinkedHashMap<>()
-            : new LinkedHashMap<>(JsonUtils.fromJson(sourcePayload, Map.class));
+            : new LinkedHashMap<>(
+                (Map<String, Object>) JsonUtils.fromJson(sourcePayload, Map.class));
     base.put("crossDay", crossDay);
     return JsonUtils.toJson(base);
   }

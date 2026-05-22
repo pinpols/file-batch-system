@@ -137,8 +137,9 @@ public class HttpPollSensorPolicy implements SensorPolicy {
     }
     JsonNode node = objectMapper.readTree(headersJson);
     if (node != null && node.isObject()) {
-      node.fields()
-          .forEachRemaining(entry -> headers.add(entry.getKey(), entry.getValue().asText()));
+      for (Map.Entry<String, JsonNode> entry : node.properties()) {
+        headers.add(entry.getKey(), entry.getValue().asText());
+      }
     }
     return headers;
   }

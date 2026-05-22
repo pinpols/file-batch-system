@@ -1,5 +1,7 @@
 # CI/CD 5 项落地遗留 / 待验证清单
 
+> **⚠️ 2026-05-23 状态更新**:`promote-staging.yml`(下方多次引用)已删除;`OPS_REPO_TOKEN` 这条 followup 不再适用。涉及 `staging-gate` / `capacity-gate` 的 followup 同样作废(workflow 也删了)。详见 [ci.md](./ci.md) 顶部。
+>
 > 日期:2026-05-22
 > 范围:CD roadmap(`docs/runbook/ci-cd-roadmap-2026-05-22.md` 已丢失,以本文档为准)5 项实施后的遗留项 + 跟进 owner。
 > 主 commit:`9dd6c4ee`(TIA + GitOps)+ `a9a99501`(GHA cache + Dependabot)。

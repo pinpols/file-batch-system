@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
@@ -27,6 +26,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -53,8 +53,7 @@ class ConsoleDryRunPlanControllerTest {
   @BeforeEach
   void setUp() {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+    ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
@@ -67,7 +66,7 @@ class ConsoleDryRunPlanControllerTest {
     when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
     when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
     when(bodySpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(any(ParameterizedTypeReference.class)))
+    when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
         .thenReturn(Map.of("level", "L1", "ok", true));
 
     mockMvc =

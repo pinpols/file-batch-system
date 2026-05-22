@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub;
@@ -19,7 +18,6 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -34,8 +32,7 @@ class ConsolePipelineDefinitionRealtimeControllerTest {
   @BeforeEach
   void setUp() {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+    ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory);
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
@@ -53,11 +50,10 @@ class ConsolePipelineDefinitionRealtimeControllerTest {
 
   @Test
   void shouldExposeDomainRealtimeStreamOnPipelineDefinitionsController() throws Exception {
-    MvcResult result =
-        mockMvc
-            .perform(get("/api/console/pipeline-definitions/events").param("tenantId", "t1"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    mockMvc
+        .perform(get("/api/console/pipeline-definitions/events").param("tenantId", "t1"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
 
     verify(realtimeEventHub).subscribe("t1", "pipeline-definitions", null, null, null);
   }

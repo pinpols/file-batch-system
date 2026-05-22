@@ -3,7 +3,7 @@ name: build-image
 # 镜像构建 + 推送 ghcr.io。
 # main push:每次 commit 都构建 7 个模块,tag = sha + latest。
 # tag(v*) push:发布场景,额外打 release tag(如 v1.2.3)。
-# 不接 K8s,实际部署由 promote-staging.yml + Argo CD 完成。
+# 不接 K8s,实际部署走人工 SOP(原 promote-staging.yml 2026-05-23 删,见 docs/runbook/ci.md)。
 on:
   push:
     branches:

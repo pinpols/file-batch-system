@@ -26,6 +26,7 @@ class ConsoleIdempotencyInterceptorTest {
   private HandlerMethod idempotentHandler;
 
   @BeforeEach
+  @SuppressWarnings("unchecked")
   void setUp() throws NoSuchMethodException {
     redisTemplate = mock(StringRedisTemplate.class);
     valueOps = mock(ValueOperations.class);

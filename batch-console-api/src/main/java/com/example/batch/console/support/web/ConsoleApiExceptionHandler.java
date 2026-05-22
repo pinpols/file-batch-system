@@ -1,6 +1,5 @@
 package com.example.batch.console.support.web;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.dto.CommonResponse;
@@ -66,7 +65,6 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class ConsoleApiExceptionHandler {
 
   private final ConsoleResponseFactory responseFactory;
-  private final BatchSecurityProperties batchSecurityProperties;
 
   // setter 注入,保持 @RequiredArgsConstructor 生成的构造器签名不变(避免破坏所有
   // 已构造该 handler 的测试)。BizMessageResolver 在 batch-common 自动装配。

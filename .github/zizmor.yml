@@ -19,8 +19,5 @@ rules:
       - .github/workflows/workflow-lint.yml
       - .github/workflows/full-ci-gate.yml
       - .github/workflows/pr-gate.yml
-      - .github/workflows/staging-gate.yml
-      - .github/workflows/capacity-gate.yml
       - .github/workflows/build-image.yml
-      - .github/workflows/promote-staging.yml
       - .github/workflows/dependabot-auto-merge.yml

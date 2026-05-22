@@ -114,6 +114,11 @@ public class ConsolePushSender {
     }
   }
 
+  // TODO: web-push 5.1.1 的 PushService.sendAsync(Notification) 被标 deprecated,
+  // 但替换路径(send / 新签名)在该库内部仍依赖 Apache HttpClient 4 的 HttpResponse,
+  // 且未提供非阻塞等价物;贸然迁移会改变线程模型与超时语义。
+  // 等升级 web-push >= 6.x(切换到 HttpClient 5 / CompletableFuture)再统一迁移。
+  @SuppressWarnings("deprecation")
   private void sendOne(ConsolePushSubscriptionEntity sub, byte[] body) {
     try {
       // web-push 5.1.1 没有 .subscription(Subscription) builder 方法;直接用

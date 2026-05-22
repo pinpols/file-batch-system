@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-    # 纯文档 / 许可证 / 编辑器配置 改动不触发 full reactor(75min) + 后续 staging-gate(90min)。
+    # 纯文档 / 许可证 / 编辑器配置 改动不触发 full reactor(75min)。
     # 注意:docs/api/** 是契约文档(OpenAPI + protocol),不在 ignore 列表 — schema 漂移仍要 CI 兜底。
     # 注意:db/migration/** / helm/** / scripts/** / pom.xml / .github/workflows/** 都不 ignore。
     paths-ignore:
@@ -241,6 +241,14 @@ jobs:
           exit-code: '1'
           severity: CRITICAL,HIGH
           scanners: vuln,config
+
+      - name: K8s manifest security — Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: helm/batch-platform
+          framework: helm
+          soft_fail: false
+          output_format: cli
 
   # ===========================================================================
   # Job 3: e2e shard matrix。22 个 *E2eIT 按 LPT 均衡分成 4 组,并发跑。

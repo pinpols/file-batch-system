@@ -26,7 +26,6 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -52,7 +51,6 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final Environment environment;
   // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
   // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
   private final ConsoleTenantGuard tenantGuard;
@@ -420,8 +418,4 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
       String traceId,
       String reason,
       Long extendWaitSeconds) {}
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
-  }
 }

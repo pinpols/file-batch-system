@@ -116,7 +116,6 @@ public class ConfigPackageExcelWorkbookWriter {
   private static final String GUIDE_TRUE = "TRUE";
   private static final String GUIDE_FALSE = "FALSE";
   private static final String GUIDE_NONE = "NONE";
-  private static final String GUIDE_BOOL_HINT = "请填写 TRUE 或 FALSE";
   private static final String GUIDE_ENABLED_DESC = "是否启用。";
   private static final String GUIDE_TENANT_DESC = "所属租户。";
   private static final String GUIDE_TENANT_EXAMPLE = "tenant-a";

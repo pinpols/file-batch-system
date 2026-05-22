@@ -10,7 +10,6 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.config.ConsoleConfigApplicationService;
 import com.example.batch.console.application.report.ConsoleQueryApplicationService;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.report.DefaultConsoleReportExcelApplicationService;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
 import com.example.batch.console.web.response.config.ConsoleConfigReleaseResponse;
@@ -20,7 +19,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.env.Environment;
 
 class DefaultConsoleReportExcelApplicationServiceTest {
 
@@ -28,20 +26,12 @@ class DefaultConsoleReportExcelApplicationServiceTest {
   void shouldExportConfigReleasesWorkbook() throws Exception {
     ConsoleConfigApplicationService configService = mock(ConsoleConfigApplicationService.class);
     ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);
-    ConsoleOrchestratorClientProperties properties =
-        mock(ConsoleOrchestratorClientProperties.class);
     com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient
         orchestratorInternalRestClient =
             mock(com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient.class);
-    Environment environment = mock(Environment.class);
     DefaultConsoleReportExcelApplicationService service =
         new DefaultConsoleReportExcelApplicationService(
-            configService,
-            queryService,
-            properties,
-            orchestratorInternalRestClient,
-            environment,
-            dateTimeSupport());
+            configService, queryService, orchestratorInternalRestClient, dateTimeSupport());
     when(configService.configReleases(any()))
         .thenReturn(
             List.of(

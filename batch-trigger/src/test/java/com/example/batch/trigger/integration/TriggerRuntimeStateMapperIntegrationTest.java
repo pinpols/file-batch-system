@@ -206,8 +206,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
     mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
 
-    int released =
-        mapper.releaseStaleMarkers(BatchDateTimeSupport.utcNow().minus(Duration.ofMinutes(5)));
+    mapper.releaseStaleMarkers(BatchDateTimeSupport.utcNow().minus(Duration.ofMinutes(5)));
     // 刚写入的 marker(scheduled_at = 现在)不在 release 范围
     TriggerRuntimeStateEntity afterRelease = mapper.selectByJobDefinitionId(jobDefId);
     assertThat(afterRelease.getScheduledFireMarker()).isEqualTo("leader-A");

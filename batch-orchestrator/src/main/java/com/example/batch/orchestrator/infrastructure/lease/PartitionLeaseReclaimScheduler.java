@@ -7,7 +7,6 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -47,7 +46,6 @@ import org.springframework.stereotype.Component;
 public class PartitionLeaseReclaimScheduler {
 
   private final JobPartitionMapper jobPartitionMapper;
-  private final JobTaskMapper jobTaskMapper;
   private final PartitionReclaimUnit reclaimUnit;
   private final BatchOrchestratorGovernanceProperties governance;
   private final OrchestratorGracefulShutdown gracefulShutdown;

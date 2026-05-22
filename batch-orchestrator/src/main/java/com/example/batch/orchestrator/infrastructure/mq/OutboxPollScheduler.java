@@ -177,7 +177,6 @@ public class OutboxPollScheduler {
       scheduleNext(null);
       return;
     }
-    @SuppressWarnings("unchecked")
     ScheduleForwarderResult[] holder = new ScheduleForwarderResult[1];
     try {
       lockingTaskExecutor.executeWithLock(

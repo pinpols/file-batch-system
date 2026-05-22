@@ -4,7 +4,6 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.trigger.config.WheelSchedulerProperties;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.support.TriggerDescriptor;
@@ -51,7 +50,6 @@ public class WheelTriggerReconciler {
   private final TriggerRuntimeStateMapper stateMapper;
   private final CronExpressionAdapter cronAdapter;
   private final BatchTimezoneProvider timezoneProvider;
-  private final WheelSchedulerProperties props;
 
   /**
    * 每个 (tenant, jobCode, expr) 唯一组合的"已警告过"记录。同一坏 cron 在 30s/次的 reconcile 循环里 只在<b>首次发现 +
