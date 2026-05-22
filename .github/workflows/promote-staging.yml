@@ -26,7 +26,21 @@ jobs:
       APP_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
+      # 缺 OPS_REPO_TOKEN 时干净跳过(不 fail,出 warning),
+      # 配 PAT 后自动进正常流程。
+      - name: Preflight — require OPS_REPO_TOKEN
+        id: preflight
+        env:
+          TOKEN: ${{ secrets.OPS_REPO_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::OPS_REPO_TOKEN not configured — skipping promote-staging."
+            echo "::warning::配置: Settings → Secrets and variables → Actions → OPS_REPO_TOKEN (PAT, write to ${{ env.OPS_REPO }})"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout ops repo
+        if: steps.preflight.outputs.skip != 'true'
         uses: actions/checkout@v6
         with:
           repository: ${{ env.OPS_REPO }}
@@ -35,9 +49,11 @@ jobs:
           path: ops
 
       - name: Install yq
+        if: steps.preflight.outputs.skip != 'true'
         uses: mikefarah/yq@v4.44.3
 
       - name: Bump 7 module image.tag → ${{ env.APP_SHA }}
+        if: steps.preflight.outputs.skip != 'true'
         working-directory: ops
         run: |
           set -eux
@@ -49,6 +65,7 @@ jobs:
           git diff "${FILE}" || true
 
       - name: Create PR in ops repo
+        if: steps.preflight.outputs.skip != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           path: ops
