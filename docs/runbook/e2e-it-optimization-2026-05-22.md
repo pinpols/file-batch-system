@@ -5,8 +5,23 @@
 ## TL;DR
 
 - **本地全 reactor verify**:`mvn verify` 串行 ~25 min(已优化,基线是 ~30 min)
-- **CI(full-ci-gate)**:拆 `unit-it` + `e2e-shard×4` 2 个 job 并发,**总时长 30→15 min**
+- **CI(full-ci-gate)**:7 job 全并发,**wall-clock 30 min → 6:32**(-77%,run `26263116015`)
 - 唯一不可压的:`WorkerProcessRestartRecoveryE2eIT`(122s,@DirtiesContext 强 reload)
+
+### 2026-05-22 末轮 CI 实测(run 26263116015,wall-clock 6:32)
+
+| Job | 耗时 | 内容 |
+|---|---|---|
+| security-scan | 1:11 ❌ | gitleaks pre-existing,与本轮优化无关 |
+| static-checks | 2:02 ✅ | PMD + Spotless + dep-boundary |
+| unit-it-a | 4:43 ✅ | common + trigger + orchestrator |
+| unit-it-b | 6:22 ✅ | worker-* + console-api(瓶颈) |
+| e2e-shard 1 | 6:03 ✅ | LPT 最长 shard |
+| e2e-shard 2 | 5:45 ✅ | |
+| e2e-shard 3 | 6:00 ✅ | |
+| e2e-shard 4 | 6:27 ✅ | |
+
+下一轮瓶颈:`unit-it-b` 6:22(若要再砍,拆 worker-* 与 console-api 成 2 job,可降到 ~4 min)。
 
 ## 措施分层
 
