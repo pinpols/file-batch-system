@@ -51,7 +51,7 @@ jobs:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
