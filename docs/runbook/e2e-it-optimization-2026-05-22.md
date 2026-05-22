@@ -166,16 +166,22 @@ bash scripts/local/run-tests.sh e2e   # ~22 min
 
 ### CI 上的并发跑(自动触发)
 - `push main`:`full-ci-gate` workflow 自动跑
-- `unit-it` job + `e2e-shard×4` matrix 并发,wall-clock ~15-17 min
+- 8 job 全并发:`static-checks` + `unit-it-a` + `unit-it-b` + `security-scan` + `e2e-shard×4`
+- 实测 wall-clock **~6:25**(run 26268987041)
 
 ### 下次扩容(若再要提速)
 
-| 路径 | 减时 | 工程量 |
-|---|---|---|
-| e2e shard 4→8 | ~3-4 min | 低(改 matrix 列表)|
-| `WorkerProcessRestartRecovery` 独立成 1 个 shard(避免 max) | -1~2 min | 低 |
-| reactor `mvn -T 2`(unit-it 并行) | -3~5 min | 中(pom 注释说撞端口竞态,需实测)|
-| 改测试架构:每 IT 独立 PG schema | -10 min | **高**(改 AbstractIntegrationTest + Flyway)|
+当前瓶颈:`unit-it-b` 6:16 / `e2e-shard 3,4` 6:19。setup overhead 已占 ~40%
+(checkout + setup-java + m2 cache restore + mvn install),边际收益骤降。
+
+| 路径 | 减时 | 工程量 | 评估 |
+|---|---|---|---|
+| e2e shard 4→8 | ~1 min | 低(改 matrix 列表) | 可做,但 setup 翻倍 |
+| `WorkerProcessRestartRecovery` 独立成 1 个 shard(避免 max) | -1 min | 低 | 可做 |
+| reactor `mvn -T 2`(unit-it 并行) | -2~3 min | 中(pom 注释说撞端口竞态) | 高风险 |
+| 改测试架构:每 IT 独立 PG schema | -10 min | **高**(改 AbstractIntegrationTest + Flyway)| 大改 |
+| **Testcontainer 镜像预热** | ~10s | 中 | **不做**(本质拉取 ~10-15s/job,占比 < 3%,actions/cache + docker save 实现复杂)|
+| **当前止步**(6:25 够低)| 0 | 0 | ⭐ **推荐** |
 
 ## Commit 历史
 
@@ -186,4 +192,11 @@ bash scripts/local/run-tests.sh e2e   # ~22 min
 | `16373b1e` | spotless javadoc 折行修复 |
 | `eb5a56f8` | AlertRoutingSaveRequest @NotBlank + 测试 mock 补字段 |
 | `62190647` | `cleanup_orphan_testcontainers()` 本地+CI 测前清 |
-| `<待补>`   | CI `full-ci-gate` 拆 unit-it + e2e-shard×4 |
+| `241badda` | e2e-shard `mvn install` 排除 batch-e2e-tests(无 jar artifact)|
+| `142bfd2e` | CI `full-ci-gate` 拆 unit-it + security-scan + e2e-shard×4 |
+| `0a4cdfe5` | 拆 unit-it 成 static-checks + unit-it-a + unit-it-b 并发 |
+| `9fa5273c` | gitleaks allowlist `idem-*` 幂等键避免误报 |
+| `0bd93576` | gitleaks 升级 8.18.4→8.30.1 + PEM header 测试 allowlist |
+| `94881dd1` | trivy 0.55.2→0.70.0(0.55.2 release 资源已 404)|
+| `2d8d522c` | dep-check 标 continue-on-error,NVD API NPE 不阻塞下游 |
+| `c0575092` | doc 记录 security-scan 修通后 wall-clock 6:25 全绿 |
