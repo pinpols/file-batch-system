@@ -37,7 +37,9 @@ jobs:
         run: |
           # 官方推荐下载脚本(带 SHA 自校验)。
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -color
+          # shellcheck -S warning:过滤 style/info 级噪声(SC2012/SC2129 等),
+          # 只在 warning+ 才挂 — workflow yaml 自身的语法/语义错仍全量报。
+          ./actionlint -color -shellcheck="shellcheck -S warning"
 
   zizmor:
     runs-on: ubuntu-latest
