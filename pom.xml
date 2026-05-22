@@ -426,7 +426,7 @@
                         <plugin>
                             <groupId>com.github.spotbugs</groupId>
                             <artifactId>spotbugs-maven-plugin</artifactId>
-                            <version>4.9.3.0</version>
+                            <version>4.9.8.3</version>
                             <!--
                               注意:截至 2026-05-20,SpotBugs core 4.9.3 仅支持到 Java 23 (bytecode v67)。
                               本项目 maven.compiler.release=25 (v69),SpotBugs 暂无法解析 → 报
