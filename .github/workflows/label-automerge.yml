@@ -1,0 +1,47 @@
+name: Label auto-merge
+
+# 给 PR 打 'automerge' 标签 → 标记 GH auto-merge(等所有 required check 绿了自动合)
+#
+# 用法:
+#   1) 开 PR
+#   2) 自己 review 一下 + 觉得 OK,在 PR 页面贴 label 'automerge'
+#   3) reviewer approve 后,所有 required check 一变绿 GH 自动 squash merge
+#
+# 安全性:
+#   - **不** 自动 approve(必须有人 review approve 才会 merge)
+#   - **不** 跳过 required status checks(pr-gate / codeql / workflow-lint 都要绿)
+#   - **不** 影响 branch protection rule(只是把 PR 进 GH auto-merge 队列)
+#   - 撤销:把 'automerge' label 删掉 + 'gh pr merge --disable-auto'
+#
+# 跟 dependabot-auto-merge 区别:
+#   - dependabot:仅 patch bump 走 approve + auto-merge,本仓默认拉新 dev 依赖锁
+#   - label:对任意人开的 PR 都生效,只要打了 label,适合 chore/docs/refactor
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+# 同 PR 上反复打 label 触发多次,只保留最后一次执行
+concurrency:
+  group: label-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  enable-auto-merge:
+    if: >
+      github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'automerge')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enable PR auto-merge (squash)
+        # --auto:GH 标记成"等 required check 绿了自动 merge",不立即合
+        # --squash:对齐本仓默认(release-please / changelog 友好)
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "$PR_URL"

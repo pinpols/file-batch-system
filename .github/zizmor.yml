@@ -1,0 +1,26 @@
+# zizmor 配置:跟项目 action 策略对齐。
+#
+# 1) unpinned-uses 降到 ref-pin(允许 @v4 / @v3.x 风格),不强制 SHA pin。
+#    理由:Dependabot 已配 github-actions ecosystem 周升级,每次 PR 验证一遍上游
+#    tag 安全;强制 SHA pin 后每次 Dependabot 升级都要人工确认 SHA,维护成本远高于
+#    潜在收益。trade-off 见 docs/runbook/ci.md。
+#
+# 2) artipacked 全部忽略:checkout 默认带 token 留 .git/config 在 workspace,
+#    被 actions/upload-artifact 打包外泄属理论风险;本仓 upload-artifact 只上传
+#    target/surefire-reports/** 明确路径,无 .git 暴露面。
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
+  artipacked:
+    ignore:
+      - .github/workflows/codeql.yml
+      - .github/workflows/workflow-lint.yml
+      - .github/workflows/full-ci-gate.yml
+      - .github/workflows/pr-gate.yml
+      - .github/workflows/staging-gate.yml
+      - .github/workflows/capacity-gate.yml
+      - .github/workflows/build-image.yml
+      - .github/workflows/promote-staging.yml
+      - .github/workflows/dependabot-auto-merge.yml
