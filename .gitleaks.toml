@@ -17,6 +17,8 @@ paths = [
     '''batch-worker-import/src/test/resources/fixtures/test-rsa-private-pkcs8\.pem''',
     # 文档示例
     '''docs/runbook/realtime-sse-verification\.md''',
+    # 测试代码:PEM header/footer 字面量(用于 strip 解析,非真私钥)
+    '''batch-worker-import/src/test/java/com/example/batch/worker/imports/preprocess/ImportPreprocessPipelineRsaTest\.java''',
 ]
 regexes = [
     # 幂等键 header value(`idem-*` 形态),不是 API key,被 generic-api-key 规则误报。
