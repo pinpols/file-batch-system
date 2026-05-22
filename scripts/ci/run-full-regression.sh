@@ -535,7 +535,7 @@ fi
 if [[ "$RUN_LOAD_SMOKE" == true ]]; then
   run_step \
     "Load Smoke (JobLaunchSimulation)" \
-    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=JobLaunchSimulation -Dusers.peak=\${BATCH_LOAD_SMOKE_USERS_PEAK:-5} -Dduration.seconds=\${BATCH_LOAD_SMOKE_DURATION_SECONDS:-30} -Dramp.seconds=\${BATCH_LOAD_SMOKE_RAMP_SECONDS:-10}"
+    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=com.example.batch.loadtest.simulations.JobLaunchSimulation -Dusers.peak=\${BATCH_LOAD_SMOKE_USERS_PEAK:-5} -Dduration.seconds=\${BATCH_LOAD_SMOKE_DURATION_SECONDS:-30} -Dramp.seconds=\${BATCH_LOAD_SMOKE_RAMP_SECONDS:-10}"
 fi
 
 if [[ "$RUN_LOAD_CAPACITY" == true ]]; then
@@ -543,7 +543,7 @@ if [[ "$RUN_LOAD_CAPACITY" == true ]]; then
   # 失败即非零退出，作为容量回归门禁。stepped ramp 25→200 users，约 5-10 分钟。
   run_step \
     "Capacity Baseline (CapacityBaselineSimulation)" \
-    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=CapacityBaselineSimulation -DjobCode=\${BATCH_LOAD_CAPACITY_JOB_CODE:-E2E_IMPORT_LOAD} -DtenantId=\${BATCH_LOAD_CAPACITY_TENANT_ID:-t1}"
+    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=com.example.batch.loadtest.simulations.CapacityBaselineSimulation -DjobCode=\${BATCH_LOAD_CAPACITY_JOB_CODE:-E2E_IMPORT_LOAD} -DtenantId=\${BATCH_LOAD_CAPACITY_TENANT_ID:-t1}"
 fi
 
 if [[ "$RUN_DEPLOY_SMOKE" == true ]]; then
