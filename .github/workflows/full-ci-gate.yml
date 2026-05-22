@@ -52,8 +52,11 @@ jobs:
           mvn -DskipTests test-compile pmd:check spotless:check -fae -B
 
   # ===========================================================================
-  # Job 2: unit-it-a — common + trigger + orchestrator(大头是 orchestrator IT)
-  # 本地 ~6 min,CI ~12-14 min(含 m2 cache cold + testcontainer pull)。
+  # 3 shard 按 IT 压力均化(2026-05-22 实测重排,对齐 pr-gate):
+  #   a:  orchestrator + worker-core               (~3 min)
+  #   b1: common + trigger + worker-process + worker-dispatch  (~3.5 min)
+  #   b2: worker-import + worker-export + console-api          (~4 min)
+  # wall-clock 由 b2 决定 ≤ 4 min(加 overhead ~5 min),目标 ≤ 6 min。
   # ===========================================================================
   unit-it-a:
     runs-on: ubuntu-latest
@@ -75,12 +78,11 @@ jobs:
             awk '$0 !~ /reuse-hash/ {print $1}' | \
             xargs -r docker rm -f >/dev/null 2>&1 || true
 
-      - name: Run unit + IT (common + trigger + orchestrator)
+      - name: Run unit + IT (orchestrator + worker-core)
         shell: bash
-        # -am 编译上游(本组无上游,但安全起见)。-fae 让所有 module 跑完再退出。
-        # 跳 PMD/Spotless(已在 static-checks job)。
+        # -am 编译上游,跳 PMD/Spotless(已在 static-checks job)
         run: |
-          mvn verify -pl batch-common,batch-trigger,batch-orchestrator -am \
+          mvn verify -pl batch-orchestrator,batch-worker-core -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -95,12 +97,11 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # Job 3: unit-it-b — worker-* + console-api
-  # 本地 ~7:30,CI ~12-14 min。
+  # Job 3: unit-it-b1 — common + trigger + worker-process + worker-dispatch
   # ===========================================================================
-  unit-it-b:
+  unit-it-b1:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     env:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
@@ -118,11 +119,10 @@ jobs:
             awk '$0 !~ /reuse-hash/ {print $1}' | \
             xargs -r docker rm -f >/dev/null 2>&1 || true
 
-      - name: Run unit + IT (worker-* + console-api)
+      - name: Run unit + IT (common + trigger + worker-process + worker-dispatch)
         shell: bash
-        # -am 让 worker / console-api 上游(common)被编译,不跑上游测试
         run: |
-          mvn verify -pl batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-console-api -am \
+          mvn verify -pl batch-common,batch-trigger,batch-worker-process,batch-worker-dispatch -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -130,7 +130,47 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-ci-unit-it-b-reports
+          name: full-ci-unit-it-b1-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Job 4: unit-it-b2 — worker-import + worker-export + console-api
+  # ===========================================================================
+  unit-it-b2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Run unit + IT (worker-import + worker-export + console-api)
+        shell: bash
+        run: |
+          mvn verify -pl batch-worker-import,batch-worker-export,batch-console-api -am \
+            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+            -fae -B
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-ci-unit-it-b2-reports
           path: |
             **/target/surefire-reports/**
             **/target/failsafe-reports/**
