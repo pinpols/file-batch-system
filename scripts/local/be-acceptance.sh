@@ -180,10 +180,14 @@ step_1_build_restart() {
     mv ~/.local/bin/mvnd ~/.local/bin/mvnd.bak
     note "mvnd 临时禁用(Step 9 会恢复)"
   fi
-  mvn package -DskipTests -pl batch-console-api -am -q > "$LOG_DIR/step1-mvn.log" 2>&1
-  local jar=$(find batch-console-api/target -name "*-exec.jar" -mmin -10 | head -1)
+  # 用 mvn 退出码判成功,不用 jar mtime(mvn -q 见无改动时 no-op,jar 不会重新打包)
+  if ! mvn package -DskipTests -pl batch-console-api -am -q > "$LOG_DIR/step1-mvn.log" 2>&1; then
+    ng "mvn package 失败(看 $LOG_DIR/step1-mvn.log)"
+    return 1
+  fi
+  local jar=$(find batch-console-api/target -name "*-exec.jar" | head -1)
   if [[ -z "$jar" ]]; then
-    ng "未找到新 build 的 jar(看 $LOG_DIR/step1-mvn.log)"
+    ng "exec jar 不存在(看 $LOG_DIR/step1-mvn.log)"
     return 1
   fi
   cp "$jar" build/runtime-jars/console.jar
@@ -399,37 +403,45 @@ run_step() {
 # ── 执行 ────────────────────────────────────────────────────
 START_TS=$(date +%s)
 printf "${BLUE}═════ BE Acceptance — 跑步骤: %s%s ═════${RST}\n" "${RUN_STEPS[*]}" \
-  "$( (( PARALLEL == 1 )) && echo ' (并行: 2/3/4)' )"
+  "$( (( PARALLEL == 1 )) && echo ' (并行: 2+3,E2E 4 串行)' )"
 
 if (( PARALLEL == 1 )); then
-  # 2/3/4(单测 / IT / E2E)并发跑;其它步骤照常串行
+  # 2(单测)+ 3(IT)并发跑;4(E2E)等 3 完成后串行
+  # 原因:E2E 和 IT 都跑 mvn test 触碰 batch-common/trigger/orchestrator/... 的
+  # target/test-classes,并发会 race 出 "X cannot be resolved" 编译假阳。
+  # 单测只跑 batch-common 单测 + 不动 reactor,跟 IT 并行无冲突。
   for n in "${RUN_STEPS[@]}"; do
     should_run "$n" || continue
     case "$n" in
-      2|3|4) ;;  # 留到并行段
+      2|3|4) ;;  # 留到下面专门处理
       *)  run_step "$n" ;;
     esac
   done
-  # 并行启 2/3/4
+  # 并行启 2 + 3
   PIDS=()
-  for n in 2 3 4; do
+  for n in 2 3; do
     should_run "$n" || continue
     (run_step "$n" > "$LOG_DIR/step${n}-parallel.log" 2>&1) &
     PIDS+=($!)
     printf "${DIM}   并行启 step %d(pid=$!)${RST}\n" "$n"
   done
-  # 等所有并行结束
+  # 等 2+3 结束
   if (( ${#PIDS[@]} > 0 )); then
     for pid in "${PIDS[@]}"; do
       wait "$pid" || SEQ_FAIL=$((SEQ_FAIL+1))
     done
   fi
-  # 汇报并行段输出
-  for n in 2 3 4; do
+  # 汇报 2+3 输出
+  for n in 2 3; do
     [[ -f "$LOG_DIR/step${n}-parallel.log" ]] || continue
     printf "\n${BLUE}── step %d 输出 ──${RST}\n" "$n"
     cat "$LOG_DIR/step${n}-parallel.log"
   done
+  # 串行跑 4(E2E),避免和 IT race
+  if should_run 4; then
+    printf "${DIM}   串行跑 step 4(E2E,避免与 IT race)${RST}\n"
+    run_step 4
+  fi
 else
   for n in "${RUN_STEPS[@]}"; do
     should_run "$n" || continue
