@@ -122,9 +122,15 @@ jobs:
 
           for file in "${changed_files[@]}"; do
             case "$file" in
-              pom.xml|.mvn/*|.github/workflows/*|scripts/ci/*|scripts/local/*|helm/*|docker-compose.yml|batch-common/*)
+              pom.xml|.mvn/*|scripts/ci/*|scripts/local/*|helm/*|docker-compose.yml|batch-common/*)
                 full_scope=true
                 run_load_tests_build=true
+                ;;
+              # 改 .github/workflows/* 不再触发 full reactor:workflow 自身错由
+              # workflow-lint / actionlint / zizmor / codeql 等独立 workflow 自查覆盖,
+              # 与 java 单测/IT 互不影响。原先一并算 full_scope 导致改 yml 注释
+              # 也拉 9 模块 maven 全跑(20+ min 纯浪费)。
+              .github/workflows/*|.github/actions/*)
                 ;;
               batch-trigger/*)
                 selected_modules[batch-trigger]=1
