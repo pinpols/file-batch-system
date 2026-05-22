@@ -204,6 +204,17 @@
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
                     <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
+                    <!--
+                      class 间顺序统一权威源(全 reactor 默认):
+                        - alphabetical 跨机 / 跨 JDK 稳定, debug 可读
+                        - reuseForks=true 单 JVM 串多 class 时, JUnit5 ClassOrderer 仍可叠加(若启用)
+                        - batch-e2e-tests override reuseForks=false 时 ClassOrderer 失效,
+                          alphabetical 是唯一权威 — 见 batch-e2e-tests/pom.xml + junit-platform.properties
+                      历史:2026-05-22 前 batch-orchestrator/batch-e2e-tests 各自靠 @Order + ClassOrderer
+                      控顺序, e2e 因 fork 隔离实际失效(隐性死代码), orch 真生效但"敏感用例先后"
+                      无文档化依赖。统一到 surefire runOrder 一处, 消除歧义。
+                    -->
+                    <runOrder>alphabetical</runOrder>
                     <argLine>@{argLine} --enable-native-access=ALL-UNNAMED -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
                     <excludes>
                         <!-- Shared composed annotation, not an executable test class. -->
