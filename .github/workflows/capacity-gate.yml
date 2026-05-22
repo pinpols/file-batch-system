@@ -39,7 +39,7 @@ jobs:
       CONSOLE_BASE_URL: ${{ vars.STAGING_CONSOLE_BASE_URL || 'http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:8080' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
