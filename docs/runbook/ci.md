@@ -2,25 +2,24 @@
 
 ## 概览
 
-项目有 **2 条** CI 门禁流水线 + **1 条** ops 同步流水线:
+项目有 **2 条** CI 门禁流水线:
 
 | 流水线 | 触发时机 | 目标 | 超时 |
 |---|---|---|---|
 | `pr-gate` | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈,阻断不合格 PR | 45 min |
 | `full-ci-gate` | push main(合并 PR 或直推) | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
-| `promote-staging` | full-ci-gate 跑完 success 后 workflow_run 触发 | sync 主仓 sha → `file-batch-system-ops` 仓 | — |
 
-> **2026-05-23 删除 `staging-gate` / `capacity-gate`**:这两条门禁目标地址是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要做真·生产环境验证 / 容量回归,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress。
+> **2026-05-23 删除 `staging-gate` / `capacity-gate` / `promote-staging`**:前两条目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;后一条要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
 
 ## 触发矩阵(开发者视角)
 
-| 场景 | pr-gate | full-ci-gate | promote-staging |
-|---|:---:|:---:|:---:|
-| feature 分支自身 push | — | — | — |
-| **PR 到 main** | ✅ | — | — |
-| **PR 合并 → main 收到 push** | — | ✅ | ✅(等 full 成功) |
-| 直推 main(绕 PR) | — | ✅ | ✅(等 full 成功) |
-| 手动 `workflow_dispatch` | 可手动 | 可手动 | — |
+| 场景 | pr-gate | full-ci-gate |
+|---|:---:|:---:|
+| feature 分支自身 push | — | — |
+| **PR 到 main** | ✅ | — |
+| **PR 合并 → main 收到 push** | — | ✅ |
+| 直推 main(绕 PR) | — | ✅ |
+| 手动 `workflow_dispatch` | 可手动 | 可手动 |
 
 ## 关键设计
 
@@ -246,8 +245,7 @@ make ops-compensate     # 触发补偿
 
 | 产物 | 来源流水线 | 保留天数 |
 |---|---|---|
-| Surefire 测试报告 | pr-gate、full-ci-gate、staging-gate | 14 / 14 / 30 天 |
-| Gatling 压测报告 | staging-gate | 30 天 |
+| Surefire 测试报告 | pr-gate、full-ci-gate | 14 天 |
 
 ---
 
@@ -262,9 +260,6 @@ make ops-compensate     # 触发补偿
 | workflow-lint | 0:18 | 改 `.github/workflows/**` | ≤1m | ✅ |
 | full-ci-gate | 6:19 | push main / nightly / 手动 | ≤10m | ✅(已贴目标) |
 | build-image | 2:53 | push main / tag | ≤6m | ✅(-73% vs 旧 10:54) |
-| promote-staging | 0:10 | 镜像推完触发 | ≤6m | ✅ skip(无 token) |
-| staging-gate | 0:08 | full-ci-gate 成功 / 手动 | ≤90m | ✅ skip(无 K8s) |
-| capacity-gate | 0:07 | 周一 03:00 UTC / 手动 | ≤45m | ✅ skip(无 staging URL) |
 
 ### Job 级分布
 
@@ -277,20 +272,6 @@ make ops-compensate     # 触发补偿
 **build-image(7 模块并行,瓶颈 orchestrator)**
 - batch-worker-{import,dispatch,process,export,console-api,trigger} 1:49-2:26 / **batch-orchestrator 2:47** ← critical path
 
-**skip 三件套(precheck-only ~5s)**
-- promote-staging / staging-gate / capacity-gate:precheck 跑 3-5s 输出 `should_run=false`,主 job 跳过,workflow 总耗时 7-10s
-
-### staging-gate / capacity-gate skip 机制
-
-精确触发条件(2026-05-23 修复,见 PR #23):
-
-| Workflow | precheck 检查 | skip 时 |
-|---|---|---|
-| staging-gate | `secrets.STAGING_KUBECONFIG_B64` 非空 | 整条门禁干净 skip + workflow warning |
-| capacity-gate | `vars.STAGING_TRIGGER_BASE_URL` 非空 | 整条容量基线干净 skip + workflow warning |
-
-配上后自动启用全量 deploy-smoke / DAST / Checkov(staging-gate)或 stepped-ramp 25→200 + SLO 断言(capacity-gate)。
-
 ---
 
 ## 关键文件索引
@@ -299,8 +280,8 @@ make ops-compensate     # 触发补偿
 .github/
   workflows/
     pr-gate.yml              # PR 门禁
-    full-ci-gate.yml         # 主干质量门禁
-    staging-gate.yml         # 生产就绪门禁
+    full-ci-gate.yml         # 主干质量门禁(含安全扫 + Checkov)
+    build-image.yml          # 镜像构建
   actions/
     setup-build-env/         # 共享 setup：JDK、Maven cache、OpenAPI 校验
   renovate.json              # 依赖自动更新配置
