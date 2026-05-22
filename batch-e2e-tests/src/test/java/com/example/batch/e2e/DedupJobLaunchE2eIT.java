@@ -18,7 +18,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +50,6 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
-@Order(1)
 class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

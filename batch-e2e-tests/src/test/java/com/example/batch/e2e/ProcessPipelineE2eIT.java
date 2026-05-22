@@ -25,7 +25,6 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,7 +58,6 @@ import org.springframework.test.context.jdbc.Sql;
 @Sql(scripts = {E2eTestSql.BIZ_SCHEMA})
 @Import(ProcessPipelineE2eIT.ProcessE2eTestConfiguration.class)
 @Tag("e2e")
-@Order(2)
 class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
