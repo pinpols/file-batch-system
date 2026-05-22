@@ -25,7 +25,6 @@ public class ConsoleApiVersionConfiguration {
 
   private static final String CURRENT_VERSION = "1";
   private static final String VERSION_HEADER = "X-API-Version";
-  private static final String ACCEPT_VERSION_HEADER = "Accept-Version";
   private static final String V1_PREFIX = "/api/v1/console/";
   private static final String UNVERSIONED_PREFIX = "/api/console/";
 

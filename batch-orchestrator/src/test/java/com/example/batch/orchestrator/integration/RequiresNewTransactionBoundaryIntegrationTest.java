@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.dto.LaunchRequest;
-import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.TriggerType;
@@ -17,7 +16,6 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
-import com.example.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
@@ -57,7 +55,6 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   @Autowired private JobInstanceMapper jobInstanceMapper;
   @Autowired private JobPartitionMapper jobPartitionMapper;
   @Autowired private JobTaskMapper jobTaskMapper;
-  @Autowired private DeadLetterTaskMapper deadLetterTaskMapper;
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private PlatformTransactionManager transactionManager;
 
@@ -275,7 +272,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             .traceId("trace-" + suffix)
             .params(Map.of())
             .build();
-    LaunchResponse response = launchService.launch(launchRequest);
+    launchService.launch(launchRequest);
 
     JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
     List<JobPartitionEntity> partitions =

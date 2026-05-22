@@ -14,6 +14,7 @@ import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
@@ -35,13 +36,14 @@ class ProcessStepExecutionAdapterTest {
   @Mock private PlatformFileRuntimeRepository runtimeRepository;
 
   @Test
+  @SuppressWarnings("unchecked")
   void execute_createsProcessPipelineAndPassesPluginCodeFromPayload() {
     ProcessStepExecutionAdapter adapter =
         new ProcessStepExecutionAdapter(
             processStageExecutor,
             new ObjectMapper(),
             runtimeRepository,
-            (ObjectProvider) mock(ObjectProvider.class));
+            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class));
     when(runtimeRepository.ensurePipelineDefinition(
             eq("tenant-a"),
             eq("job-process"),
@@ -75,6 +77,7 @@ class ProcessStepExecutionAdapterTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   void execute_preservesLocalizedErrorFromFailedStageResult() {
     ObjectMapper objectMapper = new ObjectMapper();
     ProcessStepExecutionAdapter adapter =
@@ -82,7 +85,7 @@ class ProcessStepExecutionAdapterTest {
             processStageExecutor,
             objectMapper,
             runtimeRepository,
-            (ObjectProvider) mock(ObjectProvider.class));
+            (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class));
     when(runtimeRepository.ensurePipelineDefinition(
             eq("tenant-a"),
             eq("job-process"),

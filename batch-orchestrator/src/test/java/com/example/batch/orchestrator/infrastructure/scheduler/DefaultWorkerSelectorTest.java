@@ -35,13 +35,9 @@ class DefaultWorkerSelectorTest {
 
   @Mock private WorkerRegistryMapper workerRegistryMapper;
 
-  @SuppressWarnings("unchecked")
-  @Mock
-  private ObjectProvider<MeterRegistry> meterRegistryProvider;
+  @Mock private ObjectProvider<MeterRegistry> meterRegistryProvider;
 
-  @SuppressWarnings("unchecked")
-  @Mock
-  private ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
+  @Mock private ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
 
   private DefaultWorkerSelector selector;
   private final ResourceSchedulerProperties props = new ResourceSchedulerProperties();

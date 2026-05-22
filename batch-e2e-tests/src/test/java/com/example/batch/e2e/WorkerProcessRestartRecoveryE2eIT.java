@@ -36,7 +36,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -207,7 +207,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
                         .get(10, TimeUnit.SECONDS);
                 ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
                 assertThat(desc).isNotNull();
-                assertThat(desc.state()).isEqualTo(ConsumerGroupState.STABLE);
+                assertThat(desc.groupState()).isEqualTo(GroupState.STABLE);
                 assertThat(desc.members()).isNotEmpty();
               });
     }

@@ -29,7 +29,6 @@ public record JdbcMappedExportSpec(
    * @return 解析结果
    * @throws IllegalArgumentException 配置缺失或校验失败时抛出
    */
-  @SuppressWarnings("unchecked")
   public static JdbcMappedExportSpec parse(
       Map<String, Object> templateConfig, ObjectMapper objectMapper) {
     Map<String, Object> root = extract(templateConfig, objectMapper);

@@ -50,13 +50,11 @@ import org.springframework.stereotype.Service;
 public class DataQualityCheckExecutor {
 
   private static final String STATUS_PASS = "PASS";
-  private static final String STATUS_WARN = "WARN";
   private static final String STATUS_FAIL = "FAIL";
   private static final String STATUS_ERROR = "ERROR";
 
   private static final String SEVERITY_BLOCKER = "BLOCKER";
   private static final String SEVERITY_WARN = "WARN";
-  private static final String SEVERITY_INFO = "INFO";
 
   // R2-P0-1：DQ 规则 SQL 走 NamedParameterJdbcTemplate + JSqlParser AST 校验，消除字符串拼接注入面。
   // SensorSqlValidator 已经做了「SELECT/WITH 限制 + 禁 *」校验，DQ 复用同一套规则。

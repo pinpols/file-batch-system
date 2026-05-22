@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -52,7 +51,6 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
-  private final Environment environment;
 
   @Override
   public ConsoleWorkerRegistryResponse drain(
@@ -169,9 +167,5 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
 
   private ConsoleWorkerRegistryResponse toResponse(ConsoleWorkerRegistryResponse response) {
     return response;
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 }

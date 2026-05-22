@@ -9,7 +9,6 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.infrastructure.ops.TriggerInternalRestClient;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
@@ -31,7 +30,6 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -69,11 +67,9 @@ public class ConsoleJobOpsSupport {
   /** P0-1(2026-05-16):trigger 调用统一走带 X-Internal-Secret 的 client,prod bypass=false 不再 401。 */
   private final TriggerInternalRestClient triggerInternalRestClient;
 
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
-  private final Environment environment;
 
   public static String jobTypeCompensation() {
     return JOB_TYPE_COMPENSATION;
@@ -256,10 +252,6 @@ public class ConsoleJobOpsSupport {
       return (Map<String, Object>) payloadMap;
     }
     throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.payload_must_be_object");
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 
   private String extractTenantId(Object payload) {

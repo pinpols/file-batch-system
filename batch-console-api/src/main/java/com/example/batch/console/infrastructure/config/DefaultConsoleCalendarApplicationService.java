@@ -112,8 +112,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   @Override
   public List<Map<String, Object>> holidays(Long id, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> calendar =
-        Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
+    Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
     return holidayMapper.selectByCalendarId(id);
   }
 

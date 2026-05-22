@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub;
@@ -19,7 +18,6 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -34,8 +32,7 @@ class ConsoleJobInstanceRealtimeControllerTest {
   @BeforeEach
   void setUp() {
     ConsoleApiExceptionHandler exceptionHandler =
-        new ConsoleApiExceptionHandler(
-            new ConsoleResponseFactory(requestMetadataResolver), new BatchSecurityProperties());
+        new ConsoleApiExceptionHandler(new ConsoleResponseFactory(requestMetadataResolver));
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
@@ -53,11 +50,10 @@ class ConsoleJobInstanceRealtimeControllerTest {
 
   @Test
   void shouldExposeJobInstanceRealtimeStream() throws Exception {
-    MvcResult result =
-        mockMvc
-            .perform(get("/api/console/stream/job-instances/events").param("tenantId", "t1"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    mockMvc
+        .perform(get("/api/console/stream/job-instances/events").param("tenantId", "t1"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
 
     verify(tenantGuard).resolveTenant("t1");
     verify(realtimeEventHub).subscribe("t1", "job-instances", null, null, null);

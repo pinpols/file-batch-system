@@ -162,7 +162,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Transactional
   public String grayConfigRelease(Long releaseId, ConfigReleaseActionRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
-    ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    loadRelease(tenantId, releaseId);
     validateJson(request.getGrayScopeJson(), KEY_GRAY_SCOPE_JSON);
     // 先单独更新 grayScope，再调 changeReleaseStatus 更新状态：
     // changeReleaseStatus 内部在 GRAY 分支也会更新 scope（通用路径），

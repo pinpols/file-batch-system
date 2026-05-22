@@ -1,6 +1,5 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -46,7 +45,6 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private final DispatchFileContentResolver fileContentResolver;
   private final Environment environment;
-  private final BatchSecurityProperties securityProperties;
 
   @Override
   public boolean supports(String channelType) {

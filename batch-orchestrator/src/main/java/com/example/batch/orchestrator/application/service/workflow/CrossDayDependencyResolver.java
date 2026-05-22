@@ -5,7 +5,6 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import com.example.batch.orchestrator.domain.entity.ResultVersionEntity;
 import com.example.batch.orchestrator.domain.workflow.CrossDayDependencySpec;
-import com.example.batch.orchestrator.mapper.ResultVersionMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -47,7 +46,6 @@ public class CrossDayDependencyResolver {
 
   private final BizDateArithmetic bizDateArithmetic;
   private final ResultVersionQueryService resultVersionQueryService;
-  private final ResultVersionMapper resultVersionMapper;
 
   /**
    * 解析入口。

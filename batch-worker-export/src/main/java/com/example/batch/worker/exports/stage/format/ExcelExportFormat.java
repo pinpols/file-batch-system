@@ -61,9 +61,8 @@ public class ExcelExportFormat extends AbstractExportFormat {
       workbook.write(outputStream);
       return recordCount;
     } finally {
-      // L-2：SXSSFWorkbook.close() 并不等价于 dispose()；必须显式调 dispose 以
-      // 清理 /tmp 下的 sheet-backing temp files，否则大导出后 /tmp 会堆积 GB 级文件
-      workbook.dispose();
+      // POI 5.x 起 SXSSFWorkbook.close() 会自动清理 /tmp 下的 sheet-backing temp files,
+      // dispose() 已被标记 deprecated 且功能合并入 close(),因此只需 close()。
       workbook.close();
     }
   }

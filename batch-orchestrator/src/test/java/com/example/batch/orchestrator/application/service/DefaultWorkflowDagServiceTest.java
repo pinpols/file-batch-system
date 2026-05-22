@@ -57,7 +57,6 @@ class DefaultWorkflowDagServiceTest {
         .thenAnswer(
             inv -> {
               Long runId = inv.getArgument(0);
-              @SuppressWarnings("unchecked")
               java.util.Collection<String> codes = inv.getArgument(1);
               java.util.List<WorkflowNodeRunEntity> out = new java.util.ArrayList<>();
               for (String c : codes) {
@@ -76,7 +75,6 @@ class DefaultWorkflowDagServiceTest {
         .thenAnswer(
             inv -> {
               Long defId = inv.getArgument(0);
-              @SuppressWarnings("unchecked")
               java.util.Collection<String> codes = inv.getArgument(1);
               java.util.List<WorkflowNodeEntity> out = new java.util.ArrayList<>();
               for (String c : codes) {
