@@ -1,0 +1,57 @@
+{{- /*
+  Flagger Canary for batch-console-api (唯一一个对外 HTTP 入口,适合做渐进式发布)。
+  其他 worker / orchestrator 是内部 Kafka consumer / RPC,不走 mesh 流量切分,不适用 Canary。
+
+  默认关闭(.Values.canary.enabled = false),需要显式开。
+  开启前置(ops 接入):
+    1. 集群装 flagger CRD(helm install flagger flagger/flagger)
+    2. 配 Prometheus(读 request-success-rate / request-duration)
+    3. 配 service mesh(istio / linkerd / nginx ingress)— 取决于 .Values.canary.provider
+*/}}
+{{- if .Values.canary.enabled }}
+{{- $component := "console-api" }}
+{{- $svc := .Values.consoleApi }}
+---
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+
+  {{- if and $svc.hpa $svc.hpa.enabled }}
+  autoscalerRef:
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  {{- end }}
+
+  progressDeadlineSeconds: 600
+
+  service:
+    port: {{ $svc.service.port }}
+    targetPort: {{ $svc.port }}
+    # TODO ops:portDiscovery / gateways / hosts 视 mesh 提供方填充
+
+  analysis:
+    interval: 1m
+    threshold: 5            # 连续 5 次 metric 失败 → 回滚
+    maxWeight: 50           # 金丝雀最多吃 50% 流量
+    stepWeight: 10          # 每轮 +10%(10/20/30/40/50)
+    metrics:
+      - name: request-success-rate
+        thresholdRange:
+          min: 99
+        interval: 1m
+      - name: request-duration
+        thresholdRange:
+          max: 500          # 单位 ms
+        interval: 1m
+    # TODO ops:webhooks(load-test / smoke-test / slack notify)按需补
+{{- end }}
