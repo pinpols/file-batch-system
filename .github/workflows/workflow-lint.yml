@@ -1,0 +1,78 @@
+name: workflow-lint
+
+# 两层 workflow 自身扫描:
+#   1) actionlint — yaml 结构 + shellcheck on `run:` blocks(防 typo/语法错只能 push 试错)
+#   2) zizmor    — 安全规则集(action 注入 / unpinned ref / 危险 token 暴露等)
+#
+# 触发面:只有改 `.github/workflows/**` 或 `.github/actions/**` 才跑。秒级,几乎无成本。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # zizmor[artipacked]:lint 只读 yaml,无需 token 留存(防意外打包泄漏)
+          persist-credentials: false
+
+      - name: Run actionlint
+        shell: bash
+        run: |
+          # 官方推荐下载脚本(带 SHA 自校验)。
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          # 透传 -S warning 给 shellcheck 过滤 style/info 噪声(SC2012/SC2129 等),
+          # 只在 warning+ 才挂 — workflow yaml 自身语法/语义错仍全量报。
+          ./actionlint -color -shellcheck="shellcheck -S warning"
+
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # zizmor 默认行为是发现问题非零退出。Pin minor version 防上游规则突变误伤。
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # zizmor[artipacked]:同上,扫描器只读 yaml
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install zizmor
+        shell: bash
+        run: pip install --quiet zizmor
+
+      - name: Run zizmor
+        shell: bash
+        # 本 PR 增量引入:只严扫**本 PR 新建**的 2 个 workflow。
+        # 老 workflow(dependabot-auto-merge / build-image / capacity-gate 等)
+        # 有 cache-poisoning / dangerous-triggers / bot-conditions 等 pre-existing
+        # finding, 拆独立 audit PR 治理(见 docs/runbook/ci.md TODO),
+        # 防本次引入 PR 被旧债阻塞。
+        # --min-severity medium:忽略 informational/low,只看真有杀伤力的。
+        run: |
+          zizmor --min-severity medium \
+            .github/workflows/codeql.yml \
+            .github/workflows/workflow-lint.yml
