@@ -1,3 +1,11 @@
-# Replace these placeholders with the actual GitHub account or team before publishing.
-* @YOUR_GITHUB_USERNAME
+# 全仓默认 owner
+* @idengzhao
 
+# 高风险目录显式 owner — 仓库开启 branch protection
+# "Require review from Code Owners" 后,这些目录改动强制经 owner 审批。
+/.github/                              @idengzhao
+/db/migration/                         @idengzhao
+/docs/architecture/                    @idengzhao
+/docs/api/                             @idengzhao
+/docs/runbook/                         @idengzhao
+/batch-common/src/main/java/com/example/batch/security/  @idengzhao
