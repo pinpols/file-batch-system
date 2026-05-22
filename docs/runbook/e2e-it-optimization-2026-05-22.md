@@ -8,20 +8,31 @@
 - **CI(full-ci-gate)**:7 job 全并发,**wall-clock 30 min → 6:32**(-77%,run `26263116015`)
 - 唯一不可压的:`WorkerProcessRestartRecoveryE2eIT`(122s,@DirtiesContext 强 reload)
 
-### 2026-05-22 末轮 CI 实测(run 26263116015,wall-clock 6:32)
+### 2026-05-22 末轮 CI 实测(run 26268987041,wall-clock 6:25,**全绿**)
 
 | Job | 耗时 | 内容 |
 |---|---|---|
-| security-scan | 1:11 ❌ | gitleaks pre-existing,与本轮优化无关 |
-| static-checks | 2:02 ✅ | PMD + Spotless + dep-boundary |
+| static-checks | 1:59 ✅ | PMD + Spotless + dep-boundary |
 | unit-it-a | 4:43 ✅ | common + trigger + orchestrator |
-| unit-it-b | 6:22 ✅ | worker-* + console-api(瓶颈) |
-| e2e-shard 1 | 6:03 ✅ | LPT 最长 shard |
-| e2e-shard 2 | 5:45 ✅ | |
-| e2e-shard 3 | 6:00 ✅ | |
-| e2e-shard 4 | 6:27 ✅ | |
+| security-scan | 5:30 ✅ | gitleaks + trivy fs + hadolint(dep-check 软失败) |
+| e2e-shard 2 | 5:26 ✅ | |
+| e2e-shard 1 | 6:01 ✅ | LPT 最长 shard(WorkerProcessRestartRecovery 122s) |
+| unit-it-b | 6:16 ✅ | worker-* + console-api(瓶颈) |
+| e2e-shard 3 | 6:19 ✅ | |
+| e2e-shard 4 | 6:19 ✅ | |
 
-下一轮瓶颈:`unit-it-b` 6:22(若要再砍,拆 worker-* 与 console-api 成 2 job,可降到 ~4 min)。
+#### 修过的 4 个工具链问题(commit `0a4cdfe5..2d8d522c`)
+
+| 问题 | 修复 |
+|---|---|
+| gitleaks 8.18.4 误报 `idem-approval-001` 为 generic-api-key | `.gitleaks.toml` 加 regex allowlist `idem-[a-z0-9-]+` |
+| gitleaks 8.18.4 误报 PEM header 字面量为 private-key | path allowlist `ImportPreprocessPipelineRsaTest.java` + 升级 gitleaks 到 8.30.1 |
+| trivy 0.55.2 release 资源 404 | 升级到 0.70.0 |
+| OWASP dep-check NVD API NPE(connectionPool null) | `continue-on-error: true`,backlog 配 NVD_API_KEY 或换 trivy 替代 |
+
+#### 下一轮瓶颈
+
+`unit-it-b` 6:16 + `e2e-shard 3/4` 6:19。再砍需拆 worker-* 与 console-api 成 2 job,但 setup overhead 已占 40%,**边际收益骤降,建议止步**。
 
 ## 措施分层
 
