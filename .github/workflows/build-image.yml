@@ -74,7 +74,7 @@ jobs:
 
       - name: Docker meta (tags + labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ steps.img.outputs.image }}
           tags: |
