@@ -200,9 +200,11 @@ jobs:
             echo "- load-tests: $run_load_tests_build"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Validate KAFKA_TOPICS sync (.env.prod ↔ BatchTopics.java ↔ .env.example/.env.local)
+      - name: Validate KAFKA_TOPICS sync (.env.example ↔ BatchTopics.java)
         shell: bash
-        run: bash scripts/ci/validate-kafka-topics.sh
+        # CI 没有 .env.prod / .env.local(均 gitignored),把 .env.example 作为
+        # canonical 源(本就是 prod 的 1:1 模板)。本地开发仍用脚本默认 .env.prod。
+        run: bash scripts/ci/validate-kafka-topics.sh .env.example
 
       - name: Validate Flyway schema (parse + checksum drift detection)
         shell: bash
