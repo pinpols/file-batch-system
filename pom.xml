@@ -57,7 +57,7 @@
         <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
         <spring-ai.version>2.0.0-M3</spring-ai.version>
-        <jsqlparser.version>4.5</jsqlparser.version>
+        <jsqlparser.version>4.9</jsqlparser.version>
         <shedlock.version>6.3.0</shedlock.version>
         <spring-retry.version>2.0.12</spring-retry.version>
         <!-- ArchUnit:守护 CLAUDE.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
