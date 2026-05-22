@@ -14,7 +14,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.file.ConsoleFileTemplateApplicationService;
@@ -40,7 +39,7 @@ class ConsoleFileTemplateControllerTest {
   void setUp() {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
-        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+        new ConsoleApiExceptionHandler(responseFactory);
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));

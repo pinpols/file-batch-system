@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.infrastructure.realtime.ConsoleOpsSummaryRealtimeStream;
@@ -34,7 +33,7 @@ class ConsoleOpsRealtimeControllerTest {
   void setUp() {
     ConsoleApiExceptionHandler exceptionHandler =
         new ConsoleApiExceptionHandler(
-            new ConsoleResponseFactory(requestMetadataResolver), new BatchSecurityProperties());
+            new ConsoleResponseFactory(requestMetadataResolver));
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
