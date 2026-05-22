@@ -27,7 +27,30 @@ concurrency:
   cancel-in-progress: false   # 容量基线正在跑时不要被新 push 抢断
 
 jobs:
+  # 没配 STAGING_TRIGGER_BASE_URL 变量(=staging 不可达)时,整条容量基线干净跳过
+  # (warning 而非 failure),避免周一 cron 在无 staging 环境时 100% 红屏。
+  # 配上 vars.STAGING_TRIGGER_BASE_URL 后自动启用 stepped-ramp + SLO 断言。
+  precheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      should_run: ${{ steps.s.outputs.should_run }}
+    steps:
+      - id: s
+        env:
+          STAGING_TRIGGER_BASE_URL: ${{ vars.STAGING_TRIGGER_BASE_URL }}
+        run: |
+          if [ -z "$STAGING_TRIGGER_BASE_URL" ]; then
+            echo "::warning::vars.STAGING_TRIGGER_BASE_URL 未配置 — 跳过 capacity-gate(无 staging 可压)。"
+            echo "::warning::配置: Settings → Secrets and variables → Actions → Variables → STAGING_TRIGGER_BASE_URL / STAGING_CONSOLE_BASE_URL"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   capacity-gate:
+    needs: precheck
+    if: needs.precheck.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
