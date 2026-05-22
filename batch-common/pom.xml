@@ -204,7 +204,7 @@
                  所有 transitive deps (shedlock / OTEL / Jackson jsr310) 在 trigger / worker
                  测试 classpath 上全部失踪，造成大批假阴失败。
                  与根 pom <archunit.version> 手工保持同步。 -->
-            <version>1.3.0</version>
+            <version>1.4.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
