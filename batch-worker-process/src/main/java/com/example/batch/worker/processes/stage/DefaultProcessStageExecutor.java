@@ -123,7 +123,7 @@ public class DefaultProcessStageExecutor
     if (taskId != null) {
       return "process-" + taskId;
     }
-    return "process-" + Thread.currentThread().getId() + "-" + System.nanoTime();
+    return "process-" + Thread.currentThread().threadId() + "-" + System.nanoTime();
   }
 
   private static Long toLong(Object value) {

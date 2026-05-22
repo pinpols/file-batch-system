@@ -27,7 +27,6 @@ public record JdbcMappedImportSpec(
     Map<String, String> systemBindings) {
   public record ColumnMapping(String from, String to) {}
 
-  @SuppressWarnings("unchecked")
   public static JdbcMappedImportSpec parse(
       Map<String, Object> templateConfig, ObjectMapper objectMapper) {
     Map<String, Object> root = extractJdbcMappedImport(templateConfig, objectMapper);
@@ -106,7 +105,6 @@ public record JdbcMappedImportSpec(
     return PostgresqlJsonbTexts.tryExtract(raw);
   }
 
-  @SuppressWarnings("unchecked")
   private static List<ColumnMapping> parseMappings(Object raw) {
     if (!(raw instanceof List<?> list)) {
       return List.of();
@@ -124,7 +122,6 @@ public record JdbcMappedImportSpec(
     return out;
   }
 
-  @SuppressWarnings("unchecked")
   private static List<String> parseStringList(Object raw) {
     if (raw instanceof List<?> list) {
       List<String> out = new ArrayList<>();
@@ -138,7 +135,6 @@ public record JdbcMappedImportSpec(
     return List.of();
   }
 
-  @SuppressWarnings("unchecked")
   private static Map<String, String> parseSystemBindings(Object raw) {
     if (!(raw instanceof Map<?, ?> m)) {
       return Map.of();

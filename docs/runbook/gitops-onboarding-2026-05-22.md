@@ -1,7 +1,9 @@
 # GitOps Onboarding(Argo CD + flagger)— 2026-05-22
 
+> **⚠️ 2026-05-23 状态更新**:`promote-staging.yml` 已删除(从未接通,见 [ci.md](./ci.md) 顶部说明)。本文档描述的是**未来若要恢复 ops 仓自动同步**的完整链路;当前 main commit → ops 仓同步走人工 SOP。
+>
 > 给 ops 团队的入门 runbook。**不假设读者懂 Argo CD / flagger**,从 0 装到能跑。
-> 本仓库已经写好 `build-image.yml` / `promote-staging.yml` / `helm/` 骨架,**但都没接集群**。
+> 本仓库已经写好 `build-image.yml` / `helm/` 骨架,**但都没接集群**。
 > 这份文档是把"接集群"那部分变成 checklist。
 
 ---

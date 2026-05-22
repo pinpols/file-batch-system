@@ -98,6 +98,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   private DatabaseQuotaRuntimeStateService service;
 
   @BeforeEach
+  @SuppressWarnings("unchecked")
   void setUp() {
     quotaRuntimeStateMapper = mock(QuotaRuntimeStateMapper.class);
     // C-2.8：selfProvider 在单测里直通（不走 REQUIRES_NEW 子事务），

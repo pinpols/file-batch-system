@@ -232,19 +232,6 @@ public class DispatchChannelHealthService {
     }
   }
 
-  // 指数退避：每次失败将等待时间翻倍，上限由 maxBackoffMillis 截断，防止长期故障渠道被频繁拨测
-  private long computeBackoffMillis(int failures) {
-    long base = Math.max(1L, properties.getProbeIntervalMillis());
-    long backoff = base;
-    for (int i = 1; i < failures; i++) {
-      if (backoff >= properties.getMaxBackoffMillis()) {
-        return properties.getMaxBackoffMillis();
-      }
-      backoff = Math.min(properties.getMaxBackoffMillis(), backoff * 2L);
-    }
-    return backoff;
-  }
-
   private static String stringValue(Object value) {
     if (value == null) {
       return null;

@@ -221,21 +221,6 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private static final List<String> SENSITIVE_KEYS =
       List.of("password", "secret", "token", "credential", "apiKey", "api_key", "accessKey");
 
-  /** 成功路径调用:errorMessage 传 null, 没有 i18n key/args。 */
-  private void recordDelivery(
-      OutboxEventEntity event,
-      String targetTopic,
-      String targetWorkerId,
-      String deliveryStatus,
-      String errorMessage) {
-    recordDelivery(
-        event,
-        targetTopic,
-        targetWorkerId,
-        deliveryStatus,
-        BizExceptionUtils.ofLiteral(errorMessage));
-  }
-
   /** 失败路径调用:从 Throwable 提取 i18n key/args + 渲染 message,持久化三元组。 */
   private void recordDelivery(
       OutboxEventEntity event,

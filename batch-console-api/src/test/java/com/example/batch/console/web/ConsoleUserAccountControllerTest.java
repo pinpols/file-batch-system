@@ -58,6 +58,7 @@ class ConsoleUserAccountControllerTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
   void disable_invalidatesSession() {
     when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT, DISABLED_ACCOUNT);
 

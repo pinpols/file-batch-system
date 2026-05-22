@@ -168,7 +168,6 @@ public class ConsoleSessionRegistry {
     if (!securityProperties.isSingleSessionEnabled()) {
       return true;
     }
-    String key = key(username, tenantId);
     try {
       long current = currentSessionVersion(username, tenantId);
       return current > 0L && current == sessionVersion;

@@ -10,7 +10,6 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.file.ConsoleFileApplicationService;
 import com.example.batch.console.application.job.ConsoleJobApplicationService;
 import com.example.batch.console.application.ops.ConsoleApprovalApplicationService;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.file.PresignDownloadFileRequest;
@@ -25,7 +24,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -59,11 +57,9 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(原本就是空注入,死代码)。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleJobApplicationService consoleJobApplicationService;
   private final ConsoleFileApplicationService consoleFileApplicationService;
-  private final Environment environment;
 
   @Override
   public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
@@ -276,10 +272,6 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     private String approvalReason;
     private String sourceTraceId;
     private String sourceIdempotencyKey;
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 
   /**

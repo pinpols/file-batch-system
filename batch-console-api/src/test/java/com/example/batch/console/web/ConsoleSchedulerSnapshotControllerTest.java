@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
@@ -36,8 +35,7 @@ class ConsoleSchedulerSnapshotControllerTest {
   @BeforeEach
   void setUp() {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleApiExceptionHandler exceptionHandler =
-        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+    ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory);
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
@@ -82,7 +80,6 @@ class ConsoleSchedulerSnapshotControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }
 
-  @SuppressWarnings("unchecked")
   private static ConsoleQueryCacheService passThroughCache() {
     ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
     when(cache.getOrLoad(anyString(), any(), any(), any()))

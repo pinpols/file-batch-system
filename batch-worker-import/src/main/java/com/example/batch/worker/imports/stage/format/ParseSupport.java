@@ -26,8 +26,6 @@ public class ParseSupport {
   static final String KEY_PARSED_COUNT = "parsedCount";
   static final String KEY_SCHEMA_FIELDS = "schemaFields";
 
-  private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-
   private final ObjectMapper objectMapper;
   private final ImportRecordGovernanceService recordGovernanceService;
 

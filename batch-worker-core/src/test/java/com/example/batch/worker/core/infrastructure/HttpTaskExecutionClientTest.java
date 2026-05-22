@@ -29,8 +29,7 @@ class HttpTaskExecutionClientTest {
 
   @Test
   void reportRetriesOn503ThenSucceeds() throws Exception {
-    MockWebServer server = new MockWebServer();
-    try {
+    try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse().setResponseCode(503));
       server.enqueue(new MockResponse().setResponseCode(200));
       server.start();
@@ -65,8 +64,6 @@ class HttpTaskExecutionClientTest {
                   .counter()
                   .count())
           .isEqualTo(1.0d);
-    } finally {
-      server.shutdown();
     }
   }
 
@@ -74,8 +71,7 @@ class HttpTaskExecutionClientTest {
   void reportRetriesOn429AndSucceedsWhenLimitClears() throws Exception {
     // R6 P0-7：429 = orchestrator sliding-window 限流的瞬时拒绝，过去 worker 直接放弃 REPORT 等于把
     // task 数据丢掉（orchestrator 端只能等 lease 过期回收）。改为按退避重试，与 5xx / I/O 同处理。
-    MockWebServer server = new MockWebServer();
-    try {
+    try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse().setResponseCode(429).setBody("slow down"));
       server.enqueue(new MockResponse().setResponseCode(429).setBody("slow down"));
       server.enqueue(new MockResponse().setResponseCode(200));
@@ -108,15 +104,12 @@ class HttpTaskExecutionClientTest {
                   .counter()
                   .count())
           .isEqualTo(2.0d);
-    } finally {
-      server.shutdown();
     }
   }
 
   @Test
   void renewLeasesBatchUsesSingleHttpCallForChunk() throws Exception {
-    MockWebServer server = new MockWebServer();
-    try {
+    try (MockWebServer server = new MockWebServer()) {
       server.enqueue(
           new MockResponse()
               .setResponseCode(200)
@@ -149,8 +142,6 @@ class HttpTaskExecutionClientTest {
 
       assertThat(out).containsEntry(1L, true).containsEntry(2L, false);
       assertThat(server.getRequestCount()).isEqualTo(1);
-    } finally {
-      server.shutdown();
     }
   }
 

@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -25,7 +24,6 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
-  private final Environment environment;
 
   @Override
   public Map<String, Object> instanceAction(Long id, String tenantId, String action) {
@@ -98,10 +96,6 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                     .build())
         .retrieve()
         .body(ConsoleSchedulerSnapshotResponse.class);
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 
   @Override

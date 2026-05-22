@@ -13,7 +13,6 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.config.ConsoleConfigApplicationService;
 import com.example.batch.console.application.report.ConsoleQueryApplicationService;
 import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
-import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
@@ -49,7 +48,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.env.Environment;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -69,10 +67,8 @@ public class DefaultConsoleReportExcelApplicationService
 
   private final ConsoleConfigApplicationService configApplicationService;
   private final ConsoleQueryApplicationService queryApplicationService;
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(死注入,本类只走 OrchestratorInternalRestClient)。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final Environment environment;
   private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
@@ -353,9 +349,5 @@ public class DefaultConsoleReportExcelApplicationService
         row.getCell(0).setCellStyle(titleStyle);
       }
     }
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 }

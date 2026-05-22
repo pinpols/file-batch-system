@@ -138,7 +138,8 @@ class WorkerStartupRuntimeAuditTest {
   @SuppressWarnings("unchecked")
   private ObjectProvider<WorkerStartupAuditContributor> provider(List<?> values) {
     ObjectProvider<WorkerStartupAuditContributor> provider = mock(ObjectProvider.class);
-    when(provider.orderedStream()).thenReturn((java.util.stream.Stream) values.stream());
+    when(provider.orderedStream())
+        .thenReturn((java.util.stream.Stream<WorkerStartupAuditContributor>) values.stream());
     return provider;
   }
 }

@@ -1,6 +1,6 @@
 # Release Process — 2026-05-22
 
-> ops 视角的实际操作流程。前置环境搭建见 [gitops-onboarding-2026-05-22.md](./gitops-onboarding-2026-05-22.md)。
+> **⚠️ 2026-05-23 状态更新**:本文档描述的链路里 `promote-staging.yml` 已删除,**ops 仓自动同步当前未启用**。本文档保留作为未来恢复 GitOps 时的参考蓝图。前置环境搭建见 [gitops-onboarding-2026-05-22.md](./gitops-onboarding-2026-05-22.md)。
 
 ---
 

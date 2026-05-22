@@ -3,7 +3,6 @@ package com.example.batch.console.support.auth;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
-import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
 import java.util.LinkedHashSet;
@@ -26,19 +25,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleLoginService {
 
-  private final ConsoleSecurityProperties securityProperties;
   private final ConsoleJwtService jwtService;
   private final ConsoleSessionRegistry sessionRegistry;
   private final ConsoleUserAccountService userAccountService;
   private final ConsolePasswordHasher passwordHasher;
 
   public ConsoleLoginService(
-      ConsoleSecurityProperties securityProperties,
       ConsoleJwtService jwtService,
       ConsoleSessionRegistry sessionRegistry,
       ConsoleUserAccountService userAccountService,
       ConsolePasswordHasher passwordHasher) {
-    this.securityProperties = securityProperties;
     this.jwtService = jwtService;
     this.sessionRegistry = sessionRegistry;
     this.userAccountService = userAccountService;
