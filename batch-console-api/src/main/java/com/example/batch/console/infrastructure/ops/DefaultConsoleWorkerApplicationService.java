@@ -168,5 +168,4 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
   private ConsoleWorkerRegistryResponse toResponse(ConsoleWorkerRegistryResponse response) {
     return response;
   }
-
 }

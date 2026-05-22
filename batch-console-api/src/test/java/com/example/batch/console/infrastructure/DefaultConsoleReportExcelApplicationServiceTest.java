@@ -31,10 +31,7 @@ class DefaultConsoleReportExcelApplicationServiceTest {
             mock(com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient.class);
     DefaultConsoleReportExcelApplicationService service =
         new DefaultConsoleReportExcelApplicationService(
-            configService,
-            queryService,
-            orchestratorInternalRestClient,
-            dateTimeSupport());
+            configService, queryService, orchestratorInternalRestClient, dateTimeSupport());
     when(configService.configReleases(any()))
         .thenReturn(
             List.of(

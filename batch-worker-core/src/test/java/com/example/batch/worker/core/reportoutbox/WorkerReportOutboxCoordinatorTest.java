@@ -50,8 +50,10 @@ class WorkerReportOutboxCoordinatorTest {
     JdbcTemplate jdbc = new JdbcTemplate(ds);
     SqlSessionFactory sf =
         WorkerReportOutboxSqliteSessionFactorySupport.createSqlSessionFactory(ds);
-    try (SqlSessionTemplate sessionTemplate = new SqlSessionTemplate(sf);
-        MockWebServer server = new MockWebServer()) {
+    // SqlSessionTemplate 是 Spring 托管 session,close() 抛 UnsupportedOperationException;
+    // 这里手动 new 出来不放进 try-with-resources。
+    SqlSessionTemplate sessionTemplate = new SqlSessionTemplate(sf);
+    try (MockWebServer server = new MockWebServer()) {
       WorkerReportOutboxSqliteMapper sqliteMapper =
           sessionTemplate.getMapper(WorkerReportOutboxSqliteMapper.class);
       WorkerReportOutboxRepository repo =

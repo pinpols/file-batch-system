@@ -94,7 +94,8 @@ class KafkaTriggerEventPublisherTest {
     CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
     failed.completeExceptionally(
         new ExecutionException(new RuntimeException("broker not reachable")));
-    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any())).thenReturn(failed);
+    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any()))
+        .thenReturn(failed);
 
     TriggerEventPublisher.PublishResult result =
         publisher.publish("batch.trigger.launch.v1", "tenant-a:req-2", envelope, "trace-2");

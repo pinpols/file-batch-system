@@ -190,7 +190,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     Map<String, Object> base =
         sourcePayload == null || sourcePayload.isBlank()
             ? new LinkedHashMap<>()
-            : new LinkedHashMap<>((Map<String, Object>) JsonUtils.fromJson(sourcePayload, Map.class));
+            : new LinkedHashMap<>(
+                (Map<String, Object>) JsonUtils.fromJson(sourcePayload, Map.class));
     base.put("crossDay", crossDay);
     return JsonUtils.toJson(base);
   }

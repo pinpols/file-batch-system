@@ -28,8 +28,7 @@ class ConsoleLoginServiceTest {
     userAccountService = Mockito.mock(ConsoleUserAccountService.class);
     passwordHasher = Mockito.mock(ConsolePasswordHasher.class);
     loginService =
-        new ConsoleLoginService(
-            jwtService, sessionRegistry, userAccountService, passwordHasher);
+        new ConsoleLoginService(jwtService, sessionRegistry, userAccountService, passwordHasher);
   }
 
   @Test

@@ -32,8 +32,7 @@ class ConsoleOutboxRealtimeControllerTest {
   @BeforeEach
   void setUp() {
     ConsoleApiExceptionHandler exceptionHandler =
-        new ConsoleApiExceptionHandler(
-            new ConsoleResponseFactory(requestMetadataResolver));
+        new ConsoleApiExceptionHandler(new ConsoleResponseFactory(requestMetadataResolver));
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));

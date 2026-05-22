@@ -144,5 +144,4 @@ class TriggerRequestLaunchReconcilerTest {
         .counter("batch.trigger.launch.reconciled.skipped.total", "tenant", tenant)
         .count();
   }
-
 }

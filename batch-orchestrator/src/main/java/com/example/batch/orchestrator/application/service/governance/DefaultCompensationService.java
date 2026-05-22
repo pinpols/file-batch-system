@@ -565,14 +565,14 @@ public class DefaultCompensationService implements CompensationService {
   void appendPreInsertFailureLog(
       CompensationSubmitCommand command, String traceId, String commandNo, Exception exception) {
     try {
-      JobExecutionLogEntity log = new JobExecutionLogEntity();
-      log.setTenantId(command == null ? null : command.tenantId());
-      log.setJobInstanceId(null); // pre-insert 无 entity → jobInstanceId 未知
-      log.setLogLevel("ERROR");
-      log.setLogType("COMPENSATION_REJECTED");
-      log.setTraceId(traceId);
+      JobExecutionLogEntity entry = new JobExecutionLogEntity();
+      entry.setTenantId(command == null ? null : command.tenantId());
+      entry.setJobInstanceId(null); // pre-insert 无 entity → jobInstanceId 未知
+      entry.setLogLevel("ERROR");
+      entry.setLogType("COMPENSATION_REJECTED");
+      entry.setTraceId(traceId);
       String type = command == null ? null : command.compensationType();
-      log.setMessage(
+      entry.setMessage(
           "compensation submit rejected before insert: type="
               + type
               + ", reason="
@@ -585,11 +585,11 @@ public class DefaultCompensationService implements CompensationService {
       detail.put("operatorId", command == null ? null : command.operatorId());
       detail.put("error", exception == null ? null : exception.getMessage());
       detail.put("errorCode", exception == null ? null : resolveErrorCode(exception));
-      log.setExtraJson(JsonUtils.toJson(detail));
-      taskExecutionService.appendLog(log);
+      entry.setExtraJson(JsonUtils.toJson(detail));
+      taskExecutionService.appendLog(entry);
     } catch (RuntimeException loggingEx) {
       // 落 trail 是 best-effort,不能让审计失败掩盖原始业务异常
-      DefaultCompensationService.log.warn(
+      log.warn(
           "failed to write compensation pre-insert failure trail: tenant={}, type={}, error={}",
           command == null ? null : command.tenantId(),
           command == null ? null : command.compensationType(),
