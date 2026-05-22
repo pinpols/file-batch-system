@@ -18,8 +18,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  staging-gate:
+  # 没配 STAGING_KUBECONFIG_B64 secret(=staging K8s 不可达)时,整条门禁干净跳过
+  # (warning 而非 failure)。配上 secret 后自动启用全量 deploy-smoke / verification /
+  # load-smoke / DAST / Checkov 检查。对齐 FE 仓 staging-gate.yml precheck 模式。
+  precheck:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      should_run: ${{ steps.s.outputs.should_run }}
+    steps:
+      - id: s
+        env:
+          STAGING_KUBECONFIG_B64: ${{ secrets.STAGING_KUBECONFIG_B64 }}
+        run: |
+          if [ -z "$STAGING_KUBECONFIG_B64" ]; then
+            echo "::warning::STAGING_KUBECONFIG_B64 未配置 — 跳过 BE staging-gate(无真实 staging K8s 可达)。"
+            echo "::warning::配置: Settings → Secrets and variables → Actions → STAGING_KUBECONFIG_B64 / STAGING_PLATFORM_DB_PASSWORD / ..."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  staging-gate:
+    needs: precheck
+    if: needs.precheck.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
