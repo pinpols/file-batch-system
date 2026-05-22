@@ -175,6 +175,10 @@ jobs:
 
       - name: Security scan — dependencies
         shell: bash
+        # OWASP dependency-check 当前在 CI 上撞 NVD API rate-limit → connectionPool NPE
+        # (工具自身已知问题,跟本仓库依赖无关)。先 continue-on-error 不阻塞下游
+        # hadolint/trivy,backlog 跟进:配 NVD_API_KEY secret 或换 trivy 覆盖依赖扫描。
+        continue-on-error: true
         run: bash scripts/ci/security-scan.sh --skip-build -- --mode=deps
 
       - name: Lint Dockerfile
