@@ -269,6 +269,48 @@ make ops-compensate     # 触发补偿
 
 ---
 
+## 耗时基线(2026-05-23 snapshot)
+
+最近一次成功跑的总耗时与 job 分布。指标用于回归告警:任一 wf 超基线 +50% 需排查。
+
+| Workflow | 总耗时 | 触发 | 目标 | 状态 |
+|---|---|---|---|---|
+| pr-gate | 4:21 | PR / push | ≤6m | ✅ |
+| codeql | 4:21 | PR / push / 周 | ≤6m | ✅ |
+| workflow-lint | 0:18 | 改 `.github/workflows/**` | ≤1m | ✅ |
+| full-ci-gate | 6:19 | push main / nightly / 手动 | ≤10m | ✅(已贴目标) |
+| build-image | 2:53 | push main / tag | ≤6m | ✅(-73% vs 旧 10:54) |
+| promote-staging | 0:10 | 镜像推完触发 | ≤6m | ✅ skip(无 token) |
+| staging-gate | 0:08 | full-ci-gate 成功 / 手动 | ≤90m | ✅ skip(无 K8s) |
+| capacity-gate | 0:07 | 周一 03:00 UTC / 手动 | ≤45m | ✅ skip(无 staging URL) |
+
+### Job 级分布
+
+**pr-gate(5 job 并行,瓶颈 unit-it-b2)**
+- static-checks 1:57 / security 1:16 / unit-it-a 2:49 / unit-it-b1 3:02 / **unit-it-b2 4:14** ← critical path
+
+**full-ci-gate(9 job 并行,瓶颈 security-scan)**
+- static-checks 1:36 / unit-it-a 3:04 / unit-it-b1 3:13 / unit-it-b2 4:06 / e2e-shard 1-4 各 4:23-4:58 / **security-scan 6:15** ← critical path
+
+**build-image(7 模块并行,瓶颈 orchestrator)**
+- batch-worker-{import,dispatch,process,export,console-api,trigger} 1:49-2:26 / **batch-orchestrator 2:47** ← critical path
+
+**skip 三件套(precheck-only ~5s)**
+- promote-staging / staging-gate / capacity-gate:precheck 跑 3-5s 输出 `should_run=false`,主 job 跳过,workflow 总耗时 7-10s
+
+### staging-gate / capacity-gate skip 机制
+
+精确触发条件(2026-05-23 修复,见 PR #23):
+
+| Workflow | precheck 检查 | skip 时 |
+|---|---|---|
+| staging-gate | `secrets.STAGING_KUBECONFIG_B64` 非空 | 整条门禁干净 skip + workflow warning |
+| capacity-gate | `vars.STAGING_TRIGGER_BASE_URL` 非空 | 整条容量基线干净 skip + workflow warning |
+
+配上后自动启用全量 deploy-smoke / DAST / Checkov(staging-gate)或 stepped-ramp 25→200 + SLO 断言(capacity-gate)。
+
+---
+
 ## 关键文件索引
 
 ```
