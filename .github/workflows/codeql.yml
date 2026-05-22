@@ -1,0 +1,76 @@
+name: codeql
+
+# 真 SAST(污点流分析):捕 SQLi / 反序列化 / SSRF / 路径注入等 PMD/SpotBugs 抓不到的问题。
+# GitHub 官方免费,结果直接进 Security tab。
+#
+# 触发:
+#   - 主分支 push + 任意 PR(覆盖回归)
+#   - 每周一 03:00 UTC cron(catch 新规则发布)
+# 路径过滤:纯文档 / yaml-only 改动不跑(省 ~8min)。
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'NOTICE'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  schedule:
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (java)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # zizmor[artipacked]:防 checkout 写入的 .git/config token 被后续 action
+          # 误打包到 artifact 泄漏。CodeQL 全程读源码 + upload-sarif,不需要 token persist。
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java
+          # security-extended 比 default 多 ~30 条规则(性能 / 安全热点),
+          # 跑时间增 ~3min 但对批处理 + JDBC 场景值。
+          queries: security-extended
+
+      - name: Build (skip tests)
+        # CodeQL 用编译产物分析字节码;测试不必跑,只要能 compile。
+        # `-pl !batch-e2e-tests`:e2e module 不参与产物构建,加速。
+        shell: bash
+        run: |
+          mvn -B -ntp -DskipTests -pl '!batch-e2e-tests' compile
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        # 首次接入:Code Scanning 需仓库管理员手动在
+        # Settings → Code security → Code scanning 一键开启(免费)。
+        # 未开启时 SARIF upload 会报 403 让本 job 挂红。挂 continue-on-error
+        # 防 PR 阻塞,开启后移除本行即可恢复硬阻断。
+        # 跟进:docs/runbook/ci.md「CodeQL 启用步骤」TODO。
+        continue-on-error: true
+        with:
+          category: "/language:java"
