@@ -138,13 +138,13 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # Job 3: unit-it-b — batch-worker-* + batch-console-api(并发,e2e 跳)
-  # e2e suite 留给 staging-gate / full-ci-gate(matrix shard)
+  # Job 3: unit-it-b1 — batch-worker-core + import + export(并发)
+  # 原 unit-it-b 7min 拆 2 半,b1/b2 各 ~3-4min,wall-clock 不再被 7min 卡
   # ===========================================================================
-  unit-it-b:
+  unit-it-b1:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     env:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
@@ -164,10 +164,10 @@ jobs:
             awk '$0 !~ /reuse-hash/ {print $1}' | \
             xargs -r docker rm -f >/dev/null 2>&1 || true
 
-      - name: Run unit + IT (worker-* + console-api, 跳 *E2eIT)
+      - name: Run unit + IT (worker-core + import + export)
         shell: bash
         run: |
-          mvn verify -pl batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-console-api -am \
+          mvn verify -pl batch-worker-core,batch-worker-import,batch-worker-export -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -Dit.test='!*E2eIT' \
             -fae -B
@@ -176,7 +176,51 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr-gate-unit-it-b-reports
+          name: pr-gate-unit-it-b1-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Job 4: unit-it-b2 — batch-worker-process + dispatch + console-api(并发)
+  # ===========================================================================
+  unit-it-b2:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Run unit + IT (worker-process + dispatch + console-api)
+        shell: bash
+        run: |
+          mvn verify -pl batch-worker-process,batch-worker-dispatch,batch-console-api -am \
+            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+            -Dit.test='!*E2eIT' \
+            -fae -B
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-gate-unit-it-b2-reports
           path: |
             **/target/surefire-reports/**
             **/target/failsafe-reports/**
