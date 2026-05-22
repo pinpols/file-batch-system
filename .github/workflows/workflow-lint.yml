@@ -5,6 +5,7 @@ name: workflow-lint
 #   2) zizmor    — 安全规则集(action 注入 / unpinned ref / 危险 token 暴露等)
 #
 # 触发面:只有改 `.github/workflows/**` 或 `.github/actions/**` 才跑。秒级,几乎无成本。
+# 2026-05-23 verify:PR #28 之后 docs-only 不触发,需 yaml 改动才命中本 wf。
 
 on:
   push:
