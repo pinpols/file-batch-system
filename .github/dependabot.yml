@@ -1,0 +1,79 @@
+version: 2
+updates:
+  # ==== Maven ====
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    labels:
+      - "dependencies"
+      - "auto-update"
+    # 忽略 major bump(major 升级牵涉 CVE 抑制等,需人工评审)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      spring-boot:
+        patterns:
+          - "org.springframework.boot:*"
+          - "org.springframework.cloud:*"
+          - "org.springframework:*"
+      observability:
+        patterns:
+          - "io.micrometer:*"
+          - "io.opentelemetry:*"
+          - "io.prometheus:*"
+      testing:
+        patterns:
+          - "org.junit.*"
+          - "org.junit:*"
+          - "org.mockito:*"
+          - "org.assertj:*"
+          - "org.awaitility:*"
+          - "org.testcontainers:*"
+      mybatis:
+        patterns:
+          - "org.mybatis*:*"
+      lombok:
+        patterns:
+          - "org.projectlombok:*"
+
+  # ==== GitHub Actions ====
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # ==== Docker base image ====
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(docker)"
+    labels:
+      - "dependencies"
+      - "docker"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

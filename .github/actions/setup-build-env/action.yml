@@ -27,6 +27,32 @@ runs:
         java-version: ${{ inputs.java-version }}
         cache: maven
 
+    - name: Cache testcontainer Docker images
+      id: tc-image-cache
+      uses: actions/cache@v4
+      with:
+        path: /tmp/tc-images
+        key: tc-images-${{ hashFiles('batch-common/src/test/java/com/example/batch/testing/AbstractIntegrationTest.java') }}
+
+    - name: Restore testcontainer images from cache
+      if: steps.tc-image-cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        for f in /tmp/tc-images/*.tar; do
+          [ -f "$f" ] && docker load -i "$f" || true
+        done
+
+    - name: Pull and save testcontainer images
+      if: steps.tc-image-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p /tmp/tc-images
+        for img in apache/kafka:4.1.2 postgres:16 redis:7.4 minio/minio:RELEASE.2025-04-03T14-56-28Z; do
+          docker pull "$img" || continue
+          safe=$(echo "$img" | tr '/:' '__')
+          docker save "$img" -o "/tmp/tc-images/${safe}.tar" || true
+        done
+
     - name: Compile load-tests module
       if: inputs.compile-load-tests == 'true'
       shell: bash
