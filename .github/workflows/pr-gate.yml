@@ -2,8 +2,8 @@ name: pr-gate
 
 on:
   workflow_dispatch:
-  # feature 分支 push 即增量跑(scope 探测 partial/skip/full 三态,reflow 已 handle 非 PR 走 full)。
-  # 让长生命周期 feature 分支 push 即知挂没挂,不用等开 PR 才发现,反馈延迟从 days → 15-25 min。
+  # feature 分支 push 即增量跑(scope 探测 partial/skip/full 三态)。
+  # 让长生命周期 feature 分支 push 即知挂没挂,反馈延迟从 days → 几 min。
   # 同 full-ci-gate 同款 paths-ignore:纯文档/配置 commit 不触发。
   push:
     branches-ignore:
@@ -34,26 +34,32 @@ on:
 permissions:
   contents: read
 
-# 同分支同时被 push + pull_request 触发(开了 PR 的 feature 分支再 push)时,
-# 两个事件 ref 不同(push=refs/heads/<branch>, PR=<PR-number>),concurrency group 名也不同,
-# 会跑 2 个并发 run。可接受 — 都用 scope 探测增量模式,实际开销小;cancel-in-progress
-# 保证同事件 / 同 PR 内的旧 run 取消,不会堆积。
 concurrency:
   group: pr-gate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  pr-gate:
+  # ===========================================================================
+  # Job 1: scope-and-validate — 探测 affected scope + 跑所有静态/yml/dict 校验
+  # 输出 shard_a_modules / shard_b_modules / load_tests 让下游 maven shard 并行
+  # 耗时 ~1-2 min,decide 后续 maven job 跑还是 skip
+  # ===========================================================================
+  scope-and-validate:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    timeout-minutes: 10
+    outputs:
+      shard_a_modules: ${{ steps.scope.outputs.shard_a_modules }}
+      shard_b_modules: ${{ steps.scope.outputs.shard_b_modules }}
+      run_load_tests_build: ${{ steps.scope.outputs.run_load_tests_build }}
+      maven_scope: ${{ steps.scope.outputs.maven_scope }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # zizmor[artipacked]:本 job 只跑校验脚本,无需 token persist
+          persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -63,147 +69,102 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          # PR 事件:base.sha 是目标分支(main)的最新 commit;push 事件:event.before 是上次 push 的 sha。
-          # workflow_dispatch:无 base 概念,走 full reactor 兜底。
+          # PR 事件:base.sha 是 main 最新 commit(累计 PR diff)
+          # push 事件:event.before 是上次 push 的 sha(本次增量)
+          # workflow_dispatch:无 base,走 full 兜底
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
           all_modules="batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-console-api,batch-e2e-tests"
-          module_order=(
-            batch-trigger
-            batch-orchestrator
-            batch-worker-core
-            batch-worker-import
-            batch-worker-export
-            batch-worker-process
-            batch-worker-dispatch
-            batch-console-api
-            batch-e2e-tests
-          )
+          module_order=(batch-common batch-trigger batch-orchestrator batch-worker-core batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch batch-console-api batch-e2e-tests)
 
-          # workflow_dispatch 手动触发或 BASE_SHA 缺失(分支首次 push, event.before 全 0) → full reactor 兜底
+          # 两个 shard 的 module 归属(对齐 full-ci-gate)
+          shard_a_re='^(batch-common|batch-trigger|batch-orchestrator)$'
+          shard_b_re='^(batch-worker-core|batch-worker-import|batch-worker-export|batch-worker-process|batch-worker-dispatch|batch-console-api|batch-e2e-tests)$'
+
+          # workflow_dispatch / 首次 push(event.before 全 0)→ full reactor 兜底
           if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BASE_SHA" || "$BASE_SHA" == "0000000000000000000000000000000000000000" ]]; then
-            echo "maven_scope=full" >> "$GITHUB_OUTPUT"
-            echo "maven_modules=$all_modules" >> "$GITHUB_OUTPUT"
-            echo "run_load_tests_build=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "## PR Gate Scope"
-              echo
-              echo "- Event: $EVENT_NAME"
-              echo "- Scope: full reactor (no base ref / dispatch)"
-              echo "- Modules: $all_modules"
-              echo "- load-tests: test-compile"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          # PR + push (feature 分支增量) 都走 scope 探测
-          mapfile -t changed_files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
-
-          if (( ${#changed_files[@]} == 0 )); then
-            echo "maven_scope=skip" >> "$GITHUB_OUTPUT"
-            echo "maven_modules=" >> "$GITHUB_OUTPUT"
-            echo "run_load_tests_build=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "## PR Gate Scope"
-              echo
-              echo "- Event: $EVENT_NAME"
-              echo "- Scope: skip"
-              echo "- Reason: no changed files detected"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          declare -A selected_modules=()
-          full_scope=false
-          run_load_tests_build=false
-
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              pom.xml|.mvn/*|scripts/ci/*|scripts/local/*|helm/*|docker-compose.yml|batch-common/*)
-                full_scope=true
-                run_load_tests_build=true
-                ;;
-              # 改 .github/workflows/* 不再触发 full reactor:workflow 自身错由
-              # workflow-lint / actionlint / zizmor / codeql 等独立 workflow 自查覆盖,
-              # 与 java 单测/IT 互不影响。原先一并算 full_scope 导致改 yml 注释
-              # 也拉 9 模块 maven 全跑(20+ min 纯浪费)。
-              .github/workflows/*|.github/actions/*)
-                ;;
-              batch-trigger/*)
-                selected_modules[batch-trigger]=1
-                ;;
-              batch-orchestrator/*)
-                selected_modules[batch-orchestrator]=1
-                ;;
-              batch-worker-core/*)
-                selected_modules[batch-worker-core]=1
-                ;;
-              batch-worker-import/*)
-                selected_modules[batch-worker-import]=1
-                ;;
-              batch-worker-export/*)
-                selected_modules[batch-worker-export]=1
-                ;;
-              batch-worker-process/*)
-                selected_modules[batch-worker-process]=1
-                ;;
-              batch-worker-dispatch/*)
-                selected_modules[batch-worker-dispatch]=1
-                ;;
-              batch-console-api/*)
-                selected_modules[batch-console-api]=1
-                ;;
-              batch-e2e-tests/*)
-                selected_modules[batch-e2e-tests]=1
-                ;;
-              load-tests/*)
-                run_load_tests_build=true
-                ;;
-            esac
-          done
-
-          if [[ "$full_scope" == "true" ]]; then
             maven_scope="full"
             maven_modules="$all_modules"
+            run_load_tests_build="true"
           else
-            modules_csv=""
-            for module in "${module_order[@]}"; do
-              if [[ -n "${selected_modules[$module]:-}" ]]; then
-                if [[ -z "$modules_csv" ]]; then
-                  modules_csv="$module"
-                else
-                  modules_csv="$modules_csv,$module"
-                fi
-              fi
-            done
-
-            if [[ -n "$modules_csv" ]]; then
-              maven_scope="partial"
-              maven_modules="$modules_csv"
-            else
+            mapfile -t changed_files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+            if (( ${#changed_files[@]} == 0 )); then
               maven_scope="skip"
               maven_modules=""
+              run_load_tests_build="false"
+            else
+              declare -A selected_modules=()
+              full_scope=false
+              run_load_tests_build=false
+
+              for file in "${changed_files[@]}"; do
+                case "$file" in
+                  # 根 pom / .mvn / ci 脚本 / helm / compose / batch-common → 影响全 reactor
+                  pom.xml|.mvn/*|scripts/ci/*|scripts/local/*|helm/*|docker-compose.yml|batch-common/*)
+                    full_scope=true
+                    run_load_tests_build=true
+                    ;;
+                  # workflow yml 不影响 java 测试,由 workflow-lint / actionlint / zizmor / codeql 覆盖
+                  .github/workflows/*|.github/actions/*)
+                    ;;
+                  batch-trigger/*)        selected_modules[batch-trigger]=1 ;;
+                  batch-orchestrator/*)   selected_modules[batch-orchestrator]=1 ;;
+                  batch-worker-core/*)    selected_modules[batch-worker-core]=1 ;;
+                  batch-worker-import/*)  selected_modules[batch-worker-import]=1 ;;
+                  batch-worker-export/*)  selected_modules[batch-worker-export]=1 ;;
+                  batch-worker-process/*) selected_modules[batch-worker-process]=1 ;;
+                  batch-worker-dispatch/*) selected_modules[batch-worker-dispatch]=1 ;;
+                  batch-console-api/*)    selected_modules[batch-console-api]=1 ;;
+                  batch-e2e-tests/*)      selected_modules[batch-e2e-tests]=1 ;;
+                  load-tests/*)           run_load_tests_build=true ;;
+                esac
+              done
+
+              if [[ "$full_scope" == "true" ]]; then
+                maven_scope="full"
+                maven_modules="$all_modules"
+              else
+                modules_csv=""
+                for module in "${module_order[@]}"; do
+                  if [[ -n "${selected_modules[$module]:-}" ]]; then
+                    [[ -z "$modules_csv" ]] && modules_csv="$module" || modules_csv="$modules_csv,$module"
+                  fi
+                done
+                if [[ -n "$modules_csv" ]]; then
+                  maven_scope="partial"
+                  maven_modules="$modules_csv"
+                else
+                  maven_scope="skip"
+                  maven_modules=""
+                fi
+              fi
             fi
           fi
 
+          # 把 maven_modules 按 shard 归属过滤出 shard_a_modules / shard_b_modules
+          shard_a_modules=""
+          shard_b_modules=""
+          if [[ -n "$maven_modules" ]]; then
+            shard_a_modules=$(echo "$maven_modules" | tr ',' '\n' | grep -E "$shard_a_re" | paste -sd, - || true)
+            shard_b_modules=$(echo "$maven_modules" | tr ',' '\n' | grep -E "$shard_b_re" | paste -sd, - || true)
+          fi
+
           echo "maven_scope=$maven_scope" >> "$GITHUB_OUTPUT"
-          echo "maven_modules=$maven_modules" >> "$GITHUB_OUTPUT"
+          echo "shard_a_modules=$shard_a_modules" >> "$GITHUB_OUTPUT"
+          echo "shard_b_modules=$shard_b_modules" >> "$GITHUB_OUTPUT"
           echo "run_load_tests_build=$run_load_tests_build" >> "$GITHUB_OUTPUT"
 
           {
             echo "## PR Gate Scope"
             echo
             echo "- Event: $EVENT_NAME"
-            echo "- Changed files:"
-            for file in "${changed_files[@]}"; do
-              echo "  - $file"
-            done
             echo "- Maven scope: $maven_scope"
-            echo "- Maven modules: $maven_modules"
-            echo "- load-tests: $run_load_tests_build"
+            echo "- shard_a (common/trigger/orch): ${shard_a_modules:-<skip>}"
+            echo "- shard_b (workers/console/e2e): ${shard_b_modules:-<skip>}"
+            echo "- load-tests build: $run_load_tests_build"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate KAFKA_TOPICS sync (.env.example ↔ BatchTopics.java)
@@ -216,39 +177,6 @@ jobs:
         shell: bash
         run: bash scripts/ci/validate-flyway-schema.sh
 
-      - name: Run PR gate for full reactor
-        if: steps.scope.outputs.maven_scope == 'full'
-        shell: bash
-        run: |
-          bash scripts/ci/run-full-regression.sh --skip-it-suite
-
-      - name: Run PR gate for affected modules
-        if: steps.scope.outputs.maven_scope == 'partial'
-        shell: bash
-        run: |
-          bash scripts/ci/run-full-regression.sh \
-            --skip-it-suite \
-            -- --pl "${{ steps.scope.outputs.maven_modules }}" -am -amd
-
-      - name: Compile load-tests module
-        if: steps.scope.outputs.run_load_tests_build == 'true'
-        shell: bash
-        run: |
-          mvn -q -f load-tests/pom.xml test-compile
-
-      - name: Report skipped Maven gate
-        if: steps.scope.outputs.maven_scope == 'skip' && steps.scope.outputs.run_load_tests_build != 'true'
-        shell: bash
-        run: |
-          echo "No reactor modules or load-tests sources were affected; skipping Maven gate."
-
-      - name: Security scan — secrets
-        if: steps.scope.outputs.maven_scope != 'skip'
-        shell: bash
-        # P1-4(2026-05-16):去掉 --skip-build。security-scan 不在根 reactor,fresh CI runner
-        # 没有预构建的 jar,带 --skip-build 会直接 exit 1。让脚本内部 mvn package。
-        run: bash scripts/ci/security-scan.sh -- --mode=secret
-
       - name: Verify generated dicts in sync
         shell: bash
         run: python3 scripts/codegen/gen-error-codes-dict.py --check
@@ -260,15 +188,133 @@ jobs:
       - name: Verify Console controller ↔ OpenAPI route sync
         shell: bash
         # 拦 BE 加 controller 端点但漏更 docs/api/console-api.openapi.yaml 的漂移。
-        # 历史上多次出现:Web Push / Mermaid / admin/test-data 等端点写了 controller
-        # 但 yaml 漏更,FE 跑 gen:api 拿不到 type,联调时才发现。
         run: python3 scripts/ci/check-console-openapi-paths.py
+
+      - name: PMD + Spotless (only when maven scope non-empty)
+        if: steps.scope.outputs.maven_scope != 'skip'
+        shell: bash
+        # test-compile 必要(PMD 需要 class 文件分析)
+        run: mvn -DskipTests test-compile pmd:check spotless:check -fae -B
+
+  # ===========================================================================
+  # Job 2: unit-it-a — common + trigger + orchestrator(并行)
+  # ===========================================================================
+  unit-it-a:
+    needs: scope-and-validate
+    if: needs.scope-and-validate.outputs.shard_a_modules != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Run unit + IT (shard A)
+        shell: bash
+        # -am 编译上游,跳 PMD/Spotless(已在 scope-and-validate)
+        run: |
+          mvn verify -pl ${{ needs.scope-and-validate.outputs.shard_a_modules }} -am \
+            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+            -fae -B
 
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr-gate-surefire-reports
+          name: pr-gate-unit-it-a-reports
           path: |
             **/target/surefire-reports/**
+            **/target/failsafe-reports/**
           retention-days: 14
+
+  # ===========================================================================
+  # Job 3: unit-it-b — worker-* + console-api + e2e-tests(compile-only,与 a 并行)
+  # 注:e2e 真跑放 staging-gate / full-ci-gate,这里只 verify 含 IT(--skip-it-suite 语义靠 -Dskip 控制)
+  # ===========================================================================
+  unit-it-b:
+    needs: scope-and-validate
+    if: needs.scope-and-validate.outputs.shard_b_modules != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Run unit + IT (shard B, e2e 跳 *E2eIT)
+        shell: bash
+        # pr-gate 不跑 e2e suite(交 staging-gate),用 -Dit.test 排除 *E2eIT,
+        # 普通 IT 全跑;-am 编译上游 common
+        run: |
+          mvn verify -pl ${{ needs.scope-and-validate.outputs.shard_b_modules }} -am \
+            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+            -Dit.test='!*E2eIT' \
+            -fae -B
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-gate-unit-it-b-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Job 4: misc — security scan(secret only)+ load-tests build(并行)
+  # 轻量 job,~1-2 min。secret scan 始终跑,load-tests build 仅 run_load_tests_build=true
+  # ===========================================================================
+  misc:
+    needs: scope-and-validate
+    if: needs.scope-and-validate.outputs.maven_scope != 'skip' || needs.scope-and-validate.outputs.run_load_tests_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Security scan — secrets
+        if: needs.scope-and-validate.outputs.maven_scope != 'skip'
+        shell: bash
+        # security-scan 不在根 reactor,fresh CI runner 没预构建 jar,带 --skip-build
+        # 会 exit 1。让脚本内部 mvn package。
+        run: bash scripts/ci/security-scan.sh -- --mode=secret
+
+      - name: Compile load-tests module
+        if: needs.scope-and-validate.outputs.run_load_tests_build == 'true'
+        shell: bash
+        run: mvn -q -f load-tests/pom.xml test-compile
