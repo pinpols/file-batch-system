@@ -272,6 +272,8 @@ make ops-compensate     # 触发补偿
 **build-image(7 模块并行,瓶颈 orchestrator)**
 - batch-worker-{import,dispatch,process,export,console-api,trigger} 1:49-2:26 / **batch-orchestrator 2:47** ← critical path
 
+> 2026-05-23:PR #27 合并后,本仓不再有 staging-gate / capacity-gate / promote-staging — 之前的 skip 三件套已删,流水线进一步精简。
+
 ---
 
 ## 关键文件索引

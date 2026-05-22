@@ -1,5 +1,6 @@
 package com.example.batch.common.constants;
 
+/** 批处理生命周期状态字面量集中地;改动需同步 BatchLifecycleStatus 枚举与 DB CHECK 约束。 */
 public final class BatchStatusConstants {
 
   public static final String ACCEPTED = "ACCEPTED";
