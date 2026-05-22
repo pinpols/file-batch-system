@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import com.example.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import com.example.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
 import com.example.batch.orchestrator.domain.entity.ResultVersionEntity;
-import com.example.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -20,14 +19,12 @@ import org.junit.jupiter.api.Test;
 class CrossDayDependencyResolverTest {
 
   private ResultVersionQueryService queryService;
-  private ResultVersionMapper mapper;
   private CrossDayDependencyResolver resolver;
 
   @BeforeEach
   void setUp() {
     queryService = mock(ResultVersionQueryService.class);
-    mapper = mock(ResultVersionMapper.class);
-    resolver = new CrossDayDependencyResolver(new BizDateArithmetic(), queryService, mapper);
+    resolver = new CrossDayDependencyResolver(new BizDateArithmetic(), queryService);
   }
 
   @Test

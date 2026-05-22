@@ -36,6 +36,7 @@ public abstract class AbstractIntegrationTest {
   // **PG 不加 reuse**:reuse 会让 outbox_event 等表跨 run 残留,
   // 破坏 MultiTenantConcurrent / OutboxForwarderRetry / ImportFailure 等依赖 outbox 状态的 IT。
   // PG 单次启动 ~3-5s,影响有限,稳妥优先。
+  @SuppressWarnings("resource")
   private static final PostgreSQLContainer<?> PLATFORM_POSTGRES =
       new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
           .withDatabaseName("batch_platform")
@@ -45,6 +46,7 @@ public abstract class AbstractIntegrationTest {
           .withInitScript("db/platform-init.sql")
           .withCommand("postgres", "-c", "max_connections=500");
 
+  @SuppressWarnings("resource")
   private static final PostgreSQLContainer<?> BUSINESS_POSTGRES =
       new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
           .withDatabaseName("batch_business")
@@ -59,6 +61,7 @@ public abstract class AbstractIntegrationTest {
   private static final KafkaContainer KAFKA =
       new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));
 
+  @SuppressWarnings("resource")
   private static final MinIOContainer MINIO = new MinIOContainer().withReuse(true);
 
   @SuppressWarnings("resource")

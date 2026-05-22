@@ -74,7 +74,6 @@ public class CutoffScheduleResolver {
     return defaultCutoffTime;
   }
 
-  @SuppressWarnings("unchecked")
   private LocalTime findOverride(Map<String, Object> schedule, LocalDate bizDate) {
     Object overrides = schedule.get("overrides");
     if (!(overrides instanceof List<?> rawList)) {

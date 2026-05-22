@@ -1,6 +1,5 @@
 package com.example.batch.console.config;
 
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.support.auth.ConsoleAuthenticationFilter;
@@ -30,7 +29,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 public class ConsoleSecurityConfiguration {
 
   private final ConsoleSecurityProperties properties;
-  private final BatchSecurityProperties batchSecurityProperties;
 
   @Bean
   public ConsoleRateLimitFilter consoleRateLimitFilter(

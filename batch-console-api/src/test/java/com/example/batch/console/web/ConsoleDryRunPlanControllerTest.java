@@ -27,6 +27,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -67,7 +68,7 @@ class ConsoleDryRunPlanControllerTest {
     when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
     when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
     when(bodySpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(any(ParameterizedTypeReference.class)))
+    when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
         .thenReturn(Map.of("level", "L1", "ok", true));
 
     mockMvc =

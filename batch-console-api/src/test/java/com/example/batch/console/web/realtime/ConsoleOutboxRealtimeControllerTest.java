@@ -19,7 +19,6 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -53,11 +52,10 @@ class ConsoleOutboxRealtimeControllerTest {
 
   @Test
   void shouldExposeOutboxRetryRealtimeStream() throws Exception {
-    MvcResult result =
-        mockMvc
-            .perform(get("/api/console/stream/outbox-retries/events").param("tenantId", "t1"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    mockMvc
+        .perform(get("/api/console/stream/outbox-retries/events").param("tenantId", "t1"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
 
     verify(tenantGuard).resolveTenant("t1");
     verify(realtimeEventHub).subscribe("t1", "outbox-retries", null, null, null);
@@ -65,11 +63,10 @@ class ConsoleOutboxRealtimeControllerTest {
 
   @Test
   void shouldExposeOutboxDeliveryRealtimeStream() throws Exception {
-    MvcResult result =
-        mockMvc
-            .perform(get("/api/console/stream/outbox-deliveries/events").param("tenantId", "t2"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    mockMvc
+        .perform(get("/api/console/stream/outbox-deliveries/events").param("tenantId", "t2"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
 
     verify(tenantGuard).resolveTenant("t2");
     verify(realtimeEventHub).subscribe("t2", "outbox-deliveries", null, null, null);

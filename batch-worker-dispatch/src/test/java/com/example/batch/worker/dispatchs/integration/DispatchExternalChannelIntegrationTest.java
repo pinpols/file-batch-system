@@ -54,6 +54,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   private static final long MAIL_WAIT_TIMEOUT_MILLIS = Duration.ofSeconds(10).toMillis();
 
   @Container
+  @SuppressWarnings("resource")
   private static final GenericContainer<?> SFTP_SERVER =
       new GenericContainer<>(SFTP_IMAGE)
           .withExposedPorts(22)

@@ -67,15 +67,14 @@ class DefaultLaunchServiceTest {
   private LaunchBatchDayService launchBatchDayService;
   private LaunchParamResolver launchParamResolver;
 
-  @SuppressWarnings("unchecked")
   private ObjectProvider<DefaultLaunchService> selfProvider;
 
-  @SuppressWarnings("unchecked")
   private ObjectProvider<LaunchBatchDayService> batchDaySelfProvider;
 
   private DefaultLaunchService service;
 
   @BeforeEach
+  @SuppressWarnings("unchecked")
   void setUp() {
     launchValidationService = mock(LaunchValidationService.class);
     partitionDispatchService = mock(PartitionDispatchService.class);

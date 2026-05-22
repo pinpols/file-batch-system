@@ -21,7 +21,6 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +30,6 @@ import org.junit.jupiter.api.Test;
 class PartitionLeaseReclaimSchedulerTest {
 
   private JobPartitionMapper jobPartitionMapper;
-  private JobTaskMapper jobTaskMapper;
   private PartitionReclaimUnit reclaimUnit;
   private OrchestratorGracefulShutdown gracefulShutdown;
   private PartitionLeaseProperties props;
@@ -40,7 +38,6 @@ class PartitionLeaseReclaimSchedulerTest {
   @BeforeEach
   void setUp() {
     jobPartitionMapper = mock(JobPartitionMapper.class);
-    jobTaskMapper = mock(JobTaskMapper.class);
     reclaimUnit = mock(PartitionReclaimUnit.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
 
@@ -56,7 +53,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
     scheduler =
         new PartitionLeaseReclaimScheduler(
-            jobPartitionMapper, jobTaskMapper, reclaimUnit, governance, gracefulShutdown);
+            jobPartitionMapper, reclaimUnit, governance, gracefulShutdown);
   }
 
   @Test

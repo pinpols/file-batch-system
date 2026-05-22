@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
 import java.time.Instant;
@@ -24,16 +23,13 @@ class ConsoleLoginServiceTest {
 
   @BeforeEach
   void setUp() {
-    ConsoleSecurityProperties properties = new ConsoleSecurityProperties();
-    properties.setJwtIssuer("batch-console-api");
-    properties.setJwtSecret("console-jwt-secret");
     sessionRegistry = Mockito.mock(ConsoleSessionRegistry.class);
     jwtService = Mockito.mock(ConsoleJwtService.class);
     userAccountService = Mockito.mock(ConsoleUserAccountService.class);
     passwordHasher = Mockito.mock(ConsolePasswordHasher.class);
     loginService =
         new ConsoleLoginService(
-            properties, jwtService, sessionRegistry, userAccountService, passwordHasher);
+            jwtService, sessionRegistry, userAccountService, passwordHasher);
   }
 
   @Test

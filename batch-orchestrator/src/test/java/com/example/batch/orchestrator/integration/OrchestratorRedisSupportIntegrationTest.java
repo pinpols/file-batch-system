@@ -52,7 +52,8 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
 
     redis.delete(key);
 
-    assertThat(redis.getJson(key, Map.class)).isNull();
+    Map<String, Object> result = redis.getJson(key, Map.class);
+    assertThat(result).isNull();
   }
 
   @Test

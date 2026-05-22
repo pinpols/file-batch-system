@@ -589,7 +589,7 @@ public class DefaultCompensationService implements CompensationService {
       taskExecutionService.appendLog(log);
     } catch (RuntimeException loggingEx) {
       // 落 trail 是 best-effort,不能让审计失败掩盖原始业务异常
-      this.log.warn(
+      DefaultCompensationService.log.warn(
           "failed to write compensation pre-insert failure trail: tenant={}, type={}, error={}",
           command == null ? null : command.tenantId(),
           command == null ? null : command.compensationType(),

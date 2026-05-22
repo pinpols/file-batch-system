@@ -78,7 +78,6 @@ class ConsoleOpsControllerTest {
         .andExpect(jsonPath("$.data.criticalAlerts").value(3));
   }
 
-  @SuppressWarnings("unchecked")
   private static ConsoleQueryCacheService passThroughCache() {
     ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
     when(cache.getOrLoad(anyString(), any(), any(), any()))

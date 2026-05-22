@@ -13,7 +13,6 @@ import com.example.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcil
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -146,9 +145,4 @@ class TriggerRequestLaunchReconcilerTest {
         .count();
   }
 
-  private static void setField(Object target, String name, Object value) throws Exception {
-    Field f = target.getClass().getDeclaredField(name);
-    f.setAccessible(true);
-    f.set(target, value);
-  }
 }

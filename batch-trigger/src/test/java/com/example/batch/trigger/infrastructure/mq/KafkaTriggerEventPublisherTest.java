@@ -1,7 +1,6 @@
 package com.example.batch.trigger.infrastructure.mq;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -61,15 +61,14 @@ class KafkaTriggerEventPublisherTest {
   void publish_validEnvelope_sendsWithHeadersAndReturnsOk() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-1");
     SendResult<String, String> sendResult = sendResult(0, 100L);
-    when(kafkaTemplate.send(any(ProducerRecord.class)))
+    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any()))
         .thenReturn(CompletableFuture.completedFuture(sendResult));
 
     TriggerEventPublisher.PublishResult result =
         publisher.publish("batch.trigger.launch.v1", "tenant-a:req-1", envelope, "trace-1");
 
     assertThat(result.success()).isTrue();
-    ArgumentCaptor<ProducerRecord<String, String>> captor =
-        ArgumentCaptor.forClass(ProducerRecord.class);
+    ArgumentCaptor<ProducerRecord<String, String>> captor = ArgumentCaptor.captor();
     verify(kafkaTemplate).send(captor.capture());
     ProducerRecord<String, String> sent = captor.getValue();
     assertThat(sent.topic()).isEqualTo("batch.trigger.launch.v1");
@@ -86,7 +85,7 @@ class KafkaTriggerEventPublisherTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.errorMessage()).contains("null");
-    verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+    verify(kafkaTemplate, never()).send(ArgumentMatchers.<ProducerRecord<String, String>>any());
   }
 
   @Test
@@ -95,7 +94,7 @@ class KafkaTriggerEventPublisherTest {
     CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
     failed.completeExceptionally(
         new ExecutionException(new RuntimeException("broker not reachable")));
-    when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(failed);
+    when(kafkaTemplate.send(ArgumentMatchers.<ProducerRecord<String, String>>any())).thenReturn(failed);
 
     TriggerEventPublisher.PublishResult result =
         publisher.publish("batch.trigger.launch.v1", "tenant-a:req-2", envelope, "trace-2");

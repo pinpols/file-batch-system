@@ -36,10 +36,8 @@ import com.example.batch.console.infrastructure.excel.FileTemplateExcelRowParser
 import com.example.batch.console.infrastructure.excel.ResourceQueueExcelRowParser;
 import com.example.batch.console.infrastructure.excel.ResourceQueueExcelRowParser.QueueRow;
 import com.example.batch.console.mapper.BatchWindowMapper;
-import com.example.batch.console.mapper.BizTableSchemaQueryMapper;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.CalendarHolidayMapper;
-import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
@@ -124,7 +122,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     implements ConsoleTenantConfigPackageExcelApplicationService {
 
   private static final String KEY_ID = "id";
-  private static final String EMPTY = "";
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -141,11 +138,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
-  private final ConfigChangeLogMapper configChangeLogMapper;
   private final StepRegistryQueryMapper stepRegistryQueryMapper;
-  // 保留注入：供 WorkbookWriter 在下载模板 / 导出时用来生成 targetColumn 下拉；
-  // Validator 不再硬拦业务 schema 漂移（真正的错交给 LoadStep 运行时抛）。
-  private final BizTableSchemaQueryMapper bizTableSchemaQueryMapper;
   private final TenantConfigPackageRowProjections rowProjections;
   private final BatchDateTimeSupport dateTimeSupport;
   private final MessageSource messageSource;

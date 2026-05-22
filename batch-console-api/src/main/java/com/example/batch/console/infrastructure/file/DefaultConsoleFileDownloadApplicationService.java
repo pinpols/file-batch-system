@@ -23,7 +23,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.env.Environment;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -66,7 +65,6 @@ public class DefaultConsoleFileDownloadApplicationService
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties batchSecurityProperties;
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final Environment environment;
 
   @Override
   public ResponseEntity<InputStreamResource> download(
@@ -227,9 +225,5 @@ public class DefaultConsoleFileDownloadApplicationService
 
   private record ApprovalRecordResponse(ApprovalRecord record) {
     private record ApprovalRecord(String approvalStatus) {}
-  }
-
-  private String resolveUrl(String url) {
-    return environment.resolvePlaceholders(url);
   }
 }

@@ -321,7 +321,6 @@ public class ImportRecordGovernanceService {
     context.getAttributes().put("lastErrorMessage", errorMessage);
   }
 
-  @SuppressWarnings("unchecked")
   private List<ImportBadRecord> badRecords(ImportJobContext context) {
     Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
     if (existing instanceof List<?> list) {

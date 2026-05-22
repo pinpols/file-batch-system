@@ -19,7 +19,6 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -50,25 +49,23 @@ class ConsoleOpsRealtimeControllerTest {
 
   @Test
   void shouldExposeSummaryRealtimeStream() throws Exception {
-    MvcResult result =
-        mockMvc
-            .perform(get("/api/console/ops/summary/events").param("tenantId", "t1"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    mockMvc
+        .perform(get("/api/console/ops/summary/events").param("tenantId", "t1"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
 
     verify(summaryRealtimeStream).subscribe("t1", null, true);
   }
 
   @Test
   void shouldAllowSkippingInitialSnapshot() throws Exception {
-    MvcResult result =
-        mockMvc
-            .perform(
-                get("/api/console/ops/summary/events")
-                    .param("tenantId", "t1")
-                    .param("initialSnapshot", "false"))
-            .andExpect(request().asyncStarted())
-            .andReturn();
+    mockMvc
+        .perform(
+            get("/api/console/ops/summary/events")
+                .param("tenantId", "t1")
+                .param("initialSnapshot", "false"))
+        .andExpect(request().asyncStarted())
+        .andReturn();
 
     verify(summaryRealtimeStream).subscribe("t1", null, false);
   }

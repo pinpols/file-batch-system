@@ -103,7 +103,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
             "configJson", "{\"url\":\"https://example.com/hook\"}",
             "enabled", true));
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(channelMapper).insert(captor.capture());
     assertThat(captor.getValue())
         .containsEntry("tenantId", "tenant-a")
@@ -147,7 +147,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
             "configJson", "{\"url\":\"https://example.com/new\"}",
             "enabled", false));
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(channelMapper).update(captor.capture());
     assertThat(captor.getValue())
         .containsEntry("tenantId", "tenant-a")
@@ -174,7 +174,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
             "jobCodeFilter", "JOB-*",
             "enabled", true));
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(ruleMapper).insert(captor.capture());
     assertThat(captor.getValue())
         .containsEntry("tenantId", "tenant-a")
@@ -233,7 +233,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
             "jobCodeFilter", "JOB-1",
             "enabled", false));
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(ruleMapper).update(captor.capture());
     assertThat(captor.getValue())
         .containsEntry("tenantId", "tenant-a")
@@ -291,7 +291,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
         .containsEntry("channelCode", "email-1")
         .containsEntry("status", "OK")
         .containsEntry("message", "test notification dispatched");
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(captor.capture());
     assertThat(captor.getValue())
         .containsEntry("tenantId", "tenant-a")

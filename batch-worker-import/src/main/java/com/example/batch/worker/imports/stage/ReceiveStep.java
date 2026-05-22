@@ -234,7 +234,9 @@ public class ReceiveStep implements ImportStageStep {
           if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
             return importPayload;
           }
-          Map<String, Object> asMap = objectMapper.convertValue(importPayload, Map.class);
+          @SuppressWarnings("unchecked")
+          Map<String, Object> asMap =
+              (Map<String, Object>) objectMapper.convertValue(importPayload, Map.class);
           asMap.put("content", trimmed);
           asMap.put("contentBase64", null);
           return objectMapper.convertValue(asMap, ImportPayload.class);

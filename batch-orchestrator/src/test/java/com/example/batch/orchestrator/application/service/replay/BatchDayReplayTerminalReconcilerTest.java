@@ -80,7 +80,7 @@ class BatchDayReplayTerminalReconcilerTest {
 
     verify(entryMapper)
         .updateStatus(eq(11L), eq(ENTRY_SUCCEEDED), eq(1001L), any(), any(), any(), any(), any());
-    ArgumentCaptor<List<String>> expected = ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<List<String>> expected = ArgumentCaptor.captor();
     verify(sessionMapper)
         .updateStatus(
             eq("t1"), eq(7L), eq(ENTRY_SUCCEEDED), expected.capture(), any(), any(), any(), any());

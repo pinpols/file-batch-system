@@ -17,6 +17,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -44,7 +45,7 @@ class TriggerReconcilerTest {
   void dbOnly_registersMissingQuartzJob() throws Exception {
     TriggerDescriptor enabled = enabledDescriptor("t1", "JOB_A");
     when(loader.loadAll()).thenReturn(List.of(enabled));
-    when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of());
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of());
 
     reconciler.reconcile();
 
@@ -56,7 +57,7 @@ class TriggerReconcilerTest {
   void quartzOnly_unregistersOrphanedJob() throws Exception {
     when(loader.loadAll()).thenReturn(List.of());
     JobKey orphan = JobKey.jobKey("t1:STALE_JOB", TriggerSchedulerFacade.JOB_GROUP);
-    when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of(orphan));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of(orphan));
 
     reconciler.reconcile();
 
@@ -69,7 +70,7 @@ class TriggerReconcilerTest {
     TriggerDescriptor enabled = enabledDescriptor("t1", "JOB_A");
     JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
     when(loader.loadAll()).thenReturn(List.of(enabled));
-    when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of(existing));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of(existing));
 
     reconciler.reconcile();
 
@@ -82,7 +83,7 @@ class TriggerReconcilerTest {
     TriggerDescriptor disabled = disabledDescriptor("t1", "JOB_A");
     JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
     when(loader.loadAll()).thenReturn(List.of(disabled));
-    when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of(existing));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of(existing));
 
     reconciler.reconcile();
 
@@ -114,7 +115,7 @@ class TriggerReconcilerTest {
     // timezone stub 被 short-circuit 跳过（cron 不同已命中 drift），故不 stub 以避免 strict mode 报错
 
     when(loader.loadAll()).thenReturn(List.of(descriptor));
-    when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of(existing));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of(existing));
     doReturn(List.of(quartzTrigger)).when(scheduler).getTriggersOfJob(existing);
 
     reconciler.reconcile();
@@ -127,7 +128,7 @@ class TriggerReconcilerTest {
   void malformedJobKey_logsAndSkips() throws Exception {
     when(loader.loadAll()).thenReturn(List.of());
     JobKey malformed = JobKey.jobKey("nocolon", TriggerSchedulerFacade.JOB_GROUP);
-    when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of(malformed));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of(malformed));
 
     reconciler.reconcile();
 

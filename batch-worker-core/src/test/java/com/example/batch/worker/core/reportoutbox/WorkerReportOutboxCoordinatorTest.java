@@ -50,18 +50,18 @@ class WorkerReportOutboxCoordinatorTest {
     JdbcTemplate jdbc = new JdbcTemplate(ds);
     SqlSessionFactory sf =
         WorkerReportOutboxSqliteSessionFactorySupport.createSqlSessionFactory(ds);
-    WorkerReportOutboxSqliteMapper sqliteMapper =
-        new SqlSessionTemplate(sf).getMapper(WorkerReportOutboxSqliteMapper.class);
-    WorkerReportOutboxRepository repo =
-        new WorkerReportOutboxRepository(
-            props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbc);
+    try (SqlSessionTemplate sessionTemplate = new SqlSessionTemplate(sf);
+        MockWebServer server = new MockWebServer()) {
+      WorkerReportOutboxSqliteMapper sqliteMapper =
+          sessionTemplate.getMapper(WorkerReportOutboxSqliteMapper.class);
+      WorkerReportOutboxRepository repo =
+          new WorkerReportOutboxRepository(
+              props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbc);
 
-    TransactionTemplate tt = new TransactionTemplate(new DataSourceTransactionManager(ds));
-    tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    WorkerReportOutboxPollClaimer pollClaimer = new WorkerReportOutboxPollClaimer(repo, tt);
+      TransactionTemplate tt = new TransactionTemplate(new DataSourceTransactionManager(ds));
+      tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+      WorkerReportOutboxPollClaimer pollClaimer = new WorkerReportOutboxPollClaimer(repo, tt);
 
-    MockWebServer server = new MockWebServer();
-    try {
       server.enqueue(new MockResponse().setResponseCode(503));
       server.enqueue(new MockResponse().setResponseCode(503));
       server.start();
@@ -115,8 +115,6 @@ class WorkerReportOutboxCoordinatorTest {
 
       assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM worker_report_outbox", Integer.class))
           .isZero();
-    } finally {
-      server.shutdown();
     }
   }
 

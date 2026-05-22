@@ -82,7 +82,6 @@ class ConsoleSchedulerSnapshotControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }
 
-  @SuppressWarnings("unchecked")
   private static ConsoleQueryCacheService passThroughCache() {
     ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
     when(cache.getOrLoad(anyString(), any(), any(), any()))
