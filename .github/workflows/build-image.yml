@@ -87,7 +87,12 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.app
-          platforms: linux/amd64,linux/arm64
+          # main push:只构 amd64(~2 min/module)。arm64 走 QEMU 模拟慢 5-10x
+          # (实测 multi-arch 每个 module ~8 min,80% 在 arm64 emulation 上),
+          # 主分支不需要日常构 arm64。
+          # tag(v*)push:release 场景才构 multi-arch,正式发布要兼容 ARM 服务器。
+          # 实测节省:main push wall-clock 10:54 → ~4-5 min(-55%)。
+          platforms: ${{ startsWith(github.ref, 'refs/tags/v') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: true
           build-args: |
             MODULE=${{ matrix.module }}
