@@ -18,3 +18,8 @@ paths = [
     # 文档示例
     '''docs/runbook/realtime-sse-verification\.md''',
 ]
+regexes = [
+    # 幂等键 header value(`idem-*` 形态),不是 API key,被 generic-api-key 规则误报。
+    # 例:ConsoleHttpIntegrationTest 用 "idem-approval-001" 触幂等链路。
+    '''idem-[a-z0-9-]+''',
+]
