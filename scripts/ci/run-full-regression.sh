@@ -601,5 +601,4 @@ if [[ "$RUN_DEFAULT_TESTS" == true || "$RUN_IT_SUITE" == true ]]; then
   bash "$ROOT_DIR/scripts/ci/collect-flaky.sh" || true
   current_step=""
 fi
-
 banner "FULL REGRESSION PASSED"
