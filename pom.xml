@@ -327,12 +327,17 @@
                                             <limit>
                                                 <counter>LINE</counter>
                                                 <value>COVEREDRATIO</value>
-                                                <!-- 起步基线（2026-04-26）：25% LINE 覆盖率
+                                                <!-- 阈值演进:
+                                                     - 起步基线（2026-04-26）：25%
+                                                     - 第一档提升（2026-05-23）：30% —— 对齐当前最低 module
+                                                       orchestrator（实测 30%）的下限,锁住已达到的水位,
+                                                       避免回退;不跳到 40%+ 是因为 console-api 部分模块
+                                                       仍在 30-40% 区间,激进抬阈会立刻挂 CI。
                                                      当前实测：trigger 44% / orchestrator 30% / console-api 全跑约 30-40%。
-                                                     TODO（maturity-assessment §6 P0）：6 个月内逐步提到 40%，1 年内到 60%；
-                                                     每提一档前先看 maturity-assessment.md 复评数据。
+                                                     TODO（maturity-assessment §6 P0）：6 个月内逐步提到 40%，1 年内到 60%，
+                                                     长期目标 70%；每提一档前先看 maturity-assessment.md 复评数据。
                                                      CI 调用：scripts/ci/run-full-regression.sh 的 "Coverage gate" 步骤。 -->
-                                                <minimum>0.25</minimum>
+                                                <minimum>0.30</minimum>
                                             </limit>
                                         </limits>
                                     </rule>
