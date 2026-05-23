@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.StorageObjectView;
 import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
@@ -217,7 +218,12 @@ public class FileGovernanceScheduler {
       Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
       cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
       cleanupMetadata.put("cleanupReason", "ARCHIVE_RETENTION_EXPIRED");
-      fileGovernanceRepository.updateFileStatus(tenantId, fileId, "DELETED", cleanupMetadata);
+      // 调用方:archived → deleted 是合法迁移。Repository 仅作纯 DAO 写入,
+      // 此处不再依赖 Repository 内部抛 BizException,失败由调用方静默吞 (容错型清理)
+      String currentStatus = text(fileRecord.get("file_status"));
+      FileStateMachine.assertTransition(currentStatus, "DELETED");
+      fileGovernanceRepository.updateFileStatus(
+          tenantId, fileId, currentStatus, "DELETED", cleanupMetadata);
       Map<String, Object> auditDetail = new LinkedHashMap<>();
       auditDetail.put("storagePath", storagePath);
       auditDetail.put("storageType", storageType);
