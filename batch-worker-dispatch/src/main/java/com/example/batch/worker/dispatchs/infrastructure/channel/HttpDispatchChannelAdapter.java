@@ -6,13 +6,14 @@ import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
 import java.net.InetAddress;
-import java.net.URI;
+import java.net.UnknownHostException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import okhttp3.Dns;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -27,16 +28,33 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
   private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
   private final OkHttpClient okHttpClient;
-  private final BatchSecurityProperties securityProperties;
 
   public HttpDispatchChannelAdapter(
       HttpDispatchChannelProperties properties, BatchSecurityProperties securityProperties) {
-    this.securityProperties = securityProperties;
+    // 一次性把 OkHttpClient 构造好（含 callTimeout 兜底 + 自定义 Dns）并复用：
+    // 1) 每次 dispatch 调用 newBuilder().dns(...).build() 会让 connection / dispatcher /
+    //    thread pool 被重建，复用价值归零，高并发下还会泄漏线程；
+    // 2) 父 Client 缺 callTimeout 时，connect/read/write 各自不超时 ≠ 总时长不超时——
+    //    比如 read 拉长导致总时长无界，必须显式 callTimeout 收口。
+    Dns guardedDns =
+        new Dns() {
+          @Override
+          public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+            if (securityProperties.isBypassMode()) {
+              return Dns.SYSTEM.lookup(hostname);
+            }
+            // S-2.6: resolve-then-connect — 解析 + IP 安全校验合并在 Dns 接口实现里，
+            // 由 OkHttp 在真正建连前回调，省去每请求重建 Client 的开销。
+            return List.of(DnsResolveGuard.resolveAndValidate(hostname));
+          }
+        };
     this.okHttpClient =
         new OkHttpClient.Builder()
             .connectTimeout(properties.getConnectTimeoutMillis(), TimeUnit.MILLISECONDS)
             .readTimeout(properties.getReadTimeoutMillis(), TimeUnit.MILLISECONDS)
             .writeTimeout(properties.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS)
+            .callTimeout(properties.getCallTimeoutMillis(), TimeUnit.MILLISECONDS)
+            .dns(guardedDns)
             .build();
   }
 
@@ -98,14 +116,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
     Request request = builder.build();
     try {
-      // S-2.6: resolve-then-connect — 解析 endpoint 主机名并校验 IP，通过 OkHttp Dns 钉住解析结果
-      OkHttpClient client = okHttpClient;
-      if (!securityProperties.isBypassMode()) {
-        String targetHost = URI.create(endpoint).getHost();
-        InetAddress resolved = DnsResolveGuard.resolveAndValidate(targetHost);
-        client = okHttpClient.newBuilder().dns(hostname -> List.of(resolved)).build();
-      }
-      try (Response response = client.newCall(request).execute()) {
+      // S-2.6: DNS 解析 + IP 校验在构造期注入的 Dns 实现里完成，这里直接复用单例 Client
+      try (Response response = okHttpClient.newCall(request).execute()) {
         if (!response.isSuccessful()) {
           return new DispatchResult(
               false,
