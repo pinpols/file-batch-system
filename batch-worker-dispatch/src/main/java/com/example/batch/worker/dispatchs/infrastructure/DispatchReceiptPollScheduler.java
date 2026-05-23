@@ -160,6 +160,14 @@ public class DispatchReceiptPollScheduler {
     Request request = new Request.Builder().url(url).get().build();
     try (Response response = httpClient.newCall(request).execute()) {
       if (!response.isSuccessful() || response.body() == null) {
+        // P2:之前静默吞,排障时只能看到 metric 计数无原因。补 warn + 失败计数,
+        // 上游 404/5xx 立即能在 dashboard 关联到失败率上扬。
+        log.warn(
+            "receipt poll got non-2xx: status={}, externalRequestId={}, channelCode={}",
+            response.code(),
+            externalRequestId,
+            channelCode);
+        pollFailures.incrementAndGet();
         return;
       }
       // L-4：之前 response.body().string() 把整个响应一次性读进堆内存，异常响应体（如
