@@ -52,7 +52,7 @@
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
         <okhttp.version>4.12.0</okhttp.version>
-        <okio.version>3.16.1</okio.version>
+        <okio.version>3.17.0</okio.version>
         <lombok.version>1.18.46</lombok.version>
         <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.0.1</mybatis-spring-boot.version>
