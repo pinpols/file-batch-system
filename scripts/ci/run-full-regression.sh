@@ -592,4 +592,14 @@ if [[ "$RUN_STRICT_VERIFY" == true ]]; then
   fi
 fi
 
+# flaky 汇总:跑完测试 step 才有 surefire/failsafe XML 可扫;脚本恒 0 exit,
+# 不会把已绿的 build 翻红。GH Actions 下自动写 $GITHUB_STEP_SUMMARY。
+# 治理流程见 docs/runbook/ci.md 「flaky 治理」。
+if [[ "$RUN_DEFAULT_TESTS" == true || "$RUN_IT_SUITE" == true ]]; then
+  current_step="Flaky test summary"
+  banner "Flaky test summary"
+  bash "$ROOT_DIR/scripts/ci/collect-flaky.sh" || true
+  current_step=""
+fi
+
 banner "FULL REGRESSION PASSED"

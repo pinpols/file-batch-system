@@ -217,8 +217,9 @@
                     <runOrder>alphabetical</runOrder>
                     <!--
                       flaky 自动重跑:首次 fail 后再跑 2 次,任意一次过即标 flaky-but-pass,
-                      不污染主分支绿。surefire 报告会显式标注 flaky,运维定期巡检 reports
-                      根因治理(见 docs/runbook/ci.md 「flaky 治理」 — 待补)。
+                      不污染主分支绿。surefire 报告会显式标注 flaky,
+                      `scripts/ci/collect-flaky.sh` 在 run-full-regression 末尾自动汇总,
+                      运维定期巡检根因治理(见 docs/runbook/ci.md 「flaky 治理」)。
                       仅限单测 / IT;e2e module 在自己 pom 中可覆盖。
                     -->
                     <rerunFailingTestsCount>2</rerunFailingTestsCount>
