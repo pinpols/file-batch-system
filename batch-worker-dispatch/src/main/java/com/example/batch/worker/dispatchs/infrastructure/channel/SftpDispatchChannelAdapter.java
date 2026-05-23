@@ -19,6 +19,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import jakarta.annotation.PreDestroy;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,35 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   private final BatchSecurityProperties securityProperties;
   // S-1.2 a: 读 active profile 判定是否处于生产
   private final Environment environment;
+
+  // D-1: 异步 disconnect 池。Spring 管理生命周期,@PreDestroy 关闭避免 JVM 退出阻塞。
+  // 改为实例字段后 ThreadFactory 内计数器走 AtomicInteger,消除 newThread() 并发数据竞争。
+  private final ScheduledExecutorService disconnectExecutor =
+      Executors.newScheduledThreadPool(2, new DisconnectThreadFactory());
+
+  private static final class DisconnectThreadFactory implements ThreadFactory {
+    private final AtomicInteger counter = new AtomicInteger();
+
+    @Override
+    public Thread newThread(Runnable r) {
+      Thread t = new Thread(r, "sftp-disconnect-" + counter.incrementAndGet());
+      t.setDaemon(true);
+      return t;
+    }
+  }
+
+  @PreDestroy
+  void shutdownDisconnectExecutor() {
+    disconnectExecutor.shutdown();
+    try {
+      if (!disconnectExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+        disconnectExecutor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      disconnectExecutor.shutdownNow();
+    }
+  }
 
   private boolean isProductionProfile() {
     if (environment == null) {
@@ -232,34 +263,19 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
   }
 
-  // D-1：用 daemon 单线程池承载异步 disconnect；daemon=true 保证 JVM 退出不被卡住
-  private static final ScheduledExecutorService DISCONNECT_EXECUTOR =
-      Executors.newScheduledThreadPool(
-          2,
-          new ThreadFactory() {
-            private int n = 0;
-
-            @Override
-            public Thread newThread(Runnable r) {
-              Thread t = new Thread(r, "sftp-disconnect-" + (++n));
-              t.setDaemon(true);
-              return t;
-            }
-          });
-
-  private static void disconnectWithTimeout(ChannelSftp channel, String kind, String host) {
+  private void disconnectWithTimeout(ChannelSftp channel, String kind, String host) {
     if (channel == null) {
       return;
     }
-    Future<?> future = DISCONNECT_EXECUTOR.submit(channel::disconnect);
+    Future<?> future = disconnectExecutor.submit(channel::disconnect);
     awaitOrCancel(future, kind, host);
   }
 
-  private static void disconnectWithTimeout(Session session, String kind, String host) {
+  private void disconnectWithTimeout(Session session, String kind, String host) {
     if (session == null) {
       return;
     }
-    Future<?> future = DISCONNECT_EXECUTOR.submit(session::disconnect);
+    Future<?> future = disconnectExecutor.submit(session::disconnect);
     awaitOrCancel(future, kind, host);
   }
 
