@@ -26,9 +26,8 @@ import java.util.Set;
 import java.util.UUID;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -64,7 +63,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ConsoleJwtService {
 
   private static final String TOKEN_TYPE = "console_access";
@@ -80,10 +78,57 @@ public class ConsoleJwtService {
   private final ConsoleSessionRegistry sessionRegistry;
   private final Environment environment;
 
-  // P0-3 / P2-2:可选注入,SlidingWindowRateLimiter / SseTicketService 已建 StringRedisTemplate bean;
-  // 非 Spring 单测场景 null,authenticate() / revoke() 自动降级跳过 revocation 检查。
-  @Autowired(required = false)
-  private StringRedisTemplate redisTemplate;
+  /**
+   * P1(2026-05-23 audit / CLAUDE.md §编码细则 #3):Redis 可选依赖改 {@link ObjectProvider} 构造器注入,
+   * 替代原 {@code @Autowired(required = false)} field 注入。authenticate() / revoke() 内每次调用
+   * {@link ObjectProvider#getIfAvailable()},非 Spring 单测场景或 redis 启动失败时返回 null,
+   * 与之前 {@code redisTemplate == null} 降级路径完全一致。
+   */
+  private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
+
+  public ConsoleJwtService(
+      ConsoleSecurityProperties properties,
+      ConsoleSessionRegistry sessionRegistry,
+      Environment environment,
+      ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
+    this.properties = properties;
+    this.sessionRegistry = sessionRegistry;
+    this.environment = environment;
+    this.redisTemplateProvider = redisTemplateProvider;
+  }
+
+  /** 非 Spring 单测构造器:无 Redis,等价 ObjectProvider 永远返回 null。 */
+  public ConsoleJwtService(
+      ConsoleSecurityProperties properties,
+      ConsoleSessionRegistry sessionRegistry,
+      Environment environment) {
+    this(properties, sessionRegistry, environment, EmptyRedisProvider.INSTANCE);
+  }
+
+  /** 非 Spring 测试场景下提供空 {@link ObjectProvider},{@code getIfAvailable()} 始终返回 null。 */
+  private static final class EmptyRedisProvider implements ObjectProvider<StringRedisTemplate> {
+    static final EmptyRedisProvider INSTANCE = new EmptyRedisProvider();
+
+    @Override
+    public StringRedisTemplate getObject() {
+      throw new IllegalStateException("no StringRedisTemplate bean (test stub)");
+    }
+
+    @Override
+    public StringRedisTemplate getObject(Object... args) {
+      throw new IllegalStateException("no StringRedisTemplate bean (test stub)");
+    }
+
+    @Override
+    public StringRedisTemplate getIfAvailable() {
+      return null;
+    }
+
+    @Override
+    public StringRedisTemplate getIfUnique() {
+      return null;
+    }
+  }
 
   private static final String REVOKED_KEY_PREFIX = "console:revoked:jti:";
 
@@ -219,8 +264,9 @@ public class ConsoleJwtService {
     }
     // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
     String jti = jwt.getClaimAsString(CLAIM_JTI);
-    if (jti != null && redisTemplate != null) {
-      Boolean revoked = redisTemplate.hasKey(REVOKED_KEY_PREFIX + jti);
+    StringRedisTemplate authRedis = redisTemplateProvider.getIfAvailable();
+    if (jti != null && authRedis != null) {
+      Boolean revoked = authRedis.hasKey(REVOKED_KEY_PREFIX + jti);
       if (Boolean.TRUE.equals(revoked)) {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
       }
@@ -237,7 +283,8 @@ public class ConsoleJwtService {
    * P0-3:把当前 token 加入 revocation 黑名单,TTL = token 剩余生命。 调用方:登出 endpoint 拿到当前 cookie 中的 token 后传入。
    */
   public void revoke(String token) {
-    if (redisTemplate == null) {
+    StringRedisTemplate revokeRedis = redisTemplateProvider.getIfAvailable();
+    if (revokeRedis == null) {
       return;
     }
     Jwt jwt;
@@ -258,7 +305,7 @@ public class ConsoleJwtService {
     if (ttlSeconds <= 0) {
       return; // 已过期,无需占用 Redis
     }
-    redisTemplate.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", Duration.ofSeconds(ttlSeconds));
+    revokeRedis.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", Duration.ofSeconds(ttlSeconds));
   }
 
   private void auditClientBindingDrift(Jwt jwt, String username, String tenantId) {
