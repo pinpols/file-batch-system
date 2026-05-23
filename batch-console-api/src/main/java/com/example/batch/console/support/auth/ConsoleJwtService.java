@@ -140,8 +140,10 @@ public class ConsoleJwtService {
 
   // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
   // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
-  private NimbusJwtEncoder cachedEncoder;
-  private JwtDecoder cachedDecoder;
+  // volatile：fallback 路径 encoder()/decoder() 是 DCL 模式,无 volatile JIT 重排序可能让其他线程读到
+  // 未完全构造的对象,虽然 SecretKey 重复构造无副作用但仍是 JMM 不安全模式。
+  private volatile NimbusJwtEncoder cachedEncoder;
+  private volatile JwtDecoder cachedDecoder;
 
   @PostConstruct
   void validateSecuritySecrets() {
