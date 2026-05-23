@@ -313,16 +313,19 @@ public class DefaultTriggerService implements TriggerService {
     if (rules == null) {
       rules = List.of();
     }
+    // R-arch-audit-2026-05-23 P1: 用 toUnmodifiableSet 替代 toSet，防止下游意外修改 holidays /
+    // workdayOverrides。CalendarBizDateDefinition 是 record，字段引用不可变但 Set 本身可写，
+    // toUnmodifiableSet 明确兜底，符合 CLAUDE.md §集合 "返回不可变集合" 约定。
     Set<LocalDate> holidays =
         rules.stream()
             .filter(rule -> isDayType(rule, "HOLIDAY"))
             .map(CalendarHolidayRule::getBizDate)
-            .collect(Collectors.toSet());
+            .collect(Collectors.toUnmodifiableSet());
     Set<LocalDate> workdayOverrides =
         rules.stream()
             .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
             .map(CalendarHolidayRule::getBizDate)
-            .collect(Collectors.toSet());
+            .collect(Collectors.toUnmodifiableSet());
     return new CalendarBizDateDefinition(
         calendar.getTimezone(),
         calendar.getCutoffTime(),
