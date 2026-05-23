@@ -59,11 +59,15 @@ import org.springframework.stereotype.Component;
 public class OutboxPollScheduler {
 
   /**
-   * ShedLock 兜底持锁上限。与 {@link OutboxProperties#getPublishingTimeoutSeconds()}(默认 120s)对齐 — 锁过期被另
-   * instance 抢占时,前一 instance 留下的 PUBLISHING 行已超过 stale 阈值,新 instance 跑 {@code resetStalePublishing}
-   * 即能恢复。设短于 publishingTimeoutSeconds 会留出"锁过期但 stale 未到"的盲窗。
+   * ShedLock 兜底持锁上限的余量。在 {@link OutboxProperties#getPublishingTimeoutSeconds()} 基础上加这一段缓冲得到
+   * 锁的 lockAtMost — 保证锁过期晚于 stale 重置阈值,避免"锁过期但 stale 未到"的盲窗;同时把窗口控制在 10s,
+   * 不至于让单实例长时间故障后才能切换。
+   *
+   * <p>历史问题:lockAtMost 与 publishingTimeoutSeconds 严格相等时,GC 停顿或 Kafka 超时期间锁刚过期就被另一
+   * 实例抢走,原实例继续推进与新实例并发处理同一批 outbox 事件(outbox UNIQUE(tenant_id, event_key) ON CONFLICT
+   * 兜底但会刷错误日志)。+10s 缓冲将这种竞争窗口压缩到极小。
    */
-  private static final Duration LOCK_AT_MOST = Duration.ofSeconds(120);
+  private static final Duration LOCK_AT_MOST_BUFFER = Duration.ofSeconds(10);
 
   /**
    * ShedLock 最小持锁时长 — 200ms(从原 3s 降下来,2026-05-01 校准)。
@@ -287,6 +291,9 @@ public class OutboxPollScheduler {
             ? "outbox_poll_shard_" + assignment.shardIndex()
             : "outbox_poll";
     Instant now = BatchDateTimeSupport.utcNow();
-    return new LockConfiguration(now, lockName, LOCK_AT_MOST, LOCK_AT_LEAST);
+    Duration lockAtMost =
+        Duration.ofSeconds(governance.outbox().getPublishingTimeoutSeconds())
+            .plus(LOCK_AT_MOST_BUFFER);
+    return new LockConfiguration(now, lockName, lockAtMost, LOCK_AT_LEAST);
   }
 }
