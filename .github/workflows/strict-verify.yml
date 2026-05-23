@@ -106,7 +106,7 @@ jobs:
           if [[ -f .env.example ]]; then cp .env.example .env.local; fi
           docker compose --env-file .env.local up -d postgres
           # 等 PG ready
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if docker exec batch-postgres pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
               echo "postgres ready"
               break
