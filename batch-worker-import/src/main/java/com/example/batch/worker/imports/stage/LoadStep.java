@@ -15,6 +15,7 @@ import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.plugin.ImportLoadPluginRegistry;
+import com.example.batch.worker.imports.stage.support.ImportStageSupport;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -318,52 +319,19 @@ public class LoadStep implements ImportStageStep {
   }
 
   private long numberValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (value == null) {
-      return 0L;
-    }
-    String text = String.valueOf(value);
-    if (text.isBlank()) {
-      return 0L;
-    }
-    return Long.parseLong(text);
+    return ImportStageSupport.numberValue(value);
   }
 
   private int resolveChunkSize(ImportJobContext context) {
-    int fallback = workerConfiguration == null ? 500 : workerConfiguration.chunkSize();
-    Object templateConfigObject =
-        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object value = templateConfig.get("chunk_size");
-      if (value instanceof Number number) {
-        return Math.max(1, number.intValue());
-      }
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return Math.max(1, Integer.parseInt(String.valueOf(value)));
-      }
-    }
-    return Math.max(1, fallback);
+    return ImportStageSupport.resolveChunkSize(context, workerConfiguration);
   }
 
   private String stringValue(Object value) {
-    if (value == null) {
-      return null;
-    }
-    String text = String.valueOf(value);
-    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    return ImportStageSupport.stringValue(value);
   }
 
   private void deleteQuietly(Path path) {
-    if (path == null) {
-      return;
-    }
-    try {
-      Files.deleteIfExists(path);
-    } catch (Exception ex) {
-      log.warn("Failed to delete temp file: {}", path, ex);
-    }
+    ImportStageSupport.deleteQuietly(path);
   }
 
   private Path resolvePath(Object value) {
