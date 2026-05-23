@@ -23,6 +23,8 @@ RUN_DEPLOY_SMOKE=false
 RUN_DEPLOY_VERIFICATION=false
 RUN_INSPECTION=false
 RUN_STATIC_GATES=true
+RUN_STRICT_VERIFY=false
+STRICT_VERIFY_DRY_RUN=false
 declare -a EXTRA_MVN_ARGS=()
 
 current_step=""
@@ -50,6 +52,9 @@ Options:
   --with-deployment-verification
                          Run upgrade / rollback verification smoke
   --with-inspection      Run scripts/ops/inspect-all.sh after tests
+  --with-strict-verify   Run scripts/local/strict-verify.sh (requires live PG + console-api on \$CONSOLE_PORT)
+  --strict-verify-dry-run
+                         Run strict-verify.sh --dry-run (CI smoke: only validate prerequisites, ~1s)
   --help                 Show this message
 
 Examples:
@@ -461,6 +466,15 @@ while [[ $# -gt 0 ]]; do
       RUN_INSPECTION=true
       shift
       ;;
+    --with-strict-verify)
+      RUN_STRICT_VERIFY=true
+      shift
+      ;;
+    --strict-verify-dry-run)
+      RUN_STRICT_VERIFY=true
+      STRICT_VERIFY_DRY_RUN=true
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -478,7 +492,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$RUN_DEFAULT_TESTS" == false && "$RUN_IT_SUITE" == false && "$RUN_LOAD_SMOKE" == false && "$RUN_LOAD_CAPACITY" == false && "$RUN_DEPLOY_SMOKE" == false && "$RUN_DEPLOY_VERIFICATION" == false && "$RUN_INSPECTION" == false ]]; then
+if [[ "$RUN_DEFAULT_TESTS" == false && "$RUN_IT_SUITE" == false && "$RUN_LOAD_SMOKE" == false && "$RUN_LOAD_CAPACITY" == false && "$RUN_DEPLOY_SMOKE" == false && "$RUN_DEPLOY_VERIFICATION" == false && "$RUN_INSPECTION" == false && "$RUN_STRICT_VERIFY" == false ]]; then
   printf 'Nothing to run. Use --help for options.\n' >&2
   exit 2
 fi
@@ -562,6 +576,20 @@ if [[ "$RUN_INSPECTION" == true ]]; then
   run_step \
     "Post-run Inspection" \
     bash "$ROOT_DIR/scripts/ops/inspect-all.sh"
+fi
+
+# Strict-verify:真实数据严格验证(cursor/offset 一致性 / maintenance 双轨 / 审计落表 /
+# cron-preview / cursor 解码降级 / OpenAPI 漂移)。本地 30s,CI 上目前作为可选 step
+# 经由 workflow_dispatch 跑(默认 dry-run smoke,~1s,只校验脚本前置依赖)。
+# 真实跑需要 live PG + console-api,见 .github/workflows/strict-verify.yml。
+if [[ "$RUN_STRICT_VERIFY" == true ]]; then
+  if [[ "$STRICT_VERIFY_DRY_RUN" == true ]]; then
+    run_step "Strict-verify (dry-run prerequisites smoke)" \
+      env CI=1 bash "$ROOT_DIR/scripts/local/strict-verify.sh" --dry-run
+  else
+    run_step "Strict-verify (live PG + console-api real-data verification)" \
+      env CI=1 bash "$ROOT_DIR/scripts/local/strict-verify.sh"
+  fi
 fi
 
 banner "FULL REGRESSION PASSED"
