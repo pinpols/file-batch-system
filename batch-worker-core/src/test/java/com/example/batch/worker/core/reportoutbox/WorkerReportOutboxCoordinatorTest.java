@@ -15,8 +15,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.SqlSessionTemplate;
@@ -64,8 +64,8 @@ class WorkerReportOutboxCoordinatorTest {
       tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
       WorkerReportOutboxPollClaimer pollClaimer = new WorkerReportOutboxPollClaimer(repo, tt);
 
-      server.enqueue(new MockResponse().setResponseCode(503));
-      server.enqueue(new MockResponse().setResponseCode(503));
+      server.enqueue(new MockResponse.Builder().code(503).build());
+      server.enqueue(new MockResponse.Builder().code(503).build());
       server.start();
 
       OrchestratorTaskClientProperties httpProps = new OrchestratorTaskClientProperties();
@@ -112,7 +112,7 @@ class WorkerReportOutboxCoordinatorTest {
                   Integer.class))
           .isEqualTo(1);
 
-      server.enqueue(new MockResponse().setResponseCode(200));
+      server.enqueue(new MockResponse.Builder().code(200).build());
       coordinator.pollDeferredReports();
 
       assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM worker_report_outbox", Integer.class))

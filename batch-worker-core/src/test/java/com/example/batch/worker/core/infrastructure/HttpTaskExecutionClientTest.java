@@ -13,8 +13,8 @@ import com.example.batch.worker.core.support.TaskLeaseRenewItem;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -30,8 +30,8 @@ class HttpTaskExecutionClientTest {
   @Test
   void reportRetriesOn503ThenSucceeds() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse().setResponseCode(503));
-      server.enqueue(new MockResponse().setResponseCode(200));
+      server.enqueue(new MockResponse.Builder().code(503).build());
+      server.enqueue(new MockResponse.Builder().code(200).build());
       server.start();
 
       OrchestratorTaskClientProperties props = clientProperties(server.getPort());
@@ -72,9 +72,9 @@ class HttpTaskExecutionClientTest {
     // R6 P0-7：429 = orchestrator sliding-window 限流的瞬时拒绝，过去 worker 直接放弃 REPORT 等于把
     // task 数据丢掉（orchestrator 端只能等 lease 过期回收）。改为按退避重试，与 5xx / I/O 同处理。
     try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse().setResponseCode(429).setBody("slow down"));
-      server.enqueue(new MockResponse().setResponseCode(429).setBody("slow down"));
-      server.enqueue(new MockResponse().setResponseCode(200));
+      server.enqueue(new MockResponse.Builder().code(429).body("slow down").build());
+      server.enqueue(new MockResponse.Builder().code(429).body("slow down").build());
+      server.enqueue(new MockResponse.Builder().code(200).build());
       server.start();
 
       OrchestratorTaskClientProperties props = clientProperties(server.getPort());
@@ -111,11 +111,12 @@ class HttpTaskExecutionClientTest {
   void renewLeasesBatchUsesSingleHttpCallForChunk() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(
-          new MockResponse()
-              .setResponseCode(200)
+          new MockResponse.Builder()
+              .code(200)
               .setHeader("Content-Type", "application/json")
-              .setBody(
-                  "{\"results\":[{\"taskId\":1,\"renewed\":true},{\"taskId\":2,\"renewed\":false}]}"));
+              .body(
+                  "{\"results\":[{\"taskId\":1,\"renewed\":true},{\"taskId\":2,\"renewed\":false}]}")
+              .build());
       server.start();
 
       OrchestratorTaskClientProperties props = clientProperties(server.getPort());
