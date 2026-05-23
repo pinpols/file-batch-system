@@ -2,6 +2,7 @@ package com.example.batch.trigger.infrastructure;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -77,6 +78,8 @@ public class TriggerGracefulShutdown implements ApplicationListener<ContextClose
             : scheduler.isInStandbyMode()
                 ? "STANDBY"
                 : scheduler.isStarted() ? "STARTED" : "STOPPED");
-    return status;
+    // R-arch-audit-2026-05-23 P2: 返回不可变包装，防调用方 (e.g. TriggerManagementController) 拿到
+    // 响应 map 后修改内部状态语义；status() 是只读视图。
+    return Collections.unmodifiableMap(status);
   }
 }
