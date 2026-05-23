@@ -10,6 +10,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.martijndwars.webpush.Notification;
@@ -42,6 +45,13 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class ConsolePushSender {
+
+  /**
+   * P1(2026-05-23 audit):单次 push 投递的最大等待秒数。web-push 5.1.x 同步 send() 阻塞由底层 Apache HttpClient 4
+   * 决定,默认无显式上限,慢 endpoint 可占住整个 {@code pushTaskExecutor} 工作线程。 这里用 {@code sendAsync().get(3s)}
+   * 显式封顶;超时只 warn + 跳过本次,不立即清理 sub。 升级 web-push 6.x 后切换到 reactive 流式 API。
+   */
+  private static final long SEND_TIMEOUT_SECONDS = 3L;
 
   private final ConsolePushProperties properties;
   private final ConsolePushSubscriptionMapper repository;
@@ -123,9 +133,10 @@ public class ConsolePushSender {
               body,
               properties.getTtlSeconds());
 
-      // sendOne 已在 pushTaskExecutor 线程,直接同步 send() 阻塞当前线程即可;
-      // 超时由 PushService 底层 HTTP client 配置(需要时通过 setHttpClient 注入)。
-      HttpResponse resp = pushService.send(notification);
+      // sendOne 已在 pushTaskExecutor,但 web-push 5.1.x 同步 send() 没有显式超时,
+      // 极端慢 endpoint 会占住整个 @Async 线程。改 sendAsync().get(3s) 封顶等待。
+      Future<HttpResponse> future = pushService.sendAsync(notification);
+      HttpResponse resp = future.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       int code = resp.getStatusLine().getStatusCode();
       if (code >= 200 && code < 300) {
         repository.touchLastPushedAt(sub.getId(), Instant.now());
@@ -147,6 +158,14 @@ public class ConsolePushSender {
       }
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
+    } catch (TimeoutException te) {
+      // 慢 endpoint:本次跳过、不重试、不立刻清理 sub(避免短瞬抖动误删),只 warn 留痕。
+      // web-push 6.x 升级后可引入「连续 N 次超时 → 暂时禁用 endpoint」更精细策略。
+      log.warn(
+          "[push] send timeout after {}s, sub_id={} endpoint={}",
+          SEND_TIMEOUT_SECONDS,
+          sub.getId(),
+          sub.getEndpoint());
     } catch (ExecutionException | RuntimeException e) {
       log.error("[push] send failed sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
     } catch (Exception e) {
