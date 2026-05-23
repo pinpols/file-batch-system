@@ -6,6 +6,7 @@ import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
+import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
 import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessPayload;
@@ -29,15 +30,18 @@ public class ProcessStepExecutionAdapter
     extends AbstractPipelineStepExecutionAdapter<ProcessJobContext, ProcessStageResult> {
 
   private final ProcessStageExecutor processStageExecutor;
+  private final PipelineStepTemplateProvider stepTemplateProvider;
   private final ObjectMapper objectMapper;
 
   public ProcessStepExecutionAdapter(
       ProcessStageExecutor processStageExecutor,
+      PipelineStepTemplateProvider stepTemplateProvider,
       ObjectMapper objectMapper,
       PlatformFileRuntimeRepository runtimeRepository,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider) {
     super(runtimeRepository, verifierHookProvider);
     this.processStageExecutor = processStageExecutor;
+    this.stepTemplateProvider = stepTemplateProvider;
     this.objectMapper = objectMapper;
   }
 
@@ -53,7 +57,7 @@ public class ProcessStepExecutionAdapter
 
   @Override
   protected List<PipelineStepTemplate> defaultPipelineSteps() {
-    return processStageExecutor.defaultStepDefinitions();
+    return stepTemplateProvider.defaultStepDefinitions();
   }
 
   @Override
