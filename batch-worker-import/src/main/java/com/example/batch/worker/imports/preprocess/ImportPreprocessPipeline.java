@@ -62,7 +62,22 @@ public final class ImportPreprocessPipeline {
   private static final String POLICY_NONE = "NONE";
   private static final String EMPTY = "";
 
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
+  /**
+   * P2: 持有一份默认 ObjectMapper 作 fallback,但 Spring 启动时由 {@link
+   * ImportPreprocessObjectMapperInitializer} 替换为容器管理的全局 bean,确保自定义 Module(JavaTime / Kotlin /
+   * 项目内 mixin)与其他模块行为一致。
+   */
+  private static volatile ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
+
+  /**
+   * 仅由 Spring 启动期(单线程)调用,把 fallback 实例替换为容器管理的 ObjectMapper。volatile 写一次,后续解析步骤读到的就是项目全局
+   * ObjectMapper。
+   */
+  static void setObjectMapper(ObjectMapper objectMapper) {
+    if (objectMapper != null) {
+      OBJECT_MAPPER = objectMapper;
+    }
+  }
 
   /**
    * 隐式步骤推导表：{@code compress_type} / {@code encrypt_type} 的 UPPERCASE 值 → 对应 preprocess step。
