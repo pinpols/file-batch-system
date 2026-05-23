@@ -12,10 +12,11 @@ import com.example.batch.orchestrator.mapper.BusinessCalendarMapper;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
 import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.orchestrator.mapper.WorkflowDefinitionMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,36 +30,18 @@ import org.springframework.stereotype.Service;
  * tenant_quota_policy 留在 Spring Data JDBC 仓库（P2 计划）。
  */
 @Service
-@RequiredArgsConstructor
 public class OrchestratorConfigCacheService {
 
   private static final Duration CONFIG_CACHE_TTL = Duration.ofMinutes(5);
-  // R3-P2-9 / S1-3：DB 也返回 null 时（配置被 disabled / 不存在）记录"已知缺失"时间戳，
-  // 在 NEGATIVE_TTL_MS 内直接返回 null，不再 hit DB。scheduler 每秒 tick 配置 disabled 不再
-  // 把 DB 打满。本地 map 即可（每个 orchestrator 实例独立，命中率自然降低也是可接受降级）。
-  private static final long NEGATIVE_TTL_MS = 30_000L;
-  // 容量上限保护，避免 leaked tenant/code 导致 map 无界增长；上限到达后整体重置。
-  private static final int NEGATIVE_CACHE_MAX = 10_000;
-  private final ConcurrentMap<String, Long> negativeCache = new ConcurrentHashMap<>();
+  // R3-P2-9 / S1-3：DB 也返回 null 时（配置被 disabled / 不存在）记录"已知缺失"标记，
+  // 在 NEGATIVE_TTL 内直接返回 null，不再 hit DB。scheduler 每秒 tick 配置 disabled 不再
+  // 把 DB 打满。本地 cache 即可（每个 orchestrator 实例独立，命中率自然降低也是可接受降级）。
+  private static final Duration NEGATIVE_TTL = Duration.ofSeconds(30);
+  // P1: Caffeine 替换原 ConcurrentHashMap + 手动容量保护逻辑;maximumSize 由 Caffeine 用
+  // window-TinyLFU 自动驱逐 LRU 条目,不再"上限到达 → 整体 clear"造成的 thrashing。
+  private static final long NEGATIVE_CACHE_MAX = 10_000L;
 
-  private boolean isNegativeCached(String key) {
-    Long ts = negativeCache.get(key);
-    if (ts == null) {
-      return false;
-    }
-    if (System.currentTimeMillis() - ts > NEGATIVE_TTL_MS) {
-      negativeCache.remove(key);
-      return false;
-    }
-    return true;
-  }
-
-  private void markNegative(String key) {
-    if (negativeCache.size() >= NEGATIVE_CACHE_MAX) {
-      negativeCache.clear();
-    }
-    negativeCache.put(key, System.currentTimeMillis());
-  }
+  private final Cache<String, Boolean> negativeCache;
 
   private final OrchestratorRedisSupport redis;
   private final JobDefinitionMapper jobDefinitionMapper;
@@ -66,6 +49,82 @@ public class OrchestratorConfigCacheService {
   private final BusinessCalendarMapper businessCalendarMapper;
   private final BatchWindowMapper batchWindowMapper;
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+
+  public OrchestratorConfigCacheService(
+      OrchestratorRedisSupport redis,
+      JobDefinitionMapper jobDefinitionMapper,
+      WorkflowDefinitionMapper workflowDefinitionMapper,
+      BusinessCalendarMapper businessCalendarMapper,
+      BatchWindowMapper batchWindowMapper,
+      TenantQuotaPolicyMapper tenantQuotaPolicyMapper,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    this.redis = redis;
+    this.jobDefinitionMapper = jobDefinitionMapper;
+    this.workflowDefinitionMapper = workflowDefinitionMapper;
+    this.businessCalendarMapper = businessCalendarMapper;
+    this.batchWindowMapper = batchWindowMapper;
+    this.tenantQuotaPolicyMapper = tenantQuotaPolicyMapper;
+    this.negativeCache =
+        Caffeine.newBuilder()
+            .expireAfterWrite(NEGATIVE_TTL)
+            .maximumSize(NEGATIVE_CACHE_MAX)
+            .build();
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry != null) {
+      registry.gauge(
+          "batch.orchestrator.config.negative_cache.size", negativeCache, Cache::estimatedSize);
+    }
+  }
+
+  // 兼容旧构造器签名 (测试 / 其它注入路径);ObjectProvider 默认 null 即不挂 gauge。
+  public OrchestratorConfigCacheService(
+      OrchestratorRedisSupport redis,
+      JobDefinitionMapper jobDefinitionMapper,
+      WorkflowDefinitionMapper workflowDefinitionMapper,
+      BusinessCalendarMapper businessCalendarMapper,
+      BatchWindowMapper batchWindowMapper,
+      TenantQuotaPolicyMapper tenantQuotaPolicyMapper) {
+    this(
+        redis,
+        jobDefinitionMapper,
+        workflowDefinitionMapper,
+        businessCalendarMapper,
+        batchWindowMapper,
+        tenantQuotaPolicyMapper,
+        nullObjectProvider());
+  }
+
+  private static <T> ObjectProvider<T> nullObjectProvider() {
+    return new ObjectProvider<>() {
+      @Override
+      public T getObject() {
+        return null;
+      }
+
+      @Override
+      public T getObject(Object... args) {
+        return null;
+      }
+
+      @Override
+      public T getIfAvailable() {
+        return null;
+      }
+
+      @Override
+      public T getIfUnique() {
+        return null;
+      }
+    };
+  }
+
+  private boolean isNegativeCached(String key) {
+    return negativeCache.getIfPresent(key) != null;
+  }
+
+  private void markNegative(String key) {
+    negativeCache.put(key, Boolean.TRUE);
+  }
 
   public JobDefinitionEntity findEnabledJobDefinition(String tenantId, String jobCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
@@ -208,6 +267,6 @@ public class OrchestratorConfigCacheService {
     String key = BatchRedisKeys.config(tenantId, type, code);
     redis.delete(key);
     // R3-P2-9：失效 positive cache 时也清 negative，避免开启 disabled 配置时仍命中"已知缺失"残留
-    negativeCache.remove(key);
+    negativeCache.invalidate(key);
   }
 }
