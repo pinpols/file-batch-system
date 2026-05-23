@@ -13,13 +13,13 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 
@@ -66,8 +66,13 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
   /** D-3: 子类可提供 DLQ 发布器，用于转发无法处理的"毒丸"消息。 */
   protected abstract DeadLetterPublisher deadLetterPublisher();
 
-  @Value("${batch.worker.max-concurrent-tasks:8}")
-  private int maxConcurrentTasks;
+  /**
+   * P1: 改为构造器注入(原 @Value field injection 违反 CLAUDE.md #3)。
+   *
+   * <p>子类继续走 super(...) 链;通过 @PostConstruct {@link #initSemaphore()} 在 Spring 完成依赖注入后立即初始化
+   * semaphore,避免 ensureSemaphore() 懒初始化路径在 maxConcurrentTasks=0 默认值下静默降级为 1。
+   */
+  private final int maxConcurrentTasks;
 
   /**
    * 当前正在执行的 task 数 = maxConcurrentTasks - 可用许可. semaphore 未初始化 (worker 启动早期) 时返回 0. 由 {@code
@@ -96,9 +101,18 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      @org.springframework.beans.factory.annotation.Value("${batch.worker.max-concurrent-tasks:8}")
+          int maxConcurrentTasks) {
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.maxConcurrentTasks = maxConcurrentTasks;
+  }
+
+  /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */
+  @PostConstruct
+  void initSemaphore() {
+    ensureSemaphore();
   }
 
   /**
