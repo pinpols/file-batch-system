@@ -120,7 +120,9 @@ public class DefaultExportStageExecutor
               ERROR_OBJECT_MAPPER)
           : stageStep.execute(context);
     } catch (BizException exception) {
-      log.error(
+      // P2 对齐 import 侧"业务错误 → WARN"语义:BizException 是配置 / 输入侧的预期失败,
+      // 不属于运维需要 page 的 ERROR 等级(INFRA_ERROR 还在下方 catch(Exception) 保持 ERROR)。
+      log.warn(
           "export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
           stage,
           step.stepCode(),
