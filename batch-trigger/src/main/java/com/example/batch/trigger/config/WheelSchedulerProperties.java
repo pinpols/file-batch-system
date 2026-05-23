@@ -67,4 +67,29 @@ public class WheelSchedulerProperties {
    * map 无界增长。默认 50_000 足够任何合理租户规模(平台 trigger 总数 ≪ 10k);触发上限通常是 fire 卡死的告警信号。
    */
   private int maxInFlight = 50_000;
+
+  /**
+   * fire() 异步执行池配置 — P0 (audit 2026-05-23):wheel worker 线程只负责 dispatch, DB / launchService
+   * 阻塞操作交给独立池跑,避免 misfire 雪崩。
+   */
+  private FireAsync fireAsync = new FireAsync();
+
+  /** wheel fire 异步执行池参数(对应 prefix {@code batch.trigger.wheel.fire-async.*})。 */
+  @Data
+  public static class FireAsync {
+    /** 核心线程数。默认 4 — 中等批量(数百 trigger / 分钟)足够。 */
+    private int coreSize = 4;
+
+    /** 最大线程数。突发负载 burst 时扩到此上限。默认 8。 */
+    private int maxSize = 8;
+
+    /** 阻塞队列容量。满了走 CallerRunsPolicy(让 wheel worker 兜底跑,提供背压而非丢任务)。默认 1000。 */
+    private int queueCapacity = 1000;
+
+    /** 非核心线程 keep-alive(秒)。 */
+    private int keepAliveSeconds = 60;
+
+    /** shutdown 时等待 in-flight fire 完成的秒数;到点强制中断。 */
+    private int awaitTerminationSeconds = 30;
+  }
 }
