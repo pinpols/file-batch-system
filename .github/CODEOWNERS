@@ -1,11 +1,50 @@
-# 全仓默认 owner
-* @idengzhao
+# CODEOWNERS — main 分支保护配套
+# 匹配路径的 PR 必须 listed owner approve 才能 merge(branch protection
+# require_code_owner_reviews=true)。admin(enforce_admins=false)可绕过,
+# 其他 contributor 必走 review。
+#
+# 文档:https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+#
+# 2026-05-23:owner 从 @idengzhao(旧)改 @pinpols(当前账号);
+# 加 workflow / pom / test / migration 等高风险路径强制审。
 
-# 高风险目录显式 owner — 仓库开启 branch protection
-# "Require review from Code Owners" 后,这些目录改动强制经 owner 审批。
-/.github/                              @idengzhao
-/db/migration/                         @idengzhao
-/docs/architecture/                    @idengzhao
-/docs/api/                             @idengzhao
-/docs/runbook/                         @idengzhao
-/batch-common/src/main/java/com/example/batch/security/  @idengzhao
+# 默认 — 任何文件改动都要 @pinpols
+*                                       @pinpols
+
+# CI / workflow 自身保护(防"改 workflow 关 gate")
+/.github/workflows/                     @pinpols
+/.github/actions/                       @pinpols
+/.github/CODEOWNERS                     @pinpols
+/.github/zizmor.yml                     @pinpols
+
+# 构建配置 / 依赖(防"加 GPL 库 / 改 coverage 阈值")
+/pom.xml                                @pinpols
+/.mvn/                                  @pinpols
+
+# 部署 / 基础设施
+/helm/                                  @pinpols
+/docker/                                @pinpols
+/docker-compose.yml                     @pinpols
+
+# 数据库 migration(单向操作,高风险)
+/db/migration/                          @pinpols
+
+# 测试代码(防"改 assertion 让 CI 过")
+**/src/test/                            @pinpols
+
+# 守护 / CI 脚本(防"改脚本绕 gate")
+/scripts/ci/                            @pinpols
+/scripts/local/be-acceptance.sh         @pinpols
+/scripts/local/strict-verify.sh         @pinpols
+
+# 核心通用库
+/batch-common/src/main/java/            @pinpols
+
+# 安全 / 鉴权(改这块要双慎)
+/batch-common/src/main/java/com/example/batch/security/  @pinpols
+/batch-console-api/src/main/java/com/example/batch/console/support/auth/  @pinpols
+
+# 文档 — API 契约 / 架构 / runbook
+/docs/api/                              @pinpols
+/docs/architecture/                     @pinpols
+/docs/runbook/                          @pinpols
