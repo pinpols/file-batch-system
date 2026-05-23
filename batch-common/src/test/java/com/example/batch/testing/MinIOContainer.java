@@ -17,7 +17,7 @@ public final class MinIOContainer extends GenericContainer<MinIOContainer> {
   private static final int MINIO_API_PORT = 9000;
   private static final int MINIO_CONSOLE_PORT = 9001;
   private static final DockerImageName IMAGE =
-      DockerImageName.parse("minio/minio:RELEASE.2025-04-03T14-56-28Z");
+      DockerImageName.parse("minio/minio:RELEASE.2025-09-07T16-13-09Z");
 
   private final String accessKey;
   private final String secretKey;

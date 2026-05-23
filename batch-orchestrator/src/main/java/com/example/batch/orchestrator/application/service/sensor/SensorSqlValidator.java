@@ -8,7 +8,6 @@ import net.sf.jsqlparser.statement.select.AllColumns;
 import net.sf.jsqlparser.statement.select.AllTableColumns;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
-import net.sf.jsqlparser.statement.select.SelectBody;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import net.sf.jsqlparser.statement.select.SetOperationList;
 import net.sf.jsqlparser.util.TablesNamesFinder;
@@ -57,11 +56,10 @@ public final class SensorSqlValidator {
   }
 
   private static void checkNoSelectStar(Select select) {
-    SelectBody body = select.getSelectBody();
-    if (body instanceof PlainSelect ps) {
+    if (select instanceof PlainSelect ps) {
       rejectStar(ps);
-    } else if (body instanceof SetOperationList sol && sol.getSelects() != null) {
-      for (SelectBody sb : sol.getSelects()) {
+    } else if (select instanceof SetOperationList sol && sol.getSelects() != null) {
+      for (Select sb : sol.getSelects()) {
         if (sb instanceof PlainSelect ps) {
           rejectStar(ps);
         }
@@ -73,8 +71,9 @@ public final class SensorSqlValidator {
     if (ps.getSelectItems() == null) {
       return;
     }
-    for (SelectItem item : ps.getSelectItems()) {
-      if (item instanceof AllColumns || item instanceof AllTableColumns) {
+    for (SelectItem<?> item : ps.getSelectItems()) {
+      Object expression = item.getExpression();
+      if (expression instanceof AllColumns || expression instanceof AllTableColumns) {
         throw new IllegalArgumentException(
             "sensor SQL forbids SELECT * / table.*; enumerate columns explicitly");
       }

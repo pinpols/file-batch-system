@@ -8,12 +8,11 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
 import net.sf.jsqlparser.statement.select.AllTableColumns;
+import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
-import net.sf.jsqlparser.statement.select.SelectBody;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import net.sf.jsqlparser.statement.select.SetOperationList;
-import net.sf.jsqlparser.statement.select.SubSelect;
 import net.sf.jsqlparser.statement.select.WithItem;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 
@@ -113,8 +112,7 @@ public class SqlTransformComputeSqlValidator {
 
   /** 顶层 SELECT 必须带 LIMIT,且 ≤ maxLimitRows。SetOperationList / WITH 一并校验。 */
   private static void checkTopLevelLimit(Select select, long maxLimitRows) {
-    SelectBody body = select.getSelectBody();
-    Long limit = topLimitOf(body);
+    Long limit = topLimitOf(select);
     if (limit == null) {
       throw new IllegalArgumentException(
           "sqlTransformCompute SQL must include a top-level LIMIT clause (≤ "
@@ -127,7 +125,7 @@ public class SqlTransformComputeSqlValidator {
     }
   }
 
-  private static Long topLimitOf(SelectBody body) {
+  private static Long topLimitOf(Select body) {
     if (body instanceof PlainSelect ps && ps.getLimit() != null) {
       Object rows = ps.getLimit().getRowCount();
       if (rows == null) return null;
@@ -160,29 +158,37 @@ public class SqlTransformComputeSqlValidator {
   }
 
   private void checkNoSelectStar(Select select) {
-    Deque<SelectBody> queue = collectInitialBodies(select);
+    Deque<Select> queue = collectInitialBodies(select);
     while (!queue.isEmpty()) {
-      SelectBody body = queue.poll();
+      Select body = unwrap(queue.poll());
       if (body instanceof PlainSelect ps) {
         rejectStarItems(ps);
         enqueueNestedBodies(ps, queue);
       } else if (body instanceof SetOperationList sol && sol.getSelects() != null) {
-        queue.addAll(sol.getSelects());
+        for (Select s : sol.getSelects()) {
+          queue.add(s);
+        }
       }
     }
   }
 
-  /** 收集顶层 SelectBody + 所有 WITH 子句的子查询主体。 */
-  private static Deque<SelectBody> collectInitialBodies(Select select) {
-    Deque<SelectBody> queue = new ArrayDeque<>();
-    if (select.getSelectBody() != null) {
-      queue.add(select.getSelectBody());
+  /** 解包 ParenthesedSelect → 真实的 PlainSelect / SetOperationList。 */
+  private static Select unwrap(Select select) {
+    while (select instanceof ParenthesedSelect ps) {
+      select = ps.getSelect();
     }
+    return select;
+  }
+
+  /** 收集顶层 Select + 所有 WITH 子句的子查询主体。 */
+  private static Deque<Select> collectInitialBodies(Select select) {
+    Deque<Select> queue = new ArrayDeque<>();
+    queue.add(select);
     if (select.getWithItemsList() != null) {
-      for (WithItem wi : select.getWithItemsList()) {
-        SubSelect sub = wi.getSubSelect();
-        if (sub != null && sub.getSelectBody() != null) {
-          queue.add(sub.getSelectBody());
+      for (WithItem<?> wi : select.getWithItemsList()) {
+        ParenthesedSelect sub = wi.getSelect();
+        if (sub != null) {
+          queue.add(sub);
         }
       }
     }
@@ -194,8 +200,9 @@ public class SqlTransformComputeSqlValidator {
     if (ps.getSelectItems() == null) {
       return;
     }
-    for (SelectItem item : ps.getSelectItems()) {
-      if (item instanceof AllColumns || item instanceof AllTableColumns) {
+    for (SelectItem<?> item : ps.getSelectItems()) {
+      Object expression = item.getExpression();
+      if (expression instanceof AllColumns || expression instanceof AllTableColumns) {
         throw new IllegalArgumentException(
             "sqlTransformCompute forbids SELECT * / SELECT table.*;"
                 + " enumerate columns explicitly");
@@ -204,15 +211,14 @@ public class SqlTransformComputeSqlValidator {
   }
 
   /** 把 FROM / JOIN 中的子查询加入待检查队列。 */
-  private static void enqueueNestedBodies(PlainSelect ps, Deque<SelectBody> queue) {
-    if (ps.getFromItem() instanceof SubSelect sub && sub.getSelectBody() != null) {
-      queue.add(sub.getSelectBody());
+  private static void enqueueNestedBodies(PlainSelect ps, Deque<Select> queue) {
+    if (ps.getFromItem() instanceof Select sub) {
+      queue.add(sub);
     }
     if (ps.getJoins() != null) {
       ps.getJoins().stream()
-          .filter(j -> j.getRightItem() instanceof SubSelect)
-          .map(j -> ((SubSelect) j.getRightItem()).getSelectBody())
-          .filter(b -> b != null)
+          .filter(j -> j.getRightItem() instanceof Select)
+          .map(j -> (Select) j.getRightItem())
           .forEach(queue::add);
     }
   }

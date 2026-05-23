@@ -7,9 +7,9 @@ x-common-runtime-env: &common-runtime-env
   TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
 
 services:
-  postgres:
+  postgres-primary:
     image: postgres:${POSTGRES_IMAGE_TAG}
-    container_name: batch-postgres
+    container_name: batch-postgres-primary
     restart: unless-stopped
     # 默认 max_connections=100 不够：6 模块 × (platform + business) × Hikari 池
     # 本地联调叠加就会炸 "too many clients already"。调到 300 留足余量。
@@ -67,7 +67,7 @@ services:
       - -c
       - hot_standby=on
     environment:
-      POSTGRES_PRIMARY_HOST: postgres
+      POSTGRES_PRIMARY_HOST: postgres-primary
       POSTGRES_PRIMARY_PORT: 5432
       POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
       POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}
@@ -85,7 +85,7 @@ services:
     networks:
       - batch-network
     depends_on:
-      postgres:
+      postgres-primary:
         condition: service_healthy
     healthcheck:
       # 走 unix socket 用主库同名用户/库；standby 接受只读连接，pg_isready 只看 listening 不看 recovery 状态
@@ -151,7 +151,7 @@ services:
       - batch-network
 
   minio:
-    image: minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-04-03T14-56-28Z}
+    image: minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-09-07T16-13-09Z}
     container_name: batch-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

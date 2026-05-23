@@ -47,7 +47,7 @@ runs:
       shell: bash
       run: |
         mkdir -p /tmp/tc-images
-        for img in apache/kafka:4.1.2 postgres:16 redis:7.4 minio/minio:RELEASE.2025-04-03T14-56-28Z; do
+        for img in apache/kafka:4.1.2 postgres:17 redis:7.4 minio/minio:RELEASE.2025-09-07T16-13-09Z; do
           docker pull "$img" || continue
           safe=$(echo "$img" | tr '/:' '__')
           docker save "$img" -o "/tmp/tc-images/${safe}.tar" || true

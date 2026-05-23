@@ -12,6 +12,23 @@
 
 ---
 
+## 2026-05-23 — 跨仓库版本引用对齐（infra/dep bump 收尾）
+
+### Changed
+- **`.github/actions/setup-build-env/action.yml`**：预拉镜像列表对齐 `postgres:16` → `postgres:17`、`minio/minio:RELEASE.2025-04-03T14-56-28Z` → `minio/minio:RELEASE.2025-09-07T16-13-09Z`
+- **`batch-common/src/test/java/com/example/batch/testing/MinIOContainer.java`**：Testcontainers MinIO image 字面量同步到 `RELEASE.2025-09-07T16-13-09Z`
+- **`batch-orchestrator` / `batch-console-api` 集成测 3 处 `PostgreSQLContainer` 字面量**：`postgres:16` → `postgres:17`（`BatchDaySqlMigrationsIntegrationTest`、`LocalFlywayPlatformMigrationsIntegrationTest`、`ReadReplicaHappyPathIntegrationTest`；`SqlConsistencyIntegrationTest` 已先前对齐）
+- **`docs/runbook/base-services-deployment.md`**：裸机 PG 安装提示 `brew install postgresql@16` → `postgresql@17`
+- **`docs/runbook/partition-cutover-2026-05.md`**：cutover 演练 `docker run … postgres:16` → `postgres:17`
+- **`docs/compliance/THIRD-PARTY-LICENSES.md`**：Okio 版本字段 `3.16.1` → `3.17.0`
+
+### Notes
+- 上游 commit：`66d074cf`（postgres 16→17 / minio bump）+ `f64be608`（okio 3.16.1→3.17.0）
+- `docs/compliance/sbom.json` 本次**未重生成**：`mvn -P compliance cyclonedx:makeAggregateBom` 因 `batch-trigger` / `batch-worker-core` 的 `mockwebserver` dependency 缺 `version` 字段而 build 失败（预存遗留问题，非本次引入），手改 10 处 okio bom-ref / purl / version 不能同步 hash 字段，按 "JSON 不要手改大文件" 约束跳过，留待 sbom 单独修补 PR
+- `docs/analysis/dependency-upgrade-evaluation-2026-05-23.md` 中描述 `RELEASE.2025-04-03 → 2026-Q1 release` 是当时评估记录，保留不改
+
+---
+
 ## 2026-04-26 — 文档体系重构 + dict 自动化 + compliance 重生成
 
 ### Added
