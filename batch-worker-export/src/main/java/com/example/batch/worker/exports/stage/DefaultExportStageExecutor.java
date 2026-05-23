@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,17 +42,23 @@ public class DefaultExportStageExecutor
   private final Map<String, ExportStageStep> stepsByImplCode;
   private final Map<ExportStage, ExportStageStep> stepsByStage;
   private final List<PipelineStepTemplate> defaultStepDefinitions;
-  private final MeterRegistry meterRegistry;
+  /**
+   * P1: 改为 ObjectProvider 注入,与 worker-core 内 DefaultTaskExecutionWrapper /
+   * DefaultHeartbeatService 等保持一致。test-slice (no Micrometer) 与
+   * {@code @SpringBootTest(excludeAutoConfiguration=MicrometerAutoConfiguration.class)}
+   * 场景下不再硬要求 MeterRegistry bean。
+   */
+  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
   public DefaultExportStageExecutor(
       List<ExportStageStep> steps,
       PlatformFileRuntimeRepository runtimeRepository,
-      MeterRegistry meterRegistry) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     super(runtimeRepository);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
-    this.meterRegistry = meterRegistry;
+    this.meterRegistryProvider = meterRegistryProvider;
   }
 
   @Override
@@ -66,13 +73,18 @@ public class DefaultExportStageExecutor
 
   private void recordExportRowsMetric(ExportJobContext context) {
     Object recordCountAttr = context.getAttributes().get("recordCount");
-    if (recordCountAttr instanceof Number recordCount) {
-      Counter.builder("export.file.rows.total")
-          .description("导出文件写入总行数")
-          .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
-          .register(meterRegistry)
-          .increment(recordCount.doubleValue());
+    if (!(recordCountAttr instanceof Number recordCount)) {
+      return;
     }
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null) {
+      return;
+    }
+    Counter.builder("export.file.rows.total")
+        .description("导出文件写入总行数")
+        .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
+        .register(registry)
+        .increment(recordCount.doubleValue());
   }
 
   @Override
