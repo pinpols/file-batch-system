@@ -28,5 +28,8 @@ if [ -n "${POD_NAME:-}" ] && [ -z "${BATCH_OUTBOX_SHARD_INDEX:-}" ]; then
   esac
 fi
 
+# JAVA_OPTS:全模块共享基础(配 Helm configmap)
+# JAVA_OPTS_EXTRA:per-service override(配 Helm 各 service 的 javaOptsExtra,通过
+#   deployment env 注入,优先级高于 envFrom-configmap 同名)
 # shellcheck disable=SC2086
-exec java ${JAVA_OPTS} -jar /app/app.jar
+exec java ${JAVA_OPTS} ${JAVA_OPTS_EXTRA:-} -jar /app/app.jar

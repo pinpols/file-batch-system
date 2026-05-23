@@ -38,6 +38,9 @@ spec:
               containerPort: {{ $svc.port }}
               protocol: TCP
           env:
+            # per-service JVM 参数追加,见 docs/runbook/jvm-tuning-and-profiling.md §1.2
+            - name: JAVA_OPTS_EXTRA
+              value: {{ $svc.javaOptsExtra | default "" | quote }}
             # R7-A4-P1: 显式把 prod profile 的 management server port pin 到业务端口，
             # 否则 application-prod.yml 默认 ${BATCH_MANAGEMENT_PORT:0} 走 ephemeral 随机端口，
             # livenessProbe / Prometheus scrape 全部失效。管理端口真正隔离需 ADR + 单独 Service。

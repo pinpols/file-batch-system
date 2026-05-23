@@ -61,10 +61,13 @@ RUN groupadd --system --gid 1000 batch \
 
 COPY --from=builder /tmp/app.jar /app/app.jar
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh && chown -R batch:batch /app
+RUN mkdir -p /var/log/app /var/cache/app \
+    && chmod +x /app/entrypoint.sh \
+    && chown -R batch:batch /app /var/log/app /var/cache/app
 
 USER 1000
 
 ENV JAVA_OPTS=""
+ENV JAVA_OPTS_EXTRA=""
 
 ENTRYPOINT ["/app/entrypoint.sh"]

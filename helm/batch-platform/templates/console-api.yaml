@@ -41,6 +41,10 @@ spec:
               protocol: TCP
           {{- include "batch-platform.envFrom" . | nindent 10 }}
           env:
+            # per-service JVM 参数追加,优先级高于 envFrom-configmap.JAVA_OPTS
+            # 详见 docs/runbook/jvm-tuning-and-profiling.md §1.2
+            - name: JAVA_OPTS_EXTRA
+              value: {{ $svc.javaOptsExtra | default "" | quote }}
             # R7-A4-P0：console-api 多副本必须靠 BATCH_CONSOLE_INSTANCE_ID 区分实例（SSE replay /
             # instance-scoped 缓存）。ConfigMap 不能给静态值，否则两个 pod 拿到一样会冲突；
             # 用 downward API 注入 pod 名作 per-pod 唯一标识。

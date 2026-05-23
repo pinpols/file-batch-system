@@ -148,7 +148,30 @@ workerDispatch:
     periodSeconds: 10
     failureThreshold: 18
 
-javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.profiles.active=prod"
+# JVM 参数:沿用 values.yaml 全模块基础(含 OOM 留证据 / GC log / JFR 持续录制 /
+# UTF-8 时区硬约束),overlay 仅加 prod profile;per-service 调优在 values.yaml 各
+# service.javaOptsExtra(orchestrator ZGC / worker direct 1G 等)。
+# 完整说明见 docs/runbook/jvm-tuning-and-profiling.md。
+javaOpts: >-
+  -XX:+UseContainerSupport
+  -XX:MaxRAMPercentage=70.0
+  -XX:InitialRAMPercentage=70.0
+  -XX:MaxDirectMemorySize=512m
+  -XX:NativeMemoryTracking=summary
+  -XX:MaxMetaspaceSize=256m
+  -XX:+HeapDumpOnOutOfMemoryError
+  -XX:HeapDumpPath=/var/log/app/heap-dump-%p-%t.hprof
+  -XX:+ExitOnOutOfMemoryError
+  -Xlog:gc*=info,gc+age=trace,safepoint=info:file=/var/log/app/gc-%t.log:time,uptime,level,tags:filecount=10,filesize=50M
+  -XX:+UseStringDeduplication
+  -Djava.security.egd=file:/dev/./urandom
+  -Duser.timezone=UTC
+  -Dfile.encoding=UTF-8
+  -Dsun.jnu.encoding=UTF-8
+  -XX:StartFlightRecording=name=continuous,settings=profile,maxsize=256m,maxage=10m,dumponexit=true,filename=/var/log/app/jfr-exit.jfr
+  --enable-native-access=ALL-UNNAMED
+  -Dspring.main.lazy-initialization=true
+  -Dspring.profiles.active=prod
 
 # P2-4 (pre-launch audit 2026-05-18)：prod 默认不部署 chart 内 OTel Collector(由集群 ops 提供独立 Collector)。
 # batch-defaults.yml 中 OTLP endpoint 默认 http://otel-collector:4318 仅在 Collector 存在时有效;
