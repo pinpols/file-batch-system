@@ -1,5 +1,7 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import static com.example.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
+
 import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -9,7 +11,6 @@ import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -17,8 +18,6 @@ import org.springframework.stereotype.Component;
 /** 分发补偿阶段：在投递彻底失败后将分发记录标记为 COMPENSATED，并写入审计日志。 */
 @Component
 public class CompensateDispatchStep implements DispatchStageStep {
-
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final PlatformFileRuntimeRepository runtimeRepository;

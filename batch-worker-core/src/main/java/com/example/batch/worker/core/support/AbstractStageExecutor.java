@@ -22,8 +22,13 @@ import java.util.Set;
 public abstract class AbstractStageExecutor<
     C extends ExecutionContext, R extends StageExecutionResult> {
 
-  /** 共享的错误序列化 mapper：用于 BizException → StageExecutionResult.failure 转换。 */
-  protected static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+  /**
+   * 共享的错误序列化 mapper：用于 BizException → StageExecutionResult.failure 转换。
+   *
+   * <p>public 暴露给 dispatch stage step（实现 DispatchStageStep 而非继承本类的兄弟）直接引用，
+   * 避免每个 step 重复声明 {@code private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper()}。
+   */
+  public static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   protected final PlatformFileRuntimeRepository runtimeRepository;
 

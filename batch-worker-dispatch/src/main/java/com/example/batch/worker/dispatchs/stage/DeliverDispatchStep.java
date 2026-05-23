@@ -1,5 +1,7 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import static com.example.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
+
 import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -10,7 +12,6 @@ import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -25,8 +26,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class DeliverDispatchStep implements DispatchStageStep {
-
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
