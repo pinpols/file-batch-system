@@ -67,6 +67,10 @@ spec:
               containerPort: {{ $svc.port }}
               protocol: TCP
           env:
+            # per-service JVM 参数追加,见 docs/runbook/jvm-tuning-and-profiling.md §1.2
+            # orchestrator 默认 -XX:+UseZGC -XX:+ZGenerational(状态机低延迟)
+            - name: JAVA_OPTS_EXTRA
+              value: {{ $svc.javaOptsExtra | default "" | quote }}
             # Downward API：POD_NAME 用于 entrypoint.sh 提取 StatefulSet ordinal
             # dynamic 模式下 POD_NAME 还会被用作 Redis ZSET 里的 memberId
             - name: POD_NAME

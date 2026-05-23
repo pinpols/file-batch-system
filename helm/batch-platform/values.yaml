@@ -74,6 +74,9 @@ batchLocale: "C.UTF-8"
 # ── console-api ────────────────────────────────────────────────────────────────
 
 consoleApi:
+  # per-service JVM override(追加到全局 javaOpts 后),完整参数说明见
+  # docs/runbook/jvm-tuning-and-profiling.md §1.2。空字符串 = 用全局默认。
+  javaOptsExtra: ""
   replicaCount: 2
   # P1-8 (pre-launch audit 2026-05-18)：Hikari 池大小通过 ConfigMap env 暴露给 application.yml,
   # 默认 16+16 配 2 replicas 共 64 连接,加 orchestrator 30 * 2 = 60,留出 100+ 头部给 trigger/worker。
@@ -137,6 +140,8 @@ consoleApi:
 # ── trigger ────────────────────────────────────────────────────────────────────
 
 trigger:
+  # 轻量 I/O,G1 默认即可,无 extra
+  javaOptsExtra: ""
   replicaCount: 1
   port: 18081
   # Quartz misfire 由幸存节点立即补跑，trigger 自身负担轻；但要给 Quartz cluster
@@ -172,6 +177,9 @@ trigger:
 # ── orchestrator ───────────────────────────────────────────────────────────────
 
 orchestrator:
+  # 状态机大量短命对象,用 Generational ZGC sub-ms pause(JDK 21+)
+  # 代价:吞吐 -10% 换调度延迟稳定。详见 docs/runbook/jvm-tuning-and-profiling.md §1.2
+  javaOptsExtra: "-XX:+UseZGC -XX:+ZGenerational"
   replicaCount: 2
   port: 18082
   # 关键路径：让 ShedLock 主动释放（OutboxPoll/各 Archive scheduler）+ Spring graceful
@@ -244,6 +252,8 @@ orchestrator:
 # ── worker-import ──────────────────────────────────────────────────────────────
 
 workerImport:
+  # 大文件流 + Netty direct buffer 上量,扩到 1G(覆盖全局 512M 默认)
+  javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18083
   # Worker 长任务可能 1-3 分钟才完成；@PreDestroy 上报下线 + Kafka consumer leave +
@@ -296,6 +306,8 @@ workerImport:
 # ── worker-export ──────────────────────────────────────────────────────────────
 
 workerExport:
+  # 大文件流 + Netty direct buffer 上量,扩到 1G(覆盖全局 512M 默认)
+  javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18084
   # Export 任务通常更长（生成大文件），给更宽窗口；超时未完成的 task 由 orchestrator
@@ -347,6 +359,8 @@ workerExport:
 # ── worker-dispatch ────────────────────────────────────────────────────────────
 
 workerProcess:
+  # 大文件流 + Netty direct buffer 上量,扩到 1G(覆盖全局 512M 默认)
+  javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18086
   # PROCESS 任务可能很长(SQL 加工 / staging publish);需要充分的优雅停机时间。
@@ -394,6 +408,8 @@ workerProcess:
     failureThreshold: 3
 
 workerDispatch:
+  # 大文件流 + Netty direct buffer 上量,扩到 1G(覆盖全局 512M 默认)
+  javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18085
   # Dispatch 任务通常较短，但仍需 Kafka consumer leave + 完成在跑 task。
@@ -469,11 +485,35 @@ tolerations: []
 affinity: {}
 
 # ── JVM tuning ─────────────────────────────────────────────────────────────────
+#
+# 完整参数说明见 docs/runbook/jvm-tuning-and-profiling.md。
+#
+# 两层 override:
+#   javaOpts             — 全模块共享基础(容器 / OOM / GC log / JFR / UTF-8)
+#   <service>.javaOptsExtra  — per-service 追加(heap 大小 / GC 类型 / direct mem)
+#                              通过 deployment env 注入,优先级高于 envFrom-configmap
+#
+# 调整内存:不直接改 -Xmx,改 resources.limits.memory + MaxRAMPercentage 让容器边界驱动。
 
-# spring.main.lazy-initialization=true: 在 K8s 资源紧张下避免 eager 初始化所有 bean
-# 导致 HTTP 端口 bind 晚于 startupProbe，Pod 被杀进入 CrashLoop。
-# （local profile 本就有 lazy-init: true；default profile 默认没有，所以这里显式打开）
-javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.main.lazy-initialization=true"
+javaOpts: >-
+  -XX:+UseContainerSupport
+  -XX:MaxRAMPercentage=70.0
+  -XX:InitialRAMPercentage=70.0
+  -XX:MaxDirectMemorySize=512m
+  -XX:NativeMemoryTracking=summary
+  -XX:MaxMetaspaceSize=256m
+  -XX:+HeapDumpOnOutOfMemoryError
+  -XX:HeapDumpPath=/var/log/app/heap-dump-%p-%t.hprof
+  -XX:+ExitOnOutOfMemoryError
+  -Xlog:gc*=info,gc+age=trace,safepoint=info:file=/var/log/app/gc-%t.log:time,uptime,level,tags:filecount=10,filesize=50M
+  -XX:+UseStringDeduplication
+  -Djava.security.egd=file:/dev/./urandom
+  -Duser.timezone=UTC
+  -Dfile.encoding=UTF-8
+  -Dsun.jnu.encoding=UTF-8
+  -XX:StartFlightRecording=name=continuous,settings=profile,maxsize=256m,maxage=10m,dumponexit=true,filename=/var/log/app/jfr-exit.jfr
+  --enable-native-access=ALL-UNNAMED
+  -Dspring.main.lazy-initialization=true
 
 # ── OpenTelemetry Collector (sidecar-less gateway mode) ────────────
 otelCollector:
