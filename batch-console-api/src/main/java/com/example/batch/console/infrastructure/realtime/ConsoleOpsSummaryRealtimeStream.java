@@ -2,16 +2,16 @@ package com.example.batch.console.infrastructure.realtime;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
+import com.example.batch.console.config.ConsoleAsyncConfiguration;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -23,7 +23,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * <p>负责订阅首屏摘要，并在关键写操作后推送最新快照。
  */
 @Service
-@RequiredArgsConstructor
 public class ConsoleOpsSummaryRealtimeStream {
 
   private static final String STREAM = "ops-summary";
@@ -40,8 +39,24 @@ public class ConsoleOpsSummaryRealtimeStream {
   private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes =
       new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, CachedSummary> summaryCache = new ConcurrentHashMap<>();
-  private final ScheduledExecutorService scheduler =
-      Executors.newSingleThreadScheduledExecutor(new SummaryThreadFactory());
+  private final TaskScheduler scheduler;
+
+  public ConsoleOpsSummaryRealtimeStream(
+      ConsoleOpsApplicationService opsApplicationService,
+      ConsoleRealtimeEventHub realtimeEventHub,
+      ConsoleRealtimeRedisPublisher redisPublisher,
+      ConsoleRealtimeCursorFactory cursorFactory,
+      ConsoleTenantGuard tenantGuard,
+      BatchDateTimeSupport dateTimeSupport,
+      @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
+    this.opsApplicationService = opsApplicationService;
+    this.realtimeEventHub = realtimeEventHub;
+    this.redisPublisher = redisPublisher;
+    this.cursorFactory = cursorFactory;
+    this.tenantGuard = tenantGuard;
+    this.dateTimeSupport = dateTimeSupport;
+    this.scheduler = scheduler;
+  }
 
   public void publishRefresh(String tenantId) {
     publishRefresh(tenantId, false);
@@ -86,12 +101,12 @@ public class ConsoleOpsSummaryRealtimeStream {
 
   @PreDestroy
   void shutdown() {
+    // scheduler 由 Spring 容器管理 (consoleRealtimeScheduler bean) — 这里只取消未触发的 debounce 任务。
     for (ScheduledFuture<?> future : scheduledRefreshes.values()) {
       if (future != null) {
         future.cancel(true);
       }
     }
-    scheduler.shutdownNow();
   }
 
   private void scheduleCoalescedRefresh(String tenantId) {
@@ -109,8 +124,7 @@ public class ConsoleOpsSummaryRealtimeStream {
                   scheduledRefreshes.remove(tenantId);
                 }
               },
-              REFRESH_DEBOUNCE_MILLIS,
-              TimeUnit.MILLISECONDS);
+              Instant.now().plus(Duration.ofMillis(REFRESH_DEBOUNCE_MILLIS)));
         });
   }
 
@@ -149,13 +163,4 @@ public class ConsoleOpsSummaryRealtimeStream {
   }
 
   private record CachedSummary(ConsoleOpsSummaryResponse summary, long cachedAtMillis) {}
-
-  private static final class SummaryThreadFactory implements ThreadFactory {
-    @Override
-    public Thread newThread(Runnable runnable) {
-      Thread thread = new Thread(runnable, "console-ops-summary-realtime");
-      thread.setDaemon(true);
-      return thread;
-    }
-  }
 }
