@@ -337,7 +337,7 @@ public class DefaultTriggerService implements TriggerService {
     String status = tenantStatusMapper.selectStatus(tenantId);
     if ("SUSPENDED".equals(status)) {
       // R-arch-audit-2026-05-23 P1: 用 ResultCode.TENANT_SUSPENDED 替代 BUSINESS_ERROR + 字符串后缀，
-      // 让上游（QuartzLaunchJob / Wheel fire）能通过 getResultCode() 枚举比较识别租户暂停语义，
+      // 让上游（QuartzLaunchJob / Wheel fire）能通过 getCode() 枚举比较识别租户暂停语义，
       // 不再依赖脆弱的 e.getMessage().contains("tenant is suspended")。
       throw BizException.of(
           ResultCode.TENANT_SUSPENDED,
