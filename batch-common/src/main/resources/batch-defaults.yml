@@ -168,6 +168,13 @@ logging:
       console: ${BATCH_LOG_FORMAT:}    # 生产设为 ecs；本地留空
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+  level:
+    # Flyway 幂等 migration(IF NOT EXISTS / IF EXISTS)在 PG 走 NOTICE → JDBC SQLWarning →
+    # Flyway 7+ 默认全转 WARN log,刷屏"schema/column already exists, skipping"假阳。
+    # 这些 statement 设计就是为重跑设计的,安全的。压到 ERROR 级别只保留真问题。
+    org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor: ERROR
+    # Quartz autoStartup=false 是 wheel 模式正常配置,启动期信息性 WARN 一条,压到 INFO。
+    com.example.batch.trigger.wheel.QuartzPauseWhenWheelEnabledCustomizer: INFO
 
 # ------------------------------------------------------------------
 # Batch 平台共享配置

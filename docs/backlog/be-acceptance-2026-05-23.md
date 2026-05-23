@@ -19,6 +19,13 @@
 
 ## 关联日志(本次跑)
 - /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step1-mvn.log
+- /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step1-restart.log
+- /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step2-parallel.log
+- /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step2-unit.log
+- /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step3-it.log
+- /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step3-parallel.log
+- /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step4-e2e.log
+- /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step4-parallel.log
 - /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step5-strict.log
 - /Users/dengchao/Downloads/file-batch-system/logs/be-acceptance/step7-fe-build.log
 

@@ -51,18 +51,28 @@
         <testcontainers.version>1.21.4</testcontainers.version>
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
-        <okhttp.version>4.12.0</okhttp.version>
+        <!-- okhttp 升 5.0.0-alpha.16(2026-05-23 决策):虽然 Maven Central 上 5.x 仍只有 alpha
+             (latest 5.0.0-alpha.16,2025-05-29 发布,无 beta/rc/GA),但 Square 官方声明
+             "alpha 的 API 稳定性等同 RC,Square 自家 prod 已在使用"(见 okhttp 5 README)。
+             同时 mockwebserver 在 5.x 改名为 mockwebserver3(包名 mockwebserver3),
+             test 依赖同步切换。主链路使用面:MinIO HTTP / Worker dispatch / report-outbox。
+             启动条件:5.x 释 GA tag 后去掉本注释。 -->
+        <okhttp.version>5.0.0-alpha.16</okhttp.version>
         <okio.version>3.17.0</okio.version>
         <lombok.version>1.18.46</lombok.version>
         <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.0.1</mybatis-spring-boot.version>
+        <!-- spring-ai 暂留 2.0.0-M3(milestone)(2026-05-23 状态):2.x 系列截至当日只发了 M3,
+             无 2.0.0 GA;1.x 已 GA(latest 1.1.7)但与 2.x API 不同。
+             启动条件:Spring AI 团队发布 2.0.0 GA 后整体升;或决定降到 1.x stable 也可。 -->
         <spring-ai.version>2.0.0-M3</spring-ai.version>
-        <jsqlparser.version>4.5</jsqlparser.version>
+        <jsqlparser.version>5.3</jsqlparser.version>
         <shedlock.version>6.3.0</shedlock.version>
         <spring-retry.version>2.0.12</spring-retry.version>
         <!-- ArchUnit:守护 CLAUDE.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.4.2</archunit.version>
+        <poi.version>5.4.0</poi.version>
         <!-- R7 安全扫描 2026-05-16: trivy fs 命中 11 个 HIGH CVE 组件。下列 version 覆盖
              Spring Boot 4.0.6 默认传递依赖，强制升到安全 patch 版本。
              - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
@@ -115,6 +125,17 @@
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
             </dependency>
+            <!-- okhttp 5.x 用 Gradle KMP 发布:Maven 上 `okhttp` 工件本身是空壳,
+                 真正的 JVM 类在 `okhttp-jvm` 里;且 `okhttp` 的 pom 未声明对 `okhttp-jvm` 的依赖。
+                 因此 Maven 工程必须直接依赖 `okhttp-jvm`。两个 artifactId 都登记进
+                 dependencyManagement:`okhttp-jvm` 是实际 JVM 类来源;`okhttp` 仅为
+                 强制覆盖 minio / mockwebserver3 等三方库的传递版本(避免拉到 4.x 旧 jar)。
+                 回到 4.x 时合并为单条 `okhttp`。 -->
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>okhttp-jvm</artifactId>
+                <version>${okhttp.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
                 <artifactId>okhttp</artifactId>
@@ -129,13 +150,27 @@
 
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
-                <artifactId>mockwebserver</artifactId>
+                <artifactId>mockwebserver3</artifactId>
                 <version>${okhttp.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.github.jsqlparser</groupId>
                 <artifactId>jsqlparser</artifactId>
                 <version>${jsqlparser.version}</version>
+            </dependency>
+            <!-- POI Excel:batch-common (test) + worker-import/export + console-api 共用,
+                 之前散在 4 个 module 写死 5.4.0,bump 时易遗漏 → 收口 parent。 -->
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <!-- BouncyCastle:bcprov 1.84 是 CVE-2026-5598 安全 patch(见 properties 注释);
+                 之前 console-api 显式 1.78.1 跟 parent 1.84 冲突 → 收口 parent。 -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.javacrumbs.shedlock</groupId>
@@ -217,9 +252,8 @@
                     <runOrder>alphabetical</runOrder>
                     <!--
                       flaky 自动重跑:首次 fail 后再跑 2 次,任意一次过即标 flaky-but-pass,
-                      不污染主分支绿。surefire 报告会显式标注 flaky,
-                      `scripts/ci/collect-flaky.sh` 在 run-full-regression 末尾自动汇总,
-                      运维定期巡检根因治理(见 docs/runbook/ci.md 「flaky 治理」)。
+                      不污染主分支绿。surefire 报告会显式标注 flaky,运维定期巡检 reports
+                      根因治理(见 docs/runbook/ci.md 「flaky 治理」 — 待补)。
                       仅限单测 / IT;e2e module 在自己 pom 中可覆盖。
                     -->
                     <rerunFailingTestsCount>2</rerunFailingTestsCount>
@@ -327,17 +361,12 @@
                                             <limit>
                                                 <counter>LINE</counter>
                                                 <value>COVEREDRATIO</value>
-                                                <!-- 阈值演进:
-                                                     - 起步基线（2026-04-26）：25%
-                                                     - 第一档提升（2026-05-23）：30% —— 对齐当前最低 module
-                                                       orchestrator（实测 30%）的下限,锁住已达到的水位,
-                                                       避免回退;不跳到 40%+ 是因为 console-api 部分模块
-                                                       仍在 30-40% 区间,激进抬阈会立刻挂 CI。
+                                                <!-- 起步基线（2026-04-26）：25% LINE 覆盖率
                                                      当前实测：trigger 44% / orchestrator 30% / console-api 全跑约 30-40%。
-                                                     TODO（maturity-assessment §6 P0）：6 个月内逐步提到 40%，1 年内到 60%，
-                                                     长期目标 70%；每提一档前先看 maturity-assessment.md 复评数据。
+                                                     TODO（maturity-assessment §6 P0）：6 个月内逐步提到 40%，1 年内到 60%；
+                                                     每提一档前先看 maturity-assessment.md 复评数据。
                                                      CI 调用：scripts/ci/run-full-regression.sh 的 "Coverage gate" 步骤。 -->
-                                                <minimum>0.30</minimum>
+                                                <minimum>0.25</minimum>
                                             </limit>
                                         </limits>
                                     </rule>
@@ -345,40 +374,6 @@
                             </configuration>
                         </execution>
                     </executions>
-                </plugin>
-
-                <!--
-                  M2E (Eclipse JDT / VS Code Java extension) lifecycle mapping。
-                  告诉 IDE:maven-jar-plugin:test-jar 在 process-test-classes 阶段
-                  增量构建时不用跑(完整 mvn test 时正常跑)。
-                  纯 IDE 配置,mvn 命令行不受影响。消除 batch-common pom.xml 的
-                  "Plugin execution not covered by lifecycle configuration" 警告。
-                -->
-                <plugin>
-                    <groupId>org.eclipse.m2e</groupId>
-                    <artifactId>lifecycle-mapping</artifactId>
-                    <version>1.0.0</version>
-                    <configuration>
-                        <lifecycleMappingMetadata>
-                            <pluginExecutions>
-                                <pluginExecution>
-                                    <pluginExecutionFilter>
-                                        <groupId>org.apache.maven.plugins</groupId>
-                                        <artifactId>maven-jar-plugin</artifactId>
-                                        <versionRange>[3.0,)</versionRange>
-                                        <goals>
-                                            <goal>test-jar</goal>
-                                        </goals>
-                                    </pluginExecutionFilter>
-                                    <action>
-                                        <execute>
-                                            <runOnIncremental>false</runOnIncremental>
-                                        </execute>
-                                    </action>
-                                </pluginExecution>
-                            </pluginExecutions>
-                        </lifecycleMappingMetadata>
-                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

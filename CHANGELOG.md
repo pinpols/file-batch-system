@@ -15,8 +15,8 @@
 ## 2026-05-23 — 跨仓库版本引用对齐（infra/dep bump 收尾）
 
 ### Changed
-- **`.github/actions/setup-build-env/action.yml`**：预拉镜像列表对齐 `postgres:16` → `postgres:17`、`minio/minio:RELEASE.2025-04-03T14-56-28Z` → `minio/minio:RELEASE.2025-10-15T17-29-55Z`
-- **`batch-common/src/test/java/com/example/batch/testing/MinIOContainer.java`**：Testcontainers MinIO image 字面量同步到 `RELEASE.2025-10-15T17-29-55Z`
+- **`.github/actions/setup-build-env/action.yml`**：预拉镜像列表对齐 `postgres:16` → `postgres:17`、`minio/minio:RELEASE.2025-04-03T14-56-28Z` → `minio/minio:RELEASE.2025-09-07T16-13-09Z`
+- **`batch-common/src/test/java/com/example/batch/testing/MinIOContainer.java`**：Testcontainers MinIO image 字面量同步到 `RELEASE.2025-09-07T16-13-09Z`
 - **`batch-orchestrator` / `batch-console-api` 集成测 3 处 `PostgreSQLContainer` 字面量**：`postgres:16` → `postgres:17`（`BatchDaySqlMigrationsIntegrationTest`、`LocalFlywayPlatformMigrationsIntegrationTest`、`ReadReplicaHappyPathIntegrationTest`；`SqlConsistencyIntegrationTest` 已先前对齐）
 - **`docs/runbook/base-services-deployment.md`**：裸机 PG 安装提示 `brew install postgresql@16` → `postgresql@17`
 - **`docs/runbook/partition-cutover-2026-05.md`**：cutover 演练 `docker run … postgres:16` → `postgres:17`
