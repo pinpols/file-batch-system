@@ -103,19 +103,6 @@ public class WorkerRegistryCache {
     }
   }
 
-  /**
-   * 按租户驱逐集成夹具常用的 worker_group 键位，降低长套件跨用例 Redis 快照干扰。
-   *
-   * <p>覆盖 {@code IMPORT} / {@code DEFAULT} / {@code IT} 以及空白 worker_group 对应的 {@code _} 占位键（与
-   * {@link #key(String, String)} 中空组的规范化规则一致）。
-   */
-  public void evictTenantWorkerSelectors(String tenantId) {
-    evict(tenantId, "IMPORT");
-    evict(tenantId, "DEFAULT");
-    evict(tenantId, "IT");
-    evict(tenantId, "_");
-  }
-
   private static String key(String tenantId, String workerGroup) {
     return "worker:reg:%s:%s".formatted(safe(tenantId), safe(workerGroup));
   }
