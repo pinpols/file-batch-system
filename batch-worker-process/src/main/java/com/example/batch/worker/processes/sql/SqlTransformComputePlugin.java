@@ -57,6 +57,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private static final String PARAM_TARGET_SCHEMA = "targetSchema";
   private static final String PARAM_TARGET_TABLE = "targetTable";
 
+  /**
+   * COMPUTE 阶段中转表的全名({@code schema.table})。Plugin SQL 与 {@link
+   * SqlTransformComputeSqlValidator} 的 VALIDATE 阶段白名单共用这一常量,避免散落字面量在 4 处 SQL + 1 处 validator
+   * 之间漂移。
+   */
+  public static final String STAGING_TABLE = "batch.process_staging";
+
   private final NamedParameterJdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
   private final SqlTransformComputeSecurityProperties security;
@@ -125,7 +132,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     preCleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
     int leftover =
         jdbc.update(
-            "DELETE FROM batch.process_staging WHERE batch_key = :batchKey"
+            "DELETE FROM " + STAGING_TABLE + " WHERE batch_key = :batchKey"
                 + " AND tenant_id = :tenantId"
                 + " AND target_schema = :targetSchema"
                 + " AND target_table = :targetTable",
@@ -156,7 +163,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       cleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
       cleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
       jdbc.update(
-          "DELETE FROM batch.process_staging WHERE batch_key = :batchKey"
+          "DELETE FROM " + STAGING_TABLE + " WHERE batch_key = :batchKey"
               + " AND tenant_id = :tenantId"
               + " AND target_schema = :targetSchema"
               + " AND target_table = :targetTable",
@@ -470,13 +477,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
                         + JdbcMappedSqlValidator.quotePg(column.source()))
             .collect(Collectors.joining(", "));
     return """
-    INSERT INTO batch.process_staging (batch_key, tenant_id, target_schema, target_table, payload)
+    INSERT INTO %s (batch_key, tenant_id, target_schema, target_table, payload)
     SELECT :batchKey, :tenantId, :targetSchema, :targetTable, jsonb_build_object(%s)
     FROM (
     %s
     ) base
     """
-        .formatted(jsonbBuild, spec.sourceSql());
+        .formatted(STAGING_TABLE, jsonbBuild, spec.sourceSql());
   }
 
   /** COMMIT 用 jsonb_populate_record 反序列化到目标表行类型,单 SQL ON CONFLICT 原子上线。 */
@@ -500,14 +507,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         SELECT %s
         FROM (
             SELECT jsonb_populate_record(NULL::%s, payload) AS rec
-            FROM batch.process_staging
+            FROM %s
             WHERE batch_key = :batchKey
               AND tenant_id = :tenantId
               AND target_schema = :targetSchema
               AND target_table = :targetTable
         ) staged
         """
-            .formatted(target, columnList, selectColumns, target);
+            .formatted(target, columnList, selectColumns, target, STAGING_TABLE);
     // PROCESS at-least-once 安全:所有 writeMode 都需要 ON CONFLICT 子句,SqlTransformComputeSpec
     // 已在 parse 期保证 conflictColumns 非空。INSERT / INSERT_IGNORE 共用 DO NOTHING 语义,
     // UPSERT 走 DO UPDATE SET。这样 commit-后-report-丢的重发不会双写 target。
@@ -545,24 +552,26 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     String sql =
         """
         SELECT max((payload ->> :watermarkColumn)::numeric)
-        FROM batch.process_staging
+        FROM %s
         WHERE batch_key = :batchKey
           AND tenant_id = :tenantId
           AND target_schema = :targetSchema
           AND target_table = :targetTable
-        """;
+        """
+            .formatted(STAGING_TABLE);
     return jdbc.queryForObject(sql, params, Object.class);
   }
 
   private int cleanupCommittedStaging(Map<String, Object> params) {
     return jdbc.update(
         """
-        DELETE FROM batch.process_staging
+        DELETE FROM %s
         WHERE batch_key = :batchKey
           AND tenant_id = :tenantId
           AND target_schema = :targetSchema
           AND target_table = :targetTable
-        """,
+        """
+            .formatted(STAGING_TABLE),
         params);
   }
 

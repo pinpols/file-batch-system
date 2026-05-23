@@ -30,15 +30,20 @@ public class SqlTransformComputeSqlValidator {
     return validate(raw, true);
   }
 
-  /** 校验 VALIDATE 阶段的用户 check SQL:AST + 禁 SELECT *,且只能读取 batch.process_staging。 */
+  /**
+   * 校验 VALIDATE 阶段的用户 check SQL:AST + 禁 SELECT *,且只能读取 {@link
+   * SqlTransformComputePlugin#STAGING_TABLE}。
+   */
   public String validateUserCheckSelect(String raw) {
     String sql = validate(raw, false);
     Statement statement = parse(sql);
     List<String> tableNames = new TablesNamesFinder().getTableList(statement);
     for (String tableName : tableNames) {
-      if (!"batch.process_staging".equals(tableName.toLowerCase())) {
+      if (!SqlTransformComputePlugin.STAGING_TABLE.equals(tableName.toLowerCase())) {
         throw new IllegalArgumentException(
-            "sqlTransformCompute validation SQL may only read batch.process_staging, found: "
+            "sqlTransformCompute validation SQL may only read "
+                + SqlTransformComputePlugin.STAGING_TABLE
+                + ", found: "
                 + tableName);
       }
     }
