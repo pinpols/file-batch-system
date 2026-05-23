@@ -53,6 +53,7 @@
 | 21 | [security-scan.md](./security-scan.md) | 本地安全扫描 SOP（trivy / dependency-check）|
 | 22 | [ci.md](./ci.md) | CI 流水线说明（pr-gate / full-ci-gate + 触发时机 + 超时）|
 | 23 | [console-login-encryption.md](./console-login-encryption.md) | Console 登录请求体 RSA+AES 加密 + 密钥轮换 SOP |
+| 24 | [jvm-tuning-and-profiling.md](./jvm-tuning-and-profiling.md) | JVM 参数(按模块分档)+ profiling 工具链 + 生产 5 类症状 SOP |
 
 ## 角色路径
 
