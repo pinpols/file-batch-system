@@ -264,11 +264,15 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private String buildScheduledDedupKey(ScheduledTriggerCommand command) {
+    // R-arch-audit-2026-05-23 P2: 用 Instant.toEpochMilli() 替代 Instant.toString()。
+    // Instant.toString() 输出会按精度自动调整（如 "...:00Z" vs "...:00.000Z"），不同 JVM /
+    // 序列化路径可能产生不同字符串，导致同一 fireTime 算出不同 dedupKey，去重失效。
+    // toEpochMilli() 是稳定的 long → String，跨 JVM 一致。
     return command.descriptor().getTenantId()
         + ":"
         + command.descriptor().getJobCode()
         + ":"
-        + command.fireTime();
+        + command.fireTime().toEpochMilli();
   }
 
   private LaunchResponse skipScheduled(ScheduledTriggerCommand command) {
