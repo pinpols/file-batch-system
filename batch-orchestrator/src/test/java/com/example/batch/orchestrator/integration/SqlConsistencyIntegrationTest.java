@@ -33,7 +33,7 @@ class SqlConsistencyIntegrationTest {
   @Container
   @SuppressWarnings("resource")
   private static final PostgreSQLContainer<?> POSTGRES =
-      new PostgreSQLContainer<>(DockerImageName.parse("postgres:16"))
+      new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
           .withDatabaseName("batch_sql_guard")
           .withUsername("batch_user")
           .withPassword("batch_pass_123");

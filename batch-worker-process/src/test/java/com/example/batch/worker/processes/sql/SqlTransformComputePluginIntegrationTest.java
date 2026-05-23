@@ -41,7 +41,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 class SqlTransformComputePluginIntegrationTest {
 
   private static final PostgreSQLContainer<?> POSTGRES =
-      new PostgreSQLContainer<>("postgres:16-alpine");
+      new PostgreSQLContainer<>("postgres:17-alpine");
 
   private JdbcTemplate jdbcTemplate;
   private SqlTransformComputePlugin plugin;

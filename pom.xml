@@ -51,13 +51,22 @@
         <testcontainers.version>1.21.4</testcontainers.version>
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
-        <okhttp.version>4.12.0</okhttp.version>
-        <okio.version>3.16.1</okio.version>
+        <!-- okhttp 升 5.0.0-alpha.16(2026-05-23 决策):虽然 Maven Central 上 5.x 仍只有 alpha
+             (latest 5.0.0-alpha.16,2025-05-29 发布,无 beta/rc/GA),但 Square 官方声明
+             "alpha 的 API 稳定性等同 RC,Square 自家 prod 已在使用"(见 okhttp 5 README)。
+             同时 mockwebserver 在 5.x 改名为 mockwebserver3(包名 mockwebserver3),
+             test 依赖同步切换。主链路使用面:MinIO HTTP / Worker dispatch / report-outbox。
+             启动条件:5.x 释 GA tag 后去掉本注释。 -->
+        <okhttp.version>5.0.0-alpha.16</okhttp.version>
+        <okio.version>3.17.0</okio.version>
         <lombok.version>1.18.46</lombok.version>
         <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.0.1</mybatis-spring-boot.version>
+        <!-- spring-ai 暂留 2.0.0-M3(milestone)(2026-05-23 状态):2.x 系列截至当日只发了 M3,
+             无 2.0.0 GA;1.x 已 GA(latest 1.1.7)但与 2.x API 不同。
+             启动条件:Spring AI 团队发布 2.0.0 GA 后整体升;或决定降到 1.x stable 也可。 -->
         <spring-ai.version>2.0.0-M3</spring-ai.version>
-        <jsqlparser.version>4.5</jsqlparser.version>
+        <jsqlparser.version>5.3</jsqlparser.version>
         <shedlock.version>6.3.0</shedlock.version>
         <spring-retry.version>2.0.12</spring-retry.version>
         <!-- ArchUnit:守护 CLAUDE.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
@@ -115,6 +124,17 @@
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
             </dependency>
+            <!-- okhttp 5.x 用 Gradle KMP 发布:Maven 上 `okhttp` 工件本身是空壳,
+                 真正的 JVM 类在 `okhttp-jvm` 里;且 `okhttp` 的 pom 未声明对 `okhttp-jvm` 的依赖。
+                 因此 Maven 工程必须直接依赖 `okhttp-jvm`。两个 artifactId 都登记进
+                 dependencyManagement:`okhttp-jvm` 是实际 JVM 类来源;`okhttp` 仅为
+                 强制覆盖 minio / mockwebserver3 等三方库的传递版本(避免拉到 4.x 旧 jar)。
+                 回到 4.x 时合并为单条 `okhttp`。 -->
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>okhttp-jvm</artifactId>
+                <version>${okhttp.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
                 <artifactId>okhttp</artifactId>
@@ -129,7 +149,7 @@
 
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
-                <artifactId>mockwebserver</artifactId>
+                <artifactId>mockwebserver3</artifactId>
                 <version>${okhttp.version}</version>
             </dependency>
             <dependency>

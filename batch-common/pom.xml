@@ -120,6 +120,12 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
         </dependency>
+        <!-- okhttp 5.x:minio 传递的 `okhttp` 工件在 5.x 是空壳,需显式补 `okhttp-jvm` 拿到 JVM 类
+             (MinioAutoConfiguration 显式构造 OkHttpClient,测试用 MinIOContainer 引用 HttpUrl)。 -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
