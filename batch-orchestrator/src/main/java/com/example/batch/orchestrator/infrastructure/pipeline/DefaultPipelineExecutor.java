@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component;
  * {@link PipelineExecutionResult} 并写回上下文的 {@code stepResults}。 若 {@code PipelineDefinition} 或其步骤列表为
  * {@code null}，直接返回空结果。
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class DefaultPipelineExecutor implements PipelineExecutor {
@@ -57,6 +59,12 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
     WorkerRouteModel workerRouteModel = resolveWorkerRoute(context, definition, stepDefinition);
     Optional<Step> step = stepRegistry.find(stepDefinition.getStepCode());
     if (step.isEmpty()) {
+      // 静默吞掉会让"步骤执行成功但结果全空"难以排查;补告警日志暴露配置错误
+      log.warn(
+          "stepCode={} not found in registry: tenantId={}, jobCode={}",
+          stepDefinition.getStepCode(),
+          context.getTenantId(),
+          definition.getJobCode());
       return new StepResult();
     }
     return step.get().execute(context, workerRouteModel);
