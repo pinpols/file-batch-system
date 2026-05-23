@@ -5,28 +5,26 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
+import com.example.batch.orchestrator.config.OrchestratorAsyncConfiguration;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignment;
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
 /**
@@ -56,7 +54,6 @@ import org.springframework.stereotype.Component;
  * 引发瞬时 DDL race。
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 @Lazy(false)
 public class OutboxPollScheduler {
@@ -83,12 +80,31 @@ public class OutboxPollScheduler {
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final OutboxEventMapper outboxEventMapper;
   private final ShardAssignmentProvider shardAssignmentProvider;
+  private final ThreadPoolTaskScheduler executor;
 
   private final AtomicBoolean pollingLoopStarted = new AtomicBoolean(false);
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong currentIntervalMillis = new AtomicLong(0);
 
-  private ScheduledExecutorService executor;
+  public OutboxPollScheduler(
+      DefaultScheduleForwarder scheduleForwarder,
+      OutboxPublishCircuitBreaker outboxPublishCircuitBreaker,
+      BatchOrchestratorGovernanceProperties governance,
+      LockingTaskExecutor lockingTaskExecutor,
+      OrchestratorGracefulShutdown gracefulShutdown,
+      OutboxEventMapper outboxEventMapper,
+      ShardAssignmentProvider shardAssignmentProvider,
+      @Qualifier(OrchestratorAsyncConfiguration.OUTBOX_POLL_SCHEDULER)
+          ThreadPoolTaskScheduler executor) {
+    this.scheduleForwarder = scheduleForwarder;
+    this.outboxPublishCircuitBreaker = outboxPublishCircuitBreaker;
+    this.governance = governance;
+    this.lockingTaskExecutor = lockingTaskExecutor;
+    this.gracefulShutdown = gracefulShutdown;
+    this.outboxEventMapper = outboxEventMapper;
+    this.shardAssignmentProvider = shardAssignmentProvider;
+    this.executor = executor;
+  }
 
   @EventListener(ApplicationReadyEvent.class)
   public void onApplicationReady(ApplicationReadyEvent ignored) {
@@ -106,20 +122,9 @@ public class OutboxPollScheduler {
     if (!pollingLoopStarted.compareAndSet(false, true)) {
       return;
     }
-    ScheduledThreadPoolExecutor scheduledExecutor =
-        new ScheduledThreadPoolExecutor(
-            1,
-            r -> {
-              Thread t = new Thread(r, "outbox-poll-scheduler");
-              t.setDaemon(true);
-              return t;
-            });
-    scheduledExecutor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-    scheduledExecutor.setRemoveOnCancelPolicy(true);
-    executor = scheduledExecutor;
     long initialDelay = outbox.getMinPollIntervalMillis();
     currentIntervalMillis.set(initialDelay);
-    executor.schedule(this::pollAndReschedule, initialDelay, TimeUnit.MILLISECONDS);
+    executor.schedule(this::pollAndReschedule, Instant.now().plusMillis(initialDelay));
     ShardAssignment initial = shardAssignmentProvider.current();
     log.info(
         "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x mode={} shard={}/{}",
@@ -131,23 +136,10 @@ public class OutboxPollScheduler {
         initial.shardTotal());
   }
 
-  @PreDestroy
-  public void stop() {
-    if (executor == null) {
-      return;
-    }
-    executor.shutdownNow();
-    try {
-      if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
-        log.warn("OutboxPollScheduler 未在 30s 内完成关闭，强制中断");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      log.warn("OutboxPollScheduler awaitTermination 被中断，强制中断");
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
-  }
+  // P1 治理: executor 生命周期改由 Spring 容器统一管理 (outboxPollScheduler bean), 这里不再
+  // 手动 shutdown / awaitTermination — Spring 通过 awaitTerminationSeconds=30 等价兜底。
+  // 原 setDaemon(true) 副作用 (JVM 退出时 daemon 线程被直接终止, awaitTermination 形同虚设)
+  // 也因 bean 切换为非 daemon 一并修复。
 
   /** 供单元测试直接触发一次轮询（不走自调度循环）。 */
   public void poll() {
@@ -277,9 +269,10 @@ public class OutboxPollScheduler {
         nextDelay,
         result == null ? "n/a" : result.attemptedEvents());
 
-    if (executor != null && !executor.isShutdown()) {
-      executor.schedule(this::pollAndReschedule, nextDelay, TimeUnit.MILLISECONDS);
+    if (executor.getScheduledExecutor().isShutdown()) {
+      return;
     }
+    executor.schedule(this::pollAndReschedule, Instant.now().plusMillis(nextDelay));
   }
 
   /**
