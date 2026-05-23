@@ -3,6 +3,7 @@ package com.example.batch.worker.core.support;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
+import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -147,4 +148,52 @@ public abstract class AbstractStageExecutor<
 
   /** 检测到 pipeline 步骤流存在环路时使用的错误消息。 */
   protected abstract String cycleDetectedMessage();
+
+  /**
+   * 根据有序的步骤元数据构建默认 {@link PipelineStepTemplate} 列表。
+   *
+   * <p>import / export / dispatch 三条链路的 {@code buildDefaultStepDefinitions()} 历史上都是
+   * "按枚举顺序遍历 → 校验 bean 存在 → builder 装配 template" 的同构骨架；下沉到基类后子类只需把
+   * 已按 stage 顺序排好的 step 元数据传入即可，避免每个链路抄一遍同样的 30 行 builder 装配。
+   *
+   * <p>调用方负责确保列表已按业务期望顺序排列；本方法只做 stepOrder 自增（1-based）与不可变包装。
+   *
+   * @param orderedSteps 已按 stage 顺序排好的步骤元数据列表（每条对应一个 stage 的实现 step）
+   * @return 不可变的 {@link PipelineStepTemplate} 列表，stepOrder 从 1 递增
+   */
+  protected final List<PipelineStepTemplate> buildStepTemplates(
+      List<? extends StageStepDescriptor> orderedSteps) {
+    List<PipelineStepTemplate> templates = new ArrayList<>();
+    int order = 1;
+    for (StageStepDescriptor descriptor : orderedSteps) {
+      templates.add(
+          PipelineStepTemplate.builder()
+              .stepCode(descriptor.stepCode())
+              .stepName(descriptor.stepName())
+              .stageCode(descriptor.stageCode())
+              .stepOrder(order++)
+              .implCode(descriptor.implCode())
+              .stepParams(Map.of())
+              .timeoutSeconds(0)
+              .retryPolicy("NONE")
+              .retryMaxCount(0)
+              .enabled(true)
+              .build());
+    }
+    return List.copyOf(templates);
+  }
+
+  /**
+   * 描述单个 stage step 的元数据契约：stepCode / stepName / implCode / stageCode。 各模块的 StageStep 接口可实现本接口以参与默认 template
+   * 构建；或子类内部用一次性 record 包装现有 step + stage 后传入。
+   */
+  public interface StageStepDescriptor {
+    String stepCode();
+
+    String stepName();
+
+    String implCode();
+
+    String stageCode();
+  }
 }
