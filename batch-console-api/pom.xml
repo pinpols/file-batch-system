@@ -48,6 +48,8 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
         <!-- 2026-05-16:Web Push 后端实装合并(原 batch-console/backend-patch/) -->
+        <!-- 锁 5.1.1:5.1.2 把 httpasyncclient / jose4j / bcprov 全降为 runtime scope,
+             ConsolePushSender 编译期用 HttpResponse + JoseException,升 patch 反而要补一堆显式依赖 -->
         <dependency>
             <groupId>nl.martijndwars</groupId>
             <artifactId>web-push</artifactId>

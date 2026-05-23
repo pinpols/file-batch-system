@@ -10,15 +10,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
-// web-push 5.1.1 内部用 Apache HttpClient 4(传递依赖 httpclient 4.5 + httpcore 4.4),
-// 因此返回的 Future 元素类型是 HttpClient 4 的 HttpResponse,不是 HttpClient 5 的。
+// web-push 5.1.1 内部用 Apache HttpClient 4 异步客户端;同步 send() 阻塞等待返回 HttpResponse。
 import org.apache.http.HttpResponse;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.scheduling.annotation.Async;
@@ -114,11 +110,6 @@ public class ConsolePushSender {
     }
   }
 
-  // TODO: web-push 5.1.1 的 PushService.sendAsync(Notification) 被标 deprecated,
-  // 但替换路径(send / 新签名)在该库内部仍依赖 Apache HttpClient 4 的 HttpResponse,
-  // 且未提供非阻塞等价物;贸然迁移会改变线程模型与超时语义。
-  // 等升级 web-push >= 6.x(切换到 HttpClient 5 / CompletableFuture)再统一迁移。
-  @SuppressWarnings("deprecation")
   private void sendOne(ConsolePushSubscriptionEntity sub, byte[] body) {
     try {
       // web-push 5.1.1 没有 .subscription(Subscription) builder 方法;直接用
@@ -132,10 +123,9 @@ public class ConsolePushSender {
               body,
               properties.getTtlSeconds());
 
-      // web-push 5.1.1 用 HttpClient 4.x,sendAsync 返回 Future(非 CompletableFuture);
-      // HttpResponse 取状态码走 getStatusLine().getStatusCode()。
-      Future<HttpResponse> fut = pushService.sendAsync(notification);
-      HttpResponse resp = fut.get(8, TimeUnit.SECONDS); // 8s 上限,避免单条阻塞整批
+      // sendOne 已在 pushTaskExecutor 线程,直接同步 send() 阻塞当前线程即可;
+      // 超时由 PushService 底层 HTTP client 配置(需要时通过 setHttpClient 注入)。
+      HttpResponse resp = pushService.send(notification);
       int code = resp.getStatusLine().getStatusCode();
       if (code >= 200 && code < 300) {
         repository.touchLastPushedAt(sub.getId(), Instant.now());
@@ -157,12 +147,10 @@ public class ConsolePushSender {
       }
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
-    } catch (TimeoutException te) {
-      log.warn("[push] send timeout sub_id={} endpoint={}", sub.getId(), sub.getEndpoint());
     } catch (ExecutionException | RuntimeException e) {
       log.error("[push] send failed sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
     } catch (Exception e) {
-      // web-push 抛 JoseException / GeneralSecurityException 等 checked exception 兜底
+      // web-push 抛 JoseException / GeneralSecurityException / IOException 等 checked exception 兜底
       log.error("[push] send unexpected sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
     }
   }

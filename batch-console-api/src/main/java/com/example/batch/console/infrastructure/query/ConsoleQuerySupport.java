@@ -99,21 +99,22 @@ public final class ConsoleQuerySupport {
     if (value == null || value.isBlank()) {
       return null;
     }
-    try {
-      return Instant.parse(value);
-    } catch (DateTimeParseException ignored) {
-      SwallowedExceptionLogger.info(
-          ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
+    String trimmed = value.trim();
+    if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
+      try {
+        return LocalDate.parse(trimmed).atStartOfDay(zone).toInstant();
+      } catch (DateTimeParseException ignored) {
+      }
+    }
+    if (trimmed.endsWith("Z") || trimmed.contains("+") || trimmed.lastIndexOf('-') > 9) {
+      try {
+        return Instant.parse(trimmed);
+      } catch (DateTimeParseException ignored) {
+      }
     }
     try {
-      return LocalDateTime.parse(value.replace(' ', 'T')).atZone(zone).toInstant();
+      return LocalDateTime.parse(trimmed.replace(' ', 'T')).atZone(zone).toInstant();
     } catch (DateTimeParseException ignored) {
-      SwallowedExceptionLogger.info(
-          ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
-    }
-    try {
-      return LocalDate.parse(value).atStartOfDay(zone).toInstant();
-    } catch (DateTimeParseException exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.common.invalid_argument_detail",

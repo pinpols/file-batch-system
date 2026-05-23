@@ -346,6 +346,40 @@
                         </execution>
                     </executions>
                 </plugin>
+
+                <!--
+                  M2E (Eclipse JDT / VS Code Java extension) lifecycle mapping。
+                  告诉 IDE:maven-jar-plugin:test-jar 在 process-test-classes 阶段
+                  增量构建时不用跑(完整 mvn test 时正常跑)。
+                  纯 IDE 配置,mvn 命令行不受影响。消除 batch-common pom.xml 的
+                  "Plugin execution not covered by lifecycle configuration" 警告。
+                -->
+                <plugin>
+                    <groupId>org.eclipse.m2e</groupId>
+                    <artifactId>lifecycle-mapping</artifactId>
+                    <version>1.0.0</version>
+                    <configuration>
+                        <lifecycleMappingMetadata>
+                            <pluginExecutions>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>org.apache.maven.plugins</groupId>
+                                        <artifactId>maven-jar-plugin</artifactId>
+                                        <versionRange>[3.0,)</versionRange>
+                                        <goals>
+                                            <goal>test-jar</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <execute>
+                                            <runOnIncremental>false</runOnIncremental>
+                                        </execute>
+                                    </action>
+                                </pluginExecution>
+                            </pluginExecutions>
+                        </lifecycleMappingMetadata>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
     </build>
