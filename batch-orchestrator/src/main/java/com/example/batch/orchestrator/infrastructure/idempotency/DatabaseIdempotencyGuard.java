@@ -27,8 +27,11 @@ public class DatabaseIdempotencyGuard implements IdempotencyGuard {
       log.debug("idempotency key already executed: tenantId={}, key={}", tenantId, idempotencyKey);
       return idempotencyRecordMapper.selectResultByKey(tenantId, idempotencyKey);
     }
-    // 本事务成功占位，执行业务动作
+    // 本事务成功占位，执行业务动作；同事务内回写 result，保证幂等语义完整
     String result = action.execute();
+    if (result != null) {
+      idempotencyRecordMapper.updateResult(tenantId, idempotencyKey, result);
+    }
     return result;
   }
 

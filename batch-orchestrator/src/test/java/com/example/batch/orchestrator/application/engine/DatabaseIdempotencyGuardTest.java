@@ -32,7 +32,19 @@ class DatabaseIdempotencyGuardTest {
 
     assertThat(result).isEqualTo("result-payload");
     verify(mapper).insertIfAbsent("t1", "key-1", null);
+    verify(mapper).updateResult("t1", "key-1", "result-payload");
     verifyNoMoreInteractions(mapper);
+  }
+
+  @Test
+  void executeOnce_firstExecutionWithNullResult_skipsUpdate() {
+    when(mapper.insertIfAbsent("t1", "key-null", null)).thenReturn(1);
+
+    String result = guard.executeOnce("t1", "key-null", () -> null);
+
+    assertThat(result).isNull();
+    verify(mapper).insertIfAbsent("t1", "key-null", null);
+    verify(mapper, never()).updateResult(anyString(), anyString(), anyString());
   }
 
   @Test
