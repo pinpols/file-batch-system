@@ -1,47 +1,134 @@
 name: Label auto-merge
 
-# 给 PR 打 'automerge' 标签 → 标记 GH auto-merge(等所有 required check 绿了自动合)
+# 给 PR 打 'automerge' 标签 → 等所有 required check 绿了自动 admin squash merge
+#
+# 2026-05-23 重写:原方案用 `gh pr merge --auto`,但 personal repo 不支持
+# bypass_pull_request_allowances,enforce_admins=false 又只对人工 merge 生效,
+# 导致 auto-merge 永远卡在等 review 上。改成 workflow 监听 workflow_run 完成
+# 事件,自己判断 required check 全过后用 --admin --squash 合,绕过 review。
 #
 # 用法:
 #   1) 开 PR
 #   2) 自己 review 一下 + 觉得 OK,在 PR 页面贴 label 'automerge'
-#   3) reviewer approve 后,所有 required check 一变绿 GH 自动 squash merge
+#   3) 所有 required check 一变绿,本 workflow 立即 admin squash merge
 #
 # 安全性:
-#   - **不** 自动 approve(必须有人 review approve 才会 merge)
-#   - **不** 跳过 required status checks(pr-gate / codeql / workflow-lint 都要绿)
-#   - **不** 影响 branch protection rule(只是把 PR 进 GH auto-merge 队列)
-#   - 撤销:把 'automerge' label 删掉 + 'gh pr merge --disable-auto'
+#   - **不** 跳过 required status checks(必须 unit-it-a/b1/b2 / static-checks / security 全绿)
+#   - **不** 自动加 label(必须人手贴)
+#   - --admin 绕过 required_reviews(因为只有 admin 能触发本 workflow 的 token 才有 admin 权限)
+#   - 撤销:删 'automerge' label 即可,workflow 不会再 fire
 #
 # 跟 dependabot-auto-merge 区别:
 #   - dependabot:仅 patch bump 走 approve + auto-merge,本仓默认拉新 dev 依赖锁
-#   - label:对任意人开的 PR 都生效,只要打了 label,适合 chore/docs/refactor
+#   - label:对任意人开的 PR 都生效,只要打了 label
 
 on:
   pull_request:
     types: [labeled, synchronize, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["pr-gate", "codeql"]
+    types: [completed]
 
 permissions:
   pull-requests: write
   contents: write
+  checks: read
+  statuses: read
+  actions: read
 
-# 同 PR 上反复打 label 触发多次,只保留最后一次执行
+# 同 PR 多事件并发触发,只保留最后一次
 concurrency:
-  group: label-automerge-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: label-automerge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false  # 不取消已在跑的,避免 race(自身可能 idempotent 但稳妥起见)
 
 jobs:
-  enable-auto-merge:
-    if: >
-      github.event.pull_request.draft == false &&
-      contains(github.event.pull_request.labels.*.name, 'automerge')
+  admin-merge:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Enable PR auto-merge (squash)
-        # --auto:GH 标记成"等 required check 绿了自动 merge",不立即合
-        # --squash:对齐本仓默认(release-please / changelog 友好)
+      - name: Determine candidate PRs and attempt admin merge
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge --auto --squash "$PR_URL"
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # 确定要考察的 PR(s)
+          if [[ -n "${PR_NUMBER}" ]]; then
+            PRS="${PR_NUMBER}"
+            echo "trigger=pull_request, PR=#${PR_NUMBER}"
+          elif [[ -n "${WORKFLOW_HEAD_SHA}" ]]; then
+            PRS=$(gh pr list --repo "${REPO}" --state open --search "${WORKFLOW_HEAD_SHA}" --json number --jq '.[].number' || echo "")
+            echo "trigger=workflow_run, sha=${WORKFLOW_HEAD_SHA}, PRs=${PRS:-none}"
+          else
+            echo "无 PR 上下文,退出"
+            exit 0
+          fi
+
+          if [[ -z "${PRS:-}" ]]; then
+            echo "没有匹配的 open PR,退出"
+            exit 0
+          fi
+
+          # 读 main branch protection 拿 required checks 列表
+          REQUIRED=$(gh api "repos/${REPO}/branches/main/protection" \
+            --jq '.required_status_checks.contexts // [] | .[]' 2>/dev/null || echo "")
+          if [[ -z "${REQUIRED}" ]]; then
+            echo "::warning::无法读取 main branch protection 的 required checks,退出避免误合"
+            exit 0
+          fi
+          echo "required checks: $(echo ${REQUIRED} | tr '\n' ' ')"
+
+          for pr in ${PRS}; do
+            echo
+            echo "======= PR #${pr} ======="
+
+            # 拉 PR 元数据
+            META=$(gh pr view "${pr}" --repo "${REPO}" \
+              --json labels,isDraft,mergeable,state,statusCheckRollup)
+
+            STATE=$(echo "${META}" | jq -r .state)
+            if [[ "${STATE}" != "OPEN" ]]; then
+              echo "  state=${STATE},跳过"
+              continue
+            fi
+
+            IS_DRAFT=$(echo "${META}" | jq -r .isDraft)
+            if [[ "${IS_DRAFT}" == "true" ]]; then
+              echo "  草稿,跳过"
+              continue
+            fi
+
+            HAS_LABEL=$(echo "${META}" | jq -r '.labels[]?.name' | grep -Fx automerge || echo "")
+            if [[ -z "${HAS_LABEL}" ]]; then
+              echo "  无 automerge label,跳过"
+              continue
+            fi
+
+            MERGEABLE=$(echo "${META}" | jq -r .mergeable)
+            if [[ "${MERGEABLE}" != "MERGEABLE" ]]; then
+              echo "  mergeable=${MERGEABLE}(非 MERGEABLE),跳过"
+              continue
+            fi
+
+            # 验所有 required check 都 SUCCESS
+            ALL_GREEN=true
+            for check in ${REQUIRED}; do
+              CONCLUSION=$(echo "${META}" | jq -r ".statusCheckRollup[] | select(.name == \"${check}\") | .conclusion" | head -1)
+              if [[ "${CONCLUSION}" != "SUCCESS" ]]; then
+                echo "  required check '${check}' = '${CONCLUSION:-MISSING}'(非 SUCCESS),等下次触发"
+                ALL_GREEN=false
+                break
+              fi
+            done
+
+            if [[ "${ALL_GREEN}" != "true" ]]; then
+              continue
+            fi
+
+            # 全部条件满足 — admin merge
+            echo "  ✅ 所有条件满足,执行 admin squash merge"
+            gh pr merge --admin --squash "${pr}" --repo "${REPO}"
+          done
