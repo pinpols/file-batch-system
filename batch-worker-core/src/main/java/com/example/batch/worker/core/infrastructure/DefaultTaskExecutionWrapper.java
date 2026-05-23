@@ -4,6 +4,7 @@ import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.worker.core.config.WorkerCoreAsyncConfiguration;
 import com.example.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
@@ -17,20 +18,20 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
 /**
@@ -72,7 +73,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   private final Map<String, Timer> executionTimerByType =
       new java.util.concurrent.ConcurrentHashMap<>();
 
-  private ScheduledExecutorService watchdog;
+  private final TaskScheduler watchdog;
 
   public DefaultTaskExecutionWrapper(
       StepExecutionAdapter stepExecutionAdapter,
@@ -80,12 +81,14 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
       TaskExecutionPool executionPool,
       WorkerExecutionTimeoutProperties timeoutProperties,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      @Qualifier(WorkerCoreAsyncConfiguration.WATCHDOG_SCHEDULER) TaskScheduler watchdog) {
     this.stepExecutionAdapter = stepExecutionAdapter;
     this.taskExecutionClient = taskExecutionClient;
     this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
     this.executionPool = executionPool;
     this.timeoutProperties = timeoutProperties;
+    this.watchdog = watchdog;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     this.meterRegistry = registry;
     if (registry == null) {
@@ -119,24 +122,15 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
                 .register(meterRegistry));
   }
 
-  @PostConstruct
-  void initWatchdog() {
-    AtomicLong index = new AtomicLong();
-    this.watchdog =
-        Executors.newSingleThreadScheduledExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setName("worker-task-cancel-watchdog-" + index.incrementAndGet());
-              thread.setDaemon(true);
-              return thread;
-            });
-  }
-
+  /**
+   * watchdog 生命周期由 Spring 管理 ({@link
+   * com.example.batch.worker.core.config.WorkerCoreAsyncConfiguration#workerWatchdogScheduler})。
+   * 这里保留 {@code @PreDestroy} 钩子仅为兼容旧测试 (测试可单独触发关闭); 容器关闭时 Spring 也会调 scheduler 的
+   * {@code shutdown()}。
+   */
   @PreDestroy
   void shutdownWatchdog() {
-    if (watchdog != null) {
-      watchdog.shutdownNow();
-    }
+    // no-op: scheduler 由 Spring 容器统一关闭, 这里保留方法便于测试钩子访问
   }
 
   @Override
@@ -260,8 +254,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
                 task.getTaskId());
           }
         },
-        graceSeconds,
-        TimeUnit.SECONDS);
+        Instant.now().plus(Duration.ofSeconds(graceSeconds)));
   }
 
   private long resolveEffectiveTimeoutSeconds(PulledTask task) {
