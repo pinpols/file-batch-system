@@ -19,6 +19,9 @@ public enum ResultCode implements DictEnum {
   FORBIDDEN("FORBIDDEN", "禁止访问", "forbidden", 403),
   RATE_LIMITED("RATE_LIMITED", "请求过于频繁", "too many requests", 429),
   BUSINESS_ERROR("BUSINESS_ERROR", "业务错误", "business error", 422),
+  // R-arch-audit-2026-05-23 P1: 替代 QuartzLaunchJob 中 e.getMessage().contains("tenant is suspended")
+  // 字符串匹配。租户被运维 / 计费侧暂停后，调度路径需识别该语义并暂停对应 Quartz job 防止日志风暴。
+  TENANT_SUSPENDED("TENANT_SUSPENDED", "租户已暂停", "tenant is suspended", 422),
   NOT_IMPLEMENTED("NOT_IMPLEMENTED", "未实现", "not implemented", 501),
   // R-4.1 · 依赖组件短暂不可用（如 Redis 抖动）；表达"稍后重试安全"语义
   SERVICE_UNAVAILABLE("SERVICE_UNAVAILABLE", "依赖组件暂不可用", "dependency temporarily unavailable", 503),
