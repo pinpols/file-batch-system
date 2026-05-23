@@ -64,7 +64,12 @@ public class ConsoleRealtimeReplayStore {
         || afterCursor.isBlank()) {
       return new ReplayBatch(List.of(), true);
     }
-    List<String> rawEntries = redisTemplate.opsForList().range(bufferKey(tenantId, stream), 0, -1);
+    // P1(2026-05-23 audit):读端按写端 replayMaxEntries 上限截断,避免配置漂移或被旁路写入造成
+    //   LRANGE 0 -1 拉全量大列表导致 SSE 线程 GC 抖动。后续 cursor 匹配仍按截断后的窗口判定。
+    long maxEntries = realtimeProperties.getReplayMaxEntries();
+    long endIndex = maxEntries > 0 ? maxEntries - 1 : -1L;
+    List<String> rawEntries =
+        redisTemplate.opsForList().range(bufferKey(tenantId, stream), 0, endIndex);
     if (rawEntries == null || rawEntries.isEmpty()) {
       return new ReplayBatch(List.of(), false);
     }
