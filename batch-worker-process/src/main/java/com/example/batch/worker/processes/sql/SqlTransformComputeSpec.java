@@ -1,5 +1,7 @@
 package com.example.batch.worker.processes.sql;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
@@ -236,7 +238,14 @@ public record SqlTransformComputeSpec(
     if (!Texts.hasText(value)) {
       return WriteMode.INSERT;
     }
-    return WriteMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
+    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    try {
+      return WriteMode.valueOf(normalized);
+    } catch (IllegalArgumentException ex) {
+      // P1-A2: 非法 enum 值不能让裸 IllegalArgumentException 被外层 catch(Exception) 包成 INFRA_ERROR，
+      // 改抛 BizException(INVALID_ARGUMENT) 让 stage 路径识别为配置错误并保留 i18n 错误码。
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.process.invalid_write_mode", value);
+    }
   }
 
   private static EmptyResultPolicy parseEmptyResultPolicy(Object raw) {
@@ -244,7 +253,13 @@ public record SqlTransformComputeSpec(
     if (!Texts.hasText(value)) {
       return EmptyResultPolicy.SUCCESS;
     }
-    return EmptyResultPolicy.valueOf(value.trim().toUpperCase(Locale.ROOT));
+    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    try {
+      return EmptyResultPolicy.valueOf(normalized);
+    } catch (IllegalArgumentException ex) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.process.invalid_empty_result_policy", value);
+    }
   }
 
   private static List<ColumnMapping> parseColumns(Object raw) {
