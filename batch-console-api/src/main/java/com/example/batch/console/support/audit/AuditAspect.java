@@ -3,6 +3,7 @@ package com.example.batch.console.support.audit;
 import com.example.batch.console.mapper.OperationAuditMapper;
 import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.security.MessageDigest;
@@ -67,6 +68,19 @@ public class AuditAspect {
   private final ExpressionParser spel = new SpelExpressionParser();
   private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
 
+  /**
+   * P1(2026-05-23 audit):REQUIRES_NEW 模板 @PostConstruct 一次性构建复用,
+   * 避免每次失败路径在 {@link #recordInNewTransaction} 内反复 {@code new TransactionTemplate}(切面单例)。
+   */
+  private TransactionTemplate requiresNewTemplate;
+
+  @PostConstruct
+  void initTransactionTemplate() {
+    TransactionTemplate tmpl = new TransactionTemplate(transactionManager);
+    tmpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    this.requiresNewTemplate = tmpl;
+  }
+
   @Around("@annotation(com.example.batch.console.support.audit.AuditAction)")
   public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
     MethodSignature sig = (MethodSignature) pjp.getSignature();
@@ -100,9 +114,7 @@ public class AuditAspect {
   private void recordInNewTransaction(
       AuditAction ann, String aggregateId, String paramsJson, String errorCode, String errorMsg) {
     try {
-      TransactionTemplate tmpl = new TransactionTemplate(transactionManager);
-      tmpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-      tmpl.executeWithoutResult(
+      requiresNewTemplate.executeWithoutResult(
           status -> record(ann, aggregateId, paramsJson, errorCode, errorMsg));
     } catch (Exception writeFail) {
       log.warn(
