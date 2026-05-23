@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
  * P0-4 (pre-launch audit 2026-05-18)：为 @Async 注册有界线程池。
@@ -22,6 +23,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 public class ConsoleAsyncConfiguration {
 
   public static final String PUSH_TASK_EXECUTOR = "pushTaskExecutor";
+  public static final String REALTIME_SCHEDULER = "consoleRealtimeScheduler";
 
   @Bean(name = PUSH_TASK_EXECUTOR)
   public Executor pushTaskExecutor() {
@@ -37,5 +39,24 @@ public class ConsoleAsyncConfiguration {
     executor.setAwaitTerminationSeconds(30);
     executor.initialize();
     return executor;
+  }
+
+  /**
+   * P1 治理项 (audit 2026-05-23): SSE 实时事件总线 / 摘要流之前各自直接 {@code Executors.newScheduledThreadPool},
+   * 游离 Spring 生命周期外, 无 Actuator 指标. 这里统一注册一个 {@code consoleRealtimeScheduler}
+   * 给 {@code ConsoleRealtimeEventHub} 心跳调度与 {@code ConsoleOpsSummaryRealtimeStream}
+   * debounce 刷新共用. pool size 走 2 起步: 一格供 hub 高频心跳, 一格供 summary 延迟刷新.
+   */
+  @Bean(name = REALTIME_SCHEDULER, destroyMethod = "shutdown")
+  public ThreadPoolTaskScheduler consoleRealtimeScheduler() {
+    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+    scheduler.setPoolSize(2);
+    scheduler.setThreadNamePrefix("console-realtime-");
+    scheduler.setDaemon(true);
+    scheduler.setRemoveOnCancelPolicy(true);
+    scheduler.setWaitForTasksToCompleteOnShutdown(false);
+    scheduler.setAwaitTerminationSeconds(5);
+    scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    return scheduler;
   }
 }
