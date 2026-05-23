@@ -389,6 +389,10 @@ public class FileGovernanceRepository {
   }
 
   private Map<String, Object> params(Object... pairs) {
+    if (pairs.length % 2 != 0) {
+      throw new IllegalArgumentException(
+          "params() requires even number of key/value pairs, got " + pairs.length);
+    }
     Map<String, Object> values = new LinkedHashMap<>();
     for (int index = 0; index < pairs.length; index += 2) {
       values.put(String.valueOf(pairs[index]), pairs[index + 1]);
