@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -196,20 +197,23 @@ public class DefaultTriggerService implements TriggerService {
       LaunchRequest launchRequest, String dedupKey) {
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    final TriggerRequestEntity[] existingHolder = new TriggerRequestEntity[1];
+    // R-arch-audit-2026-05-23 P1: 用 AtomicReference 替代单元素数组 holder。
+    // 数组 workaround 是 lambda effectively-final 限制的反模式，AtomicReference 语义更清晰
+    // 且无并发开销（TransactionTemplate.execute 单线程内同步执行）。
+    AtomicReference<TriggerRequestEntity> existingHolder = new AtomicReference<>();
     tx.execute(
         _ -> {
           TriggerRequestEntity existing =
               triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
           if (existing != null) {
-            existingHolder[0] = existing;
+            existingHolder.set(existing);
             return null;
           }
           triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
           publishLaunchOutbox(launchRequest, dedupKey);
           return null;
         });
-    return existingHolder[0];
+    return existingHolder.get();
   }
 
   /**
