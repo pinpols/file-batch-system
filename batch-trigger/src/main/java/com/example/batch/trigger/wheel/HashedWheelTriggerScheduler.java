@@ -222,6 +222,21 @@ public class HashedWheelTriggerScheduler {
 
   /** 测试 + 内部都用,public 为了 IT 能直接触发(避免依赖 @Scheduled 60s 周期等)。 */
   public void scanAndSchedule(Duration window) {
+    // P1: 内存 in-flight 上限保护 — fire callback 卡死时 wheel 推入速率 ≫ 释放速率会让
+    // inFlightFires / timeoutRegistry 无界增长。任一超阈值 → WARN + skip 本轮,等下次 tick
+    // 重试;真实 fire 路径恢复后 map 自然回落,无需手动清理。
+    int max = props.getMaxInFlight();
+    int inFlight = inFlightFires.size();
+    int timeouts = timeoutRegistry.size();
+    if (max > 0 && (inFlight >= max || timeouts >= max)) {
+      log.warn(
+          "scanAndSchedule skipped: in-flight cap reached (inFlightFires={}, timeoutRegistry={},"
+              + " max={}); fire callbacks likely stalled — investigate before next tick",
+          inFlight,
+          timeouts,
+          max);
+      return;
+    }
     long start = System.nanoTime();
     Instant horizon = dateTimeSupport.nowInstant().plus(window);
     List<TriggerRuntimeStateEntity> due =

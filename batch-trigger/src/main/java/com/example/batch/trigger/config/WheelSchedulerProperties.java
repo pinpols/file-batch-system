@@ -60,4 +60,12 @@ public class WheelSchedulerProperties {
 
   /** leader instance id;默认从 hostname + pid 派生,显式 set 时覆盖。 */
   private String leaderInstanceId;
+
+  /**
+   * P1: 内存 in-flight fire / timeout registry 上限。scanAndSchedule 进入前若
+   * {@code inFlightFires + timeoutRegistry} 任一超阈值即 WARN + skip 本轮,防止 leader
+   * 长时间持有期间 wheel push 速率 ≫ fire callback 释放速率导致 map 无界增长。默认 50_000
+   * 足够任何合理租户规模(平台 trigger 总数 ≪ 10k);触发上限通常是 fire 卡死的告警信号。
+   */
+  private int maxInFlight = 50_000;
 }
