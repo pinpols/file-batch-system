@@ -5,6 +5,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Hashes;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
@@ -18,7 +19,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -353,26 +353,11 @@ public class ConsoleJwtService {
   private String hashClientIp(HttpServletRequest req) {
     // 软绑定不信任 XFF(即便 trustForwardedHeaders=true 也只取 RemoteAddr 防伪造):
     // 这里是审计用途,假 XFF 反而让攻击者主动选定 token 绑定的 hash。
-    String ip = req.getRemoteAddr();
-    return ip == null ? null : sha256Short(ip);
+    return Hashes.sha256Short(req.getRemoteAddr());
   }
 
   private String hashUserAgent(HttpServletRequest req) {
-    String ua = req.getHeader("User-Agent");
-    return ua == null ? null : sha256Short(ua);
-  }
-
-  private String sha256Short(String raw) {
-    try {
-      byte[] full =
-          MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
-      // 取前 8 字节 (16 hex chars) — 防碰撞需求低,只用作 drift 比对
-      byte[] head = new byte[8];
-      System.arraycopy(full, 0, head, 0, 8);
-      return HexFormat.of().formatHex(head);
-    } catch (NoSuchAlgorithmException e) {
-      return null;
-    }
+    return Hashes.sha256Short(req.getHeader("User-Agent"));
   }
 
   private NimbusJwtEncoder encoder() {

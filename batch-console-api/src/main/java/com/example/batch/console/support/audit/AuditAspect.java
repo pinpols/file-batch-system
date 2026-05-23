@@ -1,12 +1,12 @@
 package com.example.batch.console.support.audit;
 
+import com.example.batch.common.utils.Hashes;
 import com.example.batch.console.mapper.OperationAuditMapper;
 import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -272,26 +272,13 @@ public class AuditAspect {
           (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
       if (attrs != null) {
         HttpServletRequest req = attrs.getRequest();
-        ipHash = sha256short(req.getRemoteAddr());
-        uaHash = sha256short(req.getHeader("User-Agent"));
+        ipHash = Hashes.sha256Short(req.getRemoteAddr());
+        uaHash = Hashes.sha256Short(req.getHeader("User-Agent"));
       }
     } catch (Exception ignored) {
       // request context 取不到不影响审计写入
     }
     return new RequestInfo(traceId, requestId, ipHash, uaHash);
-  }
-
-  private static String sha256short(String s) {
-    if (s == null || s.isEmpty()) return null;
-    try {
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
-      byte[] h = md.digest(s.getBytes());
-      StringBuilder sb = new StringBuilder(16);
-      for (int i = 0; i < 8; i++) sb.append(String.format("%02x", h[i]));
-      return sb.toString();
-    } catch (Exception e) {
-      return null;
-    }
   }
 
   private record OperatorInfo(String operatorId, String operatorRole, String tenantId) {}
