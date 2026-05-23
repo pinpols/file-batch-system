@@ -67,8 +67,21 @@ public class WorkerReportOutboxCoordinator {
       }
     }
     long now = BatchDateTimeSupport.utcEpochMillis();
+    long deadline =
+        props.getPollMaxDurationMillis() > 0 ? now + props.getPollMaxDurationMillis() : Long.MAX_VALUE;
     int batch = Math.max(1, props.getPollBatchSize());
     for (int i = 0; i < batch; i++) {
+      // P1: 总耗时熔断 — orchestrator 慢响应时把 batch 提前 break,
+      // 避免单次调度长时间占用线程拖延下一调度周期和 recoverStalePublishing。
+      // needs-manual-review: 完整修复(异步 CompletableFuture submit)待下一轮统筹,
+      // 本批保守只做熔断 + 配置化上限。
+      if (BatchDateTimeSupport.utcEpochMillis() >= deadline) {
+        log.warn(
+            "report outbox poll cut off by pollMaxDurationMillis={} after {} rows",
+            props.getPollMaxDurationMillis(),
+            i);
+        break;
+      }
       Optional<WorkerReportOutboxRow> claimed = pollClaimer.claimNext(now);
       if (claimed.isEmpty()) {
         break;
