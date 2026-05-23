@@ -231,6 +231,18 @@ public class HttpTaskExecutionClient
     // 用 micrometer Timer 记录 REPORT 调用耗时 + 结果 tag，运维可通过
     //   batch.worker.report.duration{tenantId=, workerType=, outcome=success|failure}
     // 的 P95/P99 发现 Orchestrator 侧 report 瓶颈或链路中断。
+    //
+    // P0 #16 (2026-05-23): 三段式失败链。
+    //   1) HTTP 重试耗尽 → 尝试 outbox.enqueue（ADR-015），由 pollDeferredReports 后台重投。
+    //   2) outbox 不可用（未启用 / 持久化失败）→ **不再** 把异常抛回 listener。
+    //      之前抛 RuntimeException → AbstractTaskConsumer 识别为 transient → return false → Kafka
+    //      不提交 offset → 重投 dispatch 消息 → 同 task 在 finally 块清完 lease 后立即被重新 CLAIM,
+    //      task 业务 body 被双执行（已落库数据被覆盖 / 重做）。
+    //      改为吞掉异常 + ERROR 日志 + worker.report.dropped.total 计数：让 Kafka 正常 ack offset,
+    //      丢失的 REPORT 由 orchestrator lease 过期自动 reclaim 兜底（reclaim 是 lease-timeout 后的
+    //      延迟重派,不是即时重派,且 orchestrator 视角看到的是 CLAIM 状态超时,可走它自己的
+    //      去重/状态机校验,而不是 Kafka 重投绕过状态机）。
+    //   双执行从"必然零延迟"降级为"可能延迟 reclaim",配合 outbox 启用时基本消除。
     long reportStartNanos = System.nanoTime();
     String outcome = "success";
     try {
@@ -240,12 +252,27 @@ public class HttpTaskExecutionClient
       if (coordinator != null && coordinator.enqueue(report)) {
         outcome = "deferred_outbox";
       } else {
-        outcome = "failure";
-        throw rex;
+        outcome = "dropped";
+        recordReportDropped(coordinator == null ? "outbox_disabled" : "outbox_enqueue_failed");
+        log.error(
+            "REPORT dropped after HTTP + outbox failure — relying on orchestrator lease reclaim to"
+                + " avoid Kafka-redelivery double-execution: tenantId={}, taskId={}, workerId={},"
+                + " reason={}, httpError={}",
+            report == null ? null : report.getTenantId(),
+            report == null ? null : report.getTaskId(),
+            report == null ? null : report.getWorkerId(),
+            coordinator == null ? "outbox_disabled" : "outbox_enqueue_failed",
+            rex.toString());
       }
     } finally {
       recordReportDuration(report, outcome, System.nanoTime() - reportStartNanos);
     }
+  }
+
+  private void recordReportDropped(String reason) {
+    meterRegistry.ifPresent(
+        registry ->
+            registry.counter("worker.report.dropped.total", "reason", reason).increment());
   }
 
   @Override
