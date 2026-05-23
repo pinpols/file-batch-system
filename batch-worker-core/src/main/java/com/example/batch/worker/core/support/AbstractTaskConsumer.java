@@ -14,6 +14,8 @@ import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
@@ -467,13 +469,18 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
           "PROCESS", BatchTopics.TASK_DISPATCH_PROCESS,
           "DISPATCH", BatchTopics.TASK_DISPATCH_DISPATCH);
 
-  // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → dispatch）
-  private static final List<Map.Entry<String, String>> WORKER_CODE_KEYWORD_TOPIC =
-      List.of(
-          Map.entry("import", BatchTopics.TASK_DISPATCH_IMPORT),
-          Map.entry("export", BatchTopics.TASK_DISPATCH_EXPORT),
-          Map.entry("process", BatchTopics.TASK_DISPATCH_PROCESS),
-          Map.entry("dispatch", BatchTopics.TASK_DISPATCH_DISPATCH));
+  // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → process → dispatch）
+  // P2: 改用 LinkedHashMap 保留顺序又表达 Map 语义,避免 List<Entry> 在阅读时被误读为 List。
+  private static final Map<String, String> WORKER_CODE_KEYWORD_TOPIC = buildWorkerCodeKeywordTopic();
+
+  private static Map<String, String> buildWorkerCodeKeywordTopic() {
+    LinkedHashMap<String, String> map = new LinkedHashMap<>(4);
+    map.put("import", BatchTopics.TASK_DISPATCH_IMPORT);
+    map.put("export", BatchTopics.TASK_DISPATCH_EXPORT);
+    map.put("process", BatchTopics.TASK_DISPATCH_PROCESS);
+    map.put("dispatch", BatchTopics.TASK_DISPATCH_DISPATCH);
+    return Collections.unmodifiableMap(map);
+  }
 
   private String resolveTopicByWorkerType(String workerType) {
     if (workerType == null || workerType.isBlank()) {
@@ -484,7 +491,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   private String resolveTopicByWorkerCode(String workerCode) {
     String wc = workerCode == null ? "" : workerCode.toLowerCase();
-    return WORKER_CODE_KEYWORD_TOPIC.stream()
+    return WORKER_CODE_KEYWORD_TOPIC.entrySet().stream()
         .filter(entry -> wc.contains(entry.getKey()))
         .map(Map.Entry::getValue)
         .findFirst()
