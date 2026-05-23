@@ -151,7 +151,7 @@ services:
       - batch-network
 
   minio:
-    image: minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-04-03T14-56-28Z}
+    image: minio/minio:${MINIO_IMAGE_TAG:-RELEASE.2025-10-15T17-29-55Z}
     container_name: batch-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -175,7 +175,7 @@ services:
       retries: 12
 
   minio-init:
-    image: minio/mc:${MINIO_MC_IMAGE_TAG:-RELEASE.2025-07-16T15-35-03Z}
+    image: minio/mc:${MINIO_MC_IMAGE_TAG:-RELEASE.2025-08-13T08-35-41Z}
     container_name: batch-minio-init
     depends_on:
       minio:
