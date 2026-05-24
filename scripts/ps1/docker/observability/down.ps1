@@ -10,7 +10,7 @@ $composeEnvFile = Get-EnvValue "COMPOSE_ENV_FILE" ".env.local"
 
 & docker compose `
   --env-file $composeEnvFile `
-  -f docker-compose.observability.yml `
+  -f docker/compose/observability.yml `
   --profile observability `
   stop
 exit $LASTEXITCODE

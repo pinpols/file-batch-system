@@ -19,7 +19,7 @@ Ensure-Directory (Join-Path $root "logs\docker")
 
 & docker compose `
   --env-file $composeEnvFile `
-  -f docker-compose.observability.yml `
+  -f docker/compose/observability.yml `
   --profile observability `
   up -d @ComposeArgs
 exit $LASTEXITCODE

@@ -13,7 +13,7 @@ $env:COMPOSE_DOCKER_CLI_BUILD = Get-EnvValue "COMPOSE_DOCKER_CLI_BUILD" "1"
 & docker compose `
   --env-file $composeEnvFile `
   -f docker-compose.yml `
-  -f docker-compose.app.yml `
+  -f docker/compose/app.yml `
   --profile apps `
   --profile replica `
   build @ComposeArgs
