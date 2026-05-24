@@ -27,9 +27,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 内置 PROCESS 加工插件:基于 step_params 的"配置驱动 SQL transform",落 WAP+bookends 五段式。
@@ -70,12 +68,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private final SqlTransformComputeSecurityProperties security;
   private final SqlTransformComputeSqlValidator sqlValidator;
   private final ProcessMetrics metrics;
-  private final TransactionTemplate businessTxTemplate;
 
   public SqlTransformComputePlugin(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
-      @Qualifier("processBusinessTransactionManager")
-          PlatformTransactionManager processBusinessTransactionManager,
       ObjectMapper objectMapper,
       SqlTransformComputeSecurityProperties security,
       ProcessMetrics metrics) {
@@ -87,7 +82,6 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     this.security = security;
     this.sqlValidator = new SqlTransformComputeSqlValidator(security);
     this.metrics = metrics;
-    this.businessTxTemplate = new TransactionTemplate(processBusinessTransactionManager);
   }
 
   @Override
@@ -156,36 +150,27 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     }
 
     String stageSql = buildStagingInsertSql(spec);
-    // P0: INSERT + overflow-DELETE 必须原子。两步独立时,INSERT 后崩溃会留下 staging 脏行,
-    // maxStagedRows 这条"提前刹车"路径若 INSERT 成功、DELETE 前进程被 kill,脏数据残留并
-    // 跨越 stagedRows>limit 判定路径(返回 failure 后 cleanupCommittedStaging 不再走)。
-    // 包成业务库本地事务后,INSERT 与 overflow-DELETE 同生共死。
-    int stagedRows =
-        businessTxTemplate.execute(
-            status -> {
-              int inserted = jdbc.update(stageSql, params);
-              if (inserted > spec.maxStagedRows()) {
-                Map<String, Object> cleanParams = new LinkedHashMap<>();
-                cleanParams.put(PARAM_BATCH_KEY, batchKey);
-                cleanParams.put(PARAM_TENANT_ID, context.getTenantId());
-                cleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
-                cleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
-                jdbc.update(
-                    "DELETE FROM "
-                        + STAGING_TABLE
-                        + " WHERE batch_key = :batchKey"
-                        + " AND tenant_id = :tenantId"
-                        + " AND target_schema = :targetSchema"
-                        + " AND target_table = :targetTable",
-                    cleanParams);
-              }
-              return inserted;
-            });
+    int stagedRows = jdbc.update(stageSql, params);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, stagedRows);
     context.getAttributes().put("processedCount", stagedRows);
     metrics.recordComputeStagedRows(context.getTenantId(), stagedRows);
 
+    // P1-6:超过 maxStagedRows 立即清本批 staging,避免后续 stage 处理超大集合 / target 表雪崩。
+    // 在事务边界外删除即可,因 PR-3 P0-3 已让 commit+cleanup 同事务,这里只是补"提前刹车"。
     if (stagedRows > spec.maxStagedRows()) {
+      Map<String, Object> cleanParams = new LinkedHashMap<>();
+      cleanParams.put(PARAM_BATCH_KEY, batchKey);
+      cleanParams.put(PARAM_TENANT_ID, context.getTenantId());
+      cleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
+      cleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
+      jdbc.update(
+          "DELETE FROM "
+              + STAGING_TABLE
+              + " WHERE batch_key = :batchKey"
+              + " AND tenant_id = :tenantId"
+              + " AND target_schema = :targetSchema"
+              + " AND target_table = :targetTable",
+          cleanParams);
       log.warn(
           "sqlTransformCompute staged rows exceeded limit: tenantId={}, batchKey={}, target={}.{},"
               + " stagedRows={}, maxStagedRows={}, cleaned",
