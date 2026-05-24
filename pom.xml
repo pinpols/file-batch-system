@@ -57,7 +57,7 @@
              同时 mockwebserver 在 5.x 改名为 mockwebserver3(包名 mockwebserver3),
              test 依赖同步切换。主链路使用面:MinIO HTTP / Worker dispatch / report-outbox。
              启动条件:5.x 释 GA tag 后去掉本注释。 -->
-        <okhttp.version>5.0.0-alpha.16</okhttp.version>
+        <okhttp.version>5.3.2</okhttp.version>
         <okio.version>3.17.0</okio.version>
         <lombok.version>1.18.46</lombok.version>
         <mockito.version>5.20.0</mockito.version>
