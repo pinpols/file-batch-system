@@ -1,5 +1,7 @@
 package com.example.batch.console.infrastructure.realtime;
 
+import com.example.batch.console.config.ConsoleAsyncConfiguration;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -25,6 +27,11 @@ public class ConsoleRealtimeEventBridge {
     this.summaryRealtimeStream = summaryRealtimeStream;
   }
 
+  // P0:原同步执行 + fallbackExecution=true 在无事务路径上会占用 Tomcat 工作线程做
+  // Redis Pub/Sub 同步 IO,Redis 抖动时阻塞业务请求线程。挂 @Async 走有界 pushTaskExecutor
+  // (core=4 / max=16 / queue=200 / CallerRunsPolicy)异步化,保留 fallbackExecution
+  // 以便在测试 / 无事务上下文中仍能触发。
+  @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
     if (event == null) {

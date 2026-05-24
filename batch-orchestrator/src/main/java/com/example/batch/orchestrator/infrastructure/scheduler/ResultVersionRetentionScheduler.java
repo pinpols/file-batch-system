@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ADR-017 §GC / 保留策略 — 周期把过期 SUPERSEDED 推到 ARCHIVED 并清空 payload_json。
@@ -52,8 +51,11 @@ public class ResultVersionRetentionScheduler {
     }
   }
 
-  /** 单轮把过期的 SUPERSEDED 行推到 ARCHIVED；事务内逐条处理便于 partial 失败时其他行已成功保留。 返回真正成功 archived 的行数。 */
-  @Transactional
+  /**
+   * 单轮把过期的 SUPERSEDED 行推到 ARCHIVED；每条 {@link ResultVersionMapper#archiveSuperseded} 都是单条 UPDATE，
+   * 数据库层原子；本方法不再包裹外层事务（之前的 {@code @Transactional} 在 @Scheduled 自调用路径下根本不会生效， 且与
+   * {@code @SchedulerLock} 嵌套顺序歧义）。返回真正成功 archived 的行数。
+   */
   public int demoteSupersededBatch(Instant now) {
     Instant cutoff = now.minus(Duration.ofDays(properties.getSupersededDays()));
     List<ResultVersionEntity> stale =
