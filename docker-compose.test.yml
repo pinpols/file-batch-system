@@ -1,0 +1,63 @@
+# 与 docker-compose.yml 叠加以 `--profile test` 启动 E2E 渠道侧的真实依赖：
+#   - sftp（atmoz/sftp）：三租户各一个 PASSWORD 账号，映射本地 fixture 目录
+#   - mockserver：接住 ta/tb/tc 的 API_PUSH 回调
+#
+# 容器内使用容器网络名（sftp:22 / mockserver:1080）；宿主机端口由 .env 中
+# SFTP_HOST_PORT / MOCKSERVER_HOST_PORT 控制，默认 12222 / 11080。
+#
+# 启动：docker compose --profile test up -d
+x-test-runtime-env: &test-runtime-env
+  BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
+  LANG: ${BATCH_LOCALE:-C.UTF-8}
+  LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+
+services:
+  sftp:
+    profiles: ["test"]
+    image: atmoz/sftp:${SFTP_IMAGE_TAG:-alpine}
+    container_name: batch-sftp
+    restart: unless-stopped
+    environment:
+      <<: *test-runtime-env
+    ports:
+      - "${SFTP_HOST_PORT:-12222}:22"
+    volumes:
+      - ./docker/sftp/users.conf:/etc/sftp/users.conf:ro
+      - ./docker/sftp/data/ta/inbound:/home/ta/inbound
+      - ./docker/sftp/data/tb/inbound:/home/tb/inbound
+      - ./docker/sftp/data/tc/inbound:/home/tc/inbound
+    networks:
+      - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 22 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  mockserver:
+    profiles: ["test"]
+    image: mockserver/mockserver:${MOCKSERVER_IMAGE_TAG:-5.15.0}
+    container_name: batch-mockserver
+    restart: unless-stopped
+    ports:
+      - "${MOCKSERVER_HOST_PORT:-11080}:1080"
+    environment:
+      <<: *test-runtime-env
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations.json
+      MOCKSERVER_LOG_LEVEL: ${MOCKSERVER_LOG_LEVEL:-INFO}
+    volumes:
+      - ./docker/mockserver/expectations.json:/config/expectations.json:ro
+    networks:
+      - batch-network
+    healthcheck:
+      test: ["CMD", "/usr/bin/java", "-jar", "/libs/mockserver-netty-jar-with-dependencies.jar", "-version"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+networks:
+  batch-network:
+    name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network
+    external: true

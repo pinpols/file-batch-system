@@ -1,0 +1,189 @@
+# 观测栈：Prometheus / Grafana / Loki / Jaeger / OTel Collector / Alertmanager / Exporters
+# 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+services:
+
+  # ── 指标 ──────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    container_name: batch-prometheus
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/prometheus/entrypoint.sh"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    environment:
+      BATCH_DEPLOY_MODE: ${BATCH_DEPLOY_MODE:-container}
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/observability/prometheus-batch-rules.yml:/etc/prometheus/rules/batch.yml:ro
+      - ./docker/observability/prometheus-entrypoint.sh:/etc/prometheus/entrypoint.sh:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-19090}:9090"
+    networks:
+      - batch-network
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: batch-alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    volumes:
+      - ./docker/observability/alertmanager-batch-template.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "${ALERTMANAGER_PORT:-19093}:9093"
+    networks:
+      - batch-network
+
+  # ── 链路 ──────────────────────────────────────────────────────────
+  jaeger:
+    image: jaegertracing/jaeger:2.7.0
+    container_name: batch-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"   # UI
+      - "4317"                              # OTLP gRPC（仅容器间）
+    networks:
+      - batch-network
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: batch-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    user: "0"  # Tempo 写 /var/tempo 需要 root；本地开发简化
+    volumes:
+      - ./docker/observability/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "${TEMPO_HTTP_PORT:-13200}:3200"   # 查询 API（Grafana datasource 走容器内 tempo:3200）
+      - "4317"                              # OTLP gRPC（仅容器间，被 otel-collector 用）
+    networks:
+      - batch-network
+
+  # ── 日志 ──────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: batch-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./docker/observability/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "${LOKI_PORT:-13100}:3100"
+    networks:
+      - batch-network
+
+  # ── OTel Collector ────────────────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.127.0
+    container_name: batch-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      DEPLOYMENT_ENVIRONMENT: local
+    volumes:
+      - ./docker/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+    networks:
+      - batch-network
+    depends_on:
+      - jaeger
+      - tempo
+      - loki
+
+  # ── 仪表盘 ───────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: batch-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./docker/observability/grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana-dashboard-batch.json:/var/lib/grafana/dashboards/batch.json:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-13000}:3000"
+    networks:
+      - batch-network
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  # ── 基础设施 Exporters ───────────────────────────────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.73.0
+    container_name: batch-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis:6379
+    networks:
+      - batch-network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: batch-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${BATCH_PLATFORM_DB_USERNAME:-batch_user}:${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}@postgres:5432/${BATCH_PLATFORM_DB_NAME:-batch_platform}?sslmode=disable"
+    networks:
+      - batch-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.9.0
+    container_name: batch-kafka-exporter
+    restart: unless-stopped
+    command: ["--kafka.server=kafka:29092"]
+    networks:
+      - batch-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: batch-node-exporter
+    restart: unless-stopped
+    networks:
+      - batch-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    container_name: batch-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - batch-network
+
+volumes:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
+
+networks:
+  batch-network:
+    name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network
+    external: true
