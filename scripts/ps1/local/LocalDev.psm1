@@ -202,7 +202,7 @@ function Initialize-AppComposeEnv {
   # 全 Docker 模式编排脚本（deploy / restart / clean-restart）的统一环境初始化。
   # 1) 载入 COMPOSE_ENV_FILE（默认 .env.local）到进程环境
   # 2) 对齐时区 / locale（与 start-all 一致的单一配置源）
-  # 3) 补齐 docker/compose/app.yml 强制要求(:?required)但 .env(.example) 未定义的变量：
+  # 3) 补齐 docker-compose.app.yml 强制要求(:?required)但 .env(.example) 未定义的变量：
   #    BATCH_PLATFORM_DB_PASSWORD / BATCH_BUSINESS_DB_PASSWORD —— 应用以 postgres 超级
   #      用户(POSTGRES_USER=batch_user)连库，未显式提供时从 POSTGRES_PASSWORD 派生；
   #    BATCH_MINIO_SECRET_KEY / BATCH_MINIO_ACCESS_KEY —— 应用访问 MinIO 用 root 凭据，
@@ -250,12 +250,12 @@ function Initialize-AppComposeEnv {
 
 function Get-AppComposeArgs {
   # 全 Docker 模式统一的 compose 入参：基础依赖 + 应用 + replica profile。
-  # 与 scripts/docker/{build,up,down}-apps.sh 完全一致（app compose 在 docker/compose/app.yml）。
+  # 与 scripts/docker/{build,up,down}-apps.sh 完全一致。
   param([string]$EnvFile)
   return @(
     "--env-file", $EnvFile,
     "-f", "docker-compose.yml",
-    "-f", "docker/compose/app.yml",
+    "-f", "docker-compose.app.yml",
     "--profile", "apps",
     "--profile", "replica"
   )

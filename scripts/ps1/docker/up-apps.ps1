@@ -22,7 +22,7 @@ Ensure-Directory (Join-Path $root "logs\docker")
 & docker compose `
   --env-file $composeEnvFile `
   -f docker-compose.yml `
-  -f docker/compose/app.yml `
+  -f docker-compose.app.yml `
   --profile apps `
   --profile replica `
   up -d --force-recreate --remove-orphans @ComposeArgs

@@ -11,7 +11,7 @@ $composeEnvFile = Get-EnvValue "COMPOSE_ENV_FILE" ".env.local"
 & docker compose `
   --env-file $composeEnvFile `
   -f docker-compose.yml `
-  -f docker/compose/app.yml `
+  -f docker-compose.app.yml `
   --profile apps `
   --profile replica `
   stop
