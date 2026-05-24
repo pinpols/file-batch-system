@@ -23,8 +23,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
+import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
@@ -39,9 +40,10 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * Webhook 异步分发器。
  *
- * <p>事件先按订阅写入 {@code webhook_delivery_log(PENDING,next_retry_at=now)}，再进进程内队列做 burst 投递。队列满时使用
- * {@link CallerRunsPolicy}，进程重启/Pod kill 后由 {@link WebhookDeliveryRelay} 扫描 PENDING/EXHAUSTED
- * 行接力，避免事件在入队后无审计地丢失。
+ * <p>事件先按订阅写入 {@code webhook_delivery_log(PENDING,next_retry_at=now)}，再进进程内队列做 burst 投递。
+ * P1(2026-05-23 audit):队列满时改用 {@link AbortPolicy} 显式抛 {@link RejectedExecutionException}, 拒绝任务由
+ * {@link WebhookDeliveryRelay} 扫 {@code PENDING/EXHAUSTED} 行接力(日志已先于入队写入), 避免之前 {@code
+ * CallerRunsPolicy} 把投递反压回 Tomcat 工作线程(单次 webhook 8-10s 超时直接拖死请求线程池)。
  */
 @Slf4j
 @Service
@@ -65,7 +67,10 @@ public class WebhookDispatcher {
   /** P2-1(2026-05-16):见 OrchestratorInternalRestClient 同名字段注释,改 ObjectProvider 避免复用 prototype。 */
   private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
 
-  // 5.11: 改用有界队列 + CallerRunsPolicy 替代无界队列
+  // 5.11: 有界队列 + AbortPolicy(原 CallerRunsPolicy 会反压 Tomcat 请求线程,与 WebhookDeliveryRelay
+  //   持久化补偿重叠,放弃即丢:实际是入队前已写 PENDING 日志,被拒任务由 relay 兜底)
+  private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
+
   private final ExecutorService executor =
       new ThreadPoolExecutor(
           4,
@@ -74,11 +79,12 @@ public class WebhookDispatcher {
           TimeUnit.SECONDS,
           new LinkedBlockingQueue<>(QUEUE_CAPACITY),
           runnable -> {
-            Thread thread = new Thread(runnable, "console-webhook-dispatch");
+            Thread thread =
+                new Thread(runnable, "console-webhook-dispatch-" + THREAD_SEQ.incrementAndGet());
             thread.setDaemon(true);
             return thread;
           },
-          new CallerRunsPolicy());
+          new AbortPolicy());
 
   public void dispatchAsync(
       String tenantId,

@@ -10,6 +10,10 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,13 +46,28 @@ public class TenantSchedulerSnapshotRecorder {
     if (!persistEnabled) {
       return;
     }
-    for (String tenantId : tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds()) {
+    List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
+    if (tenantIds.isEmpty()) {
+      return;
+    }
+    // 一次 GROUP BY 查所有租户的 ONLINE worker 数,取代 N 次 countByTenantAndStatus
+    Map<String, Long> onlineByTenant = new HashMap<>();
+    for (Map<String, Object> row :
+        workerRegistryMapper.countByTenantsAndStatus(
+            tenantIds, WorkerRegistryStatus.ONLINE.code())) {
+      String tid = String.valueOf(row.get("tenant_id"));
+      Object cnt = row.get("cnt");
+      onlineByTenant.put(tid, cnt instanceof Number n ? n.longValue() : 0L);
+    }
+    List<TenantSchedulerSnapshotEntity> rows = new ArrayList<>(tenantIds.size());
+    for (String tenantId : tenantIds) {
       SchedulerSnapshotResponse snap = snapshotService.buildLive(tenantId);
       if (snap.policies().isEmpty()) {
         continue;
       }
       SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
-      TenantSchedulerSnapshotEntity row =
+      long online = onlineByTenant.getOrDefault(tenantId, 0L);
+      rows.add(
           new TenantSchedulerSnapshotEntity(
               null,
               tenantId,
@@ -63,11 +82,12 @@ public class TenantSchedulerSnapshotRecorder {
               (int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()),
               p.groupSharedMaxRunningJobs(),
               p.quotaResetPolicy(),
-              (int)
-                  workerRegistryMapper.countByTenantAndStatus(
-                      tenantId, WorkerRegistryStatus.ONLINE.code()),
-              JsonbString.of(JsonUtils.toJson(snap)));
-      snapshotMapper.insert(row);
+              (int) Math.min(Integer.MAX_VALUE, online),
+              JsonbString.of(JsonUtils.toJson(snap))));
+    }
+    if (!rows.isEmpty()) {
+      // 批量 INSERT:单条 SQL 多 VALUES,N 次 round-trip 降为 1 次
+      snapshotMapper.insertBatch(rows);
     }
   }
 }

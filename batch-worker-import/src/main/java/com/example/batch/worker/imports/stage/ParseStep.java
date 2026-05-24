@@ -20,6 +20,7 @@ import com.example.batch.worker.imports.stage.format.FormatParser;
 import com.example.batch.worker.imports.stage.format.JsonFormatParser;
 import com.example.batch.worker.imports.stage.format.ParseSupport;
 import com.example.batch.worker.imports.stage.format.XmlFormatParser;
+import com.example.batch.worker.imports.stage.support.ImportStageSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -358,14 +359,7 @@ public class ParseStep implements ImportStageStep {
   }
 
   private void deleteQuietly(Path path) {
-    if (path == null) {
-      return;
-    }
-    try {
-      Files.deleteIfExists(path);
-    } catch (Exception ex) {
-      log.warn("Failed to delete temp file: {}", path, ex);
-    }
+    ImportStageSupport.deleteQuietly(path);
   }
 
   /**
@@ -460,10 +454,6 @@ public class ParseStep implements ImportStageStep {
   }
 
   private Path createStagingFile(ImportJobContext context, String phase) throws Exception {
-    String fileId = context == null ? "unknown" : String.valueOf(context.getFileId());
-    String workerId = context == null ? "worker" : String.valueOf(context.getWorkerId());
-    return Files.createTempFile(
-        BatchFileConstants.importStagePrefix(fileId, workerId, phase),
-        BatchFileConstants.NDJSON_SUFFIX);
+    return ImportStageSupport.createStagingFile(context, phase);
   }
 }

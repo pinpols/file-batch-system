@@ -31,7 +31,7 @@ make dev-stop    # 仅停 app JVM；基础依赖保持 up
 
 | 服务 | 建议 | 理由 |
 |---|---|---|
-| Postgres | 裸机（`brew install postgresql@16`） | 访问最频繁，fsync 裸跑快 20-30% |
+| Postgres | 裸机（`brew install postgresql@17`） | 访问最频繁，fsync 裸跑快 20-30% |
 | Redis | 裸机（`brew install redis`） | 极轻，纯内存 |
 | Kafka | 保留 Docker | KRaft 配置复杂，镜像封装好 |
 | MinIO | 保留 Docker | Bucket 初始化脚本已自动化 |

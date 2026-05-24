@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.orchestrator.infrastructure.sensor.FileArrivalSensorPolicy;
 import com.example.batch.orchestrator.mapper.SensorFileArrivalMapper;
 import java.time.Duration;
 import java.time.OffsetDateTime;

@@ -24,6 +24,8 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -49,6 +51,25 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class DefaultResourceScheduler implements ResourceScheduler {
+
+  /**
+   * tick 级别活跃计数缓存:在一个调度 tick 内 (如 WaitingPartitionDispatchScheduler 批量评估若干 partition) 对相同
+   * (tenantId, queueCode/workerGroup) 的 4 个 COUNT 查询去重,消除重复 DB round-trip。
+   *
+   * <p>由调用方通过 {@link #openTickCache()} / {@link #closeTickCache()} 包裹 schedule() 批次显式开启。
+   * 不开启时(默认),所有 resolveXxxActive 走原始无缓存路径,保持单次 schedule() 调用语义不变。
+   */
+  private static final ThreadLocal<Map<String, Long>> TICK_CACHE = new ThreadLocal<>();
+
+  /** 调用方在批量评估前开启 tick 缓存;同一批次内对同一 key 的活跃数查询将命中本地 Map。 */
+  public static void openTickCache() {
+    TICK_CACHE.set(new HashMap<>());
+  }
+
+  /** 调用方必须在 finally 中关闭以避免 ThreadLocal 泄漏。 */
+  public static void closeTickCache() {
+    TICK_CACHE.remove();
+  }
 
   private record FairnessWeights(
       Integer priority, String priorityBand, int tenantWeight, int queueWeight) {}
@@ -236,24 +257,45 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     return weight != null && weight > 0;
   }
 
+  /** long -> int 安全窄化:Long.MAX_VALUE 量级的活跃计数现实不可能,但溢出会让 fairnessScore 排序紊乱。 */
+  private static int safeNarrow(long count) {
+    return (int) Math.min(count, Integer.MAX_VALUE);
+  }
+
+  private long cachedCount(String key, java.util.function.LongSupplier loader) {
+    Map<String, Long> cache = TICK_CACHE.get();
+    if (cache == null) {
+      return loader.getAsLong();
+    }
+    return cache.computeIfAbsent(key, k -> loader.getAsLong());
+  }
+
   private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {
     if (request == null || !Texts.hasText(request.getTenantId())) {
       return 0;
     }
-    return (int) jobInstanceMapper.countActiveByTenant(request.getTenantId());
+    String tenantId = request.getTenantId();
+    long count =
+        cachedCount("tj:" + tenantId, () -> jobInstanceMapper.countActiveByTenant(tenantId));
+    return safeNarrow(count);
   }
 
   private int resolveTenantActivePartitions(ResourceSchedulingRequest request) {
     if (request == null || !Texts.hasText(request.getTenantId())) {
       return 0;
     }
-    return (int)
-        jobPartitionMapper.countActiveByTenant(
-            request.getTenantId(),
-            PartitionStatus.WAITING.code(),
-            PartitionStatus.READY.code(),
-            PartitionStatus.RUNNING.code(),
-            PartitionStatus.RETRYING.code());
+    String tenantId = request.getTenantId();
+    long count =
+        cachedCount(
+            "tp:" + tenantId,
+            () ->
+                jobPartitionMapper.countActiveByTenant(
+                    tenantId,
+                    PartitionStatus.WAITING.code(),
+                    PartitionStatus.READY.code(),
+                    PartitionStatus.RUNNING.code(),
+                    PartitionStatus.RETRYING.code()));
+    return safeNarrow(count);
   }
 
   private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
@@ -263,8 +305,13 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         || !Texts.hasText(queue.queueCode())) {
       return 0;
     }
-    return (int)
-        jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
+    String tenantId = request.getTenantId();
+    String queueCode = queue.queueCode();
+    long count =
+        cachedCount(
+            "qj:" + tenantId + ":" + queueCode,
+            () -> jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, queueCode));
+    return safeNarrow(count);
   }
 
   private int resolveQueueActivePartitions(
@@ -275,16 +322,22 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         || !Texts.hasText(queue.workerGroup())) {
       return 0;
     }
-    return (int)
-        jobPartitionMapper.countActiveByTenantAndWorkerGroup(
-            CountActiveByGroupParam.builder()
-                .tenantId(request.getTenantId())
-                .workerGroup(queue.workerGroup())
-                .waitingStatus(PartitionStatus.WAITING.code())
-                .readyStatus(PartitionStatus.READY.code())
-                .runningStatus(PartitionStatus.RUNNING.code())
-                .retryingStatus(PartitionStatus.RETRYING.code())
-                .build());
+    String tenantId = request.getTenantId();
+    String workerGroup = queue.workerGroup();
+    long count =
+        cachedCount(
+            "qp:" + tenantId + ":" + workerGroup,
+            () ->
+                jobPartitionMapper.countActiveByTenantAndWorkerGroup(
+                    CountActiveByGroupParam.builder()
+                        .tenantId(tenantId)
+                        .workerGroup(workerGroup)
+                        .waitingStatus(PartitionStatus.WAITING.code())
+                        .readyStatus(PartitionStatus.READY.code())
+                        .runningStatus(PartitionStatus.RUNNING.code())
+                        .retryingStatus(PartitionStatus.RETRYING.code())
+                        .build()));
+    return safeNarrow(count);
   }
 
   private long resolveFairnessScore(FairnessScoreContext context) {

@@ -46,10 +46,13 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
             request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
     String operatorId = request.getHeader(CommonConstants.DEFAULT_OPERATOR_ID_HEADER);
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-    String clientIp =
-        firstNonBlank(
-            request.getHeader(CommonConstants.DEFAULT_FORWARDED_FOR_HEADER),
-            request.getRemoteAddr());
+    // P1(2026-05-23 audit):与 ConsoleJwtService.hashClientIp 统一身份绑定来源,只取 RemoteAddr,
+    // 不信任 X-Forwarded-For — 之前 XFF fallback 会让伪造 XFF 的请求与 JWT 绑定的 ipHash 不一致,
+    // 同时让审计 ipHash 可被攻击者主动选定。
+    // XFF 头改作 audit log 单独字段(MDC.xffHeaderValue)观察记录,不参与身份判断;
+    // 真要走 trusted-proxy XFF,需在更前置的 ForwardedHeaderFilter 上统一处理。
+    String clientIp = request.getRemoteAddr();
+    String xffHeaderValue = request.getHeader(CommonConstants.DEFAULT_FORWARDED_FOR_HEADER);
     String tenantId =
         resolveTenantId(response, request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER));
     if (tenantId == null && response.isCommitted()) {
@@ -72,6 +75,10 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       // AuditFieldsInterceptor 拦截 insert/update 时读 MDC operatorId 自动填 created_by/updated_by
       if (operatorId != null && !operatorId.isBlank()) {
         BatchMdc.put(StructuredLogField.OPERATOR_ID, operatorId);
+      }
+      // P1(2026-05-23 audit):XFF 仅写入 audit 日志,不参与身份绑定;按 trusted-proxy 实际部署可观察伪造。
+      if (xffHeaderValue != null && !xffHeaderValue.isBlank()) {
+        BatchMdc.put("xffHeaderValue", xffHeaderValue);
       }
       filterChain.doFilter(request, response);
     } finally {

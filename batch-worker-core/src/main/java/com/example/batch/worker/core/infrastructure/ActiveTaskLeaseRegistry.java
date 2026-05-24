@@ -3,11 +3,14 @@ package com.example.batch.worker.core.infrastructure;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -45,6 +48,26 @@ public class ActiveTaskLeaseRegistry {
   // （1000+ 活跃任务时 sleep(500) 会让实际等待时间远超 timeout）
   private final Object drainMonitor = new Object();
 
+  // P1: remove(taskId) 时通知订阅者，让外围 per-taskId 累加 map（例如 WorkerTaskLeaseRenewer
+  // 的 consecutiveFailures）能同步释放条目，避免任务自然结束后 AtomicInteger 永驻进程。
+  // CopyOnWriteArrayList 适合 register 一次、read-mostly 的监听语义；listener 在 remove
+  // 写锁释放后 fan-out 调用，single-task remove 的 listener 异常不影响其它 listener。
+  private final List<Consumer<String>> removalListeners = new CopyOnWriteArrayList<>();
+
+  /**
+   * 注册 lease 移除监听器，{@link #remove(String)} 完成后按注册顺序回调（同步，调用线程内执行）。
+   *
+   * <p>典型用法：{@code WorkerTaskLeaseRenewer} 注册回调以清理 {@code consecutiveFailures}，
+   * 防止任务自然完成后的失败计数器永驻进程。
+   *
+   * <p>listener 应保持轻量且不抛异常；异常会被吞掉并记 warn，避免破坏其它订阅者的回调链。
+   */
+  public void registerRemovalListener(Consumer<String> listener) {
+    if (listener != null) {
+      removalListeners.add(listener);
+    }
+  }
+
   // C-1.1: register/remove 修改状态 → 写锁；snapshot 只读 → 读锁
   public void register(String taskId, String tenantId, String workerId) {
     register(taskId, tenantId, workerId, null);
@@ -75,6 +98,15 @@ public class ActiveTaskLeaseRegistry {
       shutdownLock.writeLock().unlock();
     }
     lostLeases.remove(taskId);
+    // P1: 同步派发 listener，让外围 per-taskId 累加结构（如 consecutiveFailures）立即清理；
+    // 任一 listener 异常不影响其它订阅者与 drain 通知逻辑。
+    for (Consumer<String> listener : removalListeners) {
+      try {
+        listener.accept(taskId);
+      } catch (RuntimeException ex) {
+        log.warn("lease removal listener threw, taskId={}: {}", taskId, ex.getMessage());
+      }
+    }
     // R-4.5 + R3-P2-2: 每次 remove 都 notifyAll（不再仅在 isEmpty 时通知）。
     // 之前的"仅 isEmpty 时通知"在 awaitDrain 还没 wait 之前 notifyAll 会丢失，
     // awaitDrain 进入 wait 后只能等下一个 remove；如果当前 remove 已经让 map 空了，

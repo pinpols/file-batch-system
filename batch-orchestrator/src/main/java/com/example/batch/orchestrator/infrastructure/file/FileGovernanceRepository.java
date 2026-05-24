@@ -3,9 +3,6 @@ package com.example.batch.orchestrator.infrastructure.file;
 import com.example.batch.common.enums.FileDispatchRunStatus;
 import com.example.batch.common.enums.FileDispatchStatus;
 import com.example.batch.common.enums.FileReceiptStatus;
-import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.exception.BizException;
-import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.mapper.FileGovernanceMapper;
@@ -14,16 +11,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 /**
- * 文件治理数据访问层：提供文件记录查询、状态更新、归档/删除、对账写入和审计追加等操作。
+ * 文件治理数据访问层（纯 DAO）：提供文件记录查询、状态更新、归档/删除、对账写入和审计追加等操作。
  *
- * <p>状态变更通过 {@link FileStateMachine#assertTransition} 校验合法跃迁； 文件删除操作同步更新 dispatch 记录的 {@code
- * runningStatus} 为 {@code TERMINATED}。 内嵌 record 值对象（{@code FileIdentity}、{@code
- * FileStorage}、{@code ReconciledFileRecordCommand} 等） 封装对账写入和审计所需的参数，避免散落的 null 参数。
+ * <p>注：状态机校验（{@code FileStateMachine.assertTransition}）与 {@code BizException} 抛出均由 {@code
+ * DefaultFileGovernanceService} 业务层负责，本类只做参数封装 + Mapper 调用。 内嵌 record 值对象（{@code
+ * FileIdentity}、{@code FileStorage}、{@code ReconciledFileRecordCommand} 等） 封装对账写入和审计所需的参数，避免散落的
+ * null 参数。
  */
-@Repository
+@Component
 @RequiredArgsConstructor
 public class FileGovernanceRepository {
 
@@ -314,35 +312,26 @@ public class FileGovernanceRepository {
     return toLong(params.get("id"));
   }
 
-  public void updateFileStatus(String tenantId, Long fileId, String nextStatus, Object metadata) {
-    Map<String, Object> fileRecord = loadFileRecord(tenantId, fileId);
-    if (fileRecord.isEmpty()) {
-      return;
-    }
-    String currentStatus =
-        fileRecord.get("file_status") == null
-            ? null
-            : String.valueOf(fileRecord.get("file_status"));
-    FileStateMachine.assertTransition(currentStatus, nextStatus);
-    int updated =
-        fileGovernanceMapper.updateFileStatus(
-            params(
-                KEY_TENANT_ID,
-                tenantId,
-                KEY_FILE_ID,
-                fileId,
-                "currentStatus",
-                currentStatus,
-                "nextStatus",
-                nextStatus,
-                "metadataJson",
-                toJson(metadata)));
-    if (updated <= 0) {
-      throw BizException.of(
-          ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
-          "file status changed concurrently, expected " + currentStatus);
-    }
+  /**
+   * 纯 DAO 写入：调用前调用方需自行执行 {@code FileStateMachine.assertTransition} 校验合法跃迁， 并对返回值 ≤ 0 抛出 {@code
+   * BizException(STATE_CONFLICT)} 处理并发冲突。
+   *
+   * @return 实际更新的行数（0 表示并发冲突 / 行不存在）
+   */
+  public int updateFileStatus(
+      String tenantId, Long fileId, String currentStatus, String nextStatus, Object metadata) {
+    return fileGovernanceMapper.updateFileStatus(
+        params(
+            KEY_TENANT_ID,
+            tenantId,
+            KEY_FILE_ID,
+            fileId,
+            "currentStatus",
+            currentStatus,
+            "nextStatus",
+            nextStatus,
+            "metadataJson",
+            toJson(metadata)));
   }
 
   public void updateFileMetadata(String tenantId, Long fileId, Object metadata) {
@@ -400,6 +389,10 @@ public class FileGovernanceRepository {
   }
 
   private Map<String, Object> params(Object... pairs) {
+    if (pairs.length % 2 != 0) {
+      throw new IllegalArgumentException(
+          "params() requires even number of key/value pairs, got " + pairs.length);
+    }
     Map<String, Object> values = new LinkedHashMap<>();
     for (int index = 0; index < pairs.length; index += 2) {
       values.put(String.valueOf(pairs[index]), pairs[index + 1]);

@@ -3,7 +3,9 @@ package com.example.batch.orchestrator.mapper;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface WorkerRegistryMapper {
@@ -55,6 +57,14 @@ public interface WorkerRegistryMapper {
   List<WorkerRegistryEntity> selectByStatus(@Param("status") String status);
 
   long countByTenantAndStatus(@Param("tenantId") String tenantId, @Param("status") String status);
+
+  /**
+   * 批量聚合：一次返回多租户在指定状态下的 worker 数量（{@code GROUP BY tenant_id}），避免 N 次 round-trip。
+   *
+   * @return 行结构 {@code {tenant_id: String, cnt: Long}};未出现的 tenant 表示该 status 下计数为 0
+   */
+  List<Map<String, Object>> countByTenantsAndStatus(
+      @Param("tenantIds") Collection<String> tenantIds, @Param("status") String status);
 
   long countByTenantAndWorkerGroupAndStatus(
       @Param("tenantId") String tenantId,

@@ -15,4 +15,7 @@ public class HttpDispatchChannelProperties {
 
   /** HTTP 写入超时（毫秒），默认 30 秒 */
   private long writeTimeoutMillis = 30_000L;
+
+  /** HTTP 整体调用超时（毫秒，含连接 + 读 + 写 + 重定向），默认 60 秒；防止单次请求总时长不可控 */
+  private long callTimeoutMillis = 60_000L;
 }

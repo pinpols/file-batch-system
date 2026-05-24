@@ -1,6 +1,7 @@
 package com.example.batch.trigger.infrastructure;
 
 import com.example.batch.common.enums.CatchUpPolicyType;
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.IdGenerator;
@@ -95,7 +96,9 @@ public class QuartzLaunchJob implements Job {
               IdGenerator.newBusinessNo("quartz"),
               IdGenerator.newTraceId()));
     } catch (BizException e) {
-      if (e.getMessage() != null && e.getMessage().contains("tenant is suspended")) {
+      // R-arch-audit-2026-05-23 P1: 用 ResultCode 枚举比较替代 e.getMessage().contains(...) 字符串匹配。
+      // i18n 错误信息文本变动不再让此分支静默失效。
+      if (e.getCode() == ResultCode.TENANT_SUSPENDED) {
         log.warn(
             "tenant is suspended, auto-pausing quartz job: tenantId={}, jobCode={}",
             descriptor.getTenantId(),

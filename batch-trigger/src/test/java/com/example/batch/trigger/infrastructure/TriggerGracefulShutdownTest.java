@@ -15,12 +15,14 @@ import org.springframework.context.event.ContextClosedEvent;
 class TriggerGracefulShutdownTest {
 
   private Scheduler scheduler;
+  private TriggerDrainState drainState;
   private TriggerGracefulShutdown shutdown;
 
   @BeforeEach
   void setUp() {
     scheduler = mock(Scheduler.class);
-    shutdown = new TriggerGracefulShutdown(scheduler);
+    drainState = new TriggerDrainState();
+    shutdown = new TriggerGracefulShutdown(scheduler, drainState);
   }
 
   @Test

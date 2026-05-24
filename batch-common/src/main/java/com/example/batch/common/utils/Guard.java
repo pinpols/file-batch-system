@@ -90,6 +90,7 @@ public final class Guard {
       case FORBIDDEN -> "error.common.forbidden_detail";
       case RATE_LIMITED -> "error.common.rate_limited_detail";
       case BUSINESS_ERROR -> "error.common.business_error_detail";
+      case TENANT_SUSPENDED -> "error.common.business_error_detail";
       case NOT_IMPLEMENTED -> "error.common.not_implemented_detail";
       case SERVICE_UNAVAILABLE -> "error.common.service_unavailable_detail";
       case SYSTEM_ERROR -> "error.common.system_error_detail";

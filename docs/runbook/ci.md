@@ -241,6 +241,40 @@ make ops-compensate     # 触发补偿
 
 ---
 
+## flaky 治理
+
+surefire / failsafe 配置 `rerunFailingTestsCount=2`(pom.xml ~224 行):首次 fail 后再跑 2 次,任一过即标 **flaky-but-pass**,不污染主分支绿。问题是:这些飘的用例若没人盯,会在主干上越堆越多,直到某次同时炸 3 次彻底翻红。
+
+### 监控脚本
+
+`scripts/ci/collect-flaky.sh`(底层 `collect-flaky.py`,纯 Python 3 标准库,无外部依赖)。扫所有模块 `target/{surefire,failsafe}-reports/TEST-*.xml`,提 `<flakyFailure>` / `<flakyError>` 节点。
+
+- **接入位置**:`run-full-regression.sh` 末尾,跑完测试后自动调用 —— 因此 `pr-gate` / `full-ci-gate` / `make ci*` 全链路都会跑。脚本恒 `exit 0`,**永不阻断已绿 build**(flaky 本就允许 pass)。
+- **输出**:
+  - stdout:人读 summary(模块 / 类#方法 / 重试次数 / 首条错误摘要)
+  - GH Actions:自动写 `$GITHUB_STEP_SUMMARY` Markdown 表,直接在 run 页面看
+  - 可选 `--json <path>`:机读 JSON,留给后续趋势分析 / 告警
+  - 可选 `--warn-threshold N`(默认 5):超阈值在 stderr 打 WARN(仍不阻断)
+
+```bash
+# 本地手动跑(需先有 target/*-reports/)
+bash scripts/ci/collect-flaky.sh
+bash scripts/ci/collect-flaky.sh -- --json build/flaky.json --warn-threshold 3
+```
+
+### 治理流程(运维定期巡检)
+
+1. **每周一巡**:翻最近一周 `full-ci-gate` 的 step summary(或下载 surefire-reports artifact 跑 `collect-flaky.sh`),记录 flaky 用例 Top N。
+2. **建治理 issue**:同一用例连续 ≥ 2 周出现 → 开 issue 派给原作者 / 模块 owner,标 `flaky-test` label。
+3. **修不动就隔离**:确认无法稳定的,改成 `@Disabled("flaky — see #<issue>")` 暂时下线,避免长期遮蔽真问题。**禁**直接删测试 —— 必须先有 issue 跟踪原因。
+4. **结构性原因**:flaky 集中在某模块(如 testcontainers Kafka / Redis 等待时序),走 `AbstractIntegrationTest` 调容器超时 / Awaitility 等待,而不是每个测试自己拍脑袋 sleep。
+
+### 为什么不阻断 build
+
+CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是噪声,阻断就把噪声升级成主干 red,反而让开发者忽略后续真问题。阻断由人工治理 issue 兜底,脚本只负责**让 flaky 可见**。
+
+---
+
 ## 产物归档
 
 | 产物 | 来源流水线 | 保留天数 |

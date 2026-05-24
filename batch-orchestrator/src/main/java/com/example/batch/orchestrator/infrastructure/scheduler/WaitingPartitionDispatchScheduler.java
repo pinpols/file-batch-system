@@ -96,32 +96,39 @@ public class WaitingPartitionDispatchScheduler {
     // 改 DEBUG 防 3 小时积 1000+ 噪音。真有 partition 被释放时由 line 269 的"released" 日志体现。
     log.debug("waiting dispatch tick: {} WAITING partitions to evaluate", waitingPartitions.size());
     List<WaitingDispatchCandidate> candidates = new ArrayList<>();
-    for (JobPartitionEntity partition : waitingPartitions) {
-      WaitingDispatchCandidate candidate;
-      // R3-P2-3：@Scheduled 后台线程默认 MDC 空，多 tenant 循环里的 log 行不带 tenantId/traceId
-      // 字段，无法按 tenant 过滤。每个 per-tenant 迭代用 BatchMdc.withTenantAndTrace 套一层。
-      // partition 持有 tenantId；jobInstance.traceId 此处暂未取，传 null（BatchMdc 会跳过空值）。
-      String tenantTag = partition == null ? null : partition.getTenantId();
-      BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
-      try {
-        candidate = buildCandidate(partition);
-      } catch (RuntimeException exception) {
-        // 单个候选的资源评估失败（常见于 quota_runtime_state 的 @Version CAS 冲突）不应中断整批 tick，
-        // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 吞掉 → 后面几千条
-        // WAITING 永远轮不到"的级联阻塞。跳过本条，下 tick 重新评估。
-        log.warn(
-            "buildCandidate failed, skipping this tick's partition: tenantId={}, partitionId={},"
-                + " error={}",
-            partition == null ? null : partition.getTenantId(),
-            partition == null ? null : partition.getId(),
-            exception.getMessage());
-        continue;
+    // 开启 DefaultResourceScheduler 的 tick 级活跃计数缓存:同租户/队列的 4 路 COUNT 在本批
+    // 内只查 DB 一次,消除 N x 4 重复 round-trip。
+    DefaultResourceScheduler.openTickCache();
+    try {
+      for (JobPartitionEntity partition : waitingPartitions) {
+        WaitingDispatchCandidate candidate;
+        // R3-P2-3：@Scheduled 后台线程默认 MDC 空，多 tenant 循环里的 log 行不带 tenantId/traceId
+        // 字段，无法按 tenant 过滤。每个 per-tenant 迭代用 BatchMdc.withTenantAndTrace 套一层。
+        // partition 持有 tenantId；jobInstance.traceId 此处暂未取，传 null（BatchMdc 会跳过空值）。
+        String tenantTag = partition == null ? null : partition.getTenantId();
+        BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
+        try {
+          candidate = buildCandidate(partition);
+        } catch (RuntimeException exception) {
+          // 单个候选的资源评估失败（常见于 quota_runtime_state 的 @Version CAS 冲突）不应中断整批 tick，
+          // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 吞掉 → 后面几千条
+          // WAITING 永远轮不到"的级联阻塞。跳过本条，下 tick 重新评估。
+          log.warn(
+              "buildCandidate failed, skipping this tick's partition: tenantId={}, partitionId={},"
+                  + " error={}",
+              partition == null ? null : partition.getTenantId(),
+              partition == null ? null : partition.getId(),
+              exception.getMessage());
+          continue;
+        }
+        if (candidate != null) {
+          candidates.add(candidate);
+        }
+        // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick
+        BatchMdc.remove(StructuredLogField.TENANT_ID);
       }
-      if (candidate != null) {
-        candidates.add(candidate);
-      }
-      // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick
-      BatchMdc.remove(StructuredLogField.TENANT_ID);
+    } finally {
+      DefaultResourceScheduler.closeTickCache();
     }
     Comparator<WaitingDispatchCandidate> comparator =
         Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore)

@@ -19,6 +19,7 @@ import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
+import com.example.batch.orchestrator.integration.support.WorkerRegistryCacheTestSupport;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
@@ -70,7 +71,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
   @BeforeEach
   void refreshWorkersForClaim() {
-    workerRegistryCache.evictTenantWorkerSelectors(TENANT);
+    WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
   }
 
@@ -149,7 +150,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void assertOneClaimWinnerForFreshLaunch() throws Exception {
-    workerRegistryCache.evictTenantWorkerSelectors(TENANT);
+    WorkerRegistryCacheTestSupport.evictTenantWorkerSelectors(workerRegistryCache, TENANT);
     LaunchSeed seed =
         LaunchIntegrationFixture.prepareLaunchWithWorker(
             jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);

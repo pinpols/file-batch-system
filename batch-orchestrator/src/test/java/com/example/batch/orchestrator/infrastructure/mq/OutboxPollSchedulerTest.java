@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxPollSchedulerTest {
@@ -50,6 +51,10 @@ class OutboxPollSchedulerTest {
             })
         .when(lockingTaskExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+    ThreadPoolTaskScheduler executor = new ThreadPoolTaskScheduler();
+    executor.setPoolSize(1);
+    executor.setThreadNamePrefix("outbox-poll-test-");
+    executor.initialize();
     scheduler =
         new OutboxPollScheduler(
             scheduleForwarder,
@@ -59,7 +64,8 @@ class OutboxPollSchedulerTest {
             gracefulShutdown,
             outboxEventMapper,
             new com.example.batch.orchestrator.infrastructure.sharding
-                .StaticShardAssignmentProvider(governance.outbox()));
+                .StaticShardAssignmentProvider(governance.outbox()),
+            executor);
     // 不调用 onApplicationReady()，避免后台线程干扰单元测试
   }
 

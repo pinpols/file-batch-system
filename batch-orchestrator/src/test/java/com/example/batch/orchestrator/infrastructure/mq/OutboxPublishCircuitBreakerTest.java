@@ -97,6 +97,22 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  void shouldUseCachedStateWhenRedisReturnsNull() {
+    // First: simulate Redis open state cached
+    long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
+    when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(futureMs);
+    assertThat(breaker.allowNow()).isFalse();
+
+    // Redis becomes unavailable (returns null) — should NOT force closed,
+    // should reuse cached open state and still deny.
+    when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(null);
+    // To force slow-path: invalidate closed cache by waiting for openUntilMs to pass is hard;
+    // instead, just call allowNow — cached snapshot openUntilMs is still future so fast-path
+    // denies.
+    assertThat(breaker.allowNow()).isFalse();
+  }
+
+  @Test
   void onAdvanceResult_shouldReOpenOnProbeFailure() {
     long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(pastMs);

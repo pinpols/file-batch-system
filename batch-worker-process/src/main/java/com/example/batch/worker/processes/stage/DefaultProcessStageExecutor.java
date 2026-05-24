@@ -9,6 +9,7 @@ import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractStageExecutor;
+import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
@@ -26,7 +27,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class DefaultProcessStageExecutor
     extends AbstractStageExecutor<ProcessJobContext, ProcessStageResult>
-    implements ProcessStageExecutor {
+    implements ProcessStageExecutor, PipelineStepTemplateProvider {
 
   private final Map<String, ProcessComputePlugin> pluginsByImplCode;
   private final Map<ProcessStage, ProcessStageStep> stepsByStage;

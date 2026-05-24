@@ -6,6 +6,12 @@
 
 - `start-all.sh`：一键启动本地联调环境（基础依赖 + 6 个 Java 模块）
 - `stop-all.sh`：分阶段停止本地 Java 进程
+- `health-check-infra.sh`：基建健康检查(PG primary/replica / Kafka / Redis / MinIO)。
+  协议层探测 + env-var 驱动,**任何环境可用**(本机走 `.env` 默认,staging/CI 覆盖
+  `PG_PRIMARY_HOST` / `KAFKA_BOOTSTRAP` / `MINIO_URL` 等)。
+  - `--quiet`:只 exit code(供 start-all.sh fail-fast 调用)
+  - `--no-replica` / `--no-kafka` / `--no-minio`:跳过某项(staging 无 replica 时)
+  - `make dev-health` 是它的别名
 - `watchdog.sh`：长时间联调时挂在另一 tab 自动拉起被系统回收的 worker 进程
 （macOS 闲置数小时会回收 JVM；docker-compose 模式不需要本脚本，靠 docker
 自带 `restart: unless-stopped` 兜底）
@@ -31,9 +37,10 @@
 1. `build-apps.sh`（首次或代码变更时）
 2. `start-all.sh`
 3. `scripts/data/init-kafka-topics.sh`、`scripts/data/init-minio.sh`（通常 Docker Compose 自动完成）
-4. `run-tests.sh`（日常开发）
-5. `run-tests.sh --all`（提交前）
-6. `scripts/ops/inspect-all.sh`（巡检）
+4. `health-check-infra.sh`(或 `make dev-health`)— 起 BE 前 / 联调遇怪问题先看基建
+5. `run-tests.sh`（日常开发）
+6. `run-tests.sh --all`（提交前）
+7. `scripts/ops/inspect-all.sh`（巡检）
 
 ## 相关目录
 

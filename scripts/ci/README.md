@@ -18,6 +18,15 @@ staging live rollout / rollback smoke 的薄封装：默认开启 live deploy sm
 bash scripts/ci/run-staging-live-smoke.sh
 ```
 
+## `collect-flaky.sh` / `collect-flaky.py`
+
+汇总 surefire / failsafe 报告里 `<flakyFailure>` / `<flakyError>`(`rerunFailingTestsCount=2` 自动重跑产生的 flaky-but-pass 用例),输出人读 summary 和(GH Actions 下)`$GITHUB_STEP_SUMMARY` Markdown 表。已在 `run-full-regression.sh` 末尾自动调用,**恒以 0 退出**,不阻断 CI。治理流程见 [`docs/runbook/ci.md`](../../docs/runbook/ci.md#flaky-治理)。
+
+```bash
+bash scripts/ci/collect-flaky.sh
+bash scripts/ci/collect-flaky.sh -- --json build/flaky.json --warn-threshold 3
+```
+
 ## `security-scan.sh`
 
 本地 / CI 安全扫描一键入口：先打包 `security-scan` 独立 Java 模块，再按参数执行 secret、依赖、SAST、文件系统、镜像和 ZAP 扫描。默认执行全量扫描，可通过 `--mode` 收窄范围。

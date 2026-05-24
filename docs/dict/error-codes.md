@@ -2,7 +2,7 @@
 
 > **自动生成** — 由 `scripts/codegen/gen-error-codes-dict.py` 从 `batch-common/.../enums/ResultCode.java` 解析。**不要手动编辑此文件**；改错误码请改枚举源文件，重跑脚本。
 
-共 14 条。HTTP 状态码遵循 RFC 7231。
+共 15 条。HTTP 状态码遵循 RFC 7231。
 
 | code | HTTP | 中文 label | 默认 message | 触发说明 |
 |---|---|---|---|---|
@@ -17,6 +17,7 @@
 | `FORBIDDEN` | 403 | 禁止访问 | forbidden | — |
 | `RATE_LIMITED` | 429 | 请求过于频繁 | too many requests | — |
 | `BUSINESS_ERROR` | 422 | 业务错误 | business error | — |
+| `TENANT_SUSPENDED` | 422 | 租户已暂停 | tenant is suspended | 字符串匹配。租户被运维 / 计费侧暂停后，调度路径需识别该语义并暂停对应 Quartz job 防止日志风暴。 |
 | `NOT_IMPLEMENTED` | 501 | 未实现 | not implemented | — |
 | `SERVICE_UNAVAILABLE` | 503 | 依赖组件暂不可用 | dependency temporarily unavailable | R-4.1 · 依赖组件短暂不可用（如 Redis 抖动）；表达"稍后重试安全"语义 |
 | `SYSTEM_ERROR` | 500 | 系统错误 | system error | — |

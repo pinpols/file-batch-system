@@ -8,6 +8,7 @@ import com.example.batch.worker.core.domain.PipelineStepTemplateParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractStageExecutor;
+import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
@@ -39,7 +40,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class DefaultDispatchStageExecutor
     extends AbstractStageExecutor<DispatchJobContext, DispatchStageResult>
-    implements DispatchStageExecutor {
+    implements DispatchStageExecutor, PipelineStepTemplateProvider {
 
   private final Map<String, DispatchStageStep> stepsByImplCode;
   private final Map<DispatchStage, DispatchStageStep> stepsByStage;

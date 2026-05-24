@@ -62,7 +62,7 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
   @SuppressWarnings("resource")
   private static final PostgreSQLContainer<?> REPLICA_PG =
-      new PostgreSQLContainer<>(DockerImageName.parse("postgres:16"))
+      new PostgreSQLContainer<>(DockerImageName.parse("postgres:17"))
           .withDatabaseName(REPLICA_DB_NAME)
           .withUsername("batch_user")
           .withPassword("batch_pass_123")

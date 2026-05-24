@@ -75,7 +75,7 @@ class AbstractTaskConsumerBackpressureTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     AbstractTaskConsumer consumer =
-        new AbstractTaskConsumer(registry, meterRegistryProvider) {
+        new AbstractTaskConsumer(registry, meterRegistryProvider, 1) {
           @Override
           protected AbstractWorkerLoop workerLoop() {
             return new AbstractWorkerLoop(runtimeFacade, dateTimeSupport) {
@@ -117,8 +117,8 @@ class AbstractTaskConsumerBackpressureTest {
           }
         };
 
-    // 强制 permits = 1
-    ReflectionTestUtils.setField(consumer, "maxConcurrentTasks", 1);
+    // 强制 permits = 1(通过构造器注入)
+    consumer.initSemaphore();
 
     String msg =
         JsonUtils.toJson(

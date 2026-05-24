@@ -3,16 +3,11 @@ package com.example.batch.console.support.cache;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.Cursor;
-import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 控制台高频查询的 Redis 缓存层。
@@ -43,7 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class ConsoleQueryCacheService {
 
   private static final String PREFIX = "console:cache:";
@@ -104,26 +98,7 @@ public class ConsoleQueryCacheService {
       return;
     }
     String pattern = PREFIX + keyPrefix + "*";
-    long deleted = 0L;
-    ScanOptions options = ScanOptions.scanOptions().match(pattern).count(SCAN_BATCH_SIZE).build();
-    try (Cursor<String> cursor = redisTemplate.scan(options)) {
-      List<String> batch = new ArrayList<>(SCAN_BATCH_SIZE);
-      while (cursor.hasNext()) {
-        batch.add(cursor.next());
-        if (batch.size() >= SCAN_BATCH_SIZE) {
-          Long n = redisTemplate.delete(batch);
-          deleted += n == null ? 0L : n;
-          batch.clear();
-        }
-      }
-      if (!batch.isEmpty()) {
-        Long n = redisTemplate.delete(batch);
-        deleted += n == null ? 0L : n;
-      }
-    } catch (Exception e) {
-      log.debug("cache evict failed: prefix={}", keyPrefix, e);
-      return;
-    }
+    long deleted = RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE);
     if (deleted > 0) {
       log.debug("evicted {} cache keys with prefix: {}", deleted, keyPrefix);
     }

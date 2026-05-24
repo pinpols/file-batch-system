@@ -5,23 +5,24 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.console.config.ConsoleAsyncConfiguration;
 import com.example.batch.console.config.ConsoleRealtimeProperties;
 import com.example.batch.console.web.response.ops.ConsoleSseEventResponse;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -58,16 +59,17 @@ public class ConsoleRealtimeEventHub {
   private final ConsoleRealtimeMetrics realtimeMetrics;
   private final ConsoleRealtimeProperties realtimeProperties;
   private final List<Subscription> subscriptions = new CopyOnWriteArrayList<>();
-  private final ScheduledExecutorService scheduler =
-      Executors.newScheduledThreadPool(1, new RealtimeThreadFactory());
+  private final TaskScheduler scheduler;
 
   public ConsoleRealtimeEventHub(
       ConsoleRealtimeReplayStore replayStore,
       ConsoleRealtimeMetrics realtimeMetrics,
-      ConsoleRealtimeProperties realtimeProperties) {
+      ConsoleRealtimeProperties realtimeProperties,
+      @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
     this.replayStore = replayStore;
     this.realtimeMetrics = realtimeMetrics;
     this.realtimeProperties = realtimeProperties;
+    this.scheduler = scheduler;
   }
 
   public SseEmitter subscribe(
@@ -95,7 +97,9 @@ public class ConsoleRealtimeEventHub {
     long interval = resolveHeartbeatInterval(heartbeatMillis);
     subscription.heartbeatFuture =
         scheduler.scheduleAtFixedRate(
-            () -> sendHeartbeat(subscription), interval, interval, TimeUnit.MILLISECONDS);
+            () -> sendHeartbeat(subscription),
+            Instant.now().plusMillis(interval),
+            Duration.ofMillis(interval));
 
     // 订阅建立后立即回一个 ready 事件，前端可据此确认流已连通并拿到当前 cursor/stream。
     sendLifecycleEvent(
@@ -148,10 +152,10 @@ public class ConsoleRealtimeEventHub {
 
   @PreDestroy
   void shutdown() {
+    // scheduler 由 Spring 容器管理生命周期 (consoleRealtimeScheduler bean), 这里只清理订阅状态。
     for (Subscription subscription : new ArrayList<>(subscriptions)) {
       close(subscription);
     }
-    scheduler.shutdownNow();
   }
 
   private boolean matches(Subscription subscription, ConsoleSseEvent event) {
@@ -339,17 +343,6 @@ public class ConsoleRealtimeEventHub {
       this.eventType = eventType;
       this.cursor = cursor;
       this.emitter = emitter;
-    }
-  }
-
-  private static final class RealtimeThreadFactory implements ThreadFactory {
-    private int index = 1;
-
-    @Override
-    public synchronized Thread newThread(Runnable runnable) {
-      Thread thread = new Thread(runnable, "console-realtime-" + index++);
-      thread.setDaemon(true);
-      return thread;
     }
   }
 }

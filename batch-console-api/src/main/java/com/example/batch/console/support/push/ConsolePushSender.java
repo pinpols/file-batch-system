@@ -17,8 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
-// web-push 5.1.1 内部用 Apache HttpClient 4(传递依赖 httpclient 4.5 + httpcore 4.4),
-// 因此返回的 Future 元素类型是 HttpClient 4 的 HttpResponse,不是 HttpClient 5 的。
+// web-push 5.1.1 内部用 Apache HttpClient 4 异步客户端;同步 send() 阻塞等待返回 HttpResponse。
 import org.apache.http.HttpResponse;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.scheduling.annotation.Async;
@@ -46,6 +45,13 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class ConsolePushSender {
+
+  /**
+   * P1(2026-05-23 audit):单次 push 投递的最大等待秒数。web-push 5.1.x 同步 send() 阻塞由底层 Apache HttpClient 4
+   * 决定,默认无显式上限,慢 endpoint 可占住整个 {@code pushTaskExecutor} 工作线程。 这里用 {@code sendAsync().get(3s)}
+   * 显式封顶;超时只 warn + 跳过本次,不立即清理 sub。 升级 web-push 6.x 后切换到 reactive 流式 API。
+   */
+  private static final long SEND_TIMEOUT_SECONDS = 3L;
 
   private final ConsolePushProperties properties;
   private final ConsolePushSubscriptionMapper repository;
@@ -114,11 +120,6 @@ public class ConsolePushSender {
     }
   }
 
-  // TODO: web-push 5.1.1 的 PushService.sendAsync(Notification) 被标 deprecated,
-  // 但替换路径(send / 新签名)在该库内部仍依赖 Apache HttpClient 4 的 HttpResponse,
-  // 且未提供非阻塞等价物;贸然迁移会改变线程模型与超时语义。
-  // 等升级 web-push >= 6.x(切换到 HttpClient 5 / CompletableFuture)再统一迁移。
-  @SuppressWarnings("deprecation")
   private void sendOne(ConsolePushSubscriptionEntity sub, byte[] body) {
     try {
       // web-push 5.1.1 没有 .subscription(Subscription) builder 方法;直接用
@@ -132,10 +133,10 @@ public class ConsolePushSender {
               body,
               properties.getTtlSeconds());
 
-      // web-push 5.1.1 用 HttpClient 4.x,sendAsync 返回 Future(非 CompletableFuture);
-      // HttpResponse 取状态码走 getStatusLine().getStatusCode()。
-      Future<HttpResponse> fut = pushService.sendAsync(notification);
-      HttpResponse resp = fut.get(8, TimeUnit.SECONDS); // 8s 上限,避免单条阻塞整批
+      // sendOne 已在 pushTaskExecutor,但 web-push 5.1.x 同步 send() 没有显式超时,
+      // 极端慢 endpoint 会占住整个 @Async 线程。改 sendAsync().get(3s) 封顶等待。
+      Future<HttpResponse> future = pushService.sendAsync(notification);
+      HttpResponse resp = future.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       int code = resp.getStatusLine().getStatusCode();
       if (code >= 200 && code < 300) {
         repository.touchLastPushedAt(sub.getId(), Instant.now());
@@ -158,11 +159,17 @@ public class ConsolePushSender {
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
     } catch (TimeoutException te) {
-      log.warn("[push] send timeout sub_id={} endpoint={}", sub.getId(), sub.getEndpoint());
+      // 慢 endpoint:本次跳过、不重试、不立刻清理 sub(避免短瞬抖动误删),只 warn 留痕。
+      // web-push 6.x 升级后可引入「连续 N 次超时 → 暂时禁用 endpoint」更精细策略。
+      log.warn(
+          "[push] send timeout after {}s, sub_id={} endpoint={}",
+          SEND_TIMEOUT_SECONDS,
+          sub.getId(),
+          sub.getEndpoint());
     } catch (ExecutionException | RuntimeException e) {
       log.error("[push] send failed sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
     } catch (Exception e) {
-      // web-push 抛 JoseException / GeneralSecurityException 等 checked exception 兜底
+      // web-push 抛 JoseException / GeneralSecurityException / IOException 等 checked exception 兜底
       log.error("[push] send unexpected sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
     }
   }

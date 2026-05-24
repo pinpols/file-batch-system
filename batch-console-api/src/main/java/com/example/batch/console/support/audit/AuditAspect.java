@@ -1,11 +1,12 @@
 package com.example.batch.console.support.audit;
 
+import com.example.batch.common.utils.Hashes;
 import com.example.batch.console.mapper.OperationAuditMapper;
 import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -67,6 +68,19 @@ public class AuditAspect {
   private final ExpressionParser spel = new SpelExpressionParser();
   private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
 
+  /**
+   * P1(2026-05-23 audit):REQUIRES_NEW 模板 @PostConstruct 一次性构建复用, 避免每次失败路径在 {@link
+   * #recordInNewTransaction} 内反复 {@code new TransactionTemplate}(切面单例)。
+   */
+  private TransactionTemplate requiresNewTemplate;
+
+  @PostConstruct
+  void initTransactionTemplate() {
+    TransactionTemplate tmpl = new TransactionTemplate(transactionManager);
+    tmpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    this.requiresNewTemplate = tmpl;
+  }
+
   @Around("@annotation(com.example.batch.console.support.audit.AuditAction)")
   public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
     MethodSignature sig = (MethodSignature) pjp.getSignature();
@@ -100,9 +114,7 @@ public class AuditAspect {
   private void recordInNewTransaction(
       AuditAction ann, String aggregateId, String paramsJson, String errorCode, String errorMsg) {
     try {
-      TransactionTemplate tmpl = new TransactionTemplate(transactionManager);
-      tmpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-      tmpl.executeWithoutResult(
+      requiresNewTemplate.executeWithoutResult(
           status -> record(ann, aggregateId, paramsJson, errorCode, errorMsg));
     } catch (Exception writeFail) {
       log.warn(
@@ -260,26 +272,13 @@ public class AuditAspect {
           (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
       if (attrs != null) {
         HttpServletRequest req = attrs.getRequest();
-        ipHash = sha256short(req.getRemoteAddr());
-        uaHash = sha256short(req.getHeader("User-Agent"));
+        ipHash = Hashes.sha256Short(req.getRemoteAddr());
+        uaHash = Hashes.sha256Short(req.getHeader("User-Agent"));
       }
     } catch (Exception ignored) {
       // request context 取不到不影响审计写入
     }
     return new RequestInfo(traceId, requestId, ipHash, uaHash);
-  }
-
-  private static String sha256short(String s) {
-    if (s == null || s.isEmpty()) return null;
-    try {
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
-      byte[] h = md.digest(s.getBytes());
-      StringBuilder sb = new StringBuilder(16);
-      for (int i = 0; i < 8; i++) sb.append(String.format("%02x", h[i]));
-      return sb.toString();
-    } catch (Exception e) {
-      return null;
-    }
   }
 
   private record OperatorInfo(String operatorId, String operatorRole, String tenantId) {}

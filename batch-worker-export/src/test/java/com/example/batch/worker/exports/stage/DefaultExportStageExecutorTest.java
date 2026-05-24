@@ -28,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * Unit tests for DefaultExportStageExecutor — verifies three stage exit paths: - success: step
@@ -69,7 +70,10 @@ class DefaultExportStageExecutorTest {
         allSteps.add(stubStep(stage));
       }
     }
-    executor = new DefaultExportStageExecutor(allSteps, runtimeRepository, meterRegistry);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
+    executor = new DefaultExportStageExecutor(allSteps, runtimeRepository, meterRegistryProvider);
   }
 
   @Test

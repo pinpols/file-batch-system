@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -65,10 +66,9 @@ class ConsoleResultVersionControllerTest {
     responseSpec = mock(RestClient.ResponseSpec.class);
 
     when(orchestratorInternalRestClient.build()).thenReturn(restClient);
-    when(restClient.get()).thenReturn((RestClient.RequestHeadersUriSpec) getUriSpec);
+    doReturn(getUriSpec).when(restClient).get();
     when(restClient.post()).thenReturn(postUriSpec);
-    when(getUriSpec.uri(anyString(), any(Object[].class)))
-        .thenReturn((RestClient.RequestHeadersSpec) getSpec);
+    doReturn(getSpec).when(getUriSpec).uri(anyString(), any(Object[].class));
     when(postUriSpec.uri(anyString(), any(Object[].class))).thenReturn(postSpec);
     when(getSpec.retrieve()).thenReturn(responseSpec);
     when(postSpec.retrieve()).thenReturn(responseSpec);

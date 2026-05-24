@@ -52,6 +52,7 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
 
     redis.delete(key);
 
+    @SuppressWarnings("unchecked")
     Map<String, Object> result = redis.getJson(key, Map.class);
     assertThat(result).isNull();
   }

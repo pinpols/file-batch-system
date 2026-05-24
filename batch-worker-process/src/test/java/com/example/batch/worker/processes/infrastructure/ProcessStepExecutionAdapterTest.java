@@ -14,6 +14,7 @@ import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
 import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
@@ -33,6 +34,7 @@ import org.springframework.beans.factory.ObjectProvider;
 class ProcessStepExecutionAdapterTest {
 
   @Mock private ProcessStageExecutor processStageExecutor;
+  @Mock private PipelineStepTemplateProvider stepTemplateProvider;
   @Mock private PlatformFileRuntimeRepository runtimeRepository;
 
   @Test
@@ -41,6 +43,7 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter =
         new ProcessStepExecutionAdapter(
             processStageExecutor,
+            stepTemplateProvider,
             new ObjectMapper(),
             runtimeRepository,
             (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class));
@@ -83,6 +86,7 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter =
         new ProcessStepExecutionAdapter(
             processStageExecutor,
+            stepTemplateProvider,
             objectMapper,
             runtimeRepository,
             (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class));

@@ -15,6 +15,7 @@ import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.plugin.ImportLoadPluginRegistry;
+import com.example.batch.worker.imports.stage.support.ImportStageSupport;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -121,28 +122,7 @@ public class LoadStep implements ImportStageStep {
           loadedCount += flushChunk(plugin, loadCtx, chunk);
         }
       }
-      context.getAttributes().put(KEY_LOADED_COUNT, loadedCount);
-      context
-          .getAttributes()
-          .put(
-              KEY_SUCCESS_COUNT,
-              numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)) + loadedCount);
-      runtimeRepository.updateFileStatus(
-          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-          "LOADED",
-          Map.of(
-              KEY_LOADED_COUNT,
-              loadedCount,
-              KEY_SUCCESS_COUNT,
-              numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)),
-              KEY_SKIPPED_COUNT,
-              numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)),
-              "badRecordCount",
-              badRecordCount(context),
-              KEY_MANUAL_REVIEW_REQUIRED,
-              Boolean.TRUE.equals(context.getAttributes().get(KEY_MANUAL_REVIEW_REQUIRED)),
-              "loadTargetRef",
-              resolveLoadTargetRef(context, importPayload)));
+      commit(context, importPayload, loadedCount);
       deleteQuietly(validatedRecordsPath);
       deleteQuietly(
           resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
@@ -174,6 +154,11 @@ public class LoadStep implements ImportStageStep {
     return chunk.size();
   }
 
+  /**
+   * Legacy 路径:从 context 的 customerPayloads 列表加载,无暂存文件。新写入方一律走 streaming 路径
+   * (VALIDATED_RECORDS_PATH);此方法仅作旧调用方兼容,将在下一版本下线,不再加新特性。
+   */
+  @Deprecated
   private ImportStageResult executeLegacy(ImportJobContext context) {
     Object payload = context == null ? null : context.getAttributes().get("customerPayloads");
     if (!(payload instanceof List<?> payloads) || payloads.isEmpty()) {
@@ -214,26 +199,7 @@ public class LoadStep implements ImportStageStep {
       if (!chunk.isEmpty()) {
         n += flushChunk(plugin, loadCtx, chunk);
       }
-      context.getAttributes().put(KEY_LOADED_COUNT, n);
-      context
-          .getAttributes()
-          .put(KEY_SUCCESS_COUNT, numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)) + n);
-      runtimeRepository.updateFileStatus(
-          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-          "LOADED",
-          Map.of(
-              KEY_LOADED_COUNT,
-              n,
-              KEY_SUCCESS_COUNT,
-              numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)),
-              KEY_SKIPPED_COUNT,
-              numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)),
-              "badRecordCount",
-              badRecordCount(context),
-              KEY_MANUAL_REVIEW_REQUIRED,
-              Boolean.TRUE.equals(context.getAttributes().get(KEY_MANUAL_REVIEW_REQUIRED)),
-              "loadTargetRef",
-              resolveLoadTargetRef(context, importPayload)));
+      commit(context, importPayload, n);
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
       log.error(
@@ -251,6 +217,32 @@ public class LoadStep implements ImportStageStep {
           ex.getMessage(),
           objectMapper);
     }
+  }
+
+  /**
+   * P1: 提取 streaming / legacy 共用的 attribute 写入 + file_status 更新(原约 22 行,两侧逐字段对称)。 loadedCount
+   * 由调用方传入即可,其他统计仍从 attributes 读最新值。
+   */
+  private void commit(ImportJobContext context, ImportPayload importPayload, long loadedCount) {
+    Map<String, Object> attrs = context.getAttributes();
+    attrs.put(KEY_LOADED_COUNT, loadedCount);
+    attrs.put(KEY_SUCCESS_COUNT, numberValue(attrs.get(KEY_SUCCESS_COUNT)) + loadedCount);
+    runtimeRepository.updateFileStatus(
+        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID)),
+        "LOADED",
+        Map.of(
+            KEY_LOADED_COUNT,
+            loadedCount,
+            KEY_SUCCESS_COUNT,
+            numberValue(attrs.get(KEY_SUCCESS_COUNT)),
+            KEY_SKIPPED_COUNT,
+            numberValue(attrs.get(KEY_SKIPPED_COUNT)),
+            "badRecordCount",
+            badRecordCount(context),
+            KEY_MANUAL_REVIEW_REQUIRED,
+            Boolean.TRUE.equals(attrs.get(KEY_MANUAL_REVIEW_REQUIRED)),
+            "loadTargetRef",
+            resolveLoadTargetRef(context, importPayload)));
   }
 
   private ImportLoadContext buildLoadContext(
@@ -327,52 +319,19 @@ public class LoadStep implements ImportStageStep {
   }
 
   private long numberValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (value == null) {
-      return 0L;
-    }
-    String text = String.valueOf(value);
-    if (text.isBlank()) {
-      return 0L;
-    }
-    return Long.parseLong(text);
+    return ImportStageSupport.numberValue(value);
   }
 
   private int resolveChunkSize(ImportJobContext context) {
-    int fallback = workerConfiguration == null ? 500 : workerConfiguration.chunkSize();
-    Object templateConfigObject =
-        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object value = templateConfig.get("chunk_size");
-      if (value instanceof Number number) {
-        return Math.max(1, number.intValue());
-      }
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return Math.max(1, Integer.parseInt(String.valueOf(value)));
-      }
-    }
-    return Math.max(1, fallback);
+    return ImportStageSupport.resolveChunkSize(context, workerConfiguration);
   }
 
   private String stringValue(Object value) {
-    if (value == null) {
-      return null;
-    }
-    String text = String.valueOf(value);
-    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    return ImportStageSupport.stringValue(value);
   }
 
   private void deleteQuietly(Path path) {
-    if (path == null) {
-      return;
-    }
-    try {
-      Files.deleteIfExists(path);
-    } catch (Exception ex) {
-      log.warn("Failed to delete temp file: {}", path, ex);
-    }
+    ImportStageSupport.deleteQuietly(path);
   }
 
   private Path resolvePath(Object value) {

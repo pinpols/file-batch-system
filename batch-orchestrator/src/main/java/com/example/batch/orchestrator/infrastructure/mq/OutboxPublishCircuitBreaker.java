@@ -109,7 +109,12 @@ public class OutboxPublishCircuitBreaker {
     // 慢速路径：查询 Redis，原子发布新快照
     Long openUntilMs =
         redis.evalLong(ALLOW_SCRIPT, BatchRedisKeys.outboxCircuit(), FIELD_OPEN_UNTIL_MS);
-    long resolvedOpen = openUntilMs != null ? openUntilMs : 0L;
+    // 区分 Redis 返回 0(正常关闭) 与 null(Redis 不可达):
+    // null 时使用上次缓存的 state，避免 Redis 故障期间强制关闭熔断从而失去保护
+    if (openUntilMs == null) {
+      return snapshot.openUntilMs() <= now;
+    }
+    long resolvedOpen = openUntilMs;
     state = new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis());
     return resolvedOpen <= now;
   }

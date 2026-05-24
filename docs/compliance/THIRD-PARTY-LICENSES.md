@@ -87,7 +87,7 @@ These packages are used in test or build tooling and are not shipped as producti
 | WireMock | 3.9.1 | Apache-2.0 | test | e2e-tests |
 | MockWebServer | 4.12.0 | Apache-2.0 | test | worker-core, trigger |
 | GreenMail | 2.1.8 | Apache-2.0 | test | dispatch（SMTP 测试） |
-| Okio / Okio JVM | 3.16.1 | Apache-2.0 | test/runtime helper | transitive via OkHttp |
+| Okio / Okio JVM | 3.17.0 | Apache-2.0 | test/runtime helper | transitive via OkHttp |
 | AssertJ | managed by Spring Boot 4.0.3 | Apache-2.0 | test | all |
 | Mockito | managed by Spring Boot 4.0.3 | MIT | test | all |
 | Kotlin Standard Library | transitive via OkHttp 4.x | Apache-2.0 | transitive | — |

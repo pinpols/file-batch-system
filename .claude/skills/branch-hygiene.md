@@ -6,6 +6,18 @@
 
 每次涉及 git 分支 / PR 操作时；session 结束前最后扫一遍。
 
+## 黄金原则(优先于所有规则)
+
+**所有开发动作只在 `feature/<repo>-bugfixed` 或从它派生的 `worktree` 里发生**。:
+
+- ❌ 不在 `main` 直接 commit / push(只读基线)
+- ❌ 不在 `chore/*` / `ci/*` / `docs/*` 等临时分支累积长期工作(那些是一次性短命分支)
+- ✅ 短命分支(chore / ci / docs / renovate / release-please)合 PR 后立即 `--delete-branch` + 本地 `git branch -D`
+- ✅ worktree 里开发完先合回 `feature/<repo>-bugfixed`(`git merge` 或 cherry-pick),再决定开 PR
+- ✅ PR 的 base 仍是 `main`,但**源分支只能是 `feature/<repo>-bugfixed` 或专门为这次 PR 切的短命分支**(短命分支立刻清)
+
+判定:如果当前 `git branch --show-current` 不是 `feature/<repo>-bugfixed` / 不是 worktree / 不是为本 PR 新切的短命分支,**立刻停手**,先 `git checkout feature/<repo>-bugfixed`(带改动跟随)再继续。
+
 ## 5 条规则
 
 ### 0. 开工前 — 同步 main + 切到特性分支

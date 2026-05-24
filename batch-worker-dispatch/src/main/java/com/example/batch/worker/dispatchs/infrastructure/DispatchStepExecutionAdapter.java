@@ -6,6 +6,7 @@ import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
+import com.example.batch.worker.core.support.PipelineStepTemplateProvider;
 import com.example.batch.worker.core.support.PipelineVerifierHook;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchPayload;
@@ -28,15 +29,18 @@ public class DispatchStepExecutionAdapter
     extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
 
   private final DispatchStageExecutor dispatchStageExecutor;
+  private final PipelineStepTemplateProvider stepTemplateProvider;
   private final ObjectMapper objectMapper;
 
   public DispatchStepExecutionAdapter(
       DispatchStageExecutor dispatchStageExecutor,
+      PipelineStepTemplateProvider stepTemplateProvider,
       ObjectMapper objectMapper,
       PlatformFileRuntimeRepository runtimeRepository,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider) {
     super(runtimeRepository, verifierHookProvider);
     this.dispatchStageExecutor = dispatchStageExecutor;
+    this.stepTemplateProvider = stepTemplateProvider;
     this.objectMapper = objectMapper;
   }
 
@@ -52,7 +56,7 @@ public class DispatchStepExecutionAdapter
 
   @Override
   protected List<PipelineStepTemplate> defaultPipelineSteps() {
-    return dispatchStageExecutor.defaultStepDefinitions();
+    return stepTemplateProvider.defaultStepDefinitions();
   }
 
   @Override

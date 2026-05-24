@@ -4,9 +4,10 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
 
 /**
  * 时间轮 trigger scheduler 的 micrometer 指标(详见 quartz-replacement-design.md §13)。
@@ -27,11 +28,12 @@ import lombok.RequiredArgsConstructor;
  *   <li>{@code batch.trigger.wheel.runtime_state.stale_marker.released} — Counter,接管的 stale marker
  *       数
  * </ul>
+ *
+ * <p><b>性能</b>:fire 热路径 Timer/Counter 在构造时一次性 register 为 field,避免每次调用 {@code
+ * Timer.builder(...).register(registry)} 重复 map lookup + Builder 对象分配。 带 tag 的
+ * Counter(group/reason/policy/jobCode)按 tag key 缓存到 ConcurrentMap。
  */
-@RequiredArgsConstructor
 public class WheelMetrics {
-
-  private final MeterRegistry registry;
 
   public static final String TASKS_SCHEDULED = "batch.trigger.wheel.tasks.scheduled";
   public static final String FIRE_LAG = "batch.trigger.wheel.fire.lag";
@@ -46,6 +48,46 @@ public class WheelMetrics {
       "batch.trigger.wheel.leader.acquire.duration";
   public static final String STALE_MARKER_RELEASED =
       "batch.trigger.wheel.runtime_state.stale_marker.released";
+  public static final String ADVANCE_FAILED = "batch.trigger.wheel.advance.failed.total";
+
+  private final MeterRegistry registry;
+
+  // ── 热路径预注册的无 tag meter ─────────────────────────────────
+  private final Timer fireLagTimer;
+  private final Timer scanDurationTimer;
+  private final Counter scanTaskCounter;
+  private final Counter leaderAcquireCounter;
+  private final Timer leaderAcquireDurationTimer;
+  private final Counter staleMarkerReleasedCounter;
+
+  // ── 带 tag 的 meter,按 tag key 缓存 ─────────────────────────────
+  private final ConcurrentMap<String, Counter> fireSuccessByGroup = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Counter> fireFailedByGroupReason = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Counter> fireDuplicateSkippedByGroup =
+      new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Counter> misfireHandledByPolicy = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Counter> advanceFailedByJob = new ConcurrentHashMap<>();
+
+  public WheelMetrics(MeterRegistry registry) {
+    this.registry = registry;
+    this.fireLagTimer =
+        Timer.builder(FIRE_LAG)
+            .description("actual fire time - scheduled fire time")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .register(registry);
+    this.scanDurationTimer =
+        Timer.builder(SCAN_DURATION)
+            .description("slidingWindow scan duration including DB query + claim")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .register(registry);
+    this.scanTaskCounter =
+        Counter.builder(SCAN_TASK_COUNT)
+            .description("cumulative tasks pushed into wheel by sliding window scan")
+            .register(registry);
+    this.leaderAcquireCounter = Counter.builder(LEADER_ACQUIRE).register(registry);
+    this.leaderAcquireDurationTimer = Timer.builder(LEADER_ACQUIRE_DURATION).register(registry);
+    this.staleMarkerReleasedCounter = Counter.builder(STALE_MARKER_RELEASED).register(registry);
+  }
 
   /** Gauge:当前 wheel 内 task 数;由 scheduler 提供 supplier。 */
   public void registerTasksScheduledGauge(Supplier<Number> supplier) {
@@ -55,60 +97,67 @@ public class WheelMetrics {
   }
 
   public void recordFireLag(long lagMillis) {
-    Timer.builder(FIRE_LAG)
-        .description("actual fire time - scheduled fire time")
-        .publishPercentiles(0.5, 0.95, 0.99)
-        .register(registry)
-        .record(lagMillis, TimeUnit.MILLISECONDS);
+    fireLagTimer.record(lagMillis, TimeUnit.MILLISECONDS);
   }
 
   public Timer scanDuration() {
-    return Timer.builder(SCAN_DURATION)
-        .description("slidingWindow scan duration including DB query + claim")
-        .publishPercentiles(0.5, 0.95, 0.99)
-        .register(registry);
+    return scanDurationTimer;
   }
 
   public void incrementScanTaskCount(long delta) {
-    Counter.builder(SCAN_TASK_COUNT)
-        .description("cumulative tasks pushed into wheel by sliding window scan")
-        .register(registry)
-        .increment(delta);
+    scanTaskCounter.increment(delta);
   }
 
   public void incrementFireSuccess(String jobGroup) {
-    Counter.builder(FIRE_SUCCESS).tags(Tags.of("group", jobGroup)).register(registry).increment();
+    fireSuccessByGroup
+        .computeIfAbsent(
+            jobGroup,
+            g -> Counter.builder(FIRE_SUCCESS).tags(Tags.of("group", g)).register(registry))
+        .increment();
   }
 
   public void incrementFireFailed(String jobGroup, String reason) {
-    Counter.builder(FIRE_FAILED)
-        .tags(Tags.of("group", jobGroup, "reason", reason))
-        .register(registry)
+    String key = jobGroup + "" + reason;
+    fireFailedByGroupReason
+        .computeIfAbsent(
+            key,
+            _ ->
+                Counter.builder(FIRE_FAILED)
+                    .tags(Tags.of("group", jobGroup, "reason", reason))
+                    .register(registry))
         .increment();
   }
 
   public void incrementFireDuplicateSkipped(String jobGroup) {
-    Counter.builder(FIRE_DUPLICATE_SKIPPED)
-        .description("DB UNIQUE constraint blocked duplicate fire (R-1 defense)")
-        .tags(Tags.of("group", jobGroup))
-        .register(registry)
+    fireDuplicateSkippedByGroup
+        .computeIfAbsent(
+            jobGroup,
+            g ->
+                Counter.builder(FIRE_DUPLICATE_SKIPPED)
+                    .description("DB UNIQUE constraint blocked duplicate fire (R-1 defense)")
+                    .tags(Tags.of("group", g))
+                    .register(registry))
         .increment();
   }
 
   public void incrementMisfireHandled(String policy) {
-    Counter.builder(MISFIRE_HANDLED).tags(Tags.of("policy", policy)).register(registry).increment();
+    misfireHandledByPolicy
+        .computeIfAbsent(
+            policy,
+            p -> Counter.builder(MISFIRE_HANDLED).tags(Tags.of("policy", p)).register(registry))
+        .increment();
   }
 
   public void incrementLeaderAcquire() {
-    Counter.builder(LEADER_ACQUIRE).register(registry).increment();
+    leaderAcquireCounter.increment();
   }
 
   public Timer leaderAcquireDuration() {
-    return Timer.builder(LEADER_ACQUIRE_DURATION).register(registry);
+    return leaderAcquireDurationTimer;
   }
 
   public void incrementStaleMarkerReleased(long count) {
-    Counter.builder(STALE_MARKER_RELEASED).register(registry).increment(count);
+    staleMarkerReleasedCounter.increment(count);
   }
 
   /**
@@ -116,11 +165,17 @@ public class WheelMetrics {
    * 重复 fire，触发条件通常是 DB 短暂不可达 / 锁等待超时。
    */
   public void incrementAdvanceFailed(String jobCode) {
-    Counter.builder("batch.trigger.wheel.advance.failed.total")
-        .description(
-            "advanceAfterFire DB update failed; next_fire_time may be stale → re-fire risk")
-        .tags(Tags.of("jobCode", jobCode == null ? "unknown" : jobCode))
-        .register(registry)
+    String key = jobCode == null ? "unknown" : jobCode;
+    advanceFailedByJob
+        .computeIfAbsent(
+            key,
+            j ->
+                Counter.builder(ADVANCE_FAILED)
+                    .description(
+                        "advanceAfterFire DB update failed; next_fire_time may be stale →"
+                            + " re-fire risk")
+                    .tags(Tags.of("jobCode", j))
+                    .register(registry))
         .increment();
   }
 }
