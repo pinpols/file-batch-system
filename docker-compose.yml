@@ -214,7 +214,7 @@ services:
       retries: 15
 
 volumes:
-  postgres-data:
+  postgres-primary-data:
   postgres-replica-data:
   kafka-data:
   minio-data:
