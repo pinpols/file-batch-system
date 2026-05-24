@@ -370,6 +370,42 @@
                                             </limit>
                                         </limits>
                                     </rule>
+                                    <!--
+                                        核心类 lock-in baseline（2026-05-24）：锁住已测好的 15 个业务核心类，
+                                        防止重构 / 抽取时回归到测试缺口。挑选标准：当前 LINE ≥ 88% + 业务关键路径
+                                        （状态机 / 派发 / 补偿 / Outbox / 安全边界 / 审计 / 读写分离）。
+                                        阈值留 ~8-10% 安全余量到 LINE 80%；BRANCH 阈值不加（部分类 branch 偏低，
+                                        加了会触发误报，分支覆盖另案治理）。
+                                        类被改名 / 拆分时需同步更新 includes；rule 失效（include 不匹配任何类）jacoco
+                                        默认 silent，定期 jacoco-aggregate 看 BUNDLE 是否漂移做兜底。
+                                    -->
+                                    <rule>
+                                        <element>CLASS</element>
+                                        <includes>
+                                            <include>com.example.batch.orchestrator.application.service.governance.DefaultCompensationService</include>
+                                            <include>com.example.batch.orchestrator.application.service.workflow.DefaultWorkflowDagService</include>
+                                            <include>com.example.batch.orchestrator.application.service.task.DefaultPartitionDispatchService</include>
+                                            <include>com.example.batch.orchestrator.application.service.task.ChildJobLaunchSupport</include>
+                                            <include>com.example.batch.orchestrator.infrastructure.scheduler.BatchDayOpenScheduler</include>
+                                            <include>com.example.batch.orchestrator.infrastructure.scheduler.CrossDayDependencyReconciler</include>
+                                            <include>com.example.batch.orchestrator.infrastructure.sla.JobSlaScheduler</include>
+                                            <include>com.example.batch.orchestrator.service.BatchDayGateService</include>
+                                            <include>com.example.batch.trigger.application.TriggerOutboxRelay</include>
+                                            <include>com.example.batch.worker.exports.sql.SqlTemplateExportSqlValidator</include>
+                                            <include>com.example.batch.worker.dispatchs.stage.DefaultDispatchStageExecutor</include>
+                                            <include>com.example.batch.worker.imports.stage.DefaultImportStageExecutor</include>
+                                            <include>com.example.batch.console.support.auth.ConsoleAuthenticationFilter</include>
+                                            <include>com.example.batch.console.config.ReadReplicaRoutingDataSource</include>
+                                            <include>com.example.batch.common.persistence.mybatis.AuditFieldsInterceptor</include>
+                                        </includes>
+                                        <limits>
+                                            <limit>
+                                                <counter>LINE</counter>
+                                                <value>COVEREDRATIO</value>
+                                                <minimum>0.80</minimum>
+                                            </limit>
+                                        </limits>
+                                    </rule>
                                 </rules>
                             </configuration>
                         </execution>
