@@ -13,6 +13,15 @@
 
 `load-tests` 是独立 reactor(未纳入根 reactor),版本字面量与根版本手工同步。
 
+## 分支用途
+
+两类改动走两条分支,**绝不互相 PR**:
+
+- **本地 Docker 部署相关**(`docker-compose*.yml` / `docker/compose/*.yml` / `.env.local` / `scripts/ps1/docker/*` / `scripts/local/sync-main.sh` / `.github/workflows/{build-image,deploy,deploy-linux}.yml` / logback `/logs` 挂载这类宿主机布置)→ 提交到 `feature/docker-deploy`(部署分支)
+- **业务开发 / bug 修复 / 测试 / 文档**(controller / service / 9 模块代码 / `docs/` / 单测集成测)→ 提交到 `feature/<topic>`(如 `feature/be-bugfixed`),走标准 PR → `main`
+- **部署分支不进 main**(也不被 PR 到 main);只接收"main → 部署分支"单向 sync,工具 `scripts/local/sync-main.sh`(.ps1 等价) / 跨仓 `C:\Users\aa\scripts\sync-all.ps1`
+
+
 ## 构建
 
 - `mvn package` — 默认 build,产物 `batch-*-${revision}.jar`(根 pom flatten 插件展开 `${revision}`)
