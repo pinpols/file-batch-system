@@ -240,7 +240,7 @@ function Initialize-AppComposeEnv {
   $env:DOCKER_BUILDKIT = Get-EnvValue "DOCKER_BUILDKIT" "1"
   $env:COMPOSE_DOCKER_CLI_BUILD = Get-EnvValue "COMPOSE_DOCKER_CLI_BUILD" "1"
 
-  $projectName = Get-EnvValue "COMPOSE_PROJECT_NAME" "batch-local"
+  $projectName = Get-EnvValue "COMPOSE_PROJECT_NAME" "batch-platform"
   return @{
     EnvFile     = $envFile
     ProjectName = $projectName

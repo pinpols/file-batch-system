@@ -7,7 +7,7 @@ Set-Location $root
 Ensure-DockerDaemon
 
 $composeEnvFile = Get-EnvValue "COMPOSE_ENV_FILE" ".env.local"
-$composeProjectName = Get-EnvValue "COMPOSE_PROJECT_NAME" "batch-local"
+$composeProjectName = Get-EnvValue "COMPOSE_PROJECT_NAME" "batch-platform"
 $appNetworkName = "${composeProjectName}_batch-network"
 $env:DOCKER_BUILDKIT = Get-EnvValue "DOCKER_BUILDKIT" "1"
 $env:COMPOSE_DOCKER_CLI_BUILD = Get-EnvValue "COMPOSE_DOCKER_CLI_BUILD" "1"
