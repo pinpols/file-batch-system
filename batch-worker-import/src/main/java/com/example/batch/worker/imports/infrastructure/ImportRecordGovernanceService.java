@@ -321,17 +321,23 @@ public class ImportRecordGovernanceService {
     context.getAttributes().put("lastErrorMessage", errorMessage);
   }
 
+  @SuppressWarnings("unchecked")
   private List<ImportBadRecord> badRecords(ImportJobContext context) {
     Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
     if (existing instanceof List<?> list) {
-      List<ImportBadRecord> resolved = new ArrayList<>();
+      // Validate all elements are ImportBadRecord; if so return the original
+      // list reference (mutating) so subsequent recordBadRecord adds are
+      // visible. Returning a defensive copy here silently dropped 2nd+ bad
+      // records.
+      boolean allMatch = true;
       for (Object item : list) {
-        if (item instanceof ImportBadRecord badRecord) {
-          resolved.add(badRecord);
+        if (!(item instanceof ImportBadRecord)) {
+          allMatch = false;
+          break;
         }
       }
-      if (!resolved.isEmpty()) {
-        return resolved;
+      if (allMatch) {
+        return (List<ImportBadRecord>) existing;
       }
     }
     List<ImportBadRecord> created = new ArrayList<>();

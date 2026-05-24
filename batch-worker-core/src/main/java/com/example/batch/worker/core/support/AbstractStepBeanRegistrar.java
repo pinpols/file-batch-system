@@ -10,8 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 应用启动期把本模块注册到 Spring 上下文的 Step bean 集合写入 {@code batch.step_registry}。
@@ -30,6 +30,7 @@ public abstract class AbstractStepBeanRegistrar<T> {
 
   private final ApplicationContext applicationContext;
   private final StepRegistryMapper stepRegistryMapper;
+  private final PlatformTransactionManager transactionManager;
   private final String module;
   private final List<BeanTypeBinding<?>> bindings;
 
@@ -37,12 +38,14 @@ public abstract class AbstractStepBeanRegistrar<T> {
   protected AbstractStepBeanRegistrar(
       ApplicationContext applicationContext,
       StepRegistryMapper stepRegistryMapper,
+      PlatformTransactionManager transactionManager,
       Class<T> stepBeanType,
       String module,
       Function<T, String> implCodeExtractor) {
     this(
         applicationContext,
         stepRegistryMapper,
+        transactionManager,
         module,
         List.of(new BeanTypeBinding<>(stepBeanType, implCodeExtractor)));
   }
@@ -54,28 +57,36 @@ public abstract class AbstractStepBeanRegistrar<T> {
   protected AbstractStepBeanRegistrar(
       ApplicationContext applicationContext,
       StepRegistryMapper stepRegistryMapper,
+      PlatformTransactionManager transactionManager,
       String module,
       List<BeanTypeBinding<?>> bindings) {
     this.applicationContext = applicationContext;
     this.stepRegistryMapper = stepRegistryMapper;
+    this.transactionManager = transactionManager;
     this.module = module;
     this.bindings = List.copyOf(bindings);
   }
 
   /**
-   * REQUIRES_NEW 独立事务：本段登记失败不影响应用正常启动继续处理其他监听器；登记失败时 console-api 的 Excel 校验会退化为不校验 impl_code
-   * 白名单（与修复前一致，保持兼容），运维收到 ERROR 日志即可定位。
+   * 事务边界：@EventListener 上原本挂的 {@code @Transactional(REQUIRES_NEW)} 违反 CLAUDE.md 规则 #4
+   * （{@code @Transactional} 只放 Service 公共方法）且 REQUIRES_NEW 在 EventListener 调用方无外层事务时 等同
+   * REQUIRED，纯属误用。改为在 listener 内显式构造 {@link TransactionTemplate} 包裹 deleteByModule + N 条
+   * insertEntry 的原子写入。登记失败时 console-api 的 Excel 校验会退化为不校验 impl_code 白名单 （与修复前一致，保持兼容），运维收到 ERROR
+   * 日志即可定位。 (P0 backport from refactor/arch-audit-p0 f4e6be53)
    */
   @EventListener(ApplicationReadyEvent.class)
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void registerStepBeansOnStartup() {
     try {
-      stepRegistryMapper.deleteByModule(module);
       LinkedHashSet<String> registeredCodes = new LinkedHashSet<>();
       List<Object> collected = new ArrayList<>();
-      for (BeanTypeBinding<?> binding : bindings) {
-        registerOne(binding, registeredCodes, collected);
-      }
+      TransactionTemplate tx = new TransactionTemplate(transactionManager);
+      tx.executeWithoutResult(
+          status -> {
+            stepRegistryMapper.deleteByModule(module);
+            for (BeanTypeBinding<?> binding : bindings) {
+              registerOne(binding, registeredCodes, collected);
+            }
+          });
       if (collected.isEmpty()) {
         log.info("step registry snapshot refreshed: module={}, count=0 (未发现 bean)", module);
         return;

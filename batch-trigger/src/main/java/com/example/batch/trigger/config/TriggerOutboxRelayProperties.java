@@ -24,4 +24,7 @@ public class TriggerOutboxRelayProperties {
 
   /** 单条最大发布尝试次数(达到后标 GIVE_UP)。默认 10。 */
   private int maxPublishAttempts = 10;
+
+  /** Relay scheduler 关闭等待秒数(优雅 shutdown,等当前 poll 跑完)。默认 15。 */
+  private int shutdownAwaitSeconds = 15;
 }
