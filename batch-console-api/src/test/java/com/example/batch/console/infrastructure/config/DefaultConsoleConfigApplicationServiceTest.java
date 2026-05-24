@@ -114,14 +114,11 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
-  void shouldThrowIllegalArgument_whenConfigPayloadJsonIsMalformed() {
+  void shouldThrowBizException_whenConfigPayloadJsonIsMalformed() {
     ConfigReleaseUpsertRequest req = upsertRequest();
     req.setConfigPayloadJson("{not json");
 
-    // Finding: validateJson() relies on JsonUtils.fromJson which throws IAE,
-    // never reaching the BizException branch for malformed JSON.
-    assertThatThrownBy(() -> service.createConfigRelease(req))
-        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> service.createConfigRelease(req)).isInstanceOf(BizException.class);
   }
 
   @Test
