@@ -13,6 +13,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 通用 API 异常处理基类：把 BizException / SystemException / 未预期异常的处理集中到一处， 子类只在 {@link #modulePrefix()}
@@ -83,6 +84,21 @@ public abstract class AbstractApiExceptionHandler {
         .body(
             CommonResponse.failure(
                 ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试")));
+  }
+
+  /**
+   * 404 NoResourceFoundException 显式按 404 + INFO 处理,不走 Exception.class 兜底的 500 + ERROR
+   * 路径。否则任何请求不存在 URL(浏览器探测 favicon.ico / 误填 actuator path)都会被记成 ERROR
+   * 刷屏,且返回 500 误导调用方。
+   */
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<CommonResponse<Void>> handleNoResourceFound(NoResourceFoundException exception) {
+    log.info("{} resource not found: {}", modulePrefix(), exception.getResourcePath());
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .body(
+            CommonResponse.failure(
+                ResultCode.NOT_FOUND,
+                resolveCommonCode(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.label())));
   }
 
   @ExceptionHandler(Exception.class)

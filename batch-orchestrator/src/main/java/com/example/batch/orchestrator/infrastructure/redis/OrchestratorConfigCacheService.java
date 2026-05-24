@@ -17,6 +17,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -50,6 +51,7 @@ public class OrchestratorConfigCacheService {
   private final BatchWindowMapper batchWindowMapper;
   private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
 
+  @Autowired
   public OrchestratorConfigCacheService(
       OrchestratorRedisSupport redis,
       JobDefinitionMapper jobDefinitionMapper,

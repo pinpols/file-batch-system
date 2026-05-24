@@ -18,7 +18,7 @@
 #
 # 环境变量:
 #   CONSOLE_PORT (默认 18080)
-#   PG_CONTAINER / PG_USER / PG_DB (默认 batch-postgres / batch_user / batch_platform)
+#   PG_CONTAINER / PG_USER / PG_DB (默认 batch-postgres-primary / batch_user / batch_platform)
 #   CI=1     CI 适配:关闭 ANSI 颜色,失败时打印额外诊断,不改变 exit code 语义
 # =========================================================
 
@@ -42,7 +42,7 @@ for arg in "$@"; do
 done
 
 CONSOLE_PORT="${CONSOLE_PORT:-18080}"
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres}"
+PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 PG_USER="${PG_USER:-batch_user}"
 PG_DB="${PG_DB:-batch_platform}"
 BASE="http://localhost:${CONSOLE_PORT}"

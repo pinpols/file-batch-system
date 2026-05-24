@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.config;
 import java.util.concurrent.ThreadPoolExecutor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
@@ -19,10 +20,13 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @Configuration
 public class OrchestratorAsyncConfiguration {
 
-  public static final String OUTBOX_POLL_SCHEDULER = "outboxPollScheduler";
+  // 2026-05-24:常量值从 "outboxPollScheduler" 改为 "outboxPollTaskScheduler",
+  // 避免与 OutboxPollScheduler @Component bean(默认 bean 名 outboxPollScheduler)
+  // 同名冲突(Spring Boot 4 默认不允许 override → BeanDefinitionOverrideException)。
+  public static final String OUTBOX_POLL_SCHEDULER = "outboxPollTaskScheduler";
 
   @Bean(name = OUTBOX_POLL_SCHEDULER, destroyMethod = "shutdown")
-  public ThreadPoolTaskScheduler outboxPollScheduler() {
+  public ThreadPoolTaskScheduler outboxPollTaskScheduler() {
     ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("outbox-poll-scheduler-");
@@ -34,5 +38,26 @@ public class OrchestratorAsyncConfiguration {
     scheduler.setAwaitTerminationSeconds(30);
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     return scheduler;
+  }
+
+  /**
+   * applicationTaskExecutor:Spring Boot 3.x TaskExecutionAutoConfiguration 默认提供,
+   * KafkaOutboxPublisher 等组件用 {@code @Qualifier("applicationTaskExecutor")} 注入。
+   *
+   * <p>2026-05-24:Spring Boot 4.x 默认 auto-config 不再无条件创建该 bean(可能因为
+   * 检测到其他 Executor 存在),导致依赖方启动期 NoSuchBeanDefinitionException。
+   * 显式声明保证依赖契约稳定。线程池参数对齐 spring.task.execution.* 默认 + 命名前缀。
+   */
+  @Bean(name = "applicationTaskExecutor", destroyMethod = "shutdown")
+  public ThreadPoolTaskExecutor applicationTaskExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(8);
+    executor.setMaxPoolSize(Integer.MAX_VALUE);
+    executor.setQueueCapacity(Integer.MAX_VALUE);
+    executor.setThreadNamePrefix("task-");
+    executor.setWaitForTasksToCompleteOnShutdown(true);
+    executor.setAwaitTerminationSeconds(30);
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+    return executor;
   }
 }

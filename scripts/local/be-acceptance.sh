@@ -163,8 +163,67 @@ should_run() {
 }
 
 # ── Step 实现 ───────────────────────────────────────────────
+
+# 清理上一次跑残留:
+#   - 孤儿 testcontainers(无 reuse-hash label = 反复 kill -9 / Ryuk 没机会清的容器)
+#   - 残留 mvn / surefire-booter JVM(上次跑被打断留下来抢端口 / 占容器)
+#   - 残留 mvnd daemon(可能持有旧 classpath / 未释放 lock)
+# 保留 reuse 容器(它们就是为了跨 JVM 复用,不要清)。
+cleanup_stale_runs() {
+  # 1. 残留 mvn / surefirebooter / forked JVM
+  local mvn_cnt=$(pgrep -f "[m]vn|[s]urefirebooter|[m]vnd" 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$mvn_cnt" -gt 0 ]]; then
+    note "清掉 $mvn_cnt 个残留 mvn / surefire / mvnd 进程"
+    pkill -9 -f "[m]vn|[s]urefirebooter|[m]vnd" 2>/dev/null || true
+    sleep 1
+  fi
+
+  # 2. 孤儿 testcontainers(label=org.testcontainers=true 但无 reuse-hash)
+  if command -v docker >/dev/null 2>&1; then
+    local orphans
+    orphans=$(docker ps -q --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
+      if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | /usr/bin/grep -q "reuse-hash"; then
+        printf '%s\n' "$cid"
+      fi
+    done)
+    if [[ -n "$orphans" ]]; then
+      local cnt=$(printf '%s\n' "$orphans" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+      note "清掉 $cnt 个孤儿 testcontainer(保留 reuse 容器)"
+      printf '%s\n' "$orphans" | /usr/bin/xargs -r docker rm -f >/dev/null 2>&1 || true
+    fi
+  fi
+
+  # 3. 上次的 state 文件(允许 --resume 时跳过)
+  if [[ "$RESUME" == "0" && -f "$STATE_FILE" ]]; then
+    rm -f "$STATE_FILE"
+    note "重置 .be-acceptance-state"
+  fi
+
+  # 4. target/test-classes 孤儿 Flyway migration:source 已删但 target stale 会让
+  #    Flyway 启动期报 "Found more than one migration with version X",E2E/IT 全挂。
+  #    收集 source 端所有 V*.sql 文件名作白名单,删 target 里不在白名单的。
+  local src_set=$(mktemp /tmp/src-migrations.XXXXXX)
+  trap "rm -f '$src_set'" RETURN
+  find . -path "*/db/migration/V*.sql" \
+    -not -path "*/target/*" -not -path "*/.claude/*" \
+    -exec basename {} \; 2>/dev/null | sort -u > "$src_set"
+  local orphan_cnt=0
+  while IFS= read -r f; do
+    local base=$(basename "$f")
+    if ! /usr/bin/grep -qxF "$base" "$src_set"; then
+      rm -f "$f"
+      orphan_cnt=$((orphan_cnt + 1))
+    fi
+  done < <(find . -path "*/target/*/db/migration/V*.sql" \
+    -not -path "*/.claude/*" 2>/dev/null)
+  if [[ "$orphan_cnt" -gt 0 ]]; then
+    note "清掉 $orphan_cnt 个 target/ 孤儿 Flyway migration(防 Flyway 启动重复 version 报错)"
+  fi
+}
+
 step_0_precheck() {
   hdr 0 "$(step_name 0)"
+  cleanup_stale_runs
   local docker_cnt=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "batch-postgres|batch-kafka|batch-redis|batch-minio" | wc -l | tr -d ' ')
   [[ "$docker_cnt" -ge 4 ]] && ok "docker 容器 $docker_cnt 个运行" || ng "docker 容器 $docker_cnt < 4(可能影响 IT/E2E)"
   local free_gb=$(df -g "$ROOT_DIR" 2>/dev/null | tail -1 | awk '{print $4}')

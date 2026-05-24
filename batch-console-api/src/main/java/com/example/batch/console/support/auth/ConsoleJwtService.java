@@ -28,6 +28,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -86,6 +87,7 @@ public class ConsoleJwtService {
    */
   private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
 
+  @Autowired
   public ConsoleJwtService(
       ConsoleSecurityProperties properties,
       ConsoleSessionRegistry sessionRegistry,
