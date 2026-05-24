@@ -13,7 +13,8 @@ P2-4：console-api 海量查询时把主库压测掉。引入 PG hot standby + S
 
 ## 一、本地启动从库
 
-### 全新环境（无旧 postgres-primary-data volume）
+
+### 全新环境
 
 ```bash
 # 1. 启动主库（首次 initdb 自动建 replicator 用户 + 应用流复制参数）
