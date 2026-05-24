@@ -113,9 +113,9 @@ class HttpTaskExecutionClientTest {
     // 重投导致 task 双执行)。改为记 worker.report.dropped.total{reason=outbox_disabled} 由
     // orchestrator lease reclaim 兜底。
     try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse().setResponseCode(503));
-      server.enqueue(new MockResponse().setResponseCode(503));
-      server.enqueue(new MockResponse().setResponseCode(503));
+      server.enqueue(new MockResponse.Builder().code(503).build());
+      server.enqueue(new MockResponse.Builder().code(503).build());
+      server.enqueue(new MockResponse.Builder().code(503).build());
       server.start();
 
       OrchestratorTaskClientProperties props = clientProperties(server.getPort());
@@ -156,8 +156,8 @@ class HttpTaskExecutionClientTest {
     // P0 #16: outbox 启用但 enqueue 失败(DB 抖动 / repository RuntimeException)亦走 dropped 路径,
     // 不能让异常上抛触发 Kafka 重投。
     try (MockWebServer server = new MockWebServer()) {
-      server.enqueue(new MockResponse().setResponseCode(503));
-      server.enqueue(new MockResponse().setResponseCode(503));
+      server.enqueue(new MockResponse.Builder().code(503).build());
+      server.enqueue(new MockResponse.Builder().code(503).build());
       server.start();
 
       OrchestratorTaskClientProperties props = clientProperties(server.getPort());
@@ -169,7 +169,8 @@ class HttpTaskExecutionClientTest {
       WorkerReportOutboxCoordinator coordinator = mock(WorkerReportOutboxCoordinator.class);
       when(coordinator.enqueue(org.mockito.ArgumentMatchers.any())).thenReturn(false);
       @SuppressWarnings("unchecked")
-      ObjectProvider<WorkerReportOutboxCoordinator> coordinatorProvider = mock(ObjectProvider.class);
+      ObjectProvider<WorkerReportOutboxCoordinator> coordinatorProvider =
+          mock(ObjectProvider.class);
       when(coordinatorProvider.getIfAvailable()).thenReturn(coordinator);
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
