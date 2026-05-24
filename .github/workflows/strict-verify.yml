@@ -25,10 +25,13 @@ on:
         options:
           - dry-run
           - live
-  # main push:无条件触发(post-merge gate,跑 dry-run + live 验真实数据)
   push:
-    branches: [main]
-  # 非 main push 限定到 strict-verify 自身相关文件,只跑 dry-run smoke
+    branches-ignore:
+      - main
+    paths:
+      - 'scripts/local/strict-verify.sh'
+      - 'scripts/ci/run-full-regression.sh'
+      - '.github/workflows/strict-verify.yml'
   pull_request:
     branches: [main]
     paths:
@@ -76,10 +79,7 @@ jobs:
   # 注意:cursor 翻页项需要 seed 数据,空库会 SKIP(脚本设计如此)。
   # =========================================================================
   strict-verify-live:
-    # 触发条件:手动 dispatch(mode=live) 或 main push(post-merge gate,catches drift)
-    if: |
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
