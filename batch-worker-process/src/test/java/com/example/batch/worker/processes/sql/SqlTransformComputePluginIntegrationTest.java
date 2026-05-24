@@ -64,9 +64,11 @@ class SqlTransformComputePluginIntegrationTest {
     jdbcTemplate = new JdbcTemplate(dataSource);
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));
+    org.springframework.jdbc.datasource.DataSourceTransactionManager txManager =
+        new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource);
     plugin =
         new SqlTransformComputePlugin(
-            dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
+            dataSource, txManager, new ObjectMapper(), security, ProcessMetrics.noop());
 
     jdbcTemplate.execute("drop schema if exists biz cascade");
     jdbcTemplate.execute("drop schema if exists batch cascade");
