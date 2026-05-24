@@ -186,7 +186,7 @@ wait_postgres() {
   echo "==> 等待 PostgreSQL 就绪..."
   local i
   for i in $(seq 1 90); do
-    if docker compose --env-file "$COMPOSE_ENV_FILE" exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+    if docker compose --env-file "$COMPOSE_ENV_FILE" exec -T postgres-primary pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
       echo "  PostgreSQL 已就绪"
       return 0
     fi

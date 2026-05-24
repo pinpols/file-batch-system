@@ -18,6 +18,7 @@ import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ConsoleOpsSummaryRealtimeStreamTest {
@@ -34,6 +35,10 @@ class ConsoleOpsSummaryRealtimeStreamTest {
 
   @BeforeEach
   void setUp() {
+    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+    scheduler.setPoolSize(1);
+    scheduler.setThreadNamePrefix("console-realtime-test-");
+    scheduler.initialize();
     stream =
         new ConsoleOpsSummaryRealtimeStream(
             opsApplicationService,
@@ -41,7 +46,8 @@ class ConsoleOpsSummaryRealtimeStreamTest {
             redisPublisher,
             cursorFactory,
             tenantGuard,
-            dateTimeSupport());
+            dateTimeSupport(),
+            scheduler);
     when(tenantGuard.resolveTenant(anyString()))
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(cursorFactory.nextCursor()).thenReturn("cursor-1");

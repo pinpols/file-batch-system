@@ -14,4 +14,10 @@ public interface IdempotencyRecordMapper {
   /** 查询已执行操作的结果载荷。 */
   String selectResultByKey(
       @Param("tenantId") String tenantId, @Param("idempotencyKey") String idempotencyKey);
+
+  /** 回写已执行操作的结果载荷（在同事务内调用，保证 result 与占位行同事务落库）。 */
+  int updateResult(
+      @Param("tenantId") String tenantId,
+      @Param("idempotencyKey") String idempotencyKey,
+      @Param("resultPayload") String resultPayload);
 }

@@ -3,11 +3,11 @@ package com.example.batch.orchestrator.application.service.sensor;
 import java.util.Map;
 
 /** sensor_spec JSONB Map 的取值帮手——容忍 String / Number 类型混入，统一返回 null / 默认。 */
-final class SensorSpecs {
+public final class SensorSpecs {
 
   private SensorSpecs() {}
 
-  static String string(Map<String, Object> spec, String key) {
+  public static String string(Map<String, Object> spec, String key) {
     if (spec == null) {
       return null;
     }
@@ -15,7 +15,7 @@ final class SensorSpecs {
     return v == null ? null : v.toString();
   }
 
-  static Long longValue(Map<String, Object> spec, String key) {
+  public static Long longValue(Map<String, Object> spec, String key) {
     if (spec == null) {
       return null;
     }
@@ -33,7 +33,7 @@ final class SensorSpecs {
     }
   }
 
-  static Integer intValue(Map<String, Object> spec, String key) {
+  public static Integer intValue(Map<String, Object> spec, String key) {
     Long l = longValue(spec, key);
     return l == null ? null : l.intValue();
   }

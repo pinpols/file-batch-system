@@ -93,6 +93,15 @@ public class HashedWheelTriggerScheduler {
   /** wasLeader 翻转检测(@Scheduled 进入时):false → true 触发 onLeaderAcquire fast-path。 */
   private final AtomicBoolean wasLeader = new AtomicBoolean(false);
 
+  /**
+   * R-arch-audit-2026-05-23 P1: 记录 slidingWindow 最近一次成功执行的时刻(毫秒)。
+   *
+   * <p>leader 失守时(其他实例抢到 ShedLock),本实例 {@code slidingWindow()} 不再被调用, {@code wasLeader} 卡在
+   * true。{@link #watchLeaderLoss()} 周期检测此值是否 超过 leader-loss 阈值(默认 2 * lockAtMostFor = 4 分钟),据此把
+   * {@code wasLeader} 复位为 false, 下次本实例重新拿到 leader 时仍能触发 fast-path catch-up scan。
+   */
+  private volatile long lastSlidingWindowRunMillis = 0L;
+
   /** 内存 dedup set:防同 leader 周期内重复 push 同一 (runtime_state_id, scheduled_fire_time)。 */
   private final ConcurrentMap<String, Boolean> inFlightFires = new ConcurrentHashMap<>();
 
@@ -160,7 +169,36 @@ public class HashedWheelTriggerScheduler {
     if (!previouslyLeader) {
       onLeaderAcquire();
     }
+    // R-arch-audit-2026-05-23 P1: 记录本次执行时刻，watchLeaderLoss 据此判断 leader 失守。
+    lastSlidingWindowRunMillis = dateTimeSupport.currentEpochMillis();
     scanAndSchedule(Duration.ofSeconds(props.getSlidingWindowSeconds()));
+  }
+
+  /**
+   * R-arch-audit-2026-05-23 P1: leader 失守检测(无 ShedLock)。 若距离上次 {@link #slidingWindow()} 执行超过 2 *
+   * lockAtMostFor (=240s)且 {@code wasLeader=true}, 说明本实例 ShedLock 已被其他实例接管,把 {@code wasLeader} 复位,
+   * 让本实例重新拿到 leader 时仍能触发 {@link #onLeaderAcquire()} fast-path。
+   *
+   * <p>不加 {@code @SchedulerLock}:每实例独立检测自己的 leader 状态。
+   */
+  @Scheduled(fixedDelayString = "${batch.trigger.wheel.leader-loss-check-interval-millis:60000}")
+  public void watchLeaderLoss() {
+    if (!wasLeader.get()) {
+      return;
+    }
+    long lastRun = lastSlidingWindowRunMillis;
+    if (lastRun == 0L) {
+      return; // 还没跑过 slidingWindow,跳过
+    }
+    long thresholdMillis = props.getSlidingWindowScanIntervalMillis() * 4L;
+    long elapsed = dateTimeSupport.currentEpochMillis() - lastRun;
+    if (elapsed > thresholdMillis && wasLeader.compareAndSet(true, false)) {
+      log.info(
+          "wheel leader loss detected (no slidingWindow in {}ms, threshold={}ms);"
+              + " wasLeader reset → next acquire will trigger fast-path",
+          elapsed,
+          thresholdMillis);
+    }
   }
 
   /**
@@ -222,6 +260,21 @@ public class HashedWheelTriggerScheduler {
 
   /** 测试 + 内部都用,public 为了 IT 能直接触发(避免依赖 @Scheduled 60s 周期等)。 */
   public void scanAndSchedule(Duration window) {
+    // P1: 内存 in-flight 上限保护 — fire callback 卡死时 wheel 推入速率 ≫ 释放速率会让
+    // inFlightFires / timeoutRegistry 无界增长。任一超阈值 → WARN + skip 本轮,等下次 tick
+    // 重试;真实 fire 路径恢复后 map 自然回落,无需手动清理。
+    int max = props.getMaxInFlight();
+    int inFlight = inFlightFires.size();
+    int timeouts = timeoutRegistry.size();
+    if (max > 0 && (inFlight >= max || timeouts >= max)) {
+      log.warn(
+          "scanAndSchedule skipped: in-flight cap reached (inFlightFires={}, timeoutRegistry={},"
+              + " max={}); fire callbacks likely stalled — investigate before next tick",
+          inFlight,
+          timeouts,
+          max);
+      return;
+    }
     long start = System.nanoTime();
     Instant horizon = dateTimeSupport.nowInstant().plus(window);
     List<TriggerRuntimeStateEntity> due =

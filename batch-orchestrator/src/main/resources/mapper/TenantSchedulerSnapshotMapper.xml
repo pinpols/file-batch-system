@@ -76,4 +76,36 @@
             </choose>
         )
     </insert>
+
+    <insert id="insertBatch">
+        insert into batch.tenant_scheduler_snapshot (
+            tenant_id, snapshot_at, fair_share_group, policy_code,
+            active_jobs, active_partitions, max_jobs_base, burst_limit, effective_job_cap,
+            group_active_jobs, group_max_jobs, quota_reset_policy, online_workers, detail_json
+        ) values
+        <foreach collection="rows" item="r" separator=",">
+            (
+                #{r.tenantId},
+                <choose>
+                    <when test="r.snapshotAt != null">#{r.snapshotAt}</when>
+                    <otherwise>current_timestamp</otherwise>
+                </choose>,
+                #{r.fairShareGroup}, #{r.policyCode},
+                <choose>
+                    <when test="r.activeJobs != null">#{r.activeJobs}</when>
+                    <otherwise>0</otherwise>
+                </choose>,
+                <choose>
+                    <when test="r.activePartitions != null">#{r.activePartitions}</when>
+                    <otherwise>0</otherwise>
+                </choose>,
+                #{r.maxJobsBase}, #{r.burstLimit}, #{r.effectiveJobCap},
+                #{r.groupActiveJobs}, #{r.groupMaxJobs}, #{r.quotaResetPolicy}, #{r.onlineWorkers},
+                <choose>
+                    <when test="r.detailJson != null">cast(#{r.detailJson.value} as jsonb)</when>
+                    <otherwise>null</otherwise>
+                </choose>
+            )
+        </foreach>
+    </insert>
 </mapper>

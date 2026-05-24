@@ -38,7 +38,7 @@
 ```bash
 # 1. 起干净 PG（避免与日常 dev 冲突）
 docker run -d --name pg-cutover -p 15500:5432 \
-    -e POSTGRES_PASSWORD=test postgres:16
+    -e POSTGRES_PASSWORD=test postgres:17
 
 # 2. 装最新 schema（V1-V143）
 psql -h localhost -p 15500 -U postgres -f docker/postgres/init/000-create-business-db.sql

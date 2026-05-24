@@ -7,6 +7,7 @@ import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractStageExecutor;
+import com.example.batch.worker.core.support.AbstractStageExecutor.StageStepDescriptor;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
@@ -203,8 +204,7 @@ public class DefaultImportStageExecutor
   }
 
   private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
-    List<PipelineStepTemplate> templates = new ArrayList<>();
-    int order = 1;
+    List<StageStepDescriptor> ordered = new ArrayList<>();
     for (ImportStage stage :
         List.of(
             ImportStage.RECEIVE,
@@ -217,23 +217,15 @@ public class DefaultImportStageExecutor
       if (step == null) {
         throw new IllegalStateException("missing import step bean for stage: " + stage.name());
       }
-      PipelineStepTemplate template =
-          PipelineStepTemplate.builder()
-              .stepCode(step.stepCode())
-              .stepName(step.stepName())
-              .stageCode(stage.name())
-              .stepOrder(order++)
-              .implCode(step.implCode())
-              .stepParams(Map.of())
-              .timeoutSeconds(0)
-              .retryPolicy("NONE")
-              .retryMaxCount(0)
-              .enabled(true)
-              .build();
-      templates.add(template);
+      ordered.add(
+          new StepDescriptor(step.stepCode(), step.stepName(), step.implCode(), stage.name()));
     }
-    return List.copyOf(templates);
+    return buildStepTemplates(ordered);
   }
+
+  /** 内联 record 把 {@link ImportStageStep} + {@link ImportStage} 适配到基类的 StageStepDescriptor 契约。 */
+  private record StepDescriptor(String stepCode, String stepName, String implCode, String stageCode)
+      implements StageStepDescriptor {}
 
   private void register(
       Map<String, ImportStageStep> indexed, String implCode, ImportStageStep step) {

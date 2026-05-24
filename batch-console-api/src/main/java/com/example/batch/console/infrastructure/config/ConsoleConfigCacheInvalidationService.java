@@ -2,12 +2,9 @@ package com.example.batch.console.infrastructure.config;
 
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.support.cache.ConsoleQueryCacheService;
-import java.util.ArrayList;
-import java.util.List;
+import com.example.batch.console.support.cache.RedisKeyUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.Cursor;
-import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -106,38 +103,14 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   /**
-   * SCAN-based pattern 删除：cursor 增量扫描 + 分批 DEL，避免 Redis {@code KEYS} 命令 O(N) 阻塞主线程。
-   *
-   * <p>异常隔离：单次 SCAN/DEL 抛错只 warn 不向上传，避免 afterCommit 钩子内异常影响事务后续流程； 残余 key 会在下次 evict 或
-   * TTL（5min）过期时自然清理。
+   * SCAN-based pattern 删除：走 {@link RedisKeyUtils#scanAndDelete} 通用工具，异常被工具层吞掉避免影响 afterCommit
+   * 钩子流程；残余 key 走 TTL（5min）自然清理。
    */
   private void scanAndDelete(String pattern) {
-    ScanOptions options = ScanOptions.scanOptions().match(pattern).count(SCAN_BATCH_SIZE).build();
-    long deleted = 0L;
-    try (Cursor<String> cursor = redisTemplate.scan(options)) {
-      List<String> batch = new ArrayList<>(SCAN_BATCH_SIZE);
-      while (cursor.hasNext()) {
-        batch.add(cursor.next());
-        if (batch.size() >= SCAN_BATCH_SIZE) {
-          deleted += deleteBatch(batch);
-          batch.clear();
-        }
-      }
-      if (!batch.isEmpty()) {
-        deleted += deleteBatch(batch);
-      }
-    } catch (RuntimeException ex) {
-      log.warn("redis scan/del failed for pattern={}: {}", pattern, ex.getMessage());
-      return;
-    }
+    long deleted = RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE);
     if (deleted > 0) {
       log.debug("evicted {} redis keys matching pattern={}", deleted, pattern);
     }
-  }
-
-  private long deleteBatch(List<String> keys) {
-    Long n = redisTemplate.delete(keys);
-    return n == null ? 0L : n;
   }
 
   private void evictAfterCommit(String key) {

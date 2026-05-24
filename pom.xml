@@ -72,6 +72,7 @@
         <!-- ArchUnit:守护 CLAUDE.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.4.2</archunit.version>
+        <poi.version>5.4.0</poi.version>
         <!-- R7 安全扫描 2026-05-16: trivy fs 命中 11 个 HIGH CVE 组件。下列 version 覆盖
              Spring Boot 4.0.6 默认传递依赖，强制升到安全 patch 版本。
              - netty 4.2.12.Final → 4.2.13.Final: 6 CVE (CVE-2026-42577/42579/42582-42584/42587)
@@ -156,6 +157,20 @@
                 <groupId>com.github.jsqlparser</groupId>
                 <artifactId>jsqlparser</artifactId>
                 <version>${jsqlparser.version}</version>
+            </dependency>
+            <!-- POI Excel:batch-common (test) + worker-import/export + console-api 共用,
+                 之前散在 4 个 module 写死 5.4.0,bump 时易遗漏 → 收口 parent。 -->
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <!-- BouncyCastle:bcprov 1.84 是 CVE-2026-5598 安全 patch(见 properties 注释);
+                 之前 console-api 显式 1.78.1 跟 parent 1.84 冲突 → 收口 parent。 -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.javacrumbs.shedlock</groupId>

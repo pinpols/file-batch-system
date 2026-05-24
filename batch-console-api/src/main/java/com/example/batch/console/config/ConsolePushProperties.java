@@ -1,5 +1,6 @@
 package com.example.batch.console.config;
 
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -21,6 +22,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>{@code subject} 是 mailto 或 https URL,作为 VAPID JWT 的 sub claim,出问题时推送服务 知道找谁(如 {@code
  * mailto:ops@example.com})。
  */
+@Data
 @ConfigurationProperties(prefix = "batch.console.push")
 public class ConsolePushProperties {
 
@@ -39,43 +41,41 @@ public class ConsolePushProperties {
   /** 单条推送 TTL(秒),浏览器推送服务超时未送达则丢弃。 */
   private int ttlSeconds = 12 * 3600;
 
-  public boolean isEnabled() {
-    return enabled;
+  /** 任务终态推送(PoC)子开关。 */
+  private final JobNotify jobNotify = new JobNotify();
+
+  /** 审批结果推送子开关。 */
+  private final ApprovalNotify approvalNotify = new ApprovalNotify();
+
+  /** 任务终态推送配置;参 ConsolePushJobNotifier。 */
+  @Data
+  public static class JobNotify {
+    /** 是否启用任务终态推送 poller(默认关,启用前先确认 VAPID + 前端订阅链路通)。 */
+    private boolean enabled = false;
+
+    /** 轮询间隔(毫秒)。 */
+    private long pollIntervalMillis = 30_000L;
+
+    /** 每次扫描"最近 N 分钟"内终态化的实例;窗口过大会重复扫历史。 */
+    private int lookbackMinutes = 10;
+
+    /** 单次最多处理实例数,避免突发风暴。 */
+    private int batchSize = 50;
   }
 
-  public void setEnabled(boolean enabled) {
-    this.enabled = enabled;
-  }
+  /** 审批结果推送配置;参 ConsolePushApprovalNotifier。 */
+  @Data
+  public static class ApprovalNotify {
+    /** 是否启用审批结果推送 poller(默认关)。 */
+    private boolean enabled = false;
 
-  public String getPublicKey() {
-    return publicKey;
-  }
+    /** 轮询间隔(毫秒)。 */
+    private long pollIntervalMillis = 30_000L;
 
-  public void setPublicKey(String publicKey) {
-    this.publicKey = publicKey;
-  }
+    /** 每次扫描"最近 N 分钟"内进入终态的审批;窗口过大会重复扫历史。 */
+    private int lookbackMinutes = 10;
 
-  public String getPrivateKey() {
-    return privateKey;
-  }
-
-  public void setPrivateKey(String privateKey) {
-    this.privateKey = privateKey;
-  }
-
-  public String getSubject() {
-    return subject;
-  }
-
-  public void setSubject(String subject) {
-    this.subject = subject;
-  }
-
-  public int getTtlSeconds() {
-    return ttlSeconds;
-  }
-
-  public void setTtlSeconds(int ttlSeconds) {
-    this.ttlSeconds = ttlSeconds;
+    /** 单次最多处理审批数,避免突发风暴。 */
+    private int batchSize = 50;
   }
 }

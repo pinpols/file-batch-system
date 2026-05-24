@@ -7,6 +7,7 @@ import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -341,14 +342,24 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     String currentStatus = stringValue(fileRecord.get("file_status"));
     try {
       assertNoActiveRuntime(command);
-      fileGovernanceRepository.updateFileStatus(
-          command.tenantId(),
-          command.fileId(),
-          nextStatus,
-          Map.of(
-              "governanceOperation", operationType,
-              "reason", command.reason(),
-              "operatorId", command.operatorId()));
+      // 状态机校验：业务规则属于应用层职责（已从 Repository 上移）
+      FileStateMachine.assertTransition(currentStatus, nextStatus);
+      int updated =
+          fileGovernanceRepository.updateFileStatus(
+              command.tenantId(),
+              command.fileId(),
+              currentStatus,
+              nextStatus,
+              Map.of(
+                  "governanceOperation", operationType,
+                  "reason", command.reason(),
+                  "operatorId", command.operatorId()));
+      if (updated <= 0) {
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT,
+            "error.common.state_conflict_detail",
+            "file status changed concurrently, expected " + currentStatus);
+      }
       fileGovernanceRepository.appendAudit(
           new FileGovernanceRepository.FileAuditCommand(
               command.tenantId(),

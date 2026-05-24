@@ -1,0 +1,164 @@
+name: strict-verify
+
+# 严格模式真实数据验证(scripts/local/strict-verify.sh)的 CI 接入。
+#
+# 两种模式:
+#   1) dry-run smoke(默认,自动触发):仅校验脚本前置依赖(docker / curl / python3),
+#      ~1s,不连 PG / console-api。作用是保证脚本本身没语法 / 参数解析腐烂。
+#      paths 触发限定到该脚本 + run-full-regression 自身改动。
+#
+#   2) full live(手动 workflow_dispatch):本地 docker compose 起 PG,把 console-api
+#      jar 跑起来,等 readiness 后跑完整 6 类真实数据验证(~30s + jar 启动 ~90s)。
+#      时延高且需 seed 数据(否则 cursor 翻页项会 SKIP),目前不接 push 自动跑。
+#
+# **非阻断**:整个 workflow 与 pr-gate / full-ci-gate 解耦,即使失败也不挡 PR merge。
+# 想升级为阻断 → 把 pr-gate 加一个 needs: strict-verify-dry-run job。
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run = 只校验依赖(快); live = 起 PG + console-api 跑真实数据(慢)'
+        required: true
+        default: 'dry-run'
+        type: choice
+        options:
+          - dry-run
+          - live
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - 'scripts/local/strict-verify.sh'
+      - 'scripts/ci/run-full-regression.sh'
+      - '.github/workflows/strict-verify.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/local/strict-verify.sh'
+      - 'scripts/ci/run-full-regression.sh'
+      - '.github/workflows/strict-verify.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strict-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # Job 1: dry-run smoke。push / pr 触发自动跑;workflow_dispatch 默认也跑。
+  # ~1s 真实执行(加 checkout / setup 总共 ~30s)。
+  # =========================================================================
+  strict-verify-dry-run:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode == 'dry-run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate script syntax
+        shell: bash
+        run: |
+          bash -n scripts/local/strict-verify.sh
+          bash -n scripts/ci/run-full-regression.sh
+
+      - name: strict-verify --dry-run (prerequisites smoke)
+        shell: bash
+        # 走 run-full-regression 入口,确保 CI 通道真的能调起;CI=1 由 wrapper 注入
+        run: bash scripts/ci/run-full-regression.sh --strict-verify-dry-run --skip-default-tests --skip-it-suite --skip-static-gates
+
+  # =========================================================================
+  # Job 2: live full run。仅 workflow_dispatch mode=live 触发。
+  # 起 PG → 跑 flyway → 起 console-api → 跑真实数据验证。
+  # **non-blocking via continue-on-error**:不挂 PR 状态。
+  # 注意:cursor 翻页项需要 seed 数据,空库会 SKIP(脚本设计如此)。
+  # =========================================================================
+  strict-verify-live:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+      CONSOLE_PORT: '18080'
+      PG_CONTAINER: batch-postgres
+      PG_USER: batch_user
+      PG_DB: batch_platform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Bring up postgres (docker compose)
+        shell: bash
+        # 复用 docker-compose.yml 的 postgres service。其他服务(kafka / minio / redis)
+        # strict-verify 不需要,console-api 启动若有缺会失败 — 先 minimal 试,失败再扩。
+        run: |
+          if [[ -f .env.example ]]; then cp .env.example .env.local; fi
+          docker compose --env-file .env.local up -d postgres
+          # 等 PG ready
+          for _ in $(seq 1 60); do
+            if docker exec batch-postgres pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
+              echo "postgres ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Build console-api jar (skip tests)
+        shell: bash
+        run: |
+          mvn -DskipTests -pl batch-console-api -am package -B -q
+
+      - name: Start console-api
+        shell: bash
+        run: |
+          JAR=$(ls batch-console-api/target/batch-console-api-*.jar | head -1)
+          echo "starting $JAR"
+          nohup java -jar "$JAR" --spring.profiles.active=local \
+            > /tmp/console-api.log 2>&1 &
+          # 等 actuator/health UP
+          for i in $(seq 1 90); do
+            if curl -sf "http://localhost:${CONSOLE_PORT}/actuator/health" -o /dev/null 2>/dev/null; then
+              echo "console-api ready after ${i}*2s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "console-api FAILED to come up; last log tail:" >&2
+          tail -100 /tmp/console-api.log >&2 || true
+          exit 1
+
+      - name: Run strict-verify (live, non-blocking)
+        # continue-on-error:作为非阻断 step。pipeline 默认 step 失败会染红整个 job,
+        # 这里用 || true + 单独捕获 exit code,既保留可观察性又不挡通行。
+        shell: bash
+        run: |
+          set +e
+          env CI=1 bash scripts/local/strict-verify.sh
+          rc=$?
+          echo "strict-verify exit code: $rc"
+          exit 0   # 永远返回 0,真正想阻断的话改这里为 exit $rc
+        continue-on-error: true
+
+      - name: Dump console-api log on failure
+        if: always()
+        shell: bash
+        run: |
+          echo "===== /tmp/console-api.log (tail 200) ====="
+          tail -200 /tmp/console-api.log || true
+
+      - name: Tear down
+        if: always()
+        shell: bash
+        run: |
+          docker compose down -v || true

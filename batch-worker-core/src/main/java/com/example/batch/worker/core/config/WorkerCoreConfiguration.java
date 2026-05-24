@@ -7,12 +7,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
 @Configuration
-@Import(WorkerReportOutboxConfiguration.class)
+@Import({WorkerReportOutboxConfiguration.class, WorkerCoreAsyncConfiguration.class})
 @EnableConfigurationProperties({
   OrchestratorWorkerClientProperties.class,
   OrchestratorTaskClientProperties.class,
   WorkerExecutionTimeoutProperties.class,
   WorkerReportOutboxProperties.class,
-  WorkerLeaseProperties.class
+  WorkerLeaseProperties.class,
+  WorkerWatchdogSchedulerProperties.class
 })
 public class WorkerCoreConfiguration {}

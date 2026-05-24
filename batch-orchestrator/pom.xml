@@ -68,6 +68,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
+        <!-- Caffeine：OrchestratorConfigCacheService 的 negativeCache 有界化（maximumSize 10k） -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
 
         <!-- Spring Boot 4：Flyway 自动配置在 starter 中，仅 flyway-core 不会执行迁移 -->
         <dependency>

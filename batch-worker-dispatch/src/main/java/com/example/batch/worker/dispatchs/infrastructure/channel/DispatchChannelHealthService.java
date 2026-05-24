@@ -13,10 +13,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +47,12 @@ public class DispatchChannelHealthService {
   // 单次探针查询上限，防止渠道数量过大时探针调度器阻塞 DB 连接池
   private static final int MAX_PROBE_CHANNEL_BATCH = 1000;
 
+  // R-A1-P1：并行探针线程池规模 + 单条探针超时上限。
+  // 串行处理 1000 个渠道时，SFTP connect 30s 阻塞会让 Spring 默认单线程 taskScheduler 积压数百分钟；
+  // 固定 8 线程 + 5s 超时把最坏情况收敛到 ~1000/8*5s ≈ 10 分钟，且单条慢节点不影响其他渠道。
+  private static final int PROBE_PARALLELISM = 8;
+  private static final long PROBE_TIMEOUT_SECONDS = 5L;
+
   private final DispatchChannelHealthRepository repository;
   private final DispatchChannelHealthProperties properties;
   private final DispatchCircuitBreakerProperties circuitBreakerProperties;
@@ -47,9 +63,20 @@ public class DispatchChannelHealthService {
   private MinioClient minioClient;
   private final AtomicLong probeSuccessCount = new AtomicLong();
   private final AtomicLong probeFailureCount = new AtomicLong();
+  private ExecutorService probeExecutor;
 
   @PostConstruct
   void init() {
+    // 用命名线程 + daemon=true，避免 JVM 退出时探针线程残留；ThreadFactory 序号用 AtomicInteger 保线程安全。
+    AtomicInteger counter = new AtomicInteger();
+    ThreadFactory factory =
+        runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setName("dispatch-channel-probe-" + counter.incrementAndGet());
+          thread.setDaemon(true);
+          return thread;
+        };
+    this.probeExecutor = Executors.newFixedThreadPool(PROBE_PARALLELISM, factory);
     if (minioStorageProperties != null
         && Texts.hasText(minioStorageProperties.getEndpoint())
         && Texts.hasText(minioStorageProperties.getAccessKey())
@@ -167,18 +194,73 @@ public class DispatchChannelHealthService {
     List<Map<String, Object>> rows =
         repository.findEnabledProbeChannels(
             properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH);
+    if (rows.isEmpty()) {
+      return;
+    }
+    // R-A1-P1：并行提交所有探针任务，单条 5s 超时；调度线程只等总聚合结果，不被任意单条慢节点拖住。
+    // 不用 invokeAll(timeout) 整体超时（早完成的探针会浪费窗口），改为每个 Future 各自 get(5s)。
+    List<Future<?>> futures = new ArrayList<>(rows.size());
     for (Map<String, Object> row : rows) {
+      futures.add(probeExecutor.submit(() -> probeOneSafely(row)));
+    }
+    for (int i = 0; i < futures.size(); i++) {
+      Future<?> future = futures.get(i);
+      Map<String, Object> row = rows.get(i);
       try {
-        probeOne(row);
-      } catch (Exception exception) {
+        future.get(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      } catch (TimeoutException timeout) {
+        future.cancel(true);
         probeFailureCount.incrementAndGet();
-        // R-4.10：row 可能含 password / api_key 等凭证，脱敏后再打日志
+        log.warn(
+            "dispatch channel probe timed out after {}s: row={}",
+            PROBE_TIMEOUT_SECONDS,
+            SecretMasking.maskSensitiveKeys(row));
+      } catch (ExecutionException executionEx) {
+        probeFailureCount.incrementAndGet();
         log.warn(
             "dispatch channel probe exception: error={}, row={}",
-            exception.getMessage(),
+            executionEx.getCause() == null
+                ? executionEx.getMessage()
+                : executionEx.getCause().getMessage(),
             SecretMasking.maskSensitiveKeys(row),
-            exception);
+            executionEx.getCause() == null ? executionEx : executionEx.getCause());
+      } catch (InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+        future.cancel(true);
+        log.warn(
+            "dispatch channel probe interrupted: row={}", SecretMasking.maskSensitiveKeys(row));
+        return;
       }
+    }
+  }
+
+  private void probeOneSafely(Map<String, Object> row) {
+    try {
+      probeOne(row);
+    } catch (Exception exception) {
+      probeFailureCount.incrementAndGet();
+      // R-4.10：row 可能含 password / api_key 等凭证，脱敏后再打日志
+      log.warn(
+          "dispatch channel probe exception: error={}, row={}",
+          exception.getMessage(),
+          SecretMasking.maskSensitiveKeys(row),
+          exception);
+    }
+  }
+
+  @PreDestroy
+  void shutdownProbeExecutor() {
+    if (probeExecutor == null) {
+      return;
+    }
+    probeExecutor.shutdown();
+    try {
+      if (!probeExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+        probeExecutor.shutdownNow();
+      }
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      probeExecutor.shutdownNow();
     }
   }
 

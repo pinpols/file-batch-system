@@ -11,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -42,8 +40,6 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@Configuration
-@EnableConfigurationProperties(ProcessStagingCleanupProperties.class)
 @ConditionalOnProperty(
     name = "batch.worker.process.staging-cleanup.enabled",
     havingValue = "true",

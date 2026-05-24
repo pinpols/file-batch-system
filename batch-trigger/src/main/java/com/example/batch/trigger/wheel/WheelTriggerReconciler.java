@@ -82,7 +82,9 @@ public class WheelTriggerReconciler {
    */
   public void doReconcile() {
     List<TriggerDescriptor> dbDescriptors = definitionLoader.loadAll();
-    Map<Long, TriggerDescriptor> wantedById = new HashMap<>();
+    // R-arch-audit-2026-05-23 P1: HashMap 预分配容量，避免大租户 (1k+ triggers) 场景下多次扩容。
+    // 默认 load factor 0.75 → 用 size * 2 兜底，足够容纳全部 enabled CRON descriptor 不触发 resize。
+    Map<Long, TriggerDescriptor> wantedById = new HashMap<>(dbDescriptors.size() * 2);
     for (TriggerDescriptor d : dbDescriptors) {
       if (!d.isEnabled() || d.getJobDefinitionId() == null) {
         continue;
@@ -160,6 +162,10 @@ public class WheelTriggerReconciler {
     for (TriggerRuntimeStateEntity state : allStates) {
       if (!wantedById.containsKey(state.getJobDefinitionId())) {
         stateMapper.deleteByJobDefinitionId(state.getJobDefinitionId());
+        // P1: trigger 被禁用 / 删除 → 同步释放 warnedInvalidCron 里 (tenantId, jobCode)
+        // 条目;否则该坏 cron 的"已警告过"标记会永驻进程,trigger 重建用同 jobCode + 同坏
+        // cron 时反而被静默吞掉首次 WARN。
+        warnedInvalidCron.remove(state.getTenantId() + ":" + state.getJobCode());
         deleted++;
         log.info(
             "wheel delete runtime_state: jobDefId={} jobCode={} (DB disabled or removed)",

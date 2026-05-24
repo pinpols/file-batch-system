@@ -1,6 +1,7 @@
-package com.example.batch.console.web;
+package com.example.batch.console.infrastructure.config;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.console.application.config.ConsoleTenantConfigCopyService;
 import com.example.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
@@ -58,7 +59,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ConsoleTenantConfigCopyService {
+public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfigCopyService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_ENABLED = "enabled";
@@ -103,6 +104,7 @@ public class ConsoleTenantConfigCopyService {
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final ConsoleTenantConfigInitApplicationService initService;
 
+  @Override
   public TenantConfigBatchInitResponse copy(
       TenantConfigCopyRequest request, String operator, String batchOperationId) {
     TenantConfigBatchInitRequest initRequest = new TenantConfigBatchInitRequest();
@@ -125,6 +127,7 @@ public class ConsoleTenantConfigCopyService {
     return initService.batchInit(initRequest, operator, batchOperationId);
   }
 
+  @Override
   public ConfigSyncBundlePayload buildBundle(String sourceTenantId, Set<ConfigType> configTypes) {
     boolean allTypes = configTypes == null || configTypes.isEmpty();
     ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
@@ -136,6 +139,7 @@ public class ConsoleTenantConfigCopyService {
     return bundle;
   }
 
+  @Override
   public ConfigSyncBundlePayload buildJobBundle(String sourceTenantId, String jobCode) {
     ConfigSyncBundlePayload all = buildBundle(sourceTenantId, Set.of());
     List<JobDefinitionSpec> jobs =

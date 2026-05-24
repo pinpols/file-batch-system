@@ -2,11 +2,11 @@ package com.example.batch.console.infrastructure.job;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.application.config.ConsoleTenantConfigCopyService;
 import com.example.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.application.job.ConsoleJobBundleApplicationService;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.ConsoleTenantConfigCopyService;
 import com.example.batch.console.web.request.config.ConfigSyncBundlePayload;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest;
 import com.example.batch.console.web.request.job.JobBundleCreateRequest;

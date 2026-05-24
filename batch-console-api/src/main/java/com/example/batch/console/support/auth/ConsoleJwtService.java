@@ -5,6 +5,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Hashes;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
@@ -18,7 +19,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -26,8 +26,8 @@ import java.util.Set;
 import java.util.UUID;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -64,7 +64,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ConsoleJwtService {
 
   private static final String TOKEN_TYPE = "console_access";
@@ -80,10 +79,58 @@ public class ConsoleJwtService {
   private final ConsoleSessionRegistry sessionRegistry;
   private final Environment environment;
 
-  // P0-3 / P2-2:可选注入,SlidingWindowRateLimiter / SseTicketService 已建 StringRedisTemplate bean;
-  // 非 Spring 单测场景 null,authenticate() / revoke() 自动降级跳过 revocation 检查。
-  @Autowired(required = false)
-  private StringRedisTemplate redisTemplate;
+  /**
+   * P1(2026-05-23 audit / CLAUDE.md §编码细则 #3):Redis 可选依赖改 {@link ObjectProvider} 构造器注入, 替代原
+   * {@code @Autowired(required = false)} field 注入。authenticate() / revoke() 内每次调用 {@link
+   * ObjectProvider#getIfAvailable()},非 Spring 单测场景或 redis 启动失败时返回 null, 与之前 {@code redisTemplate ==
+   * null} 降级路径完全一致。
+   */
+  private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
+
+  @Autowired
+  public ConsoleJwtService(
+      ConsoleSecurityProperties properties,
+      ConsoleSessionRegistry sessionRegistry,
+      Environment environment,
+      ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
+    this.properties = properties;
+    this.sessionRegistry = sessionRegistry;
+    this.environment = environment;
+    this.redisTemplateProvider = redisTemplateProvider;
+  }
+
+  /** 非 Spring 单测构造器:无 Redis,等价 ObjectProvider 永远返回 null。 */
+  public ConsoleJwtService(
+      ConsoleSecurityProperties properties,
+      ConsoleSessionRegistry sessionRegistry,
+      Environment environment) {
+    this(properties, sessionRegistry, environment, EmptyRedisProvider.INSTANCE);
+  }
+
+  /** 非 Spring 测试场景下提供空 {@link ObjectProvider},{@code getIfAvailable()} 始终返回 null。 */
+  private static final class EmptyRedisProvider implements ObjectProvider<StringRedisTemplate> {
+    static final EmptyRedisProvider INSTANCE = new EmptyRedisProvider();
+
+    @Override
+    public StringRedisTemplate getObject() {
+      throw new IllegalStateException("no StringRedisTemplate bean (test stub)");
+    }
+
+    @Override
+    public StringRedisTemplate getObject(Object... args) {
+      throw new IllegalStateException("no StringRedisTemplate bean (test stub)");
+    }
+
+    @Override
+    public StringRedisTemplate getIfAvailable() {
+      return null;
+    }
+
+    @Override
+    public StringRedisTemplate getIfUnique() {
+      return null;
+    }
+  }
 
   private static final String REVOKED_KEY_PREFIX = "console:revoked:jti:";
 
@@ -95,8 +142,10 @@ public class ConsoleJwtService {
 
   // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
   // jwt-secret 是 @ConfigurationProperties 字段，运行期不变。
-  private NimbusJwtEncoder cachedEncoder;
-  private JwtDecoder cachedDecoder;
+  // volatile：fallback 路径 encoder()/decoder() 是 DCL 模式,无 volatile JIT 重排序可能让其他线程读到
+  // 未完全构造的对象,虽然 SecretKey 重复构造无副作用但仍是 JMM 不安全模式。
+  private volatile NimbusJwtEncoder cachedEncoder;
+  private volatile JwtDecoder cachedDecoder;
 
   @PostConstruct
   void validateSecuritySecrets() {
@@ -219,8 +268,9 @@ public class ConsoleJwtService {
     }
     // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
     String jti = jwt.getClaimAsString(CLAIM_JTI);
-    if (jti != null && redisTemplate != null) {
-      Boolean revoked = redisTemplate.hasKey(REVOKED_KEY_PREFIX + jti);
+    StringRedisTemplate authRedis = redisTemplateProvider.getIfAvailable();
+    if (jti != null && authRedis != null) {
+      Boolean revoked = authRedis.hasKey(REVOKED_KEY_PREFIX + jti);
       if (Boolean.TRUE.equals(revoked)) {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
       }
@@ -237,7 +287,8 @@ public class ConsoleJwtService {
    * P0-3:把当前 token 加入 revocation 黑名单,TTL = token 剩余生命。 调用方:登出 endpoint 拿到当前 cookie 中的 token 后传入。
    */
   public void revoke(String token) {
-    if (redisTemplate == null) {
+    StringRedisTemplate revokeRedis = redisTemplateProvider.getIfAvailable();
+    if (revokeRedis == null) {
       return;
     }
     Jwt jwt;
@@ -258,7 +309,7 @@ public class ConsoleJwtService {
     if (ttlSeconds <= 0) {
       return; // 已过期,无需占用 Redis
     }
-    redisTemplate.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", Duration.ofSeconds(ttlSeconds));
+    revokeRedis.opsForValue().set(REVOKED_KEY_PREFIX + jti, "1", Duration.ofSeconds(ttlSeconds));
   }
 
   private void auditClientBindingDrift(Jwt jwt, String username, String tenantId) {
@@ -306,26 +357,11 @@ public class ConsoleJwtService {
   private String hashClientIp(HttpServletRequest req) {
     // 软绑定不信任 XFF(即便 trustForwardedHeaders=true 也只取 RemoteAddr 防伪造):
     // 这里是审计用途,假 XFF 反而让攻击者主动选定 token 绑定的 hash。
-    String ip = req.getRemoteAddr();
-    return ip == null ? null : sha256Short(ip);
+    return Hashes.sha256Short(req.getRemoteAddr());
   }
 
   private String hashUserAgent(HttpServletRequest req) {
-    String ua = req.getHeader("User-Agent");
-    return ua == null ? null : sha256Short(ua);
-  }
-
-  private String sha256Short(String raw) {
-    try {
-      byte[] full =
-          MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
-      // 取前 8 字节 (16 hex chars) — 防碰撞需求低,只用作 drift 比对
-      byte[] head = new byte[8];
-      System.arraycopy(full, 0, head, 0, 8);
-      return HexFormat.of().formatHex(head);
-    } catch (NoSuchAlgorithmException e) {
-      return null;
-    }
+    return Hashes.sha256Short(req.getHeader("User-Agent"));
   }
 
   private NimbusJwtEncoder encoder() {

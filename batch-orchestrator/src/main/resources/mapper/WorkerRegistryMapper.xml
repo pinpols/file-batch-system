@@ -112,6 +112,17 @@
          where tenant_id = #{tenantId} and status = #{status}
     </select>
 
+    <select id="countByTenantsAndStatus" resultType="java.util.Map">
+        select tenant_id, count(1) as cnt
+          from batch.worker_registry
+         where status = #{status}
+           and tenant_id in
+        <foreach collection="tenantIds" item="tid" open="(" separator="," close=")">
+            #{tid}
+        </foreach>
+         group by tenant_id
+    </select>
+
     <select id="countByTenantAndWorkerGroupAndStatus" resultType="long">
         select count(1) from batch.worker_registry
          where tenant_id = #{tenantId}

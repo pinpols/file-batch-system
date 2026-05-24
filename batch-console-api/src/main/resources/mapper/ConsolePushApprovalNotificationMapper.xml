@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConsolePushApprovalNotificationMapper">
+
+    <resultMap id="pendingApprovalMap" type="com.example.batch.console.support.push.PendingApprovalNotification">
+        <result column="tenant_id"        property="tenantId"/>
+        <result column="approval_no"      property="approvalNo"/>
+        <result column="approval_type"    property="approvalType"/>
+        <result column="approval_status"  property="approvalStatus"/>
+        <result column="requester_id"     property="requesterId"/>
+        <result column="approver_id"      property="approverId"/>
+        <result column="approval_reason"  property="approvalReason"/>
+        <result column="rejection_reason" property="rejectionReason"/>
+        <result column="approved_at"      property="approvedAt"/>
+    </resultMap>
+
+    <select id="findPending" resultMap="pendingApprovalMap">
+        select ac.tenant_id        as tenant_id,
+               ac.approval_no      as approval_no,
+               ac.approval_type    as approval_type,
+               ac.approval_status  as approval_status,
+               ac.requester_id     as requester_id,
+               ac.approver_id      as approver_id,
+               ac.approval_reason  as approval_reason,
+               ac.rejection_reason as rejection_reason,
+               ac.approved_at      as approved_at
+          from batch.approval_command ac
+         where ac.approval_status in ('APPROVED', 'REJECTED', 'EXECUTED')
+           and ac.approved_at is not null
+           and ac.approved_at &gt;= now() - (#{lookbackMinutes}::text || ' minutes')::interval
+           and ac.requester_id is not null
+           and not exists (
+               select 1
+                 from batch.console_push_approval_notification n
+                where n.tenant_id = ac.tenant_id
+                  and n.approval_no = ac.approval_no
+           )
+         order by ac.approved_at asc
+         limit #{batchSize}
+    </select>
+
+    <insert id="insertIgnore" parameterType="com.example.batch.console.domain.entity.ConsolePushApprovalNotificationEntity">
+        insert into batch.console_push_approval_notification
+            (tenant_id, approval_no)
+        values
+            (#{tenantId}, #{approvalNo})
+        on conflict (tenant_id, approval_no) do nothing
+    </insert>
+
+</mapper>

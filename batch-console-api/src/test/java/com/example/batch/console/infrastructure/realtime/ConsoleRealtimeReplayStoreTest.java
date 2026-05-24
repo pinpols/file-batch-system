@@ -49,7 +49,8 @@ class ConsoleRealtimeReplayStoreTest {
             false,
             JsonUtils.toJson("b"),
             BatchDateTimeSupport.utcNow());
-    when(listOperations.range("batch:console:realtime:buffer:t1:alerts", 0, -1))
+    // P1(2026-05-23 audit):replay 改用 LRANGE 0 (replayMaxEntries - 1) 截断,与 properties() 配对。
+    when(listOperations.range("batch:console:realtime:buffer:t1:alerts", 0, 19_999L))
         .thenReturn(List.of(JsonUtils.toJson(first), JsonUtils.toJson(second)));
 
     ConsoleRealtimeReplayStore.ReplayBatch replay = store.replay("t1", "alerts", "cursor-1", null);

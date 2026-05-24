@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -196,20 +197,23 @@ public class DefaultTriggerService implements TriggerService {
       LaunchRequest launchRequest, String dedupKey) {
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    final TriggerRequestEntity[] existingHolder = new TriggerRequestEntity[1];
+    // R-arch-audit-2026-05-23 P1: 用 AtomicReference 替代单元素数组 holder。
+    // 数组 workaround 是 lambda effectively-final 限制的反模式，AtomicReference 语义更清晰
+    // 且无并发开销（TransactionTemplate.execute 单线程内同步执行）。
+    AtomicReference<TriggerRequestEntity> existingHolder = new AtomicReference<>();
     tx.execute(
         _ -> {
           TriggerRequestEntity existing =
               triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
           if (existing != null) {
-            existingHolder[0] = existing;
+            existingHolder.set(existing);
             return null;
           }
           triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
           publishLaunchOutbox(launchRequest, dedupKey);
           return null;
         });
-    return existingHolder[0];
+    return existingHolder.get();
   }
 
   /**
@@ -260,11 +264,15 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private String buildScheduledDedupKey(ScheduledTriggerCommand command) {
+    // R-arch-audit-2026-05-23 P2: 用 Instant.toEpochMilli() 替代 Instant.toString()。
+    // Instant.toString() 输出会按精度自动调整（如 "...:00Z" vs "...:00.000Z"），不同 JVM /
+    // 序列化路径可能产生不同字符串，导致同一 fireTime 算出不同 dedupKey，去重失效。
+    // toEpochMilli() 是稳定的 long → String，跨 JVM 一致。
     return command.descriptor().getTenantId()
         + ":"
         + command.descriptor().getJobCode()
         + ":"
-        + command.fireTime();
+        + command.fireTime().toEpochMilli();
   }
 
   private LaunchResponse skipScheduled(ScheduledTriggerCommand command) {
@@ -305,16 +313,19 @@ public class DefaultTriggerService implements TriggerService {
     if (rules == null) {
       rules = List.of();
     }
+    // R-arch-audit-2026-05-23 P1: 用 toUnmodifiableSet 替代 toSet，防止下游意外修改 holidays /
+    // workdayOverrides。CalendarBizDateDefinition 是 record，字段引用不可变但 Set 本身可写，
+    // toUnmodifiableSet 明确兜底，符合 CLAUDE.md §集合 "返回不可变集合" 约定。
     Set<LocalDate> holidays =
         rules.stream()
             .filter(rule -> isDayType(rule, "HOLIDAY"))
             .map(CalendarHolidayRule::getBizDate)
-            .collect(Collectors.toSet());
+            .collect(Collectors.toUnmodifiableSet());
     Set<LocalDate> workdayOverrides =
         rules.stream()
             .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
             .map(CalendarHolidayRule::getBizDate)
-            .collect(Collectors.toSet());
+            .collect(Collectors.toUnmodifiableSet());
     return new CalendarBizDateDefinition(
         calendar.getTimezone(),
         calendar.getCutoffTime(),
@@ -336,8 +347,11 @@ public class DefaultTriggerService implements TriggerService {
   private void assertTenantActive(String tenantId) {
     String status = tenantStatusMapper.selectStatus(tenantId);
     if ("SUSPENDED".equals(status)) {
+      // R-arch-audit-2026-05-23 P1: 用 ResultCode.TENANT_SUSPENDED 替代 BUSINESS_ERROR + 字符串后缀，
+      // 让上游（QuartzLaunchJob / Wheel fire）能通过 getCode() 枚举比较识别租户暂停语义，
+      // 不再依赖脆弱的 e.getMessage().contains("tenant is suspended")。
       throw BizException.of(
-          ResultCode.BUSINESS_ERROR,
+          ResultCode.TENANT_SUSPENDED,
           "error.common.business_error_detail",
           "tenant is suspended, triggers are not allowed: " + tenantId);
     }

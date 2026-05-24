@@ -1,7 +1,11 @@
-package com.example.batch.orchestrator.application.service.sensor;
+package com.example.batch.orchestrator.infrastructure.sensor;
 
 import com.example.batch.common.enums.SensorType;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.service.sensor.SensorContext;
+import com.example.batch.orchestrator.application.service.sensor.SensorPolicy;
+import com.example.batch.orchestrator.application.service.sensor.SensorProbeResult;
+import com.example.batch.orchestrator.application.service.sensor.SensorSpecs;
 import com.example.batch.orchestrator.mapper.SensorFileArrivalMapper;
 import java.time.Instant;
 import java.time.OffsetDateTime;

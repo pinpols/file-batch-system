@@ -12,22 +12,47 @@
 #   5. cursor token 解码失败安全降级(返回空,不抛 500)
 #
 # 用法:
-#   bash scripts/local/strict-verify.sh
+#   bash scripts/local/strict-verify.sh              # 完整真实数据验证(本地默认)
+#   bash scripts/local/strict-verify.sh --dry-run    # 仅校验前置依赖(CI smoke 用)
+#   bash scripts/local/strict-verify.sh --help
 #
 # 环境变量:
 #   CONSOLE_PORT (默认 18080)
-#   PG_CONTAINER / PG_USER / PG_DB (默认 batch-postgres / batch_user / batch_platform)
+#   PG_CONTAINER / PG_USER / PG_DB (默认 batch-postgres-primary / batch_user / batch_platform)
+#   CI=1     CI 适配:关闭 ANSI 颜色,失败时打印额外诊断,不改变 exit code 语义
 # =========================================================
 
 set -uo pipefail
 
+DRY_RUN=0
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=1
+      ;;
+    --help|-h)
+      sed -n '2,30p' "$0"
+      exit 0
+      ;;
+    *)
+      printf 'Unknown option: %s\n' "$arg" >&2
+      exit 2
+      ;;
+  esac
+done
+
 CONSOLE_PORT="${CONSOLE_PORT:-18080}"
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres}"
+PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 PG_USER="${PG_USER:-batch_user}"
 PG_DB="${PG_DB:-batch_platform}"
 BASE="http://localhost:${CONSOLE_PORT}"
 
-GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' RST='\033[0m'
+# CI 模式关闭 ANSI 颜色(避免 GitHub Actions 日志里 ^[[32m 噪音);本地保留高亮
+if [[ "${CI:-}" == "1" || "${CI:-}" == "true" || ! -t 1 ]]; then
+  GREEN='' RED='' YELLOW='' BLUE='' RST=''
+else
+  GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' RST='\033[0m'
+fi
 PASS=0 FAIL=0
 
 psql_q() {
@@ -38,6 +63,58 @@ pass() { printf " ${GREEN}🟢 PASS${RST}  %s — %s\n" "$1" "$2"; PASS=$((PASS+
 fail() { printf " ${RED}🔴 FAIL${RST}  %s — %s\n" "$1" "$2"; FAIL=$((FAIL+1)); }
 skip() { printf " ${YELLOW}🟡 SKIP${RST}  %s — %s\n" "$1" "$2"; }
 hdr()  { printf "\n${BLUE}━━━ %s ━━━${RST}\n" "$1"; }
+
+# ───────────────────────────────────────────────────────────
+# §0. 前置依赖检查(--dry-run 模式只跑到这里即返回)
+#
+# CI 接入策略:每个 push 跑一次 --dry-run,验证脚本本身在 CI 环境里
+# 仍可成功解析参数 + 检测依赖缺失,不实际跑真实数据验证(那需要 PG +
+# console-api 起来,见 .github/workflows/strict-verify.yml 手动派发模式)。
+# ───────────────────────────────────────────────────────────
+hdr "0. 前置依赖检查"
+
+PRECHECK_FAIL=0
+if command -v docker >/dev/null 2>&1; then
+  pass "docker CLI 可用" "$(docker --version 2>/dev/null | head -1)"
+else
+  fail "docker CLI 缺失" "本脚本依赖 docker exec 访问 PG 容器"
+  PRECHECK_FAIL=1
+fi
+
+if command -v curl >/dev/null 2>&1; then
+  pass "curl 可用" "$(curl --version 2>/dev/null | head -1)"
+else
+  fail "curl 缺失" "本脚本依赖 curl 调 console-api HTTP 接口"
+  PRECHECK_FAIL=1
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  pass "python3 可用" "$(python3 --version 2>/dev/null)"
+else
+  fail "python3 缺失" "本脚本用 python3 解析 JSON / YAML 响应"
+  PRECHECK_FAIL=1
+fi
+
+if [[ "$DRY_RUN" == "1" ]]; then
+  # dry-run 模式:只跑前置检查,不连 PG / console-api
+  hdr "DRY-RUN 汇总"
+  printf "  PASS: %s  FAIL: %s  (dry-run: 跳过真实数据验证)\n" "$PASS" "$FAIL"
+  if [[ "$PRECHECK_FAIL" -gt 0 ]]; then
+    exit 1
+  fi
+  exit 0
+fi
+
+# 非 dry-run 模式继续验证 PG 容器可达 + console-api 探活,失败直接整体退出
+# (不算 FAIL 计数,因为这是环境问题不是数据问题)
+if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+  printf "${RED}[fatal]${RST} PG 容器 '%s' 未运行 — 请先 'docker compose up -d postgres' 或本地启动\n" "$PG_CONTAINER" >&2
+  exit 2
+fi
+if ! curl -sf "${BASE}/actuator/health" -o /dev/null --max-time 5 2>/dev/null; then
+  printf "${RED}[fatal]${RST} console-api %s 不可达 — 请先启动 console-api(scripts/local/start-all.sh)\n" "$BASE" >&2
+  exit 2
+fi
 
 # ───────────────────────────────────────────────────────────
 # §1. cursor vs offset 翻页一致性(SQL 等价 sanity)

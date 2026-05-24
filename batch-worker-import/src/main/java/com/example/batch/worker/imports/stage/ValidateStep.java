@@ -1,6 +1,5 @@
 package com.example.batch.worker.imports.stage;
 
-import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -13,6 +12,7 @@ import com.example.batch.worker.imports.infrastructure.ImportDataQualityService;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationIssue;
 import com.example.batch.worker.imports.infrastructure.quality.ValidationSession;
+import com.example.batch.worker.imports.stage.support.ImportStageSupport;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -165,12 +165,22 @@ public class ValidateStep implements ImportStageStep {
     // R-4.3: 数据集级校验阶段 validatedRecordsPath 尚未创建，
     // 超阈值直接返回失败结果即可，不需要 delete（之前代码传 null 进来也是 no-op）。
     for (ValidationIssue issue : session.datasetIssues()) {
-      recordValidationError(
-          context,
-          issue.recordNo() == null ? 0L : issue.recordNo(),
-          issue.errorCode(),
-          issue.errorMessage(),
-          issue.rawRecord());
+      ValidationErrorOutcome outcome =
+          recordValidationError(
+              context,
+              issue.recordNo() == null ? 0L : issue.recordNo(),
+              issue.errorCode(),
+              issue.errorMessage(),
+              issue.rawRecord());
+      if (outcome.stop()) {
+        return ImportStageResult.failure(
+            stage(),
+            outcome.errorCode(),
+            "error.import.validate.row_invalid",
+            new Object[] {outcome.errorMessage()},
+            outcome.errorMessage(),
+            objectMapper);
+      }
       if (!recordGovernanceService.withinThreshold(context)) {
         return ImportStageResult.failure(
             stage(),
@@ -217,8 +227,21 @@ public class ValidateStep implements ImportStageStep {
         } catch (Exception exception) {
           SwallowedExceptionLogger.warn(ValidateStep.class, "catch:Exception", exception);
 
-          recordValidationError(
-              context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
+          ValidationErrorOutcome outcome =
+              recordValidationError(
+                  context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
+          if (outcome.stop()) {
+            return new StreamingValidationResult(
+                validatedCount,
+                loadedCandidateCount,
+                ImportStageResult.failure(
+                    stage(),
+                    outcome.errorCode(),
+                    "error.import.validate.row_invalid",
+                    new Object[] {outcome.errorMessage()},
+                    outcome.errorMessage(),
+                    objectMapper));
+          }
           if (!recordGovernanceService.withinThreshold(context)) {
             return new StreamingValidationResult(
                 validatedCount,
@@ -316,8 +339,13 @@ public class ValidateStep implements ImportStageStep {
       long recordNo = chunkStartRecordNo + index;
       ValidationIssue issue = issues.get(recordNo);
       if (issue != null) {
-        recordValidationError(
-            context, recordNo, issue.errorCode(), issue.errorMessage(), issue.rawRecord());
+        ValidationErrorOutcome outcome =
+            recordValidationError(
+                context, recordNo, issue.errorCode(), issue.errorMessage(), issue.rawRecord());
+        if (outcome.stop()) {
+          return ChunkProcessResult.failure(
+              outcome.errorCode(), outcome.errorMessage(), validCount);
+        }
         if (!recordGovernanceService.withinThreshold(context)) {
           return ChunkProcessResult.failure(
               ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED, validCount);
@@ -331,7 +359,14 @@ public class ValidateStep implements ImportStageStep {
     return ChunkProcessResult.success(validCount);
   }
 
-  private void recordValidationError(
+  /**
+   * P1: 改为返回 {@link ValidationErrorOutcome},不再用 IllegalStateException 控流。 调用方根据 shouldStop()
+   * 决定是否提前返回 ChunkProcessResult.failure(...)。
+   *
+   * <p>旧实现 throw → processValidationBatch 外层 catch(Exception) → 抹成 IMPORT_VALIDATE_FAILED 失败码,丢失了
+   * "skip threshold exceeded" / "FAIL_BATCH" 语义。
+   */
+  private ValidationErrorOutcome recordValidationError(
       ImportJobContext context,
       long recordNo,
       String errorCode,
@@ -340,12 +375,22 @@ public class ValidateStep implements ImportStageStep {
     if (!recordGovernanceService.isSkippable(errorCode)) {
       recordGovernanceService.recordFailedRecord(
           context, stage(), recordNo, errorCode, errorMessage, rawRecord);
-      throw new IllegalStateException(errorMessage);
+      return ValidationErrorOutcome.stop(errorCode, errorMessage);
     }
     recordGovernanceService.recordSkippedRecord(
         context, stage(), recordNo, errorCode, errorMessage, rawRecord);
     if (recordGovernanceService.shouldFailOnSkip(errorCode)) {
-      throw new IllegalStateException("skip action FAIL_BATCH");
+      return ValidationErrorOutcome.stop(errorCode, "skip action FAIL_BATCH");
+    }
+    return ValidationErrorOutcome.CONTINUE;
+  }
+
+  /** P1: 校验错误处置结果,替代原 IllegalStateException 控流。 */
+  private record ValidationErrorOutcome(boolean stop, String errorCode, String errorMessage) {
+    static final ValidationErrorOutcome CONTINUE = new ValidationErrorOutcome(false, null, null);
+
+    static ValidationErrorOutcome stop(String errorCode, String errorMessage) {
+      return new ValidationErrorOutcome(true, errorCode, errorMessage);
     }
   }
 
@@ -358,17 +403,7 @@ public class ValidateStep implements ImportStageStep {
   }
 
   private long numberValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (value == null) {
-      return 0L;
-    }
-    String text = String.valueOf(value);
-    if (!Texts.hasText(text)) {
-      return 0L;
-    }
-    return Long.parseLong(text);
+    return ImportStageSupport.numberValue(value);
   }
 
   private List<String> stringList(Object value) {
@@ -385,46 +420,19 @@ public class ValidateStep implements ImportStageStep {
   }
 
   private String stringValue(Object value) {
-    if (value == null) {
-      return null;
-    }
-    String text = String.valueOf(value);
-    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    return ImportStageSupport.stringValue(value);
   }
 
   private int resolveChunkSize(ImportJobContext context) {
-    int fallback = workerConfiguration == null ? 500 : workerConfiguration.chunkSize();
-    Object templateConfigObject =
-        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (templateConfigObject instanceof Map<?, ?> templateConfig) {
-      Object value = templateConfig.get("chunk_size");
-      if (value instanceof Number number) {
-        return Math.max(1, number.intValue());
-      }
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return Math.max(1, Integer.parseInt(String.valueOf(value)));
-      }
-    }
-    return Math.max(1, fallback);
+    return ImportStageSupport.resolveChunkSize(context, workerConfiguration);
   }
 
   private Path createValidatedFile(ImportJobContext context) throws Exception {
-    String fileId = context == null ? "unknown" : String.valueOf(context.getFileId());
-    String workerId = context == null ? "worker" : String.valueOf(context.getWorkerId());
-    return Files.createTempFile(
-        BatchFileConstants.validatedStagePrefix(fileId, workerId),
-        BatchFileConstants.NDJSON_SUFFIX);
+    return ImportStageSupport.createValidatedFile(context);
   }
 
   private void deleteQuietly(Path path) {
-    if (path == null) {
-      return;
-    }
-    try {
-      Files.deleteIfExists(path);
-    } catch (Exception ex) {
-      log.warn("Failed to delete temp file: {}", path, ex);
-    }
+    ImportStageSupport.deleteQuietly(path);
   }
 
   private record ChunkProcessResult(

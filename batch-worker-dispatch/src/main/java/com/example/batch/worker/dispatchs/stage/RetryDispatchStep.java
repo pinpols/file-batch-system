@@ -1,5 +1,7 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import static com.example.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
+
 import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -9,9 +11,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
-import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -24,8 +24,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class RetryDispatchStep implements DispatchStageStep {
-
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
@@ -90,16 +88,8 @@ public class RetryDispatchStep implements DispatchStageStep {
     fileDispatchRepository.incrementAttempt(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
     DispatchResult dispatchResult =
-        dispatchChannelGateway.dispatch(
-            new DispatchCommand(
-                context.getTenantId(),
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                fileRecord,
-                channelConfig,
-                dispatchPayload));
-    context.getAttributes().put("dispatchResult", dispatchResult);
-    context.getAttributes().put("externalRequestId", dispatchResult.externalRequestId());
-    context.getAttributes().put("receiptCode", dispatchResult.receiptCode());
+        DispatchInvocationSupport.invokeAndRecordIdentifiers(
+            dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
     if (!dispatchResult.success()) {
       int updated =
           fileDispatchRepository.markFailed(
@@ -132,15 +122,8 @@ public class RetryDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     int updated =
-        fileDispatchRepository.markSent(
-            context.getTenantId(),
-            fileId,
-            dispatchPayload.channelCode(),
-            dispatchResult.externalRequestId(),
-            dispatchResult.receiptCode(),
-            dispatchResult.acknowledged()
-                ? "SUCCESS"
-                : dispatchResult.receiptPending() ? "PENDING" : "NONE");
+        DispatchInvocationSupport.markSent(
+            fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
     if (updated <= 0) {
       context
           .getAttributes()

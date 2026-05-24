@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.sharding;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -21,6 +22,12 @@ import org.springframework.scheduling.annotation.Scheduled;
  *
  * <p>容错：Redis 读写任何异常发生时，回退到上一次成功读到的 {@link ShardAssignment}， 保证调度不中断。集群启动时若 Redis 不可用，首次 {@link
  * #current()} 返回 {@link ShardAssignment#single()}（退化为单实例）。
+ *
+ * <p>TODO(needs-manual-review): 审计 (2026-05-23) 提议改为 @Component 注册。 当前由 {@link
+ * com.example.batch.orchestrator.config.ShardingConfiguration} 通过 {@code @Bean} 方法装配, 这种方式产生的也是
+ * Spring 管理 bean,理论上 {@code @Scheduled} 心跳能生效;但为消除歧义, 已新增 {@link #selfCheckOnStartup()} 启动期自检,首次
+ * heartbeat 失败会立刻 WARN 暴露。 真正改 @Component 需要把构造参数 (memberId / memberTtl) 重构为 @Value / properties
+ * bean 注入, 牵动分片机制初始化时序,留待人工审阅。
  */
 @Slf4j
 public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
@@ -48,6 +55,24 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     this.redis = redis;
     this.memberId = memberId;
     this.memberTtl = memberTtl;
+  }
+
+  /**
+   * 启动期自检：立即发出第一次 heartbeat,失败则 WARN 暴露 (避免 @Scheduled 注册失败 / Redis 启动早期不可达时,DYNAMIC
+   * 模式静默退化为单实例无任何告警)。
+   */
+  @PostConstruct
+  void selfCheckOnStartup() {
+    try {
+      redis.opsForZSet().add(MEMBERS_KEY, memberId, BatchDateTimeSupport.utcEpochMillis());
+      log.info("RedisShardAssignmentProvider startup heartbeat OK: member={}", memberId);
+    } catch (RuntimeException ex) {
+      log.warn(
+          "RedisShardAssignmentProvider startup heartbeat FAILED: member={}, err={} "
+              + "— DYNAMIC sharding 将持续退化为单实例直至 Redis 恢复",
+          memberId,
+          ex.toString());
+    }
   }
 
   /**

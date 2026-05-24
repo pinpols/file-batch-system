@@ -26,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 class DefaultTaskExecutionWrapperTest {
 
@@ -35,6 +36,7 @@ class DefaultTaskExecutionWrapperTest {
   private TaskExecutionPool executionPool;
   private WorkerExecutionTimeoutProperties timeoutProperties;
   private MeterRegistry registry;
+  private ThreadPoolTaskScheduler watchdogScheduler;
   private DefaultTaskExecutionWrapper wrapper;
 
   @BeforeEach
@@ -53,6 +55,11 @@ class DefaultTaskExecutionWrapperTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(registry);
+    watchdogScheduler = new ThreadPoolTaskScheduler();
+    watchdogScheduler.setPoolSize(1);
+    watchdogScheduler.setThreadNamePrefix("worker-task-cancel-watchdog-");
+    watchdogScheduler.setDaemon(true);
+    watchdogScheduler.initialize();
     wrapper =
         new DefaultTaskExecutionWrapper(
             stepExecutionAdapter,
@@ -60,13 +67,14 @@ class DefaultTaskExecutionWrapperTest {
             activeTaskLeaseRegistry,
             executionPool,
             timeoutProperties,
-            provider);
-    wrapper.initWatchdog();
+            provider,
+            watchdogScheduler);
   }
 
   @AfterEach
   void tearDown() {
     wrapper.shutdownWatchdog();
+    watchdogScheduler.shutdown();
     executionPool.shutdown();
   }
 

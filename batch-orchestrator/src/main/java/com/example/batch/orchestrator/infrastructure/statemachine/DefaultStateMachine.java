@@ -7,7 +7,10 @@ import com.example.batch.orchestrator.domain.statemachine.StateTransition;
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +26,23 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class DefaultStateMachine<T> implements StateMachine<T> {
+
+  /** 反射方法名候选,顺序敏感(优先匹配更具体的 getXxxStatus)。 */
+  private static final List<String> GETTER_METHOD_NAMES =
+      List.of(
+          "getInstanceStatus",
+          "getPartitionStatus",
+          "getTaskStatus",
+          "getRunStatus",
+          "getNodeStatus",
+          "getStatus");
+
+  /**
+   * 按 Class 缓存的 status getter Method,首次反射后驻留,后续 transition 调用 O(1) 查表。 Optional.empty 表示该 class
+   * 上无任何匹配方法(下次仍走快速失败路径,避免反复反射查询)。
+   */
+  private static final Map<Class<?>, Optional<Method>> STATUS_GETTER_CACHE =
+      new ConcurrentHashMap<>();
 
   @Override
   public StateTransition transition(T target, String event) {
@@ -49,16 +69,11 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
         return status;
       }
     }
-    // 尚未实现 Stateful 的类型走反射兜底。
-    for (String methodName :
-        List.of(
-            "getInstanceStatus",
-            "getPartitionStatus",
-            "getTaskStatus",
-            "getRunStatus",
-            "getNodeStatus",
-            "getStatus")) {
-      String status = invokeStringGetter(target, methodName);
+    // 尚未实现 Stateful 的类型走反射兜底(Method 在 STATUS_GETTER_CACHE 中按 Class 缓存)。
+    Optional<Method> cached =
+        STATUS_GETTER_CACHE.computeIfAbsent(target.getClass(), DefaultStateMachine::resolveGetter);
+    if (cached.isPresent()) {
+      String status = invokeStringGetter(target, cached.get());
       if (Texts.hasText(status)) {
         return status;
       }
@@ -70,15 +85,28 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
             + ": implement Stateful or expose a getStatus() / getXxxStatus() method");
   }
 
-  private String invokeStringGetter(T target, String methodName) {
+  /** 首次解析:按 GETTER_METHOD_NAMES 顺序查找一次,命中即缓存。 */
+  private static Optional<Method> resolveGetter(Class<?> clazz) {
+    for (String methodName : GETTER_METHOD_NAMES) {
+      try {
+        Method method = clazz.getMethod(methodName);
+        if (method.getReturnType() == String.class) {
+          return Optional.of(method);
+        }
+      } catch (NoSuchMethodException ignored) {
+        // 继续尝试下一个候选
+      }
+    }
+    return Optional.empty();
+  }
+
+  private String invokeStringGetter(T target, Method method) {
     try {
-      Method method = target.getClass().getMethod(methodName);
       Object value = method.invoke(target);
       return value instanceof String status ? status : null;
     } catch (ReflectiveOperationException exception) {
       SwallowedExceptionLogger.info(
           DefaultStateMachine.class, "catch:ReflectiveOperationException", exception);
-
       return null;
     }
   }

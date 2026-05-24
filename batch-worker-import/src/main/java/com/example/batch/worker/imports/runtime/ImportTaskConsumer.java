@@ -9,6 +9,7 @@ import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
@@ -35,8 +36,9 @@ public class ImportTaskConsumer extends AbstractTaskConsumer {
       TaskDispatchExecutor taskDispatchExecutor,
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       DeadLetterPublisher deadLetterPublisher,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    super(kafkaListenerEndpointRegistry, meterRegistryProvider);
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      @Value("${batch.worker.max-concurrent-tasks:8}") int maxConcurrentTasks) {
+    super(kafkaListenerEndpointRegistry, meterRegistryProvider, maxConcurrentTasks);
     this.workerLoop = workerLoop;
     this.configuration = configuration;
     this.taskDispatchExecutor = taskDispatchExecutor;

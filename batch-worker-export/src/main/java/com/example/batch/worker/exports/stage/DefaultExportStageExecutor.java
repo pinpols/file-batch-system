@@ -7,6 +7,7 @@ import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractStageExecutor;
+import com.example.batch.worker.core.support.AbstractStageExecutor.StageStepDescriptor;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
@@ -18,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,17 +43,24 @@ public class DefaultExportStageExecutor
   private final Map<String, ExportStageStep> stepsByImplCode;
   private final Map<ExportStage, ExportStageStep> stepsByStage;
   private final List<PipelineStepTemplate> defaultStepDefinitions;
-  private final MeterRegistry meterRegistry;
+
+  /**
+   * P1: 改为 ObjectProvider 注入,与 worker-core 内 DefaultTaskExecutionWrapper / DefaultHeartbeatService
+   * 等保持一致。test-slice (no Micrometer) 与
+   * {@code @SpringBootTest(excludeAutoConfiguration=MicrometerAutoConfiguration.class)} 场景下不再硬要求
+   * MeterRegistry bean。
+   */
+  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
   public DefaultExportStageExecutor(
       List<ExportStageStep> steps,
       PlatformFileRuntimeRepository runtimeRepository,
-      MeterRegistry meterRegistry) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     super(runtimeRepository);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
-    this.meterRegistry = meterRegistry;
+    this.meterRegistryProvider = meterRegistryProvider;
   }
 
   @Override
@@ -66,13 +75,18 @@ public class DefaultExportStageExecutor
 
   private void recordExportRowsMetric(ExportJobContext context) {
     Object recordCountAttr = context.getAttributes().get("recordCount");
-    if (recordCountAttr instanceof Number recordCount) {
-      Counter.builder("export.file.rows.total")
-          .description("导出文件写入总行数")
-          .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
-          .register(meterRegistry)
-          .increment(recordCount.doubleValue());
+    if (!(recordCountAttr instanceof Number recordCount)) {
+      return;
     }
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null) {
+      return;
+    }
+    Counter.builder("export.file.rows.total")
+        .description("导出文件写入总行数")
+        .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
+        .register(registry)
+        .increment(recordCount.doubleValue());
   }
 
   @Override
@@ -107,7 +121,9 @@ public class DefaultExportStageExecutor
               ERROR_OBJECT_MAPPER)
           : stageStep.execute(context);
     } catch (BizException exception) {
-      log.error(
+      // P2 对齐 import 侧"业务错误 → WARN"语义:BizException 是配置 / 输入侧的预期失败,
+      // 不属于运维需要 page 的 ERROR 等级(INFRA_ERROR 还在下方 catch(Exception) 保持 ERROR)。
+      log.warn(
           "export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
           stage,
           step.stepCode(),
@@ -204,8 +220,7 @@ public class DefaultExportStageExecutor
   }
 
   private List<PipelineStepTemplate> buildDefaultStepDefinitions() {
-    List<PipelineStepTemplate> templates = new ArrayList<>();
-    int order = 1;
+    List<StageStepDescriptor> ordered = new ArrayList<>();
     for (ExportStage stage :
         List.of(
             ExportStage.PREPARE,
@@ -217,23 +232,15 @@ public class DefaultExportStageExecutor
       if (step == null) {
         throw new IllegalStateException("missing export step bean for stage: " + stage.name());
       }
-      PipelineStepTemplate template =
-          PipelineStepTemplate.builder()
-              .stepCode(step.stepCode())
-              .stepName(step.stepName())
-              .stageCode(stage.name())
-              .stepOrder(order++)
-              .implCode(step.implCode())
-              .stepParams(Map.of())
-              .timeoutSeconds(0)
-              .retryPolicy("NONE")
-              .retryMaxCount(0)
-              .enabled(true)
-              .build();
-      templates.add(template);
+      ordered.add(
+          new StepDescriptor(step.stepCode(), step.stepName(), step.implCode(), stage.name()));
     }
-    return List.copyOf(templates);
+    return buildStepTemplates(ordered);
   }
+
+  /** 内联 record 把 {@link ExportStageStep} + {@link ExportStage} 适配到基类的 StageStepDescriptor 契约。 */
+  private record StepDescriptor(String stepCode, String stepName, String implCode, String stageCode)
+      implements StageStepDescriptor {}
 
   private void register(
       Map<String, ExportStageStep> indexed, String implCode, ExportStageStep step) {

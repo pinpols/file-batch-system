@@ -30,6 +30,7 @@ import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.matchers.GroupMatcher;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
@@ -51,8 +52,12 @@ import org.springframework.stereotype.Service;
  * <p><b>幂等注册</b>：{@link #scheduleWithReplace} 在 {@code scheduleJob} 前先 deleteJob， 保证每次调用结果一致，无论 job
  * 是否已存在。{@link #registerAll} 持有 ShedLock ({@code lockAtMostFor=PT15M}) 防止多实例并发重复注册。
  */
+// R-arch-audit-2026-05-23 P1: 拆分注入路径 — Quartz 模式装配本类作为 TriggerRegistrationService 实现,
+// Wheel 模式装配 NoopTriggerRegistrationService。matchIfMissing=false：application.yml 已为
+// scheduler-impl 提供默认值 (wheel)，缺省装配不再回落到 quartz。
 @Slf4j
 @Service
+@ConditionalOnProperty(name = "batch.trigger.scheduler-impl", havingValue = "quartz")
 @RequiredArgsConstructor
 public class TriggerSchedulerFacade implements TriggerRegistrationService {
 

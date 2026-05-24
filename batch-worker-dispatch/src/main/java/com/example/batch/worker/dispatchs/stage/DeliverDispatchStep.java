@@ -1,5 +1,7 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import static com.example.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
+
 import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -9,9 +11,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
-import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -26,8 +26,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class DeliverDispatchStep implements DispatchStageStep {
-
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
@@ -112,25 +110,12 @@ public class DeliverDispatchStep implements DispatchStageStep {
         guard.callOrSkip(
             "dispatch.deliver",
             () ->
-                dispatchChannelGateway.dispatch(
-                    new DispatchCommand(
-                        context.getTenantId(),
-                        String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                        fileRecord,
-                        channelConfig,
-                        dispatchPayload)),
+                DispatchInvocationSupport.invokeAndRecordIdentifiers(
+                    dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload),
             DispatchResult.success(
                 "DRY_RUN", "DRY_RUN_RECEIPT_" + dispatchPayload.channelCode(), false));
-    context.getAttributes().put("dispatchResult", dispatchResult);
-    context.getAttributes().put("externalRequestId", dispatchResult.externalRequestId());
-    context.getAttributes().put("receiptCode", dispatchResult.receiptCode());
-    context
-        .getAttributes()
-        .put(
-            "receiptStatus",
-            dispatchResult.acknowledged()
-                ? "SUCCESS"
-                : dispatchResult.receiptPending() ? "PENDING" : "NONE");
+    // dry-run 分支直接拿到 fake 结果，没经过 helper 的 propagate，这里补一次（真实路径会重复设置但等价）。
+    DispatchInvocationSupport.propagateIdentifiers(context, dispatchResult);
     Map<String, Object> fileMetadata = new LinkedHashMap<>();
     fileMetadata.put("channelCode", dispatchPayload.channelCode());
     if (dispatchResult.externalRequestId() != null) {
@@ -157,15 +142,8 @@ public class DeliverDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     int updated =
-        fileDispatchRepository.markSent(
-            context.getTenantId(),
-            fileId,
-            dispatchPayload.channelCode(),
-            dispatchResult.externalRequestId(),
-            dispatchResult.receiptCode(),
-            dispatchResult.acknowledged()
-                ? "SUCCESS"
-                : dispatchResult.receiptPending() ? "PENDING" : "NONE");
+        DispatchInvocationSupport.markSent(
+            fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
     if (updated <= 0) {
       return DispatchStageResult.failure(
           stage(),

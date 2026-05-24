@@ -13,13 +13,15 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import jakarta.annotation.PostConstruct;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 
@@ -66,8 +68,13 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
   /** D-3: 子类可提供 DLQ 发布器，用于转发无法处理的"毒丸"消息。 */
   protected abstract DeadLetterPublisher deadLetterPublisher();
 
-  @Value("${batch.worker.max-concurrent-tasks:8}")
-  private int maxConcurrentTasks;
+  /**
+   * P1: 改为构造器注入(原 @Value field injection 违反 CLAUDE.md #3)。
+   *
+   * <p>子类继续走 super(...) 链;通过 @PostConstruct {@link #initSemaphore()} 在 Spring 完成依赖注入后立即初始化
+   * semaphore,避免 ensureSemaphore() 懒初始化路径在 maxConcurrentTasks=0 默认值下静默降级为 1。
+   */
+  private final int maxConcurrentTasks;
 
   /**
    * 当前正在执行的 task 数 = maxConcurrentTasks - 可用许可. semaphore 未初始化 (worker 启动早期) 时返回 0. 由 {@code
@@ -96,9 +103,18 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      @org.springframework.beans.factory.annotation.Value("${batch.worker.max-concurrent-tasks:8}")
+          int maxConcurrentTasks) {
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.maxConcurrentTasks = maxConcurrentTasks;
+  }
+
+  /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */
+  @PostConstruct
+  void initSemaphore() {
+    ensureSemaphore();
   }
 
   /**
@@ -453,13 +469,19 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
           "PROCESS", BatchTopics.TASK_DISPATCH_PROCESS,
           "DISPATCH", BatchTopics.TASK_DISPATCH_DISPATCH);
 
-  // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → dispatch）
-  private static final List<Map.Entry<String, String>> WORKER_CODE_KEYWORD_TOPIC =
-      List.of(
-          Map.entry("import", BatchTopics.TASK_DISPATCH_IMPORT),
-          Map.entry("export", BatchTopics.TASK_DISPATCH_EXPORT),
-          Map.entry("process", BatchTopics.TASK_DISPATCH_PROCESS),
-          Map.entry("dispatch", BatchTopics.TASK_DISPATCH_DISPATCH));
+  // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → process → dispatch）
+  // P2: 改用 LinkedHashMap 保留顺序又表达 Map 语义,避免 List<Entry> 在阅读时被误读为 List。
+  private static final Map<String, String> WORKER_CODE_KEYWORD_TOPIC =
+      buildWorkerCodeKeywordTopic();
+
+  private static Map<String, String> buildWorkerCodeKeywordTopic() {
+    LinkedHashMap<String, String> map = new LinkedHashMap<>(4);
+    map.put("import", BatchTopics.TASK_DISPATCH_IMPORT);
+    map.put("export", BatchTopics.TASK_DISPATCH_EXPORT);
+    map.put("process", BatchTopics.TASK_DISPATCH_PROCESS);
+    map.put("dispatch", BatchTopics.TASK_DISPATCH_DISPATCH);
+    return Collections.unmodifiableMap(map);
+  }
 
   private String resolveTopicByWorkerType(String workerType) {
     if (workerType == null || workerType.isBlank()) {
@@ -470,7 +492,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   private String resolveTopicByWorkerCode(String workerCode) {
     String wc = workerCode == null ? "" : workerCode.toLowerCase();
-    return WORKER_CODE_KEYWORD_TOPIC.stream()
+    return WORKER_CODE_KEYWORD_TOPIC.entrySet().stream()
         .filter(entry -> wc.contains(entry.getKey()))
         .map(Map.Entry::getValue)
         .findFirst()

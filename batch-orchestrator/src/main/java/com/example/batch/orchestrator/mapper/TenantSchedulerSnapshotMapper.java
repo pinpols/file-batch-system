@@ -16,6 +16,9 @@ public interface TenantSchedulerSnapshotMapper {
   /** insert 一行；{@code id} 由 BIGSERIAL 自增（不回写：entity 是 record，调用方也无需 id）。 */
   int insert(TenantSchedulerSnapshotEntity record);
 
+  /** 批量 insert：单条 SQL 多 VALUES 行，显著降低 N 租户场景下的 DB round-trip。 */
+  int insertBatch(@Param("rows") List<TenantSchedulerSnapshotEntity> rows);
+
   /** 取指定租户最近 {@code limit} 条快照，按 snapshot_at 降序。 */
   List<TenantSchedulerSnapshotEntity> listRecent(
       @Param("tenantId") String tenantId, @Param("limit") int limit);
