@@ -86,7 +86,7 @@ jobs:
     env:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
       CONSOLE_PORT: '18080'
-      PG_CONTAINER: batch-postgres
+      PG_CONTAINER: batch-postgres-primary
       PG_USER: batch_user
       PG_DB: batch_platform
     steps:
@@ -104,10 +104,10 @@ jobs:
         # strict-verify 不需要,console-api 启动若有缺会失败 — 先 minimal 试,失败再扩。
         run: |
           if [[ -f .env.example ]]; then cp .env.example .env.local; fi
-          docker compose --env-file .env.local up -d postgres
+          docker compose --env-file .env.local up -d postgres-primary
           # 等 PG ready
           for _ in $(seq 1 60); do
-            if docker exec batch-postgres pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
+            if docker exec batch-postgres-primary pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
               echo "postgres ready"
               break
             fi
