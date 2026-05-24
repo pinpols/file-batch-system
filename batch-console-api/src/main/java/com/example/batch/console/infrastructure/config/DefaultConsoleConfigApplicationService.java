@@ -351,7 +351,15 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     if (!Texts.hasText(value)) {
       return;
     }
-    Object parsed = JsonUtils.fromJson(value, Object.class);
+    // JsonUtils.fromJson 对畸形 JSON 抛 IllegalArgumentException,字面量 "null" 才返回 null;
+    // 两者都要翻译成 INVALID_ARGUMENT,否则畸形 JSON 穿透 ControllerAdvice 变 500。
+    Object parsed;
+    try {
+      parsed = JsonUtils.fromJson(value, Object.class);
+    } catch (IllegalArgumentException e) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
+    }
     if (parsed == null) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
