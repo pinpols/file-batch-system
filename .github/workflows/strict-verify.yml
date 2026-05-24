@@ -103,6 +103,10 @@ jobs:
         # strict-verify 不需要,console-api 启动若有缺会失败 — 先 minimal 试,失败再扩。
         run: |
           if [[ -f .env.example ]]; then cp .env.example .env.local; fi
+          # docker-compose.yml 的 batch-network 声明为 external,本地由 deploy.ps1 创建;
+          # CI 干净环境下需先建,否则 compose up 报 "network ... could not be found"。
+          docker network inspect batch-local_batch-network >/dev/null 2>&1 \
+            || docker network create batch-local_batch-network
           docker compose --env-file .env.local up -d postgres-primary
           # 等 PG ready
           for _ in $(seq 1 60); do
