@@ -1,0 +1,118 @@
+name: deploy
+
+# build-image 成功 → 自托管 runner 拉 GHCR 镜像重启本地 docker compose。
+# 前提:
+#   1) 自托管 runner 装在部署机,labels = [self-hosted, deploy, windows]。
+#   2) 部署机的 docker daemon 在跑(Docker Desktop 启动状态)。
+#   3) 仓库 Settings → Secrets and variables → Actions 配:
+#        BATCH_PLATFORM_DB_PASSWORD
+#        BATCH_BUSINESS_DB_PASSWORD
+#        BATCH_MINIO_SECRET_KEY
+#      (BATCH_MINIO_ACCESS_KEY / 端口号等用 .env.local 现有默认值即可)
+#   4) GITHUB_TOKEN 自动有 packages:read,无需额外 PAT。
+#
+# 触发:
+#   - workflow_run: 监听 build-image 成功(只 main 分支)
+#   - workflow_dispatch: 手动重跑(回滚/调试用)
+
+on:
+  workflow_run:
+    workflows: ["build-image"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '镜像 tag (默认 latest,可填 sha-<full> 精确部署某次构建)'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false   # 部署串行,不打断进行中的
+
+jobs:
+  deploy:
+    # 仅当 build-image 成功(或手动触发)才部署
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, deploy, windows]
+    timeout-minutes: 20
+
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
+      # 三个必填密码透传给 compose(对齐 .env.local 默认值,生产可在 Secrets 改)
+      BATCH_PLATFORM_DB_PASSWORD: ${{ secrets.BATCH_PLATFORM_DB_PASSWORD || 'batch_pass_123' }}
+      BATCH_BUSINESS_DB_PASSWORD: ${{ secrets.BATCH_BUSINESS_DB_PASSWORD || 'batch_pass_123' }}
+      BATCH_MINIO_SECRET_KEY: ${{ secrets.BATCH_MINIO_SECRET_KEY || 'minioadmin123' }}
+      BATCH_MINIO_ACCESS_KEY: minioadmin
+
+    steps:
+      - name: Checkout 部署分支 (含 compose / PS 脚本)
+        uses: actions/checkout@v4
+        with:
+          ref: feature/docker-deploy
+
+      - name: 显示部署上下文
+        shell: pwsh
+        run: |
+          Write-Host "触发:        $env:GITHUB_EVENT_NAME"
+          Write-Host "镜像 tag:    $env:IMAGE_TAG"
+          Write-Host "ref:         $env:GITHUB_REF"
+          Write-Host "sha:         $env:GITHUB_SHA"
+          docker version --format '{{.Server.Version}}' | ForEach-Object { "docker:       $_" }
+
+      - name: 登录 GHCR
+        shell: pwsh
+        run: |
+          $env:GITHUB_TOKEN | docker login ghcr.io -u $env:GITHUB_ACTOR --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 拉取最新镜像
+        shell: pwsh
+        run: |
+          docker compose `
+            --env-file .env.local `
+            -f docker-compose.yml `
+            -f docker/compose/app.yml `
+            -f docker/compose/app.deploy.yml `
+            --profile apps --profile replica `
+            pull
+
+      - name: 重启服务 (apps + replica)
+        shell: pwsh
+        run: |
+          docker compose `
+            --env-file .env.local `
+            -f docker-compose.yml `
+            -f docker/compose/app.yml `
+            -f docker/compose/app.deploy.yml `
+            --profile apps --profile replica `
+            up -d --no-build --remove-orphans --wait --wait-timeout 300
+
+      - name: 验证健康
+        shell: pwsh
+        run: |
+          docker compose `
+            --env-file .env.local `
+            -f docker-compose.yml `
+            -f docker/compose/app.yml `
+            -f docker/compose/app.deploy.yml `
+            --profile apps --profile replica `
+            ps
+          # console-api 是前端唯一直接调用的对外面,单独再 probe 一下
+          $port = (Select-String -Path .env.local -Pattern '^CONSOLE_API_PORT=(\d+)').Matches[0].Groups[1].Value
+          if (-not $port) { $port = '18080' }
+          Write-Host "probe http://localhost:$port/actuator/health"
+          $r = Invoke-WebRequest "http://localhost:$port/actuator/health" -UseBasicParsing -TimeoutSec 10
+          if ($r.Content -notmatch '"status"\s*:\s*"UP"') { throw "console-api 不 UP: $($r.Content)" }
+          Write-Host "✔ console-api UP"
+
+      - name: 清理悬挂镜像
+        if: always()
+        shell: pwsh
+        run: docker image prune -f

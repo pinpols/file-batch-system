@@ -6,6 +6,10 @@ ARG MODULE
 
 WORKDIR /workspace
 
+# 部署调整: 全局 Maven settings 指向阿里云镜像(避开 VPN 对 Maven Central 的不稳定 HTTPS)。
+# 放全局 conf 而非 /root/.m2 -- 后续 mvn RUN 的 cache mount 会盖掉 /root/.m2 里的文件。
+COPY docker/settings.xml /usr/share/maven/conf/settings.xml
+
 COPY pom.xml ./
 COPY batch-common/pom.xml batch-common/pom.xml
 COPY batch-console-api/pom.xml batch-console-api/pom.xml

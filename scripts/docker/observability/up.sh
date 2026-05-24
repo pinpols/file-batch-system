@@ -20,7 +20,7 @@ ensure_docker_on_path
 unset _DOCKER_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-local}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-plaform}"
 OBS_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
 if ! docker network inspect "$OBS_NETWORK_NAME" >/dev/null 2>&1; then
