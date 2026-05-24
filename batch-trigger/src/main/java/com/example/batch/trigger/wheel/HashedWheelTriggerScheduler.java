@@ -39,12 +39,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DuplicateKeyException; // 仍用于 misfire pending 写入幂等
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
 /**
@@ -89,13 +86,6 @@ public class HashedWheelTriggerScheduler {
   private final BatchDateTimeSupport dateTimeSupport;
   private final WheelMetrics metrics;
   private final CatchUpThrottle catchUpThrottle;
-
-  /**
-   * P0 (audit 2026-05-23):wheel worker 线程仅负责 dispatch,真正的 fire 逻辑(loadDescriptor + launchScheduled
-   * + advanceAfterFire + catchUpThrottle.acquire)在本池跑,避免单 worker 同步 DB 阻塞 wheel 引发 misfire 雪崩。
-   */
-  @Qualifier("triggerFireExecutor")
-  private final ThreadPoolTaskExecutor triggerFireExecutor;
 
   private HashedWheelTimer wheel;
   private String leaderInstanceId;
@@ -314,29 +304,9 @@ public class HashedWheelTriggerScheduler {
     Instant scheduledFireTime = state.getNextFireTime();
     long delayMillis =
         Math.max(0L, scheduledFireTime.toEpochMilli() - dateTimeSupport.currentEpochMillis());
-    // P0 (audit 2026-05-23):wheel worker 只 submit,不阻塞。
-    // CallerRunsPolicy:executor 队列满时让 wheel worker 同步跑(背压),不丢 fire。
     Timeout timeout =
         wheel.newTimeout(
-            _ -> {
-              try {
-                triggerFireExecutor.execute(() -> fire(state, scheduledFireTime, dedupKey));
-              } catch (TaskRejectedException rejected) {
-                // executor 已 shutdown(进程下线) → 直接清理 dedup 并放弃本次 fire。
-                // 下一个 leader 启动后 onLeaderAcquire 会重新扫到。
-                log.warn(
-                    "triggerFireExecutor rejected fire submit (shutdown?); job={}"
-                        + " scheduledFireTime={}",
-                    state.getJobCode(),
-                    scheduledFireTime,
-                    rejected);
-                inFlightFires.remove(dedupKey);
-                timeoutRegistry.remove(state.getId());
-                tasksScheduled.updateAndGet(v -> Math.max(0, v - 1));
-              }
-            },
-            delayMillis,
-            TimeUnit.MILLISECONDS);
+            _ -> fire(state, scheduledFireTime, dedupKey), delayMillis, TimeUnit.MILLISECONDS);
     timeoutRegistry.put(state.getId(), timeout);
     tasksScheduled.updateAndGet(v -> v + 1);
     return true;
@@ -348,7 +318,6 @@ public class HashedWheelTriggerScheduler {
     long actualFireMillis = dateTimeSupport.currentEpochMillis();
     metrics.recordFireLag(actualFireMillis - scheduledFireTime.toEpochMilli());
     String groupTag = "tenant:" + state.getTenantId();
-    long fireStartNanos = System.nanoTime();
     try {
       TriggerDescriptor descriptor = loadDescriptor(state);
       // 0) misfire 分流:next_fire_time 比 actual 早超过 misfireThreshold 视为 misfire
@@ -370,7 +339,6 @@ public class HashedWheelTriggerScheduler {
       timeoutRegistry.remove(state.getId());
       inFlightFires.remove(dedupKey);
       tasksScheduled.updateAndGet(v -> Math.max(0, v - 1));
-      metrics.fireAsyncDuration().record(System.nanoTime() - fireStartNanos, TimeUnit.NANOSECONDS);
     }
   }
 

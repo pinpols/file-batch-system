@@ -5,14 +5,11 @@ import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
 import com.example.batch.console.config.ConsoleAsyncConfiguration;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
@@ -39,14 +36,9 @@ public class ConsoleOpsSummaryRealtimeStream {
   private final ConsoleRealtimeCursorFactory cursorFactory;
   private final ConsoleTenantGuard tenantGuard;
   private final BatchDateTimeSupport dateTimeSupport;
-  // P0:scheduledRefreshes 在 finally 里有 remove,但异常 / cancel 路径下仍可能漏删,
-  // 加 maximumSize 兜底防止租户基数增长后无界堆积。
   private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes =
       new ConcurrentHashMap<>();
-  // P0:summaryCache 原裸 ConcurrentHashMap 仅在读路径判 TTL,从不删除,租户基数大时永久驻留。
-  // 改 Caffeine expireAfterWrite(10s) + maximumSize(1000),与 SUMMARY_CACHE_TTL_MILLIS 对齐。
-  private final Cache<String, CachedSummary> summaryCache =
-      Caffeine.newBuilder().expireAfterWrite(10, TimeUnit.SECONDS).maximumSize(1000).build();
+  private final ConcurrentHashMap<String, CachedSummary> summaryCache = new ConcurrentHashMap<>();
   private final TaskScheduler scheduler;
 
   public ConsoleOpsSummaryRealtimeStream(
@@ -159,9 +151,7 @@ public class ConsoleOpsSummaryRealtimeStream {
 
   private ConsoleOpsSummaryResponse loadSummary(String tenantId, boolean forceRefresh) {
     long now = dateTimeSupport.currentEpochMillis();
-    CachedSummary cached = summaryCache.getIfPresent(tenantId);
-    // 双重 TTL 控制:Caffeine expireAfterWrite 兜底 10s,业务侧再用 cachedAtMillis 精确判过期
-    // —— 保留原逻辑等价语义,改动只是把无界存储换成有界 Caffeine。
+    CachedSummary cached = summaryCache.get(tenantId);
     if (!forceRefresh
         && cached != null
         && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS) {

@@ -2,6 +2,7 @@ package com.example.batch.trigger.application;
 
 import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
@@ -9,20 +10,22 @@ import com.example.batch.trigger.config.TriggerOutboxRelayProperties;
 import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
 /**
@@ -51,6 +54,7 @@ import org.springframework.stereotype.Component;
  * </ul>
  */
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class TriggerOutboxRelay {
 
@@ -65,49 +69,27 @@ public class TriggerOutboxRelay {
   private final LockingTaskExecutor lockingTaskExecutor;
   private final MeterRegistry meterRegistry;
   private final TriggerOutboxRelayProperties properties;
-  private final ThreadPoolTaskScheduler scheduler;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong pendingEvents = new AtomicLong();
   private final AtomicLong stalePublishingEvents = new AtomicLong();
-  private final AtomicBoolean started = new AtomicBoolean(false);
+  private ScheduledExecutorService executor;
   private Counter giveUpCounter;
-
-  public TriggerOutboxRelay(
-      TriggerOutboxEventMapper mapper,
-      TriggerEventPublisher publisher,
-      LockingTaskExecutor lockingTaskExecutor,
-      MeterRegistry meterRegistry,
-      TriggerOutboxRelayProperties properties,
-      @Qualifier("triggerOutboxRelayScheduler") ThreadPoolTaskScheduler scheduler) {
-    this.mapper = mapper;
-    this.publisher = publisher;
-    this.lockingTaskExecutor = lockingTaskExecutor;
-    this.meterRegistry = meterRegistry;
-    this.properties = properties;
-    this.scheduler = scheduler;
-  }
-
   // R3-P1-3：单条 outbox 事件 NEW→PUBLISHED 端到端延迟分位，按 result tag (ok/fail) 拆分。
   // 之前只有积压 gauge，无法区分 Kafka 慢 vs relay 调度慢。
   private io.micrometer.core.instrument.Timer publishLatencyOk;
   private io.micrometer.core.instrument.Timer publishLatencyFail;
 
   /**
-   * R3-P1-9：从 {@code @PostConstruct} 改为 {@code @EventListener(ApplicationReadyEvent.class)} — 之前
-   * PostConstruct 阶段 Flyway 迁移可能未完成， 第一轮 poll 访问 {@code trigger_outbox_event} 表的新列会抛 schema 错误（被吞为
-   * noise）。
-   *
-   * <p>P0 修复：把原 {@code auditOnReady} 合并进 {@code start()},避免两个独立 ApplicationReadyEvent 监听器并发 /
-   * 顺序不确定导致的 TOCTOU 与重复 metrics 注册。
-   *
-   * <p>P0 修复：调度由 Spring 托管 {@link ThreadPoolTaskScheduler} 接管,替代原自建 {@code
-   * Executors.newSingleThreadScheduledExecutor}(unbounded queue + 游离生命周期 + 无 Actuator)。
+   * R3-P1-9：从 {@code @PostConstruct} 改为 {@code @EventListener(ApplicationReadyEvent.class)}， 与
+   * {@code auditOnReady} 一致 — 之前 PostConstruct 阶段 Flyway 迁移可能未完成， 第一轮 poll 访问 {@code
+   * trigger_outbox_event} 表的新列会抛 schema 错误（被吞为 noise）。 注意：本类内有两个 ApplicationReady 监听器（start +
+   * auditOnReady），Spring 顺序无保证但都会执行。
    */
   @EventListener(ApplicationReadyEvent.class)
-  public synchronized void start() {
-    if (!started.compareAndSet(false, true)) {
-      return; // 已启动（防 dev tools 重启 / 重复事件场景）
+  public void start() {
+    if (executor != null) {
+      return; // 已启动（防 dev tools 重启场景）
     }
     meterRegistry.gauge("batch.trigger.outbox.pending.events", pendingEvents);
     meterRegistry.gauge("batch.trigger.outbox.publishing.stale.events", stalePublishingEvents);
@@ -127,18 +109,27 @@ public class TriggerOutboxRelay {
             .tags("result", "fail")
             .publishPercentiles(0.5, 0.95, 0.99)
             .register(meterRegistry);
-    scheduler.scheduleWithFixedDelay(
-        this::poll, Duration.ofMillis(properties.getPollIntervalMillis()));
+    executor =
+        Executors.newSingleThreadScheduledExecutor(
+            r -> {
+              Thread t = new Thread(r, "trigger-outbox-relay");
+              t.setDaemon(true);
+              return t;
+            });
+    executor.scheduleWithFixedDelay(
+        this::poll,
+        properties.getPollIntervalMillis(),
+        properties.getPollIntervalMillis(),
+        TimeUnit.MILLISECONDS);
     log.info(
         "TriggerOutboxRelay 已启动:poll={}ms batch={} backoff_max={}s",
         properties.getPollIntervalMillis(),
         properties.getBatchSize(),
         MAX_BACKOFF_SECONDS);
-    // 启动末尾顺手跑一次运行态审计(原 auditOnReady 监听器合并到这里,串行,无 TOCTOU)
-    runStartupAudit();
   }
 
-  private void runStartupAudit() {
+  @EventListener(ApplicationReadyEvent.class)
+  public void auditOnReady() {
     try {
       long pending =
           mapper.countByStatuses(
@@ -160,6 +151,25 @@ public class TriggerOutboxRelay {
       }
     } catch (RuntimeException ex) {
       log.warn("启动运行态审计执行失败（trigger，不影响启动）：{}", ex.getMessage());
+    }
+  }
+
+  @PreDestroy
+  public void stop() {
+    if (executor == null) {
+      return;
+    }
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(15, TimeUnit.SECONDS)) {
+        log.warn("TriggerOutboxRelay 未在 15s 内完成关闭,强制中断");
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      SwallowedExceptionLogger.info(TriggerOutboxRelay.class, "catch:InterruptedException", e);
+
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
     }
   }
 

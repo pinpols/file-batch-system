@@ -12,9 +12,6 @@ import com.example.batch.worker.processes.stage.ProcessStageStep;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.SimpleTransactionStatus;
 
 class ProcessStepBeanRegistrarTest {
 
@@ -59,23 +56,7 @@ class ProcessStepBeanRegistrarTest {
     when(applicationContext.getBeansOfType(ProcessComputePlugin.class))
         .thenReturn(Map.of("sqlTransformComputePlugin", plugin));
 
-    PlatformTransactionManager txManager =
-        new PlatformTransactionManager() {
-          @Override
-          public TransactionStatus getTransaction(
-              org.springframework.transaction.TransactionDefinition definition) {
-            return new SimpleTransactionStatus();
-          }
-
-          @Override
-          public void commit(TransactionStatus status) {}
-
-          @Override
-          public void rollback(TransactionStatus status) {}
-        };
-
-    new ProcessStepBeanRegistrar(applicationContext, mapper, txManager)
-        .registerStepBeansOnStartup();
+    new ProcessStepBeanRegistrar(applicationContext, mapper).registerStepBeansOnStartup();
 
     verify(mapper).deleteByModule("PROCESS");
     verify(mapper).insertEntry("PROCESS", "PROCESS_COMPUTE", stageStep.getClass().getName());

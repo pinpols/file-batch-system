@@ -29,8 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 主动打开批次日实例。
@@ -56,10 +55,8 @@ public class BatchDayOpenScheduler {
   private final CalendarDependencyMapper calendarDependencyMapper;
   // ADR-023 Stage 4: 灾难日热切换检查
   private final DisasterDayOverrideMapper disasterDayOverrideMapper;
-  // 事务边界：扫描循环本身不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义），
-  // 每个 calendar 命中后通过 TransactionTemplate 单条 short tx 写入 batch_day_instance + 审计日志。
-  private final PlatformTransactionManager transactionManager;
 
+  @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.open-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_open", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
   public void scheduledOpen() {
@@ -74,10 +71,8 @@ public class BatchDayOpenScheduler {
     if (calendars == null || calendars.isEmpty()) {
       return;
     }
-    TransactionTemplate tx = new TransactionTemplate(transactionManager);
     for (BusinessCalendarEntity calendar : calendars) {
-      // 每个 calendar 一笔 short tx：insert batch_day_instance + 审计日志同事务原子。
-      tx.executeWithoutResult(status -> openOne(calendar, now));
+      openOne(calendar, now);
     }
   }
 

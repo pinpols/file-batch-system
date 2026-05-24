@@ -14,15 +14,13 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 批处理日切（cutoff）扫描器：定时检查状态为 OPEN 的 {@code batch_day_instance}， 当当前本地时间超过租户配置的 cutoffTime 后将其标记为已切日。
  *
  * <p>默认 cutoffTime 为 06:00；每条候选记录带自己的时区，确保多地域租户的切日时间各自独立。 ShedLock 防止多节点重复处理同一批次；每条记录的 {@code
  * markCutoff} 用 CAS 更新， 即使并发也只有一次会成功（避免重复切日）。
- *
- * <p>事务边界：扫描循环不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义）；每条 markCutoff 是单条带 CAS 条件的
- * UPDATE，数据库层就是原子，无需外层事务包裹。
  */
 @Slf4j
 @Component
@@ -36,6 +34,7 @@ public class BatchDayCutoffScheduler {
   private final BatchTimezoneProvider timezoneProvider;
   private final BatchDateTimeSupport dateTimeSupport;
 
+  @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
   // 命名加模块前缀：trigger 与 orchestrator 共享 shedlock 表；同名会跨服务互斥，
   // 但两侧业务逻辑不同（trigger 派调度 vs orchestrator 推状态机），不应互斥。

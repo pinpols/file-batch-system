@@ -20,16 +20,12 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * batch_day_instance 自动切换：OPEN -> CUTOFF（在 cutoff_time 之后）。
  *
  * <p>该状态机缺失会导致 late arrival 路由永远无法生效，因此必须补齐。
- *
- * <p>事务边界：扫描循环本身不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义）， 每个候选 batch_day_instance 用 {@link
- * TransactionTemplate} 单条 short tx 处理。
  */
 @Slf4j
 @Component
@@ -42,8 +38,8 @@ public class BatchDayCutoffScheduler {
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchDayTimePolicyResolver timePolicyResolver;
   private final BatchDateTimeSupport dateTimeSupport;
-  private final PlatformTransactionManager transactionManager;
 
+  @Transactional
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
   // 命名加模块前缀：与 trigger 同名 ShedLock 会跨服务互斥；两侧业务逻辑不同不应互斥。
   @SchedulerLock(
@@ -83,32 +79,25 @@ public class BatchDayCutoffScheduler {
         continue;
       }
       if (!now.isBefore(cutoffAt)) {
-        Instant cutoffAtFinal = cutoffAt;
-        // 每个候选行一笔 short tx：CAS 更新 + 审计日志同事务原子。
-        TransactionTemplate tx = new TransactionTemplate(transactionManager);
-        tx.executeWithoutResult(status -> applyCutoff(candidate, cutoffAtFinal, now));
+        BatchDayInstanceEntity updated = candidate.withCutoff(cutoffAt, now);
+        int rows = batchDayInstanceMapper.updateWithCas(updated);
+        if (rows == 0) {
+          // CAS 冲突：另一路径（settle / reopen）抢先写入，本轮跳过该候选不阻塞其他候选
+          log.debug(
+              "batch day cutoff cas conflict; skip: tenantId={}, calendarCode={}, bizDate={}",
+              candidate.tenantId(),
+              candidate.calendarCode(),
+              candidate.bizDate());
+          continue;
+        }
+        appendAuditLog(candidate, updated, "CUTOFF_REACHED", now);
+        log.info(
+            "batch day advanced to CUTOFF: tenantId={}, calendarCode={}, bizDate={}",
+            candidate.tenantId(),
+            candidate.calendarCode(),
+            candidate.bizDate());
       }
     }
-  }
-
-  private void applyCutoff(BatchDayInstanceEntity candidate, Instant cutoffAt, Instant now) {
-    BatchDayInstanceEntity updated = candidate.withCutoff(cutoffAt, now);
-    int rows = batchDayInstanceMapper.updateWithCas(updated);
-    if (rows == 0) {
-      // CAS 冲突：另一路径（settle / reopen）抢先写入，本轮跳过该候选不阻塞其他候选
-      log.debug(
-          "batch day cutoff cas conflict; skip: tenantId={}, calendarCode={}, bizDate={}",
-          candidate.tenantId(),
-          candidate.calendarCode(),
-          candidate.bizDate());
-      return;
-    }
-    appendAuditLog(candidate, updated, "CUTOFF_REACHED", now);
-    log.info(
-        "batch day advanced to CUTOFF: tenantId={}, calendarCode={}, bizDate={}",
-        candidate.tenantId(),
-        candidate.calendarCode(),
-        candidate.bizDate());
   }
 
   private Instant resolveCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {

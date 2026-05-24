@@ -9,13 +9,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Reconciles compensation commands left RUNNING after a JVM crash between command insert and
  * terminal status update.
- *
- * <p>无需事务包裹：{@link CompensationCommandMapper#markStaleRunningFailed} 是单条带 LIMIT 的批量 UPDATE，
- * 在数据库层就是原子操作。
  */
 @Slf4j
 @Component
@@ -41,6 +39,7 @@ public class StaleCompensationCommandReconciler {
       initialDelayString =
           "${batch.compensation.stale-running-reconciler.initial-delay-millis:60000}",
       fixedDelayString = "${batch.compensation.stale-running-reconciler.fixed-delay-millis:60000}")
+  @Transactional
   public void reconcile() {
     if (timeoutSeconds <= 0 || batchSize <= 0) {
       return;

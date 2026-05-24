@@ -145,23 +145,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       // C-2.10: setIfAbsent 失败后重新读一次，区分并发 PENDING 与刚落 DONE 两种情况。
       // 窗口内另一请求可能刚从 PENDING 晋升为 DONE（取不到锁但已处理完），
       // 前端应看到"已处理"而不是"稍后重试"，避免无谓轮询。
-      // P0:此二次 get 必须同 catch DataAccessException(对齐 111-121 行 fail-closed 语义),
-      // 否则 Redis 在 setIfAbsent ↔ get 间抖动会抛 DataAccessException 透传到
-      // ExceptionHandler 返回 500 而非约定的 503,且保守回退 CONFLICT_PENDING_BODY
-      // 让客户端走 retry 路径,避免误判"已处理"。
-      String current;
-      try {
-        current = redisTemplate.opsForValue().get(redisKey);
-      } catch (DataAccessException ex) {
-        log.warn(
-            "idempotency Redis follow-up GET unavailable — fail-closed (treat as pending):"
-                + " key={}, cause={}",
-            idempotencyKey,
-            ex.getMessage());
-        response.setHeader("Retry-After", "30");
-        writeJson(response, HttpStatus.CONFLICT, CONFLICT_PENDING_BODY);
-        return false;
-      }
+      String current = redisTemplate.opsForValue().get(redisKey);
       if (DONE.equals(current)) {
         log.warn(
             "duplicate idempotency key rejected (raced to DONE): key={}, uri={}, tenant={}",

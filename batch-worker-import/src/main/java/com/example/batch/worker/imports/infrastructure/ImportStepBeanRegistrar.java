@@ -5,7 +5,6 @@ import com.example.batch.worker.core.support.AbstractStepBeanRegistrar;
 import com.example.batch.worker.imports.stage.ImportStageStep;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Import worker 启动后把所有 {@link ImportStageStep} bean 登记到 {@code batch.step_registry}，
@@ -15,13 +14,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 public class ImportStepBeanRegistrar extends AbstractStepBeanRegistrar<ImportStageStep> {
 
   public ImportStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager) {
+      ApplicationContext applicationContext, StepRegistryMapper stepRegistryMapper) {
     super(
         applicationContext,
         stepRegistryMapper,
-        transactionManager,
         ImportStageStep.class,
         "IMPORT",
         ImportStageStep::implCode);

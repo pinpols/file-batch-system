@@ -28,7 +28,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +35,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /** S3 Stage 2: TriggerOutboxRelay 单测,覆盖空批 / 成功 / 失败 / 反序列化错误 / 已被抢占 5 类路径 + 退避函数。 */
 // LENIENT 保留:setUp() 预置了 resetStalePublishing / countByStatuses / countStalePublishing /
@@ -52,23 +50,13 @@ class TriggerOutboxRelayTest {
 
   private TriggerOutboxRelay relay;
   private TriggerOutboxRelayProperties relayProperties;
-  private ThreadPoolTaskScheduler scheduler;
 
   @BeforeEach
   void setUp() throws Throwable {
     relayProperties = new TriggerOutboxRelayProperties();
-    scheduler = new ThreadPoolTaskScheduler();
-    scheduler.setPoolSize(1);
-    scheduler.setThreadNamePrefix("trigger-outbox-relay-test-");
-    scheduler.initialize();
     relay =
         new TriggerOutboxRelay(
-            mapper,
-            publisher,
-            lockingTaskExecutor,
-            new SimpleMeterRegistry(),
-            relayProperties,
-            scheduler);
+            mapper, publisher, lockingTaskExecutor, new SimpleMeterRegistry(), relayProperties);
     when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
         .thenReturn(0);
     when(mapper.countByStatuses(any())).thenReturn(0L);
@@ -82,13 +70,6 @@ class TriggerOutboxRelayTest {
             })
         .when(lockingTaskExecutor)
         .executeWithLock(any(LockingTaskExecutor.Task.class), any());
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (scheduler != null) {
-      scheduler.shutdown();
-    }
   }
 
   @Test

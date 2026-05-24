@@ -23,8 +23,7 @@ import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.DataBindingPropertyAccessor;
-import org.springframework.expression.spel.support.SimpleEvaluationContext;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -176,14 +175,7 @@ public class AuditAspect {
     String expr = ann.aggregateId();
     if (expr == null || expr.isEmpty()) return "-";
     try {
-      // P0 安全:对齐 ConsoleCacheInvalidationAspect.evaluateSpel(),用 SimpleEvaluationContext
-      // + DataBindingPropertyAccessor 做最小权限上下文。SimpleEvaluationContext 禁止
-      // T(System).exit(0) 类型方法 / Type 引用 / bean 引用,仅允许属性 / 索引 / 算术 / 实例方法。
-      SimpleEvaluationContext ctx =
-          SimpleEvaluationContext.forPropertyAccessors(
-                  DataBindingPropertyAccessor.forReadOnlyAccess())
-              .withInstanceMethods()
-              .build();
+      StandardEvaluationContext ctx = new StandardEvaluationContext();
       String[] names = paramNameDiscoverer.getParameterNames(method);
       if (names != null) {
         for (int i = 0; i < names.length && i < args.length; i++) {

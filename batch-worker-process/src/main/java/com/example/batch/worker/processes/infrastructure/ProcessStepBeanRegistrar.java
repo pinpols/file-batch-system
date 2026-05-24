@@ -8,7 +8,6 @@ import com.example.batch.worker.processes.stage.ProcessStageStep;
 import java.util.List;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Process worker 启动后把 stage step 与 compute plugin 登记到 {@code batch.step_registry}，供 console-api 上传
@@ -21,13 +20,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 public class ProcessStepBeanRegistrar extends AbstractStepBeanRegistrar<ProcessStageStep> {
 
   public ProcessStepBeanRegistrar(
-      ApplicationContext applicationContext,
-      StepRegistryMapper stepRegistryMapper,
-      PlatformTransactionManager transactionManager) {
+      ApplicationContext applicationContext, StepRegistryMapper stepRegistryMapper) {
     super(
         applicationContext,
         stepRegistryMapper,
-        transactionManager,
         ProcessWorkerType.PROCESS,
         List.of(
             new BeanTypeBinding<>(ProcessStageStep.class, ProcessStageStep::implCode),

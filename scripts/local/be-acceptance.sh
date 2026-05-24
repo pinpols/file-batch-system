@@ -261,13 +261,8 @@ step_1_build_restart() {
     note "mvnd 临时禁用(Step 9 会恢复)"
   fi
   # 用 mvn 退出码判成功,不用 jar mtime(mvn -q 见无改动时 no-op,jar 不会重新打包)
-  # 用 install(不是 package):把 e2e-tests 依赖的全部模块(orchestrator/trigger/worker-*/console-api/common)
-  # 装到 ~/.m2。Step 2/3/4 的 --skip-build 直接跑测试,依赖 jar 必须从 m2 拿;若用 package 只产
-  # target/ jar 不入 m2,m2 会停留在上次 install 时的旧版本,e2e 测试用 stale jar 屏蔽问题
-  # (CI full-ci-gate 强制 fresh install 反而能暴露 — 2026-05-24 真实踩过)。
-  # -pl batch-e2e-tests -am 反向拉齐所有上游依赖(等价于 batch-console-api + 全 worker 模块 + orchestrator + trigger + common)。
-  if ! mvn install -DskipTests -pl batch-e2e-tests -am -q > "$LOG_DIR/step1-mvn.log" 2>&1; then
-    ng "mvn install 失败(看 $LOG_DIR/step1-mvn.log)"
+  if ! mvn package -DskipTests -pl batch-console-api -am -q > "$LOG_DIR/step1-mvn.log" 2>&1; then
+    ng "mvn package 失败(看 $LOG_DIR/step1-mvn.log)"
     return 1
   fi
   local jar=$(find batch-console-api/target -name "*-exec.jar" | head -1)

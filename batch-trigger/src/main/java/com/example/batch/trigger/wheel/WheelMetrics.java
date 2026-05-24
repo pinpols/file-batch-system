@@ -89,31 +89,10 @@ public class WheelMetrics {
     this.staleMarkerReleasedCounter = Counter.builder(STALE_MARKER_RELEASED).register(registry);
   }
 
-  /** P0 (audit 2026-05-23):fire 异步池队列堆积监控。Gauge,supplier 由 executor bean 提供。 */
-  public static final String FIRE_QUEUE_SIZE = "batch.trigger.fire.queue.size";
-
-  /** P0 (audit 2026-05-23):单次 fire 异步执行耗时(loadDescriptor + launchScheduled + advance)。 */
-  public static final String FIRE_ASYNC_DURATION = "batch.trigger.fire.async.duration";
-
   /** Gauge:当前 wheel 内 task 数;由 scheduler 提供 supplier。 */
   public void registerTasksScheduledGauge(Supplier<Number> supplier) {
     io.micrometer.core.instrument.Gauge.builder(TASKS_SCHEDULED, supplier)
         .description("current wheel scheduled task count")
-        .register(registry);
-  }
-
-  /** Gauge:triggerFireExecutor 队列堆积数;由 executor bean 提供 supplier。 */
-  public void registerFireQueueSizeGauge(Supplier<Number> supplier) {
-    io.micrometer.core.instrument.Gauge.builder(FIRE_QUEUE_SIZE, supplier)
-        .description("triggerFireExecutor queue depth — high values signal wheel back-pressure")
-        .register(registry);
-  }
-
-  /** Timer:单次 fire 异步执行耗时。 */
-  public Timer fireAsyncDuration() {
-    return Timer.builder(FIRE_ASYNC_DURATION)
-        .description("end-to-end fire() runtime on async executor")
-        .publishPercentiles(0.5, 0.95, 0.99)
         .register(registry);
   }
 
