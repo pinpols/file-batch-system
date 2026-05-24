@@ -1,0 +1,113 @@
+name: deploy-linux
+
+# Linux 部署机变体(与 deploy.yml 并存,Windows / Linux runner 解耦)。
+# 仅 workflow_dispatch 手动触发,避免与 deploy.yml 同时被 build-image 触发造成"双 runner 同步部署"。
+#
+# 前提:
+#   1) 自托管 runner 装在 Linux 部署机, labels = [self-hosted, deploy, linux]。
+#   2) Docker Engine 在跑(host-side `docker compose` 可用)。
+#   3) 同样需要 secrets(沿用 deploy.yml 的设定):
+#        BATCH_PLATFORM_DB_PASSWORD / BATCH_BUSINESS_DB_PASSWORD / BATCH_MINIO_SECRET_KEY
+#   4) .env.local 不入仓,自己想办法:① 在 runner workspace 外固定路径放份模板,deploy 时 cp 进来;
+#      ② 或把所有需要的变量改用 GH Secrets/Variables 注入,本文件保留前者形态便于切换。
+#
+# 与 Windows 版差异:
+#   - shell: bash(Linux runner 默认就有,不依赖 pwsh)
+#   - 行续行用 \(不是 pwsh 的反引号)
+#   - 路径仍然全部相对,无平台差异
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '镜像 tag (默认 latest,可填 sha-<full> 精确部署某次构建)'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-linux-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, deploy, linux]
+    timeout-minutes: 20
+
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
+      BATCH_PLATFORM_DB_PASSWORD: ${{ secrets.BATCH_PLATFORM_DB_PASSWORD || 'batch_pass_123' }}
+      BATCH_BUSINESS_DB_PASSWORD: ${{ secrets.BATCH_BUSINESS_DB_PASSWORD || 'batch_pass_123' }}
+      BATCH_MINIO_SECRET_KEY: ${{ secrets.BATCH_MINIO_SECRET_KEY || 'minioadmin123' }}
+      BATCH_MINIO_ACCESS_KEY: minioadmin
+
+    steps:
+      - name: Checkout 部署分支 (含 compose / scripts)
+        uses: actions/checkout@v4
+        with:
+          ref: feature/docker-deploy
+
+      - name: 显示部署上下文
+        shell: bash
+        run: |
+          echo "触发:        $GITHUB_EVENT_NAME"
+          echo "镜像 tag:    $IMAGE_TAG"
+          echo "ref:         $GITHUB_REF"
+          echo "sha:         $GITHUB_SHA"
+          echo "docker:      $(docker version --format '{{.Server.Version}}')"
+          echo "compose:     $(docker compose version --short)"
+
+      - name: 登录 GHCR
+        shell: bash
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 拉取最新镜像
+        shell: bash
+        run: |
+          docker compose \
+            --env-file .env.local \
+            -f docker-compose.yml \
+            -f docker/compose/app.yml \
+            -f docker/compose/app.deploy.yml \
+            --profile apps --profile replica \
+            pull
+
+      - name: 重启服务 (apps + replica)
+        shell: bash
+        run: |
+          docker compose \
+            --env-file .env.local \
+            -f docker-compose.yml \
+            -f docker/compose/app.yml \
+            -f docker/compose/app.deploy.yml \
+            --profile apps --profile replica \
+            up -d --no-build --remove-orphans --wait --wait-timeout 300
+
+      - name: 验证健康
+        shell: bash
+        run: |
+          docker compose \
+            --env-file .env.local \
+            -f docker-compose.yml \
+            -f docker/compose/app.yml \
+            -f docker/compose/app.deploy.yml \
+            --profile apps --profile replica \
+            ps
+          port=$(awk -F= '$1=="CONSOLE_API_PORT"{print $2}' .env.local)
+          port=${port:-18080}
+          echo "probe http://localhost:${port}/actuator/health"
+          body=$(curl -fsS --max-time 10 "http://localhost:${port}/actuator/health")
+          echo "$body"
+          echo "$body" | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"' \
+            || { echo "console-api 不 UP" >&2; exit 1; }
+          echo "✔ console-api UP"
+
+      - name: 清理悬挂镜像
+        if: always()
+        shell: bash
+        run: docker image prune -f
