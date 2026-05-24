@@ -24,6 +24,12 @@ dev-start:
 dev-stop:
 	bash scripts/local/stop-all.sh
 
+# 基建健康检查（PG primary/replica / Kafka / Redis / MinIO）— 协议层探测,
+# env-var 驱动,任何环境可用。详见 scripts/local/health-check-infra.sh 顶部注释。
+# CI / staging:覆盖 PG_PRIMARY_HOST / KAFKA_BOOTSTRAP / MINIO_URL 等环境变量。
+dev-health:
+	bash scripts/local/health-check-infra.sh
+
 # 重新构建并启动（增量构建，推荐默认使用，~30s total）
 # 增量模式覆盖 95% 日常改代码迭代：改 .java / .yml / 加类都能正确识别
 dev-restart:

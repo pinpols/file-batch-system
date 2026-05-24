@@ -119,15 +119,26 @@ on_error() {
 
 trap on_error ERR
 
+# docker / kubectl 常见路径(用作 PATH miss 时的 fallback)。完整说明见
+# scripts/local/docker-path.sh 顶部注释。简表:
+#   Linux:   /usr/bin   (apt/dnf 标准) ;  /usr/local/bin  (manual) ;  /snap/bin  (Ubuntu)
+#   macOS:   /usr/local/bin  (Intel HB) ;  /opt/homebrew/bin  (Apple Silicon) ;
+#            /Applications/Docker.app/Contents/Resources/bin  (Docker Desktop)
+#   常见:    ~/.rd/bin       (Rancher Desktop) ;  ~/.docker/bin  (Docker CLI plugin)
+#   WSL2:    见 Linux(host docker.exe 不推荐通过 /mnt/c 调用,慢)
 resolve_docker_bin() {
   if command -v docker >/dev/null 2>&1; then
     command -v docker
     return 0
   fi
   for candidate in \
-    /Applications/Docker.app/Contents/Resources/bin/docker \
+    /usr/bin/docker \
+    /usr/local/bin/docker \
     /opt/homebrew/bin/docker \
-    /usr/local/bin/docker
+    /snap/bin/docker \
+    "${HOME}/.rd/bin/docker" \
+    "${HOME}/.docker/bin/docker" \
+    /Applications/Docker.app/Contents/Resources/bin/docker
   do
     if [[ -x "$candidate" ]]; then
       printf '%s\n' "$candidate"
@@ -143,9 +154,12 @@ resolve_kubectl_bin() {
     return 0
   fi
   for candidate in \
-    /Applications/Docker.app/Contents/Resources/bin/kubectl \
+    /usr/bin/kubectl \
+    /usr/local/bin/kubectl \
     /opt/homebrew/bin/kubectl \
-    /usr/local/bin/kubectl
+    /snap/bin/kubectl \
+    "${HOME}/.rd/bin/kubectl" \
+    /Applications/Docker.app/Contents/Resources/bin/kubectl
   do
     if [[ -x "$candidate" ]]; then
       printf '%s\n' "$candidate"

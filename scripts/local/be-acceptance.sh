@@ -34,7 +34,9 @@ set -uo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-FE_DIR="${FE_DIR:-/Users/dengchao/Downloads/batch-console}"
+# FE_DIR:默认走 sibling 仓相对路径(本仓和 batch-console 平级)。
+# 别人 clone 仓库到不同位置 / Linux 上跑,环境变量 export FE_DIR=/path 覆盖。
+FE_DIR="${FE_DIR:-$ROOT_DIR/../batch-console}"
 CONSOLE_PORT="${CONSOLE_PORT:-18080}"
 FE_PORT="${FE_PORT:-5173}"
 LOG_DIR="$ROOT_DIR/logs/be-acceptance"
@@ -150,7 +152,26 @@ fi
 
 # ── 工具函数 ────────────────────────────────────────────────
 SEQ_PASS=0 SEQ_FAIL=0
-hdr() { printf "\n${BLUE}═════ Step %d / %s ═════${RST}\n" "$1" "$2"; }
+# 各 step 起止时间(便于 monitor 看进度;长 step 后续可补 heartbeat)。
+STEP_START_TS=0
+_ts() { date +%H:%M:%S; }
+_elapsed_human() {
+  local sec=$1
+  if (( sec < 60 )); then
+    printf '%ds' "$sec"
+  else
+    printf '%dm%ds' $((sec / 60)) $((sec % 60))
+  fi
+}
+hdr() {
+  # 上一个 step 收尾打 elapsed(若有)
+  if (( STEP_START_TS > 0 )); then
+    local prev_elapsed=$(( $(date +%s) - STEP_START_TS ))
+    printf "${DIM}   ↳ step 耗时 %s${RST}\n" "$(_elapsed_human $prev_elapsed)"
+  fi
+  STEP_START_TS=$(date +%s)
+  printf "\n${BLUE}═════ [%s] Step %d / %s ═════${RST}\n" "$(_ts)" "$1" "$2"
+}
 ok()  { printf "${GREEN}✅${RST} %s\n" "$1"; SEQ_PASS=$((SEQ_PASS+1)); }
 ng()  { printf "${RED}❌${RST} %s\n" "$1"; SEQ_FAIL=$((SEQ_FAIL+1)); }
 note(){ printf "${DIM}   %s${RST}\n" "$1"; }
