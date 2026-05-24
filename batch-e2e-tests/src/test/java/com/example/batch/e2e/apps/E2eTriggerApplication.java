@@ -8,18 +8,21 @@ import com.example.batch.e2e.config.E2ePlatformDataSourceConfiguration;
 import com.example.batch.e2e.config.E2ePlatformMybatisConfiguration;
 import com.example.batch.e2e.config.E2eShedLockConfiguration;
 import com.example.batch.trigger.BatchTriggerApplication;
+import java.util.concurrent.Executor;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
  * ADR-010 Stage 5 Layer 2 scaffold: trigger-only e2e application context. 与 {@link
@@ -83,5 +86,17 @@ public class E2eTriggerApplication {
 
   public static void main(String[] args) {
     SpringApplication.run(E2eTriggerApplication.class, args);
+  }
+
+  // KafkaOutboxPublisher 需要 @Qualifier("applicationTaskExecutor") Executor;
+  // 此 slice 下 TaskExecutionAutoConfiguration 未触发,显式补一个最小线程池。
+  @Bean(name = "applicationTaskExecutor")
+  public Executor applicationTaskExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(2);
+    executor.setMaxPoolSize(4);
+    executor.setThreadNamePrefix("e2e-app-task-");
+    executor.initialize();
+    return executor;
   }
 }

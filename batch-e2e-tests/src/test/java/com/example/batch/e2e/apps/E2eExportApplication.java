@@ -13,18 +13,21 @@ import com.example.batch.worker.dispatchs.infrastructure.DispatchStepExecutionAd
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
 import com.example.batch.worker.imports.BatchWorkerImportApplication;
 import com.example.batch.worker.imports.infrastructure.ImportStepExecutionAdapter;
+import java.util.concurrent.Executor;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration
 @EnableAutoConfiguration(
@@ -125,5 +128,17 @@ public class E2eExportApplication {
 
   public static void main(String[] args) {
     SpringApplication.run(E2eExportApplication.class, args);
+  }
+
+  // KafkaOutboxPublisher 需要 @Qualifier("applicationTaskExecutor") Executor;
+  // 此 slice 下 TaskExecutionAutoConfiguration 未触发,显式补一个最小线程池。
+  @Bean(name = "applicationTaskExecutor")
+  public Executor applicationTaskExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(2);
+    executor.setMaxPoolSize(4);
+    executor.setThreadNamePrefix("e2e-app-task-");
+    executor.initialize();
+    return executor;
   }
 }
