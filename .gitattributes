@@ -1,0 +1,2 @@
+# Force LF for shell scripts (容器内 bash 执行需 LF;Windows checkout 默认 CRLF 会导致 exit 127)
+*.sh text eol=lf
