@@ -9,7 +9,7 @@ x-common-runtime-env: &common-runtime-env
 services:
   postgres-primary:
     image: postgres:${POSTGRES_IMAGE_TAG}
-    container_name: batch-postgres
+    container_name: batch-postgres-primary
     restart: unless-stopped
     # 默认 max_connections=100 不够：6 模块 × (platform + business) × Hikari 池
     # 本地联调叠加就会炸 "too many clients already"。调到 300 留足余量。
