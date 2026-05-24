@@ -13,7 +13,7 @@ P2-4：console-api 海量查询时把主库压测掉。引入 PG hot standby + S
 
 ## 一、本地启动从库
 
-### 全新环境（无旧 postgres-data volume）
+### 全新环境（无旧 postgres-primary-data volume）
 
 ```bash
 # 1. 启动主库（首次 initdb 自动建 replicator 用户 + 应用流复制参数）
@@ -25,7 +25,7 @@ docker compose --profile replica up -d postgres-replica
 
 首次启动时 `entrypoint.sh` 会从主库 `pg_basebackup` 拉一份完整数据到 `postgres-replica-data` volume，然后进入 hot standby 模式订阅 WAL。
 
-### 已有旧 postgres-data volume（重要）
+### 已有旧 postgres-primary-data volume（重要）
 
 旧 volume 的 PG 容器**不会自动**：
 - 重新跑 `init/*.sh` → **没有 replicator 用户**
@@ -58,7 +58,7 @@ docker compose --profile replica up -d postgres-replica
 
 ```bash
 docker compose down
-docker volume rm batch-plaform_postgres-data batch-plaform_postgres-replica-data
+docker volume rm batch-plaform_postgres-primary-data batch-plaform_postgres-replica-data
 docker compose up -d postgres
 docker compose --profile replica up -d postgres-replica
 ```
