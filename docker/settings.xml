@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  部署调整(feature/docker-deploy):构建镜像内 Maven 走阿里云国内镜像。
+  原因:本机经 VPN 代理访问 repo.maven.apache.org 的 HTTPS 握手不稳(SSL unexpected eof),
+  改用阿里云镜像避开国际线路。central 仓被镜像到 aliyun public(其聚合了 central)。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyun-public</id>
+      <name>Aliyun Public</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>
