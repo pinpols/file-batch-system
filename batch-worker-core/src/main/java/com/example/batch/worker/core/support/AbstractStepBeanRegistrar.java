@@ -18,12 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>采用"快照覆盖"策略：先按 module 清空，再一次性 INSERT 当前集合。这样已删除的类在下一次 启动后自动从表里消失；多实例并发启动也只会生成相同内容的覆盖，最终一致。
  *
- * <p>子类只需指定 module 名（{@code IMPORT / EXPORT / DISPATCH / PROCESS}）与 Step bean 类型。process 这类"既有 stage step
- * 又有 compute plugin"的链路可走 {@link #AbstractStepBeanRegistrar(ApplicationContext, StepRegistryMapper, String, List)}
- * 多类型构造器，把多种 bean 类型 + 各自 implCode 提取器组合到同一 module 下登记。
+ * <p>子类只需指定 module 名（{@code IMPORT / EXPORT / DISPATCH / PROCESS}）与 Step bean 类型。process 这类"既有
+ * stage step 又有 compute plugin"的链路可走 {@link #AbstractStepBeanRegistrar(ApplicationContext,
+ * StepRegistryMapper, String, List)} 多类型构造器，把多种 bean 类型 + 各自 implCode 提取器组合到同一 module 下登记。
  *
- * <p>console-api 的 Excel 上传校验会按 pipeline 的 worker_type 查本表，拦住 {@code impl_code} 指向未注册 Spring bean 的坏配置
- * （以前 seed 里 {@code sftpReceiveStep} 之类的"幽灵 impl_code"只能等运行时抛 STEP_NOT_FOUND 才暴露）。
+ * <p>console-api 的 Excel 上传校验会按 pipeline 的 worker_type 查本表，拦住 {@code impl_code} 指向未注册 Spring bean
+ * 的坏配置 （以前 seed 里 {@code sftpReceiveStep} 之类的"幽灵 impl_code"只能等运行时抛 STEP_NOT_FOUND 才暴露）。
  */
 @Slf4j
 public abstract class AbstractStepBeanRegistrar<T> {
@@ -48,8 +48,8 @@ public abstract class AbstractStepBeanRegistrar<T> {
   }
 
   /**
-   * 多 bean 类型构造器：同一 module 下登记多种 bean 类型（例如 process 模块同时登记 ProcessStageStep 与 ProcessComputePlugin）。
-   * 各 binding 按列表顺序遍历，所有类型共享同一去重集合（同 impl_code 仅登记一次，先入为主）。
+   * 多 bean 类型构造器：同一 module 下登记多种 bean 类型（例如 process 模块同时登记 ProcessStageStep 与
+   * ProcessComputePlugin）。 各 binding 按列表顺序遍历，所有类型共享同一去重集合（同 impl_code 仅登记一次，先入为主）。
    */
   protected AbstractStepBeanRegistrar(
       ApplicationContext applicationContext,

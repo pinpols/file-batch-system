@@ -29,9 +29,9 @@ import java.util.function.Supplier;
  *       数
  * </ul>
  *
- * <p><b>性能</b>:fire 热路径 Timer/Counter 在构造时一次性 register 为 field,避免每次调用
- * {@code Timer.builder(...).register(registry)} 重复 map lookup + Builder 对象分配。
- * 带 tag 的 Counter(group/reason/policy/jobCode)按 tag key 缓存到 ConcurrentMap。
+ * <p><b>性能</b>:fire 热路径 Timer/Counter 在构造时一次性 register 为 field,避免每次调用 {@code
+ * Timer.builder(...).register(registry)} 重复 map lookup + Builder 对象分配。 带 tag 的
+ * Counter(group/reason/policy/jobCode)按 tag key 缓存到 ConcurrentMap。
  */
 public class WheelMetrics {
 

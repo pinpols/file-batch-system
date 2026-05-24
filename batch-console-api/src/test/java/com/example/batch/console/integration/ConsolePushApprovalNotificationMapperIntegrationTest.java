@@ -61,8 +61,7 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   @Test
   void findPendingShouldExcludeOutsideLookbackWindow() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
-    String no =
-        insertApproval(tenant, "DOWNLOAD", "REJECTED", "alice", "bob", "no", "30 minute");
+    String no = insertApproval(tenant, "DOWNLOAD", "REJECTED", "alice", "bob", "no", "30 minute");
 
     List<PendingApprovalNotification> pending = mapper.findPending(10, 50);
 

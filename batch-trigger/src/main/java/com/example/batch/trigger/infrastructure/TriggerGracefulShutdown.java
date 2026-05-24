@@ -20,10 +20,10 @@ import org.springframework.stereotype.Component;
  *   <li>调用 scheduler-specific 停机动作(Quartz: {@code Scheduler.standby/start/shutdown})
  * </ul>
  *
- * <p>R-arch-audit-2026-05-23 P1: draining 状态从本类抽到独立 {@link TriggerDrainState} bean,
- * 让两种 scheduler 实现(Quartz / Wheel)各自响应停机语义 — Quartz 走本类的 standby/shutdown 路径; Wheel 仅依赖
- * {@code TriggerDrainState.isDraining()} 来阻挡新 fire,真停机由 {@code @PreDestroy} 走
- * {@link com.example.batch.trigger.wheel.HashedWheelTriggerScheduler#shutdown()}。
+ * <p>R-arch-audit-2026-05-23 P1: draining 状态从本类抽到独立 {@link TriggerDrainState} bean, 让两种 scheduler
+ * 实现(Quartz / Wheel)各自响应停机语义 — Quartz 走本类的 standby/shutdown 路径; Wheel 仅依赖 {@code
+ * TriggerDrainState.isDraining()} 来阻挡新 fire,真停机由 {@code @PreDestroy} 走 {@link
+ * com.example.batch.trigger.wheel.HashedWheelTriggerScheduler#shutdown()}。
  */
 @Slf4j
 @Component

@@ -96,9 +96,9 @@ public class HashedWheelTriggerScheduler {
   /**
    * R-arch-audit-2026-05-23 P1: 记录 slidingWindow 最近一次成功执行的时刻(毫秒)。
    *
-   * <p>leader 失守时(其他实例抢到 ShedLock),本实例 {@code slidingWindow()} 不再被调用, {@code wasLeader} 卡在 true。{@link
-   * #watchLeaderLoss()} 周期检测此值是否 超过 leader-loss 阈值(默认 2 * lockAtMostFor = 4 分钟),据此把 {@code wasLeader}
-   * 复位为 false, 下次本实例重新拿到 leader 时仍能触发 fast-path catch-up scan。
+   * <p>leader 失守时(其他实例抢到 ShedLock),本实例 {@code slidingWindow()} 不再被调用, {@code wasLeader} 卡在
+   * true。{@link #watchLeaderLoss()} 周期检测此值是否 超过 leader-loss 阈值(默认 2 * lockAtMostFor = 4 分钟),据此把
+   * {@code wasLeader} 复位为 false, 下次本实例重新拿到 leader 时仍能触发 fast-path catch-up scan。
    */
   private volatile long lastSlidingWindowRunMillis = 0L;
 

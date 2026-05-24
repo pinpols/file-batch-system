@@ -36,7 +36,8 @@ public class ConsolePushApprovalNotifier {
   void start() {
     if (!properties.isEnabled() || !properties.getApprovalNotify().isEnabled()) {
       log.info(
-          "[push] ConsolePushApprovalNotifier disabled (push.enabled or approval-notify.enabled = false)");
+          "[push] ConsolePushApprovalNotifier disabled (push.enabled or approval-notify.enabled ="
+              + " false)");
       return;
     }
     scheduler =
@@ -50,7 +51,8 @@ public class ConsolePushApprovalNotifier {
     scheduler.scheduleWithFixedDelay(
         this::pollSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
     log.info(
-        "[push] ConsolePushApprovalNotifier started, intervalMillis={} lookbackMinutes={} batchSize={}",
+        "[push] ConsolePushApprovalNotifier started, intervalMillis={} lookbackMinutes={}"
+            + " batchSize={}",
         intervalMillis,
         properties.getApprovalNotify().getLookbackMinutes(),
         properties.getApprovalNotify().getBatchSize());
@@ -102,8 +104,7 @@ public class ConsolePushApprovalNotifier {
         reason == null || reason.isBlank()
             ? String.format("approver=%s · %s", nullToDash(p.getApproverId()), p.getApprovalNo())
             : String.format(
-                "approver=%s · %s",
-                nullToDash(p.getApproverId()), truncate(reason, 80));
+                "approver=%s · %s", nullToDash(p.getApproverId()), truncate(reason, 80));
     String tag = "approval-" + p.getApprovalNo();
     // 前端 /m/approvals 是列表页;带 ?id 让列表页打开后高亮/滚动到目标条。
     // 如果未来 FE 加了详情页 /m/approvals/:no,把这里改成 path 段即可。

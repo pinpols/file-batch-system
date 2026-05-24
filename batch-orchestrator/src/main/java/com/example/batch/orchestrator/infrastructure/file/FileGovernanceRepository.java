@@ -16,10 +16,10 @@ import org.springframework.stereotype.Component;
 /**
  * 文件治理数据访问层（纯 DAO）：提供文件记录查询、状态更新、归档/删除、对账写入和审计追加等操作。
  *
- * <p>注：状态机校验（{@code FileStateMachine.assertTransition}）与 {@code BizException} 抛出均由
- * {@code DefaultFileGovernanceService} 业务层负责，本类只做参数封装 + Mapper 调用。
- * 内嵌 record 值对象（{@code FileIdentity}、{@code FileStorage}、{@code ReconciledFileRecordCommand} 等）
- * 封装对账写入和审计所需的参数，避免散落的 null 参数。
+ * <p>注：状态机校验（{@code FileStateMachine.assertTransition}）与 {@code BizException} 抛出均由 {@code
+ * DefaultFileGovernanceService} 业务层负责，本类只做参数封装 + Mapper 调用。 内嵌 record 值对象（{@code
+ * FileIdentity}、{@code FileStorage}、{@code ReconciledFileRecordCommand} 等） 封装对账写入和审计所需的参数，避免散落的
+ * null 参数。
  */
 @Component
 @RequiredArgsConstructor
@@ -313,8 +313,8 @@ public class FileGovernanceRepository {
   }
 
   /**
-   * 纯 DAO 写入：调用前调用方需自行执行 {@code FileStateMachine.assertTransition} 校验合法跃迁，
-   * 并对返回值 ≤ 0 抛出 {@code BizException(STATE_CONFLICT)} 处理并发冲突。
+   * 纯 DAO 写入：调用前调用方需自行执行 {@code FileStateMachine.assertTransition} 校验合法跃迁， 并对返回值 ≤ 0 抛出 {@code
+   * BizException(STATE_CONFLICT)} 处理并发冲突。
    *
    * @return 实际更新的行数（0 表示并发冲突 / 行不存在）
    */

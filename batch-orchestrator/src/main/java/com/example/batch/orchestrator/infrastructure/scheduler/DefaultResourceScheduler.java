@@ -53,8 +53,8 @@ import org.springframework.stereotype.Component;
 public class DefaultResourceScheduler implements ResourceScheduler {
 
   /**
-   * tick 级别活跃计数缓存:在一个调度 tick 内 (如 WaitingPartitionDispatchScheduler 批量评估若干 partition)
-   * 对相同 (tenantId, queueCode/workerGroup) 的 4 个 COUNT 查询去重,消除重复 DB round-trip。
+   * tick 级别活跃计数缓存:在一个调度 tick 内 (如 WaitingPartitionDispatchScheduler 批量评估若干 partition) 对相同
+   * (tenantId, queueCode/workerGroup) 的 4 个 COUNT 查询去重,消除重复 DB round-trip。
    *
    * <p>由调用方通过 {@link #openTickCache()} / {@link #closeTickCache()} 包裹 schedule() 批次显式开启。
    * 不开启时(默认),所有 resolveXxxActive 走原始无缓存路径,保持单次 schedule() 调用语义不变。
@@ -275,7 +275,8 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       return 0;
     }
     String tenantId = request.getTenantId();
-    long count = cachedCount("tj:" + tenantId, () -> jobInstanceMapper.countActiveByTenant(tenantId));
+    long count =
+        cachedCount("tj:" + tenantId, () -> jobInstanceMapper.countActiveByTenant(tenantId));
     return safeNarrow(count);
   }
 

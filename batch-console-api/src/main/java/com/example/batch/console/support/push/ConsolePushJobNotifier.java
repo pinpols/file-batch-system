@@ -16,10 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * PoC:周期扫描最近 N 分钟终态化的 job_instance,对有 operator_id 的逐条 push 通知到提交人; SCHEDULED 等无 operator 的实例跳过(系统调度任务无明确收件人)。
+ * PoC:周期扫描最近 N 分钟终态化的 job_instance,对有 operator_id 的逐条 push 通知到提交人; SCHEDULED 等无 operator
+ * 的实例跳过(系统调度任务无明确收件人)。
  *
- * <p>幂等:写入 {@link ConsolePushJobNotificationMapper#insertIgnore} 用 ON CONFLICT DO NOTHING; rowcount=1
- * 才发推,=0 表示已被其他实例 / 上次轮询处理过。
+ * <p>幂等:写入 {@link ConsolePushJobNotificationMapper#insertIgnore} 用 ON CONFLICT DO NOTHING;
+ * rowcount=1 才发推,=0 表示已被其他实例 / 上次轮询处理过。
  *
  * <p>调度:自管理 {@link ScheduledExecutorService}(console-api 未启用全局 {@code @EnableScheduling},参 {@code
  * ReplicaLagMonitor})。单 JVM 内 {@code fixedDelay} 顺序串行;多 replica 部署时靠 UNIQUE 兜底去重。
@@ -40,7 +41,8 @@ public class ConsolePushJobNotifier {
   @PostConstruct
   void start() {
     if (!properties.isEnabled() || !properties.getJobNotify().isEnabled()) {
-      log.info("[push] ConsolePushJobNotifier disabled (push.enabled or job-notify.enabled = false)");
+      log.info(
+          "[push] ConsolePushJobNotifier disabled (push.enabled or job-notify.enabled = false)");
       return;
     }
     scheduler =

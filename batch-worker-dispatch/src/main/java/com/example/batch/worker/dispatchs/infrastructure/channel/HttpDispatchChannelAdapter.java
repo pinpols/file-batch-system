@@ -41,7 +41,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
           @Override
           public List<InetAddress> lookup(String hostname) throws UnknownHostException {
             if (securityProperties.isBypassMode()) {
-              return Dns.SYSTEM.lookup(hostname);
+              return SYSTEM.lookup(hostname);
             }
             // S-2.6: resolve-then-connect — 解析 + IP 安全校验合并在 Dns 接口实现里，
             // 由 OkHttp 在真正建连前回调，省去每请求重建 Client 的开销。

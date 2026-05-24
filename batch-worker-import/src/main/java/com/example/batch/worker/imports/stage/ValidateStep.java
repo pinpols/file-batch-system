@@ -1,6 +1,5 @@
 package com.example.batch.worker.imports.stage;
 
-import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -344,7 +343,8 @@ public class ValidateStep implements ImportStageStep {
             recordValidationError(
                 context, recordNo, issue.errorCode(), issue.errorMessage(), issue.rawRecord());
         if (outcome.stop()) {
-          return ChunkProcessResult.failure(outcome.errorCode(), outcome.errorMessage(), validCount);
+          return ChunkProcessResult.failure(
+              outcome.errorCode(), outcome.errorMessage(), validCount);
         }
         if (!recordGovernanceService.withinThreshold(context)) {
           return ChunkProcessResult.failure(
@@ -360,11 +360,11 @@ public class ValidateStep implements ImportStageStep {
   }
 
   /**
-   * P1: 改为返回 {@link ValidationErrorOutcome},不再用 IllegalStateException 控流。 调用方根据
-   * shouldStop() 决定是否提前返回 ChunkProcessResult.failure(...)。
+   * P1: 改为返回 {@link ValidationErrorOutcome},不再用 IllegalStateException 控流。 调用方根据 shouldStop()
+   * 决定是否提前返回 ChunkProcessResult.failure(...)。
    *
-   * <p>旧实现 throw → processValidationBatch 外层 catch(Exception) → 抹成
-   * IMPORT_VALIDATE_FAILED 失败码,丢失了 "skip threshold exceeded" / "FAIL_BATCH" 语义。
+   * <p>旧实现 throw → processValidationBatch 外层 catch(Exception) → 抹成 IMPORT_VALIDATE_FAILED 失败码,丢失了
+   * "skip threshold exceeded" / "FAIL_BATCH" 语义。
    */
   private ValidationErrorOutcome recordValidationError(
       ImportJobContext context,

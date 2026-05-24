@@ -10,9 +10,8 @@ import java.util.Set;
  * 跨租户配置复制应用服务。
  *
  * <p>P1(2026-05-23 audit):原实现 {@code com.example.batch.console.web.ConsoleTenantConfigCopyService}
- * 标 {@code @Service} 却放在 {@code web} 包,违反 application / infrastructure 分层。本接口位于
- * {@code application/config},默认实现见
- * {@code infrastructure/config/DefaultConsoleTenantConfigCopyService}。
+ * 标 {@code @Service} 却放在 {@code web} 包,违反 application / infrastructure 分层。本接口位于 {@code
+ * application/config},默认实现见 {@code infrastructure/config/DefaultConsoleTenantConfigCopyService}。
  */
 public interface ConsoleTenantConfigCopyService {
 

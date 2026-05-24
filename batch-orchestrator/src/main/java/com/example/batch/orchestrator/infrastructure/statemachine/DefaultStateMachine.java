@@ -38,10 +38,11 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
           "getStatus");
 
   /**
-   * 按 Class 缓存的 status getter Method,首次反射后驻留,后续 transition 调用 O(1) 查表。
-   * Optional.empty 表示该 class 上无任何匹配方法(下次仍走快速失败路径,避免反复反射查询)。
+   * 按 Class 缓存的 status getter Method,首次反射后驻留,后续 transition 调用 O(1) 查表。 Optional.empty 表示该 class
+   * 上无任何匹配方法(下次仍走快速失败路径,避免反复反射查询)。
    */
-  private static final Map<Class<?>, Optional<Method>> STATUS_GETTER_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Class<?>, Optional<Method>> STATUS_GETTER_CACHE =
+      new ConcurrentHashMap<>();
 
   @Override
   public StateTransition transition(T target, String event) {

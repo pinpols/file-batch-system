@@ -16,8 +16,6 @@ public interface ConsolePushJobNotificationMapper {
   List<PendingJobNotification> findPending(
       @Param("lookbackMinutes") int lookbackMinutes, @Param("batchSize") int batchSize);
 
-  /**
-   * 幂等写入"已推送"记录。UNIQUE(tenant_id, job_instance_id) 冲突时 DO NOTHING,返回 0; 成功插入返回 1。调用方依此判断是否首次推送。
-   */
+  /** 幂等写入"已推送"记录。UNIQUE(tenant_id, job_instance_id) 冲突时 DO NOTHING,返回 0; 成功插入返回 1。调用方依此判断是否首次推送。 */
   int insertIgnore(ConsolePushJobNotificationEntity entity);
 }

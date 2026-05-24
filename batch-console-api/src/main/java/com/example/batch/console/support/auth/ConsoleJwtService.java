@@ -80,10 +80,10 @@ public class ConsoleJwtService {
   private final Environment environment;
 
   /**
-   * P1(2026-05-23 audit / CLAUDE.md §编码细则 #3):Redis 可选依赖改 {@link ObjectProvider} 构造器注入,
-   * 替代原 {@code @Autowired(required = false)} field 注入。authenticate() / revoke() 内每次调用
-   * {@link ObjectProvider#getIfAvailable()},非 Spring 单测场景或 redis 启动失败时返回 null,
-   * 与之前 {@code redisTemplate == null} 降级路径完全一致。
+   * P1(2026-05-23 audit / CLAUDE.md §编码细则 #3):Redis 可选依赖改 {@link ObjectProvider} 构造器注入, 替代原
+   * {@code @Autowired(required = false)} field 注入。authenticate() / revoke() 内每次调用 {@link
+   * ObjectProvider#getIfAvailable()},非 Spring 单测场景或 redis 启动失败时返回 null, 与之前 {@code redisTemplate ==
+   * null} 降级路径完全一致。
    */
   private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
 

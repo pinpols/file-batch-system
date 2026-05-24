@@ -64,8 +64,8 @@ public final class ImportPreprocessPipeline {
 
   /**
    * P2: 持有一份默认 ObjectMapper 作 fallback,但 Spring 启动时由 {@link
-   * ImportPreprocessObjectMapperInitializer} 替换为容器管理的全局 bean,确保自定义 Module(JavaTime / Kotlin /
-   * 项目内 mixin)与其他模块行为一致。
+   * ImportPreprocessObjectMapperInitializer} 替换为容器管理的全局 bean,确保自定义 Module(JavaTime / Kotlin / 项目内
+   * mixin)与其他模块行为一致。
    */
   private static volatile ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
 

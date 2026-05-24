@@ -58,8 +58,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
               .body(new ParameterizedTypeReference<CommonResponse<List<Object>>>() {});
       return resp != null ? resp.data() : List.of();
     } catch (RestClientException ex) {
-      log.warn(
-          "trigger downstream unavailable, degrading to empty list: {}", ex.getMessage());
+      log.warn("trigger downstream unavailable, degrading to empty list: {}", ex.getMessage());
       return List.of();
     }
   }

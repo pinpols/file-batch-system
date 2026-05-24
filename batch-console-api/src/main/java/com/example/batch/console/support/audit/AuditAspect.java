@@ -69,8 +69,8 @@ public class AuditAspect {
   private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
 
   /**
-   * P1(2026-05-23 audit):REQUIRES_NEW 模板 @PostConstruct 一次性构建复用,
-   * 避免每次失败路径在 {@link #recordInNewTransaction} 内反复 {@code new TransactionTemplate}(切面单例)。
+   * P1(2026-05-23 audit):REQUIRES_NEW 模板 @PostConstruct 一次性构建复用, 避免每次失败路径在 {@link
+   * #recordInNewTransaction} 内反复 {@code new TransactionTemplate}(切面单例)。
    */
   private TransactionTemplate requiresNewTemplate;
 

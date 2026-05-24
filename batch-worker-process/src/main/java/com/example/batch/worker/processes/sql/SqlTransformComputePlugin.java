@@ -58,9 +58,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private static final String PARAM_TARGET_TABLE = "targetTable";
 
   /**
-   * COMPUTE 阶段中转表的全名({@code schema.table})。Plugin SQL 与 {@link
-   * SqlTransformComputeSqlValidator} 的 VALIDATE 阶段白名单共用这一常量,避免散落字面量在 4 处 SQL + 1 处 validator
-   * 之间漂移。
+   * COMPUTE 阶段中转表的全名({@code schema.table})。Plugin SQL 与 {@link SqlTransformComputeSqlValidator} 的
+   * VALIDATE 阶段白名单共用这一常量,避免散落字面量在 4 处 SQL + 1 处 validator 之间漂移。
    */
   public static final String STAGING_TABLE = "batch.process_staging";
 
@@ -132,7 +131,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     preCleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
     int leftover =
         jdbc.update(
-            "DELETE FROM " + STAGING_TABLE + " WHERE batch_key = :batchKey"
+            "DELETE FROM "
+                + STAGING_TABLE
+                + " WHERE batch_key = :batchKey"
                 + " AND tenant_id = :tenantId"
                 + " AND target_schema = :targetSchema"
                 + " AND target_table = :targetTable",
@@ -163,7 +164,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       cleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
       cleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
       jdbc.update(
-          "DELETE FROM " + STAGING_TABLE + " WHERE batch_key = :batchKey"
+          "DELETE FROM "
+              + STAGING_TABLE
+              + " WHERE batch_key = :batchKey"
               + " AND tenant_id = :tenantId"
               + " AND target_schema = :targetSchema"
               + " AND target_table = :targetTable",

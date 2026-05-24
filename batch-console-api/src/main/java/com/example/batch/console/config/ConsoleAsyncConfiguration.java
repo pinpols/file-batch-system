@@ -42,10 +42,10 @@ public class ConsoleAsyncConfiguration {
   }
 
   /**
-   * P1 治理项 (audit 2026-05-23): SSE 实时事件总线 / 摘要流之前各自直接 {@code Executors.newScheduledThreadPool},
-   * 游离 Spring 生命周期外, 无 Actuator 指标. 这里统一注册一个 {@code consoleRealtimeScheduler}
-   * 给 {@code ConsoleRealtimeEventHub} 心跳调度与 {@code ConsoleOpsSummaryRealtimeStream}
-   * debounce 刷新共用. pool size 走 2 起步: 一格供 hub 高频心跳, 一格供 summary 延迟刷新.
+   * P1 治理项 (audit 2026-05-23): SSE 实时事件总线 / 摘要流之前各自直接 {@code Executors.newScheduledThreadPool}, 游离
+   * Spring 生命周期外, 无 Actuator 指标. 这里统一注册一个 {@code consoleRealtimeScheduler} 给 {@code
+   * ConsoleRealtimeEventHub} 心跳调度与 {@code ConsoleOpsSummaryRealtimeStream} debounce 刷新共用. pool size
+   * 走 2 起步: 一格供 hub 高频心跳, 一格供 summary 延迟刷新.
    */
   @Bean(name = REALTIME_SCHEDULER, destroyMethod = "shutdown")
   public ThreadPoolTaskScheduler consoleRealtimeScheduler() {

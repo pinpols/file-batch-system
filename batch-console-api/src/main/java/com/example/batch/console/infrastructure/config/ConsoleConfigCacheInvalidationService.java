@@ -103,8 +103,8 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   /**
-   * SCAN-based pattern 删除：走 {@link RedisKeyUtils#scanAndDelete} 通用工具，异常被工具层吞掉避免影响
-   * afterCommit 钩子流程；残余 key 走 TTL（5min）自然清理。
+   * SCAN-based pattern 删除：走 {@link RedisKeyUtils#scanAndDelete} 通用工具，异常被工具层吞掉避免影响 afterCommit
+   * 钩子流程；残余 key 走 TTL（5min）自然清理。
    */
   private void scanAndDelete(String pattern) {
     long deleted = RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE);

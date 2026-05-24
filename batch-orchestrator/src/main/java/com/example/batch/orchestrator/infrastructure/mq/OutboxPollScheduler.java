@@ -59,9 +59,8 @@ import org.springframework.stereotype.Component;
 public class OutboxPollScheduler {
 
   /**
-   * ShedLock 兜底持锁上限的余量。在 {@link OutboxProperties#getPublishingTimeoutSeconds()} 基础上加这一段缓冲得到
-   * 锁的 lockAtMost — 保证锁过期晚于 stale 重置阈值,避免"锁过期但 stale 未到"的盲窗;同时把窗口控制在 10s,
-   * 不至于让单实例长时间故障后才能切换。
+   * ShedLock 兜底持锁上限的余量。在 {@link OutboxProperties#getPublishingTimeoutSeconds()} 基础上加这一段缓冲得到 锁的
+   * lockAtMost — 保证锁过期晚于 stale 重置阈值,避免"锁过期但 stale 未到"的盲窗;同时把窗口控制在 10s, 不至于让单实例长时间故障后才能切换。
    *
    * <p>历史问题:lockAtMost 与 publishingTimeoutSeconds 严格相等时,GC 停顿或 Kafka 超时期间锁刚过期就被另一
    * 实例抢走,原实例继续推进与新实例并发处理同一批 outbox 事件(outbox UNIQUE(tenant_id, event_key) ON CONFLICT
@@ -90,6 +89,7 @@ public class OutboxPollScheduler {
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong currentIntervalMillis = new AtomicLong(0);
 
+  @SuppressWarnings("PMD.ExcessiveParameterList") // 8 项依赖均单一职责,封装 Command 类反而模糊语义
   public OutboxPollScheduler(
       DefaultScheduleForwarder scheduleForwarder,
       OutboxPublishCircuitBreaker outboxPublishCircuitBreaker,

@@ -345,5 +345,4 @@ public class ConsoleRealtimeEventHub {
       this.emitter = emitter;
     }
   }
-
 }

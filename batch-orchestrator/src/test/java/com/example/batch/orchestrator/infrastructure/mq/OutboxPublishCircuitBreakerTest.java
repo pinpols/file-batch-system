@@ -107,7 +107,8 @@ class OutboxPublishCircuitBreakerTest {
     // should reuse cached open state and still deny.
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(null);
     // To force slow-path: invalidate closed cache by waiting for openUntilMs to pass is hard;
-    // instead, just call allowNow — cached snapshot openUntilMs is still future so fast-path denies.
+    // instead, just call allowNow — cached snapshot openUntilMs is still future so fast-path
+    // denies.
     assertThat(breaker.allowNow()).isFalse();
   }
 

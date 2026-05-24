@@ -68,7 +68,9 @@ public class WorkerReportOutboxCoordinator {
     }
     long now = BatchDateTimeSupport.utcEpochMillis();
     long deadline =
-        props.getPollMaxDurationMillis() > 0 ? now + props.getPollMaxDurationMillis() : Long.MAX_VALUE;
+        props.getPollMaxDurationMillis() > 0
+            ? now + props.getPollMaxDurationMillis()
+            : Long.MAX_VALUE;
     int batch = Math.max(1, props.getPollBatchSize());
     for (int i = 0; i < batch; i++) {
       // P1: 总耗时熔断 — orchestrator 慢响应时把 batch 提前 break,

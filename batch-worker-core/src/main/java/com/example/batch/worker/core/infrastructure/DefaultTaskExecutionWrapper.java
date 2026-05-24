@@ -125,8 +125,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   /**
    * watchdog 生命周期由 Spring 管理 ({@link
    * com.example.batch.worker.core.config.WorkerCoreAsyncConfiguration#workerWatchdogScheduler})。
-   * 这里保留 {@code @PreDestroy} 钩子仅为兼容旧测试 (测试可单独触发关闭); 容器关闭时 Spring 也会调 scheduler 的
-   * {@code shutdown()}。
+   * 这里保留 {@code @PreDestroy} 钩子仅为兼容旧测试 (测试可单独触发关闭); 容器关闭时 Spring 也会调 scheduler 的 {@code
+   * shutdown()}。
    */
   @PreDestroy
   void shutdownWatchdog() {

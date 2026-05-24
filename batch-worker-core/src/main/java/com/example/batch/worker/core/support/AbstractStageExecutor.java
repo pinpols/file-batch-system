@@ -25,8 +25,8 @@ public abstract class AbstractStageExecutor<
   /**
    * 共享的错误序列化 mapper：用于 BizException → StageExecutionResult.failure 转换。
    *
-   * <p>public 暴露给 dispatch stage step（实现 DispatchStageStep 而非继承本类的兄弟）直接引用，
-   * 避免每个 step 重复声明 {@code private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper()}。
+   * <p>public 暴露给 dispatch stage step（实现 DispatchStageStep 而非继承本类的兄弟）直接引用， 避免每个 step 重复声明 {@code
+   * private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper()}。
    */
   public static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
@@ -157,9 +157,9 @@ public abstract class AbstractStageExecutor<
   /**
    * 根据有序的步骤元数据构建默认 {@link PipelineStepTemplate} 列表。
    *
-   * <p>import / export / dispatch 三条链路的 {@code buildDefaultStepDefinitions()} 历史上都是
-   * "按枚举顺序遍历 → 校验 bean 存在 → builder 装配 template" 的同构骨架；下沉到基类后子类只需把
-   * 已按 stage 顺序排好的 step 元数据传入即可，避免每个链路抄一遍同样的 30 行 builder 装配。
+   * <p>import / export / dispatch 三条链路的 {@code buildDefaultStepDefinitions()} 历史上都是 "按枚举顺序遍历 → 校验
+   * bean 存在 → builder 装配 template" 的同构骨架；下沉到基类后子类只需把 已按 stage 顺序排好的 step 元数据传入即可，避免每个链路抄一遍同样的 30 行
+   * builder 装配。
    *
    * <p>调用方负责确保列表已按业务期望顺序排列；本方法只做 stepOrder 自增（1-based）与不可变包装。
    *
@@ -189,8 +189,8 @@ public abstract class AbstractStageExecutor<
   }
 
   /**
-   * 描述单个 stage step 的元数据契约：stepCode / stepName / implCode / stageCode。 各模块的 StageStep 接口可实现本接口以参与默认 template
-   * 构建；或子类内部用一次性 record 包装现有 step + stage 后传入。
+   * 描述单个 stage step 的元数据契约：stepCode / stepName / implCode / stageCode。 各模块的 StageStep 接口可实现本接口以参与默认
+   * template 构建；或子类内部用一次性 record 包装现有 step + stage 后传入。
    */
   public interface StageStepDescriptor {
     String stepCode();

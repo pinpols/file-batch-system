@@ -41,9 +41,9 @@ import org.springframework.web.client.RestClientResponseException;
  * Webhook 异步分发器。
  *
  * <p>事件先按订阅写入 {@code webhook_delivery_log(PENDING,next_retry_at=now)}，再进进程内队列做 burst 投递。
- * P1(2026-05-23 audit):队列满时改用 {@link AbortPolicy} 显式抛 {@link RejectedExecutionException},
- * 拒绝任务由 {@link WebhookDeliveryRelay} 扫 {@code PENDING/EXHAUSTED} 行接力(日志已先于入队写入),
- * 避免之前 {@code CallerRunsPolicy} 把投递反压回 Tomcat 工作线程(单次 webhook 8-10s 超时直接拖死请求线程池)。
+ * P1(2026-05-23 audit):队列满时改用 {@link AbortPolicy} 显式抛 {@link RejectedExecutionException}, 拒绝任务由
+ * {@link WebhookDeliveryRelay} 扫 {@code PENDING/EXHAUSTED} 行接力(日志已先于入队写入), 避免之前 {@code
+ * CallerRunsPolicy} 把投递反压回 Tomcat 工作线程(单次 webhook 8-10s 超时直接拖死请求线程池)。
  */
 @Slf4j
 @Service

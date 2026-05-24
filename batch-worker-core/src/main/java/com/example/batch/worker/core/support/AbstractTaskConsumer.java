@@ -471,7 +471,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
 
   // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → process → dispatch）
   // P2: 改用 LinkedHashMap 保留顺序又表达 Map 语义,避免 List<Entry> 在阅读时被误读为 List。
-  private static final Map<String, String> WORKER_CODE_KEYWORD_TOPIC = buildWorkerCodeKeywordTopic();
+  private static final Map<String, String> WORKER_CODE_KEYWORD_TOPIC =
+      buildWorkerCodeKeywordTopic();
 
   private static Map<String, String> buildWorkerCodeKeywordTopic() {
     LinkedHashMap<String, String> map = new LinkedHashMap<>(4);

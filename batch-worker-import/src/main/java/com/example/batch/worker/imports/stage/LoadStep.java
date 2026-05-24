@@ -220,8 +220,8 @@ public class LoadStep implements ImportStageStep {
   }
 
   /**
-   * P1: 提取 streaming / legacy 共用的 attribute 写入 + file_status 更新(原约 22 行,两侧逐字段对称)。
-   * loadedCount 由调用方传入即可,其他统计仍从 attributes 读最新值。
+   * P1: 提取 streaming / legacy 共用的 attribute 写入 + file_status 更新(原约 22 行,两侧逐字段对称)。 loadedCount
+   * 由调用方传入即可,其他统计仍从 attributes 读最新值。
    */
   private void commit(ImportJobContext context, ImportPayload importPayload, long loadedCount) {
     Map<String, Object> attrs = context.getAttributes();

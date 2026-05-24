@@ -43,11 +43,12 @@ public class DefaultExportStageExecutor
   private final Map<String, ExportStageStep> stepsByImplCode;
   private final Map<ExportStage, ExportStageStep> stepsByStage;
   private final List<PipelineStepTemplate> defaultStepDefinitions;
+
   /**
-   * P1: 改为 ObjectProvider 注入,与 worker-core 内 DefaultTaskExecutionWrapper /
-   * DefaultHeartbeatService 等保持一致。test-slice (no Micrometer) 与
-   * {@code @SpringBootTest(excludeAutoConfiguration=MicrometerAutoConfiguration.class)}
-   * 场景下不再硬要求 MeterRegistry bean。
+   * P1: 改为 ObjectProvider 注入,与 worker-core 内 DefaultTaskExecutionWrapper / DefaultHeartbeatService
+   * 等保持一致。test-slice (no Micrometer) 与
+   * {@code @SpringBootTest(excludeAutoConfiguration=MicrometerAutoConfiguration.class)} 场景下不再硬要求
+   * MeterRegistry bean。
    */
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 

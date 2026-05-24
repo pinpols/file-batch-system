@@ -24,11 +24,10 @@ import org.springframework.scheduling.annotation.Scheduled;
  * #current()} 返回 {@link ShardAssignment#single()}（退化为单实例）。
  *
  * <p>TODO(needs-manual-review): 审计 (2026-05-23) 提议改为 @Component 注册。 当前由 {@link
- * com.example.batch.orchestrator.config.ShardingConfiguration} 通过 {@code @Bean} 方法装配,
- * 这种方式产生的也是 Spring 管理 bean,理论上 {@code @Scheduled} 心跳能生效;但为消除歧义,
- * 已新增 {@link #selfCheckOnStartup()} 启动期自检,首次 heartbeat 失败会立刻 WARN 暴露。
- * 真正改 @Component 需要把构造参数 (memberId / memberTtl) 重构为 @Value / properties bean 注入,
- * 牵动分片机制初始化时序,留待人工审阅。
+ * com.example.batch.orchestrator.config.ShardingConfiguration} 通过 {@code @Bean} 方法装配, 这种方式产生的也是
+ * Spring 管理 bean,理论上 {@code @Scheduled} 心跳能生效;但为消除歧义, 已新增 {@link #selfCheckOnStartup()} 启动期自检,首次
+ * heartbeat 失败会立刻 WARN 暴露。 真正改 @Component 需要把构造参数 (memberId / memberTtl) 重构为 @Value / properties
+ * bean 注入, 牵动分片机制初始化时序,留待人工审阅。
  */
 @Slf4j
 public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
@@ -59,8 +58,8 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
   }
 
   /**
-   * 启动期自检：立即发出第一次 heartbeat,失败则 WARN 暴露
-   * (避免 @Scheduled 注册失败 / Redis 启动早期不可达时,DYNAMIC 模式静默退化为单实例无任何告警)。
+   * 启动期自检：立即发出第一次 heartbeat,失败则 WARN 暴露 (避免 @Scheduled 注册失败 / Redis 启动早期不可达时,DYNAMIC
+   * 模式静默退化为单实例无任何告警)。
    */
   @PostConstruct
   void selfCheckOnStartup() {

@@ -10,12 +10,12 @@ import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.Map;
 
 /**
- * Dispatch 链路两条 step（{@link DeliverDispatchStep} / {@link RetryDispatchStep}）共用的"执行 dispatch
- * → 把识别码回写到 context → markSent / markFailed"骨架。
+ * Dispatch 链路两条 step（{@link DeliverDispatchStep} / {@link RetryDispatchStep}）共用的"执行 dispatch →
+ * 把识别码回写到 context → markSent / markFailed"骨架。
  *
- * <p>差异点（dry-run 处理、record insert vs increment、next-stage 跳转）保留在各 step 自己里，本 helper
- * 只承担两侧严格一致的那段 ~60 行重复：构造 DispatchCommand → 调 gateway → context 写回 externalRequestId /
- * receiptCode / receiptStatus → 根据 success 调 markSent 或 markFailed。
+ * <p>差异点（dry-run 处理、record insert vs increment、next-stage 跳转）保留在各 step 自己里，本 helper 只承担两侧严格一致的那段
+ * ~60 行重复：构造 DispatchCommand → 调 gateway → context 写回 externalRequestId / receiptCode /
+ * receiptStatus → 根据 success 调 markSent 或 markFailed。
  */
 final class DispatchInvocationSupport {
 

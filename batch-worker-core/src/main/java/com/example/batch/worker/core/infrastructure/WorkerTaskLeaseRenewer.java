@@ -67,10 +67,9 @@ public class WorkerTaskLeaseRenewer {
   }
 
   /**
-   * P1: 订阅 {@link ActiveTaskLeaseRegistry#registerRemovalListener} — task 完成（正常 / 异常）
-   * 触发 {@link ActiveTaskLeaseRegistry#remove} 后立即清理 {@code consecutiveFailures} 条目，
-   * 避免 AtomicInteger 永驻进程。tick 内的 snapshot-diff 清理（renewActiveTaskLeases 中 L-5
-   * 注释段）仍保留作为防御兜底。
+   * P1: 订阅 {@link ActiveTaskLeaseRegistry#registerRemovalListener} — task 完成（正常 / 异常） 触发 {@link
+   * ActiveTaskLeaseRegistry#remove} 后立即清理 {@code consecutiveFailures} 条目， 避免 AtomicInteger
+   * 永驻进程。tick 内的 snapshot-diff 清理（renewActiveTaskLeases 中 L-5 注释段）仍保留作为防御兜底。
    */
   @PostConstruct
   void subscribeLeaseRemoval() {
