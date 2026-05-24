@@ -13,6 +13,7 @@ P2-4：console-api 海量查询时把主库压测掉。引入 PG hot standby + S
 
 ## 一、本地启动从库
 
+
 ### 全新环境
 
 ```bash
