@@ -87,21 +87,22 @@ public class TriggerOutboxRelay {
     this.properties = properties;
     this.scheduler = scheduler;
   }
+
   // R3-P1-3：单条 outbox 事件 NEW→PUBLISHED 端到端延迟分位，按 result tag (ok/fail) 拆分。
   // 之前只有积压 gauge，无法区分 Kafka 慢 vs relay 调度慢。
   private io.micrometer.core.instrument.Timer publishLatencyOk;
   private io.micrometer.core.instrument.Timer publishLatencyFail;
 
   /**
-   * R3-P1-9：从 {@code @PostConstruct} 改为 {@code @EventListener(ApplicationReadyEvent.class)} —
-   * 之前 PostConstruct 阶段 Flyway 迁移可能未完成， 第一轮 poll 访问 {@code trigger_outbox_event}
-   * 表的新列会抛 schema 错误（被吞为 noise）。
+   * R3-P1-9：从 {@code @PostConstruct} 改为 {@code @EventListener(ApplicationReadyEvent.class)} — 之前
+   * PostConstruct 阶段 Flyway 迁移可能未完成， 第一轮 poll 访问 {@code trigger_outbox_event} 表的新列会抛 schema 错误（被吞为
+   * noise）。
    *
-   * <p>P0 修复：把原 {@code auditOnReady} 合并进 {@code start()},避免两个独立 ApplicationReadyEvent
-   * 监听器并发 / 顺序不确定导致的 TOCTOU 与重复 metrics 注册。
+   * <p>P0 修复：把原 {@code auditOnReady} 合并进 {@code start()},避免两个独立 ApplicationReadyEvent 监听器并发 /
+   * 顺序不确定导致的 TOCTOU 与重复 metrics 注册。
    *
-   * <p>P0 修复：调度由 Spring 托管 {@link ThreadPoolTaskScheduler} 接管,替代原自建
-   * {@code Executors.newSingleThreadScheduledExecutor}(unbounded queue + 游离生命周期 + 无 Actuator)。
+   * <p>P0 修复：调度由 Spring 托管 {@link ThreadPoolTaskScheduler} 接管,替代原自建 {@code
+   * Executors.newSingleThreadScheduledExecutor}(unbounded queue + 游离生命周期 + 无 Actuator)。
    */
   @EventListener(ApplicationReadyEvent.class)
   public synchronized void start() {

@@ -28,8 +28,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>该状态机缺失会导致 late arrival 路由永远无法生效，因此必须补齐。
  *
- * <p>事务边界：扫描循环本身不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义），
- * 每个候选 batch_day_instance 用 {@link TransactionTemplate} 单条 short tx 处理。
+ * <p>事务边界：扫描循环本身不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义）， 每个候选 batch_day_instance 用 {@link
+ * TransactionTemplate} 单条 short tx 处理。
  */
 @Slf4j
 @Component

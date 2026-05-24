@@ -18,11 +18,11 @@ public class QuartzTriggerConfiguration {
   /**
    * P0 修复：TriggerOutboxRelay 专用 Spring 托管 scheduler。
    *
-   * <p>替换原 {@code Executors.newSingleThreadScheduledExecutor} 自建线程池
-   * （默认 unbounded queue，DB 慢时提交堆积可 OOM；且游离于 Spring 生命周期外，无 Actuator 可见性）。
+   * <p>替换原 {@code Executors.newSingleThreadScheduledExecutor} 自建线程池 （默认 unbounded queue，DB 慢时提交堆积可
+   * OOM；且游离于 Spring 生命周期外，无 Actuator 可见性）。
    *
-   * <p>共享 {@code taskScheduler} 不直接复用：本 relay 是 IO 密集型固定间隔 poll，单独 1 线程避免与
-   * 其它 @Scheduled 任务互相阻塞；同时给 Actuator 留专属 thread name 便于排查。
+   * <p>共享 {@code taskScheduler} 不直接复用：本 relay 是 IO 密集型固定间隔 poll，单独 1 线程避免与 其它 @Scheduled 任务互相阻塞；同时给
+   * Actuator 留专属 thread name 便于排查。
    */
   @Bean(name = "triggerOutboxRelayScheduler", destroyMethod = "shutdown")
   public ThreadPoolTaskScheduler triggerOutboxRelayScheduler(

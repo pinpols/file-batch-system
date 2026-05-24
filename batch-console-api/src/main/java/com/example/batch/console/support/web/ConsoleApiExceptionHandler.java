@@ -68,8 +68,8 @@ public class ConsoleApiExceptionHandler {
   private final BizMessageResolver bizMessageResolver;
 
   /**
-   * 测试便利构造器:大量 MockMvc 单测仅注入 ConsoleResponseFactory。生产由
-   * @RequiredArgsConstructor 生成的双参构造器从 Spring 容器装配 BizMessageResolver。
+   * 测试便利构造器:大量 MockMvc 单测仅注入 ConsoleResponseFactory。生产由 @RequiredArgsConstructor 生成的双参构造器从 Spring
+   * 容器装配 BizMessageResolver。
    */
   public ConsoleApiExceptionHandler(ConsoleResponseFactory responseFactory) {
     this(responseFactory, null);

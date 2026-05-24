@@ -33,7 +33,8 @@ public class DispatchChannelGateway {
   // Adapter lookup cache keyed by channelType (case-sensitive as supplied) — avoids the prior
   // O(n) adapters.stream().filter().findFirst() on every dispatch. Populated lazily on first miss
   // so the dynamic supports() contract (adapters mock different types in unit tests) is preserved.
-  private final ConcurrentMap<String, DispatchChannelAdapter> adapterCache = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, DispatchChannelAdapter> adapterCache =
+      new ConcurrentHashMap<>();
 
   public DispatchResult dispatch(DispatchCommand command) {
     Map<String, Object> channelConfig = command.channelConfig();

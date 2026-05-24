@@ -8,6 +8,7 @@ import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentReso
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
+import jakarta.annotation.PreDestroy;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -20,7 +21,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import jakarta.annotation.PreDestroy;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

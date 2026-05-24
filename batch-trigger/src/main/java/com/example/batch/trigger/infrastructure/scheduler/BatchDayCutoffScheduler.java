@@ -21,8 +21,8 @@ import org.springframework.stereotype.Component;
  * <p>默认 cutoffTime 为 06:00；每条候选记录带自己的时区，确保多地域租户的切日时间各自独立。 ShedLock 防止多节点重复处理同一批次；每条记录的 {@code
  * markCutoff} 用 CAS 更新， 即使并发也只有一次会成功（避免重复切日）。
  *
- * <p>事务边界：扫描循环不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义）；每条 markCutoff
- * 是单条带 CAS 条件的 UPDATE，数据库层就是原子，无需外层事务包裹。
+ * <p>事务边界：扫描循环不开事务（避免长事务 + 与 @SchedulerLock AOP 顺序歧义）；每条 markCutoff 是单条带 CAS 条件的
+ * UPDATE，数据库层就是原子，无需外层事务包裹。
  */
 @Slf4j
 @Component

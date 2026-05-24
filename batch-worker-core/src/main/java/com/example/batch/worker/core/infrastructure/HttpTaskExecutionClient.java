@@ -271,8 +271,7 @@ public class HttpTaskExecutionClient
 
   private void recordReportDropped(String reason) {
     meterRegistry.ifPresent(
-        registry ->
-            registry.counter("worker.report.dropped.total", "reason", reason).increment());
+        registry -> registry.counter("worker.report.dropped.total", "reason", reason).increment());
   }
 
   @Override

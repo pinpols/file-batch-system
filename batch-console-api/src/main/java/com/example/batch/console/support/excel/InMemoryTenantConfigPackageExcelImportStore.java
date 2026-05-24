@@ -14,10 +14,7 @@ public class InMemoryTenantConfigPackageExcelImportStore
   // 在用户放弃 preview/apply 时永久驻留,高并发可累积到 OOM。
   // 改 Caffeine:expireAfterWrite 30 分钟 + maximumSize 1000(对齐预期上传 session 寿命)。
   private final Cache<String, PackageExcelSession> sessions =
-      Caffeine.newBuilder()
-          .expireAfterWrite(30, TimeUnit.MINUTES)
-          .maximumSize(1000)
-          .build();
+      Caffeine.newBuilder().expireAfterWrite(30, TimeUnit.MINUTES).maximumSize(1000).build();
 
   @Override
   public String save(PackageExcelSession session) {
