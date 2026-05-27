@@ -337,11 +337,11 @@ wait_container_exited_zero batch-minio-init "MinIO bucket init"
 # Postgres 容器初始化只建库 + 几个 schema/shedlock，业务表必须每次启动 apply 一次，
 # 避免新增表（如 P1-7 加的 process_staging）在旧 PG 卷上缺失导致 worker 启动 SQL 异常。
 echo "==> 应用业务库 DDL（biz.* + batch.process_staging）..."
-if docker exec -i batch-postgres psql -U "${POSTGRES_USER:-batch_user}" -d batch_business -v ON_ERROR_STOP=1 \
+if docker exec -i batch-postgres-primary psql -U "${POSTGRES_USER:-batch_user}" -d batch_business -v ON_ERROR_STOP=1 \
      < "$ROOT/scripts/db/business/create_biz_tables.sql" >/dev/null 2>&1; then
   echo "  业务库 DDL 已 apply"
 else
-  echo "  ⚠️  业务库 DDL apply 失败（不阻塞启动；详见 docker logs batch-postgres）"
+  echo "  ⚠️  业务库 DDL apply 失败（不阻塞启动；详见 docker logs batch-postgres-primary）"
 fi
 
 if [[ "${BUILD:-0}" == "1" ]]; then

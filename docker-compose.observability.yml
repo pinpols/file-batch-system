@@ -140,11 +140,11 @@ services:
     container_name: batch-postgres-exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://${BATCH_PLATFORM_DB_USERNAME:-batch_user}:${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}@postgres:5432/${BATCH_PLATFORM_DB_NAME:-batch_platform}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${BATCH_PLATFORM_DB_USERNAME:-batch_user}:${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}@postgres-primary:5432/${BATCH_PLATFORM_DB_NAME:-batch_platform}?sslmode=disable"
     networks:
       - batch-network
     depends_on:
-      postgres:
+      postgres-primary:
         condition: service_healthy
 
   kafka-exporter:

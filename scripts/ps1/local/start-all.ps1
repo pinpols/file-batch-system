@@ -50,7 +50,7 @@ Write-Host "==> 等待基础服务就绪..."
 $postgresUser = Get-EnvValue "POSTGRES_USER" "batch_user"
 $postgresDb = Get-EnvValue "POSTGRES_DB" "batch_platform"
 for ($i = 1; $i -le 90; $i++) {
-  & docker compose --env-file $composeEnvFile exec -T postgres pg_isready -U $postgresUser -d $postgresDb *> $null
+  & docker compose --env-file $composeEnvFile exec -T postgres-primary pg_isready -U $postgresUser -d $postgresDb *> $null
   if ($LASTEXITCODE -eq 0) { Write-Host "  PostgreSQL 已就绪"; break }
   if ($i -eq 90) { throw "PostgreSQL 在超时时间内未就绪" }
   Start-Sleep -Seconds 2
@@ -65,7 +65,7 @@ Wait-ContainerExitedZero batch-minio-init "MinIO bucket init"
 $ddl = Join-Path $root "scripts\db\business\create_biz_tables.sql"
 if (Test-Path $ddl) {
   Write-Host "==> 应用业务库 DDL（biz.* + batch.process_staging）..."
-  Get-Content $ddl -Raw | & docker exec -i batch-postgres psql -U $postgresUser -d batch_business -v ON_ERROR_STOP=1 *> $null
+  Get-Content $ddl -Raw | & docker exec -i batch-postgres-primary psql -U $postgresUser -d batch_business -v ON_ERROR_STOP=1 *> $null
   if ($LASTEXITCODE -eq 0) { Write-Host "  业务库 DDL 已 apply" } else { Write-Host "  WARNING: 业务库 DDL apply 失败（不阻塞启动）" }
 }
 
