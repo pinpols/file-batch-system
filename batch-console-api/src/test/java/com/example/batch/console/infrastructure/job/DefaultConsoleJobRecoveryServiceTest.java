@@ -226,6 +226,7 @@ class DefaultConsoleJobRecoveryServiceTest {
     ArgumentCaptor<CompensationPayload> captor = ArgumentCaptor.forClass(CompensationPayload.class);
     verify(ops).submitCompensation(captor.capture(), anyString());
     assertThat(captor.getValue().getCompensationType()).isEqualTo("DLQ");
+    verify(ops).publishRefresh(TENANT);
   }
 
   // ── replayTask ──────────────────────────────────────────────────────────
@@ -256,6 +257,7 @@ class DefaultConsoleJobRecoveryServiceTest {
 
     assertThat(result).isEqualTo("OP-1");
     verify(ops).requireApprovedApproval(TENANT, "APR-TASK");
+    verify(ops).publishRefresh(TENANT);
   }
 
   // ── replayPartition ─────────────────────────────────────────────────────
@@ -285,6 +287,7 @@ class DefaultConsoleJobRecoveryServiceTest {
 
     assertThat(result).isEqualTo("OP-2");
     verify(ops).requireApprovedApproval(TENANT, "APR-PART");
+    verify(ops).publishRefresh(TENANT);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
