@@ -21,6 +21,7 @@
 - **业务开发 / bug 修复 / 测试 / 文档**(controller / service / 9 模块代码 / `docs/` / 单测集成测)→ 提交到 `feature/<topic>`(如 `feature/be-bugfixed`),走标准 PR → `main`
 - **部署分支不进 main**(也不被 PR 到 main);只接收"main → 部署分支"单向 sync,工具 `scripts/local/sync-main.sh`(.ps1 等价) / 跨仓 `C:\Users\aa\scripts\sync-all.ps1`
 
+
 ## 构建
 
 - `mvn package` — 默认 build,产物 `batch-*-${revision}.jar`(根 pom flatten 插件展开 `${revision}`)
