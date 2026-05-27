@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Fetch dependabot metadata
         id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
 
       # patch bump / security advisory → 自动 approve + auto-merge
       - name: Auto-approve patch + security
