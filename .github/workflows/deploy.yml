@@ -1,6 +1,8 @@
 name: deploy
 
-# build-image 成功 → 自托管 runner 拉 GHCR 镜像重启本地 docker compose。
+# build-image 成功 → 自托管 runner 在部署机本地 docker compose build 构建镜像并重启本地 compose。
+# (不再从 GHCR 拉镜像:镜像私有 + 本机走 VPN 代理拉取慢/常卡;部署机即构建机,本地 build 更稳。
+#  代价:构建的是 checkout 出来的 feature/docker-deploy 源码 → 该分支需与 main 保持同步才是最新代码。)
 #
 # 配置注入:所有部署变量改从仓库 Variables / Secrets 读,经 job env 块透传给 docker compose
 #   (compose 直接从进程环境插值 ${VAR},不再 --env-file .env.local)。
@@ -13,7 +15,7 @@ name: deploy
 #   2) 部署机的 docker daemon 在跑(Docker Desktop 启动状态)。
 #   3) 仓库已配齐下方 env 块引用的 Variables(34)+ Secrets(8)。缺任一关键项,
 #      下面「校验关键变量」步骤会 fail-fast,不会带空值去 up。
-#   4) GITHUB_TOKEN 自动有 packages:read,无需额外 PAT。
+#   4) 本地构建,无需 GHCR 登录 / packages:read（部署机需能拉 docker.io 基础镜像 + Maven 依赖）。
 #
 # 触发:
 #   - workflow_run: 监听 build-image 成功(只 main 分支)
@@ -141,22 +143,14 @@ jobs:
           Write-Host "sha:         $env:GITHUB_SHA"
           docker version --format '{{.Server.Version}}' | ForEach-Object { "docker:       $_" }
 
-      - name: 登录 GHCR
-        shell: pwsh
-        run: |
-          $env:GITHUB_TOKEN | docker login ghcr.io -u $env:GITHUB_ACTOR --password-stdin
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 拉取最新镜像
+      - name: 本地构建镜像 (apps + replica;部署机本地 build,不从 GHCR 拉)
         shell: pwsh
         run: |
           docker compose `
             -f docker-compose.yml `
             -f docker/compose/app.yml `
-            -f docker/compose/app.deploy.yml `
             --profile apps --profile replica `
-            pull
+            build
 
       - name: 重启服务 (apps + replica)
         shell: pwsh
@@ -164,7 +158,6 @@ jobs:
           docker compose `
             -f docker-compose.yml `
             -f docker/compose/app.yml `
-            -f docker/compose/app.deploy.yml `
             --profile apps --profile replica `
             up -d --no-build --remove-orphans --wait --wait-timeout 300
 
@@ -174,7 +167,6 @@ jobs:
           docker compose `
             -f docker-compose.yml `
             -f docker/compose/app.yml `
-            -f docker/compose/app.deploy.yml `
             --profile apps --profile replica `
             ps
           # console-api 是前端唯一直接调用的对外面,单独再 probe 一下(端口直接读 env)
