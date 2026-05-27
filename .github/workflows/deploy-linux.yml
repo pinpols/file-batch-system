@@ -99,7 +99,7 @@ jobs:
             --profile apps --profile replica \
             ps
           port=$(awk -F= '$1=="CONSOLE_API_PORT"{print $2}' .env.local)
-          port=${port:-18080}
+          port=${port:-18090}   # 宿主机映射端口(CONSOLE_API_PORT 默认),非容器内 18080
           echo "probe http://localhost:${port}/actuator/health"
           body=$(curl -fsS --max-time 10 "http://localhost:${port}/actuator/health")
           echo "$body"

@@ -106,7 +106,7 @@ jobs:
             ps
           # console-api 是前端唯一直接调用的对外面,单独再 probe 一下
           $port = (Select-String -Path .env.local -Pattern '^CONSOLE_API_PORT=(\d+)').Matches[0].Groups[1].Value
-          if (-not $port) { $port = '18080' }
+          if (-not $port) { $port = '18090' }   # 宿主机映射端口(CONSOLE_API_PORT 默认),非容器内 18080
           Write-Host "probe http://localhost:$port/actuator/health"
           $r = Invoke-WebRequest "http://localhost:$port/actuator/health" -UseBasicParsing -TimeoutSec 10
           if ($r.Content -notmatch '"status"\s*:\s*"UP"') { throw "console-api 不 UP: $($r.Content)" }
