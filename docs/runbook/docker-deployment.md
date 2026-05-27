@@ -61,7 +61,7 @@
 对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability/)。
 
 如果你只需要业务运行，不需要监控面板和 trace/log 链路，这一层可以不启。
-业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-local}_batch-network` 共享网络互通。
+业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-plaform}_batch-network` 共享网络互通。
 
 应用容器的文件日志会写到 `./logs/docker/*.log`，可直接在本地查看或 `tail -f`。
 

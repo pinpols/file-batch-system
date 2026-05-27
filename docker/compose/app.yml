@@ -61,6 +61,10 @@ services:
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     volumes:
       - ./logs/docker:/app/logs
+      # logback-spring.xml prod profile 的 FRONTEND_FILE 硬编码写 /logs/frontend.log;
+      # K8s 那边 helm 挂了 emptyDir,docker-compose 这里要对齐,否则容器启动 logback 报
+      # "Failed to create parent directories for [/logs/frontend.log]" 直接 crash。
+      - ./logs/docker:/logs
     ports:
       - "${CONSOLE_API_PORT:-18080}:18080"
     networks:
@@ -411,5 +415,5 @@ services:
 
 networks:
   batch-network:
-    name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network
+    name: ${COMPOSE_PROJECT_NAME:-batch-plaform}_batch-network
     external: true
