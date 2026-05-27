@@ -424,4 +424,3 @@ networks:
 volumes:
   batch-app-logs:
     name: ${COMPOSE_PROJECT_NAME:-batch-platform}_app-logs
-    external: true

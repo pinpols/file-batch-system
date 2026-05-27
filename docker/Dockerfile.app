@@ -65,9 +65,9 @@ RUN groupadd --system --gid 1000 batch \
 
 COPY --from=builder /tmp/app.jar /app/app.jar
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN mkdir -p /var/log/app /var/cache/app \
+RUN mkdir -p /var/log/app /var/cache/app /logs /app/logs \
     && chmod +x /app/entrypoint.sh \
-    && chown -R batch:batch /app /var/log/app /var/cache/app
+    && chown -R batch:batch /app /var/log/app /var/cache/app /logs /app/logs
 
 USER 1000
 
