@@ -1,7 +1,8 @@
 name: deploy
 
-# build-image 成功 → 自托管 runner 在部署机本地 docker compose build 构建镜像并重启本地 compose。
-# (不再从 GHCR 拉镜像:镜像私有 + 本机走 VPN 代理拉取慢/常卡;部署机即构建机,本地 build 更稳。
+# push main → 自托管 runner 在部署机本地 docker compose build 构建镜像并重启本地 compose。
+# (不再经 build-image/GHCR:本地构建用不到云端镜像,build-image 已删除以免双构建。
+#  不再从 GHCR 拉镜像:镜像私有 + 本机走 VPN 代理拉取慢/常卡;部署机即构建机,本地 build 更稳。
 #  代价:构建的是 checkout 出来的 feature/docker-deploy 源码 → 该分支需与 main 保持同步才是最新代码。)
 #
 # 配置注入:所有部署变量改从仓库 Variables / Secrets 读,经 job env 块透传给 docker compose
@@ -18,13 +19,11 @@ name: deploy
 #   4) 本地构建,无需 GHCR 登录 / packages:read（部署机需能拉 docker.io 基础镜像 + Maven 依赖）。
 #
 # 触发:
-#   - workflow_run: 监听 build-image 成功(只 main 分支)
+#   - push: main(每次 main 推送直接部署;不再经 build-image —— 本地构建用不到云端镜像)
 #   - workflow_dispatch: 手动重跑(回滚/调试用)
 
 on:
-  workflow_run:
-    workflows: ["build-image"]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -35,7 +34,6 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
   group: deploy-main
@@ -43,8 +41,6 @@ concurrency:
 
 jobs:
   deploy:
-    # 仅当 build-image 成功(或手动触发)才部署
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: [self-hosted, deploy, windows]
     timeout-minutes: 20
 
