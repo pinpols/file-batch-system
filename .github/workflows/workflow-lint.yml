@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # zizmor[artipacked]:lint 只读 yaml,无需 token 留存(防意外打包泄漏)
           persist-credentials: false
@@ -51,7 +51,7 @@ jobs:
     # zizmor 默认行为是发现问题非零退出。Pin minor version 防上游规则突变误伤。
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # zizmor[artipacked]:同上,扫描器只读 yaml
           persist-credentials: false

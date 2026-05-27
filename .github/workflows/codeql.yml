@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # zizmor[artipacked]:防 checkout 写入的 .git/config token 被后续 action
           # 误打包到 artifact 泄漏。CodeQL 全程读源码 + upload-sarif,不需要 token persist。

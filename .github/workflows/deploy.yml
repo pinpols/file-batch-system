@@ -113,7 +113,7 @@ jobs:
 
     steps:
       - name: Checkout 部署分支 (含 compose / PS 脚本)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: feature/docker-deploy
 
