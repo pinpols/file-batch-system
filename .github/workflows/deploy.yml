@@ -173,7 +173,9 @@ jobs:
           $port = $env:CONSOLE_API_PORT
           Write-Host "probe http://localhost:$port/actuator/health"
           $r = Invoke-WebRequest "http://localhost:$port/actuator/health" -UseBasicParsing -TimeoutSec 10
-          if ($r.Content -notmatch '"status"\s*:\s*"UP"') { throw "console-api 不 UP: $($r.Content)" }
+          # actuator 响应 Content-Type 非纯文本,PowerShell 把 .Content 返成 byte[] → 先 UTF8 解码再匹配,否则正则恒不中→误判 not UP
+          $body = if ($r.Content -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($r.Content) } else { [string]$r.Content }
+          if ($body -notmatch '"status"\s*:\s*"UP"') { throw "console-api 不 UP: $body" }
           Write-Host "✔ console-api UP"
 
       - name: 清理悬挂镜像
