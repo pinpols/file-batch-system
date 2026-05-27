@@ -50,7 +50,7 @@ jobs:
         uses: ./.github/actions/setup-build-env
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: java
           # security-extended 比 default 多 ~30 条规则(性能 / 安全热点),
@@ -65,7 +65,7 @@ jobs:
           mvn -B -ntp -DskipTests -pl '!batch-e2e-tests' compile
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         # 首次接入:Code Scanning 需仓库管理员手动在
         # Settings → Code security → Code scanning 一键开启(免费)。
         # 未开启时 SARIF upload 会报 403 让本 job 挂红。挂 continue-on-error
