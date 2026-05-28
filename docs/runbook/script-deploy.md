@@ -26,6 +26,7 @@ bash 脚本完全跑在 host,**所有上述跨容器/跨网络问题都不存在
 |---|---|
 | 仓内 `scripts/ps1/docker/deploy-be.ps1` | BE 自动部署脚本**源头**(部署机的 `C:\Users\aa\scripts\` 是它的拷贝)|
 | 仓内 `scripts/ps1/docker/deploy-fe.ps1` | FE 自动部署脚本**源头** |
+| 仓内 `scripts/ps1/docker/healthcheck-watchdog.ps1` | 容器健康看门狗(可选,每 2 min 跑;状态变坏发 webhook)|
 | 部署机 `C:\Users\aa\scripts\deploy-{be,fe}.ps1` | 计划任务直接执行的脚本(若仓内更新,部署机 cp 同步)|
 | `C:\Users\aa\logs\deploy-{be,fe}.log` | 部署日志(无更新时不写,有更新时记 timestamp + git pull + compose 输出)|
 | `C:\Users\aa\logs\deploy-{be,fe}.lock` | 并发锁(脚本自管,30 min 内复用,超时自清)|
@@ -94,6 +95,33 @@ git checkout <prev-sha>
      /SC MINUTE /MO 1 /F
    ```
 5. 验证:`Start-ScheduledTask BatchDeployBE; Get-Content C:\Users\aa\logs\deploy-be.log -Wait`
+
+## 失败告警(可选)
+
+deploy 脚本 + healthcheck-watchdog 都读环境变量 `BATCH_DEPLOY_NOTIFY_WEBHOOK`,设了就发,不设 no-op:
+
+```powershell
+# 钉钉/企微/Slack 兼容:任何接受 {msgtype:text, text:{content:...}} JSON 的 webhook
+setx BATCH_DEPLOY_NOTIFY_WEBHOOK "https://oapi.dingtalk.com/robot/send?access_token=xxx"
+# 新 PowerShell 窗口生效;现有计划任务下次运行生效
+```
+
+## 健康看门狗(可选)
+
+`scripts/ps1/docker/healthcheck-watchdog.ps1` + `BatchHealthcheck` 计划任务每 2 min 跑:
+- `docker ps` 拉所有 `batch-*` 容器(自动排 `*-init` 一次性容器)
+- 与上一轮状态(`C:\Users\aa\logs\healthcheck-state.json`)比对
+- 只在 **healthy → 非 healthy** 或 **非 healthy → healthy** 转换时发 webhook(防 noisy)
+- 共用 `BATCH_DEPLOY_NOTIFY_WEBHOOK`
+
+注册:
+```powershell
+schtasks /Create /TN BatchHealthcheck `
+  /TR '"C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -ExecutionPolicy Bypass -File C:\Users\aa\scripts\healthcheck-watchdog.ps1' `
+  /SC MINUTE /MO 2 /F
+```
+
+测试:`docker stop batch-trigger`(2 min 内应收到 webhook),`docker start batch-trigger`(等 healthcheck 转 healthy 后收 resolved)。
 
 ## 边界
 
