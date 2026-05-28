@@ -10,6 +10,8 @@ x-app-runtime-env: &app-runtime-env
   BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
   LANG: ${BATCH_LOCALE:-C.UTF-8}
   LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+  # /internal/** 服务间共享密钥;强制要求 .env.local 显式设置,防止落回默认 internal-secret(15 字符弱密钥)。
+  BATCH_INTERNAL_SECRET: ${BATCH_INTERNAL_SECRET:?BATCH_INTERNAL_SECRET is required}
 
 services:
   console-api:
