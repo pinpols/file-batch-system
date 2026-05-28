@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.observability;
 
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -74,7 +75,8 @@ public class JobLifecycleMetricsRecorder {
               if (instance == null || instance.getCreatedAt() == null) {
                 return;
               }
-              Instant resolvedFinished = finishedAt != null ? finishedAt : Instant.now();
+              Instant resolvedFinished =
+                  finishedAt != null ? finishedAt : BatchDateTimeSupport.utcNow();
               Duration duration = Duration.between(instance.getCreatedAt(), resolvedFinished);
               // ADR-026:dry_run 维度切分指标 — Boolean 字段可能为 null,缺省按 false(非演练)处理
               boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());

@@ -9,6 +9,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.audit.AuditAction;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.constraints.Pattern;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -114,10 +115,7 @@ public class ConsoleAdminTestDataController {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
     List<String> tenantIds =
-        java.util.Arrays.stream(ids.split(","))
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
-            .toList();
+        Arrays.stream(ids.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
     Map<String, Integer> result = cleanupService.cleanupByExactTenantIds(tenantIds);
     return responseFactory.success(result);
   }

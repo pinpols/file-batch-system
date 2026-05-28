@@ -51,7 +51,7 @@
 
 合法豁免仅 4 张系统表:`batch_runtime_default_parameter` / `step_registry` / `shedlock` / `biz_table_schema`。
 
-守护:`TenantIsolationIntegrationTest`。
+守护:`MultiTenantIsolationIntegrationTest`(batch-orchestrator)+ 各模块 `MapperXmlTenantGuardArchTest`(静态扫描 mapper XML,禁可空 `<if tenantId>` 守护)。
 
 ## 异步事件路由
 

@@ -233,6 +233,14 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  void shouldThrowBizException_whenSecretPayloadJsonIsMalformed() {
+    SecretVersionRotateRequest req = rotateRequest();
+    req.setSecretPayloadJson("{not json");
+
+    assertThatThrownBy(() -> service.rotateSecretVersion(req)).isInstanceOf(BizException.class);
+  }
+
+  @Test
   void shouldRotateSecret_withDefaultStatus_whenBlank() {
     when(secretVersionMapper.selectLatestVersionNo(anyMap())).thenReturn(null);
 
@@ -366,6 +374,24 @@ class DefaultConsoleConfigApplicationServiceTest {
     assertThat(result.get("grayScopeChanged")).isEqualTo(true);
     assertThat(result.get("statusChanged")).isEqualTo(true);
     assertThat(result).containsKeys("payloadA", "payloadB");
+  }
+
+  @Test
+  void shouldDiffConfigReleases_andTolerateMalformedHistoricalJson() {
+    // 历史 DB 数据可能含坏 JSON(validateJson 守卫加入前的写入);
+    // diff 必须降级为 null 比较,而不是穿透 IllegalArgumentException 变 500。
+    ConfigReleaseEntity a = release(1L, "JOB", "k", 1);
+    a.setConfigPayload("{not json");
+    a.setGrayScope("{\"x\":1}");
+    ConfigReleaseEntity b = release(2L, "JOB", "k", 2);
+    b.setConfigPayload("{\"a\":2}");
+    b.setGrayScope("[broken");
+    when(configReleaseMapper.selectById(anyMap())).thenReturn(a, b);
+
+    Map<String, Object> result = service.diffConfigReleases(TENANT, 1L, 2L);
+
+    assertThat(result.get("payloadChanged")).isEqualTo(true); // null vs {"a":2}
+    assertThat(result.get("grayScopeChanged")).isEqualTo(true); // {"x":1} vs null
   }
 
   @Test

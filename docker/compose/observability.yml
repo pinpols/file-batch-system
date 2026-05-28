@@ -185,5 +185,5 @@ volumes:
 
 networks:
   batch-network:
-    name: ${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network
+    name: ${COMPOSE_PROJECT_NAME:-batch-plaform}_batch-network
     external: true

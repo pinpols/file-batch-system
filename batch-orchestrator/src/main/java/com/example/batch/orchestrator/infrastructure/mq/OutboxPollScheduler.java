@@ -128,7 +128,8 @@ public class OutboxPollScheduler {
     }
     long initialDelay = outbox.getMinPollIntervalMillis();
     currentIntervalMillis.set(initialDelay);
-    executor.schedule(this::pollAndReschedule, Instant.now().plusMillis(initialDelay));
+    executor.schedule(
+        this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(initialDelay));
     ShardAssignment initial = shardAssignmentProvider.current();
     log.info(
         "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x mode={} shard={}/{}",
@@ -276,7 +277,7 @@ public class OutboxPollScheduler {
     if (executor.getScheduledExecutor().isShutdown()) {
       return;
     }
-    executor.schedule(this::pollAndReschedule, Instant.now().plusMillis(nextDelay));
+    executor.schedule(this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(nextDelay));
   }
 
   /**

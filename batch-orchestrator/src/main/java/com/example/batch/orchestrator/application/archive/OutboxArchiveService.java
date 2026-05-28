@@ -26,7 +26,13 @@ public class OutboxArchiveService {
   private final OutboxEventMapper outboxEventMapper;
   private final OutboxArchiveProperties properties;
 
-  /** 单次归档：按 status + retentionDays 计算 cutoff，单批上限 batchSize。 */
+  /**
+   * 单次归档:按 status + retentionDays 计算 cutoff,单批上限 batchSize。
+   *
+   * <p>6 步 SQL(3 archive INSERT + 3 hot DELETE)**必须同事务**,否则进程中途崩溃会留下 数据同时存在于冷/热表的不一致态。所有 archive
+   * INSERT 走 `on conflict do nothing` 保证 重跑幂等(ShedLock lockAtMost 到期 + 跨实例竞态下同批 ids 可能被两轮取到)。
+   */
+  @Transactional
   public ArchiveBatchResult archiveOnce(String publishStatus, int retentionDays) {
     if (!properties.isEnabled()) {
       return ArchiveBatchResult.disabled();

@@ -351,18 +351,26 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     if (!Texts.hasText(value)) {
       return;
     }
-    // JsonUtils.fromJson 对畸形 JSON 抛 IllegalArgumentException,字面量 "null" 才返回 null;
-    // 两者都要翻译成 INVALID_ARGUMENT,否则畸形 JSON 穿透 ControllerAdvice 变 500。
-    Object parsed;
-    try {
-      parsed = JsonUtils.fromJson(value, Object.class);
-    } catch (IllegalArgumentException e) {
+    if (safeParseJson(value) == null) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
     }
-    if (parsed == null) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
+  }
+
+  /**
+   * 容错解析 JSON:畸形 / 字面量 "null" / 空白 一律返回 null,不抛异常。
+   *
+   * <p>调用方按需翻译为 BizException(入参写路径)或当 null 处理(diff 读路径,容忍历史坏数据)。 旧实现裸调 {@code JsonUtils.fromJson}
+   * 在畸形 JSON 时抛 {@link IllegalArgumentException}, 穿透 ControllerAdvice 变 500;统一收口在此。
+   */
+  private static Object safeParseJson(String value) {
+    if (!Texts.hasText(value)) {
+      return null;
+    }
+    try {
+      return JsonUtils.fromJson(value, Object.class);
+    } catch (IllegalArgumentException e) {
+      return null;
     }
   }
 
@@ -511,15 +519,9 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     result.put("releaseA", toConfigReleaseResponse(a));
     result.put("releaseB", toConfigReleaseResponse(b));
 
-    // JSON payload diff
-    Object payloadA =
-        a.getConfigPayload() != null
-            ? JsonUtils.fromJson(a.getConfigPayload(), Object.class)
-            : null;
-    Object payloadB =
-        b.getConfigPayload() != null
-            ? JsonUtils.fromJson(b.getConfigPayload(), Object.class)
-            : null;
+    // JSON payload diff:容忍历史坏 JSON,坏数据按 null 比较(否则穿透 500)。
+    Object payloadA = safeParseJson(a.getConfigPayload());
+    Object payloadB = safeParseJson(b.getConfigPayload());
     boolean payloadChanged = !Objects.equals(payloadA, payloadB);
     result.put("payloadChanged", payloadChanged);
     if (payloadChanged) {
@@ -528,10 +530,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     }
 
     // Gray scope diff
-    Object grayA =
-        a.getGrayScope() != null ? JsonUtils.fromJson(a.getGrayScope(), Object.class) : null;
-    Object grayB =
-        b.getGrayScope() != null ? JsonUtils.fromJson(b.getGrayScope(), Object.class) : null;
+    Object grayA = safeParseJson(a.getGrayScope());
+    Object grayB = safeParseJson(b.getGrayScope());
     boolean grayChanged = !Objects.equals(grayA, grayB);
     result.put("grayScopeChanged", grayChanged);
 
