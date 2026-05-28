@@ -93,12 +93,16 @@ try {
 
     $pushOut = git push origin $DeployBr 2>&1
     if ($LASTEXITCODE -ne 0) {
-      Log "PUSH FAILED after merge: $pushOut(本地已 merge,远程未同步,下轮重试)"
-      Notify 'sync push failed' "$pushOut"
-      # 不 return,后面 deploy 还能用本地新 HEAD
-    } else {
-      Log "git push ok: synced main into $DeployBr"
+      # 远程被人推进了(典型:刚 merge 了 PR 到 deploy 分支)→ 本地 merge commit 与远程分叉
+      # 救法:丢本地 merge,reset 到 origin。下轮 polling 会重新检测 main 仍未 sync 并重试。
+      # (不 rebase——本场景 deploy 分支推进频率极低,reset+下轮 fast-path 比 rebase 简单且不会产生干扰 commit)
+      Log "PUSH FAILED after merge: $pushOut"
+      Log "reset --hard origin/$DeployBr,放弃本地 merge,下轮 polling 重试 sync"
+      git reset --hard "origin/$DeployBr" 2>&1 | Out-Null
+      Notify 'sync push race,已回滚' "$pushOut"
+      return
     }
+    Log "git push ok: synced main into $DeployBr"
   }
 
   # 3) 比 local HEAD vs origin(可能刚被自己 sync 推进了)
