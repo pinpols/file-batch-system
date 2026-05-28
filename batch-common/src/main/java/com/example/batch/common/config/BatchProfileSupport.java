@@ -21,9 +21,9 @@ public final class BatchProfileSupport {
       Set.of("prod", "production", "staging", "uat", "preprod", "pre-prod", "pre-production");
 
   /**
-   * 明确的"非生产"profile 名集合。只有激活集里出现这些之一(且不含任何 prod-like)时,才把环境判为非生产并放宽安全守卫
-   * (bypass-mode、弱密钥、auth filter 关闭等)。本地脚本 / strict-verify 用 {@code local},集成测用 {@code
-   * test}/{@code e2e},Docker 本地部署需显式设 {@code SPRING_PROFILES_ACTIVE=local}。
+   * 明确的"非生产"profile 名集合。只有激活集里出现这些之一(且不含任何 prod-like)时,才把环境判为非生产并放宽安全守卫 (bypass-mode、弱密钥、auth
+   * filter 关闭等)。本地脚本 / strict-verify 用 {@code local},集成测用 {@code test}/{@code e2e},Docker 本地部署需显式设
+   * {@code SPRING_PROFILES_ACTIVE=local}。
    */
   public static final Set<String> NON_PROD_PROFILES =
       Set.of("dev", "development", "local", "test", "e2e", "ci", "integration", "it", "sit");
@@ -33,8 +33,8 @@ public final class BatchProfileSupport {
   /**
    * 当前环境是否应按"生产"对待(fail-secure)。
    *
-   * <p><strong>语义(audit fix:fail-open → fail-secure)</strong>:历史实现只在激活集里显式出现 prod-like
-   * profile 时才返回 true,导致"部署到生产却忘配 {@code SPRING_PROFILES_ACTIVE}"时 fail-open——空 / 未知 profile
+   * <p><strong>语义(audit fix:fail-open → fail-secure)</strong>:历史实现只在激活集里显式出现 prod-like profile 时才返回
+   * true,导致"部署到生产却忘配 {@code SPRING_PROFILES_ACTIVE}"时 fail-open——空 / 未知 profile
    * 被判为非生产,bypass-mode、弱密钥校验等安全守卫全被绕过。现改为:
    *
    * <ul>

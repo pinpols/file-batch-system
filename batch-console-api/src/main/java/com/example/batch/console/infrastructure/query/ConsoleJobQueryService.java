@@ -276,10 +276,7 @@ public class ConsoleJobQueryService {
   private static List<String> parseCsv(String csv) {
     if (csv == null || csv.isBlank()) return null;
     List<String> out =
-        Arrays.stream(csv.split(","))
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
-            .toList();
+        Arrays.stream(csv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
     return out.isEmpty() ? null : out;
   }
 }

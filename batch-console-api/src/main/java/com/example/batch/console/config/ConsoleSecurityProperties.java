@@ -46,10 +46,10 @@ public class ConsoleSecurityProperties {
   /**
    * 默认授权角色（SSE ticket 空角色 / bypass-mode 未带 role header 时的兜底）。
    *
-   * <p>安全收敛(audit fix)：原默认含 {@code ADMIN} / {@code TENANT_ADMIN}，会让"空角色 SSE
-   * ticket"(prod 可达，遗留 ticket)与"bypass-mode 无 role header 请求"(本地 / E2E)静默拿到管理员权限 → 提权。
-   * 改为最小权限只读 {@code AUDITOR}：仍非空(规避空权限集导致访问全拒)，但任何写 / 管理操作必须显式带 role
-   * header。影响：bypass-mode / E2E 中做写操作的请求需显式设置 {@code role-header}，不能再依赖隐式 admin 兜底。
+   * <p>安全收敛(audit fix)：原默认含 {@code ADMIN} / {@code TENANT_ADMIN}，会让"空角色 SSE ticket"(prod 可达，遗留
+   * ticket)与"bypass-mode 无 role header 请求"(本地 / E2E)静默拿到管理员权限 → 提权。 改为最小权限只读 {@code
+   * AUDITOR}：仍非空(规避空权限集导致访问全拒)，但任何写 / 管理操作必须显式带 role header。影响：bypass-mode / E2E 中做写操作的请求需显式设置
+   * {@code role-header}，不能再依赖隐式 admin 兜底。
    */
   private List<String> defaultAuthorities = new ArrayList<>(List.of(ConsoleRoles.AUDITOR));
 

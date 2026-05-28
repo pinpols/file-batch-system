@@ -94,7 +94,8 @@ final class RemoteFilesystemDispatchSupport {
               } catch (IOException ioe) {
                 // 红线 #5:不抛裸 RuntimeException。UncheckedIOException 是 JDK 为"lambda 内包装受检
                 // IOException"准备的语义化类型;它仍是 RuntimeException 子类,下方 ExecutionException
-                // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof IOException)照旧命中。
+                // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof
+                // IOException)照旧命中。
                 throw new UncheckedIOException(ioe);
               }
             });

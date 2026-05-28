@@ -33,11 +33,11 @@ import org.springframework.stereotype.Component;
  * <p><b>不解决的问题</b>(交给 ops backlog):trigger_request 卡 ACCEPTED 但 job_instance 始终没出现 (consumer 异常 /
  * launch 失败) — 需要单独的"过期 ACCEPTED"告警 + 人工排查,本 reconciler 不会自动 GIVE_UP。
  *
- * <p><b>HIGH-1 audit fix(2026-05)</b>:launch 的 T1(建 instance=CREATED)与 T2(派发 + 推进状态)是两段独立事务,T2
- * 崩溃会让 instance 滞留 {@code CREATED} 且零 partition。本 reconciler 的扫描 SQL 已加 {@code ji.instance_status
- * <> 'CREATED'} 守护:此类<strong>从未真正派发</strong>的滞留实例不再被回写成 {@code LAUNCHED}(那会谎报成功、掩盖静默丢作业),
- * 而是保留为陈旧 {@code ACCEPTED}、归入上述"过期 ACCEPTED"告警 + 恢复路径。自动重驱 T2 的恢复调度器另行设计(dispatch
- * 非幂等,需集成测验证),不在本 reconciler 职责内。
+ * <p><b>HIGH-1 audit fix(2026-05)</b>:launch 的 T1(建 instance=CREATED)与 T2(派发 + 推进状态)是两段独立事务,T2 崩溃会让
+ * instance 滞留 {@code CREATED} 且零 partition。本 reconciler 的扫描 SQL 已加 {@code ji.instance_status <>
+ * 'CREATED'} 守护:此类<strong>从未真正派发</strong>的滞留实例不再被回写成 {@code LAUNCHED}(那会谎报成功、掩盖静默丢作业), 而是保留为陈旧
+ * {@code ACCEPTED}、归入上述"过期 ACCEPTED"告警 + 恢复路径。自动重驱 T2 的恢复调度器另行设计(dispatch 非幂等,需集成测验证),不在本
+ * reconciler 职责内。
  *
  * <p>ADR-010 固化路径，无条件启用（2026-05-02 同步 HTTP 路径已删除）。
  */

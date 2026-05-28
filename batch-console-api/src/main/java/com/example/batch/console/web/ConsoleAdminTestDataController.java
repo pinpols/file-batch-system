@@ -115,10 +115,7 @@ public class ConsoleAdminTestDataController {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
     List<String> tenantIds =
-        Arrays.stream(ids.split(","))
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
-            .toList();
+        Arrays.stream(ids.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
     Map<String, Integer> result = cleanupService.cleanupByExactTenantIds(tenantIds);
     return responseFactory.success(result);
   }
