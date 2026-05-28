@@ -72,6 +72,8 @@ public class ConsoleGovernanceController {
   @Idempotent
   public CommonResponse<Void> update(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpdateGovernanceParam param) {
+    // 同 list 走 tenantGuard 校验:不能直接信前端 tenantId,需做格式 / 存在性校验。
+    String resolved = tenantGuard.resolveTenant(tenantId);
     if (!param.key().startsWith(PREFIX)) {
       return responseFactory.success(null);
     }
@@ -80,7 +82,7 @@ public class ConsoleGovernanceController {
         KNOWN_KEYS.containsKey(param.key())
             ? "Governance parameter: " + param.key()
             : "Custom governance parameter";
-    parameterService.upsert(tenantId, param.key(), param.value(), description, operator);
+    parameterService.upsert(resolved, param.key(), param.value(), description, operator);
     return responseFactory.success(null);
   }
 
@@ -89,7 +91,8 @@ public class ConsoleGovernanceController {
   @Idempotent
   public CommonResponse<Void> reset(
       @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
-    parameterService.delete(tenantId, key);
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    parameterService.delete(resolved, key);
     return responseFactory.success(null);
   }
 

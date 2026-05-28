@@ -232,6 +232,11 @@
     </select>
 
     <select id="selectSlaViolationCandidates" resultMap="JobInstanceResultMap">
+        <!--
+          tenant_id 加入 ORDER BY 首列:scheduler 是全局扫(ShedLock 单节点),
+          batchSize 上限若被单一高违约租户占满,其他租户告警会静默跳过 → 实质 SLA 治理失效。
+          按 tenant_id 字典序循环抽取,在多租间近似 round-robin 公平。
+        -->
         select *
         from batch.job_instance
         where instance_status in ('WAITING', 'READY', 'RUNNING')
@@ -244,7 +249,8 @@
                     and started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
                 )
               )
-        order by coalesce(
+        order by tenant_id asc,
+                 coalesce(
                     deadline_at,
                     started_at + (expected_duration_seconds * interval '1 second'),
                     created_at
@@ -278,12 +284,13 @@
     </update>
 
     <select id="selectSlaEscalationCandidates" resultMap="JobInstanceResultMap">
+        <!-- tenant_id 加入 ORDER BY 首列,理由同 selectSlaViolationCandidates(防 batchSize 被单租独占) -->
         select *
         from batch.job_instance
         where instance_status in ('WAITING', 'READY', 'RUNNING')
           and sla_alerted_at is not null
           and sla_alerted_at &lt; #{escalationBefore}
-        order by sla_alerted_at asc, id asc
+        order by tenant_id asc, sla_alerted_at asc, id asc
         limit #{limit}
     </select>
 

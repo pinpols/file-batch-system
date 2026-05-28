@@ -16,16 +16,17 @@ import org.springframework.stereotype.Component;
  * P2-4:PROCESS worker 关键运行指标。无 MeterRegistry 时全部退化为 no-op,本地 IDE 跑测试不需要 prometheus 也能编译通过。
  *
  * <ul>
- *   <li>{@code process_compute_staged_rows} - DistributionSummary,COMPUTE 写 staging 的行数(tag:
- *       tenantId)
- *   <li>{@code process_commit_published_rows} - DistributionSummary,COMMIT 落 target 表的行数(tag:
- *       tenantId)
- *   <li>{@code process_validation_failed_total} - Counter,VALIDATE 阶段单条 rule 失败计数(tag: tenantId,
- *       ruleName)
- *   <li>{@code process_stage_duration_seconds} - Timer,五段每段耗时(tag: stage, tenantId, success)
+ *   <li>{@code process_compute_staged_rows} - DistributionSummary,COMPUTE 写 staging 的行数
+ *   <li>{@code process_commit_published_rows} - DistributionSummary,COMMIT 落 target 表的行数
+ *   <li>{@code process_validation_failed_total} - Counter,VALIDATE 阶段单条 rule 失败计数(tag: ruleName)
+ *   <li>{@code process_stage_duration_seconds} - Timer,五段每段耗时(tag: stage, success)
+ *   <li>{@code process_feedback_swallowed_total} - Counter,FEEDBACK 阶段吞掉的异常累计
  * </ul>
  *
- * <p>tag 缓存:同 tag 组合复用同一个 meter 实例,避免每次 record 触发 registry 内部查找+构建。
+ * <p><b>tenantId 不作为 Micrometer tag</b>:运行时高基数(随租户数线性增长)会让 Prometheus time-series 内存爆炸。tenantId 走
+ * MDC 进日志便于按租户追溯;按租维度聚合改用 Prometheus exemplar 或日志聚合方案, 不在 metrics label 维度直接展开。
+ *
+ * <p>方法签名保留 tenantId 入参纯为向后兼容,内部不再用于 tag 缓存键。
  */
 @Component
 public class ProcessMetrics {
@@ -39,14 +40,14 @@ public class ProcessMetrics {
   private static final String UNKNOWN_TAG = "unknown";
 
   private final MeterRegistry registry;
-  private final ConcurrentMap<String, DistributionSummary> stagedByTenant =
-      new ConcurrentHashMap<>();
-  private final ConcurrentMap<String, DistributionSummary> publishedByTenant =
-      new ConcurrentHashMap<>();
-  private final ConcurrentMap<String, Counter> validationFailedByKey = new ConcurrentHashMap<>();
+  // 单例 meter(不再按租户拆 — tenantId 已从 tag 去掉)
+  private volatile DistributionSummary stagedSummary;
+  private volatile DistributionSummary publishedSummary;
+  private volatile Counter feedbackSwallowedCounter;
+  // ruleName 是 低基数(规则定义有限,通常 <100),保留为 tag
+  private final ConcurrentMap<String, Counter> validationFailedByRule = new ConcurrentHashMap<>();
+  // stage + success 都是 低基数,组合 < 12 种
   private final ConcurrentMap<String, Timer> stageTimerByKey = new ConcurrentHashMap<>();
-  private final ConcurrentMap<String, Counter> feedbackSwallowedByTenant =
-      new ConcurrentHashMap<>();
 
   @Autowired
   public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
@@ -66,48 +67,48 @@ public class ProcessMetrics {
     if (registry == null) {
       return;
     }
-    String tenantTag = normalize(tenantId);
-    DistributionSummary summary =
-        stagedByTenant.computeIfAbsent(
-            tenantTag,
-            tag ->
-                DistributionSummary.builder(STAGED_ROWS)
-                    .description("PROCESS COMPUTE 写 staging 的行数")
-                    .tags(Tags.of("tenantId", tag))
-                    .register(registry));
-    summary.record(stagedRows);
+    if (stagedSummary == null) {
+      synchronized (this) {
+        if (stagedSummary == null) {
+          stagedSummary =
+              DistributionSummary.builder(STAGED_ROWS)
+                  .description("PROCESS COMPUTE 写 staging 的行数")
+                  .register(registry);
+        }
+      }
+    }
+    stagedSummary.record(stagedRows);
   }
 
   public void recordCommitPublishedRows(String tenantId, long publishedRows) {
     if (registry == null) {
       return;
     }
-    String tenantTag = normalize(tenantId);
-    DistributionSummary summary =
-        publishedByTenant.computeIfAbsent(
-            tenantTag,
-            tag ->
-                DistributionSummary.builder(PUBLISHED_ROWS)
-                    .description("PROCESS COMMIT 落 target 表的行数")
-                    .tags(Tags.of("tenantId", tag))
-                    .register(registry));
-    summary.record(publishedRows);
+    if (publishedSummary == null) {
+      synchronized (this) {
+        if (publishedSummary == null) {
+          publishedSummary =
+              DistributionSummary.builder(PUBLISHED_ROWS)
+                  .description("PROCESS COMMIT 落 target 表的行数")
+                  .register(registry);
+        }
+      }
+    }
+    publishedSummary.record(publishedRows);
   }
 
   public void incrementValidationFailed(String tenantId, String ruleName) {
     if (registry == null) {
       return;
     }
-    String tenantTag = normalize(tenantId);
     String ruleTag = normalize(ruleName);
-    String key = tenantTag + "|" + ruleTag;
     Counter counter =
-        validationFailedByKey.computeIfAbsent(
-            key,
-            k ->
+        validationFailedByRule.computeIfAbsent(
+            ruleTag,
+            tag ->
                 Counter.builder(VALIDATION_FAILED)
                     .description("PROCESS VALIDATE 阶段单条 rule 校验失败计数")
-                    .tags(Tags.of("tenantId", tenantTag, "ruleName", ruleTag))
+                    .tags(Tags.of("ruleName", tag))
                     .register(registry));
     counter.increment();
   }
@@ -120,16 +121,17 @@ public class ProcessMetrics {
     if (registry == null) {
       return;
     }
-    String tenantTag = normalize(tenantId);
-    Counter counter =
-        feedbackSwallowedByTenant.computeIfAbsent(
-            tenantTag,
-            tag ->
-                Counter.builder(FEEDBACK_SWALLOWED)
-                    .description("PROCESS FEEDBACK 阶段吞掉的异常累计 (target 已落,但 cleanup/audit 失败)")
-                    .tags(Tags.of("tenantId", tag))
-                    .register(registry));
-    counter.increment();
+    if (feedbackSwallowedCounter == null) {
+      synchronized (this) {
+        if (feedbackSwallowedCounter == null) {
+          feedbackSwallowedCounter =
+              Counter.builder(FEEDBACK_SWALLOWED)
+                  .description("PROCESS FEEDBACK 阶段吞掉的异常累计 (target 已落,但 cleanup/audit 失败)")
+                  .register(registry);
+        }
+      }
+    }
+    feedbackSwallowedCounter.increment();
   }
 
   public void recordStageDuration(
@@ -138,16 +140,15 @@ public class ProcessMetrics {
       return;
     }
     String stageTag = normalize(stage);
-    String tenantTag = normalize(tenantId);
     String successTag = success ? "true" : "false";
-    String key = stageTag + "|" + tenantTag + "|" + successTag;
+    String key = stageTag + "|" + successTag;
     Timer timer =
         stageTimerByKey.computeIfAbsent(
             key,
             k ->
                 Timer.builder(STAGE_DURATION)
                     .description("PROCESS 五段每段耗时")
-                    .tags(Tags.of("stage", stageTag, "tenantId", tenantTag, "success", successTag))
+                    .tags(Tags.of("stage", stageTag, "success", successTag))
                     .register(registry));
     timer.record(durationNanos, TimeUnit.NANOSECONDS);
   }

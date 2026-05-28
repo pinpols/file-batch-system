@@ -39,7 +39,7 @@ public class DefaultConsoleJobBundleApplicationService
     ConfigSyncBundlePayload bundle =
         tenantConfigCopyService.buildJobBundle(resolvedTenantId, jobCode);
     if (sizeOf(bundle.getJobDefinitions()) == 0) {
-      throw BizException.of(ResultCode.NOT_FOUND, "job definition not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found", jobCode);
     }
     return mapOf(
         KEY_TENANT_ID,

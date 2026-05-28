@@ -88,9 +88,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
           classes = E2eDispatchApplication.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
-          classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
           classes = BatchWorkerImportApplication.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,

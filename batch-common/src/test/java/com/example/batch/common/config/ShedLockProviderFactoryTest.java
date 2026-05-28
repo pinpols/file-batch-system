@@ -9,6 +9,8 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -51,5 +53,39 @@ class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
                     Duration.ZERO))
             .orElseThrow();
     simpleLock.unlock();
+  }
+
+  /**
+   * Redis LockProvider 同款锁语义验证:抢到锁 → 重复抢同名应失败 → 释放后能再抢。 验 ShedLock switch 到 Redis
+   * 后业务侧 @SchedulerLock 行为不变。
+   */
+  @Test
+  void redisLockProviderShouldEnforceMutualExclusion() {
+    LettuceConnectionFactory connectionFactory =
+        new LettuceConnectionFactory(new RedisStandaloneConfiguration(redisHost(), redisPort()));
+    connectionFactory.afterPropertiesSet();
+    try {
+      LockProvider provider = ShedLockProviderFactory.redisLockProvider(connectionFactory, "test");
+
+      LockConfiguration cfg =
+          new LockConfiguration(
+              BatchDateTimeSupport.utcNow(),
+              "factory-redis-mutex-" + System.nanoTime(),
+              Duration.ofSeconds(30),
+              Duration.ZERO);
+
+      SimpleLock first = provider.lock(cfg).orElseThrow();
+      try {
+        // 第二次抢同名锁必须失败(SETNX 互斥)
+        assertThat(provider.lock(cfg)).isEmpty();
+      } finally {
+        first.unlock();
+      }
+      // 释放后能再抢到
+      SimpleLock again = provider.lock(cfg).orElseThrow();
+      again.unlock();
+    } finally {
+      connectionFactory.destroy();
+    }
   }
 }
