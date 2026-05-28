@@ -189,10 +189,31 @@ class BatchSecurityPropertiesTest {
   }
 
   @Test
-  void unrelatedProfile_notProduction() {
+  void unknownProfile_failSecure_treatedAsProduction() {
+    // audit fix(fail-open → fail-secure):未知 / 未登记的 profile 不再被当作非生产放行。
+    // 既无 prod-like 也无已识别的非生产 profile → 按生产对待 → bypass=true 必须被拒。
     BatchSecurityProperties props = newProps("custom-env", true);
     props.setInternalSecret("strong-non-default-secret-2026");
-    // 不匹配 prod-like，bypass=true 应该通过
+    assertThatThrownBy(props::validateSecuritySettings)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("bypass-mode=true 在生产 profile 下被禁止");
+  }
+
+  @Test
+  void emptyProfile_failSecure_treatedAsProduction() {
+    // 空激活集(部署忘配 SPRING_PROFILES_ACTIVE)同样 fail-secure 当生产。
+    BatchSecurityProperties props = newProps(null, true);
+    props.setInternalSecret("strong-non-default-secret-2026");
+    assertThatThrownBy(props::validateSecuritySettings)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("bypass-mode=true 在生产 profile 下被禁止");
+  }
+
+  @Test
+  void e2eProfile_recognizedNonProd_allowsBypass() {
+    // 集成测常用 {"test","e2e"};e2e 已登记为非生产,bypass=true 应放行。
+    BatchSecurityProperties props = newProps("e2e", true);
+    props.setInternalSecret("strong-secret-at-least-16-chars-long");
     props.validateSecuritySettings();
     assertThat(props.isBypassMode()).isTrue();
   }

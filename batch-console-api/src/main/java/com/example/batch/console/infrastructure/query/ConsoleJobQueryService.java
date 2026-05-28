@@ -26,6 +26,7 @@ import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -275,7 +276,7 @@ public class ConsoleJobQueryService {
   private static List<String> parseCsv(String csv) {
     if (csv == null || csv.isBlank()) return null;
     List<String> out =
-        java.util.Arrays.stream(csv.split(","))
+        Arrays.stream(csv.split(","))
             .map(String::trim)
             .filter(s -> !s.isEmpty())
             .toList();
