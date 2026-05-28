@@ -910,7 +910,7 @@ Deployment note:
 - `GET /api/console/webhooks/delivery-logs` — query delivery log history (`subscriptionId` optional, `limit` default 20)
 - Webhook delivery uses HMAC-SHA256 signature in `X-Webhook-Signature` header; payload is JSON with `eventType`, `tenantId`, `payload`, `timestamp`.
 - Delivery retries up to 3 times with exponential backoff (2s, 4s, 8s).
-- Permissions: `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`, `ROLE_TENANT_USER`.
+- Permissions: read endpoints allow `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`, `ROLE_TENANT_USER`; create/update/delete require `ROLE_ADMIN` or `ROLE_TENANT_ADMIN`.
 
 ### Resource Tags
 

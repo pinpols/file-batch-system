@@ -92,10 +92,11 @@ public class ConsoleSecurityConfiguration {
                         ConsoleRoles.USER)
                     .anyRequest()
                     .authenticated())
-        // MaintenanceModeFilter 必须放最前:维护期不浪费 rate limit / auth / DB 资源
-        .addFilterBefore(maintenanceModeFilter, UsernamePasswordAuthenticationFilter.class)
+        // Auth 先建立 SecurityContext，MaintenanceModeFilter 才能识别 ROLE_ADMIN 旁路；
+        // rate limit 仍放在维护拦截之后，维护期被挡请求不消耗限流窗口。
+        .addFilterBefore(consoleAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
         .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
-        .addFilterAfter(consoleAuthenticationFilter, ConsoleRateLimitFilter.class)
         .build();
   }
 
