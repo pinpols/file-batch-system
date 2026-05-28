@@ -58,7 +58,8 @@ ENV BATCH_TIMEZONE_DEFAULT_ZONE="Asia/Shanghai" \
 
 # curl 不 pin 版本:容器基底 eclipse-temurin:25-jre-jammy 已 pin,curl 跟随 jammy 安全补丁
 # hadolint ignore=DL3008
-RUN apt-get update \
+RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g; s|http://security.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list \
+    && apt-get update -o Acquire::Retries=3 \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
