@@ -64,6 +64,13 @@
             <artifactId>shedlock-provider-jdbc-template</artifactId>
             <version>${shedlock.version}</version>
         </dependency>
+        <!-- Redis LockProvider:HA / 高并发场景下 SETNX 比 PG row UPDATE 快 1 个量级。
+             默认仍是 jdbc(不切换零影响);切换:batch.shedlock.provider=redis。 -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-redis-spring</artifactId>
+            <version>${shedlock.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -168,6 +175,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- ShedLock Redis LockProvider 单测用(lettuce client + spring-data-redis API),
+             生产代码自身用 spring-data-redis transitively,test 侧需 lettuce 起真连接验证锁互斥。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

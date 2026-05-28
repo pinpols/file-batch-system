@@ -186,6 +186,19 @@ batch:
   timezone:
     default-zone: ${BATCH_TIMEZONE_DEFAULT_ZONE:Asia/Shanghai}
 
+  # ShedLock LockProvider 切换(2026-05-28 加,详见 BatchShedLockAutoConfiguration)
+  # ── 单 / 双节点:jdbc(默认),PG batch.shedlock 表
+  # ── 多节点 HA / 高并发:redis,SETNX 比 PG row UPDATE 快 1 个量级
+  # 业务代码 48 处 @SchedulerLock 无需任何改动。
+  # 切换灰度:**全停 → 切配置 → 全起**(不能两个 provider 同时跑,会重复触发任务)。
+  shedlock:
+    provider: ${BATCH_SHEDLOCK_PROVIDER:jdbc}         # jdbc | redis
+    auto-create: ${BATCH_SHEDLOCK_AUTO_CREATE:false}  # jdbc 模式启动期自建 batch.shedlock 表(dev 用)
+    redis:
+      # 多服务 / 多环境共享同 Redis 集群时,key prefix 用 env 区分,防撞 key。
+      # 实际 key:shedlock:<env>:<lockName>(如 shedlock:prod:outbox_poll)
+      key-prefix-env: ${BATCH_SHEDLOCK_REDIS_ENV:default}
+
   # 安全 / KMS（orchestrator + worker + console 共用）
   security:
     # 全链路安全旁路开关（放宽认证 / 脱敏 / 加解密 / 审批 / 渠道校验）；仅限本地 / 联调 / E2E。

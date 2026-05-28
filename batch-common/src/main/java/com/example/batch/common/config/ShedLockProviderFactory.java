@@ -3,10 +3,12 @@ package com.example.batch.common.config;
 import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
+import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** 创建基于 JDBC 的 ShedLock 提供者的共享工具类。 */
+/** 创建 ShedLock 提供者(JDBC / Redis)的共享工具类。 */
 public final class ShedLockProviderFactory {
 
   private static final String SHEDLOCK_TABLE = "batch.shedlock";
@@ -49,5 +51,29 @@ public final class ShedLockProviderFactory {
       throw new IllegalStateException(
           "Failed to auto-create batch.shedlock for ShedLock startup", ex);
     }
+  }
+
+  /**
+   * Redis LockProvider:基于 Redis SETNX + TTL,适合多节点 HA 高并发场景。
+   *
+   * <p>对比 JDBC:
+   *
+   * <ul>
+   *   <li>性能:SETNX 单 key 写比 PG row UPDATE 快 1 个量级(几 ms 内完成)
+   *   <li>时钟:Redis 服务端 TTL,不依赖应用机器时钟(比 JDBC 的 usingDbTime 更稳)
+   *   <li>HA:Redis 不可达时 ShedLock 抛异常,任务跳过本次(不会同时跑多份)
+   *   <li>持久化:不需要(锁 TTL 短,Redis 重启丢锁等同于"锁过期")
+   * </ul>
+   *
+   * <p>key 命名:{@code <prefix>:<env>:<lockName>}(防多服务 / 多环境共享 Redis 时撞 key)。
+   *
+   * @param connectionFactory Spring Data Redis 连接工厂
+   * @param environment 环境名(prod / staging / dev),作为 key 第二层 prefix
+   */
+  public static LockProvider redisLockProvider(
+      RedisConnectionFactory connectionFactory, String environment) {
+    String keyPrefix =
+        "shedlock:" + (environment == null || environment.isBlank() ? "default" : environment);
+    return new RedisLockProvider(connectionFactory, keyPrefix);
   }
 }
