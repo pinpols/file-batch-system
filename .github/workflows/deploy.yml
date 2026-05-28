@@ -40,7 +40,7 @@ jobs:
     # 仅当 build-image 成功(或手动触发)才部署
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: [self-hosted, deploy, windows]
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     env:
       IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}

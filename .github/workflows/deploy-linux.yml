@@ -35,7 +35,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: [self-hosted, deploy, linux]
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     env:
       IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
