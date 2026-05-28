@@ -434,7 +434,7 @@
 
 ### 5.1 依赖概况
 
-系统共引入 **30+ 个直接运行时依赖**（不含传递依赖），主要通过 Spring Boot 4.0.3 BOM 统一管理版本。完整清单见 `docs/compliance/THIRD-PARTY-LICENSES.md`。
+系统共引入 **30+ 个直接运行时依赖**（不含传递依赖），主要通过 Spring Boot 4.0.6 BOM 统一管理版本。完整清单见 `docs/compliance/THIRD-PARTY-LICENSES.md`。
 
 ### 5.2 许可证分布
 
