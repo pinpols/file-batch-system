@@ -29,6 +29,9 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Spring Boot ${VAR:default} —— 冒号后非花括号、非 ?
