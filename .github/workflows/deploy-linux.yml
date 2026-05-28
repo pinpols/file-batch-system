@@ -43,6 +43,8 @@ jobs:
       BATCH_BUSINESS_DB_PASSWORD: ${{ secrets.BATCH_BUSINESS_DB_PASSWORD || 'batch_pass_123' }}
       BATCH_MINIO_SECRET_KEY: ${{ secrets.BATCH_MINIO_SECRET_KEY || 'minioadmin123' }}
       BATCH_MINIO_ACCESS_KEY: minioadmin
+      # 同 deploy.yml:compose strict-require BATCH_INTERNAL_SECRET,workflow 必须透传
+      BATCH_INTERNAL_SECRET: ${{ secrets.BATCH_INTERNAL_SECRET || 'local-internal-secret-32-chars' }}
 
     steps:
       - name: Checkout 部署分支 (含 compose / scripts)
