@@ -59,6 +59,14 @@ jobs:
         with:
           ref: feature/docker-deploy
 
+      - name: 准备 .env.local(checkout 不带 gitignored 文件)
+        shell: pwsh
+        run: |
+          # .env.local gitignored,checkout 工作区为空;compose 调用要 --env-file .env.local。
+          # 用 .env.example 做兜底:有默认值的变量都覆盖;4 个 strict ${VAR:?} 由 workflow env 段
+          # 透传(shell env 优先于 --env-file)。
+          Copy-Item .env.example .env.local -Force
+
       - name: 显示部署上下文
         shell: pwsh
         run: |

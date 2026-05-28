@@ -52,6 +52,13 @@ jobs:
         with:
           ref: feature/docker-deploy
 
+      - name: 准备 .env.local(checkout 不带 gitignored 文件)
+        shell: bash
+        run: |
+          # 同 deploy.yml:--env-file .env.local 需文件存在;用 .env.example 兜底,
+          # 4 个 strict ${VAR:?} 由 workflow env 段透传(shell env 优先于 --env-file)。
+          cp .env.example .env.local
+
       - name: 显示部署上下文
         shell: bash
         run: |
