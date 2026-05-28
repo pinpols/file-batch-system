@@ -76,14 +76,11 @@ jobs:
           Write-Host "sha:         $env:GITHUB_SHA"
           docker version --format '{{.Server.Version}}' | ForEach-Object { "docker:       $_" }
 
-      - name: 登录 GHCR
-        shell: pwsh
-        run: |
-          $env:GITHUB_TOKEN | docker login ghcr.io -u $env:GITHUB_ACTOR --password-stdin
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 拉取最新镜像
+      # 本地构建镜像(build-local)替代 GHCR pull。
+      # 原因:compose image 用 `batch-console-api:${APP_IMAGE_TAG:-local}` 裸名无 ghcr.io 前缀,
+      # pull 一直 404/超时 retry 卡 12 min+;且 GHCR 在 18081 代理下不稳。
+      # 部署机本地构建直接吃 feature/docker-deploy 上 sync 进来的 main 源码,免代理免登录。
+      - name: 本地构建镜像 (apps)
         shell: pwsh
         run: |
           docker compose `
@@ -91,8 +88,8 @@ jobs:
             -f docker-compose.yml `
             -f docker/compose/app.yml `
             -f docker/compose/app.deploy.yml `
-            --profile apps --profile replica `
-            pull
+            --profile apps `
+            build --pull=false
 
       - name: 重启服务 (apps + replica)
         shell: pwsh

@@ -69,13 +69,8 @@ jobs:
           echo "docker:      $(docker version --format '{{.Server.Version}}')"
           echo "compose:     $(docker compose version --short)"
 
-      - name: 登录 GHCR
-        shell: bash
-        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 拉取最新镜像
+      # 本地构建镜像(build-local)替代 GHCR pull(同 deploy.yml 注释,GHCR 路径不匹配 + 代理卡)
+      - name: 本地构建镜像 (apps)
         shell: bash
         run: |
           docker compose \
@@ -83,8 +78,8 @@ jobs:
             -f docker-compose.yml \
             -f docker/compose/app.yml \
             -f docker/compose/app.deploy.yml \
-            --profile apps --profile replica \
-            pull
+            --profile apps \
+            build --pull=false
 
       - name: 重启服务 (apps + replica)
         shell: bash
