@@ -116,6 +116,11 @@ services:
       # 容器内必须用容器网络名 kafka:29092 而非宿主机 localhost:19092。
       BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
+      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
+      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
+      # trigger 不设 BATCH_SECURITY_BYPASS_MODE(默认 false),fail-secure 后会卡在 internal-secret
+      # 占位符校验(batch-defaults.yml: ${BATCH_INTERNAL_SECRET:internal-secret})→ FATAL 启动失败。
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       SERVER_PORT: 18081
       MANAGEMENT_SERVER_PORT: 18081
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
