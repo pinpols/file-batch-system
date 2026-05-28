@@ -58,7 +58,7 @@ docker compose --profile replica up -d postgres-replica
 
 ```bash
 docker compose down
-docker volume rm batch-plaform_postgres-primary-data batch-plaform_postgres-replica-data
+docker volume rm batch-platform_postgres-primary-data batch-platform_postgres-replica-data
 docker compose up -d postgres
 docker compose --profile replica up -d postgres-replica
 ```
@@ -202,7 +202,7 @@ console-api 的 `ReadReplicaRoutingDataSource` 不是"试一下从库失败就�
 
 ```bash
 docker compose stop postgres-replica
-docker volume rm batch-plaform_postgres-replica-data
+docker volume rm batch-platform_postgres-replica-data
 docker compose --profile replica up -d postgres-replica
 # 容器启动时 entrypoint 会重新 pg_basebackup
 ```
