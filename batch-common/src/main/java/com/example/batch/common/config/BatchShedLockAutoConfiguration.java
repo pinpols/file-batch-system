@@ -67,7 +67,10 @@ public class BatchShedLockAutoConfiguration {
       matchIfMissing = true)
   public LockProvider redisLockProvider(
       RedisConnectionFactory connectionFactory,
-      @Value("${batch.shedlock.redis.key-prefix-env:default}") String environment) {
+      // 默认用 spring.application.name 做 env prefix(每服务一份命名空间,统一格式
+      // job-lock:<service>:<lockName>),想跨环境隔离时显式覆盖 batch.shedlock.redis.key-prefix-env。
+      @Value("${batch.shedlock.redis.key-prefix-env:${spring.application.name:default}}")
+          String environment) {
     LockProvider provider =
         ShedLockProviderFactory.redisLockProvider(connectionFactory, environment);
     log.info(

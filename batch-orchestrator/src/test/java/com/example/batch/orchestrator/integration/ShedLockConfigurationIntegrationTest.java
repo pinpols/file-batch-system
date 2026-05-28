@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.infrastructure.redis.RedisShedLockProvider;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Optional;
@@ -17,12 +16,18 @@ import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
+import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** 集成冒烟：确认 ShedLock 在 Flyway 与测试基础设施之后仍可正常装配（orchestrator 使用 Redis 锁实现）。 */
+/**
+ * 集成冒烟：确认 ShedLock 在 Flyway 与测试基础设施之后仍可正常装配。
+ *
+ * <p>2026-05-28 起 orchestrator 删除自家 RedisShedLockProvider,统一走 batch-common {@code
+ * BatchShedLockAutoConfiguration} 的官方 {@code RedisLockProvider}(默认 redis)。
+ */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -47,7 +52,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
             Integer.class);
 
     assertThat(tableCount).isEqualTo(1);
-    assertThat(lockProvider).isInstanceOf(RedisShedLockProvider.class);
+    assertThat(lockProvider).isInstanceOf(RedisLockProvider.class);
     assertThat(dataSource).isNotNull();
   }
 
