@@ -34,6 +34,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 批次日结算调度器。
@@ -191,7 +193,26 @@ public class BatchDaySettleScheduler {
       BatchDayInstanceEntity to = claimed.withSettled("FAILED", now, now);
       casUpdate(to);
       appendBatchDayAuditLog(claimed, to, "BATCH_DAY_FAILED");
-      driveCatchUp(claimed, now);
+      // driveCatchUp 写 job_instance / outbox 等副作用,**必须等当前 REQUIRES_NEW 事务提交后**才执行;
+      // 否则:本事务回滚会留下"batch_day 仍 SETTLING + catch-up job_instance 已写"的不一致,
+      // 下一轮重做 finalizeSettling 再次触发 catch-up,造成同 candidate 重复 launch。
+      // afterCommit 钩子保证只在 batch_day 真正落到 FAILED 后才发起 catch-up。
+      final BatchDayInstanceEntity finalClaimed = claimed;
+      final Instant finalNow = now;
+      if (TransactionSynchronizationManager.isSynchronizationActive()) {
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
+              @Override
+              public void afterCommit() {
+                driveCatchUp(finalClaimed, finalNow);
+              }
+            });
+      } else {
+        // 无 tx 上下文(单测 / 手动直调),退化为内联;生产路径不应走这里(@Transactional 保证有 tx)
+        log.warn(
+            "finalizeSettling invoked outside transaction context; running driveCatchUp inline");
+        driveCatchUp(finalClaimed, finalNow);
+      }
       log.info(
           "batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
           claimed.tenantId(),
