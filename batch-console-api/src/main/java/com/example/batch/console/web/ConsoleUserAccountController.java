@@ -5,6 +5,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleUserAccountService;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.auth.CreateUserAccountRequest;
 import com.example.batch.console.web.request.auth.ResetPasswordRequest;
@@ -56,6 +57,7 @@ public class ConsoleUserAccountController {
   }
 
   @PostMapping
+  @AuditAction(action = "user.create", aggregateType = "user_account")
   public CommonResponse<ConsoleUserAccountResponse> create(
       @Validated @RequestBody CreateUserAccountRequest request) {
     return responseFactory.success(
@@ -68,6 +70,7 @@ public class ConsoleUserAccountController {
   }
 
   @PutMapping("/{id}")
+  @AuditAction(action = "user.update", aggregateType = "user_account", aggregateId = "#id")
   public CommonResponse<ConsoleUserAccountResponse> update(
       @PathVariable long id, @Validated @RequestBody UpdateUserAccountRequest request) {
     return responseFactory.success(
@@ -75,6 +78,11 @@ public class ConsoleUserAccountController {
   }
 
   @PostMapping("/{id}/reset-password")
+  @AuditAction(
+      action = "user.resetPassword",
+      aggregateType = "user_account",
+      aggregateId = "#id",
+      recordParams = false)
   public CommonResponse<Void> resetPassword(
       @PathVariable long id, @Validated @RequestBody ResetPasswordRequest request) {
     userAccountService.resetPassword(id, request.getNewPassword());
@@ -82,11 +90,13 @@ public class ConsoleUserAccountController {
   }
 
   @PostMapping("/{id}/enable")
+  @AuditAction(action = "user.enable", aggregateType = "user_account", aggregateId = "#id")
   public CommonResponse<ConsoleUserAccountResponse> enable(@PathVariable long id) {
     return responseFactory.success(userAccountService.enable(id));
   }
 
   @PostMapping("/{id}/disable")
+  @AuditAction(action = "user.disable", aggregateType = "user_account", aggregateId = "#id")
   public CommonResponse<ConsoleUserAccountResponse> disable(@PathVariable long id) {
     return responseFactory.success(userAccountService.disable(id));
   }

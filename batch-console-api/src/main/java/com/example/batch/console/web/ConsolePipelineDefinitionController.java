@@ -4,6 +4,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.application.workflow.ConsolePipelineDefinitionApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.file.PipelineDefinitionSaveRequest;
 import com.example.batch.console.web.response.workflow.PipelineDefinitionDetailResponse;
@@ -52,18 +53,27 @@ public class ConsolePipelineDefinitionController {
   }
 
   @PostMapping
+  @AuditAction(action = "pipelineDefinition.create", aggregateType = "pipeline_definition")
   public CommonResponse<PipelineDefinitionDetailResponse> create(
       @Valid @RequestBody PipelineDefinitionSaveRequest request) {
     return responseFactory.success(pipelineDefinitionApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
+  @AuditAction(
+      action = "pipelineDefinition.update",
+      aggregateType = "pipeline_definition",
+      aggregateId = "#id")
   public CommonResponse<PipelineDefinitionDetailResponse> update(
       @PathVariable Long id, @Valid @RequestBody PipelineDefinitionSaveRequest request) {
     return responseFactory.success(pipelineDefinitionApplicationService.update(id, request));
   }
 
   @PostMapping("/{id}/toggle")
+  @AuditAction(
+      action = "pipelineDefinition.toggle",
+      aggregateType = "pipeline_definition",
+      aggregateId = "#id")
   public CommonResponse<Void> toggle(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,

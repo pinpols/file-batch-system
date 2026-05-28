@@ -65,10 +65,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
           classes = BatchOrchestratorApplication.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
-          classes = E2eOrchestratorApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class)
+          classes = E2eOrchestratorApplication.class)
     })
 @ImportAutoConfiguration({
   BatchJsonAutoConfiguration.class,

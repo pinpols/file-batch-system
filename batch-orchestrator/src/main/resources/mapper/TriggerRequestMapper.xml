@@ -98,6 +98,12 @@
         where tr.request_status = 'ACCEPTED'
           and tr.related_job_instance_id is null
           and tr.created_at &lt; #{olderThan}
+          -- audit fix(HIGH-1 静默丢作业):只回写"真正派发过"的实例。launch 的 T1(建 instance=CREATED)与
+          -- T2(派发 partition/outbox + 推进状态)分属两段独立事务;若 T2 崩溃,instance 滞留 CREATED 且零
+          -- partition。原查询不过滤状态,会把这种滞留实例也 JOIN 进来、经 reconcileLaunched 谎报成 LAUNCHED,
+          -- 掩盖"作业从未真跑"。排除 CREATED 后,滞留实例保留为陈旧 ACCEPTED → 进入 ADR-010 既定的"过期
+          -- ACCEPTED 告警 + 人工/恢复"路径,而非被静默闭环。
+          and ji.instance_status &lt;&gt; 'CREATED'
         order by tr.id asc
         limit #{limit}
     </select>

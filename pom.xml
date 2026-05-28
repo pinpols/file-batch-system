@@ -182,6 +182,14 @@
                 <artifactId>shedlock-provider-jdbc-template</artifactId>
                 <version>${shedlock.version}</version>
             </dependency>
+            <!-- Redis LockProvider:HA / 高并发场景下,Redis SETNX 比 PG row UPDATE 快 1 个量级。
+                 切换:batch.shedlock.provider=redis(默认 jdbc 保持兼容)。
+                 详见 BatchShedLockAutoConfiguration / batch-defaults.yml。 -->
+            <dependency>
+                <groupId>net.javacrumbs.shedlock</groupId>
+                <artifactId>shedlock-provider-redis-spring</artifactId>
+                <version>${shedlock.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.retry</groupId>
                 <artifactId>spring-retry</artifactId>

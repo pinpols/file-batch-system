@@ -32,6 +32,7 @@
         where tenant_id = #{tenantId}
           and template_code = #{templateCode}
           and enabled = true
+          and is_deleted = false
         <if test="templateType != null and templateType != ''">
             and template_type = #{templateType}
         </if>

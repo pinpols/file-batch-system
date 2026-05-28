@@ -14,6 +14,7 @@ import io.minio.StatObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
@@ -91,7 +92,11 @@ final class RemoteFilesystemDispatchSupport {
               try {
                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
               } catch (IOException ioe) {
-                throw new RuntimeException(ioe);
+                // 红线 #5:不抛裸 RuntimeException。UncheckedIOException 是 JDK 为"lambda 内包装受检
+                // IOException"准备的语义化类型;它仍是 RuntimeException 子类,下方 ExecutionException
+                // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof
+                // IOException)照旧命中。
+                throw new UncheckedIOException(ioe);
               }
             });
     try {

@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.service.dataquality;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
@@ -87,7 +88,7 @@ public class DataQualityCheckExecutor {
     List<RuleFinding> findings = new ArrayList<>(rules.size());
     boolean anyBlocker = false;
     boolean anyWarn = false;
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
 
     for (DataQualityRuleEntity rule : rules) {
       RuleFinding finding = executeOne(instance, rule, now);

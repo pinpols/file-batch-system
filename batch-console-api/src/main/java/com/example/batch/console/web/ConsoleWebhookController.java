@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/webhooks")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleWebhookController {
@@ -39,12 +38,14 @@ public class ConsoleWebhookController {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @GetMapping
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<List<WebhookSubscriptionEntity>> list(
       @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(webhookService.listSubscriptions(tenantId));
   }
 
   @GetMapping("/delivery-logs")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<List<WebhookDeliveryLogEntity>> deliveryLogs(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "subscriptionId", required = false) Long subscriptionId,
@@ -54,12 +55,14 @@ public class ConsoleWebhookController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
   public CommonResponse<WebhookSubscriptionEntity> detail(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
     return responseFactory.success(webhookService.getSubscription(tenantId, id));
   }
 
   @PostMapping
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<WebhookSubscriptionEntity> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateWebhookRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
@@ -77,6 +80,7 @@ public class ConsoleWebhookController {
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<WebhookSubscriptionEntity> update(
       @RequestParam("tenantId") String tenantId,
       @PathVariable Long id,
@@ -96,6 +100,7 @@ public class ConsoleWebhookController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<Void> delete(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
     webhookService.deleteSubscription(tenantId, id);

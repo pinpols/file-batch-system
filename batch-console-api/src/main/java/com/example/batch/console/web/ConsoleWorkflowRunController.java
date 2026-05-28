@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class ConsoleWorkflowRunController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/{id}/cancel")
+  @AuditAction(action = "workflowRun.cancel", aggregateType = "workflow_run", aggregateId = "#id")
   public CommonResponse<Map<String, Object>> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -29,6 +31,10 @@ public class ConsoleWorkflowRunController {
   }
 
   @PostMapping("/{id}/terminate")
+  @AuditAction(
+      action = "workflowRun.terminate",
+      aggregateType = "workflow_run",
+      aggregateId = "#id")
   public CommonResponse<Map<String, Object>> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -36,6 +42,7 @@ public class ConsoleWorkflowRunController {
   }
 
   @PostMapping("/{id}/skip-node")
+  @AuditAction(action = "workflowRun.skipNode", aggregateType = "workflow_run", aggregateId = "#id")
   public CommonResponse<Map<String, Object>> skipNode(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,

@@ -18,7 +18,7 @@
 
 | 项               | 说明                                                                                                                                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| OTel 桥接 + 导出    | `batch-common`：`micrometer-tracing-bridge-otel`、`opentelemetry-exporter-otlp`（JDK sender），BOM 由 Spring Boot 4.0.3 管理                                                                                   |
+| OTel 桥接 + 导出    | `batch-common`：`micrometer-tracing-bridge-otel`、`opentelemetry-exporter-otlp`（JDK sender），BOM 由 Spring Boot 4.0.6 管理                                                                                   |
 | `@Observed` AOP | `BatchObservabilityAutoConfiguration` → `ObservedAspect` bean                                                                                                                                          |
 | 默认配置            | `batch-defaults.yml`：`management.tracing.sampling.probability=${OTEL_SAMPLING_PROBABILITY:1.0}`；`management.otlp.tracing.endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}/v1/traces` |
 | 种子 manual span  | `orch.launch`、`orch.partition.dispatch`、`orch.workflow.param-resolve`（后续按需追加）                                                                                                                          |

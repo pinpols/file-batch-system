@@ -61,13 +61,14 @@ class DatabaseIdempotencyGuardTest {
 
   @Test
   void isAlreadyExecuted_keyExists_returnsTrue() {
-    when(mapper.selectResultByKey("t1", "existing-key")).thenReturn("some-result");
+    // 行存在(可能是 result=null 占位行,也可能已回写完成),都算"已认领"
+    when(mapper.countByKey("t1", "existing-key")).thenReturn(1);
     assertThat(guard.isAlreadyExecuted("t1", "existing-key")).isTrue();
   }
 
   @Test
   void isAlreadyExecuted_keyAbsent_returnsFalse() {
-    when(mapper.selectResultByKey("t1", "missing-key")).thenReturn(null);
+    when(mapper.countByKey("t1", "missing-key")).thenReturn(0);
     assertThat(guard.isAlreadyExecuted("t1", "missing-key")).isFalse();
   }
 }

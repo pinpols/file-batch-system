@@ -71,9 +71,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
           type = FilterType.ASSIGNABLE_TYPE,
           classes = BatchWorkerProcessApplication.class),
       @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class),
-      @ComponentScan.Filter(
           type = FilterType.REGEX,
           pattern =
               "com\\.example\\.batch\\.worker\\.processes\\.config\\.PlatformDataSourceConfiguration"),

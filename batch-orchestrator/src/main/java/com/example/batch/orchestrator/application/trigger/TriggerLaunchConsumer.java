@@ -153,15 +153,16 @@ public class TriggerLaunchConsumer {
           .increment();
       throw ex;
     } catch (BizException ex) {
-      // 业务级拒收(jobCode 不存在 / 跨租 / 字段缺失等),不是系统故障,记 WARN 不带 stack
+      // 业务级拒收(jobCode 不存在 / 跨租 / 字段缺失等)— 不可恢复,重投只是无效复制。
+      // 必须 ack 让 offset 前进,否则同 partition 后续合法消息全被阻塞(poison message)。
       log.warn(
-          "TriggerLaunchConsumer 业务拒收: tenantId={} requestId={} code={} message={}",
+          "TriggerLaunchConsumer 业务拒收(ack drop,不重投): tenantId={} requestId={} code={} message={}",
           tenantId,
           request.requestId(),
           ex.getCode(),
           ex.getMessage());
       counter(METRIC_FAILED, "tenant", tenantTag, "reason", "business").increment();
-      throw ex;
+      ack.acknowledge();
     } catch (RuntimeException ex) {
       log.error(
           "TriggerLaunchConsumer launch 失败: tenantId={} requestId={}",
