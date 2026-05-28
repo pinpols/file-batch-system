@@ -12,6 +12,8 @@ x-app-runtime-env: &app-runtime-env
   LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
   # /internal/** 服务间共享密钥;强制要求 .env.local 显式设置,防止落回默认 internal-secret(15 字符弱密钥)。
   BATCH_INTERNAL_SECRET: ${BATCH_INTERNAL_SECRET:?BATCH_INTERNAL_SECRET is required}
+  BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
+  BATCH_REDIS_PORT: 6379
 
 services:
   console-api:
