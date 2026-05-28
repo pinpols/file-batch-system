@@ -88,7 +88,7 @@ jobs:
             -f docker-compose.yml `
             -f docker/compose/app.yml `
             -f docker/compose/app.deploy.yml `
-            --profile apps `
+            --profile apps --profile replica `
             build --pull=false
 
       - name: 重启服务 (apps + replica)
