@@ -1,13 +1,13 @@
 package com.example.batch.orchestrator.infrastructure.sensor;
 
 import com.example.batch.common.enums.SensorType;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.sensor.SensorContext;
 import com.example.batch.orchestrator.application.service.sensor.SensorPolicy;
 import com.example.batch.orchestrator.application.service.sensor.SensorProbeResult;
 import com.example.batch.orchestrator.application.service.sensor.SensorSpecs;
 import com.example.batch.orchestrator.mapper.SensorFileArrivalMapper;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -58,7 +58,8 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
 
     String sqlPattern = pattern.replace('*', '%');
     String sourceType = mapChannelToSourceType(SensorSpecs.string(spec, "channelCode"));
-    OffsetDateTime since = Instant.now().minusSeconds(maxAgeSeconds).atOffset(ZoneOffset.UTC);
+    OffsetDateTime since =
+        BatchDateTimeSupport.utcNow().minusSeconds(maxAgeSeconds).atOffset(ZoneOffset.UTC);
 
     try {
       Map<String, Object> hit =

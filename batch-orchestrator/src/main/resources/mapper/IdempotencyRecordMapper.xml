@@ -29,6 +29,13 @@
           and idempotency_key = #{idempotencyKey}
     </select>
 
+    <select id="countByKey" resultType="int">
+        select count(*)
+        from batch.idempotency_record
+        where tenant_id = #{tenantId}
+          and idempotency_key = #{idempotencyKey}
+    </select>
+
     <update id="updateResult">
         update batch.idempotency_record
         set result_payload = #{resultPayload}
