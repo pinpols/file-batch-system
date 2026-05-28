@@ -106,7 +106,7 @@
             timeout_seconds  = #{p.timeoutSeconds},
             enabled          = #{p.enabled},
             updated_at       = current_timestamp
-        where tenant_id = #{p.tenantId} and id = #{p.id}
+        where tenant_id = #{p.tenantId} and id = #{p.id} and is_deleted = false
     </update>
 
     <insert id="upsertFileChannelConfig">

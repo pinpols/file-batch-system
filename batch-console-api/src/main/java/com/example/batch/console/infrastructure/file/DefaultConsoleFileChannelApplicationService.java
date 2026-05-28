@@ -78,7 +78,10 @@ public class DefaultConsoleFileChannelApplicationService
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
-    mapper.insertFileChannelConfig(param);
+    // 软删后重建:活跃同 code 已被上面 selectByUniqueKey 预检拒(CONFLICT);此处用 upsert,
+    // 命中软删残留行(is_deleted=true)时 on conflict do update 复活,避免纯 INSERT 撞 UNIQUE → 500。
+    // 与 notification/webhook/alert 三张兄弟表的软删复活约定一致。
+    mapper.upsertFileChannelConfig(param);
     return mapper.selectByUniqueKey(tenantId, request.getChannelCode());
   }
 
