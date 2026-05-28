@@ -1,5 +1,6 @@
 package com.example.batch.console.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -18,9 +19,12 @@ import com.example.batch.console.service.ConsoleWebhookService.CreateSubscriptio
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.request.ops.CreateWebhookRequest;
+import com.example.batch.console.web.request.ops.UpdateWebhookRequest;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -105,5 +109,23 @@ class ConsoleWebhookControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.name").value("job-events"))
         .andExpect(jsonPath("$.data.eventTypes").value("JOB-INSTANCE-UPDATED"));
+  }
+
+  @Test
+  void shouldRestrictWebhookWritesToAdminOrTenantAdmin() throws Exception {
+    assertThat(preAuthorize("create", String.class, CreateWebhookRequest.class))
+        .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
+    assertThat(preAuthorize("update", String.class, Long.class, UpdateWebhookRequest.class))
+        .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
+    assertThat(preAuthorize("delete", String.class, Long.class))
+        .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");
+    assertThat(preAuthorize("list", String.class)).contains("ROLE_TENANT_USER");
+  }
+
+  private String preAuthorize(String methodName, Class<?>... parameterTypes) throws Exception {
+    return ConsoleWebhookController.class
+        .getMethod(methodName, parameterTypes)
+        .getAnnotation(PreAuthorize.class)
+        .value();
   }
 }
