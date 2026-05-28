@@ -9,6 +9,7 @@ import com.example.batch.console.service.ConsoleTenantApplicationService.BatchCr
 import com.example.batch.console.service.ConsoleTenantApplicationService.ConfigInitOption;
 import com.example.batch.console.service.ConsoleTenantApplicationService.CreateTenantCommand;
 import com.example.batch.console.service.ConsoleTenantApplicationService.TenantSpec;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.auth.ConsolePrincipal;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.auth.BatchCreateTenantRequest;
@@ -64,6 +65,10 @@ public class ConsoleTenantController {
 
   @PostMapping
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(
+      action = "tenant.create",
+      aggregateType = "tenant",
+      aggregateId = "#request.tenantId")
   public CommonResponse<ConsoleTenantResponse> create(
       @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
     return responseFactory.success(
@@ -79,6 +84,7 @@ public class ConsoleTenantController {
 
   @PostMapping("/batch")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.batchCreate", aggregateType = "tenant", recordParams = false)
   public CommonResponse<BatchCreateTenantsResponse> batchCreate(
       @Validated @RequestBody BatchCreateTenantRequest request, Authentication authentication) {
     String operator = resolveOperator(authentication);
@@ -95,6 +101,7 @@ public class ConsoleTenantController {
 
   @PutMapping("/{tenantId}")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.update", aggregateType = "tenant", aggregateId = "#tenantId")
   public CommonResponse<ConsoleTenantResponse> update(
       @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
     return responseFactory.success(
@@ -103,12 +110,14 @@ public class ConsoleTenantController {
 
   @PostMapping("/{tenantId}/suspend")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.suspend", aggregateType = "tenant", aggregateId = "#tenantId")
   public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
     return responseFactory.success(tenantService.suspendTenant(tenantId));
   }
 
   @PostMapping("/{tenantId}/activate")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.activate", aggregateType = "tenant", aggregateId = "#tenantId")
   public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
     return responseFactory.success(tenantService.activateTenant(tenantId));
   }
