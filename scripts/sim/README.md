@@ -58,6 +58,31 @@ bash scripts/sim/05-load.sh               # 触发
 bash scripts/sim/06-verify.sh             # 看产物
 ```
 
+## LAN 访问(多机环境 / 手机 / 跨网段)
+
+所有脚本都 env-driven。**一行 source 切到 LAN 模式**:
+
+```bash
+source scripts/sim/env-lan.sh          # 自动探测 LAN_HOST(默认本机 en0 IP)
+bash scripts/sim/03-import-tenants.sh  # 自动用 LAN URL
+bash scripts/sim/05-load.sh
+bash scripts/sim/06-verify.sh
+```
+
+或手动指定其他主机:
+
+```bash
+LAN_HOST=192.168.1.13 source scripts/sim/env-lan.sh
+```
+
+env-lan.sh 会 export `CONSOLE_BASE` / `TRIGGER_BASE` / `MOCK_BASE` / `PG_PRIMARY_HOST:PORT` /
+`REDIS_HOST:PORT` / `KAFKA_BOOTSTRAP` / `MINIO_URL` / `SFTP_HOST:PORT` 一整套。
+03-06 脚本都识别这些(默认 localhost)。
+
+**注意端口跟 `.env.local` 对齐**:console 18080 / trigger 18081 / orchestrator 18082 /
+PG 15432 / Redis 16379 / Kafka 19092 / MinIO 19000 / SFTP 12222 / MockServer 11080。
+如果你这边端口被改过(如 docker-compose.deploy.yml override 到 18090),传 `CONSOLE_PORT=18090` 给 env-lan.sh 即可。
+
 ## 调试入口
 
 ```bash
