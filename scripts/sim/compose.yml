@@ -1,0 +1,66 @@
+# 模拟器:SFTP + MockServer,跑在主 compose 同 network 下,跟主服务联调。
+#
+# 启动:
+#   docker compose -f docker-compose.yml -f scripts/sim/compose.yml --env-file .env.local up -d sftp mockserver
+#
+# 或用包装脚本(更可读):
+#   bash scripts/sim/02-start-sim.sh
+#
+# 网络:复用主 compose 的 batch-network(由 .env.local COMPOSE_PROJECT_NAME 派生)。
+# 容器命名: container_name 写死 sftp / mockserver,跟 ta/tb/tc tenant config 里
+# channel_config.target_endpoint 一致(sftp:22 / http://mockserver:1080)。
+
+services:
+  sftp:
+    image: atmoz/sftp:alpine
+    container_name: sftp
+    restart: unless-stopped
+    # 3 个 tenant 各一账号(对齐 ta/tb/tc channel_config config_json.username/password)。
+    # atmoz/sftp 命令格式:user:pass:uid:gid:dir1,dir2(5 段,GID 空表 fallback)。
+    # 每个账号 chroot 到 /home/<user>,业务文件投到 /home/<user>/inbound(对齐 remotePath)。
+    command: >-
+      ta:ta_pass_123:1001::inbound,outbound
+      tb:tb_pass_123:1002::inbound,outbound
+      tc:tc_pass_123:1003::inbound,outbound
+    ports:
+      - "${SFTP_HOST_PORT:-12222}:22"
+    volumes:
+      - sftp-data:/home
+    networks:
+      - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 22 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  mockserver:
+    image: mockserver/mockserver:5.15.0
+    container_name: mockserver
+    restart: unless-stopped
+    environment:
+      MOCKSERVER_LOG_LEVEL: WARN
+      # 启动期载 stub(下面 volume 挂的 expectations.json)
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations.json
+    ports:
+      - "${MOCKSERVER_HOST_PORT:-11080}:1080"
+    volumes:
+      - ./scripts/sim/mockserver-stubs:/config:ro
+    networks:
+      - batch-network
+    healthcheck:
+      # mockserver 5.x 用 /mockserver/status(PUT 或 POST 都行),但镜像里没有 curl;
+      # 退而求其次用 java 自带 nc(busybox)探 1080 端口听就行。
+      test: ["CMD-SHELL", "java -version >/dev/null 2>&1 && (echo > /dev/tcp/localhost/1080) 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+volumes:
+  sftp-data:
+    name: batch-sim-sftp-data
+
+networks:
+  batch-network:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network
