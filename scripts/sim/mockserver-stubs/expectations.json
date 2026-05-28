@@ -1,0 +1,29 @@
+[
+  {
+    "httpRequest": { "method": "POST", "path": "/tb/callback" },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": { "Content-Type": ["application/json"] },
+      "body": "{\"received\":true,\"tenant\":\"tb\",\"endpoint\":\"callback\"}"
+    },
+    "times": { "unlimited": true }
+  },
+  {
+    "httpRequest": { "method": "POST", "path": "/tb/ingest" },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": { "Content-Type": ["application/json"] },
+      "body": "{\"received\":true,\"tenant\":\"tb\",\"endpoint\":\"ingest\"}"
+    },
+    "times": { "unlimited": true }
+  },
+  {
+    "httpRequest": { "method": "POST", "path": "/tc/ingest" },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": { "Content-Type": ["application/json"] },
+      "body": "{\"received\":true,\"tenant\":\"tc\",\"endpoint\":\"risk-ingest\"}"
+    },
+    "times": { "unlimited": true }
+  }
+]
