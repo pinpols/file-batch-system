@@ -40,16 +40,13 @@ public class BatchShedLockAutoConfiguration {
   // 改为依赖 Spring 自然注入：DataSource 缺失时 Spring 会在创建本 bean 时显式报
   // UnsatisfiedDependency，比静默不创建友好。
   //
-  // 2026-05-28:支持 batch.shedlock.provider 切换(默认 jdbc 保持向后兼容)。
-  //   provider=jdbc(默认):JDBC + batch.shedlock 表(单节点 / 双节点 OK)
-  //   provider=redis      :Redis SETNX(HA 多节点高并发,需 spring-data-redis)
+  // 2026-05-28:batch.shedlock.provider 切换,**默认 redis**(SETNX 比 PG row UPDATE 快 1 个量级)。
+  //   provider=redis(默认):Redis SETNX,适合 HA 多节点;lettuce client 由 batch-common 全模块共享
+  //   provider=jdbc       :JDBC + batch.shedlock 表(回滚 / Redis 不可用时降级)
   // 业务代码(48 处 @SchedulerLock)切换时**无需任何改动**,ShedLock 抽象了 provider。
   @Bean
   @ConditionalOnMissingBean(LockProvider.class)
-  @ConditionalOnProperty(
-      name = "batch.shedlock.provider",
-      havingValue = "jdbc",
-      matchIfMissing = true)
+  @ConditionalOnProperty(name = "batch.shedlock.provider", havingValue = "jdbc")
   public LockProvider jdbcLockProvider(
       DataSource dataSource,
       @Value("${batch.shedlock.auto-create:false}") boolean autoCreateTable) {
@@ -64,7 +61,10 @@ public class BatchShedLockAutoConfiguration {
 
   @Bean
   @ConditionalOnMissingBean(LockProvider.class)
-  @ConditionalOnProperty(name = "batch.shedlock.provider", havingValue = "redis")
+  @ConditionalOnProperty(
+      name = "batch.shedlock.provider",
+      havingValue = "redis",
+      matchIfMissing = true)
   public LockProvider redisLockProvider(
       RedisConnectionFactory connectionFactory,
       @Value("${batch.shedlock.redis.key-prefix-env:default}") String environment) {

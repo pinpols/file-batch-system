@@ -6,7 +6,6 @@ import com.example.batch.orchestrator.application.service.forensic.ForensicExpor
 import com.example.batch.orchestrator.application.service.forensic.ForensicExportResponse;
 import com.example.batch.orchestrator.application.service.forensic.ForensicExportService;
 import com.example.batch.orchestrator.domain.entity.ForensicExportLogEntity;
-import com.example.batch.orchestrator.mapper.ForensicExportLogMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,7 +42,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class ForensicExportController {
 
   private final ForensicExportService forensicExportService;
-  private final ForensicExportLogMapper forensicExportLogMapper;
 
   @PostMapping("/export")
   public ForensicExportResponse export(@RequestBody ExportRequestBody body) {
@@ -63,7 +61,7 @@ public class ForensicExportController {
   @GetMapping("/export/{exportId}/download")
   public ResponseEntity<FileSystemResource> download(
       @PathVariable String exportId, @RequestParam("tenantId") String tenantId) throws IOException {
-    ForensicExportLogEntity log = forensicExportLogMapper.selectByExportId(tenantId, exportId);
+    ForensicExportLogEntity log = forensicExportService.findLog(tenantId, exportId);
     if (log == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_not_found");
     }

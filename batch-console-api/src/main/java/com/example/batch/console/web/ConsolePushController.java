@@ -72,6 +72,7 @@ public class ConsolePushController {
       @Valid @RequestBody ConsolePushUnsubscribeRequest request) {
     String username = requestMetadataResolver.current().operatorId();
     subscriptionService.unsubscribe(tenantId, username, request.endpoint());
-    return ResponseEntity.noContent().build();
+    // 与 subscribe 对齐,统一返 CommonResponse(违反 CLAUDE.md §Java 规则 #6 的裸 ResponseEntity 已移除)
+    return ResponseEntity.ok(responseFactory.success(null));
   }
 }

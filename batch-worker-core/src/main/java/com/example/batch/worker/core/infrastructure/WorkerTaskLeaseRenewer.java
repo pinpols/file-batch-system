@@ -209,10 +209,8 @@ public class WorkerTaskLeaseRenewer {
           // fast-retry 救回了之前失败的续期：记 metric 让运维感知抖动恢复速率
           MeterRegistry registry = meterRegistryProvider.getIfAvailable();
           if (registry != null) {
-            Counter.builder(METRIC_FAST_RETRY)
-                .tags(Tags.of("tenantId", String.valueOf(activeTaskLease.getTenantId())))
-                .register(registry)
-                .increment();
+            // tenantId 不作 metric tag(高基数 → Prometheus 内存爆),日志 MDC 已带租户便于追溯
+            Counter.builder(METRIC_FAST_RETRY).register(registry).increment();
           }
         }
         consecutiveFailures.remove(activeTaskLease.getTaskId());
@@ -274,8 +272,9 @@ public class WorkerTaskLeaseRenewer {
           reason);
       MeterRegistry registry = meterRegistryProvider.getIfAvailable();
       if (registry != null) {
+        // tenantId 不作 tag(高基数);只保留 reason(低基数,几个固定枚举)
         Counter.builder(METRIC_CONSECUTIVE)
-            .tags(Tags.of("tenantId", String.valueOf(lease.getTenantId()), "reason", reason))
+            .tags(Tags.of("reason", reason))
             .register(registry)
             .increment();
       }
