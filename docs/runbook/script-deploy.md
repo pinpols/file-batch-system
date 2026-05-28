@@ -6,8 +6,9 @@
 ## 设计
 
 - 部署机两个 PowerShell 脚本(`C:\Users\aa\scripts\deploy-be.ps1` / `deploy-fe.ps1`)
-- Windows 计划任务 `BatchDeployBE` / `BatchDeployFE`,每 1 min 触发一次
+- Windows 计划任务 `BatchDeployBE` / `BatchDeployFE`,每 1 min 触发一次(走 VBS wrapper,**无窗口闪现**)
 - 脚本逻辑:`git fetch` → 比 `HEAD` 与 `origin/<branch>` → 不同就 `git pull --ff-only` + `docker compose up -d --build --wait`
+- **BE 额外**:每跑也 fetch `origin/main`,若 main 有未 sync 到 docker-deploy 的 commit → 自动 `git merge origin/main` + `git push`(然后正常走 polling 部署链路)。**结果:你 PR 合 main 后,1 min 内自动 sync+部署**,不用手动 `bash scripts/local/sync-main.sh`
 - 日志:`C:\Users\aa\logs\deploy-{be,fe}.log`
 - 锁文件 `deploy-{be,fe}.lock` 防计划任务和手动触发并发(30 min 内复用,避免死锁)
 
@@ -84,16 +85,14 @@ git checkout <prev-sha>
 
 1. clone BE + FE 仓到 `C:\Users\aa\Downloads\file-batch-system` 和 `C:\Users\aa\Downloads\batch-console`
 2. 配 `.env.local`(BE 仓根,gitignored)— 至少含密码 + `SPRING_PROFILES_ACTIVE=dev`(**不要 local**:local profile yml 写死 localhost:15432 给 IDE 直跑用,容器跑会连不上 host postgres)
-3. 把 `deploy-be.ps1` / `deploy-fe.ps1` 拷到 `C:\Users\aa\scripts\`
-4. 注册计划任务:
+3. 把 `deploy-be.ps1` / `deploy-fe.ps1` / `healthcheck-watchdog.ps1` + 3 个 `launch-*.vbs` 拷到 `C:\Users\aa\scripts\`
+4. 注册计划任务(**走 VBS wrapper 隐藏窗口**,避免每分钟 pwsh 闪窗):
    ```powershell
-   schtasks /Create /TN BatchDeployBE `
-     /TR '"C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -ExecutionPolicy Bypass -File C:\Users\aa\scripts\deploy-be.ps1' `
-     /SC MINUTE /MO 1 /F
-   schtasks /Create /TN BatchDeployFE `
-     /TR '"C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -ExecutionPolicy Bypass -File C:\Users\aa\scripts\deploy-fe.ps1' `
-     /SC MINUTE /MO 1 /F
+   schtasks /Create /TN BatchDeployBE    /TR 'wscript.exe "C:\Users\aa\scripts\launch-deploy-be.vbs"'             /SC MINUTE /MO 1 /F
+   schtasks /Create /TN BatchDeployFE    /TR 'wscript.exe "C:\Users\aa\scripts\launch-deploy-fe.vbs"'             /SC MINUTE /MO 1 /F
+   schtasks /Create /TN BatchHealthcheck /TR 'wscript.exe "C:\Users\aa\scripts\launch-healthcheck-watchdog.vbs"' /SC MINUTE /MO 2 /F
    ```
+   VBS wrapper 用 `Wscript.Shell.Run(..., 0, False)` 完全后台跑 pwsh,无窗口闪现。
 5. 验证:`Start-ScheduledTask BatchDeployBE; Get-Content C:\Users\aa\logs\deploy-be.log -Wait`
 
 ## 失败告警(可选)
