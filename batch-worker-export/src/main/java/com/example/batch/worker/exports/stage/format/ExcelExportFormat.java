@@ -35,13 +35,17 @@ public class ExcelExportFormat extends AbstractExportFormat {
     DelimitedFormatConfig formatConfig =
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
 
-    SXSSFWorkbook workbook = new SXSSFWorkbook(100);
-    try (OutputStream outputStream =
-        Files.newOutputStream(
-            ctx.generatedFile(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
+    // workbook 必须纳入 try-with-resources:旧写法把 workbook 放外面 + finally close,
+    // 若 Files.newOutputStream 抛异常(磁盘满 / 权限),控制流不进 try/finally → workbook
+    // 已创建的 /tmp sheet-backing temp file 永不清理。Java 9+ try-with-resources 支持
+    // 资源变量复用,把 workbook 与 outputStream 一起放进 try() 即可保证两者都被关闭。
+    try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+        OutputStream outputStream =
+            Files.newOutputStream(
+                ctx.generatedFile(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE)) {
       Sheet sheet = workbook.createSheet(resolveSheetName(ctx.dataCtx().templateConfig()));
       int[] rowNoHolder = {0};
       rowNoHolder[0] =
@@ -60,10 +64,6 @@ public class ExcelExportFormat extends AbstractExportFormat {
               });
       workbook.write(outputStream);
       return recordCount;
-    } finally {
-      // POI 5.x 起 SXSSFWorkbook.close() 会自动清理 /tmp 下的 sheet-backing temp files,
-      // dispose() 已被标记 deprecated 且功能合并入 close(),因此只需 close()。
-      workbook.close();
     }
   }
 

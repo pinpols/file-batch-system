@@ -143,7 +143,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   }
 
   @Override
+  @Transactional
   public void toggleEnabled(Long id, String tenantId, Boolean enabled) {
+    // @Transactional 必需:evictWorkflowDefinition 走 afterCommit 钩子,无事务时退化为立即 DEL,
+    // 造成"删缓存 → 事务未提交 → 读者填回旧值 → 事务提交"的不一致窗口。与 create/update 对齐。
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     int rows = definitionMapper.toggleEnabled(resolvedTenant, id, enabled);
     if (rows == 0) {

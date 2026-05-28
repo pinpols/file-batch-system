@@ -24,7 +24,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.CannotAcquireLockException;
-import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -87,11 +86,12 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       description = "Outbox batch publish latency including Kafka acknowledgements",
       histogram = true)
   @Retryable(
-      retryFor = {
-        CannotAcquireLockException.class,
-        TransientDataAccessException.class,
-        QueryTimeoutException.class
-      },
+      // 注意:不重试 QueryTimeoutException。阶段一 markPublishing CAS 把状态推到 PUBLISHING,
+      // 该状态不在 markPublishing 的可重入集合(NEW/FAILED);若阶段三 markPublished 超时触发重试,
+      // 同事件已 PUBLISHING 会被跳过停留在中间态,等 resetStalePublishing 超时回收前消费方可能
+      // 已处理。Kafka at-least-once + 重新触发会造成重复消费。超时让 resetStalePublishing 负责
+      // 自愈即可,不在此处重试。
+      retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
       maxAttempts = 3,
       backoff = @Backoff(delay = 100, multiplier = 2, maxDelay = 1000))
   public ScheduleForwarderResult advance(SchedulePlan plan) {

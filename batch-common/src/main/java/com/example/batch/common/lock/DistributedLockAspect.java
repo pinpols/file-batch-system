@@ -1,5 +1,6 @@
 package com.example.batch.common.lock;
 
+import com.example.batch.common.time.BatchDateTimeSupport;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,7 +42,7 @@ public class DistributedLockAspect {
     DistributedLock ann = method.getAnnotation(DistributedLock.class);
     String lockKey = resolveKey(ann, method, pjp.getArgs(), signature);
 
-    Instant now = Instant.now();
+    Instant now = BatchDateTimeSupport.utcNow();
     LockConfiguration config =
         new LockConfiguration(
             now,
