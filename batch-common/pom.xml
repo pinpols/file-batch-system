@@ -64,6 +64,20 @@
             <artifactId>shedlock-provider-jdbc-template</artifactId>
             <version>${shedlock.version}</version>
         </dependency>
+        <!-- Redis LockProvider:HA / 高并发场景下 SETNX 比 PG row UPDATE 快 1 个量级。
+             2026-05-28 起 batch.shedlock.provider 默认 redis,所有模块需 lettuce client。 -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-redis-spring</artifactId>
+            <version>${shedlock.version}</version>
+        </dependency>
+        <!-- spring-data-redis + lettuce-core:Redis LockProvider 运行时实现。
+             provider 默认 redis(2026-05-28),所有继承本 module 的服务都自动得到 lettuce 客户端。
+             如需禁用:模块自己 exclude + 显式设 batch.shedlock.provider=jdbc。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -170,6 +184,7 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 注:spring-boot-starter-data-redis 已经在 main scope(上方),test 复用,不必重复声明。 -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>

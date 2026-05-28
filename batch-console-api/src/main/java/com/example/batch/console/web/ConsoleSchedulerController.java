@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -29,11 +30,13 @@ public class ConsoleSchedulerController {
   }
 
   @PostMapping("/pause-all")
+  @AuditAction(action = "scheduler.pauseAll", aggregateType = "scheduler")
   public CommonResponse<Map<String, String>> pauseAll() {
     return responseFactory.success(triggerProxyService.schedulerPauseAll());
   }
 
   @PostMapping("/resume-all")
+  @AuditAction(action = "scheduler.resumeAll", aggregateType = "scheduler")
   public CommonResponse<Map<String, String>> resumeAll() {
     return responseFactory.success(triggerProxyService.schedulerResumeAll());
   }

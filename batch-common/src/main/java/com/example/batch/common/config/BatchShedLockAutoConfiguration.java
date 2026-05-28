@@ -10,7 +10,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 
 /**
  * ShedLock 共享自动配置：每个模块只要 classpath 含 {@code shedlock-spring} + 容器有 {@link DataSource} bean，就自动获得
@@ -37,17 +39,44 @@ public class BatchShedLockAutoConfiguration {
   // DataSource 此时可能尚未注册（即使加了 @AutoConfigureAfter 也不可靠）会被误判为不存在。
   // 改为依赖 Spring 自然注入：DataSource 缺失时 Spring 会在创建本 bean 时显式报
   // UnsatisfiedDependency，比静默不创建友好。
+  //
+  // 2026-05-28:batch.shedlock.provider 切换,**默认 redis**(SETNX 比 PG row UPDATE 快 1 个量级)。
+  //   provider=redis(默认):Redis SETNX,适合 HA 多节点;lettuce client 由 batch-common 全模块共享
+  //   provider=jdbc       :JDBC + batch.shedlock 表(回滚 / Redis 不可用时降级)
+  // 业务代码(48 处 @SchedulerLock)切换时**无需任何改动**,ShedLock 抽象了 provider。
   @Bean
   @ConditionalOnMissingBean(LockProvider.class)
-  public LockProvider lockProvider(
+  @ConditionalOnProperty(name = "batch.shedlock.provider", havingValue = "jdbc")
+  public LockProvider jdbcLockProvider(
       DataSource dataSource,
       @Value("${batch.shedlock.auto-create:false}") boolean autoCreateTable) {
     LockProvider provider =
         ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
     log.info(
-        "ShedLock LockProvider auto-configured: type={}, autoCreate={}",
+        "ShedLock LockProvider auto-configured: type=JDBC ({}), autoCreate={}",
         provider.getClass().getSimpleName(),
         autoCreateTable);
+    return provider;
+  }
+
+  @Bean
+  @ConditionalOnMissingBean(LockProvider.class)
+  @ConditionalOnProperty(
+      name = "batch.shedlock.provider",
+      havingValue = "redis",
+      matchIfMissing = true)
+  public LockProvider redisLockProvider(
+      RedisConnectionFactory connectionFactory,
+      // 默认用 spring.application.name 做 env prefix(每服务一份命名空间,统一格式
+      // job-lock:<service>:<lockName>),想跨环境隔离时显式覆盖 batch.shedlock.redis.key-prefix-env。
+      @Value("${batch.shedlock.redis.key-prefix-env:${spring.application.name:default}}")
+          String environment) {
+    LockProvider provider =
+        ShedLockProviderFactory.redisLockProvider(connectionFactory, environment);
+    log.info(
+        "ShedLock LockProvider auto-configured: type=Redis ({}), env={}",
+        provider.getClass().getSimpleName(),
+        environment);
     return provider;
   }
 

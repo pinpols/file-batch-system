@@ -281,17 +281,11 @@ public class HttpTaskExecutionClient
 
   private void recordReportDuration(
       TaskExecutionReport report, String outcome, long durationNanos) {
+    // tenantId 不作 metric tag(高基数,随租户线性膨胀);只保留 outcome(枚举型,低基数)
     meterRegistry.ifPresent(
         registry ->
             Timer.builder("batch.worker.report.duration")
-                .tags(
-                    Tags.of(
-                        "tenantId",
-                        report == null || report.getTenantId() == null
-                            ? "unknown"
-                            : report.getTenantId(),
-                        "outcome",
-                        outcome))
+                .tags(Tags.of("outcome", outcome))
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(registry)
                 .record(durationNanos, TimeUnit.NANOSECONDS));
