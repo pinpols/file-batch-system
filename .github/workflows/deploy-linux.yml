@@ -35,7 +35,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: [self-hosted, deploy, linux]
-    timeout-minutes: 40
+    timeout-minutes: 20
 
     env:
       IMAGE_TAG: ${{ inputs.image_tag || 'latest' }}
@@ -69,7 +69,14 @@ jobs:
           echo "docker:      $(docker version --format '{{.Server.Version}}')"
           echo "compose:     $(docker compose version --short)"
 
-      # 本地构建镜像(build-local)替代 GHCR pull(同 deploy.yml 注释,GHCR 路径不匹配 + 代理卡)
+      # Maven 全量 package 在 host 上跑,Dockerfile.app 已简化为只 COPY jar(同 deploy.yml)
+      - name: Maven package 全量 (host, 并行)
+        shell: bash
+        run: |
+          mvn -B -T 1C -s docker/settings.xml -DskipTests \
+            -pl '!batch-e2e-tests' -am package
+
+      # 本地构建镜像(build-local),Dockerfile.app 已无 builder,只 COPY jar
       - name: 本地构建镜像 (apps)
         shell: bash
         run: |
