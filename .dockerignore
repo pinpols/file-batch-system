@@ -2,8 +2,15 @@
 .idea
 .DS_Store
 logs
-target
-**/target
+# target/ 内容整体排除,但放行 host 预 build 的主 jar
+# (Dockerfile.app 已改为 host 端 mvn package 后 COPY 预编译产物;原 builder stage 已删,
+#  不再需要把源 + target intermediate 全灌进 context 让 docker 里再 mvn)
+target/**
+**/target/**
+!**/target/*.jar
+**/target/*-sources.jar
+**/target/*-javadoc.jar
+**/target/*-original.jar
 *.log
 *.iml
 docs
