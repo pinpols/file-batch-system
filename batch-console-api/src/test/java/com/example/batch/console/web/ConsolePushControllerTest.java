@@ -79,14 +79,15 @@ class ConsolePushControllerTest {
   }
 
   @Test
-  void unsubscribeShouldReturn204AndForwardEndpoint() throws Exception {
+  void unsubscribeShouldReturnSuccessAndForwardEndpoint() throws Exception {
+    // unsubscribe 改返 CommonResponse(对齐 §Java 规则 #6,不再裸 204 no-content)
     mockMvc
         .perform(
             post("/api/console/push/unsubscribe")
                 .param("tenantId", "ta")
                 .contentType(APPLICATION_JSON)
                 .content("{\"endpoint\":\"https://push.example/x\"}"))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk());
     verify(subscriptionService).unsubscribe("ta", "tester", "https://push.example/x");
   }
 }

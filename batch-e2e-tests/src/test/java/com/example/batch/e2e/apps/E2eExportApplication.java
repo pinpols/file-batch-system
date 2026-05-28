@@ -77,9 +77,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
           classes = E2eDispatchApplication.class),
-      @ComponentScan.Filter(
-          type = FilterType.ASSIGNABLE_TYPE,
-          classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class),
       // REGEX 按全限定类名匹配，避免 ASSIGNABLE_TYPE 在注解解析期加载 worker-export 配置类（不完整 jar 会 CNFE）
       @ComponentScan.Filter(
           type = FilterType.REGEX,
