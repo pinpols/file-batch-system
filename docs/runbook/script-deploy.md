@@ -24,10 +24,13 @@ bash 脚本完全跑在 host,**所有上述跨容器/跨网络问题都不存在
 
 | 路径 | 作用 |
 |---|---|
-| `C:\Users\aa\scripts\deploy-be.ps1` | BE 自动部署 |
-| `C:\Users\aa\scripts\deploy-fe.ps1` | FE 自动部署 |
-| `C:\Users\aa\logs\deploy-{be,fe}.log` | 部署日志(无更新时不写,有更新时记 timestamp + git pull + compose 输出) |
-| `C:\Users\aa\logs\deploy-{be,fe}.lock` | 并发锁(脚本自管) |
+| 仓内 `scripts/ps1/docker/deploy-be.ps1` | BE 自动部署脚本**源头**(部署机的 `C:\Users\aa\scripts\` 是它的拷贝)|
+| 仓内 `scripts/ps1/docker/deploy-fe.ps1` | FE 自动部署脚本**源头** |
+| 部署机 `C:\Users\aa\scripts\deploy-{be,fe}.ps1` | 计划任务直接执行的脚本(若仓内更新,部署机 cp 同步)|
+| `C:\Users\aa\logs\deploy-{be,fe}.log` | 部署日志(无更新时不写,有更新时记 timestamp + git pull + compose 输出)|
+| `C:\Users\aa\logs\deploy-{be,fe}.lock` | 并发锁(脚本自管,30 min 内复用,超时自清)|
+
+**FE 脚本 trap**:必须带 `-p batch-platform-console` 项目名 flag。FE 已运行容器的 compose project 是 `batch-platform-console`,脚本默认走目录名 `batch-console` 会撞名 (`Container name "/batch-console" is already in use`)。BE 没此问题(`COMPOSE_PROJECT_NAME` 由 .env.local 强制设)。
 
 ## 计划任务管理
 
