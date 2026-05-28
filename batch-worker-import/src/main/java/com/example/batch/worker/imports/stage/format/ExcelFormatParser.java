@@ -6,7 +6,10 @@ import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +43,11 @@ public class ExcelFormatParser implements FormatParser {
 
   private static final long MAX_EXCEL_BYTES =
       Long.getLong("batch.worker.import.max-excel-bytes", 200L * 1024 * 1024);
+
+  // 当 byte[] 大于此阈值,改走"先落 temp file → OPCPackage.open(File)"路径,避免 POI
+  // 内部 ByteArrayInputStream → ZipInputStream → 全量缓冲 造成第二份堆内拷贝。
+  // 16 MB 与 PreprocessStep 的 SPOOL_THRESHOLD_BYTES 保持一致语义。
+  private static final long FILE_BACKED_THRESHOLD_BYTES = 16L * 1024 * 1024;
 
   private final ParseSupport support;
 
@@ -75,7 +83,15 @@ public class ExcelFormatParser implements FormatParser {
     List<ColumnBinding> bindings =
         loadColumnBindings(support.templateFieldMappings(templateConfig));
 
-    try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(excelBytes))) {
+    Path tempFile = null;
+    if (excelBytes.length > FILE_BACKED_THRESHOLD_BYTES) {
+      tempFile = Files.createTempFile("import-xlsx-", ".xlsx");
+      Files.write(tempFile, excelBytes);
+    }
+    try (OPCPackage pkg =
+        tempFile != null
+            ? OPCPackage.open(tempFile.toFile(), org.apache.poi.openxml4j.opc.PackageAccess.READ)
+            : OPCPackage.open(new ByteArrayInputStream(excelBytes))) {
       XSSFReader reader = new XSSFReader(pkg);
       ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
       StylesTable styles = reader.getStylesTable();
@@ -95,6 +111,14 @@ public class ExcelFormatParser implements FormatParser {
           }
         }
         idx++;
+      }
+    } finally {
+      if (tempFile != null) {
+        try {
+          Files.deleteIfExists(tempFile);
+        } catch (IOException ignore) {
+          // best-effort,JVM 退出时 OS 也会清理 /tmp
+        }
       }
     }
     return 0L;
