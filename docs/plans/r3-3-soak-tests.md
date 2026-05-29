@@ -81,6 +81,12 @@ jcmd $pid GC.heap_dump logs/soak/heap-$(date +%Y%m%d-%H%M).hprof
 - [ ] 启动前 `faketime` 或 JVM `-Dbatch.testing.clock-offset=+12h`(需 BatchDateTimeSupport 支持注入 offset)
 - [ ] 验 `batch_day_instance` 在测试时钟 00:00 翻批正确
 
+> **TODO / 阻塞**:`BatchDateTimeSupport` 当前使用注入的 `Clock` bean(`clock.instant()`),**不读** `-Dbatch.testing.clock-offset`。
+> `start-soak.sh` 已透传该 `-D` 参数,但要真正生效,需在 `batch-common` 的 Clock bean 配置上增加 offset 注入:
+> 例如新增一个 `@Profile("soak") @Bean Clock offsetClock(...)` 用 `Clock.offset(Clock.systemUTC(), Duration.parse(...))` 包一层。
+> 在该 bean 上线前,跨日 hack 走另一条路:用 `faketime`(macOS `libfaketime`)包 JVM 进程,或直接改宿主机时钟(不推荐)。
+> 报告里的"跨日"维度会照常解析 `batch_day_instance`,只是触发依赖外部条件。
+
 ## 验收标准
 - [ ] 一次 24h 真跑完成,报告无异常
 - [ ] 报告里 5 项核心指标曲线平稳(heap 不持续涨 / 连接池不见底 / GC 停顿稳定)
