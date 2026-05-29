@@ -12,23 +12,23 @@
 | Service:Endpoint | 类型 | 策略 | Fallback 返回 | Owner | 实现状态 |
 |---|---|---|---|---|---|
 | trigger:GET /list | 只读 | 降级 | empty list + WARN | ops | ✅ PR #97 |
-| trigger:GET /scheduler-status | 只读 | 降级 | `{status: UNKNOWN}` | ops | ✅ PR #98 |
-| trigger:POST /pause-all | 写 | fail-fast | — | ops | ✅ PR #98 |
-| trigger:POST /resume-all | 写 | fail-fast | — | ops | ✅ PR #98 |
-| trigger:POST /{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
-| trigger:POST /pause-tenant | 写 | fail-fast | — | ops | ✅ PR #98 |
-| trigger:POST /resume-tenant | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:POST /instances/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:POST /instances/partitions/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:POST /workflow-runs/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:POST /workflow-runs/{id}/skip-node | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:GET /scheduler/snapshot | 只读 | fail-fast<sup>1</sup> | — | ops | ✅ PR #98 |
-| orchestrator:GET /scheduler/snapshot/history | 只读 | 降级 | empty list | ops | ✅ PR #98 |
-| orchestrator:POST /outbox/cleanup | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:POST /outbox/republish | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:POST /batch-days/operate | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:POST /forensic/export | 写 | fail-fast | — | ops | ✅ PR #98 |
-| orchestrator:GET /forensic/export/{id}/download | 写<sup>2</sup> | fail-fast | — | ops | ✅ PR #98 |
+| trigger:GET /scheduler-status | 只读 | 降级 | `{status: UNKNOWN}` | ops | ✅ PR #99 |
+| trigger:POST /pause-all | 写 | fail-fast | — | ops | ✅ PR #99 |
+| trigger:POST /resume-all | 写 | fail-fast | — | ops | ✅ PR #99 |
+| trigger:POST /{action} | 写 | fail-fast | — | ops | ✅ PR #99 |
+| trigger:POST /pause-tenant | 写 | fail-fast | — | ops | ✅ PR #99 |
+| trigger:POST /resume-tenant | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:POST /instances/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:POST /instances/partitions/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:POST /workflow-runs/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:POST /workflow-runs/{id}/skip-node | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:GET /scheduler/snapshot | 只读 | fail-fast<sup>1</sup> | — | ops | ✅ PR #99 |
+| orchestrator:GET /scheduler/snapshot/history | 只读 | 降级 | empty list | ops | ✅ PR #99 |
+| orchestrator:POST /outbox/cleanup | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:POST /outbox/republish | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:POST /batch-days/operate | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:POST /forensic/export | 写 | fail-fast | — | ops | ✅ PR #99 |
+| orchestrator:GET /forensic/export/{id}/download | 写<sup>2</sup> | fail-fast | — | ops | ✅ PR #99 |
 | orchestrator:GET /cluster-diagnostic | 只读 | 降级 + 缓存 stale | 上次成功值 | ops | ⏳ TODO(独立 PR,需补 cache 层) |
 | dashboard:GET /sla-report | 只读 | 降级 + 缓存 stale | last-known cache | ops | ⏳ TODO(独立 PR,需补 cache 层) |
 | push:POST /send-vapid | 异步 | retry 3 + dead-letter | — | notif | ⏳ TODO(独立 epic,走 spring-retry / outbox) |
