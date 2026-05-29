@@ -215,6 +215,14 @@
             <artifactId>kafka</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- kafka-clients:chaos IT (KafkaLatencyToxicIT) 直连 Toxiproxy 端口校验 producer 行为,
+             不走 spring-kafka,需显式 producer 客户端。testcontainers-kafka 不传递 kafka-clients,
+             因此显式声明 + 用 spring-boot 管控的版本(BOM 注入)。 -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!--
           Toxiproxy:网络故障注入(latency / slice / bandwidth limit)。
           用于 validation-infra r3 的 KafkaLatency / RedisDown / PgConnectionReset
