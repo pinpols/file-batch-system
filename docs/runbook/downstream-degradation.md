@@ -11,19 +11,30 @@
 
 | Service:Endpoint | 类型 | 策略 | Fallback 返回 | Owner | 实现状态 |
 |---|---|---|---|---|---|
-| trigger:GET /list | 只读 | 降级 | empty list + WARN | ops | ✅ commit `<this PR>` |
-| trigger:GET /scheduler-status | 只读 | 降级 | `{status: UNKNOWN}` | ops | ⏳ TODO |
-| trigger:POST /pause-all | 写 | fail-fast | — | ops | ⏳ TODO |
-| trigger:POST /resume-all | 写 | fail-fast | — | ops | ⏳ TODO |
-| trigger:POST /{action} | 写 | fail-fast | — | ops | ⏳ TODO |
-| trigger:POST /pause-tenant | 写 | fail-fast | — | ops | ⏳ TODO |
-| trigger:POST /resume-tenant | 写 | fail-fast | — | ops | ⏳ TODO |
-| orchestrator:GET /outbox/* (查询) | 只读 | 降级 | empty list | ops | ⏳ TODO |
-| orchestrator:POST /outbox/cleanup | 写 | fail-fast | — | ops | ⏳ TODO |
-| orchestrator:POST /outbox/republish | 写 | fail-fast | — | ops | ⏳ TODO |
-| orchestrator:GET /cluster-diagnostic | 只读 | 降级 + 缓存 stale | 上次成功值 | ops | ⏳ TODO |
-| dashboard:GET /sla-report | 只读 | 降级 + 缓存 stale | last-known cache | ops | ⏳ TODO |
-| push:POST /send-vapid | 异步 | retry 3 + dead-letter | — | notif | ⏳ TODO(独立 PR) |
+| trigger:GET /list | 只读 | 降级 | empty list + WARN | ops | ✅ PR #97 |
+| trigger:GET /scheduler-status | 只读 | 降级 | `{status: UNKNOWN}` | ops | ✅ PR #98 |
+| trigger:POST /pause-all | 写 | fail-fast | — | ops | ✅ PR #98 |
+| trigger:POST /resume-all | 写 | fail-fast | — | ops | ✅ PR #98 |
+| trigger:POST /{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
+| trigger:POST /pause-tenant | 写 | fail-fast | — | ops | ✅ PR #98 |
+| trigger:POST /resume-tenant | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:POST /instances/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:POST /instances/partitions/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:POST /workflow-runs/{id}/{action} | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:POST /workflow-runs/{id}/skip-node | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:GET /scheduler/snapshot | 只读 | fail-fast<sup>1</sup> | — | ops | ✅ PR #98 |
+| orchestrator:GET /scheduler/snapshot/history | 只读 | 降级 | empty list | ops | ✅ PR #98 |
+| orchestrator:POST /outbox/cleanup | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:POST /outbox/republish | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:POST /batch-days/operate | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:POST /forensic/export | 写 | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:GET /forensic/export/{id}/download | 写<sup>2</sup> | fail-fast | — | ops | ✅ PR #98 |
+| orchestrator:GET /cluster-diagnostic | 只读 | 降级 + 缓存 stale | 上次成功值 | ops | ⏳ TODO(独立 PR,需补 cache 层) |
+| dashboard:GET /sla-report | 只读 | 降级 + 缓存 stale | last-known cache | ops | ⏳ TODO(独立 PR,需补 cache 层) |
+| push:POST /send-vapid | 异步 | retry 3 + dead-letter | — | notif | ⏳ TODO(独立 epic,走 spring-retry / outbox) |
+
+<sup>1</sup> 强类型响应,FE 不接受空对象 → fail-fast 让前端显示真实错误而不是渲染空字段。
+<sup>2</sup> 文件下载,降级无意义(下载失败必须告诉用户),按 fail-fast 处理。
 
 **Legend**:
 - ✅ 已用 `DownstreamFallback` 接入
