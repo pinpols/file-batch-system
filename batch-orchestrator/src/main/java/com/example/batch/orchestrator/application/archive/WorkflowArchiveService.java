@@ -42,12 +42,20 @@ public class WorkflowArchiveService {
     if (ids.isEmpty()) {
       return ArchiveBatchResult.empty(cutoff);
     }
+    // A3 fix(2026-05-29):insert-before-delete 模式,跟 SuccessInstanceArchiveService /
+    // OutboxArchiveService 一致。原本只有 delete 步骤,workflow_run/node_run 永久丢失,
+    // archive 表永远为空,与"archive"语义名实不符。
+    int nodeRunsArchived = workflowRunMapper.archiveWorkflowNodeRunsByWorkflowRunIds(ids);
+    int runsArchived = workflowRunMapper.archiveWorkflowRunsByIds(ids);
     int nodeRunsDeleted = workflowRunMapper.deleteNodeRunsByWorkflowRunIds(ids);
     int runsDeleted = workflowRunMapper.deleteByIds(ids);
     log.info(
-        "workflow archive tick: cutoff={}, retention={}d, runs={}, nodeRuns={}",
+        "workflow archive tick: cutoff={}, retention={}d,"
+            + " archived(runs={}, nodeRuns={}), deleted(runs={}, nodeRuns={})",
         cutoff,
         retention,
+        runsArchived,
+        nodeRunsArchived,
         runsDeleted,
         nodeRunsDeleted);
     return new ArchiveBatchResult(true, cutoff, ids.size(), runsDeleted, nodeRunsDeleted);
