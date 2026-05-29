@@ -189,12 +189,15 @@ public class GenerateStep implements ExportStageStep {
       m.forEach((k, val) -> out.put(String.valueOf(k), val));
       return out;
     }
-    if (raw instanceof String text && Texts.hasText(text)) {
+    String text =
+        raw instanceof String s
+            ? s
+            : com.example.batch.common.utils.PostgresqlJsonbTexts.tryExtract(raw);
+    if (Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {
         SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ignored);
-
         return Map.of();
       }
     }
