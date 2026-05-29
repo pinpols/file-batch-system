@@ -72,7 +72,7 @@ public class ImportIngressScanner {
 
   /** 无锁入口，供测试和手动调用使用。调度逻辑留在 {@link #scheduledScan()} 中，直接调用时始终执行扫描逻辑。 */
   public void scan() {
-    if (!scannerProperties.isEnabled() || !Texts.hasText(workerConfiguration.tenantId())) {
+    if (!scannerProperties.isEnabled()) {
       return;
     }
     if (!ensureBucket()) {
@@ -86,6 +86,27 @@ public class ImportIngressScanner {
     observedObjects.keySet().removeIf(existing -> !currentObjects.contains(existing));
   }
 
+  /**
+   * 从对象路径解析租户。约定路径布局 {@code <prefix><tenantId>/<fileName>}（例如 {@code
+   * ingress/ta/customer-20260529.csv}）。 解析失败返回空字符串，由调用方决定 fallback：worker config 的 tenantId
+   * 仍然作为兼容入口 （旧的"按 worker tenant 投放"语义不破坏），不带 tenant 段的对象按 worker 自身 tenantId 登记。
+   */
+  private String resolveTenantFromObjectName(String objectName) {
+    String prefix = scannerProperties.getPrefix();
+    if (objectName == null) {
+      return "";
+    }
+    String key =
+        Texts.hasText(prefix) && objectName.startsWith(prefix)
+            ? objectName.substring(prefix.length())
+            : objectName;
+    int slash = key.indexOf('/');
+    if (slash <= 0) {
+      return "";
+    }
+    return key.substring(0, slash);
+  }
+
   private void tryRegister(ObjectSnapshot snapshot, Set<String> currentObjects) {
     if (snapshot == null || snapshot.objectName().endsWith(".done")) {
       return;
@@ -97,10 +118,20 @@ public class ImportIngressScanner {
     if (!isStable(snapshot)) {
       return;
     }
+    // 多租户:从 prefix 解析 tenant;解析不到时 fallback 到 worker 自身 tenantId(兼容旧布局)
+    String resolvedTenant = resolveTenantFromObjectName(snapshot.objectName());
+    if (!Texts.hasText(resolvedTenant)) {
+      resolvedTenant = workerConfiguration.tenantId();
+    }
+    if (!Texts.hasText(resolvedTenant)) {
+      log.warn(
+          "import ingress scanner skipped object without tenant prefix nor fallback tenantId:"
+              + " objectName={}",
+          snapshot.objectName());
+      return;
+    }
     if (runtimeRepository.existsFileRecordByStoragePath(
-        workerConfiguration.tenantId(),
-        minioStorageProperties.getBucket(),
-        snapshot.objectName())) {
+        resolvedTenant, minioStorageProperties.getBucket(), snapshot.objectName())) {
       return;
     }
     String fileName =
@@ -146,7 +177,7 @@ public class ImportIngressScanner {
     Long fileId =
         runtimeRepository.createFileRecord(
             FileRecordParam.builder()
-                .tenantId(workerConfiguration.tenantId())
+                .tenantId(resolvedTenant)
                 .fileCode(null)
                 .bizType(scannerProperties.getDefaultBizType())
                 .fileCategory("INPUT")
@@ -174,7 +205,7 @@ public class ImportIngressScanner {
       runtimeRepository.appendAudit(
           FileAuditParam.builder()
               .fileId(fileId)
-              .tenantId(workerConfiguration.tenantId())
+              .tenantId(resolvedTenant)
               .operationType("ARRIVAL_REGISTER")
               .operationResult("SUCCESS")
               .operatorType("SYSTEM")
@@ -191,7 +222,7 @@ public class ImportIngressScanner {
     runtimeRepository.appendAudit(
         FileAuditParam.builder()
             .fileId(fileId)
-            .tenantId(workerConfiguration.tenantId())
+            .tenantId(resolvedTenant)
             .operationType("RECEIVE_SCAN")
             .operationResult("SUCCESS")
             .operatorType("SYSTEM")
@@ -202,7 +233,7 @@ public class ImportIngressScanner {
             .build());
     log.info(
         "import file registered by scanner: tenantId={}, fileId={}, objectName={}",
-        workerConfiguration.tenantId(),
+        resolvedTenant,
         fileId,
         snapshot.objectName());
   }

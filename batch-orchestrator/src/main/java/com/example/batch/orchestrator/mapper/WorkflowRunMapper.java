@@ -52,4 +52,13 @@ public interface WorkflowRunMapper {
 
   /** P3-3 archive: 按 id 列表删除 workflow_run，返回删除行数。 */
   int deleteByIds(@Param("ids") List<Long> ids);
+
+  /**
+   * A3 fix: 把 workflow_run 行 insert 到 archive.workflow_run_archive(insert-before-delete 保数据 不丢)。on
+   * conflict do nothing 防重放幂等。
+   */
+  int archiveWorkflowRunsByIds(@Param("ids") List<Long> ids);
+
+  /** A3 fix: 把 workflow_node_run 子行 insert 到 archive.workflow_node_run_archive。 */
+  int archiveWorkflowNodeRunsByWorkflowRunIds(@Param("ids") List<Long> workflowRunIds);
 }
