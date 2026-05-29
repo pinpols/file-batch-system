@@ -215,6 +215,16 @@
             <artifactId>kafka</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+          Toxiproxy:网络故障注入(latency / slice / bandwidth limit)。
+          用于 validation-infra r3 的 KafkaLatency / RedisDown / PgConnectionReset
+          系列 chaos IT,放在 batch-common test scope 让所有模块都能复用。
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>toxiproxy</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
