@@ -21,6 +21,7 @@ import com.example.batch.orchestrator.application.service.workflow.OrchestratorW
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import com.example.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import io.micrometer.observation.annotation.Observed;
 import java.sql.SQLException;
@@ -34,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -141,20 +143,60 @@ public class DefaultLaunchService implements LaunchService {
       Map<String, Object> effectiveParams,
       String traceId,
       PreparedLaunch prepared) {
-    partitionDispatchService.dispatch(
-        PartitionDispatchService.DispatchContext.of(
-            new PartitionDispatchService.DispatchRequest(request, effectiveParams, traceId),
-            new PartitionDispatchService.DispatchRuntime(
-                prepared.jobInstance(),
-                prepared.workflowRun(),
-                prepared.initialNodes(),
-                prepared.startedAt())));
+    try {
+      partitionDispatchService.dispatch(
+          PartitionDispatchService.DispatchContext.of(
+              new PartitionDispatchService.DispatchRequest(request, effectiveParams, traceId),
+              new PartitionDispatchService.DispatchRuntime(
+                  prepared.jobInstance(),
+                  prepared.workflowRun(),
+                  prepared.initialNodes(),
+                  prepared.startedAt())));
+    } catch (RuntimeException ex) {
+      // A1-B fix(2026-05-29):T1 已 commit workflow_run(CREATED + current_node_code=NODE_A,NODE_B
+      // 之类的 fan-out 展开)。T2 dispatch 抛 BUSINESS_ERROR(典型 dispatch_business_error 资源调度
+      // failFast)时,workflow_run 留半态:CREATED + current_node_code 指向"假装在跑"的下游。
+      // 此处反向 finalize 为 FAILED,避免运维误判。
+      finalizeWorkflowRunOnDispatchFailure(prepared.workflowRun());
+      throw ex;
+    }
 
     jobMappers.triggerRequestMapper.updateAcceptance(
         request.tenantId(),
         request.requestId(),
         BatchStatusConstants.LAUNCHED,
         prepared.jobInstance().getId());
+  }
+
+  /**
+   * A1-B fix:dispatch 拒收后把 workflow_run CREATED → FAILED,清掉 current_node_code 残留。 走 self-invocation
+   * 让 @Transactional 生效,独立事务不被父事务回滚波及。
+   */
+  private void finalizeWorkflowRunOnDispatchFailure(WorkflowRunEntity workflowRun) {
+    if (workflowRun == null || workflowRun.getId() == null) {
+      return;
+    }
+    try {
+      selfProvider.getObject().markWorkflowRunFailedDueToDispatch(workflowRun);
+    } catch (RuntimeException reverseEx) {
+      // 反向 finalize 失败,静默吞掉(不掩盖原始 dispatch 异常 cause;reverseEx 仅 oncall 视角看一眼)
+      SwallowedExceptionLogger.info(
+          DefaultLaunchService.class, "catch:finalizeWorkflowRunOnDispatchFailure", reverseEx);
+    }
+  }
+
+  /** A1-B fix:独立事务把 workflow_run CREATED → FAILED(CAS 守护防覆盖正常 outcome 回报)。 */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markWorkflowRunFailedDueToDispatch(WorkflowRunEntity workflowRun) {
+    workflowMappers.workflowRunMapper.updateStatus(
+        UpdateWorkflowRunStatusParam.builder()
+            .tenantId(workflowRun.getTenantId())
+            .id(workflowRun.getId())
+            .runStatus(WorkflowRunStatus.FAILED.code())
+            .currentNodeCode(WorkflowNodeCode.END.code())
+            .finishedAt(BatchDateTimeSupport.utcNow())
+            .expectedStatuses(List.of(WorkflowRunStatus.CREATED.code()))
+            .build());
   }
 
   /**

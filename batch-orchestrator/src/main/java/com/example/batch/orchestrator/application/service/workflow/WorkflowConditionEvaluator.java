@@ -301,12 +301,20 @@ public class WorkflowConditionEvaluator {
     if (value == null) {
       return null;
     }
+    if (value instanceof Number n) {
+      return new BigDecimal(n.toString());
+    }
+    String text = String.valueOf(value);
+    // fast-path:非数字格式直接返 null,避免 NumberFormatException 噪音日志
+    // (条件 mode == 'fast' 时每个字符都会被试探,造成日志爆炸)
+    if (!looksLikeNumber(text)) {
+      return null;
+    }
     try {
-      return new BigDecimal(String.valueOf(value));
+      return new BigDecimal(text);
     } catch (NumberFormatException exception) {
       SwallowedExceptionLogger.info(
           WorkflowConditionEvaluator.class, "catch:NumberFormatException", exception);
-
       return null;
     }
   }
