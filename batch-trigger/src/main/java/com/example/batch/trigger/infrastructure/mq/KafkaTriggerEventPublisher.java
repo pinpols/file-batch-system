@@ -108,6 +108,18 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
 
       Thread.currentThread().interrupt();
       return PublishResult.fail("kafka send interrupted");
+    } catch (RuntimeException ex) {
+      // KafkaProducer.send() 在 ensureValidRecordSize / SerializationException 等校验失败时
+      // 同步抛 RuntimeException,绕过上面 ExecutionException catch。补 broad catch 避免 outbox
+      // 卡 PUBLISHING attempt=0 永远不进 retry/GIVE_UP 路径(A2 agent 发现的真因)。
+      log.error(
+          "kafka publish failed synchronously (will retry until GIVE_UP):"
+              + " topic={} messageKey={} cause={}",
+          topic,
+          messageKey,
+          ex.getMessage(),
+          ex);
+      return PublishResult.fail("kafka send sync: " + ex.getMessage());
     }
   }
 }

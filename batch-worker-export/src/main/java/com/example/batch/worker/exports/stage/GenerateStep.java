@@ -5,6 +5,7 @@ import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
+import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
@@ -189,12 +190,12 @@ public class GenerateStep implements ExportStageStep {
       m.forEach((k, val) -> out.put(String.valueOf(k), val));
       return out;
     }
-    if (raw instanceof String text && Texts.hasText(text)) {
+    String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
+    if (Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {
         SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ignored);
-
         return Map.of();
       }
     }
