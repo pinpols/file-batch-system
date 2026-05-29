@@ -12,7 +12,28 @@ import java.net.UnknownHostException;
  */
 public final class DnsResolveGuard {
 
+  /**
+   * A3 fix(2026-05-29):dev / local 场景需要回环(MockServer / SFTP 容器)+ 私网(LAN)的 SSRF guard 开关。生产严禁开,默认
+   * false。通过 system property 或 env 注入,避免触改 caller 签名。
+   *
+   * <p>system property: {@code batch.security.ssrf-guard.allow-private}
+   *
+   * <p>env: {@code BATCH_SECURITY_SSRF_GUARD_ALLOW_PRIVATE}
+   */
+  private static final String PROP_ALLOW_PRIVATE = "batch.security.ssrf-guard.allow-private";
+
+  private static final String ENV_ALLOW_PRIVATE = "BATCH_SECURITY_SSRF_GUARD_ALLOW_PRIVATE";
+
   private DnsResolveGuard() {}
+
+  private static boolean isAllowPrivateOverride() {
+    String prop = System.getProperty(PROP_ALLOW_PRIVATE);
+    if (prop != null) {
+      return Boolean.parseBoolean(prop);
+    }
+    String env = System.getenv(ENV_ALLOW_PRIVATE);
+    return env != null && Boolean.parseBoolean(env);
+  }
 
   /**
    * 解析主机名并校验解析后的 IP 地址不在受限网段。
@@ -37,6 +58,10 @@ public final class DnsResolveGuard {
 
   /** 判断已解析的 IP 是否落在受限网段（回环 / 私有 / 链路本地 / IPv4-mapped IPv6 / ULA）。 */
   public static boolean isBlocked(InetAddress addr) {
+    // A3 fix:dev / local 场景的 allow-private 开关,生产严禁开。详见 PROP_ALLOW_PRIVATE 注释。
+    if (isAllowPrivateOverride()) {
+      return false;
+    }
     if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
       return true;
     }

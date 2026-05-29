@@ -135,4 +135,44 @@
         where id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>
+
+    <!--
+      A3 agent (2026-05-29) 发现 WorkflowArchiveService 名为 "archive" 实际仅 delete,
+      跟 SuccessInstanceArchiveService / OutboxArchiveService 不一致,workflow_run / node_run
+      数据永久丢失。补 archive insert(insert-before-delete 模式),与 cleanup-workflow-runs.sql
+      和 SuccessInstanceArchiveMapper.archiveJobInstancesByIds 一致。
+    -->
+    <insert id="archiveWorkflowRunsByIds">
+        insert into archive.workflow_run_archive (
+            id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date,
+            run_status, current_node_code, trace_id, started_at, finished_at,
+            created_at, updated_at, dry_run
+        )
+        select
+            id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date,
+            run_status, current_node_code, trace_id, started_at, finished_at,
+            created_at, updated_at, dry_run
+        from batch.workflow_run
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        on conflict (id) do nothing
+    </insert>
+
+    <insert id="archiveWorkflowNodeRunsByWorkflowRunIds">
+        insert into archive.workflow_node_run_archive (
+            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
+            error_code, error_message, started_at, finished_at, duration_ms, output,
+            error_key, error_args, sensor_next_probe_at, sensor_last_probe_at,
+            sensor_probe_count, sensor_error_count
+        )
+        select
+            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
+            error_code, error_message, started_at, finished_at, duration_ms, output,
+            error_key, error_args, sensor_next_probe_at, sensor_last_probe_at,
+            sensor_probe_count, sensor_error_count
+        from batch.workflow_node_run
+        where workflow_run_id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        on conflict (id) do nothing
+    </insert>
 </mapper>
