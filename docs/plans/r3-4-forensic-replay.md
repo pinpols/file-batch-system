@@ -32,25 +32,31 @@ ADR-022 `forensic_export` 已能导出生产证据包(job_instances + batch_day_
 ```
 forensic-bundle-{exportId}.zip
 ├── manifest.json              # exportId / tenantId / bizDate range / sha256
-├── job-instances.csv          # 期间所有 job_instance 行 + 关联 step 历史
-├── batch-day-audits.csv       # 同期 batch_day_operation_audit
+├── job-instances.json         # 期间所有 job_instance 行 + 关联 step 历史(JSON 数组)
+├── batch-day-audits.json      # 同期 batch_day_operation_audit(JSON 数组)
 └── attestation.json           # sha256 + 导出时间戳
 ```
+
+> **2026-05-29 校准**:实际 bundle 用 JSON 而非 CSV(plan 初稿误推测)。Plan #4 实施时实测确认。
 
 ### 回放流程
 ```
 [bundle.zip]
    ↓ unzip + sha256 verify
 [unpacked/]
-   ↓ schema map: forensic.* → sim batch_business.* (临时 ns)
+   ↓ schema map: forensic.* → sim_replay_${exportId} schema in batch_platform 库
 [sim_replay_${exportId}]
-   ↓ orchestrator launch with original trigger params
+   ↓ POST /api/console/jobs/trigger(走 ConsoleJobController, 带 Idempotency-Key header)
 [live system]
    ↓ wait until terminal status
 [result snapshot]
-   ↓ SQL diff vs bundle 原 job_instances.csv
+   ↓ SQL diff vs bundle 原 job-instances.json
 [replay-report.md]
 ```
+
+> **2026-05-29 校准**:
+> 1. 临时 schema 建在 `batch_platform` 库(`job_instance` 表所在),不是 `batch_business`(后者只有 `process_staging` 等 staging 表)
+> 2. idempotency header 实际名 `Idempotency-Key`(`CommonConstants`),不是 `X-Idempotency-Key`
 
 ### Diff 维度
 | 字段 | 比对方式 | 失败处理 |
@@ -86,17 +92,17 @@ forensic-bundle-{exportId}.zip
 - [ ] 解析 manifest.json,出 `tenantId / bizDate range / jobCodes` 摘要
 
 ### Step 2 — schema 映射 + 数据还原(3h)
-- [ ] 临时 namespace 策略:`sim_replay_{exportId}` schema,跑完后 drop
-- [ ] CSV → SQL COPY 导入 forensic.job_instance_snapshot 等表
+- [ ] 临时 namespace 策略:`sim_replay_{exportId}` schema **在 batch_platform 库**(`job_instance` 所在),跑完后 drop
+- [ ] JSON → JSONB 存入 forensic.job_instance_snapshot 等表(避开 CSV 列映射,bundle 是 JSON 数组)
 - [ ] 关联 step / partition 历史也还原(保证 trigger params 完整)
 
 ### Step 3 — replay 触发(2h)
 - [ ] 从 manifest 反推 launch request(tenantId / jobCode / bizDate / params)
-- [ ] 通过 console-api `/internal/launch` 触发(走 sim console-api 18080)
-- [ ] 轮询 `instance_status` 进终态
+- [ ] 通过 console-api `POST /api/console/jobs/trigger` 触发(走 sim console-api 18080),带 `Idempotency-Key` header(`CommonConstants`,不是 `X-Idempotency-Key`)
+- [ ] 轮询 `instance_status` 进终态(SUCCESS / FAILED / PARTIAL_FAILED / CANCELED / SKIPPED)
 
 ### Step 4 — diff harness(3h)
-- [ ] 抽取 replay 结果 snapshot(同 forensic 的 csv 格式)
+- [ ] 抽取 replay 结果 snapshot(同 forensic 的 JSON 格式)
 - [ ] diff 逻辑实现:5 个维度,容差可配
 - [ ] 生成 markdown 报告
 
