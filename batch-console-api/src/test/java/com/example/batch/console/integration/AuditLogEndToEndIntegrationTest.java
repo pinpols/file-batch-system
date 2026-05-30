@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.BatchConsoleApiApplication;
-import com.example.batch.console.application.monitor.ConsoleAlertApplicationService;
-import com.example.batch.console.web.response.ops.ConsoleAlertActionResponse;
+import com.example.batch.console.domain.notification.application.ConsoleAlertApplicationService;
+import com.example.batch.console.domain.notification.web.response.ConsoleAlertActionResponse;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;

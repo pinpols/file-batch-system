@@ -6,8 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Webhook 投递 Relay 调度参数。
  *
- * <p>之前散落在 {@link com.example.batch.console.service.WebhookDeliveryRelay} 字段上的 3 个
- * {@code @Value};收敛到这里方便联调时 一次性 override。
+ * <p>之前散落在 {@link com.example.batch.console.domain.notification.service.WebhookDeliveryRelay} 字段上的
+ * 3 个 {@code @Value};收敛到这里方便联调时 一次性 override。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.webhook.relay")

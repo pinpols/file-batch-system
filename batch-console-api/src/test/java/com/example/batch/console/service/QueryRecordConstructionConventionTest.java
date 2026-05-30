@@ -36,7 +36,7 @@ class QueryRecordConstructionConventionTest {
           "/domain/query/JobTaskQuery.java",
           "/domain/query/JobPartitionQuery.java",
           "/domain/query/JobExecutionLogQuery.java",
-          "/domain/query/AlertEventQuery.java",
+          "/domain/notification/query/AlertEventQuery.java",
           "/domain/query/OutboxEventQuery.java",
           "/domain/query/JobDefinitionQuery.java",
           "/domain/query/WorkflowDefinitionQuery.java",
