@@ -67,7 +67,42 @@ class StoredProcTaskExecutorTest {
       props.setProcedureWhitelist(Set.of("batch.allowed_proc"));
       TaskResult r = executor.execute(ctxWithParams(Map.of("procedureName", "batch.evil_proc")));
       assertThat(r.success()).isFalse();
-      assertThat(r.message()).contains("not in whitelist");
+      assertThat(r.message()).contains("not allowed");
+    }
+
+    @Test
+    void allowsBySchemaWhenSchemaAllowlisted() throws Exception {
+      // schema 级放行:allowedSchemas 含 batch → batch.* 任意过程都过 validation,无需逐个列举
+      props.setAllowedSchemas(Set.of("batch"));
+      Connection conn = mock(Connection.class);
+      CallableStatement cs = mock(CallableStatement.class);
+      when(ds.getConnection()).thenReturn(conn);
+      when(conn.getAutoCommit()).thenReturn(true);
+      when(conn.prepareCall(anyString())).thenReturn(cs);
+
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("procedureName", "batch.brand_new_proc")));
+      assertThat(r.success()).isTrue();
+    }
+
+    @Test
+    void rejectsSchemaOutsideAllowedSchemas() {
+      // schema 级放行挡住逃逸 schema:allowedSchemas=batch 时 pg_catalog.* 拒绝
+      props.setAllowedSchemas(Set.of("batch"));
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("procedureName", "pg_catalog.evil_proc")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("not allowed");
+    }
+
+    @Test
+    void exactAndSchemaAreOr() {
+      // procedureWhitelist 与 allowedSchemas 是 OR:都配时,命中任一即放行;都不命中才拒
+      props.setProcedureWhitelist(Set.of("app.one_off"));
+      props.setAllowedSchemas(Set.of("batch"));
+      TaskResult r = executor.execute(ctxWithParams(Map.of("procedureName", "other.not_allowed")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("not allowed");
     }
 
     @Test
