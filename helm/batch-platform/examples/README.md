@@ -21,7 +21,7 @@
 # 构建 7 个 app 镜像并打 batch-* 前缀（Dockerfile.app 会 COPY entrypoint.sh）
 for m in batch-console-api batch-trigger batch-orchestrator \
          batch-worker-import batch-worker-export batch-worker-process \
-         batch-worker-dispatch; do
+         batch-worker-dispatch batch-worker-spi; do
   DOCKER_BUILDKIT=1 docker build \
     --build-arg MODULE="$m" -f docker/Dockerfile.app \
     -t "batch-${m#batch-}:latest" --quiet .
