@@ -88,6 +88,7 @@ def main() -> int:
         "batch-worker-export",
         "batch-worker-process",
         "batch-worker-dispatch",
+        "batch-worker-spi",
     }
     for module in sorted(non_data_jdbc_modules):
         deps = runtime_dependencies(module)

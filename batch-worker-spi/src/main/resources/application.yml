@@ -1,0 +1,31 @@
+# 专用 Task SPI Worker 配置(PR-1 结构隔离阶段:最小骨架)。
+#
+# ⚠️ 运行时接线(平台 datasource / kafka / worker 注册 / 路由)是 ADR-029 的 PR-2,本文件目前只给
+# 应用名 + executor 开关默认值(全关)。PR-2 会补全 datasource/kafka/worker 块并加 IT 验证真能收任务。
+server:
+  port: ${BATCH_WORKER_SPI_PORT:18086}
+
+spring:
+  application:
+    name: batch-worker-spi
+  flyway:
+    enabled: false
+  config:
+    import: "classpath:batch-defaults.yml"
+
+batch:
+  worker:
+    # 本 worker 注册的 SPI taskType 白名单(空=全注册)。
+    spi:
+      enabled-types: ${BATCH_WORKER_SPI_ENABLED_TYPES:}
+    # dual-use(RCE 级)执行器:默认全关,部署时按需 + 配白名单/schema/超时再开。
+    # 安全定位见 ADR-029:本 worker 应配独立低权限 datasource,不连业务库。
+    executors:
+      shell:
+        enabled: ${BATCH_WORKER_SPI_SHELL_ENABLED:false}
+      stored-proc:
+        enabled: ${BATCH_WORKER_SPI_STORED_PROC_ENABLED:false}
+      sql:
+        enabled: ${BATCH_WORKER_SPI_SQL_ENABLED:false}
+      http:
+        enabled: ${BATCH_WORKER_SPI_HTTP_ENABLED:false}

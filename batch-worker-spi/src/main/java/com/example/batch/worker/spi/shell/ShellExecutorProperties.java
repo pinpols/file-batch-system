@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.shell;
+package com.example.batch.worker.spi.shell;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;

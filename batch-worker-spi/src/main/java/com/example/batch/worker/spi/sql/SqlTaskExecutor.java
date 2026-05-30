@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.sql;
+package com.example.batch.worker.spi.sql;
 
 import com.example.batch.common.spi.task.BatchTaskExecutor;
 import com.example.batch.common.spi.task.ResourceKind;

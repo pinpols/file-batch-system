@@ -211,10 +211,10 @@ jobs:
             awk '$0 !~ /reuse-hash/ {print $1}' | \
             xargs -r docker rm -f >/dev/null 2>&1 || true
 
-      - name: Run unit + IT (worker-import + worker-export + console-api)
+      - name: Run unit + IT (worker-import + worker-export + worker-spi + console-api)
         shell: bash
         run: |
-          mvn verify -pl batch-worker-import,batch-worker-export,batch-console-api -am \
+          mvn verify -pl batch-worker-import,batch-worker-export,batch-worker-spi,batch-console-api -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -Dit.test='!*E2eIT' \
             -fae -B

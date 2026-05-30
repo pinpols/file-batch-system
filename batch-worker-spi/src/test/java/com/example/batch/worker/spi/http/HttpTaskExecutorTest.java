@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.http;
+package com.example.batch.worker.spi.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
