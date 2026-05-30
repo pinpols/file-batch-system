@@ -21,6 +21,7 @@ import com.example.batch.console.web.query.FilePipelineQueryRequest;
 import com.example.batch.console.web.query.FilePipelineStepQueryRequest;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
+import com.example.batch.console.web.query.JobExecutionLogQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
 import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
@@ -48,6 +49,7 @@ import com.example.batch.console.web.response.file.ConsoleFilePipelineStepRespon
 import com.example.batch.console.web.response.file.ConsoleFileRecordResponse;
 import com.example.batch.console.web.response.file.ConsoleFileTemplateResponse;
 import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
+import com.example.batch.console.web.response.job.ConsoleJobExecutionLogResponse;
 import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
@@ -248,6 +250,13 @@ public class ConsoleQueryController {
   public CommonResponse<ConsoleJobInstanceResponse> instanceDetail(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.jobInstance(tenantId, id));
+  }
+
+  /** GET /job-execution-logs — 任务级执行日志(锚定 jobInstanceId,支持 level/type/keyword + cursor 分页)。 */
+  @GetMapping("/job-execution-logs")
+  public CommonResponse<PageResponse<ConsoleJobExecutionLogResponse>> jobExecutionLogs(
+      @Valid @ModelAttribute JobExecutionLogQueryRequest request) {
+    return responseFactory.success(applicationService.jobExecutionLogs(request));
   }
 
   /** GET /instances/batch-status — 批量查询作业实例状态。 */
