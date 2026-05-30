@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.NotificationChannelMapper">
+<mapper namespace="com.example.batch.console.domain.notification.mapper.NotificationChannelMapper">
 
     <select id="selectByTenant" resultType="map">
         SELECT id, tenant_id, channel_code, channel_name, channel_type, config_json,

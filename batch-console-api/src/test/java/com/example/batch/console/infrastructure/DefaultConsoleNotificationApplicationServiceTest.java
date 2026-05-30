@@ -7,10 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.infrastructure.monitor.DefaultConsoleNotificationApplicationService;
-import com.example.batch.console.mapper.NotificationChannelMapper;
-import com.example.batch.console.mapper.NotificationDeliveryLogMapper;
-import com.example.batch.console.mapper.SubscriptionRuleMapper;
+import com.example.batch.console.domain.notification.infrastructure.DefaultConsoleNotificationApplicationService;
+import com.example.batch.console.domain.notification.mapper.NotificationChannelMapper;
+import com.example.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
+import com.example.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
