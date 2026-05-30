@@ -59,6 +59,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @ComponentScan(
     basePackages = {
       "com.example.batch.e2e.support",
+      "com.example.batch.common.spi.task",
       "com.example.batch.console.application",
       "com.example.batch.console.config",
       "com.example.batch.console.domain",

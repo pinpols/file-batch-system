@@ -61,6 +61,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 })
 @ComponentScan(
     basePackages = {"com.example.batch.e2e.support", "com.example.batch.trigger"},
+    "com.example.batch.common.spi.task",
     excludeFilters = {
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
