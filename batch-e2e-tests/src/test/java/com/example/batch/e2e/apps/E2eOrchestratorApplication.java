@@ -58,8 +58,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
   E2eKafkaProducerConfiguration.class
 })
 @ComponentScan(
-    basePackages = {"com.example.batch.e2e.support", "com.example.batch.orchestrator"},
-    "com.example.batch.common.spi.task",
+    basePackages = {
+      "com.example.batch.e2e.support",
+      "com.example.batch.common.spi.task",
+      "com.example.batch.orchestrator"
+    },
     excludeFilters = {
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
