@@ -4,7 +4,8 @@
 # (不连业务库 —— 本 worker 只需平台库做 claim/lease/report,sql/proc executor 要库时另配低权限连接)。
 # 独立 K8s serviceaccount / 网络策略 / seccomp 由部署层(PR-3)下放。
 server:
-  port: ${BATCH_WORKER_SPI_PORT:18086}
+  # 18086 被 process worker 占用,SPI worker 用 18087(仅健康检查/指标)
+  port: ${BATCH_WORKER_SPI_PORT:18087}
 
 spring:
   application:
