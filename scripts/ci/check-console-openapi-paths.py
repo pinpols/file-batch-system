@@ -19,7 +19,9 @@ except ImportError as exc:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OPENAPI_PATH = REPO_ROOT / "docs" / "api" / "console-api.openapi.yaml"
-CONTROLLER_ROOT = (
+# P1-A Stage 1 后,Controller 按 bounded context 散落到 domain/<ctx>/web/,
+# 所以从 console/ 根目录递归扫所有 *Controller.java,不再钉死 web/。
+CONSOLE_ROOT = (
     REPO_ROOT
     / "batch-console-api"
     / "src"
@@ -29,7 +31,6 @@ CONTROLLER_ROOT = (
     / "example"
     / "batch"
     / "console"
-    / "web"
 )
 
 CLASS_MAPPING = re.compile(r"@RequestMapping\s*(?:\((?P<args>.*?)\))?", re.DOTALL)
@@ -96,7 +97,7 @@ def openapi_routes() -> set[tuple[str, str]]:
 
 def controller_routes() -> set[tuple[str, str]]:
     out: set[tuple[str, str]] = set()
-    for java in sorted(CONTROLLER_ROOT.rglob("*.java")):
+    for java in sorted(CONSOLE_ROOT.rglob("*Controller.java")):
         text = java.read_text(encoding="utf-8")
         decl = CLASS_DECL.search(text)
         if not decl:
