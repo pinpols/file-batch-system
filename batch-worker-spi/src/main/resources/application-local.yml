@@ -67,6 +67,17 @@ batch:
         enabled: true
       shell:
         enabled: true
+      stored-proc:
+        enabled: true
+        # 本地放行 batch schema 下的过程(生产应精确到过程白名单)
+        allowed-schemas:
+          - batch
+      http:
+        enabled: true
+        # 仅本地:dev 机器上没有云 metadata 威胁、目标就是 localhost 自身服务,清空 SSRF 黑名单。
+        # 生产保留默认黑名单(localhost/127.*/169.254.169.254/metadata.*),见 HttpExecutorProperties。
+        blocked-host-patterns: []
+        allowed-host-patterns: []
   datasource:
     business:
       url: jdbc:postgresql://localhost:15432/batch_business
