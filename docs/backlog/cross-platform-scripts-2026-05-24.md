@@ -67,7 +67,7 @@ KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}"
 
 容器名 = `${COMPOSE_PROJECT_NAME}-${SERVICE}` 格式,默认 project name 是仓库目录名(=`file-batch-system`)→ 容器名前缀 `batch-`(因为 docker-compose 服务名是 `postgres-primary` / `kafka` 等)。
 
-**只要不改 `COMPOSE_PROJECT_NAME`**(默认 `batch-plaform`,见 `start-all.sh:32`),容器名一直对得上。换 K8s / project name 才挂。
+**只要不改 `COMPOSE_PROJECT_NAME`**(默认 `batch-platform`,见 `start-all.sh:32`),容器名一直对得上。换 K8s / project name 才挂。
 
 ### 治根方案
 
