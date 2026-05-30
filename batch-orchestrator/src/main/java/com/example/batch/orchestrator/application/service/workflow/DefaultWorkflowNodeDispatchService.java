@@ -294,6 +294,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (workflowNode.getWorkerGroup() != null && !workflowNode.getWorkerGroup().isBlank()) {
       plan.setWorkerGroup(workflowNode.getWorkerGroup());
     }
+    // P1 动态 fan-out:节点配了 fanOut → 按上游 output 数组展开成 N 个并行分区(在资源调度前展开,
+    // N 个分区都参与 worker 路由)。复用现有 partition 派发 + 聚合(N partition 终态聚合成节点终态),不另造状态机。
+    FanOutPlan fanOut = prepareFanOut(workflowNode, workflowRun, node.nodeCode(), plan);
     ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
     applySchedulingDecision(plan, decision);
     List<JobPartitionEntity> existingPartitions =
@@ -322,10 +325,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     List<JobPartitionEntity> newPartitions =
         partitionLifecycleService.createPartitions(
             plan, jobInstance.getId(), decision.getPartitionStatus());
-    String taskPayload =
+    String baseTaskPayload =
         payloadBuilder.buildTaskPayload(
             sourcePayload, node, targetJobCode, workflowNode, jobInstance, workflowRun);
     int sequence = 1;
+    int fanOutIndex = 0;
     for (JobPartitionEntity partition : newPartitions) {
       JobTaskEntity task = new JobTaskEntity();
       task.setTenantId(jobInstance.getTenantId());
@@ -339,6 +343,17 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       // V88: 拷 priority (workflow node task 的 priority 源 = SchedulePlan, 由
       // DefaultSchedulePlanBuilder 读 job_definition)
       task.setPriority(plan.getPriority());
+      // fan-out:每个并行分区拿不同的 item(注入到 payload),非 fan-out 走共享 payload(行为不变)。
+      String taskPayload =
+          fanOut == null
+              ? baseTaskPayload
+              : WorkflowFanOutSupport.injectItem(
+                  baseTaskPayload,
+                  fanOut.itemParam(),
+                  fanOut.items().get(fanOutIndex),
+                  fanOutIndex,
+                  fanOut.items().size());
+      fanOutIndex++;
       task.setTaskPayload(taskPayload);
       task.setDryRun(plan.isDryRun());
       taskExecutionServiceProvider.getObject().createTask(task);
@@ -370,6 +385,40 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     jobInstance.setExpectedPartitionCount(currentExpectedPartitionCount + newPartitions.size());
     jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
     return newPartitions.size();
+  }
+
+  /** fan-out 解析结果:N 个 item + 注入用的 itemParam。null 表示普通(非 fan-out)节点。 */
+  private record FanOutPlan(List<Object> items, String itemParam) {}
+
+  /**
+   * 解析 + 校验 fan-out,并就地把 {@code plan} 的分区展开成 N 份。无 fanOut 配置 → 返回 null(普通节点)。 空数组 / 超 maxFanOut →
+   * fail-fast。
+   */
+  private FanOutPlan prepareFanOut(
+      WorkflowNodeEntity workflowNode,
+      WorkflowRunEntity workflowRun,
+      String nodeCode,
+      SchedulePlan plan) {
+    WorkflowFanOutSupport.FanOutSpec spec = WorkflowFanOutSupport.parseSpec(workflowNode);
+    if (spec == null) {
+      return null;
+    }
+    List<Object> items = payloadBuilder.resolveFanOutItems(spec.itemsExpr(), workflowRun);
+    if (items.isEmpty()) {
+      // v0.1:空数组 fail-fast(上游须保证非空,或用 GATEWAY 守护)。v0.2 再支持空 fan-out 直接 SUCCESS。
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.workflow.fan_out_items_empty", nodeCode);
+    }
+    if (items.size() > spec.maxFanOut()) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.workflow.fan_out_exceeds_max",
+          String.valueOf(items.size()),
+          String.valueOf(spec.maxFanOut()));
+    }
+    plan.setPartitions(WorkflowFanOutSupport.expandPartitions(plan, items.size()));
+    plan.setPartitionCount(items.size());
+    return new FanOutPlan(items, spec.itemParam());
   }
 
   /**
