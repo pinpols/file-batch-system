@@ -442,7 +442,7 @@ workerSpi:
     maxReplicas: 4
     pollingInterval: 30
     cooldownPeriod: 120
-    topic: "batch.task.dispatch.task"
+    topic: "batch.task.dispatch.spi"
     consumerGroup: "batch-worker-spi"
     lagThreshold: "20"
   livenessProbe:
