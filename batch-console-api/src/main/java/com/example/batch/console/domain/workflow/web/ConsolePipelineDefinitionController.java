@@ -2,11 +2,11 @@ package com.example.batch.console.domain.workflow.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.domain.workflow.application.ConsolePipelineDefinitionApplicationService;
 import com.example.batch.console.domain.workflow.web.request.PipelineDefinitionSaveRequest;
 import com.example.batch.console.domain.workflow.web.response.PipelineDefinitionDetailResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;

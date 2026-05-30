@@ -1,10 +1,10 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.domain.entity.ApiKeyEntity;
 import com.example.batch.console.service.ConsoleApiKeyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;

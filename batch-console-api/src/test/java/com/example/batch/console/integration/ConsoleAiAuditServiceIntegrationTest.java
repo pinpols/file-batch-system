@@ -4,11 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
-import com.example.batch.console.domain.command.AiAuditCommand;
-import com.example.batch.console.domain.entity.ConsoleAiAuditLogEntity;
-import com.example.batch.console.domain.query.ConsoleAiAuditLogQuery;
-import com.example.batch.console.mapper.ConsoleAiAuditLogMapper;
-import com.example.batch.console.support.ConsoleAiAuditService;
+import com.example.batch.console.domain.audit.command.AiAuditCommand;
+import com.example.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
+import com.example.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
+import com.example.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
+import com.example.batch.console.domain.audit.support.ConsoleAiAuditService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
