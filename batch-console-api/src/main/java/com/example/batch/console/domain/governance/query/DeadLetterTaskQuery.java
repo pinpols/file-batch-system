@@ -1,4 +1,4 @@
-package com.example.batch.console.domain.query;
+package com.example.batch.console.domain.governance.query;
 
 import com.example.batch.common.model.PageRequest;
 

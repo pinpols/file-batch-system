@@ -1,4 +1,4 @@
-package com.example.batch.console.web.request.ops;
+package com.example.batch.console.domain.governance.web.request;
 
 import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotNull;

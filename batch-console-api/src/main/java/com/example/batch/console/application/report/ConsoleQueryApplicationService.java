@@ -1,13 +1,14 @@
 package com.example.batch.console.application.report;
 
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
+import com.example.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.BatchDayQueryRequest;
 import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
 import com.example.batch.console.web.query.ConsoleAiAuditLogQueryRequest;
-import com.example.batch.console.web.query.DeadLetterQueryRequest;
 import com.example.batch.console.web.query.FileArrivalGroupQueryRequest;
 import com.example.batch.console.web.query.FileChainQueryRequest;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
@@ -52,7 +53,6 @@ import com.example.batch.console.web.response.job.ConsoleRetryScheduleResponse;
 import com.example.batch.console.web.response.ops.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ops.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ops.ConsoleAuditLogResponse;
-import com.example.batch.console.web.response.ops.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.web.response.ops.ConsolePendingCatchUpResponse;

@@ -34,7 +34,11 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
   BatchObjectCryptoAutoConfiguration.class,
   RestClientAutoConfiguration.class
 })
-@MapperScan({"com.example.batch.console.mapper", "com.example.batch.common.mapper"})
+@MapperScan({
+  "com.example.batch.console.mapper",
+  "com.example.batch.console.domain.**.mapper",
+  "com.example.batch.common.mapper"
+})
 @ConfigurationPropertiesScan(
     basePackages = {"com.example.batch.console", "com.example.batch.common"})
 public class BatchConsoleApiApplication {

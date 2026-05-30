@@ -1,5 +1,6 @@
 package com.example.batch.console.application.job;
 
+import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.job.CompensateRequest;
 import com.example.batch.console.web.request.job.CompensationCommandRequest;
 import com.example.batch.console.web.request.job.PartitionReplayRequest;
@@ -8,7 +9,6 @@ import com.example.batch.console.web.request.job.TaskReplayRequest;
 import com.example.batch.console.web.request.job.TriggerRequest;
 import com.example.batch.console.web.request.ops.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
-import com.example.batch.console.web.request.ops.DeadLetterReplayRequest;
 import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpResponse;
 import java.util.List;
 import java.util.Map;
