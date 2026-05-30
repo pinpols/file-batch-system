@@ -101,10 +101,20 @@ public class StoredProcExecutorProperties {
    * 是否允许调用 SECURITY DEFINER 过程。默认 true(保持现有行为,不做 DB 检查)。
    *
    * <p>SECURITY DEFINER 过程以其 <b>owner</b> 身份执行而非调用者(对应 PG {@code pg_proc.prosecdef = true}),
-   * 这是经典提权面:低权限 worker 角色可借此跑 owner 权限的逻辑。如需收紧,可在执行前查 {@code pg_proc.prosecdef} 并在本值为 false 时拒绝
-   * definer 过程——本 PR 仅提供属性 + 文档, 不实现该 DB 检查(留待 IT / 后续 PR)。
+   * 这是经典提权面:低权限 worker 角色可借此跑 owner 权限的逻辑(若 owner 是 superuser → 借机碰 OS)。 默认 <b>false</b>(堵死):CALL
+   * 前查 {@code pg_proc.prosecdef},是 definer 过程则拒。仅在确知 definer 过程安全时显式置 true。
    */
-  private boolean allowSecurityDefiner = true;
+  private boolean allowSecurityDefiner = false;
+
+  /**
+   * 是否拒绝以"有 OS 能力的 DB 角色"执行(默认 <b>true</b>,fail-closed)。
+   *
+   * <p>存过 body 在 DB 内执行、CALL 端无法审查其内容,故代码层堵死 OS 的唯一可靠手段是:拒绝 superuser 或 {@code
+   * pg_execute_server_program} / {@code pg_read_server_files} / {@code pg_write_server_files} 成员角色。
+   * 这些权限是 {@code COPY ... PROGRAM} / 不可信 PL / 服务端文件访问的前置;无之则过程物理上碰不到 OS。 执行前查 {@code current_user}
+   * 能力,命中即拒。生产应以最小权限非 superuser 角色连接;测试(testcontainers superuser)需显式置 false。
+   */
+  private boolean forbidOsCapableRole = true;
 
   /** 允许的 SQL Type 名集合(给 outParams 白名单)。常用全开;不允许 OTHER / STRUCT / ARRAY 等复合。 */
   private Set<String> allowedOutSqlTypes =

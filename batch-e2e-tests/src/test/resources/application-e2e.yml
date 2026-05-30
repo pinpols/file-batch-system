@@ -94,6 +94,8 @@ batch:
         enabled: true
         allowed-schemas:
           - batch
+        # e2e 平台库是 superuser:关掉 OS 角色闸(否则被拒);allowSecurityDefiner 保持默认 false
+        forbid-os-capable-role: false
       http:
         enabled: true
         # e2e 打本地 JDK HttpServer(127.0.0.1):清 SSRF 黑名单 + 关 blockPrivateIps(否则 loopback 被拦);仅测试 profile

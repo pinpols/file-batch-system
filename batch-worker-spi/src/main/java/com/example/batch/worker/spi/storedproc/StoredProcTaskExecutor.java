@@ -321,6 +321,14 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         // 在同一事务内 pin search_path,固定过程解析目标(防 search_path shadowing/注入)。
         pinSearchPath(conn, inv.procName);
 
+        // 代码层堵死 OS:① 拒绝 OS 能力角色(无之则过程物理上碰不到 OS)② 拒绝 SECURITY DEFINER(借 owner 提权绕过①)。
+        if (props.isForbidOsCapableRole()) {
+          requireNonOsCapableRole(conn);
+        }
+        if (!props.isAllowSecurityDefiner()) {
+          requireNotSecurityDefiner(conn, inv.procName);
+        }
+
         // 可选 DB 原生授权:current_user 对目标过程无 EXECUTE 权限则在 CALL 前拒绝。
         if (props.isVerifyExecutePrivilege()) {
           requireExecutePrivilege(conn, inv.procName);
@@ -539,6 +547,58 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     } catch (SQLException ex) {
       throw new StoredProcValidationException(
           "EXECUTE privilege check failed for " + procName + ": " + ex.getMessage());
+    }
+  }
+
+  /**
+   * 代码层堵死 OS:拒绝以 OS 能力角色执行。存过 body 不可审查,唯一可靠的代码层防线是不给执行角色 OS 权限—— superuser 或 {@code
+   * pg_execute_server_program} / {@code pg_read_server_files} / {@code pg_write_server_files}
+   * 成员(这些是 COPY PROGRAM / 不可信 PL / 服务端文件访问的前置),命中即拒。
+   */
+  private void requireNonOsCapableRole(Connection conn) {
+    String sql =
+        "select rolsuper"
+            + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
+            + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
+            + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
+            + " from pg_roles where rolname = current_user";
+    try (PreparedStatement ps = conn.prepareStatement(sql);
+        ResultSet rs = ps.executeQuery()) {
+      if (rs.next() && rs.getBoolean(1)) {
+        throw new StoredProcValidationException(
+            "refusing stored-proc on OS-capable DB role (superuser / pg_execute_server_program /"
+                + " pg_read_server_files / pg_write_server_files); connect as a least-privilege"
+                + " role, or disable forbidOsCapableRole only in trusted test envs");
+      }
+    } catch (SQLException ex) {
+      throw new StoredProcValidationException("OS-capable role check failed: " + ex.getMessage());
+    }
+  }
+
+  /**
+   * 代码层堵死 OS(补充):拒绝 SECURITY DEFINER 过程({@code pg_proc.prosecdef=true})。它以 owner 身份运行, 若 owner 是
+   * superuser/OS 能力角色,可绕过 {@link #requireNonOsCapableRole} 提权碰 OS。
+   */
+  private void requireNotSecurityDefiner(Connection conn, String procName) {
+    int dot = procName.indexOf('.');
+    String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
+    String name = dot > 0 ? procName.substring(dot + 1) : procName;
+    String sql =
+        "select p.prosecdef from pg_catalog.pg_proc p"
+            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+            + " where p.proname = ? and n.nspname = ? limit 1";
+    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+      ps.setString(1, name);
+      ps.setString(2, schema);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next() && rs.getBoolean(1)) {
+          throw new StoredProcValidationException(
+              "refusing SECURITY DEFINER procedure (privilege escalation risk): " + procName);
+        }
+      }
+    } catch (SQLException ex) {
+      throw new StoredProcValidationException(
+          "SECURITY DEFINER check failed for " + procName + ": " + ex.getMessage());
     }
   }
 

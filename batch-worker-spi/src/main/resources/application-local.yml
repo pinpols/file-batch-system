@@ -72,6 +72,8 @@ batch:
         # 本地放行 batch schema 下的过程(生产应精确到过程白名单)
         allowed-schemas:
           - batch
+        # 本地 dev:关 OS 角色闸(本地角色可能高权限);生产用最小权限角色,默认 true 兜底
+        forbid-os-capable-role: false
       http:
         enabled: true
         # 仅本地:dev 机器上没有云 metadata 威胁、目标就是 localhost 自身服务,清空 SSRF 黑名单。

@@ -82,6 +82,7 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   private StoredProcExecutorProperties props() {
     StoredProcExecutorProperties p = new StoredProcExecutorProperties();
     p.setEnabled(true);
+    p.setForbidOsCapableRole(false); // testcontainers 是 superuser;OS 角色闸的拒绝路径单列 IT 验
     p.setDefaultAutoCommit(false); // 事务内,SET LOCAL search_path 生效
     p.setAllowedSchemas(Set.of("spi_it"));
     return p;
@@ -146,5 +147,35 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     p.setVerifyExecutePrivilege(true);
     TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
     assertThat(r.success()).isTrue(); // current_user 有 EXECUTE → has_function_privilege 通过
+  }
+
+  @Test
+  void forbidOsCapableRoleRejectsSuperuserConnection() {
+    // testcontainers 连接是 superuser(OS 能力角色)→ forbidOsCapableRole=true 时代码层直接拒。
+    StoredProcExecutorProperties p = props();
+    p.setForbidOsCapableRole(true);
+    TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
+    assertThat(r.success()).isFalse();
+  }
+
+  @Test
+  void securityDefinerProcedureRejectedByDefault() {
+    jdbc.execute(
+        "CREATE PROCEDURE spi_it.it_proc_def() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END"
+            + " $$");
+    // allowSecurityDefiner 默认 false → SECURITY DEFINER 过程被拒(防借 owner 提权)。
+    TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_proc_def")));
+    assertThat(r.success()).isFalse();
+  }
+
+  @Test
+  void securityDefinerAllowedWhenExplicitlyEnabled() {
+    jdbc.execute(
+        "CREATE PROCEDURE spi_it.it_proc_def2() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END"
+            + " $$");
+    StoredProcExecutorProperties p = props();
+    p.setAllowSecurityDefiner(true);
+    TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "spi_it.it_proc_def2")));
+    assertThat(r.success()).isTrue();
   }
 }

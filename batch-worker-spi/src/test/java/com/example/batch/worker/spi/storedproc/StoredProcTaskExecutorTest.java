@@ -33,6 +33,8 @@ class StoredProcTaskExecutorTest {
   @BeforeEach
   void setUp() {
     props = new StoredProcExecutorProperties();
+    props.setForbidOsCapableRole(false); // 单测 mock 连接,新 DB 闸由真 PG IT 覆盖
+    props.setAllowSecurityDefiner(true);
     props.setEnabled(true);
     ds = mock(DataSource.class);
     beanFactory = mock(BeanFactory.class);
