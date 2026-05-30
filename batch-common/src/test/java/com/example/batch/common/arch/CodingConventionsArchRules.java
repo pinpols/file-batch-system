@@ -2,11 +2,13 @@ package com.example.batch.common.arch;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
 
 /**
  * 复用型 ArchUnit 规则,守护 CLAUDE.md 硬性规约。
@@ -44,6 +46,158 @@ public final class CodingConventionsArchRules {
         .because(
             "CLAUDE.md §字符编码:禁止 Charset.forName(\"UTF-8\") / 字面量;改用 StandardCharsets.UTF_8"
                 + " 或 EncodingUtils.resolve(raw)。白名单 = EncodingUtils 自身。");
+  }
+
+  /**
+   * Spring Boot Application 类的 {@code @SpringBootApplication.scanBasePackages}(或
+   * {@code @ComponentScan.basePackages})必须覆盖给定 {@code requiredPrefixes}。
+   *
+   * <p>"覆盖"= 配置列表里存在某个 entry 等于或为 prefix 的祖先包(如配置 {@code "com.example.batch"} 覆盖 {@code
+   * "com.example.batch.common.spi.task"})。
+   *
+   * <p>防止 P0/P1-B 已踩过的"加新 batch-common 子包但 e2e/app 没扫 → bean 找不到"问题(PR #113 / #114)。
+   */
+  public static ArchRule componentScanCoversRule(String... requiredPrefixes) {
+    return ArchRuleDefinition.classes()
+        .that()
+        .areAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")
+        .should(coversRequiredPackages(requiredPrefixes))
+        .allowEmptyShould(true)
+        .because(
+            "新增 com.example.batch.common.<subpkg> 后,所有 SB Application 的 ComponentScan 必须能扫到,"
+                + "否则 bean 启动 NoSuchBean。defaults: 加 scanBasePackages=\"com.example.batch\""
+                + " 或在列表里显式补 "
+                + String.join(", ", requiredPrefixes)
+                + "。");
+  }
+
+  /**
+   * {@code @Component} / Spring stereotype 类有多个 public 构造器时,必须有一个标 {@code @Autowired}。
+   *
+   * <p>Spring Boot 4 移除了"参数最多者优先"的隐式规则,无标注 → 回退 no-arg → NoSuchMethodException 启动失败 (PR #111 已踩)。
+   */
+  public static ArchRule multipleCtorsRequireAutowiredRule() {
+    return ArchRuleDefinition.classes()
+        .that(isSpringStereotype())
+        .should(haveExactlyOnePublicCtorOrOneAutowired())
+        .allowEmptyShould(true)
+        .because(
+            "Spring Boot 4 不再隐式取参数最多 ctor;多 ctor 必须显式 @Autowired 标主。否则启动"
+                + " NoSuchMethodException(no-arg fallback 没找到)。见 PR #111 fix(main-red).");
+  }
+
+  // ─── 上述 2 条规则的辅助 ─────────────────────────────────────────────────────
+
+  private static ArchCondition<JavaClass> coversRequiredPackages(String... requiredPrefixes) {
+    String description =
+        "have @SpringBootApplication / @ComponentScan covering: "
+            + String.join(", ", requiredPrefixes);
+    return new ArchCondition<>(description) {
+      @Override
+      public void check(JavaClass item, ConditionEvents events) {
+        java.util.List<String> scanList = readScanBasePackages(item);
+        if (scanList.isEmpty()) {
+          // 没显式 scanBasePackages → 默认扫 class 所在包(SB 行为)
+          scanList = java.util.List.of(item.getPackageName());
+        }
+        for (String req : requiredPrefixes) {
+          boolean covered =
+              scanList.stream().anyMatch(entry -> req.equals(entry) || req.startsWith(entry + "."));
+          if (!covered) {
+            events.add(
+                SimpleConditionEvent.violated(
+                    item,
+                    item.getName()
+                        + ": @ComponentScan basePackages "
+                        + scanList
+                        + " does not cover required package \""
+                        + req
+                        + "\""));
+          }
+        }
+      }
+
+      private java.util.List<String> readScanBasePackages(JavaClass clazz) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        clazz
+            .tryGetAnnotationOfType("org.springframework.boot.autoconfigure.SpringBootApplication")
+            .ifPresent(a -> addStringArrayProperty(a, "scanBasePackages", out));
+        clazz
+            .tryGetAnnotationOfType("org.springframework.context.annotation.ComponentScan")
+            .ifPresent(
+                a -> {
+                  addStringArrayProperty(a, "basePackages", out);
+                  addStringArrayProperty(a, "value", out);
+                });
+        return out;
+      }
+
+      private void addStringArrayProperty(
+          com.tngtech.archunit.core.domain.JavaAnnotation<?> a,
+          String prop,
+          java.util.List<String> out) {
+        Object v = a.get(prop).orElse(null);
+        if (v instanceof String[]) {
+          for (String s : (String[]) v) if (s != null && !s.isBlank()) out.add(s);
+        } else if (v instanceof String && !((String) v).isBlank()) {
+          out.add((String) v);
+        }
+      }
+    };
+  }
+
+  private static DescribedPredicate<JavaClass> isSpringStereotype() {
+    return new DescribedPredicate<>("is Spring @Component / stereotype") {
+      private final java.util.Set<String> stereotypes =
+          java.util.Set.of(
+              "org.springframework.stereotype.Component",
+              "org.springframework.stereotype.Service",
+              "org.springframework.stereotype.Repository",
+              "org.springframework.stereotype.Controller",
+              "org.springframework.web.bind.annotation.RestController",
+              "org.springframework.context.annotation.Configuration");
+
+      @Override
+      public boolean test(JavaClass clazz) {
+        return clazz.getAnnotations().stream()
+            .map(a -> a.getRawType().getName())
+            .anyMatch(stereotypes::contains);
+      }
+    };
+  }
+
+  private static ArchCondition<JavaClass> haveExactlyOnePublicCtorOrOneAutowired() {
+    return new ArchCondition<>("have ≤1 public ctor OR @Autowired on one when ≥2") {
+      @Override
+      public void check(JavaClass item, ConditionEvents events) {
+        java.util.Set<com.tngtech.archunit.core.domain.JavaConstructor> publicCtors =
+            item.getConstructors().stream()
+                .filter(
+                    c ->
+                        c.getModifiers()
+                            .contains(com.tngtech.archunit.core.domain.JavaModifier.PUBLIC))
+                .collect(java.util.stream.Collectors.toSet());
+        if (publicCtors.size() < 2) {
+          return; // 0 或 1 个 public ctor:Spring 自动选,无歧义
+        }
+        boolean anyAutowired =
+            publicCtors.stream()
+                .anyMatch(
+                    c ->
+                        c.isAnnotatedWith(
+                            "org.springframework.beans.factory.annotation.Autowired"));
+        if (!anyAutowired) {
+          events.add(
+              SimpleConditionEvent.violated(
+                  item,
+                  item.getName()
+                      + ": has "
+                      + publicCtors.size()
+                      + " public ctors but none is @Autowired — Spring Boot 4 will fall back to"
+                      + " no-arg ctor and fail startup"));
+        }
+      }
+    };
   }
 
   private static ArchCondition<JavaClass> callMethod(String targetOwner, String methodName) {
