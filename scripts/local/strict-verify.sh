@@ -327,6 +327,30 @@ print(','.join(sorted(schema.get('properties', {}).keys())))
 fi
 
 # ───────────────────────────────────────────────────────────
+# §7. SPI worker 原子任务配置真实数据(ADR-029)
+#    PSQL 直查 job_definition,校验 job_type='SPI' 的真实 seed 配置完整性。
+#    (派发→执行→终态的全链真验由 batch-e2e-tests 的 Spi*E2eIT 覆盖,需 SPI worker 进程)
+# ───────────────────────────────────────────────────────────
+hdr "7. SPI 原子任务配置真实数据(ADR-029)"
+
+SPI_JOBS=$(psql_q "select count(*) from batch.job_definition where job_type='SPI';")
+if [[ -z "$SPI_JOBS" || "$SPI_JOBS" -eq 0 ]]; then
+  skip "SPI 配置验证" "未发现 job_type='SPI' 的 job 定义(SPI 未 seed / 未启用)"
+else
+  # 7.1 每个 SPI job 的 default_params 必须携带 taskType(执行器子类型协议)
+  MISSING_TT=$(psql_q "select count(*) from batch.job_definition where job_type='SPI' and (default_params->>'taskType') is null;")
+  [[ "$MISSING_TT" == "0" ]] \
+    && pass "SPI job default_params 均含 taskType" "$SPI_JOBS 个 SPI job" \
+    || fail "SPI job 缺 taskType" "$MISSING_TT 个 SPI job 的 default_params 无 taskType"
+
+  # 7.2 taskType 必须在已知执行器白名单内(shell/sql/stored_proc/http)
+  BAD_TT=$(psql_q "select count(*) from batch.job_definition where job_type='SPI' and (default_params->>'taskType') not in ('shell','sql','stored_proc','http');")
+  [[ "$BAD_TT" == "0" ]] \
+    && pass "SPI taskType 均在执行器白名单" "shell/sql/stored_proc/http" \
+    || fail "SPI taskType 越界" "$BAD_TT 个 SPI job 的 taskType 不在 {shell,sql,stored_proc,http}"
+fi
+
+# ───────────────────────────────────────────────────────────
 # 汇总
 # ───────────────────────────────────────────────────────────
 TOTAL_RUNS=$((PASS + FAIL))
