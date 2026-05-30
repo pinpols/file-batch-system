@@ -148,6 +148,21 @@ workerDispatch:
     periodSeconds: 10
     failureThreshold: 18
 
+# ADR-029 专用 SPI worker(原子任务 shell/sql/stored-proc/http)。最小权限隔离:
+# 生产务必另配 workerSpi.serviceAccountName / envFromSecretName(独立低权限凭据)。
+workerSpi:
+  replicaCount: 1
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  startupProbe:
+    httpGet: {path: /actuator/health/liveness, port: 18087}
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 18
+
 # JVM 参数:沿用 values.yaml 全模块基础(含 OOM 留证据 / GC log / JFR 持续录制 /
 # UTF-8 时区硬约束),overlay 仅加 prod profile;per-service 调优在 values.yaml 各
 # service.javaOptsExtra(orchestrator ZGC / worker direct 1G 等)。

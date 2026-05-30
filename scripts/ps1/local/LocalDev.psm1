@@ -93,6 +93,7 @@ function Get-AppPort {
     "worker-export" { return (Get-EnvValue "BATCH_WORKER_EXPORT_PORT" "18084") }
     "worker-process" { return (Get-EnvValue "BATCH_WORKER_PROCESS_PORT" "18086") }
     "worker-dispatch" { return (Get-EnvValue "BATCH_WORKER_DISPATCH_PORT" "18085") }
+    "worker-spi" { return (Get-EnvValue "BATCH_WORKER_SPI_PORT" "18087") }
     default { throw "未知模块 '$Name'" }
   }
 }
@@ -107,6 +108,7 @@ function Get-MavenModuleForApp {
     "worker-export" { return "batch-worker-export" }
     "worker-process" { return "batch-worker-process" }
     "worker-dispatch" { return "batch-worker-dispatch" }
+    "worker-spi" { return "batch-worker-spi" }
     default { throw "未知模块 '$Name'" }
   }
 }
@@ -136,7 +138,7 @@ function Stop-PortProcess {
 function Get-JavaBatchProcesses {
   $runtimeNames = @(
     "orchestrator", "trigger", "console",
-    "worker-import", "worker-export", "worker-process", "worker-dispatch"
+    "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-spi"
   )
   Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" | Where-Object {
     $cmd = $_.CommandLine

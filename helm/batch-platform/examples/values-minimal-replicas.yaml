@@ -10,3 +10,6 @@ workerExport:
   replicaCount: 1
 workerDispatch:
   replicaCount: 1
+
+workerSpi:
+  replicaCount: 1

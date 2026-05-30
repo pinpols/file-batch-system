@@ -31,7 +31,7 @@ Ensure-Directory $logDir
 $coreModules = @(
   "batch-common", "batch-trigger", "batch-orchestrator", "batch-worker-core",
   "batch-worker-import", "batch-worker-export", "batch-worker-process",
-  "batch-worker-dispatch", "batch-console-api"
+  "batch-worker-dispatch", "batch-worker-spi", "batch-console-api"
 )
 $failed = 0
 $passed = 0

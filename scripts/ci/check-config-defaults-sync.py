@@ -107,6 +107,7 @@ def main() -> int:
         ROOT / "batch-worker-import/src/main/resources/application.yml",
         ROOT / "batch-worker-export/src/main/resources/application.yml",
         ROOT / "batch-worker-dispatch/src/main/resources/application.yml",
+        ROOT / "batch-worker-spi/src/main/resources/application.yml",
     ]
     yml_defaults = merge(*(scan_yml(p, SPRING_PLACEHOLDER) for p in yml_files))
 

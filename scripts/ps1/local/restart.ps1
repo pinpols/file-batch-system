@@ -15,7 +15,7 @@ $env:BATCH_CONSOLE_READ_REPLICA_ENABLED = Get-EnvValue "BATCH_CONSOLE_READ_REPLI
 
 if (-not $Modules -or $Modules.Count -eq 0) {
   Write-Host "用法: .\scripts\ps1\local\restart.ps1 <module> [module...]"
-  Write-Host "支持: orchestrator trigger console worker-import worker-export worker-process worker-dispatch"
+  Write-Host "支持: orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-spi"
   exit 1
 }
 
@@ -55,7 +55,7 @@ if ((Get-EnvValue "BUILD" "0") -eq "1") {
 }
 
 Write-Host "==> 按依赖顺序启动..."
-$ordered = @("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch")
+$ordered = @("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-spi")
 $needWaitOrch = $Modules -contains "orchestrator"
 foreach ($name in $ordered) {
   if ($Modules -notcontains $name) { continue }

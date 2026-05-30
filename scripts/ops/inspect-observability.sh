@@ -15,12 +15,12 @@ set -euo pipefail
 BASE_URLS="${BATCH_OBSERVABILITY_BASE_URLS:-http://localhost:18080,http://localhost:18081,http://localhost:18082}"
 REQUIRED_METRICS="${BATCH_OBSERVABILITY_REQUIRED_METRICS:-batch_alert_events_total,batch_job_sla_violation_count,batch_dispatch_deliveries_total,batch_dispatch_circuits_open,http_server_requests_seconds_count}"
 KAFKA_BOOTSTRAP_SERVERS="${BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS:-${BATCH_KAFKA_BOOTSTRAP_SERVERS:-}}"
-KAFKA_GROUPS="${BATCH_OBSERVABILITY_KAFKA_GROUPS:-batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch}"
+KAFKA_GROUPS="${BATCH_OBSERVABILITY_KAFKA_GROUPS:-batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-spi}"
 KAFKA_BIN_DIR="${BATCH_OBSERVABILITY_KAFKA_BIN_DIR:-}"
 KAFKA_LAG_THRESHOLD="${BATCH_OBSERVABILITY_KAFKA_LAG_THRESHOLD:-1000}"
 EXTRA_ENDPOINTS="${BATCH_OBSERVABILITY_EXTRA_ENDPOINTS:-http://localhost:19121/metrics|redis_connected_clients,redis_memory_used_bytes;http://localhost:19187/metrics|pg_up,pg_stat_database_numbackends;http://localhost:19308/metrics|kafka_brokers;http://localhost:19100/metrics|node_load1,node_memory_MemAvailable_bytes,node_filesystem_size_bytes,node_network_receive_bytes_total;http://localhost:19101/metrics|container_cpu_usage_seconds_total,container_memory_working_set_bytes;http://localhost:19000/minio/v2/metrics/cluster|minio_cluster_nodes_offline_total}"
 PROMETHEUS_BASE_URL="${BATCH_OBSERVABILITY_PROMETHEUS_BASE_URL:-http://localhost:19090}"
-PROMETHEUS_TARGET_JOBS="${BATCH_OBSERVABILITY_PROMETHEUS_TARGET_JOBS:-batch-console-api,batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,redis-exporter,postgres-exporter,kafka-exporter,minio,node-exporter,cadvisor,otel-collector}"
+PROMETHEUS_TARGET_JOBS="${BATCH_OBSERVABILITY_PROMETHEUS_TARGET_JOBS:-batch-console-api,batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-spi,redis-exporter,postgres-exporter,kafka-exporter,minio,node-exporter,cadvisor,otel-collector}"
 
 failures=0
 
