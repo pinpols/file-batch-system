@@ -82,6 +82,11 @@
         <netty.version>4.2.13.Final</netty.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <postgresql.version>42.7.11</postgresql.version>
+
+        <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
+             2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4.0.6 + JDK25 是否能跑。
+             结论见 docs/spike/resilience4j-sb4-compat.md。 -->
+        <resilience4j.version>2.3.0</resilience4j.version>
     </properties>
 
     <dependencyManagement>
@@ -199,6 +204,17 @@
                 <groupId>com.tngtech.archunit</groupId>
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
+            </dependency>
+            <!-- SPIKE -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-spring-boot3</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-micrometer</artifactId>
+                <version>${resilience4j.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
