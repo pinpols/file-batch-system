@@ -7,7 +7,7 @@
 #
 # 支持的模块名：
 #   orchestrator  trigger  console
-#   worker-import  worker-export  worker-process  worker-dispatch
+#   worker-import  worker-export  worker-process  worker-dispatch  worker-spi
 #
 # 示例：
 #   ./scripts/local/restart.sh trigger
@@ -128,6 +128,7 @@ port_for() {
     worker-export)   echo "${BATCH_WORKER_EXPORT_PORT:-18084}" ;;
     worker-process)  echo "${BATCH_WORKER_PROCESS_PORT:-18086}" ;;
     worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-18085}" ;;
+    worker-spi)      echo "${BATCH_WORKER_SPI_PORT:-18087}" ;;
     *) echo "ERROR: 未知模块 '$1'" >&2; exit 1 ;;
   esac
 }
@@ -142,6 +143,7 @@ maven_module_for() {
     worker-export)   echo "batch-worker-export" ;;
     worker-process)  echo "batch-worker-process" ;;
     worker-dispatch) echo "batch-worker-dispatch" ;;
+    worker-spi)      echo "batch-worker-spi" ;;
   esac
 }
 
@@ -229,7 +231,7 @@ wait_orchestrator() {
 
 if [ $# -eq 0 ]; then
   echo "用法: $0 <module> [module...]"
-  echo "支持: orchestrator trigger console worker-import worker-export worker-process worker-dispatch"
+  echo "支持: orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-spi"
   exit 1
 fi
 
@@ -262,7 +264,7 @@ echo "==> 按依赖顺序启动..."
 export BATCH_CONSOLE_READ_REPLICA_ENABLED="${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}"
 
 # 定义全局启动顺序
-ORDERED=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch)
+ORDERED=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-spi)
 
 need_wait_orch=false
 for name in "${TARGETS[@]}"; do
