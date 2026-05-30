@@ -23,6 +23,7 @@ flowchart LR
   WI["batch-worker-import"]
   WE["batch-worker-export"]
   WP["batch-worker-process"]
+  WSPI["batch-worker-spi"]
   M["MinIO bucket<br/>batch-dev"]
 
   P["batch_platform<br/>trigger_request<br/>trigger_outbox_event (V80, ADR-010)<br/>job_definition<br/>job_instance<br/>job_partition<br/>job_task<br/>workflow_run<br/>workflow_node_run (output JSONB, ADR-009)<br/>worker_registry<br/>retry_schedule<br/>dead_letter_task<br/>outbox_event<br/>file_record<br/>file_channel_config<br/>file_dispatch_record<br/>file_audit_log<br/>..."]
@@ -48,10 +49,12 @@ flowchart LR
   K -->|"Kafka consume"| WI
   K -->|"Kafka consume"| WE
   K -->|"Kafka consume"| WP
+  K -->|"Kafka consume"| WSPI
 
   WD -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
   WI -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
   WE -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
+  WSPI -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
   WP -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
 
   WD -->|"JDBC -> batch_platform<br/>file_record / file_channel_config / file_dispatch_record"| P

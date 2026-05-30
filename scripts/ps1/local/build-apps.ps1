@@ -26,15 +26,15 @@ $mvnArgs = @(
   "-Dmaven.javadoc.skip=true",
   "-Dflatten.skip=true",
   "-pl",
-  "batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-console-api",
+  "batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-spi,batch-console-api",
   "-am"
 ) + $cleanGoal + @("package", "-T", "2C")
 & $mvn @mvnArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> 复制可执行 jar 到 build/runtime-jars/..."
-$modules = @("batch-orchestrator", "batch-trigger", "batch-console-api", "batch-worker-import", "batch-worker-export", "batch-worker-process", "batch-worker-dispatch")
-$names = @("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch")
+$modules = @("batch-orchestrator", "batch-trigger", "batch-console-api", "batch-worker-import", "batch-worker-export", "batch-worker-process", "batch-worker-dispatch", "batch-worker-spi")
+$names = @("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-spi")
 
 for ($i = 0; $i -lt $modules.Count; $i++) {
   $module = $modules[$i]

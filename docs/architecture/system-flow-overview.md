@@ -54,12 +54,13 @@ flowchart LR
   K[("Kafka<br/>batch.task.dispatch.*")]:::store
   TKAFKA[("Kafka<br/>batch.trigger.launch.v1<br/>(via trigger_outbox + relay · ADR-010)")]:::store
 
-  subgraph WORKERS ["执行层 · 四类 Worker"]
+  subgraph WORKERS ["执行层 · Worker(4 类 pipeline + 专用 SPI)"]
     direction TB
     WI["worker-import<br/>RECEIVE → ... → FEEDBACK"]:::worker
     WE["worker-export<br/>PREPARE → ... → COMPLETE"]:::worker
     WP["worker-process<br/>PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK<br/>(WAP+bookends · staging 中转)"]:::worker
     WD["worker-dispatch<br/>PREPARE → ... → COMPLETE"]:::worker
+    WSPI["worker-spi<br/>原子任务 shell/sql/stored-proc/http<br/>(ADR-029 隔离)"]:::worker
   end
 
   subgraph DATA ["数据落地"]
@@ -99,12 +100,14 @@ flowchart LR
   K ==>|"consume (export)"| WE
   K ==>|"consume (process)"| WP
   K ==>|"consume (dispatch)"| WD
+  K ==>|"consume (spi)"| WSPI
 
   %% ─── worker 上报回 LS（控制信号 HTTP） ───────────
   WI -. "claim / heartbeat / report (HTTP)" .-> LS
   WE -. "claim / heartbeat / report (HTTP)" .-> LS
   WP -. "claim / heartbeat / report (HTTP)" .-> LS
   WD -. "claim / heartbeat / report (HTTP)" .-> LS
+  WSPI -. "claim / heartbeat / report (HTTP)" .-> LS
   LS ==>|"UPDATE job_instance<br/>+ partition (状态机, JDBC)"| PDB
 
   %% ─── worker 数据落地（业务写 / 外部副作用） ─────

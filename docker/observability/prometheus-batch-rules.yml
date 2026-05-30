@@ -2,7 +2,7 @@ groups:
   - name: batch-platform
     rules:
       - alert: BatchServiceDown
-        expr: up{job=~"batch-(console-api|trigger|orchestrator|worker-import|worker-export|worker-process|worker-dispatch)"} == 0
+        expr: up{job=~"batch-(console-api|trigger|orchestrator|worker-import|worker-export|worker-process|worker-dispatch|worker-spi)"} == 0
         for: 2m
         labels:
           severity: critical
@@ -82,7 +82,7 @@ groups:
 
       # 需 kafka-exporter（如 danielqsj/kafka-exporter）或 Prometheus Kafka 适配器
       # 暴露 kafka_consumergroup_lag 指标。各 batch worker 使用的消费组为
-      # batch-worker-import、batch-worker-export、batch-worker-process、batch-worker-dispatch。
+      # batch-worker-import、batch-worker-export、batch-worker-process、batch-worker-dispatch、batch-worker-spi。
       - alert: BatchKafkaConsumerLagHigh
         expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|process|dispatch)"} > 1000
         for: 10m
