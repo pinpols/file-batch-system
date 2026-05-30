@@ -10,7 +10,7 @@ class SpiWorkerRouteAdapterTest {
   @Test
   void buildDefaultRoute_declaresTaskWorkerTypeAndAvailable() {
     WorkerRouteModel route = new SpiWorkerRouteAdapter().buildDefaultRoute();
-    assertThat(route.getWorkerType()).isEqualTo("TASK");
+    assertThat(route.getWorkerType()).isEqualTo("SPI");
     assertThat(route.getAvailable()).isTrue();
   }
 }

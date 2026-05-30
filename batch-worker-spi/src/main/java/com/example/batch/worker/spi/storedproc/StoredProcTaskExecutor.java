@@ -7,6 +7,7 @@ import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
 import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -265,21 +266,16 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   private TaskResult runCall(TaskContext ctx, Invocation inv) {
     long start = System.currentTimeMillis();
 
-    // 构造 CALL SQL:{call proc(?, ?, ...)} placeholder count = in + out
     int totalParams = inv.inParams.size() + inv.outTypes.size();
-    StringBuilder call = new StringBuilder("{call ").append(inv.procName).append("(");
-    for (int i = 0; i < totalParams; i++) {
-      if (i > 0) call.append(",");
-      call.append("?");
-    }
-    call.append(")}");
 
     try (Connection conn = inv.dataSource.getConnection()) {
+      // 真 PROCEDURE 发原生 CALL,FUNCTION 仍走 {call} 转义(见 buildCallSql)。
+      String call = buildCallSql(conn, inv.procName, totalParams);
       boolean originalAutoCommit = conn.getAutoCommit();
       try {
         conn.setAutoCommit(inv.autoCommit);
 
-        try (CallableStatement cs = conn.prepareCall(call.toString())) {
+        try (CallableStatement cs = conn.prepareCall(call)) {
           cs.setQueryTimeout(inv.timeoutSec);
 
           // IN params (positions 1..N)
@@ -349,6 +345,50 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       }
     } catch (SQLException ex) {
       return TaskResult.fail("stored proc call failed: " + ex.getMessage(), ex);
+    }
+  }
+
+  /**
+   * 构造调用语句。真 PROCEDURE 用原生 {@code CALL proc(...)};FUNCTION 用 JDBC {@code {call ...}} 转义(PG 驱动转
+   * SELECT)。原因:PG 默认 {@code escapeSyntaxCallMode=select} 把 {@code {call}} 当函数解析,调真过程会报 "is a
+   * procedure, use CALL"。经 {@code pg_proc.prokind} 判定;非 PG / 查不到 / 异常时回退 {@code {call}}(保留旧函数语义)。
+   */
+  private static String buildCallSql(Connection conn, String procName, int totalParams) {
+    String placeholders = "?,".repeat(totalParams);
+    if (!placeholders.isEmpty()) {
+      placeholders = placeholders.substring(0, placeholders.length() - 1);
+    }
+    if (isProcedure(conn, procName)) {
+      return "CALL " + procName + "(" + placeholders + ")";
+    }
+    return "{call " + procName + "(" + placeholders + ")}";
+  }
+
+  /** 查 {@code pg_proc.prokind} 判定目标是否为 PROCEDURE('p')。非 PG / mock / 查不到时返回 false(按函数处理)。 */
+  private static boolean isProcedure(Connection conn, String procName) {
+    String schema = null;
+    String name = procName;
+    int dot = procName.indexOf('.');
+    if (dot > 0) {
+      schema = procName.substring(0, dot);
+      name = procName.substring(dot + 1);
+    }
+    String sql =
+        "select p.prokind from pg_catalog.pg_proc p"
+            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+            + " where p.proname = ?"
+            + (schema == null ? "" : " and n.nspname = ?")
+            + " limit 1";
+    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+      ps.setString(1, name);
+      if (schema != null) {
+        ps.setString(2, schema);
+      }
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() && "p".equals(rs.getString(1));
+      }
+    } catch (SQLException | RuntimeException ex) {
+      return false;
     }
   }
 

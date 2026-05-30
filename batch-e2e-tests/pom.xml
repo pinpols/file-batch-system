@@ -57,6 +57,11 @@
         </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-spi</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.example.batch</groupId>
             <artifactId>batch-common</artifactId>
             <version>${project.version}</version>
             <classifier>tests</classifier>

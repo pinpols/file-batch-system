@@ -29,7 +29,7 @@ public class SpiWorkerLoop extends AbstractWorkerLoop {
 
   @Override
   protected String workerGroup() {
-    return "task";
+    return "spi";
   }
 
   @Override
