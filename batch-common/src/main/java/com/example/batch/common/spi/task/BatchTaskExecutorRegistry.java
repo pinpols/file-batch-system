@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,25 +22,47 @@ import org.springframework.stereotype.Component;
  *
  * <p>同一 {@code taskType} 重复注册启动期 fail-fast,清晰报错(防 Spring + ServiceLoader 双重注入)。
  *
- * <p>设计依据:{@code docs/design/task-spi-design.md} §3.4。
+ * <p>P0 Phase 5:支持 {@link BatchWorkerSpiProperties#getEnabledTaskTypes()} 白名单过滤,实现 "同一 worker
+ * 进程注册多个 taskType"的能力(空集 = 不过滤,向后兼容)。
+ *
+ * <p>设计依据:{@code docs/design/task-spi-design.md} §3.4 + §Phase 5。
  */
 @Slf4j
 @Component
 public class BatchTaskExecutorRegistry {
 
   private final Map<String, BatchTaskExecutor> byType;
+  private final Set<String> enabledFilter;
 
+  /** Test-friendly 构造器:不过滤,全注册。Spring 路径请用主构造器。 */
   public BatchTaskExecutorRegistry(List<BatchTaskExecutor> springBeans) {
+    this(springBeans, Set.of());
+  }
+
+  public BatchTaskExecutorRegistry(
+      List<BatchTaskExecutor> springBeans, ObjectProvider<BatchWorkerSpiProperties> propsProvider) {
+    this(springBeans, resolveFilter(propsProvider));
+  }
+
+  private static Set<String> resolveFilter(ObjectProvider<BatchWorkerSpiProperties> propsProvider) {
+    BatchWorkerSpiProperties props = propsProvider.getIfAvailable();
+    return props == null ? Set.of() : Set.copyOf(props.getEnabledTaskTypes());
+  }
+
+  private BatchTaskExecutorRegistry(List<BatchTaskExecutor> springBeans, Set<String> filter) {
+    this.enabledFilter = filter;
+
     Map<String, BatchTaskExecutor> merged = new LinkedHashMap<>();
+    Set<String> filteredOut = new java.util.LinkedHashSet<>();
 
     // 1) Spring 容器内的所有 BatchTaskExecutor bean
     for (BatchTaskExecutor exec : springBeans) {
-      register(merged, exec, "spring");
+      registerWithFilter(merged, filteredOut, exec, "spring");
     }
 
     // 2) ServiceLoader:META-INF/services 声明的实现
     for (BatchTaskExecutor exec : ServiceLoader.load(BatchTaskExecutor.class)) {
-      register(merged, exec, "service-loader");
+      registerWithFilter(merged, filteredOut, exec, "service-loader");
     }
 
     this.byType = Map.copyOf(merged);
@@ -52,6 +75,29 @@ public class BatchTaskExecutorRegistry {
       log.info(
           "BatchTaskExecutorRegistry 启动:已注册 {} 个 taskType: {}", byType.size(), byType.keySet());
     }
+    if (!filteredOut.isEmpty()) {
+      log.info(
+          "BatchTaskExecutorRegistry: 过滤掉 {} 个未启用 taskType: {} (启用白名单: {})",
+          filteredOut.size(),
+          filteredOut,
+          enabledFilter);
+    }
+  }
+
+  private void registerWithFilter(
+      Map<String, BatchTaskExecutor> merged,
+      Set<String> filteredOut,
+      BatchTaskExecutor exec,
+      String source) {
+    String type = exec.taskType();
+    if (type != null
+        && !type.isBlank()
+        && !enabledFilter.isEmpty()
+        && !enabledFilter.contains(type)) {
+      filteredOut.add(type);
+      return;
+    }
+    register(merged, exec, source);
   }
 
   private static void register(
