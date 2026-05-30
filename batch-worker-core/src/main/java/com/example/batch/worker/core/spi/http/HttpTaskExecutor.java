@@ -88,7 +88,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        java.util.Set.of(ResourceKind.NET),
+        Set.of(ResourceKind.NET),
         false, // 业务可能非幂等(POST 创建资源等),保守
         true,
         props.getDefaultTimeout());
