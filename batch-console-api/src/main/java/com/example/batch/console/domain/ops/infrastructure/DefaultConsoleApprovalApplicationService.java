@@ -7,7 +7,8 @@ import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.application.file.ConsoleFileApplicationService;
+import com.example.batch.console.domain.file.application.ConsoleFileApplicationService;
+import com.example.batch.console.domain.file.web.request.PresignDownloadFileRequest;
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobApplicationService;
 import com.example.batch.console.domain.job.web.request.CompensationCommandRequest;
@@ -16,7 +17,7 @@ import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRe
 import com.example.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.file.PresignDownloadFileRequest;
+import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.util.ArrayList;
 import java.util.List;

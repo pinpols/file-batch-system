@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
 import com.example.batch.console.domain.job.web.response.ConsoleJobStepInstanceResponse;
 import com.example.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
@@ -24,7 +25,6 @@ import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowTop
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.response.file.ConsoleFilePipelineResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
