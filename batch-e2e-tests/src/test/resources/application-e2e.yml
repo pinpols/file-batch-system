@@ -67,6 +67,32 @@ batch:
         enabled: false
       receipt-poll:
         enabled: false
+    # ADR-029 专用 SPI worker(仅 E2eSpiApplication 上下文绑定;其它 e2e app 无 SpiWorkerConfiguration bean,此块惰性忽略)
+    spi:
+      tenant-id: t1
+      worker-code: e2e-spi-1
+      worker-type: SPI
+      heartbeat-interval-millis: 600000
+      topic: batch.task.dispatch.spi
+      consumer-group-id: batch-worker-spi-e2e
+    # SPI 执行器:e2e 全开 4 类做全链验证;仅在 batch-worker-spi 被扫描的 E2eSpiApplication 上下文生效
+    executors:
+      sql:
+        enabled: true
+        allowed-statement-types:
+          - SELECT
+      shell:
+        enabled: true
+        # command-whitelist 留空 = 信任环境允许全部(e2e 只跑 /bin/echo)
+      stored-proc:
+        enabled: true
+        allowed-schemas:
+          - batch
+      http:
+        enabled: true
+        # e2e 打本地 JDK HttpServer(127.0.0.1),需清掉默认 SSRF 黑名单(含 localhost/127.*);仅测试 profile
+        blocked-host-patterns: []
+        allowed-host-patterns: []
   datasource:
     business:
       url: ${spring.datasource.url}
