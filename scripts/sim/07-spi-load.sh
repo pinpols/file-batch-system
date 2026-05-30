@@ -19,6 +19,7 @@
 set -uo pipefail
 
 TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
+INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
 ROUNDS="${ROUNDS:-5}"
 SPI_TENANT="${SPI_TENANT:-default-tenant}"
 BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
@@ -38,6 +39,8 @@ for round in $(seq 1 "$ROUNDS"); do
     req_id="sim-spi-${round}-${job}-$(date +%s%N | tail -c 8)"
     resp=$(curl -sf -X POST \
       -H "Content-Type: application/json" \
+      -H "X-Internal-Secret: $INTERNAL_SECRET" \
+      -H "Idempotency-Key: $req_id" \
       -H "X-Tenant-Id: $SPI_TENANT" \
       -H "X-Request-Id: $req_id" \
       "$TRIGGER_BASE/api/triggers/launch" \
