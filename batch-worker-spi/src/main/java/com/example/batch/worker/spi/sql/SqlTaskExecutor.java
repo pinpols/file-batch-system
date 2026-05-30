@@ -150,10 +150,12 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       }
     }
 
-    // dataSource
-    String dsBeanName = stringParam(params, PARAM_DS_BEAN, props.getDataSourceBeanName());
+    // dataSource(param 覆盖需命中 allowedDataSourceBeans)
+    String dsBeanName = resolveDataSourceBeanName(params);
     DataSource ds =
         dsBeanName == null ? defaultDataSource : beanFactory.getBean(dsBeanName, DataSource.class);
+
+    boolean allSelect = statements.stream().allMatch(s -> "SELECT".equals(detectStatementType(s)));
 
     // timeout(只能缩短)
     int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
@@ -174,12 +176,39 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       autoCommit = (Boolean) ac;
     }
 
-    return new SqlInvocation(statements, ds, timeoutSec, autoCommit);
+    return new SqlInvocation(statements, ds, timeoutSec, autoCommit, allSelect);
   }
 
   private static String stringParam(Map<String, Object> p, String key, String fallback) {
     Object v = p.get(key);
     return v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : fallback;
+  }
+
+  /**
+   * 解析最终要用的 dataSource bean 名,并对 param {@code dataSourceBean} 覆盖做白名单校验。
+   *
+   * <p>规则:param 缺省时回落到 {@link SqlExecutorProperties#getDataSourceBeanName()}(可能 null = 默认库)。 当
+   * param 显式给出且与配置的默认 bean 名不同时,必须命中 {@link SqlExecutorProperties#getAllowedDataSourceBeans()},否则抛
+   * {@link SqlValidationException}。配置的默认 bean 永远允许。
+   *
+   * @return 校验后的 bean 名,或 null 表示用注入的默认 dataSource
+   */
+  String resolveDataSourceBeanName(Map<String, Object> params) {
+    String configured = props.getDataSourceBeanName();
+    Object v = params.get(PARAM_DS_BEAN);
+    String paramBean = v instanceof String && !((String) v).isBlank() ? ((String) v).trim() : null;
+
+    if (paramBean == null || paramBean.equals(configured)) {
+      return configured;
+    }
+    if (!props.getAllowedDataSourceBeans().contains(paramBean)) {
+      throw new SqlValidationException(
+          "dataSourceBean '"
+              + paramBean
+              + "' not in allowedDataSourceBeans="
+              + props.getAllowedDataSourceBeans());
+    }
+    return paramBean;
   }
 
   /** 用 `;` 切语句,跳过引号内 / 注释内 `;`(简化版,不处理嵌套或 dollar-quote)。 */
@@ -233,6 +262,15 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return out;
   }
 
+  /**
+   * 取首关键字粗分类语句类型。
+   *
+   * <p>PG 的 {@code DO $$...$$} 匿名代码块可执行任意过程化逻辑(含 DML/DDL),归为 {@code "DDL"} 走 DDL 白名单, 避免落到 {@code
+   * "OTHER"} 绕过校验。
+   *
+   * <p><b>安全提示</b>:把 {@code "OTHER"} 放进 {@link SqlExecutorProperties#getAllowedStatementTypes()}
+   * 约等于放开任意 SQL(无法识别的语句一律通过),生产慎用。
+   */
   static String detectStatementType(String stmt) {
     Matcher m = FIRST_KEYWORD.matcher(stmt);
     if (!m.find()) return "UNKNOWN";
@@ -253,7 +291,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           "GRANT",
           "REVOKE",
           "ANALYZE",
-          "VACUUM" ->
+          "VACUUM",
+          "DO" ->
           "DDL";
       case "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "SET" -> "TX";
       default -> "OTHER";
@@ -286,10 +325,24 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     int lastResultRows = 0;
     boolean truncated = false;
 
+    // 全 SELECT 时强制走显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段查询内生效。
+    // 写任务保持原有 autoCommit 语义,不受影响。
+    boolean effectiveAutoCommit = inv.allSelect ? false : inv.autoCommit;
+
     try (Connection conn = inv.dataSource.getConnection()) {
       boolean originalAutoCommit = conn.getAutoCommit();
+      boolean originalReadOnly = conn.isReadOnly();
       try {
-        conn.setAutoCommit(inv.autoCommit);
+        conn.setAutoCommit(effectiveAutoCommit);
+        // 全 SELECT 时强制 READ ONLY 事务,并设服务端 statement_timeout(与 setQueryTimeout 双保险)
+        if (inv.allSelect) {
+          conn.setReadOnly(true);
+          try (Statement guard = conn.createStatement()) {
+            guard.execute("SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L));
+          } catch (SQLException setEx) {
+            log.warn("SET LOCAL statement_timeout failed: {}", setEx.getMessage());
+          }
+        }
 
         for (String sql : inv.statements) {
           try (Statement stmt = conn.createStatement()) {
@@ -311,11 +364,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           }
         }
 
-        if (!inv.autoCommit) {
+        if (!effectiveAutoCommit) {
           conn.commit();
         }
       } catch (SQLException | RuntimeException ex) {
-        if (!inv.autoCommit) {
+        if (!effectiveAutoCommit) {
           try {
             conn.rollback();
           } catch (SQLException rollbackEx) {
@@ -328,6 +381,13 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           conn.setAutoCommit(originalAutoCommit);
         } catch (SQLException restoreEx) {
           log.warn("restore autoCommit failed: {}", restoreEx.getMessage());
+        }
+        if (inv.allSelect) {
+          try {
+            conn.setReadOnly(originalReadOnly);
+          } catch (SQLException restoreEx) {
+            log.warn("restore readOnly failed: {}", restoreEx.getMessage());
+          }
         }
       }
     } catch (SQLException ex) {
@@ -373,7 +433,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   // ─── helper records / exceptions ────────────────────────────────────────────
 
   private record SqlInvocation(
-      List<String> statements, DataSource dataSource, int timeoutSec, boolean autoCommit) {}
+      List<String> statements,
+      DataSource dataSource,
+      int timeoutSec,
+      boolean autoCommit,
+      boolean allSelect) {}
 
   private record FetchResult(List<Map<String, Object>> rows, int actualCount, boolean truncated) {}
 

@@ -36,6 +36,14 @@ public class SqlExecutorProperties {
   /** dataSource bean 名。null = 用主 datasource;生产推荐显式指定专用低权限 datasource。 */
   private String dataSourceBeanName = null;
 
+  /**
+   * 允许通过 param {@code dataSourceBean} 覆盖的 bean 名白名单。默认空 = 不允许任何覆盖。
+   *
+   * <p>配置的 {@link #dataSourceBeanName}(及 null 默认库)永远允许;param 指定的其它 bean 名必须命中此集合,否则拒绝。 防止业务方借 param
+   * 切到任意高权限 datasource。
+   */
+  private Set<String> allowedDataSourceBeans = Set.of();
+
   /** 允许的语句类型集合。默认只允许 SELECT(读)。生产按需放开。 */
   private Set<String> allowedStatementTypes = Set.of("SELECT");
 
