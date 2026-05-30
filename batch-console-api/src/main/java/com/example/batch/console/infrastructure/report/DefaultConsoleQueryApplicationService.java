@@ -22,6 +22,7 @@ import com.example.batch.console.web.query.FilePipelineQueryRequest;
 import com.example.batch.console.web.query.FilePipelineStepQueryRequest;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
+import com.example.batch.console.web.query.JobExecutionLogQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
 import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
@@ -48,6 +49,7 @@ import com.example.batch.console.web.response.file.ConsoleFilePipelineStepRespon
 import com.example.batch.console.web.response.file.ConsoleFileRecordResponse;
 import com.example.batch.console.web.response.file.ConsoleFileTemplateResponse;
 import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
+import com.example.batch.console.web.response.job.ConsoleJobExecutionLogResponse;
 import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
@@ -232,6 +234,12 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   @Override
   public ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
     return jobQueryService.jobInstance(tenantId, id);
+  }
+
+  @Override
+  public PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(
+      JobExecutionLogQueryRequest request) {
+    return jobQueryService.jobExecutionLogs(request);
   }
 
   @Override

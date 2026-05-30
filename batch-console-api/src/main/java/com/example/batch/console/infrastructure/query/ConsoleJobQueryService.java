@@ -9,20 +9,24 @@ import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
+import com.example.batch.console.domain.entity.JobExecutionLogEntity;
 import com.example.batch.console.domain.entity.JobInstanceEntity;
 import com.example.batch.console.domain.entity.JobPartitionEntity;
 import com.example.batch.console.domain.entity.JobStepInstanceEntity;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
+import com.example.batch.console.domain.query.JobExecutionLogQuery;
 import com.example.batch.console.domain.query.JobInstanceQuery;
 import com.example.batch.console.domain.query.JobPartitionQuery;
 import com.example.batch.console.domain.query.JobStepInstanceQuery;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.querymap.ConsoleJobQueryMappers;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
+import com.example.batch.console.web.query.JobExecutionLogQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
 import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
 import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
+import com.example.batch.console.web.response.job.ConsoleJobExecutionLogResponse;
 import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
@@ -60,6 +64,51 @@ public class ConsoleJobQueryService {
     List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
     long total = jobMappers.jobDefinitionMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobDefinitionResponse);
+  }
+
+  /**
+   * 任务级执行日志查看(P0):查 {@code batch.job_execution_log},锚定单个 jobInstanceId,支持 level/type/keyword 过滤 +
+   * 双轨分页。大表 + 时间序,优先 cursor 模式(传 cursor 即生效,不查 count)。
+   */
+  public PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(
+      JobExecutionLogQueryRequest request) {
+    boolean cursorMode = request.getCursor() != null && !request.getCursor().isBlank();
+    PageRequest pageRequest =
+        cursorMode
+            ? new PageRequest(1, request.getPageSize())
+            : new PageRequest(request.getPageNo(), request.getPageSize());
+    JobExecutionLogQuery query =
+        new JobExecutionLogQuery(
+            resolveTenant(tenantGuard, request.getTenantId()),
+            request.getJobInstanceId(),
+            request.getJobPartitionId(),
+            request.getLogLevel(),
+            request.getLogType(),
+            request.getKeyword(),
+            pageRequest,
+            decodeCursorId(request.getCursor()));
+    List<JobExecutionLogEntity> rows = jobMappers.jobExecutionLogMapper.selectByQuery(query);
+    if (cursorMode) {
+      return cursorPage(
+          pageRequest, rows, this::toJobExecutionLogResponse, JobExecutionLogEntity::getId);
+    }
+    long total = jobMappers.jobExecutionLogMapper.countByQuery(query);
+    return page(pageRequest, total, rows, this::toJobExecutionLogResponse);
+  }
+
+  private ConsoleJobExecutionLogResponse toJobExecutionLogResponse(JobExecutionLogEntity entity) {
+    return new ConsoleJobExecutionLogResponse(
+        entity.getId(),
+        display(entity.getTenantId()),
+        entity.getJobInstanceId(),
+        entity.getJobPartitionId(),
+        display(entity.getLogLevel()),
+        display(entity.getLogType()),
+        display(entity.getTraceId()),
+        display(entity.getMessage()),
+        display(entity.getDetailRef()),
+        entity.getExtraJson(),
+        entity.getCreatedAt());
   }
 
   public PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
