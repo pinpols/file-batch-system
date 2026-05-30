@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,20 +24,18 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * SKELETON — DB 相关 hardening 行为的真 testcontainers PG 集成测试。这些行为无法在 mockito 单测里真测,只能打真库:
+ * StoredProc hardening 的真 testcontainers PG 集成测试 —— 验证只能打真库才能验的行为(单测是 mock JDBC):
  *
  * <ul>
- *   <li>{@code SET LOCAL search_path}:pin 后过程解析目标固定,session search_path 注入不生效
- *   <li>{@code has_function_privilege(...)}:verifyExecutePrivilege=true 时无权过程被拒
- *   <li>{@code pg_proc.prokind}:真 PROCEDURE 走原生 CALL,FUNCTION 走 {call} 转义
- *   <li>{@code pg_proc.prosecdef}:SECURITY DEFINER 过程的 prosecdef 感知(本 PR 仅属性+文档)
- *   <li>真 REFCURSOR 在 maxRefCursorRows 下的截断 + fetchSize 行为
+ *   <li>prokind 路由:真 PROCEDURE 走原生 {@code CALL},真 FUNCTION 走 {@code {call}} 转义
+ *   <li>{@code SET LOCAL search_path} pin:非 qualified 名靠 defaultSchema pin 才能解析
+ *   <li>REFCURSOR 在 {@code maxRefCursorRows} 下截断
+ *   <li>{@code verifyExecutePrivilege}:current_user 有 EXECUTE 时 has_function_privilege 放行
  * </ul>
  *
- * <p>模板照搬 {@link SqlTaskExecutorIntegrationTest}。整个类 {@link Disabled} —— 当前不在本仓库运行, 待 DDL fixture(建
- * schema/proc/function/refcursor + 低权限角色)落地后启用。
+ * <p>低权限拒绝路径(current_user 无 EXECUTE)在 testcontainers 超级用户下无法构造(superuser 绕过
+ * has_function_privilege),需独立低权限 datasource,留作后续;此处覆盖 happy path + 上述真库行为。
  */
-@Disabled("IT skeleton — requires testcontainers PG + DDL fixtures; not run in this PR")
 @SpringBootTest(
     classes = BatchWorkerSpiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -50,21 +48,43 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired DataSource dataSource;
   @Autowired BeanFactory beanFactory;
+  private JdbcTemplate jdbc;
 
   @BeforeEach
-  void fixtures() {
-    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-    // TODO: create schema `batch`, a real PROCEDURE, a FUNCTION returning refcursor,
-    // a SECURITY DEFINER proc, and a low-privilege role lacking EXECUTE.
-    jdbc.execute("CREATE SCHEMA IF NOT EXISTS batch");
-    // jdbc.execute("CREATE PROCEDURE batch.touch() LANGUAGE sql AS $$ SELECT 1 $$");
-    // jdbc.execute(
-    //     "CREATE FUNCTION batch.big_cursor() RETURNS refcursor LANGUAGE plpgsql AS $$ ... $$");
+  void setUp() {
+    jdbc = new JdbcTemplate(dataSource);
+    jdbc.execute("DROP SCHEMA IF EXISTS spi_it CASCADE");
+    jdbc.execute("CREATE SCHEMA spi_it");
+    jdbc.execute("CREATE TABLE spi_it.marker(id serial primary key, note text)");
+    // 真 PROCEDURE(prokind 'p' → 原生 CALL)
+    jdbc.execute(
+        "CREATE PROCEDURE spi_it.it_proc() LANGUAGE plpgsql AS $$ BEGIN"
+            + " INSERT INTO spi_it.marker(note) VALUES ('proc'); END $$");
+    // 真 FUNCTION 返回 void(prokind 'f' → {call} 转义)
+    jdbc.execute(
+        "CREATE FUNCTION spi_it.it_fn_void() RETURNS void LANGUAGE plpgsql AS $$ BEGIN"
+            + " INSERT INTO spi_it.marker(note) VALUES ('fn'); END $$");
+    // OUT refcursor 的 PROCEDURE,游标覆盖 50 行(测 maxRefCursorRows 截断)
+    jdbc.execute(
+        "CREATE PROCEDURE spi_it.it_proc_cursor(OUT c refcursor) LANGUAGE plpgsql AS $$ BEGIN"
+            + " OPEN c FOR SELECT g FROM generate_series(1,50) g; END $$");
   }
 
-  private StoredProcTaskExecutor executor(StoredProcExecutorProperties props) {
-    props.setEnabled(true);
-    return new StoredProcTaskExecutor(props, beanFactory, dataSource);
+  @AfterEach
+  void tearDown() {
+    jdbc.execute("DROP SCHEMA IF EXISTS spi_it CASCADE");
+  }
+
+  private StoredProcTaskExecutor executor(StoredProcExecutorProperties p) {
+    return new StoredProcTaskExecutor(p, beanFactory, dataSource);
+  }
+
+  private StoredProcExecutorProperties props() {
+    StoredProcExecutorProperties p = new StoredProcExecutorProperties();
+    p.setEnabled(true);
+    p.setDefaultAutoCommit(false); // 事务内,SET LOCAL search_path 生效
+    p.setAllowedSchemas(Set.of("spi_it"));
+    return p;
   }
 
   private TaskContext ctx(Map<String, Object> params) {
@@ -72,46 +92,59 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void nativeCallForRealProcedure() {
-    StoredProcExecutorProperties props = new StoredProcExecutorProperties();
-    props.setAllowedSchemas(Set.of("batch"));
-    TaskResult r = executor(props).execute(ctx(Map.of("procedureName", "batch.touch")));
+  void realProcedureRunsViaNativeCall() {
+    TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
     assertThat(r.success()).isTrue();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from spi_it.marker where note='proc'", Integer.class))
+        .isEqualTo(1);
   }
 
   @Test
-  void searchPathPinnedToDefaultSchema() {
-    // 即使会话 search_path 指向别处,pin 后 batch.touch 仍应解析到 batch schema 的过程
-    StoredProcExecutorProperties props = new StoredProcExecutorProperties();
-    props.setAllowedSchemas(Set.of("batch"));
-    props.setDefaultSchema("batch");
-    TaskResult r = executor(props).execute(ctx(Map.of("procedureName", "touch")));
+  void realFunctionRunsViaCallEscape() {
+    TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_fn_void")));
     assertThat(r.success()).isTrue();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from spi_it.marker where note='fn'", Integer.class))
+        .isEqualTo(1);
   }
 
   @Test
-  void verifyExecutePrivilegeRejectsWhenLackingGrant() {
-    // 连低权限角色 datasource → has_function_privilege 返回 false → 拒绝
-    StoredProcExecutorProperties props = new StoredProcExecutorProperties();
-    props.setAllowedSchemas(Set.of("batch"));
-    props.setVerifyExecutePrivilege(true);
-    TaskResult r = executor(props).execute(ctx(Map.of("procedureName", "batch.touch")));
-    assertThat(r.success()).isFalse();
-    assertThat(r.message()).contains("EXECUTE privilege");
-  }
-
-  @Test
-  void refCursorTruncatedAgainstRealCursor() {
-    StoredProcExecutorProperties props = new StoredProcExecutorProperties();
-    props.setAllowedSchemas(Set.of("batch"));
-    props.setMaxRefCursorRows(5);
+  void refCursorTruncatedAtCap() {
+    StoredProcExecutorProperties p = props();
+    p.setMaxRefCursorRows(5);
     TaskResult r =
-        executor(props)
+        executor(p)
             .execute(
                 ctx(
                     Map.of(
-                        "procedureName", "batch.big_cursor", "outParams", List.of("REF_CURSOR"))));
+                        "procedureName",
+                        "spi_it.it_proc_cursor",
+                        "outParams",
+                        List.of("REF_CURSOR"))));
     assertThat(r.success()).isTrue();
     assertThat(r.output().get("truncated")).isEqualTo(true);
+  }
+
+  @Test
+  void searchPathPinResolvesUnqualifiedViaDefaultSchema() {
+    // 非 qualified 名不在默认 search_path 里;靠 pin(SET LOCAL search_path = pg_catalog, spi_it)才能解析。
+    // 成功即证明 pin 把 spi_it 加进了 search_path(否则 it_proc 找不到会报错)。
+    StoredProcExecutorProperties p = props();
+    p.setDefaultSchema("spi_it");
+    p.setProcedureWhitelist(Set.of("it_proc")); // 非 qualified 需精确白名单放行
+    p.setAllowedSchemas(Set.of()); // 关 schema 放行,逼走 whitelist + pin
+    TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "it_proc")));
+    assertThat(r.success()).isTrue();
+  }
+
+  @Test
+  void verifyExecutePrivilegeAllowsWhenCurrentUserHasExecute() {
+    StoredProcExecutorProperties p = props();
+    p.setVerifyExecutePrivilege(true);
+    TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
+    assertThat(r.success()).isTrue(); // current_user 有 EXECUTE → has_function_privilege 通过
   }
 }

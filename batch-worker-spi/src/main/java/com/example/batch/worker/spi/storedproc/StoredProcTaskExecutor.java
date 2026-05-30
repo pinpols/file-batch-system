@@ -513,21 +513,33 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
    * verifyExecutePrivilege=true} 时调用。
    */
   private void requireExecutePrivilege(Connection conn, String procName) {
-    String target =
-        procName.indexOf('.') > 0 ? procName : props.getDefaultSchema() + "." + procName;
-    String sql = "select has_function_privilege(current_user, ?, 'EXECUTE')";
+    // 按 OID 判权:has_function_privilege 的 text 形态需带参数签名(如 'sch.f()'),无签名会报
+    // "function does not exist";改用 pg_proc 解析 OID 再判,免签名、对重载也稳。
+    int dot = procName.indexOf('.');
+    String schema = dot > 0 ? procName.substring(0, dot) : props.getDefaultSchema();
+    String name = dot > 0 ? procName.substring(dot + 1) : procName;
+    String sql =
+        "select has_function_privilege(current_user, p.oid, 'EXECUTE')"
+            + " from pg_catalog.pg_proc p"
+            + " join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
+            + " where p.proname = ? and n.nspname = ? limit 1";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
-      ps.setString(1, target);
+      ps.setString(1, name);
+      ps.setString(2, schema);
       try (ResultSet rs = ps.executeQuery()) {
-        if (rs.next() && rs.getBoolean(1)) {
-          return;
+        if (!rs.next()) {
+          throw new StoredProcValidationException(
+              "procedure not found for EXECUTE check: " + procName);
+        }
+        if (!rs.getBoolean(1)) {
+          throw new StoredProcValidationException(
+              "current_user lacks EXECUTE privilege on " + procName);
         }
       }
     } catch (SQLException ex) {
       throw new StoredProcValidationException(
-          "EXECUTE privilege check failed for " + target + ": " + ex.getMessage());
+          "EXECUTE privilege check failed for " + procName + ": " + ex.getMessage());
     }
-    throw new StoredProcValidationException("current_user lacks EXECUTE privilege on " + target);
   }
 
   private Object truncateIfNeeded(Object value) {
