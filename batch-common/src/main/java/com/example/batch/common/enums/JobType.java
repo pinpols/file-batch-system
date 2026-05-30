@@ -20,7 +20,9 @@ public enum JobType implements DictEnum {
   EXPORT("EXPORT", "导出任务"),
   PROCESS("PROCESS", "加工任务"),
   DISPATCH("DISPATCH", "分发任务"),
-  WORKFLOW("WORKFLOW", "工作流任务");
+  WORKFLOW("WORKFLOW", "工作流任务"),
+  /** ADR-029:原子任务(Task SPI:shell/sql/stored-proc/http),由专用 batch-worker-spi 执行。 */
+  TASK("TASK", "原子任务");
 
   private final String code;
   private final String label;
@@ -34,6 +36,8 @@ public enum JobType implements DictEnum {
       case PROCESS -> BatchType.PROCESS;
       case DISPATCH -> BatchType.DISPATCH;
       case WORKFLOW -> BatchType.WORKFLOW;
+      // TASK(原子任务)无独立 BatchType,归 GENERAL carryover 桶(BatchType 仅作指标/分类投影)。
+      case TASK -> BatchType.GENERAL;
     };
   }
 }
