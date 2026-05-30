@@ -35,7 +35,6 @@ import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelV
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
 
-import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -44,6 +43,7 @@ import com.example.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import com.example.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import com.example.batch.console.domain.job.entity.JobDefinitionEntity;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

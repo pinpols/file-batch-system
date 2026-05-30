@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.JobDefinitionMapper">
-    <resultMap id="JobDefinitionResultMap" type="com.example.batch.console.domain.entity.JobDefinitionEntity">
+<mapper namespace="com.example.batch.console.domain.job.mapper.JobDefinitionMapper">
+    <resultMap id="JobDefinitionResultMap" type="com.example.batch.console.domain.job.entity.JobDefinitionEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_code" property="jobCode"/>
@@ -110,7 +110,7 @@
           enabled=true, execution_mode='FULL'
         与 batch.job_definition 列 DEFAULT 同步;DB migration 改默认值时本 SQL 须同步。
     -->
-    <insert id="insert" parameterType="com.example.batch.console.domain.entity.JobDefinitionEntity" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="com.example.batch.console.domain.job.entity.JobDefinitionEntity" useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
             timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,
