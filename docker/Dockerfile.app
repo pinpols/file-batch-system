@@ -74,7 +74,13 @@ RUN groupadd --system --gid 1000 batch \
 # 不写 `COPY --from=builder /workspace/${MODULE}/target/${MODULE}-*.jar /app/app.jar`:glob 命中多个时 docker COPY 失败
 COPY --from=builder /workspace/${MODULE}/target/ /tmp/build/
 RUN set -eux; \
-    jar="$(ls /tmp/build/${MODULE}-*.jar 2>/dev/null | grep -Ev 'sources|javadoc|original' | head -n 1)"; \
+    jar=""; \
+    for f in /tmp/build/${MODULE}-*.jar; do \
+        case "$f" in *sources*|*javadoc*|*original*) continue ;; esac; \
+        [ -f "$f" ] || continue; \
+        jar="$f"; \
+        break; \
+    done; \
     [ -n "$jar" ] || { echo "ERROR: no main jar found for ${MODULE}"; exit 1; }; \
     mv "$jar" /app/app.jar; \
     rm -rf /tmp/build

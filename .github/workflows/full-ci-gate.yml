@@ -276,31 +276,36 @@ jobs:
               ProcessPipelineE2eIT,
               OutboxForwarderRetryE2eIT
           - id: 2
-            label: "292s"
+            label: "292s + Spi/TriggerAsync 新增"
             tests: >-
               ImportFailureE2eIT,
               FullChainTenantPropagationE2eIT,
               ImportFailurePipelineE2eIT,
               ExportPipelineE2eIT,
-              TriggerAsyncLaunchFullChainE2eIT
+              TriggerAsyncLaunchFullChainE2eIT,
+              TriggerAsyncLaunchE2eIT,
+              SpiTaskPipelineE2eIT
           - id: 3
-            label: "334s"
+            label: "334s + Spi mixed"
             tests: >-
               DeadLetterApprovalReplayE2eIT,
               DispatchFailurePipelineE2eIT,
               MultiTenantConcurrentE2eIT,
               ProcessFailurePipelineE2eIT,
               OutboxForwarderE2eIT,
-              SensorWaitFixtureE2eIT
+              SensorWaitFixtureE2eIT,
+              SpiMixedScenarioE2eIT
           - id: 4
-            label: "334s"
+            label: "334s + Spi seed/load"
             tests: >-
               ExportStorageFailureE2eIT,
               DispatchPipelineE2eIT,
               ExportContentVerificationE2eIT,
               ImportPipelineE2eIT,
               DedupJobLaunchE2eIT,
-              OutboxPollMarginsYamlE2eIT
+              OutboxPollMarginsYamlE2eIT,
+              SpiSeedStrictVerifyE2eIT,
+              SpiTaskLoadE2eIT
     steps:
       - name: Checkout
         uses: actions/checkout@v6
