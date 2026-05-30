@@ -16,7 +16,6 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileOperationRe
 import com.example.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
 import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;

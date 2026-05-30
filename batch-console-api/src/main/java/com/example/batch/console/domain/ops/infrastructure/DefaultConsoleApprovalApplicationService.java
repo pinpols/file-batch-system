@@ -17,7 +17,6 @@ import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRe
 import com.example.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.util.ArrayList;
 import java.util.List;
