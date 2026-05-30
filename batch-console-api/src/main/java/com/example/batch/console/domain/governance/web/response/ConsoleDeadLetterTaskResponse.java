@@ -1,4 +1,4 @@
-package com.example.batch.console.web.response.ops;
+package com.example.batch.console.domain.governance.web.response;
 
 import java.time.Instant;
 

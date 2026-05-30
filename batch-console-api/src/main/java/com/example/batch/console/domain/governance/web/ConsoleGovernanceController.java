@@ -1,4 +1,4 @@
-package com.example.batch.console.web;
+package com.example.batch.console.domain.governance.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
