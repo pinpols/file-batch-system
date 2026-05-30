@@ -413,7 +413,7 @@ workerProcess:
 workerSpi:
   javaOptsExtra: ""
   replicaCount: 1
-  port: 18086
+  port: 18087
   # 最小权限 hooks(ops 填;留空则回退共享 SA/secret 仅为不阻断起步,生产务必配独立的)
   serviceAccountName: ""
   envFromSecretName: ""
@@ -430,7 +430,7 @@ workerSpi:
       memory: "768Mi"
   service:
     type: ClusterIP
-    port: 18086
+    port: 18087
   hpa:
     enabled: false
     minReplicas: 1
@@ -448,14 +448,14 @@ workerSpi:
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
-      port: 18086
+      port: 18087
     initialDelaySeconds: 40
     periodSeconds: 15
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /actuator/health/readiness
-      port: 18086
+      port: 18087
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3

@@ -75,6 +75,7 @@ declare -a CORE_TEST_MODULES=(
   batch-worker-export
   batch-worker-process
   batch-worker-dispatch
+  batch-worker-spi
   batch-console-api
 )
 
