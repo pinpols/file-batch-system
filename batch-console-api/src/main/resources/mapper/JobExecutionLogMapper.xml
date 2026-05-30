@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.JobExecutionLogMapper">
+    <resultMap id="JobExecutionLogResultMap" type="com.example.batch.console.domain.entity.JobExecutionLogEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_instance_id" property="jobInstanceId"/>
+        <result column="job_partition_id" property="jobPartitionId"/>
+        <result column="log_level" property="logLevel"/>
+        <result column="log_type" property="logType"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="message" property="message"/>
+        <result column="detail_ref" property="detailRef"/>
+        <result column="extra_json" property="extraJson"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="filters">
+        and job_instance_id = #{jobInstanceId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
+        <if test="jobPartitionId != null">
+            and job_partition_id = #{jobPartitionId}
+        </if>
+        <if test="logLevel != null and logLevel != ''">
+            and log_level = #{logLevel}
+        </if>
+        <if test="logType != null and logType != ''">
+            and log_type = #{logType}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            and message like concat('%', #{keyword}, '%')
+        </if>
+    </sql>
+
+    <select id="selectByQuery" resultMap="JobExecutionLogResultMap">
+        select *
+        from batch.job_execution_log
+        where tenant_id = #{tenantId}
+        <include refid="filters"/>
+        <choose>
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by id desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.job_execution_log
+        where tenant_id = #{tenantId}
+        <include refid="filters"/>
+    </select>
+</mapper>
