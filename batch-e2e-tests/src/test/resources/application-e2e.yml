@@ -20,6 +20,12 @@ batch:
       base-url: http://127.0.0.1:${local.server.port}
     trigger:
       base-url: http://127.0.0.1:${local.server.port}
+    security:
+      # E2E bypass-mode 兜底默认授权(无 role header 时使用)
+      default-authorities:
+        - ROLE_ADMIN
+        - ROLE_AUDITOR
+        - ROLE_CONFIG_ADMIN
   worker:
     task-client:
       base-url: http://127.0.0.1:${local.server.port}
