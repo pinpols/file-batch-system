@@ -183,6 +183,15 @@
             <artifactId>archunit-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- SPIKE: Resilience4j SB4 兼容验证。结论见 docs/spike/resilience4j-sb4-compat.md -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-micrometer</artifactId>
+        </dependency>
     </dependencies>
 
     <!-- macOS：Lettuce/Netty DNS 原生解析，消除 DnsServerAddressStreamProviders 的 WARN -->
