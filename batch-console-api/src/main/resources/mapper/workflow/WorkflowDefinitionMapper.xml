@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper">
+    <resultMap id="WorkflowDefinitionResultMap" type="com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="workflow_code" property="workflowCode"/>
+        <result column="workflow_name" property="workflowName"/>
+        <result column="workflow_type" property="workflowType"/>
+        <result column="version" property="version"/>
+        <result column="enabled" property="enabled"/>
+        <result column="description" property="description"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="WorkflowDefinitionResultMap">
+        select *
+        from batch.workflow_definition
+        <!-- P1-10 (pre-launch audit 2026-05-18)：tenant_id 强制非可选,与 JobDefinitionMapper 对齐;
+             tenantId 为空时让 SQL 显式失败而非全表扫,杜绝防御深度漏洞。 -->
+        where tenant_id = #{tenantId}
+        <if test="workflowCode != null and workflowCode != ''">
+            and workflow_code like concat('%', #{workflowCode}, '%')
+        </if>
+        <if test="workflowName != null and workflowName != ''">
+            and workflow_name like concat('%', #{workflowName}, '%')
+        </if>
+        <if test="workflowType != null and workflowType != ''">
+            and workflow_type = #{workflowType}
+        </if>
+        <if test="version != null">
+            and version = #{version}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by workflow_code, version desc, id desc
+        <if test="pageRequest != null">
+            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.workflow_definition
+        <!-- P1-10 (pre-launch audit 2026-05-18)：tenant_id 强制非可选,与 JobDefinitionMapper 对齐;
+             tenantId 为空时让 SQL 显式失败而非全表扫,杜绝防御深度漏洞。 -->
+        where tenant_id = #{tenantId}
+        <if test="workflowCode != null and workflowCode != ''">
+            and workflow_code like concat('%', #{workflowCode}, '%')
+        </if>
+        <if test="workflowName != null and workflowName != ''">
+            and workflow_name like concat('%', #{workflowName}, '%')
+        </if>
+        <if test="workflowType != null and workflowType != ''">
+            and workflow_type = #{workflowType}
+        </if>
+        <if test="version != null">
+            and version = #{version}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+    </select>
+
+    <select id="selectByUniqueKey" resultMap="WorkflowDefinitionResultMap">
+        select *
+        from batch.workflow_definition
+        where tenant_id = #{tenantId}
+          and workflow_code = #{workflowCode}
+          and version = #{version}
+        limit 1
+    </select>
+
+    <select id="selectById" resultMap="WorkflowDefinitionResultMap">
+        select *
+        from batch.workflow_definition
+        where tenant_id = #{tenantId}
+          and id = #{id}
+        limit 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.workflow_definition (
+            tenant_id,
+            workflow_code,
+            workflow_name,
+            workflow_type,
+            version,
+            enabled,
+            description
+        ) values (
+            #{tenantId},
+            #{workflowCode},
+            #{workflowName},
+            <choose><when test="workflowType != null and workflowType != ''">#{workflowType}</when><otherwise>'DAG'</otherwise></choose>,
+            <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>,
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
+            #{description}
+        )
+    </insert>
+
+    <update id="updateWorkflowDefinition">
+        update batch.workflow_definition
+        set workflow_name = #{workflowName},
+            workflow_type = #{workflowType},
+            enabled = #{enabled},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <delete id="deleteByTenantAndId">
+        delete from batch.workflow_definition
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </delete>
+
+    <update id="toggleEnabled">
+        update batch.workflow_definition
+        set enabled = #{enabled},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <insert id="upsertWorkflowDefinition">
+        insert into batch.workflow_definition (
+            tenant_id,
+            workflow_code,
+            workflow_name,
+            workflow_type,
+            version,
+            enabled,
+            description,
+            created_by,
+            updated_by
+        ) values (
+            #{tenantId},
+            #{workflowCode},
+            #{workflowName},
+            <choose><when test="workflowType != null and workflowType != ''">#{workflowType}</when><otherwise>'DAG'</otherwise></choose>,
+            <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>,
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
+            #{description},
+            #{createdBy},
+            #{updatedBy}
+        )
+        on conflict (tenant_id, workflow_code, version) do update
+        set workflow_name = excluded.workflow_name,
+            workflow_type = excluded.workflow_type,
+            enabled = excluded.enabled,
+            description = excluded.description,
+            updated_by = excluded.updated_by,
+            updated_at = current_timestamp
+    </insert>
+</mapper>

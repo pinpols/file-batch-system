@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.workflow.mapper.WorkflowNodeRunMapper">
+    <resultMap id="WorkflowNodeRunResultMap" type="com.example.batch.console.domain.workflow.entity.WorkflowNodeRunEntity">
+        <id column="id" property="id"/>
+        <result column="workflow_run_id" property="workflowRunId"/>
+        <result column="node_code" property="nodeCode"/>
+        <result column="node_type" property="nodeType"/>
+        <result column="run_seq" property="runSeq"/>
+        <result column="node_status" property="nodeStatus"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="error_key" property="errorKey"/>
+        <result column="error_args" property="errorArgs"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="duration_ms" property="durationMs"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="WorkflowNodeRunResultMap">
+        select n.*
+        from batch.workflow_node_run n
+        join batch.workflow_run r on r.id = n.workflow_run_id
+        where r.tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and n.id &lt; #{cursorId}
+        </if>
+        <if test="workflowRunId != null">
+            and n.workflow_run_id = #{workflowRunId}
+        </if>
+        <if test="nodeCode != null and nodeCode != ''">
+            and n.node_code = #{nodeCode}
+        </if>
+        <if test="nodeStatus != null and nodeStatus != ''">
+            and n.node_status = #{nodeStatus}
+        </if>
+        <choose>
+            <when test="cursorId != null">
+                order by n.id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by n.run_seq desc, n.id desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectById" resultMap="WorkflowNodeRunResultMap">
+        select n.*
+        from batch.workflow_node_run n
+        join batch.workflow_run r on r.id = n.workflow_run_id
+        where r.tenant_id = #{tenantId}
+          and n.id = #{id}
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.workflow_node_run n
+        join batch.workflow_run r on r.id = n.workflow_run_id
+        where r.tenant_id = #{tenantId}
+        <if test="workflowRunId != null">
+            and n.workflow_run_id = #{workflowRunId}
+        </if>
+        <if test="nodeCode != null and nodeCode != ''">
+            and n.node_code = #{nodeCode}
+        </if>
+        <if test="nodeStatus != null and nodeStatus != ''">
+            and n.node_status = #{nodeStatus}
+        </if>
+    </select>
+</mapper>

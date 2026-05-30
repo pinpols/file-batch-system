@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.workflow.mapper.WorkflowEdgeMapper">
+    <resultMap id="WorkflowEdgeResultMap" type="com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="workflow_definition_id" property="workflowDefinitionId"/>
+        <result column="from_node_code" property="fromNodeCode"/>
+        <result column="to_node_code" property="toNodeCode"/>
+        <result column="edge_type" property="edgeType"/>
+        <result column="condition_expr" property="conditionExpr"/>
+        <result column="enabled" property="enabled"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="WorkflowEdgeResultMap">
+        select e.*
+        from batch.workflow_edge e
+        left join batch.workflow_definition d on d.id = e.workflow_definition_id
+        where 1 = 1
+        <if test="workflowDefinitionId != null">
+            and e.workflow_definition_id = #{workflowDefinitionId}
+        </if>
+        <if test="tenantId != null and tenantId != ''">
+            and d.tenant_id = #{tenantId}
+        </if>
+        <if test="workflowCode != null and workflowCode != ''">
+            and d.workflow_code = #{workflowCode}
+        </if>
+        <if test="fromNodeCode != null and fromNodeCode != ''">
+            and e.from_node_code = #{fromNodeCode}
+        </if>
+        <if test="toNodeCode != null and toNodeCode != ''">
+            and e.to_node_code = #{toNodeCode}
+        </if>
+        <if test="edgeType != null and edgeType != ''">
+            and e.edge_type = #{edgeType}
+        </if>
+        <if test="enabled != null">
+            and e.enabled = #{enabled}
+        </if>
+        order by e.id asc
+        <if test="pageRequest != null">
+            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.workflow_edge e
+        left join batch.workflow_definition d on d.id = e.workflow_definition_id
+        where 1 = 1
+        <if test="workflowDefinitionId != null">
+            and e.workflow_definition_id = #{workflowDefinitionId}
+        </if>
+        <if test="tenantId != null and tenantId != ''">
+            and d.tenant_id = #{tenantId}
+        </if>
+        <if test="workflowCode != null and workflowCode != ''">
+            and d.workflow_code = #{workflowCode}
+        </if>
+        <if test="fromNodeCode != null and fromNodeCode != ''">
+            and e.from_node_code = #{fromNodeCode}
+        </if>
+        <if test="toNodeCode != null and toNodeCode != ''">
+            and e.to_node_code = #{toNodeCode}
+        </if>
+        <if test="edgeType != null and edgeType != ''">
+            and e.edge_type = #{edgeType}
+        </if>
+        <if test="enabled != null">
+            and e.enabled = #{enabled}
+        </if>
+    </select>
+
+    <select id="selectByUniqueKey" resultMap="WorkflowEdgeResultMap">
+        select *
+        from batch.workflow_edge
+        where workflow_definition_id = #{workflowDefinitionId}
+          and from_node_code = #{fromNodeCode}
+          and to_node_code = #{toNodeCode}
+          and edge_type = #{edgeType}
+        limit 1
+    </select>
+
+    <delete id="deleteByWorkflowDefinitionId">
+        delete from batch.workflow_edge
+        where workflow_definition_id = #{workflowDefinitionId}
+    </delete>
+
+    <insert id="upsertWorkflowEdge">
+        insert into batch.workflow_edge (
+            tenant_id,
+            workflow_definition_id,
+            from_node_code,
+            to_node_code,
+            edge_type,
+            condition_expr,
+            enabled
+        ) values (
+            #{tenantId},
+            #{workflowDefinitionId},
+            #{fromNodeCode},
+            #{toNodeCode},
+            <choose><when test="edgeType != null and edgeType != ''">#{edgeType}</when><otherwise>'SUCCESS'</otherwise></choose>,
+            #{conditionExpr},
+            <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>
+        )
+        on conflict (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) do update
+        set condition_expr = excluded.condition_expr,
+            enabled = excluded.enabled,
+            updated_at = current_timestamp
+    </insert>
+</mapper>

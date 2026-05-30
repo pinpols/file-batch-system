@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.workflow.mapper.PipelineDefinitionMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            id,
+            tenant_id,
+            job_code,
+            pipeline_name,
+            pipeline_type,
+            biz_type,
+            worker_group,
+            version,
+            enabled,
+            description,
+            created_at,
+            updated_at
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="pipelineType != null and pipelineType != ''">
+            and pipeline_type = #{pipelineType}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by id desc
+        <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="pipelineType != null and pipelineType != ''">
+            and pipeline_type = #{pipelineType}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+    </select>
+
+    <select id="selectById" resultType="map">
+        select *
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <select id="selectByUniqueKey" resultType="map">
+        select *
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+          and version = #{version}
+        limit 1
+    </select>
+
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.pipeline_definition (
+            tenant_id, job_code, pipeline_name, pipeline_type,
+            biz_type, worker_group, version, enabled, description
+        ) values (
+            #{tenant_id}, #{job_code}, #{pipeline_name}, #{pipeline_type},
+            #{biz_type}, #{worker_group}, <choose><when test="version != null">#{version}</when><otherwise>1</otherwise></choose>, <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>, #{description}
+        )
+    </insert>
+
+    <update id="update" parameterType="map">
+        update batch.pipeline_definition
+        set pipeline_name = #{pipeline_name},
+            pipeline_type = #{pipeline_type},
+            biz_type = #{biz_type},
+            worker_group = #{worker_group},
+            enabled = #{enabled},
+            description = #{description},
+            updated_at = current_timestamp
+        where tenant_id = #{tenant_id}
+          and id = #{id}
+    </update>
+
+    <update id="toggleEnabled">
+        update batch.pipeline_definition
+        set enabled = #{enabled}, updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <delete id="deleteByTenantAndId">
+        delete from batch.pipeline_definition
+        where tenant_id = #{tenantId} and id = #{id}
+    </delete>
+</mapper>
