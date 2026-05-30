@@ -1,0 +1,131 @@
+package com.example.batch.console.domain.rbac.web;
+
+import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.model.PageResponse;
+import com.example.batch.console.domain.audit.support.AuditAction;
+import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService;
+import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService.BatchCreateTenantCommand;
+import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService.ConfigInitOption;
+import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService.CreateTenantCommand;
+import com.example.batch.console.domain.rbac.service.ConsoleTenantApplicationService.TenantSpec;
+import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
+import com.example.batch.console.support.web.Idempotent;
+import com.example.batch.console.domain.rbac.web.request.BatchCreateTenantRequest;
+import com.example.batch.console.domain.rbac.web.request.CreateTenantRequest;
+import com.example.batch.console.domain.rbac.web.request.UpdateTenantRequest;
+import com.example.batch.console.domain.rbac.web.response.BatchCreateTenantsResponse;
+import com.example.batch.console.domain.rbac.web.response.ConsoleTenantResponse;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 租户管理 REST 端点。
+ *
+ * <p>租户是系统的基本隔离单元，需先在此创建租户，再通过 tenant-init API 推送配置。
+ */
+@RestController
+@Validated
+@RequestMapping("/api/console/tenants")
+@RequiredArgsConstructor
+@Idempotent
+public class ConsoleTenantController {
+
+  private final ConsoleTenantApplicationService tenantService;
+  private final ConsoleResponseFactory responseFactory;
+
+  @GetMapping
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "1") int pageNo,
+      @RequestParam(defaultValue = "20") int pageSize) {
+    return responseFactory.success(
+        tenantService.listTenants(keyword, status, new PageRequest(pageNo, pageSize)));
+  }
+
+  @GetMapping("/{tenantId}")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
+    return responseFactory.success(tenantService.getTenant(tenantId));
+  }
+
+  @PostMapping
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(
+      action = "tenant.create",
+      aggregateType = "tenant",
+      aggregateId = "#request.tenantId")
+  public CommonResponse<ConsoleTenantResponse> create(
+      @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
+    return responseFactory.success(
+        tenantService.createTenant(
+            new CreateTenantCommand(
+                request.getTenantId(),
+                request.getTenantName(),
+                request.getDescription(),
+                request.getUsername(),
+                request.getPassword(),
+                resolveOperator(authentication))));
+  }
+
+  @PostMapping("/batch")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.batchCreate", aggregateType = "tenant", recordParams = false)
+  public CommonResponse<BatchCreateTenantsResponse> batchCreate(
+      @Validated @RequestBody BatchCreateTenantRequest request, Authentication authentication) {
+    String operator = resolveOperator(authentication);
+    List<TenantSpec> specs =
+        request.getTenants().stream()
+            .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
+            .toList();
+    return responseFactory.success(
+        tenantService.batchCreateTenants(
+            new BatchCreateTenantCommand(
+                specs, request.getUsernamePrefix(), request.getPassword(), operator),
+            new ConfigInitOption(request.getInitConfigFrom(), request.getInitMode())));
+  }
+
+  @PutMapping("/{tenantId}")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.update", aggregateType = "tenant", aggregateId = "#tenantId")
+  public CommonResponse<ConsoleTenantResponse> update(
+      @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
+    return responseFactory.success(
+        tenantService.updateTenant(tenantId, request.getTenantName(), request.getDescription()));
+  }
+
+  @PostMapping("/{tenantId}/suspend")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.suspend", aggregateType = "tenant", aggregateId = "#tenantId")
+  public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
+    return responseFactory.success(tenantService.suspendTenant(tenantId));
+  }
+
+  @PostMapping("/{tenantId}/activate")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @AuditAction(action = "tenant.activate", aggregateType = "tenant", aggregateId = "#tenantId")
+  public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
+    return responseFactory.success(tenantService.activateTenant(tenantId));
+  }
+
+  private String resolveOperator(Authentication authentication) {
+    if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
+      return p.username();
+    }
+    return authentication != null ? authentication.getName() : "system";
+  }
+}

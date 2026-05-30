@@ -14,7 +14,7 @@ import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClie
 import com.example.batch.console.mapper.FileErrorRecordMapper;
 import com.example.batch.console.mapper.FileRecordMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import java.io.ByteArrayInputStream;

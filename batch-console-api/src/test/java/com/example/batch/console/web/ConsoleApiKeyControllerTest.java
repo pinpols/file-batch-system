@@ -14,8 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.domain.entity.ApiKeyEntity;
-import com.example.batch.console.service.ConsoleApiKeyService;
+import com.example.batch.console.domain.rbac.entity.ApiKeyEntity;
+import com.example.batch.console.domain.rbac.service.ConsoleApiKeyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;

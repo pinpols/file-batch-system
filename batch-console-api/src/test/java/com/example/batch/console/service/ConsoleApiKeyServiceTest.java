@@ -10,9 +10,9 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.domain.entity.ApiKeyEntity;
-import com.example.batch.console.mapper.ConsoleApiKeyMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.entity.ApiKeyEntity;
+import com.example.batch.console.domain.rbac.mapper.ConsoleApiKeyMapper;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

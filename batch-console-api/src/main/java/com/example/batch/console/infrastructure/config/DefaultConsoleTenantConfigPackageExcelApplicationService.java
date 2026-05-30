@@ -48,7 +48,7 @@ import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
 import com.example.batch.console.support.excel.ConsoleSingleSheetExcelImportSupport;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore;

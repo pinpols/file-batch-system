@@ -14,7 +14,7 @@ import com.example.batch.console.mapper.ConfigApprovalMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
 import com.example.batch.console.support.ConfigChangeLogBuilder;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.config.ConfigApprovalActionRequest;
 import com.example.batch.console.web.request.config.ConfigReleaseApprovalSubmitRequest;
 import java.time.Instant;

@@ -8,7 +8,7 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.config.ConsoleCalendarApplicationService;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.CalendarHolidayMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.file.CalendarSaveRequest;
 import com.example.batch.console.web.request.file.HolidayImportRequest;
 import com.example.batch.console.web.request.file.HolidaySaveRequest;

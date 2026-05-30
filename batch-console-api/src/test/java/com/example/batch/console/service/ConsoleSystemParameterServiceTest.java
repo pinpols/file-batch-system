@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.console.domain.entity.SystemParameterEntity;
 import com.example.batch.console.mapper.ConsoleSystemParameterMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;

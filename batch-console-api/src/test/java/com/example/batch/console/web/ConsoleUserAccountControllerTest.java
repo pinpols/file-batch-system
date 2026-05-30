@@ -10,10 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.mapper.ConsoleUserAccountMapper;
-import com.example.batch.console.service.ConsoleUserAccountService;
-import com.example.batch.console.support.auth.ConsolePasswordHasher;
-import com.example.batch.console.support.auth.ConsoleSessionRegistry;
+import com.example.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import com.example.batch.console.domain.rbac.service.ConsoleUserAccountService;
+import com.example.batch.console.domain.rbac.support.ConsolePasswordHasher;
+import com.example.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

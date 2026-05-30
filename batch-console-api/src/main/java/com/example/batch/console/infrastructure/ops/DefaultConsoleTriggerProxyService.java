@@ -3,7 +3,7 @@ package com.example.batch.console.infrastructure.ops;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.resilience.DownstreamFallback;
 import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;

@@ -1,7 +1,7 @@
 package com.example.batch.console.support.maintenance;
 
 import com.example.batch.common.utils.EncodingUtils;
-import com.example.batch.console.support.auth.ConsolePrincipal;
+import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
 import com.example.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;

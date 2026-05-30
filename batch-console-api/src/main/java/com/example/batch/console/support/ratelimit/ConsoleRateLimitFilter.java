@@ -4,7 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleRateLimitProperties;
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
+import com.example.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

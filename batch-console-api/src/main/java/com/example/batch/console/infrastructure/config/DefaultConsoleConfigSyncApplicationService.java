@@ -7,7 +7,7 @@ import com.example.batch.console.application.config.ConsoleConfigSyncApplication
 import com.example.batch.console.application.config.ConsoleTenantConfigCopyService;
 import com.example.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.mapper.ConfigSyncLogMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.config.ConfigSyncBundlePayload;
 import com.example.batch.console.web.request.config.ConfigSyncExportRequest;

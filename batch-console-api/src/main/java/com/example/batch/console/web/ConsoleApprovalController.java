@@ -47,7 +47,7 @@ public class ConsoleApprovalController {
   private final ConsoleResponseFactory responseFactory;
   // R4-P0-2：所有 approve/reject 入口必须用 tenantGuard 校验请求体 tenantId 是否与 JWT 持有的 tenantId 一致，
   // 防止租户角色用户改 body tenantId 批准其他租户的 approvalNo。
-  private final com.example.batch.console.support.auth.ConsoleTenantGuard tenantGuard;
+  private final com.example.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
 
   /** 审批通过。 */
   @PostMapping("/{approvalNo}/approve")

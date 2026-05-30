@@ -12,7 +12,7 @@ import com.example.batch.console.domain.workflow.web.request.PipelineDefinitionS
 import com.example.batch.console.domain.workflow.web.response.PipelineDefinitionDetailResponse;
 import com.example.batch.console.domain.workflow.web.response.PipelineDefinitionDetailResponse.StepResponse;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;

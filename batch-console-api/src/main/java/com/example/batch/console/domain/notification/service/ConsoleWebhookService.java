@@ -8,7 +8,7 @@ import com.example.batch.console.domain.notification.entity.WebhookSubscriptionE
 import com.example.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import com.example.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
 import com.example.batch.console.support.CallbackUrlValidator;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;

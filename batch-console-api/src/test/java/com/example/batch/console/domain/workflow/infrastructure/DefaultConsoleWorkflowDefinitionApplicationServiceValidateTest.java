@@ -17,7 +17,7 @@ import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalid
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

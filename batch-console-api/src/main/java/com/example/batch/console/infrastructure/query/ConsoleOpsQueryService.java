@@ -31,7 +31,7 @@ import com.example.batch.console.domain.query.OutboxRetryLogQuery;
 import com.example.batch.console.domain.query.PendingCatchUpQuery;
 import com.example.batch.console.domain.query.RetryScheduleQuery;
 import com.example.batch.console.domain.query.WorkerRegistryQuery;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.querymap.ConsoleOpsQueryMappers;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;

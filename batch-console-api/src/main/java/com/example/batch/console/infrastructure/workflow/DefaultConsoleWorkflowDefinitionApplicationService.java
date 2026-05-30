@@ -22,7 +22,7 @@ import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalid
 import com.example.batch.console.infrastructure.job.DefaultConsoleJobDefinitionApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;

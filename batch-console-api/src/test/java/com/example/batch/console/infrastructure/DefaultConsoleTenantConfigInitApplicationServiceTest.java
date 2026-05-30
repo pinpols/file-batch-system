@@ -26,7 +26,7 @@ import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.ResourceQueueMapper;
-import com.example.batch.console.mapper.TenantQuotaPolicyMapper;
+import com.example.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import com.example.batch.console.web.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;

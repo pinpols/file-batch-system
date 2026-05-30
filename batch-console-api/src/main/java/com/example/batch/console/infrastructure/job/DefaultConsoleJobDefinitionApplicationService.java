@@ -9,7 +9,7 @@ import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.job.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.job.JobDefinitionCreateRequest;

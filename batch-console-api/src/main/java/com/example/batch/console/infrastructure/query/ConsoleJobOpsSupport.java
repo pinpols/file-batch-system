@@ -13,7 +13,7 @@ import com.example.batch.console.domain.governance.web.request.DeadLetterReplayR
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.infrastructure.ops.TriggerInternalRestClient;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.job.CompensationCommandRequest;

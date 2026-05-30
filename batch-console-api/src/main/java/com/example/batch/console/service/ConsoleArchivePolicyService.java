@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
 import com.example.batch.console.domain.param.ArchivePolicyUpsertParam;
 import com.example.batch.console.mapper.ConsoleArchivePolicyMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;

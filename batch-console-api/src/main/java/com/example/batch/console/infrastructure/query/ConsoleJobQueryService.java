@@ -18,7 +18,7 @@ import com.example.batch.console.domain.query.JobExecutionLogQuery;
 import com.example.batch.console.domain.query.JobInstanceQuery;
 import com.example.batch.console.domain.query.JobPartitionQuery;
 import com.example.batch.console.domain.query.JobStepInstanceQuery;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.querymap.ConsoleJobQueryMappers;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.query.JobExecutionLogQueryRequest;

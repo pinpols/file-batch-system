@@ -10,7 +10,7 @@ import com.example.batch.console.domain.param.FileTemplateConfigUpsertParam;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
 import com.example.batch.console.infrastructure.job.DefaultConsoleJobDefinitionApplicationService;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.request.file.FileTemplateCreateRequest;

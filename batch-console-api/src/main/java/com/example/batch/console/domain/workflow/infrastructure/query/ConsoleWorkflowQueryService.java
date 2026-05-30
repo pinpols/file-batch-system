@@ -28,7 +28,7 @@ import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNod
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

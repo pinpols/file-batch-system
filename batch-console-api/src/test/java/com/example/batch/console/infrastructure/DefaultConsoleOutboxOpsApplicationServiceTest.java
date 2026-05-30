@@ -9,7 +9,7 @@ import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService
 import com.example.batch.console.infrastructure.ops.DefaultConsoleOutboxOpsApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.OutboxEventMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOutboxCleanupResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxStatsResponse;

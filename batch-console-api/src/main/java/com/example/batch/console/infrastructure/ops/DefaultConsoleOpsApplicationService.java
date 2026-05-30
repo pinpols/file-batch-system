@@ -9,7 +9,7 @@ import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.OutboxDeliveryLogMapper;
 import com.example.batch.console.mapper.OutboxRetryLogMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

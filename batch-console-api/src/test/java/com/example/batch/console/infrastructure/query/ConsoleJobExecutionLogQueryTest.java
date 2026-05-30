@@ -17,7 +17,7 @@ import com.example.batch.console.mapper.JobExecutionLogMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.JobPartitionMapper;
 import com.example.batch.console.mapper.JobStepInstanceMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.querymap.ConsoleJobQueryMappers;
 import com.example.batch.console.web.query.JobExecutionLogQueryRequest;
 import com.example.batch.console.web.response.job.ConsoleJobExecutionLogResponse;

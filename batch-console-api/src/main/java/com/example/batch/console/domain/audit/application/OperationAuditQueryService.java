@@ -5,7 +5,7 @@ import com.example.batch.console.domain.audit.mapper.OperationAuditMapper;
 import com.example.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
 import com.example.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import com.example.batch.console.domain.audit.web.response.ConsoleOperationAuditResponse;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

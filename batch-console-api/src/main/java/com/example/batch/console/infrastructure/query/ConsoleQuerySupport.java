@@ -7,7 +7,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.page.CursorCodec;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
