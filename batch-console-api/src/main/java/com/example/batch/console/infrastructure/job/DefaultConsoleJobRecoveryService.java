@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.job.ConsoleJobRecoveryService;
+import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.CompensationPayload;
@@ -12,7 +13,6 @@ import com.example.batch.console.web.request.job.CompensationCommandRequest;
 import com.example.batch.console.web.request.job.PartitionReplayRequest;
 import com.example.batch.console.web.request.job.RerunRequest;
 import com.example.batch.console.web.request.job.TaskReplayRequest;
-import com.example.batch.console.web.request.ops.DeadLetterReplayRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

@@ -1,4 +1,4 @@
-package com.example.batch.console.domain.entity;
+package com.example.batch.console.domain.governance.entity;
 
 import java.time.Instant;
 import lombok.Data;

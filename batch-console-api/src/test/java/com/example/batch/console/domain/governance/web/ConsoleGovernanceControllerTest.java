@@ -1,4 +1,4 @@
-package com.example.batch.console.web;
+package com.example.batch.console.domain.governance.web;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
