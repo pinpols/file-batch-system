@@ -17,6 +17,7 @@ import com.example.batch.console.web.query.FilePipelineQueryRequest;
 import com.example.batch.console.web.query.FilePipelineStepQueryRequest;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
+import com.example.batch.console.web.query.JobExecutionLogQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
 import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
@@ -43,6 +44,7 @@ import com.example.batch.console.web.response.file.ConsoleFilePipelineStepRespon
 import com.example.batch.console.web.response.file.ConsoleFileRecordResponse;
 import com.example.batch.console.web.response.file.ConsoleFileTemplateResponse;
 import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
+import com.example.batch.console.web.response.job.ConsoleJobExecutionLogResponse;
 import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
@@ -116,6 +118,10 @@ public interface ConsoleQueryApplicationService {
 
   /** 查询作业实例详情。 */
   ConsoleJobInstanceResponse jobInstance(String tenantId, Long id);
+
+  /** 查询任务级执行日志(job_execution_log)。 */
+  PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(
+      JobExecutionLogQueryRequest request);
 
   /** 批量查询作业实例状态。 */
   List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos);

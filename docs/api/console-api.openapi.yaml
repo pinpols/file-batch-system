@@ -3257,6 +3257,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleJobInstanceResponse'
+  /api/console/queries/job-execution-logs:
+    get:
+      tags: [Queries]
+      summary: Query task-level execution logs (job_execution_log)
+      operationId: queryJobExecutionLogs
+      description: |
+        任务级执行日志查看,锚定单个 jobInstanceId。支持 logLevel / logType / keyword 过滤,
+        双轨分页(传 cursor 走 cursor 模式不返 total,否则 pageNo offset)。
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: jobInstanceId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 锚定的作业实例 ID(必填)。
+        - name: jobPartitionId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: 可选,只看某个分区的日志。
+        - name: logLevel
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DEBUG, INFO, WARN, ERROR]
+          description: 可选,日志级别单值过滤。
+        - name: logType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SYSTEM, BUSINESS, RETRY, ALARM, AUDIT]
+          description: 可选,日志类型单值过滤。
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选,message 模糊匹配。
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: cursor 分页 token(ADR-031),非空时走 cursor 模式。
+      responses:
+        '200':
+          description: Job execution log list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseJobExecutionLogList'
   /api/console/queries/job-step-instances:
     get:
       tags: [Queries]
@@ -8740,6 +8799,13 @@ components:
             data:
               $ref: '#/components/schemas/PageResponse'
     CommonResponseJobStepInstanceList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PageResponse'
+    CommonResponseJobExecutionLogList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
