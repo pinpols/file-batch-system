@@ -17,7 +17,8 @@ if [ "$MODE" = "local" ]; then
   {"targets": ["host.docker.internal:18083"], "labels": {"job": "batch-worker-import", "__metrics_path__": "/actuator/prometheus"}},
   {"targets": ["host.docker.internal:18084"], "labels": {"job": "batch-worker-export", "__metrics_path__": "/actuator/prometheus"}},
   {"targets": ["host.docker.internal:18085"], "labels": {"job": "batch-worker-dispatch", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18086"], "labels": {"job": "batch-worker-process", "__metrics_path__": "/actuator/prometheus"}}
+  {"targets": ["host.docker.internal:18086"], "labels": {"job": "batch-worker-process", "__metrics_path__": "/actuator/prometheus"}},
+  {"targets": ["host.docker.internal:18087"], "labels": {"job": "batch-worker-spi", "__metrics_path__": "/actuator/prometheus"}}
 ]
 EOF
 else
@@ -29,7 +30,8 @@ else
   {"targets": ["worker-import:8083"], "labels": {"job": "batch-worker-import", "__metrics_path__": "/actuator/prometheus"}},
   {"targets": ["worker-export:8084"], "labels": {"job": "batch-worker-export", "__metrics_path__": "/actuator/prometheus"}},
   {"targets": ["worker-dispatch:8085"], "labels": {"job": "batch-worker-dispatch", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["worker-process:8086"], "labels": {"job": "batch-worker-process", "__metrics_path__": "/actuator/prometheus"}}
+  {"targets": ["worker-process:8086"], "labels": {"job": "batch-worker-process", "__metrics_path__": "/actuator/prometheus"}},
+  {"targets": ["worker-spi:8087"], "labels": {"job": "batch-worker-spi", "__metrics_path__": "/actuator/prometheus"}}
 ]
 EOF
 fi
