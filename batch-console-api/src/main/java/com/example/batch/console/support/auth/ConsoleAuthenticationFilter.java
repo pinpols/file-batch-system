@@ -138,12 +138,19 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             return;
           }
 
-          responseWriter.write(
-              response,
-              HttpStatus.UNAUTHORIZED,
-              ResultCode.UNAUTHORIZED,
-              CommonErrorMessages.INVALID_CONSOLE_JWT);
-          return;
+          // A3-B fix(2026-05-29):bypass-mode 开启时 JWT 失败应降级到 bypass 分支,
+          // 否则 admin 带过期/失效 cookie 调任何接口直接 401,无法访问 admin 端点(本意是
+          // dev/test 完全免鉴权)。生产关闭 bypass-mode 后此分支不生效,行为不变。
+          if (batchSecurityProperties.isBypassMode()) {
+            // fall through to bypass-mode handler below
+          } else {
+            responseWriter.write(
+                response,
+                HttpStatus.UNAUTHORIZED,
+                ResultCode.UNAUTHORIZED,
+                CommonErrorMessages.INVALID_CONSOLE_JWT);
+            return;
+          }
         }
       }
 

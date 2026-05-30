@@ -1,13 +1,28 @@
 package com.example.batch.console.application.report;
 
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.web.query.AlertEventQueryRequest;
+import com.example.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
+import com.example.batch.console.domain.audit.web.response.AiAuditLogResponse;
+import com.example.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
+import com.example.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
+import com.example.batch.console.domain.notification.web.query.AlertEventQueryRequest;
+import com.example.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
+import com.example.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
+import com.example.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
+import com.example.batch.console.domain.workflow.web.query.WorkflowNodeQueryRequest;
+import com.example.batch.console.domain.workflow.web.query.WorkflowNodeRunQueryRequest;
+import com.example.batch.console.domain.workflow.web.query.WorkflowRunQueryRequest;
+import com.example.batch.console.domain.workflow.web.query.WorkflowTopologyQueryRequest;
+import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowDefinitionResponse;
+import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
+import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
+import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
+import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
+import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.BatchDayQueryRequest;
 import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
-import com.example.batch.console.web.query.ConsoleAiAuditLogQueryRequest;
-import com.example.batch.console.web.query.DeadLetterQueryRequest;
 import com.example.batch.console.web.query.FileArrivalGroupQueryRequest;
 import com.example.batch.console.web.query.FileChainQueryRequest;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
@@ -17,6 +32,7 @@ import com.example.batch.console.web.query.FilePipelineQueryRequest;
 import com.example.batch.console.web.query.FilePipelineStepQueryRequest;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
+import com.example.batch.console.web.query.JobExecutionLogQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
 import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
@@ -25,13 +41,6 @@ import com.example.batch.console.web.query.OutboxRetryLogQueryRequest;
 import com.example.batch.console.web.query.PendingCatchUpQueryRequest;
 import com.example.batch.console.web.query.RetryScheduleQueryRequest;
 import com.example.batch.console.web.query.WorkerRegistryQueryRequest;
-import com.example.batch.console.web.query.WorkflowDefinitionQueryRequest;
-import com.example.batch.console.web.query.WorkflowEdgeQueryRequest;
-import com.example.batch.console.web.query.WorkflowNodeQueryRequest;
-import com.example.batch.console.web.query.WorkflowNodeRunQueryRequest;
-import com.example.batch.console.web.query.WorkflowRunQueryRequest;
-import com.example.batch.console.web.query.WorkflowTopologyQueryRequest;
-import com.example.batch.console.web.response.auth.AiAuditLogResponse;
 import com.example.batch.console.web.response.file.ConsoleBatchDayResponse;
 import com.example.batch.console.web.response.file.ConsoleBatchDayWindowResponse;
 import com.example.batch.console.web.response.file.ConsoleFileArrivalGroupResponse;
@@ -43,24 +52,17 @@ import com.example.batch.console.web.response.file.ConsoleFilePipelineStepRespon
 import com.example.batch.console.web.response.file.ConsoleFileRecordResponse;
 import com.example.batch.console.web.response.file.ConsoleFileTemplateResponse;
 import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
+import com.example.batch.console.web.response.job.ConsoleJobExecutionLogResponse;
 import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleRetryScheduleResponse;
-import com.example.batch.console.web.response.ops.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ops.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ops.ConsoleAuditLogResponse;
-import com.example.batch.console.web.response.ops.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.web.response.ops.ConsolePendingCatchUpResponse;
 import com.example.batch.console.web.response.ops.ConsoleWorkerRegistryResponse;
-import com.example.batch.console.web.response.workflow.ConsoleWorkflowDefinitionResponse;
-import com.example.batch.console.web.response.workflow.ConsoleWorkflowEdgeResponse;
-import com.example.batch.console.web.response.workflow.ConsoleWorkflowNodeResponse;
-import com.example.batch.console.web.response.workflow.ConsoleWorkflowNodeRunResponse;
-import com.example.batch.console.web.response.workflow.ConsoleWorkflowRunResponse;
-import com.example.batch.console.web.response.workflow.ConsoleWorkflowTopologyResponse;
 import java.util.List;
 import java.util.Map;
 
@@ -116,6 +118,10 @@ public interface ConsoleQueryApplicationService {
 
   /** 查询作业实例详情。 */
   ConsoleJobInstanceResponse jobInstance(String tenantId, Long id);
+
+  /** 查询任务级执行日志(job_execution_log)。 */
+  PageResponse<ConsoleJobExecutionLogResponse> jobExecutionLogs(
+      JobExecutionLogQueryRequest request);
 
   /** 批量查询作业实例状态。 */
   List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos);

@@ -31,6 +31,7 @@ COPY batch-worker-import/pom.xml batch-worker-import/pom.xml
 COPY batch-worker-export/pom.xml batch-worker-export/pom.xml
 COPY batch-worker-process/pom.xml batch-worker-process/pom.xml
 COPY batch-worker-dispatch/pom.xml batch-worker-dispatch/pom.xml
+COPY batch-worker-spi/pom.xml batch-worker-spi/pom.xml
 COPY batch-e2e-tests/pom.xml batch-e2e-tests/pom.xml
 
 # m2 cache mount(id 命名以便跨 compose build 复用同一份;Portainer/手动 build 都行)

@@ -1,6 +1,8 @@
 package com.example.batch.orchestrator.application.service.workflow;
 
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.JsonUtils;
@@ -13,6 +15,7 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.mapper.FileRecordLookupMapper;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -305,6 +308,20 @@ public class WorkflowNodePayloadBuilder {
         return workflowRunFields;
       }
     };
+  }
+
+  /**
+   * P1 动态 fan-out:把 {@code itemsExpr}(形如 {@code $.nodes.<上游>.output.<arrayKey>})对当前 workflow_run
+   * 上下文解析成元素列表。解析结果必须是 JSON 数组,否则 fail-fast(配置错)。供 {@link DefaultWorkflowNodeDispatchService} 在
+   * TASK 节点派发前决定展开几个并行分区。
+   */
+  public List<Object> resolveFanOutItems(String itemsExpr, WorkflowRunEntity workflowRun) {
+    Object resolved = workflowParamResolver.resolve(itemsExpr, loadWorkflowRunContext(workflowRun));
+    if (resolved instanceof List<?> list) {
+      return new ArrayList<>(list);
+    }
+    throw BizException.of(
+        ResultCode.INVALID_ARGUMENT, "error.workflow.fan_out_items_not_array", itemsExpr);
   }
 
   // ── 公共 JSON 反序列化助手(主 service + ChildJobLaunchSupport 共用) ────────

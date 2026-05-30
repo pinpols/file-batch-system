@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.CompensationPayload;
@@ -19,7 +20,6 @@ import com.example.batch.console.web.request.job.CompensationCommandRequest;
 import com.example.batch.console.web.request.job.PartitionReplayRequest;
 import com.example.batch.console.web.request.job.RerunRequest;
 import com.example.batch.console.web.request.job.TaskReplayRequest;
-import com.example.batch.console.web.request.ops.DeadLetterReplayRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

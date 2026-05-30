@@ -1,8 +1,8 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.audit.AuditAction;
 import com.example.batch.console.support.maintenance.MaintenanceStateHolder;
 import com.example.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import com.example.batch.console.web.request.system.UpdateMaintenanceRequest;

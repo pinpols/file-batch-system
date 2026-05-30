@@ -8,8 +8,10 @@
 
 ## 模块
 
-固定 9 个,不可擅自增删:
-`batch-common` · `batch-trigger` · `batch-orchestrator` · `batch-worker-core` · `batch-worker-import` · `batch-worker-export` · `batch-worker-process` · `batch-worker-dispatch` · `batch-console-api`
+固定 10 个,不可擅自增删:
+`batch-common` · `batch-trigger` · `batch-orchestrator` · `batch-worker-core` · `batch-worker-import` · `batch-worker-export` · `batch-worker-process` · `batch-worker-dispatch` · `batch-worker-spi` · `batch-console-api`
+
+> `batch-worker-spi` = 专用 Task SPI worker,独占 shell/sql/stored-proc/http 原子执行器(dual-use RCE 隔离),不带文件 pipeline。见 ADR-029。2026-05-30 由 9 增至 10,破"固定模块"规则的理由(安全特权隔离)记于 ADR-029。
 
 `load-tests` 是独立 reactor(未纳入根 reactor),版本字面量与根版本手工同步。
 

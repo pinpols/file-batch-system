@@ -87,6 +87,14 @@
             <artifactId>kafka</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- ArchUnit:跑 SpringWiringGuardArchTest 守护 ComponentScan 覆盖 + 多 ctor @Autowired。
+             规则定义在 batch-common test-jar(已 depend),只需补 ArchUnit runtime。 -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.4.2</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

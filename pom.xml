@@ -30,6 +30,7 @@
         <module>batch-worker-export</module>
         <module>batch-worker-process</module>
         <module>batch-worker-dispatch</module>
+        <module>batch-worker-spi</module>
         <module>batch-console-api</module>
         <module>batch-e2e-tests</module>
     </modules>
@@ -82,6 +83,11 @@
         <netty.version>4.2.13.Final</netty.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <postgresql.version>42.7.11</postgresql.version>
+
+        <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
+             2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4.0.6 + JDK25 是否能跑。
+             结论见 docs/spike/resilience4j-sb4-compat.md。 -->
+        <resilience4j.version>2.3.0</resilience4j.version>
     </properties>
 
     <dependencyManagement>
@@ -199,6 +205,17 @@
                 <groupId>com.tngtech.archunit</groupId>
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
+            </dependency>
+            <!-- SPIKE -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-spring-boot3</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-micrometer</artifactId>
+                <version>${resilience4j.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -353,6 +370,17 @@
                             <goals>
                                 <goal>prepare-agent</goal>
                             </goals>
+                            <configuration>
+                                <!--
+                                    JaCoCo 0.8.14 ASM instrumentation 对 jsqlparser 生成的超大方法
+                                    (CCJSqlParserTokenManager.jjMoveNfa_0) 会抛 MethodTooLargeException,
+                                    导致 fork JVM 加载失败、orchestrator IT 大面积连环挂(2026-05-30 真因)。
+                                    第三方 lib coverage 本就无收集意义,exclude 它即可。升 0.8.15+ 时复核。
+                                -->
+                                <excludes>
+                                    <exclude>net/sf/jsqlparser/**</exclude>
+                                </excludes>
+                            </configuration>
                         </execution>
                         <!-- phase=none：不绑定生命周期，由 CI 脚本显式调用 jacoco:check -->
                         <execution>

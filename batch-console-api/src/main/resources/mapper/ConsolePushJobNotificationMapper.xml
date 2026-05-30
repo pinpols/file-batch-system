@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.ConsolePushJobNotificationMapper">
+<mapper namespace="com.example.batch.console.domain.notification.mapper.ConsolePushJobNotificationMapper">
 
-    <resultMap id="pendingJobMap" type="com.example.batch.console.support.push.PendingJobNotification">
+    <resultMap id="pendingJobMap" type="com.example.batch.console.domain.notification.support.PendingJobNotification">
         <result column="job_instance_id"  property="jobInstanceId"/>
         <result column="tenant_id"        property="tenantId"/>
         <result column="operator_id"      property="operatorId"/>
@@ -33,7 +33,7 @@
          limit #{batchSize}
     </select>
 
-    <insert id="insertIgnore" parameterType="com.example.batch.console.domain.entity.ConsolePushJobNotificationEntity">
+    <insert id="insertIgnore" parameterType="com.example.batch.console.domain.notification.entity.ConsolePushJobNotificationEntity">
         insert into batch.console_push_job_notification
             (tenant_id, job_instance_id)
         values

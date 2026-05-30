@@ -333,8 +333,15 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   @SuppressWarnings("unchecked")
   private Map<String, Object> readComputeStepParams(ProcessJobContext context) {
     Object value = context.getAttributes().get(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS);
-    if (value == null) {
-      value = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
+    // A2-C fix(2026-05-29):空 map 应 fallback 到当前 step 的 step_params,不然 COMPUTE step
+    // 配 {} 会"压住"PREPARE/VALIDATE 等同步 step 上配置的 validations / emptyResultPolicy,
+    // 静默通过。原代码只 null check,空 map 命中后导致 spec.validations() 为空。
+    if (value == null || (value instanceof Map<?, ?> m && m.isEmpty())) {
+      Object current =
+          context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
+      if (current != null) {
+        value = current;
+      }
     }
     if (value instanceof Map<?, ?> map) {
       Map<String, Object> out = new LinkedHashMap<>();
