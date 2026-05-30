@@ -85,6 +85,47 @@ class DefaultStepExecutionAdapterTest {
     assertThat(resp.message()).isEqualTo("network kaboom");
   }
 
+  @Test
+  void shouldRouteByPayloadTaskTypeAndPassParams() {
+    // job_type=SPI ⇒ stepCode="SPI";真正子类型 + 参数都在 payload 里。
+    BatchTaskExecutor sql =
+        stub(
+            "sql",
+            ctx -> {
+              assertThat(ctx.parameters()).containsEntry("sql", "SELECT 1");
+              assertThat(ctx.parameters()).containsEntry("taskType", "sql");
+              return TaskResult.ok();
+            });
+    DefaultStepExecutionAdapter adapter =
+        new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(sql)));
+
+    StepExecutionResponse resp =
+        adapter.execute(
+            new StepExecutionRequest(
+                "t1",
+                "job-1",
+                "SPI",
+                "w-1",
+                Map.of("payload", "{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}")));
+
+    assertThat(resp.success()).isTrue();
+    assertThat(resp.code()).isEqualTo("SUCCESS");
+  }
+
+  @Test
+  void shouldFallBackToStepCodeWhenPayloadHasNoTaskType() {
+    BatchTaskExecutor shell = stub("shell", ctx -> TaskResult.ok());
+    DefaultStepExecutionAdapter adapter =
+        new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(shell)));
+
+    StepExecutionResponse resp =
+        adapter.execute(
+            new StepExecutionRequest(
+                "t1", "job-1", "shell", "w-1", Map.of("payload", "{\"command\":\"/bin/echo\"}")));
+
+    assertThat(resp.success()).isTrue();
+  }
+
   // ─── helpers ─────────────────────────────────────────────────────────────────
 
   private static BatchTaskExecutor stub(
