@@ -8,6 +8,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -39,6 +40,7 @@ public class BatchTaskExecutorRegistry {
     this(springBeans, Set.of());
   }
 
+  @Autowired
   public BatchTaskExecutorRegistry(
       List<BatchTaskExecutor> springBeans, ObjectProvider<BatchWorkerSpiProperties> propsProvider) {
     this(springBeans, resolveFilter(propsProvider));
