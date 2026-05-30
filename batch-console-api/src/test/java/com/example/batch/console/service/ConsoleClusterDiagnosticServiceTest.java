@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
-import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
+import com.example.batch.console.domain.observability.view.cluster.DeliveryStatusCountView;
 import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;

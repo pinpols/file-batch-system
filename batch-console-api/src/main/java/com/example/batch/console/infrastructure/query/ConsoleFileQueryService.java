@@ -1,6 +1,6 @@
 package com.example.batch.console.infrastructure.query;
 
-import static com.example.batch.console.infrastructure.query.ConsoleQuerySupport.*;
+import static com.example.batch.console.domain.observability.infrastructure.ConsoleQuerySupport.*;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;

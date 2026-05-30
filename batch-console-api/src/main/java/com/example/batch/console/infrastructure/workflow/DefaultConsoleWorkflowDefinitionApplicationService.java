@@ -20,7 +20,7 @@ import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNod
 import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import com.example.batch.console.infrastructure.job.DefaultConsoleJobDefinitionApplicationService;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.ArrayDeque;

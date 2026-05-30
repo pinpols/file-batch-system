@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.console.support.SseTicketService;
+import com.example.batch.console.domain.observability.service.SseTicketService;
 import com.example.batch.console.support.auth.ConsoleAuthenticationFilter;
 import com.example.batch.console.support.auth.ConsoleJwtService;
 import com.example.batch.console.support.auth.ConsolePrincipal;

@@ -6,7 +6,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.notification.service.WebhookDispatcher;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEvent;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEvent;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

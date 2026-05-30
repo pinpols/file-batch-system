@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
 import com.example.batch.console.infrastructure.ops.DefaultConsoleOutboxOpsApplicationService;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.OutboxEventMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleOutboxCleanupResponse;

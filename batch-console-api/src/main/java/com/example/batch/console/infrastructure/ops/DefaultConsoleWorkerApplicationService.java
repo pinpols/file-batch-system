@@ -3,7 +3,7 @@ package com.example.batch.console.infrastructure.ops;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.application.ops.ConsoleWorkerApplicationService;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;

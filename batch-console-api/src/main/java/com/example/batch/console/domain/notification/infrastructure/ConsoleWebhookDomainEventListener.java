@@ -1,7 +1,7 @@
 package com.example.batch.console.domain.notification.infrastructure;
 
 import com.example.batch.console.domain.notification.service.WebhookDispatcher;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEvent;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;

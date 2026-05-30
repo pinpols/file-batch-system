@@ -1,6 +1,6 @@
 package com.example.batch.console.web.realtime;
 
-import com.example.batch.console.infrastructure.realtime.ConsoleOpsSummaryRealtimeStream;
+import com.example.batch.console.domain.observability.realtime.ConsoleOpsSummaryRealtimeStream;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;

@@ -18,7 +18,7 @@ import com.example.batch.console.application.job.ConsoleJobRecoveryService;
 import com.example.batch.console.application.job.ConsoleJobTriggerService;
 import com.example.batch.console.application.ops.ConsoleApprovalApplicationService;
 import com.example.batch.console.application.ops.ConsoleWorkerApplicationService;
-import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
+import com.example.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import com.example.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import com.example.batch.console.domain.audit.web.response.AiChatResponse;
 import com.example.batch.console.web.response.file.ConsoleFileOperationResponse;

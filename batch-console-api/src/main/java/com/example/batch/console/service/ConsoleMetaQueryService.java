@@ -73,7 +73,7 @@ import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.enums.WorkflowType;
-import com.example.batch.console.domain.view.meta.SimpleOptionView;
+import com.example.batch.console.domain.observability.view.meta.SimpleOptionView;
 import com.example.batch.console.mapper.ConsoleMetaQueryMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.cache.ConsoleQueryCacheService;

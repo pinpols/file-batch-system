@@ -2,7 +2,7 @@ package com.example.batch.console.infrastructure.ops;
 
 import com.example.batch.common.resilience.DownstreamFallback;
 import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotResponse;

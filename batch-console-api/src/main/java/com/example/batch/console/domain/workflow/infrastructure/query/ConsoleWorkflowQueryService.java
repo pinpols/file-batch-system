@@ -1,6 +1,6 @@
 package com.example.batch.console.domain.workflow.infrastructure.query;
 
-import static com.example.batch.console.infrastructure.query.ConsoleQuerySupport.*;
+import static com.example.batch.console.domain.observability.infrastructure.ConsoleQuerySupport.*;
 
 import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;

@@ -12,7 +12,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.infrastructure.ops.TriggerInternalRestClient;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
