@@ -31,13 +31,13 @@
 #
 # 前置: 需先加载 multi-tenant-seed 才覆盖 ta/tb/tc 场景:
 #   docker cp batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql \
-#     batch-postgres:/tmp/ && docker exec batch-postgres \
+#     batch-postgres-primary:/tmp/ && docker exec batch-postgres-primary \
 #     psql -U batch_user -d batch_platform -f /tmp/multi-tenant-seed.sql
 #
 # 环境变量:
 #   TRIGGER_PORT / ORCH_PORT / CONSOLE_PORT  服务端口(默认 18081/18082/18080)
 #   INTERNAL_SECRET                          trigger /api/* 共享密钥(默认 internal-secret)
-#   PG_CONTAINER                             PG 容器名(默认 batch-postgres)
+#   PG_CONTAINER                             PG 容器名(默认 batch-postgres-primary)
 #   PG_USER / PG_DB                          (默认 batch_user / batch_platform)
 #   AWAIT_TIMEOUT                            异步链路等待秒数(默认 30)
 #   LOAD_SEED                                1=运行前先 reload 种子(默认 0)
@@ -57,7 +57,7 @@ TRIGGER_PORT="${TRIGGER_PORT:-18081}"
 ORCH_PORT="${ORCH_PORT:-18082}"
 CONSOLE_PORT="${CONSOLE_PORT:-18080}"
 INTERNAL_SECRET="${INTERNAL_SECRET:-internal-secret}"
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres}"
+PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 PG_USER="${PG_USER:-batch_user}"
 PG_DB="${PG_DB:-batch_platform}"
 AWAIT_TIMEOUT="${AWAIT_TIMEOUT:-30}"
