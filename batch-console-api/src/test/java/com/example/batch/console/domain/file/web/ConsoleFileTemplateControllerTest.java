@@ -1,4 +1,4 @@
-package com.example.batch.console.web;
+package com.example.batch.console.domain.file.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
+import com.example.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -27,10 +27,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
-class ConsoleFileChannelControllerTest {
+class ConsoleFileTemplateControllerTest {
 
-  private final ConsoleFileChannelApplicationService applicationService =
-      mock(ConsoleFileChannelApplicationService.class);
+  private final ConsoleFileTemplateApplicationService applicationService =
+      mock(ConsoleFileTemplateApplicationService.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;
@@ -48,28 +48,28 @@ class ConsoleFileChannelControllerTest {
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleFileChannelController(applicationService, responseFactory))
+                new ConsoleFileTemplateController(applicationService, responseFactory))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
   }
 
   @Test
-  void shouldReturn200WhenGetChannelById() throws Exception {
+  void shouldReturn200WhenGetTemplateById() throws Exception {
     when(applicationService.get(anyLong(), anyString()))
         .thenReturn(Map.of("id", 1L, "tenantId", "t1"));
 
     mockMvc
-        .perform(get("/api/console/file-channels/1").param("tenantId", "t1"))
+        .perform(get("/api/console/file-templates/1").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.tenantId").value("t1"));
   }
 
   @Test
-  void shouldReturn400WhenCreateRequestMissingRequired() throws Exception {
+  void shouldReturn400WhenCreateRequestMissingTemplateCode() throws Exception {
     mockMvc
-        .perform(post("/api/console/file-channels").contentType(APPLICATION_JSON).content("{}"))
+        .perform(post("/api/console/file-templates").contentType(APPLICATION_JSON).content("{}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -77,23 +77,23 @@ class ConsoleFileChannelControllerTest {
   }
 
   @Test
-  void shouldReturn200WhenToggleChannel() throws Exception {
+  void shouldReturn200WhenToggleTemplate() throws Exception {
     mockMvc
         .perform(
-            patch("/api/console/file-channels/1")
+            patch("/api/console/file-templates/1")
                 .contentType(APPLICATION_JSON)
-                .content("{\"tenantId\":\"t1\",\"enabled\":false}"))
+                .content("{\"tenantId\":\"t1\",\"enabled\":true}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
   }
 
   @Test
-  void shouldReturn400WhenToggleChannelMissingTenantId() throws Exception {
+  void shouldReturn400WhenToggleTemplateMissingTenantId() throws Exception {
     mockMvc
         .perform(
-            patch("/api/console/file-channels/1")
+            patch("/api/console/file-templates/1")
                 .contentType(APPLICATION_JSON)
-                .content("{\"enabled\":false}"))
+                .content("{\"enabled\":true}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -101,13 +101,13 @@ class ConsoleFileChannelControllerTest {
   }
 
   @Test
-  void shouldReturn200WhenUpdateChannel() throws Exception {
+  void shouldReturn200WhenUpdateTemplate() throws Exception {
     when(applicationService.update(anyLong(), any()))
         .thenReturn(Map.of("id", 1L, "tenantId", "t1"));
 
     mockMvc
         .perform(
-            put("/api/console/file-channels/1")
+            put("/api/console/file-templates/1")
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isOk())

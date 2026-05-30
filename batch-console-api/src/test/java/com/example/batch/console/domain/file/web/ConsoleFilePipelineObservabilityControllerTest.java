@@ -1,4 +1,4 @@
-package com.example.batch.console.web;
+package com.example.batch.console.domain.file.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -12,11 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

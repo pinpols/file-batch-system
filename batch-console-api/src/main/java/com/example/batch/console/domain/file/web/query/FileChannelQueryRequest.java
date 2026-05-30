@@ -1,6 +1,5 @@
 package com.example.batch.console.domain.file.web.query;
 
-
 import com.example.batch.console.web.query.PageQueryRequest;
 import lombok.Data;
 
