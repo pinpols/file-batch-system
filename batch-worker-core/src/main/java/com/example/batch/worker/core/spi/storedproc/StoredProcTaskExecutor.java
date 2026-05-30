@@ -131,14 +131,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
           "procedureName must match ^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$, got: "
               + procName);
     }
-    if (!props.getProcedureWhitelist().isEmpty()
-        && !props.getProcedureWhitelist().contains(procName)) {
-      throw new StoredProcValidationException(
-          "procedureName not in whitelist: "
-              + procName
-              + ", allowed="
-              + props.getProcedureWhitelist());
-    }
+    requireAllowed(procName);
 
     List<Object> inParams = parseInParams(params.get(PARAM_IN));
     List<String> outTypes = parseOutTypes(params.get(PARAM_OUT));
@@ -168,6 +161,36 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     }
 
     return new Invocation(procName, inParams, outTypes, ds, timeoutSec, autoCommit);
+  }
+
+  /**
+   * 放行校验:procedureWhitelist(精确)与 allowedSchemas(schema 级)是 OR 关系,命中任一即放行。 两者都空 = 允许全部(仅 dev /
+   * 信任环境)。schema 级用于"把可信 schema 整个放行,新增过程零配置"。
+   */
+  private void requireAllowed(String procName) {
+    boolean hasExactList = !props.getProcedureWhitelist().isEmpty();
+    boolean hasSchemaList = !props.getAllowedSchemas().isEmpty();
+    if (!hasExactList && !hasSchemaList) {
+      return; // 两者都空 = 允许全部(仅 dev)
+    }
+    boolean exactOk = props.getProcedureWhitelist().contains(procName);
+    String schema = schemaOf(procName);
+    boolean schemaOk = schema != null && props.getAllowedSchemas().contains(schema);
+    if (!exactOk && !schemaOk) {
+      throw new StoredProcValidationException(
+          "procedureName not allowed: "
+              + procName
+              + ", allowedProcedures="
+              + props.getProcedureWhitelist()
+              + ", allowedSchemas="
+              + props.getAllowedSchemas());
+    }
+  }
+
+  /** 取 schema-qualified 过程名的 schema 部分(点号前);非 schema-qualified(无点)返回 null。 */
+  private static String schemaOf(String procName) {
+    int dot = procName.indexOf('.');
+    return dot > 0 ? procName.substring(0, dot) : null;
   }
 
   @SuppressWarnings("unchecked")

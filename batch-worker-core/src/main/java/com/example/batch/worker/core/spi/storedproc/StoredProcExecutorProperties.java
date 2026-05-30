@@ -34,8 +34,24 @@ public class StoredProcExecutorProperties {
   /** dataSource bean 名。null = 主 datasource。 */
   private String dataSourceBeanName = null;
 
-  /** 过程名白名单(schema-qualified,如 "batch.refresh_metrics")。空 = 允许全部(仅 dev)。 */
+  /**
+   * 过程名精确白名单(schema-qualified,如 "batch.refresh_metrics")。
+   *
+   * <p>与 {@link #allowedSchemas} 是 OR 关系:命中任一即放行。两者都空 = 允许全部(仅 dev / 信任环境)。 精确列举死板(每加一个
+   * 过程都要改),日常优先用 {@link #allowedSchemas} 按 schema 放行。
+   */
   private Set<String> procedureWhitelist = Set.of();
+
+  /**
+   * Schema 级允许清单(如 "batch" / "app")。命中 = 该 schema 下的所有过程都放行,新增过程零配置。
+   *
+   * <p>这是推荐的日常用法:把可信 schema(如自家 batch 业务库)整个放行,既不用逐个列过程,又挡住 {@code pg_catalog} / {@code public} 等逃逸
+   * schema。与 {@link #procedureWhitelist} OR;两者都空 = 允许全部(仅 dev)。
+   *
+   * <p>注意:schema 级放行 = 信任该 schema 下"现在和将来的所有过程",请确保该 schema 的 DDL 写权限受控 (能建过程的人 = 能让 worker
+   * 执行任意逻辑)。
+   */
+  private Set<String> allowedSchemas = Set.of();
 
   /** CALL 超时(setQueryTimeout)。 */
   private Duration defaultStatementTimeout = Duration.ofMinutes(1);

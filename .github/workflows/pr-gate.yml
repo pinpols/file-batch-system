@@ -88,6 +88,11 @@ jobs:
         # 拦 BE 加 controller 端点但漏更 docs/api/console-api.openapi.yaml 的漂移。
         run: python3 scripts/ci/check-console-openapi-paths.py
 
+      - name: Verify dual-use SPI executor allowlist
+        shell: bash
+        # 拦 RCE 级 shell/stored-proc executor 在非白名单 worker 误开(策略 A:只 process)。
+        run: python3 scripts/ci/check-dual-use-executor-allowlist.py --check
+
       - name: PMD + Spotless + dependency boundary
         shell: bash
         # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
