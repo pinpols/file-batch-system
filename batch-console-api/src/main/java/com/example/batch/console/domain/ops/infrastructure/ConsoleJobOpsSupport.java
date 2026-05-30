@@ -19,6 +19,7 @@ import com.example.batch.console.infrastructure.ops.TriggerInternalRestClient;
 import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.domain.ops.infrastructure.TriggerInternalRestClient;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;

@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.application.report.ConsoleQueryApplicationService;
+import com.example.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import com.example.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;

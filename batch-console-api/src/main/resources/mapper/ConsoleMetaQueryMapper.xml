@@ -3,7 +3,7 @@
 <mapper namespace="com.example.batch.console.mapper.ConsoleMetaQueryMapper">
 
     <!-- 5 个 query 共享同一 result map(record SimpleOptionView 双 String 列 code/label)。 -->
-    <resultMap id="SimpleOptionResultMap" type="com.example.batch.console.domain.view.meta.SimpleOptionView">
+    <resultMap id="SimpleOptionResultMap" type="com.example.batch.console.domain.observability.view.meta.SimpleOptionView">
         <constructor>
             <arg column="code" javaType="java.lang.String"/>
             <arg column="label" javaType="java.lang.String"/>

@@ -6,7 +6,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import com.example.batch.console.support.SseTicketService;
+import com.example.batch.console.domain.observability.service.SseTicketService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

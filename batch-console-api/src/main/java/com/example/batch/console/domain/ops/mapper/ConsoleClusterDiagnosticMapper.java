@@ -1,7 +1,7 @@
 package com.example.batch.console.domain.ops.mapper;
 
-import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
-import com.example.batch.console.domain.view.cluster.ShedLockView;
+import com.example.batch.console.domain.observability.view.cluster.DeliveryStatusCountView;
+import com.example.batch.console.domain.observability.view.cluster.ShedLockView;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;

@@ -9,6 +9,7 @@ import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.console.domain.job.mapper.JobInstanceMapper;
 import com.example.batch.console.domain.view.cluster.DeliveryStatusCountView;
+import com.example.batch.console.domain.observability.view.cluster.DeliveryStatusCountView;
 import com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
 import com.example.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;

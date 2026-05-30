@@ -14,7 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import com.example.batch.console.support.SseTicketService;
+import com.example.batch.console.domain.observability.service.SseTicketService;
 import jakarta.servlet.FilterChain;
 import java.util.List;
 import java.util.Set;
@@ -208,8 +208,8 @@ class ConsoleAuthenticationFilterTest {
   @Test
   void filter_validatesSseTicketAndCachesResultForAsyncDispatch() throws Exception {
     // R4-P1-1：validate 返回 TicketPayload，含签发时角色集
-    com.example.batch.console.support.SseTicketService.TicketPayload payload =
-        new com.example.batch.console.support.SseTicketService.TicketPayload(
+    com.example.batch.console.domain.observability.service.SseTicketService.TicketPayload payload =
+        new com.example.batch.console.domain.observability.service.SseTicketService.TicketPayload(
             "alice", "t1", java.util.Set.of("ROLE_USER"));
     when(sseTicketService.validate("ticket-1")).thenReturn(payload);
 

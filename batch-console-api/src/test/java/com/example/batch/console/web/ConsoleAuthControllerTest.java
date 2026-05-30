@@ -11,7 +11,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.SseTicketService;
+import com.example.batch.console.domain.observability.service.SseTicketService;
 import com.example.batch.console.support.auth.ConsoleJwtService;
 import com.example.batch.console.support.auth.ConsoleLoginKeyPairService;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;

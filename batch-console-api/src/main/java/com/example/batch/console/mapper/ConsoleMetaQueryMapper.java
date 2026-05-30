@@ -1,6 +1,6 @@
 package com.example.batch.console.mapper;
 
-import com.example.batch.console.domain.view.meta.SimpleOptionView;
+import com.example.batch.console.domain.observability.view.meta.SimpleOptionView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
