@@ -15,6 +15,7 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
+import com.example.batch.console.domain.ops.web.ConsoleApprovalController;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -45,8 +46,8 @@ class ConsoleApprovalControllerTest {
 
     // R4-P0-2：Controller 现在依赖 ConsoleTenantGuard 强校验请求体 tenantId。
     // 测试用 mock guard，resolveTenant 简单返回入参（与原 body 直传等价）。
-    com.example.batch.console.support.auth.ConsoleTenantGuard tenantGuard =
-        mock(com.example.batch.console.support.auth.ConsoleTenantGuard.class);
+    com.example.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard =
+        mock(com.example.batch.console.domain.rbac.support.ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
 
     mockMvc =

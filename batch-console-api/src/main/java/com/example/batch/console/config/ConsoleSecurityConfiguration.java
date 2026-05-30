@@ -2,10 +2,10 @@ package com.example.batch.console.config;
 
 import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
-import com.example.batch.console.support.auth.ConsoleAuthenticationFilter;
-import com.example.batch.console.support.auth.ConsoleRoles;
-import com.example.batch.console.support.auth.ConsoleSecurityHeadersWriter;
-import com.example.batch.console.support.auth.ConsoleSecurityResponseWriter;
+import com.example.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
+import com.example.batch.console.domain.rbac.support.ConsoleRoles;
+import com.example.batch.console.domain.rbac.support.ConsoleSecurityHeadersWriter;
+import com.example.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
 import com.example.batch.console.support.maintenance.MaintenanceModeFilter;
 import com.example.batch.console.support.ratelimit.ConsoleRateLimitFilter;
 import com.example.batch.console.support.ratelimit.SlidingWindowRateLimiter;

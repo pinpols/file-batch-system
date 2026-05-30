@@ -7,6 +7,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.console.domain.observability.realtime.ConsoleOpsSummaryRealtimeStream;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeEventHub;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeInstanceIdProvider;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeMetrics;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeRedisPubSubConsumer;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeRedisPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;

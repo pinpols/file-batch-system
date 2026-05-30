@@ -2,13 +2,13 @@ package com.example.batch.console.domain.ops.web;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.domain.audit.support.AuditAction;
-import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.web.Idempotent;
+import com.example.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.domain.ops.web.request.ApprovalActionRequest;
 import com.example.batch.console.domain.ops.web.request.BatchApprovalActionRequest;
 import com.example.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
+import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +47,7 @@ public class ConsoleApprovalController {
   private final ConsoleResponseFactory responseFactory;
   // R4-P0-2：所有 approve/reject 入口必须用 tenantGuard 校验请求体 tenantId 是否与 JWT 持有的 tenantId 一致，
   // 防止租户角色用户改 body tenantId 批准其他租户的 approvalNo。
-  private final com.example.batch.console.support.auth.ConsoleTenantGuard tenantGuard;
+  private final com.example.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
 
   /** 审批通过。 */
   @PostMapping("/{approvalNo}/approve")

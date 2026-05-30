@@ -2,6 +2,7 @@ package com.example.batch.console.support.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.console.domain.rbac.support.ConsoleSecurityHeadersWriter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;

@@ -10,6 +10,7 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.config.ConsoleMaintenanceProperties;
+import com.example.batch.console.domain.observability.web.ConsoleSystemController;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.maintenance.MaintenanceStateHolder;
 import com.example.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;

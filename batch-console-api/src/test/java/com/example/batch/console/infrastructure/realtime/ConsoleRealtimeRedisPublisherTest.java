@@ -9,6 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeInstanceIdProvider;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeRedisPublisher;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeReplayStore;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
+import com.example.batch.console.domain.observability.realtime.ConsoleSseEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

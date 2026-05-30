@@ -1,7 +1,6 @@
 package com.example.batch.console.domain.job.infrastructure;
 
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
-import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobApplicationService;
 import com.example.batch.console.domain.job.application.ConsoleJobApprovalService;
 import com.example.batch.console.domain.job.application.ConsoleJobRecoveryService;
@@ -14,7 +13,7 @@ import com.example.batch.console.domain.job.web.request.RerunRequest;
 import com.example.batch.console.domain.job.web.request.TaskReplayRequest;
 import com.example.batch.console.domain.job.web.request.TriggerRequest;
 import com.example.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpResponse;
-import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
+import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.job.CompensateRequest;
 import com.example.batch.console.web.request.job.CompensationCommandRequest;
 import com.example.batch.console.web.request.job.PartitionReplayRequest;
@@ -22,7 +21,7 @@ import com.example.batch.console.web.request.job.RerunRequest;
 import com.example.batch.console.web.request.job.TaskReplayRequest;
 import com.example.batch.console.web.request.job.TriggerRequest;
 import com.example.batch.console.web.request.ops.BatchDayCatchUpRequest;
-import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
+import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpResponse;
 import java.util.List;
 import java.util.Map;

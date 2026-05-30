@@ -9,12 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.service.ConsoleMetaQueryService;
+import com.example.batch.console.domain.rbac.service.ConsoleMetaQueryService;
+import com.example.batch.console.domain.rbac.web.ConsoleMetaController;
+import com.example.batch.console.domain.rbac.web.response.ConsoleMetaEnumItem;
+import com.example.batch.console.domain.rbac.web.response.ConsoleMetaOption;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.response.auth.ConsoleMetaEnumItem;
-import com.example.batch.console.web.response.auth.ConsoleMetaOption;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

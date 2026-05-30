@@ -3,6 +3,7 @@ package com.example.batch.console.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.DictEnum;
+import com.example.batch.console.domain.rbac.service.ConsoleMetaQueryService;
 import java.io.IOException;
 import java.util.Set;
 import java.util.TreeSet;

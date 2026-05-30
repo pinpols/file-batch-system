@@ -1,6 +1,6 @@
 package com.example.batch.console.config;
 
-import com.example.batch.console.support.auth.ConsoleRoles;
+import com.example.batch.console.domain.rbac.support.ConsoleRoles;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;

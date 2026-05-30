@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
+import com.example.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;

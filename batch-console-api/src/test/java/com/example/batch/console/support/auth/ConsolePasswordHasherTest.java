@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import org.junit.jupiter.api.Test;
 
 class ConsolePasswordHasherTest {

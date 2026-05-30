@@ -10,7 +10,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.excel.ConsoleSingleSheetExcelImportSupport;

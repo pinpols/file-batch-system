@@ -6,7 +6,7 @@ import com.example.batch.console.config.ConsolePushProperties;
 import com.example.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
 import com.example.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
 import com.example.batch.console.domain.notification.web.request.ConsolePushSubscribeRequest;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;

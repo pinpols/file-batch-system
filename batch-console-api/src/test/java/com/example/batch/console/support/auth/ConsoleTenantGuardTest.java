@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;

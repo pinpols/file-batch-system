@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.ConsoleMetaQueryMapper">
+<mapper namespace="com.example.batch.console.domain.rbac.mapper.ConsoleMetaQueryMapper">
 
     <!-- 5 个 query 共享同一 result map(record SimpleOptionView 双 String 列 code/label)。 -->
     <resultMap id="SimpleOptionResultMap" type="com.example.batch.console.domain.observability.view.meta.SimpleOptionView">

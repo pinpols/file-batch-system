@@ -11,7 +11,7 @@ import com.example.batch.console.domain.notification.infrastructure.DefaultConso
 import com.example.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import com.example.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import com.example.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;

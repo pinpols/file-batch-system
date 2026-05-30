@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.ConsoleUserAccountMapper">
+<mapper namespace="com.example.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper">
 
     <resultMap id="userAccountEntityMap"
-               type="com.example.batch.console.domain.entity.ConsoleUserAccountEntity">
+               type="com.example.batch.console.domain.rbac.entity.ConsoleUserAccountEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="username" property="username"/>

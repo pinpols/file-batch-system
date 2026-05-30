@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.config.ConsoleMaintenanceProperties;
+import com.example.batch.console.domain.ops.web.ConsoleAdminMaintenanceController;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.maintenance.MaintenanceStateHolder;
 import com.example.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;

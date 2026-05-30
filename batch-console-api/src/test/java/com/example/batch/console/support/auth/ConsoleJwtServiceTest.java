@@ -10,7 +10,10 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
+import com.example.batch.console.domain.rbac.support.ConsoleJwtService;
+import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
+import com.example.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import com.example.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
 import java.time.Duration;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;

@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeInstanceIdProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 

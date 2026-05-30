@@ -8,7 +8,7 @@ import com.example.batch.console.domain.notification.application.ConsoleNotifica
 import com.example.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import com.example.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import com.example.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashMap;
 import java.util.List;

@@ -2,7 +2,7 @@ package com.example.batch.console.domain.audit.support;
 
 import com.example.batch.common.utils.Hashes;
 import com.example.batch.console.domain.audit.mapper.OperationAuditMapper;
-import com.example.batch.console.support.auth.ConsolePrincipal;
+import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;

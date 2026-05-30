@@ -4,8 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.web.request.auth.ConsoleLoginRequest;
-import com.example.batch.console.web.response.auth.ConsoleAuthTokenResponse;
+import com.example.batch.console.domain.rbac.service.ConsoleUserAccountService;
+import com.example.batch.console.domain.rbac.support.ConsoleJwtService;
+import com.example.batch.console.domain.rbac.support.ConsoleLoginService;
+import com.example.batch.console.domain.rbac.support.ConsolePasswordHasher;
+import com.example.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import com.example.batch.console.domain.rbac.support.ConsoleUserAccount;
+import com.example.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
+import com.example.batch.console.domain.rbac.web.response.ConsoleAuthTokenResponse;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
