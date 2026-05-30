@@ -1,0 +1,155 @@
+{{- /*
+  ADR-029 专用 Task SPI worker:dual-use(RCE 级)能力隔离。
+  最小权限部署要点(ops 在 values 填):
+    - serviceAccountName:独立 SA,最小 IAM,不给业务系统访问权
+    - envFromSecretName:独立受限 secret(平台库 claim/lease 用低权限账号,不含业务库/MinIO 凭据)
+    - 配 NetworkPolicy 限制出向(只允许平台库 + kafka + 显式放行的 SPI 目标)
+*/ -}}
+{{- $component := "worker-spi" }}
+{{- $svc := .Values.workerSpi }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  {{- if and (not $svc.hpa.enabled) (not (and $svc.keda $svc.keda.enabled)) }}
+  replicas: {{ $svc.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.workerSpi.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end }}
+      {{- include "batch-platform.imagePullSecrets" . | nindent 6 }}
+      {{- include "batch-platform.gracefulShutdownPod" $svc.gracefulShutdown | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "batch-platform.image" (dict "root" . "name" "batch-worker-spi") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "batch-platform.gracefulShutdownLifecycle" $svc.gracefulShutdown | nindent 10 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+              protocol: TCP
+          env:
+            # per-service JVM 参数追加,见 docs/runbook/jvm-tuning-and-profiling.md §1.2
+            - name: JAVA_OPTS_EXTRA
+              value: {{ $svc.javaOptsExtra | default "" | quote }}
+            # R7-A4-P1: 显式把 prod profile 的 management server port pin 到业务端口，
+            # 否则 application-prod.yml 默认 ${BATCH_MANAGEMENT_PORT:0} 走 ephemeral 随机端口，
+            # livenessProbe / Prometheus scrape 全部失效。管理端口真正隔离需 ADR + 单独 Service。
+            - name: BATCH_MANAGEMENT_PORT
+              value: {{ $svc.port | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "batch-platform.configmapName" . }}
+            # 最小权限:优先用 workerSpi.envFromSecretName 指定的受限 secret;未配则回退共享 secret
+            # (回退仅为不阻断起步;生产强烈建议配独立受限 secret,见 ADR-029)。
+            - secretRef:
+                name: {{ .Values.workerSpi.envFromSecretName | default (include "batch-platform.secretName" .) }}
+          {{- with $svc.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml $svc.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $svc.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- include "batch-platform.scheduling" . | nindent 6 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  type: {{ $svc.service.type }}
+  selector:
+    {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $svc.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- if and $svc.hpa.enabled (not (and $svc.keda $svc.keda.enabled)) }}
+---
+# CPU-based HPA（作为 KEDA 的 fallback；KEDA 开启时本 HPA 自动跳过）
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  minReplicas: {{ $svc.hpa.minReplicas }}
+  maxReplicas: {{ $svc.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.hpa.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- if and $svc.keda $svc.keda.enabled }}
+---
+# KEDA ScaledObject：按 Kafka consumer lag 扩缩，CPU HPA 让位给它
+# 前提：集群已安装 KEDA operator（helm install kedacore/keda -n keda）
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  minReplicaCount: {{ $svc.keda.minReplicas }}
+  maxReplicaCount: {{ $svc.keda.maxReplicas }}
+  pollingInterval: {{ $svc.keda.pollingInterval | default 30 }}
+  cooldownPeriod: {{ $svc.keda.cooldownPeriod | default 120 }}
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ $.Values.kafka.bootstrapServers | quote }}
+        consumerGroup: {{ $svc.keda.consumerGroup | quote }}
+        topic: {{ $svc.keda.topic | quote }}
+        lagThreshold: {{ $svc.keda.lagThreshold | quote }}
+        offsetResetPolicy: latest
+{{- end }}

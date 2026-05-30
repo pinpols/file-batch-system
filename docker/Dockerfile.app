@@ -20,6 +20,7 @@ COPY batch-worker-import/pom.xml batch-worker-import/pom.xml
 COPY batch-worker-export/pom.xml batch-worker-export/pom.xml
 COPY batch-worker-process/pom.xml batch-worker-process/pom.xml
 COPY batch-worker-dispatch/pom.xml batch-worker-dispatch/pom.xml
+COPY batch-worker-spi/pom.xml batch-worker-spi/pom.xml
 COPY batch-e2e-tests/pom.xml batch-e2e-tests/pom.xml
 
 RUN --mount=type=cache,target=/root/.m2,sharing=locked \
