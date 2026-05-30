@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.job.mapper.JobInstanceMapper">
+    <resultMap id="JobInstanceResultMap" type="com.example.batch.console.domain.job.entity.JobInstanceEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="instance_no" property="instanceNo"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="trigger_type" property="triggerType"/>
+        <result column="instance_status" property="instanceStatus"/>
+        <result column="batch_no" property="batchNo"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="rerun_flag" property="rerunFlag"/>
+        <result column="retry_flag" property="retryFlag"/>
+        <result column="rerun_reason" property="rerunReason"/>
+        <result column="related_file_id" property="relatedFileId"/>
+        <result column="parent_instance_id" property="parentInstanceId"/>
+        <result column="queue_code" property="queueCode"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="priority" property="priority"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="params_snapshot" property="paramsSnapshot"/>
+        <result column="high_water_mark_in" property="highWaterMarkIn"/>
+        <result column="high_water_mark_out" property="highWaterMarkOut"/>
+        <result column="result_summary" property="resultSummary"/>
+        <result column="deadline_at" property="deadlineAt"/>
+        <result column="expected_duration_seconds" property="expectedDurationSeconds"/>
+        <result column="sla_alerted_at" property="slaAlertedAt"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="dry_run" property="dryRun"/>
+        <result column="failure_class" property="failureClass"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            <!-- ADR-031: cursor 模式 — order by id desc 时 cursor 谓词为 id &lt; lastId
+                 租户过滤永远在前(line above),cursor 谓词绝不能影响租户隔离 -->
+            and id &lt; #{cursorId}
+        </if>
+        <if test="jobCode != null and jobCode != ''">
+            and job_code like concat('%', #{jobCode}, '%')
+        </if>
+        <choose>
+            <when test="instanceStatuses != null and instanceStatuses.size() &gt; 0">
+                and instance_status in
+                <foreach collection="instanceStatuses" item="st" open="(" close=")" separator=",">
+                    #{st}
+                </foreach>
+            </when>
+            <when test="instanceStatus != null and instanceStatus != ''">
+                and instance_status = #{instanceStatus}
+            </when>
+        </choose>
+        <if test="instanceNo != null and instanceNo != ''">
+            and instance_no = #{instanceNo}
+        </if>
+        <if test="bizDate != null and bizDate != ''">
+            and cast(biz_date as varchar) = #{bizDate}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id like concat('%', #{traceId}, '%')
+        </if>
+        <if test="startedFrom != null">
+            and started_at &gt;= #{startedFrom}
+        </if>
+        <if test="startedTo != null">
+            and started_at &lt;= #{startedTo}
+        </if>
+        <if test="minDurationSeconds != null">
+            and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
+        </if>
+        <if test="slaBreached != null and slaBreached">
+            and deadline_at is not null
+            and deadline_at &lt; current_timestamp
+            and instance_status in ('CREATED','WAITING','READY','RUNNING','PARTIAL_FAILED')
+        </if>
+        <choose>
+            <!-- ADR-031:cursor 模式强制 order by id desc(因为 cursor key 是 id),
+                 且不走 offsetPageClause 避免 cursor 谓词后再 OFFSET 跳过数据。
+                 sortBy=duration 在 cursor 模式不适用,由 service 层 reject。 -->
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <when test="sortBy == 'duration'">
+                order by (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at)) desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </when>
+            <otherwise>
+                order by id desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectById" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code like concat('%', #{jobCode}, '%')
+        </if>
+        <choose>
+            <when test="instanceStatuses != null and instanceStatuses.size() &gt; 0">
+                and instance_status in
+                <foreach collection="instanceStatuses" item="st" open="(" close=")" separator=",">
+                    #{st}
+                </foreach>
+            </when>
+            <when test="instanceStatus != null and instanceStatus != ''">
+                and instance_status = #{instanceStatus}
+            </when>
+        </choose>
+        <if test="instanceNo != null and instanceNo != ''">
+            and instance_no = #{instanceNo}
+        </if>
+        <if test="bizDate != null and bizDate != ''">
+            and cast(biz_date as varchar) = #{bizDate}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id like concat('%', #{traceId}, '%')
+        </if>
+        <if test="startedFrom != null">
+            and started_at &gt;= #{startedFrom}
+        </if>
+        <if test="startedTo != null">
+            and started_at &lt;= #{startedTo}
+        </if>
+        <if test="minDurationSeconds != null">
+            and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
+        </if>
+        <if test="slaBreached != null and slaBreached">
+            and deadline_at is not null
+            and deadline_at &lt; current_timestamp
+            and instance_status in ('CREATED','WAITING','READY','RUNNING','PARTIAL_FAILED')
+        </if>
+    </select>
+
+    <select id="countByStatuses" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and instance_status in
+        <foreach collection="statuses" item="status" open="(" close=")" separator=",">
+            #{status}
+        </foreach>
+    </select>
+
+    <select id="countSlaBreaches" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and deadline_at is not null
+          and deadline_at &lt; current_timestamp
+          and instance_status in
+        <foreach collection="activeStatuses" item="status" open="(" close=")" separator=",">
+            #{status}
+        </foreach>
+    </select>
+
+    <select id="selectByInstanceNos" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and instance_no in
+        <foreach collection="instanceNos" item="no" open="(" close=")" separator=",">
+            #{no}
+        </foreach>
+        order by id desc
+    </select>
+</mapper>

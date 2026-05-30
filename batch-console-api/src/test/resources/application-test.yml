@@ -8,6 +8,11 @@ spring:
     openai:
       api-key: "test-api-key"
 
+mybatis:
+  # P1-A Stage 1:mapper XML 按 context 子目录组织(mapper/<ctx>/*.xml),
+  # 覆盖 batch-defaults.yml 的 mapper/*.xml flat 默认。
+  mapper-locations: classpath*:mapper/**/*.xml
+
 batch:
   scheduling:
     # IT 不验证 Spring @Scheduled 线程池的优雅收尾；关闭时立即取消，避免 surefire fork 退出超时。

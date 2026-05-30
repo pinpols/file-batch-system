@@ -25,6 +25,12 @@ spring:
           # 默认模型（Console 内置 AI 功能使用；也会被 batch.console.ai.model 覆盖）
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
 
+mybatis:
+  # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
+  type-aliases-package: com.example.batch.console.domain
+  # P1-A Stage 1 后 mapper XML 按 context 子目录组织(mapper/<ctx>/*.xml)
+  mapper-locations: classpath*:mapper/**/*.xml
+
 batch:
   console:
     # 维护 / 降级模式开关。默认全部 false,生产灰度切换 / 紧急回滚时由 env 临时开启。

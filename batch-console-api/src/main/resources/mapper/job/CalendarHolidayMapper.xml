@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.job.mapper.CalendarHolidayMapper">
+
+    <select id="selectByCalendarId" resultType="map">
+        select
+            id, calendar_id as "calendarId", biz_date as "bizDate",
+            day_type as "dayType", holiday_name as "holidayName",
+            description, created_at as "createdAt", updated_at as "updatedAt"
+        from batch.calendar_holiday
+        where calendar_id = #{calendarId}
+        order by biz_date
+    </select>
+
+    <select id="selectById" resultType="map">
+        select
+            id, calendar_id as "calendarId", biz_date as "bizDate",
+            day_type as "dayType", holiday_name as "holidayName",
+            description, created_at as "createdAt", updated_at as "updatedAt"
+        from batch.calendar_holiday
+        where id = #{id}
+    </select>
+
+    <select id="selectByCalendarIdAndId" resultType="map">
+        select
+            id, calendar_id as "calendarId", biz_date as "bizDate",
+            day_type as "dayType", holiday_name as "holidayName",
+            description, created_at as "createdAt", updated_at as "updatedAt"
+        from batch.calendar_holiday
+        where calendar_id = #{calendarId}
+          and id = #{id}
+    </select>
+
+    <!-- bizDate 入参 String,PG date 列要求显式 cast::date,否则 "column biz_date is of type date" -->
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.calendar_holiday (
+            calendar_id, biz_date, day_type, holiday_name, description
+        ) values (
+            #{calendarId}, #{bizDate}::date, #{dayType}, #{holidayName}, #{description}
+        )
+    </insert>
+
+    <insert id="batchInsert">
+        insert into batch.calendar_holiday (
+            tenant_id, calendar_id, biz_date, day_type, holiday_name, description
+        ) values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.tenantId}, #{item.calendarId}, #{item.bizDate}::date, #{item.dayType}, #{item.holidayName}, #{item.description})
+        </foreach>
+    </insert>
+
+    <update id="update" parameterType="map">
+        update batch.calendar_holiday
+        set biz_date = #{bizDate}::date,
+            day_type = #{dayType},
+            holiday_name = #{holidayName},
+            description = #{description},
+            updated_at = current_timestamp
+        where id = #{id}
+          and calendar_id = #{calendarId}
+    </update>
+
+    <delete id="deleteByCalendarId">
+        delete from batch.calendar_holiday
+        where calendar_id = #{calendarId}
+    </delete>
+
+    <delete id="deleteById">
+        delete from batch.calendar_holiday where id = #{id}
+    </delete>
+
+    <delete id="deleteByCalendarIdAndId">
+        delete from batch.calendar_holiday
+         where calendar_id = #{calendarId}
+           and id = #{id}
+    </delete>
+</mapper>

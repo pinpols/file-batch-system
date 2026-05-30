@@ -1,6 +1,7 @@
 package com.example.batch.console.domain.workflow.web;
 
 import com.example.batch.common.dto.CommonResponse;
+<<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/domain/workflow/web/ConsoleWorkflowDefinitionController.java
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.domain.workflow.infrastructure.WorkflowMermaidRenderer;
@@ -10,6 +11,15 @@ import com.example.batch.console.domain.workflow.web.response.WorkflowMermaidRes
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.job.EnabledPatchRequest;
+import com.example.batch.console.application.workflow.ConsoleWorkflowDefinitionApplicationService;
+import com.example.batch.console.application.workflow.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
+import com.example.batch.console.domain.job.web.request.EnabledPatchRequest;
+import com.example.batch.console.infrastructure.workflow.WorkflowMermaidRenderer;
+import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.web.Idempotent;
+import com.example.batch.console.web.request.workflow.WorkflowDefinitionSaveRequest;
+import com.example.batch.console.web.response.workflow.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.web.response.workflow.WorkflowMermaidResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

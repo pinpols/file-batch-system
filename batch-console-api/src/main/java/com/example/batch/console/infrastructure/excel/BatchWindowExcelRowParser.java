@@ -11,7 +11,7 @@ import com.example.batch.common.enums.BatchWindowEndStrategy;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.OutOfWindowAction;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.domain.param.BatchWindowUpsertParam;
+import com.example.batch.console.domain.job.param.BatchWindowUpsertParam;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.job.mapper.JobPartitionMapper">
+    <resultMap id="JobPartitionResultMap" type="com.example.batch.console.domain.job.entity.JobPartitionEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_instance_id" property="jobInstanceId"/>
+        <result column="partition_no" property="partitionNo"/>
+        <result column="partition_key" property="partitionKey"/>
+        <result column="partition_status" property="partitionStatus"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="worker_code" property="workerCode"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="business_key" property="businessKey"/>
+        <result column="lease_expire_at" property="leaseExpireAt"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="dry_run" property="dryRun"/>
+    </resultMap>
+
+    <sql id="filters">
+        where tenant_id = #{tenantId}
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
+        <if test="jobInstanceId != null">
+            and job_instance_id = #{jobInstanceId}
+        </if>
+        <if test="partitionStatus != null and partitionStatus != ''">
+            and partition_status = #{partitionStatus}
+        </if>
+    </sql>
+
+    <select id="selectByQuery" resultMap="JobPartitionResultMap">
+        select id, tenant_id, job_instance_id, partition_no, partition_key, partition_status,
+               worker_group, worker_code, retry_count, business_key, lease_expire_at,
+               started_at, finished_at
+        from batch.job_partition
+        <include refid="filters"/>
+        <choose>
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by partition_no asc, id asc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.job_partition
+        <include refid="filters"/>
+    </select>
+</mapper>

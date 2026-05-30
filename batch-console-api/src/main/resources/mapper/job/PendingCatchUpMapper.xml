@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.job.mapper.PendingCatchUpMapper">
+    <resultMap id="PendingCatchUpResultMap" type="com.example.batch.console.domain.job.entity.PendingCatchUpEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="request_id" property="requestId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="request_status" property="requestStatus"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="approval_no" property="approvalNo"/>
+        <result column="approval_status" property="approvalStatus"/>
+    </resultMap>
+
+    <!--
+        catch-up 待审列表:trigger_request 是调度请求源 + approval_command 是审批单存储。
+        LEFT JOIN 暴露 approval_no/approval_status,前端拿 approval_no 调统一审批接口
+        /api/console/approvals/{approvalNo}/approve|reject;未走统一审批的旧记录 approval_no=null。
+        关联键:tenant_id 相同 + approval_command.target_id=trigger_request.request_id + approval_type='CATCH_UP'。
+    -->
+    <select id="selectByQuery" resultMap="PendingCatchUpResultMap">
+        select tr.id,
+               tr.tenant_id,
+               tr.request_id,
+               tr.job_code,
+               tr.biz_date,
+               tr.request_status,
+               tr.trace_id,
+               tr.created_at,
+               tr.updated_at,
+               ac.approval_no,
+               ac.approval_status
+        from batch.trigger_request tr
+        left join batch.approval_command ac
+               on ac.tenant_id   = tr.tenant_id
+              and ac.target_id   = tr.request_id
+              and ac.approval_type = 'CATCH_UP'
+        where tr.tenant_id = #{tenantId}
+          and tr.trigger_type = 'CATCH_UP'
+          and tr.request_status = 'ACCEPTED'
+        <if test="cursorId != null">
+            and tr.id &lt; #{cursorId}
+        </if>
+        <if test="jobCode != null and jobCode != ''">
+            and tr.job_code = #{jobCode}
+        </if>
+        <if test="requestId != null and requestId != ''">
+            and tr.request_id = #{requestId}
+        </if>
+        order by tr.id desc
+        <choose>
+            <when test="cursorId != null">
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.trigger_request
+        where tenant_id = #{tenantId}
+          and trigger_type = 'CATCH_UP'
+          and request_status = 'ACCEPTED'
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="requestId != null and requestId != ''">
+            and request_id = #{requestId}
+        </if>
+    </select>
+</mapper>

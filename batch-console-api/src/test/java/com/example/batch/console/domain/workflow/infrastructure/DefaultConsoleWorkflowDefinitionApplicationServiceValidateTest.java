@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+<<<<<<< HEAD:batch-console-api/src/test/java/com/example/batch/console/domain/workflow/infrastructure/DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest.java
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
@@ -17,6 +18,18 @@ import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalid
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.mapper.JobDefinitionMapper;
+import com.example.batch.console.application.workflow.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
+import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
+import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
+import com.example.batch.console.domain.entity.WorkflowNodeEntity;
+import com.example.batch.console.domain.job.entity.JobDefinitionEntity;
+import com.example.batch.console.domain.job.mapper.JobDefinitionMapper;
+import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
+import com.example.batch.console.mapper.WorkflowDefinitionMapper;
+import com.example.batch.console.mapper.WorkflowEdgeMapper;
+import com.example.batch.console.mapper.WorkflowNodeMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
