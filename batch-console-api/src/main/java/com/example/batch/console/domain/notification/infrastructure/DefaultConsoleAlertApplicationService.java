@@ -10,8 +10,6 @@ import com.example.batch.console.domain.notification.mapper.AlertEventMapper;
 import com.example.batch.console.domain.notification.web.response.ConsoleAlertActionResponse;
 import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.request.ops.AlertActionRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

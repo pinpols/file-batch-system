@@ -20,15 +20,6 @@ import com.example.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpR
 import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
-import com.example.batch.console.web.request.job.CompensateRequest;
-import com.example.batch.console.web.request.job.CompensationCommandRequest;
-import com.example.batch.console.web.request.job.PartitionReplayRequest;
-import com.example.batch.console.web.request.job.RerunRequest;
-import com.example.batch.console.web.request.job.TaskReplayRequest;
-import com.example.batch.console.web.request.job.TriggerRequest;
-import com.example.batch.console.web.request.ops.BatchDayCatchUpRequest;
-import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
-import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;

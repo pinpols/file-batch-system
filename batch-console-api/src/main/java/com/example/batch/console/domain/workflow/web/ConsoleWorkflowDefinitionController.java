@@ -1,6 +1,7 @@
 package com.example.batch.console.domain.workflow.web;
 
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.console.domain.job.web.request.EnabledPatchRequest;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.domain.workflow.infrastructure.WorkflowMermaidRenderer;
@@ -9,7 +10,6 @@ import com.example.batch.console.domain.workflow.web.response.WorkflowDefinition
 import com.example.batch.console.domain.workflow.web.response.WorkflowMermaidResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
-import com.example.batch.console.web.request.job.EnabledPatchRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

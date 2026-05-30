@@ -11,8 +11,6 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.application.config.ConsoleConfigApplicationService;
-import com.example.batch.console.application.report.ConsoleQueryApplicationService;
-import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
 import com.example.batch.console.domain.observability.application.ConsoleQueryApplicationService;
 import com.example.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
@@ -23,7 +21,6 @@ import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapsho
 import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleSecretVersionResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
-import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
 import com.example.batch.console.support.excel.ConsoleExcelStyles;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;

@@ -2,8 +2,6 @@ package com.example.batch.console.domain.workflow.web.realtime;
 
 import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeEventHub;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;

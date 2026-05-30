@@ -8,8 +8,6 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.file.ConsoleFileApplicationService;
-import com.example.batch.console.application.job.ConsoleJobApplicationService;
-import com.example.batch.console.application.ops.ConsoleApprovalApplicationService;
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobApplicationService;
 import com.example.batch.console.domain.job.web.request.CompensationCommandRequest;
@@ -19,8 +17,6 @@ import com.example.batch.console.domain.ops.web.response.ConsoleBatchApprovalRes
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.file.PresignDownloadFileRequest;
-import com.example.batch.console.web.request.job.CompensationCommandRequest;
-import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.util.ArrayList;
 import java.util.List;

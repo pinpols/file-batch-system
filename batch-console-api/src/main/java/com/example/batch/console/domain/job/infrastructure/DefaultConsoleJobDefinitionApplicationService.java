@@ -14,8 +14,6 @@ import com.example.batch.console.domain.job.web.request.JobDefinitionUpdateReque
 import com.example.batch.console.domain.job.web.response.ConsoleJobDefinitionResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
-import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

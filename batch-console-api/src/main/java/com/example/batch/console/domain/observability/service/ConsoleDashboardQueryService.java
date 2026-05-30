@@ -4,10 +4,6 @@ import com.example.batch.console.domain.observability.mapper.ConsoleDashboardQue
 import com.example.batch.console.domain.observability.view.dashboard.SlaStatsView;
 import com.example.batch.console.domain.observability.view.dashboard.StatusCountView;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import com.example.batch.console.domain.view.dashboard.SlaStatsView;
-import com.example.batch.console.domain.view.dashboard.StatusCountView;
-import com.example.batch.console.mapper.ConsoleDashboardQueryMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

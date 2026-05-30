@@ -23,8 +23,6 @@ import com.example.batch.console.domain.rbac.mapper.SecretVersionMapper;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
-import com.example.batch.console.mapper.ConsoleDashboardQueryMapper;
-import com.example.batch.console.mapper.SecretVersionMapper;
 import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;

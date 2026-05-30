@@ -13,9 +13,6 @@ import com.example.batch.console.domain.job.service.ConsoleSelfServiceJobService
 import com.example.batch.console.domain.job.service.ConsoleSelfServiceJobService.RerunParam;
 import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
-import com.example.batch.console.service.ConsoleSelfServiceJobService.CompensationParam;
-import com.example.batch.console.service.ConsoleSelfServiceJobService.RerunParam;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
