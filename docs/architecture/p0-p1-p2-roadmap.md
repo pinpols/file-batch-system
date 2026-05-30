@@ -187,16 +187,23 @@ batch-console-api/src/main/java/com/example/batch/console/
 
 ### 阶段
 
-| Phase | 工期 | 风险 |
-|---|---|---|
-| Stage 1 子包归一 + ArchUnit | 1-2 周 | 低 |
-| Stage 2 拆 push | 3 周 | 低(独立) |
-| Stage 2 拆 observability | 4 周 | 中(只读聚合 + Redis 缓存策略) |
-| Stage 2 拆 notification | 4 周 | 中(渠道适配 + 模板) |
-| Stage 2 拆 ops | 4 周 | 中(代理类多,downstream 复杂) |
-| Stage 3 owner 制 + SLO | 持续 | — |
+| Phase | 工期 | 风险 | 决策 |
+|---|---|---|---|
+| Stage 1 子包归一 + ArchUnit | 1-2 周 | 低 | ✅ **只做这一阶段** |
+| Stage 2 拆 push | 3 周 | 低(独立) | ❌ 不做(推迟) |
+| Stage 2 拆 observability | 4 周 | 中(只读聚合 + Redis 缓存策略) | ❌ 不做(推迟) |
+| Stage 2 拆 notification | 4 周 | 中(渠道适配 + 模板) | ❌ 不做(推迟) |
+| Stage 2 拆 ops | 4 周 | 中(代理类多,downstream 复杂) | ❌ 不做(推迟) |
+| Stage 3 owner 制 + SLO | 持续 | — | ❌ 不做(推迟) |
 
-**总:~4 个月(逐月拆 1 个),核心 BE 1 人**。
+**决策(2026-05-31):P1-A 只做 Stage 1**(子包归一 + ArchUnit 锁边界,0 部署变化)。
+
+Stage 2/3 推迟,**不排进近期 roadmap**。理由:
+- 拆出模块共享同一 DB schema,拆了也不获得真隔离(部署 / schema / 迁移耦合仍在),只是 1 jar 变 4 进程
+- 拆分收益("流量独立 / 高 QPS / blast radius")缺实测数据支撑,当前单人核心 BE 用不上
+- Stage 1 的 ArchUnit 边界已拿到 ~90% 的维护性收益,且是 Stage 2 的前置——将来真要拆是机械操作,推迟不损失任何选项
+
+**触发条件**(满足任一再重启 Stage 2):push/notification 扇出实测压垮主 API · observability 需独立扩缩容 · 出现多团队分域 owner(即 Stage 3 前提)。
 
 ---
 
@@ -315,14 +322,22 @@ BE 降级时响应头加 `X-Degraded-Source: trigger`。FE interceptor 看到挂
 
 ### 阶段
 
-| 阶段 | 工期 | 内容 |
-|---|---|---|
-| Week 1 | 1 周 | Vue Flow PoC,JobNode + GatewayNode + 存 JSON(序列化为 workflow_definition.nodes/edges) |
-| Week 2-3 | 2 周 | 接 BE workflow validation API,前端即时校验(循环 / 孤儿 / 必填) |
-| Week 4 | 1 周 | 运行时态可视化(节点挂状态徽章 + 实时刷新),复用 workflow viewer |
-| Week 5-6 | 2 周 | 模板库 / 复制粘贴 / 撤销重做 / 版本对比 |
+| 阶段 | 工期 | 内容 | 决策 |
+|---|---|---|---|
+| Week 1 | 1 周 | Vue Flow PoC,JobNode + GatewayNode + 存 JSON(序列化为 workflow_definition.nodes/edges) | ✅ 核心 |
+| Week 2-3 | 2 周 | 接 BE workflow validation API,前端即时校验(循环 / 孤儿 / 必填) | ✅ 核心,80/20 就在这 |
+| Week 4 | 1 周 | 运行时态可视化(节点挂状态徽章 + 实时刷新),复用 workflow viewer | ❌ 不做(现有 mermaid viewer 已覆盖大半;顶多挂个 badge) |
+| Week 5-6 | 2 周 | 模板库 / 复制粘贴 / 撤销重做 / 版本对比 | ❌ 不做(Vue Flow 自带 undo/redo;模板库 / 版本对比按需再说) |
 
-**总:6 周,核心 FE 1 人**。
+**决策(2026-05-31):MVP 只做 Week 1–3(~3 周),停在"建图 + 存 + 即时校验"。**
+
+前置判断:**先确认有没有真实的非工程师编排者**(运营 / 业务自助配 workflow)。
+- 有 → 做 Week 1–3 MVP
+- 没有(workflow 都是工程师偶尔建)→ **不做**,守现有只读 mermaid viewer 即可
+
+选型:MVP 阶段 vue-flow(Vue3 原生 + 复用现有 EP 组件)已足够;**别为"功能更全"提前换 AntV X6**,除非真撞到 vue-flow 能力天花板。
+
+Week 4–6 推迟到需求触发的增量。现状已有只读 viewer:`WorkflowMermaidViewer.vue` / `WorkflowMiniDag.vue` / 移动端 `MWorkflowViewer.vue`(FE 仓 batch-console)。
 
 ### 不要做的
 
@@ -334,29 +349,26 @@ BE 降级时响应头加 `X-Degraded-Source: trigger`。FE interceptor 看到挂
 
 ## 总投入与排期
 
+> **范围决策(2026-05-31)**:P1-A 砍到只做 Stage 1;P2 砍到只做 Week 1–3 MVP(且需先确认有真实编排用户)。下表已反映。
+
 | 项 | 工期 | 人 | 与其他依赖 |
 |---|---|---|---|
 | P0 SPI 化 | 6 周 | 核心 BE 1 人 | 独立 |
-| P1-A 拆分 | ~4 个月 | 核心 BE 1 人 | Stage 1 完成后可并行 P0 |
+| P1-A **只做 Stage 1** | 1-2 周 | 核心 BE 1 人 | Stage 2/3 推迟,见上文触发条件 |
 | P1-B 降级统一 | 5 周 | 核心 BE 1 人 | 独立,可与 P1-A 并行 |
-| P2 DAG 编辑器 | 6 周 | 核心 FE 1 人 | 独立 |
+| P2 DAG 编辑器 **MVP** | 3 周(Week 1–3) | 核心 FE 1 人 | 需先确认有真实编排用户;Week 4–6 推迟 |
 
-### 推荐 4 个月窗口排期
+### 推荐排期
 
 ```
 月 1:           P1-B 降级统一 (5w)     ──► 全 service 加上断路+fallback
-                P1-A Stage 1 (1-2w)    ──► 子包归一 + ArchUnit
-                P2 DAG editor 启动 (4w / 月)
+                P1-A Stage 1 (1-2w)    ──► 子包归一 + ArchUnit(P1-A 到此为止)
+                P2 DAG MVP (3w)        ──► 建图 + 存 + 即时校验(确认有编排用户后启动)
 
-月 2-3:         P0 SPI 化 (6w)         ──► 同步拆 1 个 console 模块 (push)
-                P2 DAG editor 完工 (2w)
-
-月 4:           P1-A Stage 2 继续       ──► 拆 observability / notification
-
-月 5+:          P1-A 拆 ops + Owner 制持续推进
+月 2+:          P0 SPI 化 (6w)         ──► 独立推进
 ```
 
-总:**约 4 个月可拿到所有 P0+P1+P2 的核心收益**(2 人并行,1 BE + 1 FE)。
+总:**核心收益集中在月 1–2**(2 人并行,1 BE + 1 FE);P1-A Stage 2/3、P2 Week 4–6 均按触发条件 / 需求推迟,不占用近期窗口。
 
 ### 推迟到 4 个月后的事(给排期减负)
 
