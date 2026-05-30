@@ -1,0 +1,81 @@
+server:
+  port: 18087
+
+spring:
+  main:
+    # 同 pipeline worker:关懒加载,保证 @KafkaListener container 启动期实例化 + 订阅 topic
+    lazy-initialization: false
+  datasource:
+    url: jdbc:postgresql://localhost:15432/batch_platform
+    username: batch_user
+    password: batch_pass_123
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: localhost:19092
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      repositories:
+        enabled: false
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.worker.spi.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+
+batch:
+  shedlock:
+    auto-create: true
+  security:
+    bypass-mode: true
+    kms:
+      default-key-ref: DEFAULT_TEST
+      keys:
+        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
+  orchestrator:
+    base-url: http://localhost:18082
+  worker:
+    registry:
+      fail-fast-on-startup: false
+    type: SPI
+    lease:
+      renew-interval-millis: 10000
+    task-client:
+      base-url: http://localhost:18082
+    spi:
+      worker-code: spi-node-1
+      worker-type: SPI
+      tenant-id: default-tenant
+      heartbeat-interval-millis: 15000
+      topic: batch.task.dispatch.spi
+      consumer-group-id: batch-worker-spi
+      capability-tags:
+        - atomic-task
+    # 本地联调开启的 SPI 执行器(生产默认全关,按需开 + 配白名单/schema)
+    executors:
+      sql:
+        enabled: true
+      shell:
+        enabled: true
+  datasource:
+    business:
+      url: jdbc:postgresql://localhost:15432/batch_business
+      username: batch_user
+      password: batch_pass_123
+      schema: biz
+  storage:
+    minio:
+      endpoint: http://localhost:19000
+      access-key: minioadmin
+      secret-key: minioadmin123
+      bucket: batch-dev
