@@ -353,6 +353,17 @@
                             <goals>
                                 <goal>prepare-agent</goal>
                             </goals>
+                            <configuration>
+                                <!--
+                                    JaCoCo 0.8.14 ASM instrumentation 对 jsqlparser 生成的超大方法
+                                    (CCJSqlParserTokenManager.jjMoveNfa_0) 会抛 MethodTooLargeException,
+                                    导致 fork JVM 加载失败、orchestrator IT 大面积连环挂(2026-05-30 真因)。
+                                    第三方 lib coverage 本就无收集意义,exclude 它即可。升 0.8.15+ 时复核。
+                                -->
+                                <excludes>
+                                    <exclude>net/sf/jsqlparser/**</exclude>
+                                </excludes>
+                            </configuration>
                         </execution>
                         <!-- phase=none：不绑定生命周期，由 CI 脚本显式调用 jacoco:check -->
                         <execution>
