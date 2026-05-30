@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 4 示范:第三方 BatchTaskExecutor 插件 jar。
+
+  关键点:
+  1. 不挂在主 reactor pom 下,这是"外部 jar"语义。要 build 用 `mvn install -f examples/sftp-push-executor/pom.xml`
+  2. 只 depend batch-common(拿 SPI 契约),不引 batch-worker-core(避免拉整套 worker infra)
+  3. 通过 ServiceLoader META-INF/services 自动注册;放到 worker classpath 即可被 BatchTaskExecutorRegistry 发现
+  4. 业务方按此模板开自己 repo,跟主项目松耦合
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.example.batch.ext</groupId>
+  <artifactId>sftp-push-executor</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Batch SFTP Push Executor (Phase 4 示范)</name>
+  <description>第三方 BatchTaskExecutor 插件示范:SFTP 文件推送任务</description>
+
+  <properties>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <batch-common.version>1.1.0-SNAPSHOT</batch-common.version>
+  </properties>
+
+  <dependencies>
+    <!-- 唯一硬依赖:batch-common(拿 BatchTaskExecutor SPI 契约) -->
+    <dependency>
+      <groupId>com.example.batch</groupId>
+      <artifactId>batch-common</artifactId>
+      <version>${batch-common.version}</version>
+      <scope>provided</scope>
+      <!-- 跑业务 jar 时 batch-common 由 worker classpath 提供;此处 provided 防 jar 重复 -->
+    </dependency>
+
+    <!-- 业务依赖示例:真做 SFTP 这里加 com.jcraft:jsch / org.apache.sshd:sshd-sftp 之类。
+         本示范不引,doExecute() 是 stub。 -->
+
+    <!-- 测试 -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.13.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>3.27.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.5</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
