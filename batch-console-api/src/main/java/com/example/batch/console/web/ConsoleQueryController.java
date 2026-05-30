@@ -22,8 +22,9 @@ import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNod
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
+import com.example.batch.console.domain.notification.web.query.AlertEventQueryRequest;
+import com.example.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.web.query.AlertEventQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.BatchDayQueryRequest;
@@ -62,7 +63,6 @@ import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
 import com.example.batch.console.web.response.job.ConsoleRetryScheduleResponse;
-import com.example.batch.console.web.response.ops.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ops.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ops.ConsoleAuditLogResponse;
 import com.example.batch.console.web.response.ops.ConsoleOutboxDeliveryLogResponse;

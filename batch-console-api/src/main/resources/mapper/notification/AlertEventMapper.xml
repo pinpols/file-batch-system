@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.notification.mapper.AlertEventMapper">
+
+    <resultMap id="AlertEventResultMap" type="com.example.batch.common.persistence.entity.AlertEventEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="service_name" property="serviceName"/>
+        <result column="alert_type" property="alertType"/>
+        <result column="severity" property="severity"/>
+        <result column="title" property="title"/>
+        <result column="detail_json" property="detailJson"/>
+        <result column="dedup_fingerprint" property="dedupFingerprint"/>
+        <result column="occurrence_count" property="occurrenceCount"/>
+        <result column="first_seen_at" property="firstSeenAt"/>
+        <result column="last_seen_at" property="lastSeenAt"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectById" resultMap="AlertEventResultMap">
+        select *
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+          and id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectByQuery" resultMap="AlertEventResultMap">
+        select *
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+        <if test="severity != null and severity != ''">
+            and severity = #{severity}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        <if test="alertType != null and alertType != ''">
+            and alert_type = #{alertType}
+        </if>
+        <if test="cursorId != null">
+            and id &lt; #{cursorId}
+        </if>
+        <choose>
+            <when test="cursorId != null">
+                order by id desc
+                limit #{pageRequest.pageSize}
+            </when>
+            <otherwise>
+                order by last_seen_at desc
+                <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+        <if test="severity != null and severity != ''">
+            and severity = #{severity}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        <if test="alertType != null and alertType != ''">
+            and alert_type = #{alertType}
+        </if>
+    </select>
+
+    <select id="countByStatus" resultType="long">
+        select count(1)
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+          and status = #{status}
+    </select>
+
+    <select id="countBySeverityAndStatus" resultType="long">
+        select count(1)
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+          and severity = #{severity}
+          and status = #{status}
+    </select>
+
+    <update id="updateStatus">
+        update batch.alert_event
+        set status = #{status},
+            updated_at = now()
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+</mapper>

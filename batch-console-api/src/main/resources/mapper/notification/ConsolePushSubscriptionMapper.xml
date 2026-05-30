@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper">
+
+    <resultMap id="pushSubMap" type="com.example.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity">
+        <id     column="id"              property="id"/>
+        <result column="tenant_id"       property="tenantId"/>
+        <result column="username"        property="username"/>
+        <result column="endpoint"        property="endpoint"/>
+        <result column="p256dh_key"      property="p256dhKey"/>
+        <result column="auth_secret"     property="authSecret"/>
+        <result column="user_agent"      property="userAgent"/>
+        <result column="created_at"      property="createdAt"/>
+        <result column="last_pushed_at"  property="lastPushedAt"/>
+        <result column="last_seen_at"    property="lastSeenAt"/>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, username, endpoint, p256dh_key, auth_secret, user_agent,
+        created_at, last_pushed_at, last_seen_at
+    </sql>
+
+    <select id="findByTenantAndUser" resultMap="pushSubMap">
+        select <include refid="selectColumns"/>
+          from batch.console_push_subscription
+         where tenant_id = #{tenantId} and username = #{username}
+    </select>
+
+    <select id="findByTenant" resultMap="pushSubMap">
+        select <include refid="selectColumns"/>
+          from batch.console_push_subscription
+         where tenant_id = #{tenantId}
+    </select>
+
+    <insert id="upsert" parameterType="com.example.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity">
+        insert into batch.console_push_subscription
+            (tenant_id, username, endpoint, p256dh_key, auth_secret, user_agent, last_seen_at)
+        values
+            (#{tenantId}, #{username}, #{endpoint}, #{p256dhKey}, #{authSecret}, #{userAgent}, now())
+        on conflict (tenant_id, username, endpoint) do update set
+            p256dh_key   = excluded.p256dh_key,
+            auth_secret  = excluded.auth_secret,
+            user_agent   = excluded.user_agent,
+            last_seen_at = excluded.last_seen_at
+    </insert>
+
+    <delete id="deleteByEndpoint">
+        delete from batch.console_push_subscription
+         where tenant_id = #{tenantId}
+           and username = #{username}
+           and endpoint = #{endpoint}
+    </delete>
+
+    <delete id="deleteAllByEndpoint">
+        delete from batch.console_push_subscription
+         where endpoint = #{endpoint}
+    </delete>
+
+    <update id="touchLastPushedAt">
+        update batch.console_push_subscription
+           set last_pushed_at = #{ts}
+         where id = #{id}
+    </update>
+
+    <delete id="deleteIfStaleSince">
+        delete from batch.console_push_subscription
+         where last_seen_at &lt; #{staleBefore}
+    </delete>
+
+</mapper>

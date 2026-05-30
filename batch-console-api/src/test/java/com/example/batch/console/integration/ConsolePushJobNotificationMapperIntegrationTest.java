@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
-import com.example.batch.console.domain.entity.ConsolePushJobNotificationEntity;
-import com.example.batch.console.mapper.ConsolePushJobNotificationMapper;
-import com.example.batch.console.support.push.PendingJobNotification;
+import com.example.batch.console.domain.notification.entity.ConsolePushJobNotificationEntity;
+import com.example.batch.console.domain.notification.mapper.ConsolePushJobNotificationMapper;
+import com.example.batch.console.domain.notification.support.PendingJobNotification;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.sql.Date;
 import java.time.LocalDate;

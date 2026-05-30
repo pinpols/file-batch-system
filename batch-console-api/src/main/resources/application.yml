@@ -28,6 +28,8 @@ spring:
 mybatis:
   # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
   type-aliases-package: com.example.batch.console.domain
+  # P1-A Stage 1 后 mapper XML 按 context 子目录组织(mapper/<ctx>/*.xml)
+  mapper-locations: classpath*:mapper/**/*.xml
 
 batch:
   console:

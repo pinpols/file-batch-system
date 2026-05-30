@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper">
+    <resultMap id="subscriptionMap"
+               type="com.example.batch.console.domain.notification.entity.WebhookSubscriptionEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="name" property="name"/>
+        <result column="callback_url" property="callbackUrl"/>
+        <result column="event_types" property="eventTypes"/>
+        <result column="secret" property="secret"/>
+        <result column="enabled" property="enabled"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, name, callback_url, event_types, secret, enabled,
+        created_by, updated_by, created_at, updated_at
+    </sql>
+
+    <select id="findAllByTenant" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and is_deleted = false
+         order by name
+    </select>
+
+    <select id="findByTenantAndId" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+         limit 1
+    </select>
+
+    <select id="findByTenantAndName" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and name = #{name} and is_deleted = false
+         limit 1
+    </select>
+
+    <select id="findEnabledByTenant" resultMap="subscriptionMap">
+        select <include refid="selectColumns"/>
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and enabled = true and is_deleted = false
+    </select>
+
+    <!--
+        upsert 语义: 同 name 撞 UNIQUE 时复活软删行(V146 软删 + 复活约定)。
+        纯 INSERT 在软删后 recreate 会撞 UNIQUE, 改 ON CONFLICT 自动覆盖 + is_deleted=false。
+    -->
+    <insert id="insert">
+        insert into batch.webhook_subscription (
+            tenant_id, name, callback_url, event_types, secret, enabled, created_by, updated_by
+        ) values (
+            #{tenantId}, #{name}, #{callbackUrl}, #{eventTypes}, #{secret}, #{enabled}, #{operator}, #{operator}
+        )
+        on conflict (tenant_id, name) do update set
+            callback_url = excluded.callback_url,
+            event_types = excluded.event_types,
+            secret = excluded.secret,
+            enabled = excluded.enabled,
+            updated_by = excluded.updated_by,
+            is_deleted = false,
+            updated_at = current_timestamp
+    </insert>
+
+    <update id="update">
+        update batch.webhook_subscription
+           set callback_url = #{callbackUrl},
+               event_types  = #{eventTypes},
+               secret       = #{secret},
+               enabled      = #{enabled},
+               updated_by   = #{operator},
+               updated_at   = current_timestamp
+         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+    </update>
+
+    <!--
+        软删除(② 软删除约定):不物理 DELETE,UPDATE 标记 is_deleted=true。
+        撤销:UPDATE batch.webhook_subscription SET is_deleted=false WHERE id=?(运维 SQL)。
+    -->
+    <update id="deleteByTenantAndId">
+        update batch.webhook_subscription
+           set is_deleted = true,
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+    </update>
+</mapper>

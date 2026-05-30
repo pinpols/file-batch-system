@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.notification.mapper.AlertRoutingConfigMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            id,
+            tenant_id,
+            route_code,
+            route_name,
+            team,
+            alert_group,
+            severity,
+            receiver,
+            group_by,
+            group_wait_seconds,
+            group_interval_seconds,
+            repeat_interval_seconds,
+            enabled,
+            description,
+            created_at,
+            updated_at
+        from batch.alert_routing_config
+        where tenant_id = #{tenantId}
+          and is_deleted = false
+        <if test="routeCode != null and routeCode != ''">
+            and route_code like concat('%', #{routeCode}, '%')
+        </if>
+        <if test="team != null and team != ''">
+            and team = #{team}
+        </if>
+        <if test="severity != null and severity != ''">
+            and severity = #{severity}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by id desc
+        <if test="pageRequest != null">
+            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.alert_routing_config
+        where tenant_id = #{tenantId}
+          and is_deleted = false
+        <if test="routeCode != null and routeCode != ''">
+            and route_code like concat('%', #{routeCode}, '%')
+        </if>
+        <if test="team != null and team != ''">
+            and team = #{team}
+        </if>
+        <if test="severity != null and severity != ''">
+            and severity = #{severity}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+    </select>
+
+    <select id="selectByUniqueKey" resultType="map">
+        select *
+        from batch.alert_routing_config
+        where tenant_id = #{tenantId}
+          and is_deleted = false
+          and route_code = #{routeCode}
+        limit 1
+    </select>
+
+    <select id="selectById" resultType="map">
+        select *
+        from batch.alert_routing_config
+        where tenant_id = #{tenantId}
+          and is_deleted = false
+          and id = #{id}
+        limit 1
+    </select>
+
+    <!--
+        软删除(② 软删除约定):本表 controller 当前无 delete 端点,仅 upsert/toggle 维护;
+        V145 已加 is_deleted 列与 partial index,SELECT 谓词同步,后续若加 delete 路径
+        模板见 FileChannelConfigMapper#deleteById:
+            UPDATE batch.alert_routing_config
+               SET is_deleted = true, updated_at = current_timestamp
+             WHERE tenant_id = #{tenantId} AND id = #{id} AND is_deleted = false
+    -->
+
+    <insert id="upsertAlertRoutingConfig">
+        insert into batch.alert_routing_config (
+            tenant_id, route_code, route_name, team, alert_group, severity,
+            receiver, group_by, group_wait_seconds, group_interval_seconds,
+            repeat_interval_seconds, enabled, description, created_by, updated_by,
+            created_at, updated_at
+        ) values (
+            #{p.tenantId}, #{p.routeCode}, #{p.routeName}, #{p.team}, #{p.alertGroup}, #{p.severity},
+            #{p.receiver}, #{p.groupBy}, #{p.groupWaitSeconds}, #{p.groupIntervalSeconds},
+            #{p.repeatIntervalSeconds}, #{p.enabled}, #{p.description}, #{p.createdBy}, #{p.updatedBy},
+            current_timestamp, current_timestamp
+        )
+        on conflict (tenant_id, route_code) do update set
+            route_name = excluded.route_name,
+            team = excluded.team,
+            alert_group = excluded.alert_group,
+            severity = excluded.severity,
+            receiver = excluded.receiver,
+            group_by = excluded.group_by,
+            group_wait_seconds = excluded.group_wait_seconds,
+            group_interval_seconds = excluded.group_interval_seconds,
+            repeat_interval_seconds = excluded.repeat_interval_seconds,
+            enabled = excluded.enabled,
+            description = excluded.description,
+            updated_by = excluded.updated_by,
+            is_deleted = false,
+            updated_at = current_timestamp
+    </insert>
+
+    <update id="updateById">
+        update batch.alert_routing_config
+        set route_code = #{p.routeCode},
+            route_name = #{p.routeName},
+            team = #{p.team},
+            alert_group = #{p.alertGroup},
+            severity = #{p.severity},
+            receiver = #{p.receiver},
+            group_by = #{p.groupBy},
+            group_wait_seconds = #{p.groupWaitSeconds},
+            group_interval_seconds = #{p.groupIntervalSeconds},
+            repeat_interval_seconds = #{p.repeatIntervalSeconds},
+            enabled = #{p.enabled},
+            description = #{p.description},
+            updated_by = #{p.updatedBy},
+            updated_at = current_timestamp
+        where tenant_id = #{p.tenantId}
+          and id = #{p.id}
+          and is_deleted = false
+    </update>
+
+    <update id="toggleEnabled">
+        update batch.alert_routing_config
+        set enabled = #{enabled}, updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and is_deleted = false
+    </update>
+</mapper>

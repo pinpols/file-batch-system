@@ -3,6 +3,7 @@ package com.example.batch.console.support.querymap;
 import com.example.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
 import com.example.batch.console.domain.governance.mapper.DeadLetterTaskMapper;
 import com.example.batch.console.mapper.AlertEventMapper;
+import com.example.batch.console.domain.notification.mapper.AlertEventMapper;
 import com.example.batch.console.mapper.ApprovalCommandMapper;
 import com.example.batch.console.mapper.AuditLogMapper;
 import com.example.batch.console.mapper.BatchDayMapper;

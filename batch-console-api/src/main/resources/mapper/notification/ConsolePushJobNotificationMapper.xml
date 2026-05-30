@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.notification.mapper.ConsolePushJobNotificationMapper">
+
+    <resultMap id="pendingJobMap" type="com.example.batch.console.domain.notification.support.PendingJobNotification">
+        <result column="job_instance_id"  property="jobInstanceId"/>
+        <result column="tenant_id"        property="tenantId"/>
+        <result column="operator_id"      property="operatorId"/>
+        <result column="job_code"         property="jobCode"/>
+        <result column="instance_status"  property="instanceStatus"/>
+        <result column="finished_at"      property="finishedAt"/>
+    </resultMap>
+
+    <select id="findPending" resultMap="pendingJobMap">
+        select ji.id            as job_instance_id,
+               ji.tenant_id     as tenant_id,
+               ji.operator_id   as operator_id,
+               ji.job_code      as job_code,
+               ji.instance_status as instance_status,
+               ji.finished_at   as finished_at
+          from batch.job_instance ji
+         where ji.instance_status in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED', 'PARTIAL_FAILED')
+           and ji.finished_at is not null
+           and ji.finished_at &gt;= now() - (#{lookbackMinutes}::text || ' minutes')::interval
+           and ji.operator_id is not null
+           and not exists (
+               select 1
+                 from batch.console_push_job_notification n
+                where n.tenant_id = ji.tenant_id
+                  and n.job_instance_id = ji.id
+           )
+         order by ji.finished_at asc
+         limit #{batchSize}
+    </select>
+
+    <insert id="insertIgnore" parameterType="com.example.batch.console.domain.notification.entity.ConsolePushJobNotificationEntity">
+        insert into batch.console_push_job_notification
+            (tenant_id, job_instance_id)
+        values
+            (#{tenantId}, #{jobInstanceId})
+        on conflict (tenant_id, job_instance_id) do nothing
+    </insert>
+
+</mapper>
