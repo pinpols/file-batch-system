@@ -5,7 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.BatchColumnNames;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

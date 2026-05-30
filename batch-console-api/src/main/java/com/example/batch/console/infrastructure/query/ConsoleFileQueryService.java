@@ -1,6 +1,6 @@
 package com.example.batch.console.infrastructure.query;
 
-import static com.example.batch.console.infrastructure.query.ConsoleQuerySupport.*;
+import static com.example.batch.console.domain.observability.infrastructure.ConsoleQuerySupport.*;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;
@@ -19,7 +19,7 @@ import com.example.batch.console.domain.query.FileErrorRecordQuery;
 import com.example.batch.console.domain.query.FilePipelineQuery;
 import com.example.batch.console.domain.query.FileRecordQuery;
 import com.example.batch.console.domain.query.FileTemplateConfigQuery;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.querymap.ConsoleFileQueryMappers;
 import com.example.batch.console.web.query.FileArrivalGroupQueryRequest;
 import com.example.batch.console.web.query.FileChainQueryRequest;

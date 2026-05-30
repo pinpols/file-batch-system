@@ -5,7 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.console.domain.entity.JobDefinitionEntity;
+import com.example.batch.console.domain.job.entity.JobDefinitionEntity;
+import com.example.batch.console.domain.job.mapper.JobDefinitionMapper;
+import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
@@ -14,10 +17,7 @@ import com.example.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper
 import com.example.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
-import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.infrastructure.workflow.DefaultConsoleWorkflowDefinitionApplicationService;
-import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

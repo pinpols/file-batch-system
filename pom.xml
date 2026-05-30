@@ -430,7 +430,7 @@
                                             <include>com.example.batch.worker.exports.sql.SqlTemplateExportSqlValidator</include>
                                             <include>com.example.batch.worker.dispatchs.stage.DefaultDispatchStageExecutor</include>
                                             <include>com.example.batch.worker.imports.stage.DefaultImportStageExecutor</include>
-                                            <include>com.example.batch.console.support.auth.ConsoleAuthenticationFilter</include>
+                                            <include>com.example.batch.console.domain.rbac.support.ConsoleAuthenticationFilter</include>
                                             <include>com.example.batch.console.config.ReadReplicaRoutingDataSource</include>
                                             <include>com.example.batch.common.persistence.mybatis.AuditFieldsInterceptor</include>
                                         </includes>

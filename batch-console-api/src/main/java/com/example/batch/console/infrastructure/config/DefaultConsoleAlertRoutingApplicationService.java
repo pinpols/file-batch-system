@@ -8,7 +8,7 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
 import com.example.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import com.example.batch.console.domain.param.AlertRoutingConfigUpsertParam;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.config.AlertRoutingSaveRequest;
 import java.util.List;

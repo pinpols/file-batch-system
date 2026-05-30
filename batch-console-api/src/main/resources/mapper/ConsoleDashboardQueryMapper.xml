@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.ConsoleDashboardQueryMapper">
+<mapper namespace="com.example.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper">
 
     <!-- ============================================================
          result maps:每个 record View 用 <constructor> 显式按 canonical
          constructor 入参顺序绑定 SQL 列;不依赖 mapUnderscoreToCamelCase。
          ============================================================ -->
 
-    <resultMap id="StatusCountResultMap" type="com.example.batch.console.domain.view.dashboard.StatusCountView">
+    <resultMap id="StatusCountResultMap" type="com.example.batch.console.domain.observability.view.dashboard.StatusCountView">
         <constructor>
             <arg column="status" javaType="java.lang.String"/>
             <arg column="count" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
-    <resultMap id="DayStatusCountResultMap" type="com.example.batch.console.domain.view.dashboard.DayStatusCountView">
+    <resultMap id="DayStatusCountResultMap" type="com.example.batch.console.domain.observability.view.dashboard.DayStatusCountView">
         <constructor>
             <arg column="day" javaType="java.time.LocalDate"/>
             <arg column="status" javaType="java.lang.String"/>
@@ -22,21 +22,21 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="TypeCountResultMap" type="com.example.batch.console.domain.view.dashboard.TypeCountView">
+    <resultMap id="TypeCountResultMap" type="com.example.batch.console.domain.observability.view.dashboard.TypeCountView">
         <constructor>
             <arg column="type" javaType="java.lang.String"/>
             <arg column="count" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
-    <resultMap id="DayCountResultMap" type="com.example.batch.console.domain.view.dashboard.DayCountView">
+    <resultMap id="DayCountResultMap" type="com.example.batch.console.domain.observability.view.dashboard.DayCountView">
         <constructor>
             <arg column="day" javaType="java.time.LocalDate"/>
             <arg column="count" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
-    <resultMap id="WorkerGroupStatusCountResultMap" type="com.example.batch.console.domain.view.dashboard.WorkerGroupStatusCountView">
+    <resultMap id="WorkerGroupStatusCountResultMap" type="com.example.batch.console.domain.observability.view.dashboard.WorkerGroupStatusCountView">
         <constructor>
             <arg column="worker_group" javaType="java.lang.String"/>
             <arg column="status" javaType="java.lang.String"/>
@@ -44,21 +44,21 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="ActivePartitionResultMap" type="com.example.batch.console.domain.view.dashboard.ActivePartitionView">
+    <resultMap id="ActivePartitionResultMap" type="com.example.batch.console.domain.observability.view.dashboard.ActivePartitionView">
         <constructor>
             <arg column="worker_code" javaType="java.lang.String"/>
             <arg column="active_partitions" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
-    <resultMap id="SeverityCountResultMap" type="com.example.batch.console.domain.view.dashboard.SeverityCountView">
+    <resultMap id="SeverityCountResultMap" type="com.example.batch.console.domain.observability.view.dashboard.SeverityCountView">
         <constructor>
             <arg column="severity" javaType="java.lang.String"/>
             <arg column="count" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
-    <resultMap id="DaySeverityCountResultMap" type="com.example.batch.console.domain.view.dashboard.DaySeverityCountView">
+    <resultMap id="DaySeverityCountResultMap" type="com.example.batch.console.domain.observability.view.dashboard.DaySeverityCountView">
         <constructor>
             <arg column="day" javaType="java.time.LocalDate"/>
             <arg column="severity" javaType="java.lang.String"/>
@@ -66,7 +66,7 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="ConfigDependentResultMap" type="com.example.batch.console.domain.view.dashboard.ConfigDependentView">
+    <resultMap id="ConfigDependentResultMap" type="com.example.batch.console.domain.observability.view.dashboard.ConfigDependentView">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="code" javaType="java.lang.String"/>
@@ -74,7 +74,7 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="ExecutionProgressResultMap" type="com.example.batch.console.domain.view.dashboard.ExecutionProgressView">
+    <resultMap id="ExecutionProgressResultMap" type="com.example.batch.console.domain.observability.view.dashboard.ExecutionProgressView">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="job_code" javaType="java.lang.String"/>
@@ -88,7 +88,7 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="SlaStatsResultMap" type="com.example.batch.console.domain.view.dashboard.SlaStatsView">
+    <resultMap id="SlaStatsResultMap" type="com.example.batch.console.domain.observability.view.dashboard.SlaStatsView">
         <constructor>
             <arg column="breached" javaType="java.lang.Long"/>
             <arg column="on_time" javaType="java.lang.Long"/>
@@ -97,7 +97,7 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="SlaDayResultMap" type="com.example.batch.console.domain.view.dashboard.SlaDayView">
+    <resultMap id="SlaDayResultMap" type="com.example.batch.console.domain.observability.view.dashboard.SlaDayView">
         <constructor>
             <arg column="day" javaType="java.time.LocalDate"/>
             <arg column="breached" javaType="java.lang.Long"/>
@@ -105,7 +105,7 @@
         </constructor>
     </resultMap>
 
-    <resultMap id="SlaJobReportResultMap" type="com.example.batch.console.domain.view.dashboard.SlaJobReportView">
+    <resultMap id="SlaJobReportResultMap" type="com.example.batch.console.domain.observability.view.dashboard.SlaJobReportView">
         <constructor>
             <arg column="job_code" javaType="java.lang.String"/>
             <arg column="job_name" javaType="java.lang.String"/>
