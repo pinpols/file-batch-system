@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure.ops;
 
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.common.resilience.DownstreamFallback;
 import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
@@ -10,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 /**
  * {@link ConsoleTriggerProxyService} 的默认实现:通过 RestClient 转发请求到触发器管理接口。
@@ -25,6 +25,9 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
 
   private final TriggerInternalRestClient triggerInternalRestClient;
   private final ConsoleTenantGuard tenantGuard;
+  private final DownstreamFallback downstreamFallback;
+
+  private static final String SVC = "trigger";
 
   private RestClient newClient() {
     return triggerInternalRestClient.build();
@@ -47,20 +50,22 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
 
   @Override
   public List<Object> triggerList() {
-    // 只读查询,trigger 服务不可达时降级为空 list(FE 渲染空表 + 上层 banner 提示),
-    // 不向上抛 500 让整页崩。状态变更(register / pause / resume)仍然 fail-fast。
-    try {
-      CommonResponse<List<Object>> resp =
-          newClient()
-              .get()
-              .uri("/api/triggers/management/list")
-              .retrieve()
-              .body(new ParameterizedTypeReference<CommonResponse<List<Object>>>() {});
-      return resp != null ? resp.data() : List.of();
-    } catch (RestClientException ex) {
-      log.warn("trigger downstream unavailable, degrading to empty list: {}", ex.getMessage());
-      return List.of();
-    }
+    // 只读查询,trigger 不可达 → DownstreamFallback 降级为空 list + metrics(详见
+    // docs/runbook/downstream-degradation.md "trigger:list" 条目)。
+    // 状态变更(register / pause / resume / triggerAction)仍 fail-fast,见各方法的 callOrThrow。
+    return downstreamFallback.callOrFallback(
+        SVC,
+        "list",
+        () -> {
+          CommonResponse<List<Object>> resp =
+              newClient()
+                  .get()
+                  .uri("/api/triggers/management/list")
+                  .retrieve()
+                  .body(new ParameterizedTypeReference<CommonResponse<List<Object>>>() {});
+          return resp != null ? resp.data() : List.<Object>of();
+        },
+        ex -> List.<Object>of());
   }
 
   @Override
