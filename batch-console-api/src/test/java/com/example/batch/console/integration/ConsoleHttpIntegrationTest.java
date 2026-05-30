@@ -23,6 +23,17 @@ import com.example.batch.console.domain.ops.application.ConsoleApprovalApplicati
 import com.example.batch.console.domain.ops.application.ConsoleWorkerApplicationService;
 import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.web.response.file.ConsoleFileOperationResponse;
+import com.example.batch.console.domain.file.application.ConsoleFileApplicationService;
+import com.example.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
+import com.example.batch.console.application.job.ConsoleJobApprovalService;
+import com.example.batch.console.application.job.ConsoleJobRecoveryService;
+import com.example.batch.console.application.job.ConsoleJobTriggerService;
+import com.example.batch.console.application.ops.ConsoleApprovalApplicationService;
+import com.example.batch.console.application.ops.ConsoleWorkerApplicationService;
+import com.example.batch.console.application.report.ConsoleReportExcelApplicationService;
+import com.example.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import com.example.batch.console.domain.audit.web.response.AiChatResponse;
+import com.example.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
