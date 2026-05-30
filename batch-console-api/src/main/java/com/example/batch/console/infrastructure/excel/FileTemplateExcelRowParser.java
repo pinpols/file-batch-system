@@ -15,7 +15,7 @@ import com.example.batch.common.enums.FileEncryptType;
 import com.example.batch.common.enums.FileTemplateFormat;
 import com.example.batch.common.enums.FileTemplateType;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
-import com.example.batch.console.domain.param.FileTemplateConfigUpsertParam;
+import com.example.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

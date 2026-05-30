@@ -50,7 +50,7 @@ class QueryRecordConstructionConventionTest {
           "/domain/workflow/query/WorkflowTopologyQuery.java",
           "/domain/governance/query/DeadLetterTaskQuery.java",
           "/domain/ops/query/RetryScheduleQuery.java",
-          "/domain/query/FileErrorRecordQuery.java",
+          "/domain/file/query/FileErrorRecordQuery.java",
           // follow-up:复杂 record(8/11 字段)+ E2E support 临时豁免,留 QF 后续 sprint 处理
           "/test/java/com/example/batch/console/integration/JobInstanceQueryIntegrationTest.java",
           "/test/java/com/example/batch/console/integration/ConsoleAiAuditServiceIntegrationTest.java",
