@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.BatchWindowMapper">
+<mapper namespace="com.example.batch.console.domain.job.mapper.BatchWindowMapper">
     <select id="selectByQuery" resultType="map">
         select
             id,
@@ -56,7 +56,7 @@
         limit 1
     </select>
 
-    <insert id="upsertBatchWindow" parameterType="com.example.batch.console.domain.param.BatchWindowUpsertParam">
+    <insert id="upsertBatchWindow" parameterType="com.example.batch.console.domain.job.param.BatchWindowUpsertParam">
         insert into batch.batch_window (
             tenant_id, window_code, window_name, timezone,
             start_time, end_time, end_strategy, out_of_window_action,

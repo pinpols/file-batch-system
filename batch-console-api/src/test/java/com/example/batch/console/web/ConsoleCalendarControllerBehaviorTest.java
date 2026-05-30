@@ -16,13 +16,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.application.config.ConsoleCalendarApplicationService;
+import com.example.batch.console.domain.job.application.ConsoleCalendarApplicationService;
+import com.example.batch.console.domain.job.web.request.CalendarSaveRequest;
+import com.example.batch.console.domain.job.web.request.HolidayImportRequest;
+import com.example.batch.console.domain.job.web.request.HolidaySaveRequest;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.file.CalendarSaveRequest;
-import com.example.batch.console.web.request.file.HolidayImportRequest;
-import com.example.batch.console.web.request.file.HolidaySaveRequest;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

@@ -20,7 +20,7 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.HolidayRollRule;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.console.domain.param.BusinessCalendarUpsertParam;
+import com.example.batch.console.domain.job.param.BusinessCalendarUpsertParam;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;

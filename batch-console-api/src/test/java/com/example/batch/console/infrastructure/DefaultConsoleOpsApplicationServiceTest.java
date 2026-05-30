@@ -5,10 +5,10 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.console.domain.job.mapper.JobInstanceMapper;
 import com.example.batch.console.domain.notification.mapper.AlertEventMapper;
 import com.example.batch.console.infrastructure.ops.DefaultConsoleOpsApplicationService;
 import com.example.batch.console.mapper.ApprovalCommandMapper;
-import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.OutboxDeliveryLogMapper;
 import com.example.batch.console.mapper.OutboxRetryLogMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;

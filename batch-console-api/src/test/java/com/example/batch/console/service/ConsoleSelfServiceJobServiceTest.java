@@ -9,9 +9,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.domain.job.service.ConsoleSelfServiceJobService;
+import com.example.batch.console.domain.job.service.ConsoleSelfServiceJobService.CompensationParam;
+import com.example.batch.console.domain.job.service.ConsoleSelfServiceJobService.RerunParam;
 import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
-import com.example.batch.console.service.ConsoleSelfServiceJobService.CompensationParam;
-import com.example.batch.console.service.ConsoleSelfServiceJobService.RerunParam;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

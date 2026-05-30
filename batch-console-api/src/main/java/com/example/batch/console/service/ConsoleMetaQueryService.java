@@ -100,14 +100,15 @@ public class ConsoleMetaQueryService {
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleQueryCacheService cacheService;
   private final MessageSource messageSource;
-  private final com.example.batch.console.mapper.StepRegistryQueryMapper stepRegistryQueryMapper;
+  private final com.example.batch.console.domain.job.mapper.StepRegistryQueryMapper
+      stepRegistryQueryMapper;
 
   public ConsoleMetaQueryService(
       ConsoleMetaQueryMapper repository,
       ConsoleTenantGuard tenantGuard,
       ConsoleQueryCacheService cacheService,
       MessageSource messageSource,
-      com.example.batch.console.mapper.StepRegistryQueryMapper stepRegistryQueryMapper) {
+      com.example.batch.console.domain.job.mapper.StepRegistryQueryMapper stepRegistryQueryMapper) {
     this.repository = repository;
     this.tenantGuard = tenantGuard;
     this.cacheService = cacheService;

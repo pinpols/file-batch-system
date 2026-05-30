@@ -13,12 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.application.job.ConsoleJobBundleApplicationService;
+import com.example.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
+import com.example.batch.console.domain.job.web.request.JobBundleCreateRequest;
+import com.example.batch.console.domain.job.web.request.JobBundleImportRequest;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.job.JobBundleCreateRequest;
-import com.example.batch.console.web.request.job.JobBundleImportRequest;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
