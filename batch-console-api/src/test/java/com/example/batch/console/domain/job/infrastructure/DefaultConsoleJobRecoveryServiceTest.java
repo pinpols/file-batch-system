@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-<<<<<<< HEAD:batch-console-api/src/test/java/com/example/batch/console/infrastructure/job/DefaultConsoleJobRecoveryServiceTest.java
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;

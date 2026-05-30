@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-<<<<<<< HEAD:batch-console-api/src/test/java/com/example/batch/console/domain/workflow/infrastructure/DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest.java
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;

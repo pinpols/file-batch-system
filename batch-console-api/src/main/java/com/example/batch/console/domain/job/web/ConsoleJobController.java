@@ -5,7 +5,6 @@ import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-<<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/web/ConsoleJobController.java
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobApprovalService;
 import com.example.batch.console.domain.job.application.ConsoleJobRecoveryService;
@@ -21,7 +20,6 @@ import com.example.batch.console.domain.job.web.response.ConsoleBatchDayCatchUpR
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
-<<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/web/ConsoleJobController.java
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;

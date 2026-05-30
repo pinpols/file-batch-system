@@ -1,7 +1,6 @@
 package com.example.batch.console.domain.job.web;
 
 import com.example.batch.common.dto.CommonResponse;
-<<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/web/ConsoleJobDefinitionController.java
 import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.domain.job.application.ConsoleJobDefinitionApplicationService;
 import com.example.batch.console.domain.job.web.request.BatchEnabledPatchRequest;

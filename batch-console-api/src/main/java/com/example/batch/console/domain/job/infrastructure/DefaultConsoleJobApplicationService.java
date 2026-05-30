@@ -1,6 +1,5 @@
 package com.example.batch.console.domain.job.infrastructure;
 
-<<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/infrastructure/job/DefaultConsoleJobApplicationService.java
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobApplicationService;

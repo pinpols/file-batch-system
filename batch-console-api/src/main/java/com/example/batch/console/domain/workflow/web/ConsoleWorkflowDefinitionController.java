@@ -1,7 +1,6 @@
 package com.example.batch.console.domain.workflow.web;
 
 import com.example.batch.common.dto.CommonResponse;
-<<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/domain/workflow/web/ConsoleWorkflowDefinitionController.java
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.domain.workflow.infrastructure.WorkflowMermaidRenderer;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
