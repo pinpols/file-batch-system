@@ -37,6 +37,7 @@
 | 028 | [ADR-028-sensor-wait-node.md](./ADR-028-sensor-wait-node.md)                             | Sensor WAIT 节点：workflow_node_type=WAIT + 4 类 sensor（HTTP/FILE/KAFKA/TIME）+ 终态后下游派发 + V16 静态校验（Accepted） |
 | 029 | [ADR-029-shared-config-defaults-module.md](./ADR-029-shared-config-defaults-module.md)   | 共享配置基线 `batch-defaults.yml` 位于 `batch-common/src/main/resources/`,由 `ConfigDriftGuardTest` 守护 classpath 存在性 + OWNED_KEYS(Revised:Accepted,2026-05-16;原独立模块方案被驳回为过度抽象) |
 | 030 | [ADR-030-content-verifier-spi.md](./ADR-030-content-verifier-spi.md)                     | 产物内容验收 SPI：`ContentVerifier` + `ContentVerifierRegistry` + Micrometer Timer/Counter；首发实现 ExportFileNonEmptyVerifier；stage hot path 接入由后续 PR 按需做（Accepted）   |
+| 034 | [ADR-034-cap-positioning.md](./ADR-034-cap-positioning.md)                               | CAP 定位:核心调度链路 = **CP**(任务 CLAIM / 状态机 / outbox / RBAC / 租户 / 审批必须强一致,牺牲可用),只读 / 观测层 = **AP**(Dashboard / trigger list 等走 `DownstreamFallback` 降级,允许 stale)。例外 + 落地机制 + 何时升级见 ADR(Accepted) |
 
 ### 优先级 + 范围边界纪律
 
