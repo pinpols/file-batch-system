@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.storedproc;
+package com.example.batch.worker.spi.storedproc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
