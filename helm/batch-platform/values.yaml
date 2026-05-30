@@ -407,6 +407,59 @@ workerProcess:
     periodSeconds: 10
     failureThreshold: 3
 
+# ADR-029 专用 Task SPI worker:dual-use(RCE 级 shell/stored-proc)能力隔离进程。
+# 最小权限部署:配独立 serviceAccountName + 独立受限 envFromSecretName(平台库 claim/lease 用
+# 低权限账号,不含业务库/MinIO 凭据)+ NetworkPolicy 限制出向。executors 默认全关,按需开。
+workerSpi:
+  javaOptsExtra: ""
+  replicaCount: 1
+  port: 18086
+  # 最小权限 hooks(ops 填;留空则回退共享 SA/secret 仅为不阻断起步,生产务必配独立的)
+  serviceAccountName: ""
+  envFromSecretName: ""
+  # 原子任务可能含外部调用(http/shell),给中等优雅停机
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 120
+    preStopSleepSeconds: 15
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "384Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+  service:
+    type: ClusterIP
+    port: 18086
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  keda:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    pollingInterval: 30
+    cooldownPeriod: 120
+    topic: "batch.task.dispatch.task"
+    consumerGroup: "batch-worker-spi"
+    lagThreshold: "20"
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 18086
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 18086
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
 workerDispatch:
   # 大文件流 + Netty direct buffer 上量,扩到 1G(覆盖全局 512M 默认)
   javaOptsExtra: "-XX:MaxDirectMemorySize=1g"
