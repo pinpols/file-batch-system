@@ -12,4 +12,13 @@ public class BatchMqTopicsPropertiesTest {
 
     assertThat(properties.resolveDispatchTopic("PROCESS")).isEqualTo("batch.task.dispatch.process");
   }
+
+  @Test
+  void resolveDispatchTopic_returnsTaskTopicForTaskWorkerType() {
+    BatchMqTopicsProperties properties = new BatchMqTopicsProperties();
+
+    // ADR-029:TASK worker_type → 专属 batch.task.dispatch.task(大小写不敏感)
+    assertThat(properties.resolveDispatchTopic("TASK")).isEqualTo("batch.task.dispatch.task");
+    assertThat(properties.resolveDispatchTopic("task")).isEqualTo("batch.task.dispatch.task");
+  }
 }
