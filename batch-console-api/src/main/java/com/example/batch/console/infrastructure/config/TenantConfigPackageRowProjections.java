@@ -35,7 +35,7 @@ import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelV
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
 
-import com.example.batch.console.domain.entity.JobDefinitionEntity;
+import com.example.batch.console.domain.job.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowNodeEntity;

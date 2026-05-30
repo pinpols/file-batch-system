@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.example.batch.console.domain.audit.mapper.OperationAuditMapper;
-import com.example.batch.console.support.auth.ConsolePrincipal;
+import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
 import java.util.List;

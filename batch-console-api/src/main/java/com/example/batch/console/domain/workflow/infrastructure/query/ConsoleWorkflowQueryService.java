@@ -1,11 +1,12 @@
 package com.example.batch.console.domain.workflow.infrastructure.query;
 
-import static com.example.batch.console.infrastructure.query.ConsoleQuerySupport.*;
+import static com.example.batch.console.domain.observability.infrastructure.ConsoleQuerySupport.*;
 
 import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -28,7 +29,6 @@ import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNod
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowTopologyResponse;
-import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

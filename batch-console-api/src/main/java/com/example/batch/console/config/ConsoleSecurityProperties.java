@@ -1,7 +1,7 @@
 package com.example.batch.console.config;
 
 import com.example.batch.common.config.BatchProfileSupport;
-import com.example.batch.console.support.auth.ConsoleRoles;
+import com.example.batch.console.domain.rbac.support.ConsoleRoles;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -93,7 +93,7 @@ public class ConsoleSecurityProperties {
 
   /**
    * 登录请求体加密（RSA-2048 OAEP-SHA256 包装 AES-256-GCM key）。FE 加密 {@code {username,password}}, BE 解密后走原
-   * {@link com.example.batch.console.support.auth.ConsoleLoginService}。
+   * {@link com.example.batch.console.domain.rbac.support.ConsoleLoginService}。
    *
    * <p>双模式 + prod 守护:
    *
