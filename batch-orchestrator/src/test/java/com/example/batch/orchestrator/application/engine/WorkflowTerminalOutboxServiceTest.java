@@ -9,6 +9,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.event.DomainEvent;
 import com.example.batch.common.event.DomainEventPublisher;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.orchestrator.infrastructure.lineage.OpenLineageEmitter;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,12 +31,14 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Mock private DomainEventPublisher domainEventPublisher;
 
+  @Mock private OpenLineageEmitter openLineageEmitter;
+
   private WorkflowTerminalOutboxService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new WorkflowTerminalOutboxService(domainEventPublisher);
+    service = new WorkflowTerminalOutboxService(domainEventPublisher, openLineageEmitter);
   }
 
   // ===== isTerminal =====
