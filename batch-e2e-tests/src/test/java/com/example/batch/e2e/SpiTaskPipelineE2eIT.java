@@ -88,15 +88,13 @@ class SpiTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   @Test
   void storedProcTaskRunsThroughKafkaAndReportsSuccess() {
-    // 用 FUNCTION RETURNS void:executor 经 JDBC {call ...} 转义,PG 默认 escapeSyntaxCallMode=select
-    // 会以 SELECT fn() 调用(真 PROCEDURE 需 CALL,不在本执行器当前 CALL 形态下);本 e2e 验证派发链 + CALL 语句路径。
+    // 真 PROCEDURE:executor 经 pg_proc.prokind 判定后发原生 CALL(PG 默认 {call}→SELECT 调真过程会报错)。
     jdbcTemplate.execute(
-        "CREATE OR REPLACE FUNCTION batch.e2e_spi_fn() RETURNS void LANGUAGE plpgsql"
-            + " AS $$ BEGIN END; $$");
+        "CREATE OR REPLACE PROCEDURE batch.e2e_spi_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("taskType", "stored_proc");
-    params.put("procedureName", "batch.e2e_spi_fn");
+    params.put("procedureName", "batch.e2e_spi_proc");
 
     launchAndAwaitSuccess(params);
   }
