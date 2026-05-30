@@ -96,9 +96,10 @@ batch:
           - batch
       http:
         enabled: true
-        # e2e 打本地 JDK HttpServer(127.0.0.1),需清掉默认 SSRF 黑名单(含 localhost/127.*);仅测试 profile
+        # e2e 打本地 JDK HttpServer(127.0.0.1):清 SSRF 黑名单 + 关 blockPrivateIps(否则 loopback 被拦);仅测试 profile
         blocked-host-patterns: []
         allowed-host-patterns: []
+        block-private-ips: false
   datasource:
     business:
       url: ${spring.datasource.url}
