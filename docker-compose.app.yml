@@ -10,10 +10,6 @@ x-app-runtime-env: &app-runtime-env
   BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
   LANG: ${BATCH_LOCALE:-C.UTF-8}
   LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
-  # /internal/** 服务间共享密钥;强制要求 .env.local 显式设置,防止落回默认 internal-secret(15 字符弱密钥)。
-  BATCH_INTERNAL_SECRET: ${BATCH_INTERNAL_SECRET:?BATCH_INTERNAL_SECRET is required}
-  BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
-  BATCH_REDIS_PORT: 6379
 
 services:
   console-api:
@@ -51,14 +47,14 @@ services:
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-console-api.log
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      # logback-spring.xml prod profile 的 FRONTEND_FILE 硬编码写 /logs/frontend.log;
+      # K8s 那边 helm 挂了 emptyDir,docker-compose 这里要对齐。
+      # 注:容器进程现在需要可写 /logs(若开启 read-only rootfs 须额外配)。
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
-      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       SERVER_PORT: 18080
       # S2-1 / R4-P2-3：docker-compose 本地开发刻意共享 management 与 business 端口，避免 port mapping 复杂化。
       # K8s prod 走 application-prod.yml 的 ${BATCH_MANAGEMENT_PORT:0}（random port），actuator 与业务端口
@@ -67,11 +63,8 @@ services:
       MANAGEMENT_SERVER_PORT: 18080
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     volumes:
-      - batch-app-logs:/app/logs
-      # logback-spring.xml prod profile 的 FRONTEND_FILE 硬编码写 /logs/frontend.log;
-      # K8s 那边 helm 挂了 emptyDir,docker-compose 这里要对齐,否则容器启动 logback 报
-      # "Failed to create parent directories for [/logs/frontend.log]" 直接 crash。
-      - batch-app-logs:/logs
+      - ./logs/docker:/app/logs
+      - ./logs/docker:/logs
     ports:
       - "${CONSOLE_API_PORT:-18080}:18080"
     networks:
@@ -120,20 +113,13 @@ services:
       # 容器内必须用容器网络名 kafka:29092 而非宿主机 localhost:19092。
       BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
-      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
-      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local/dev 在非生产白名单内。
-      # BATCH_SECURITY_BYPASS_MODE 跟其它 app 一致从 .env 注入(默认 false 保护生产);dev 设 true 可
-      # 一键放开 /api/triggers/launch 等用户态 API 鉴权,internal-secret 已被 anchor 强制注入,
-      # bypass 是否开不影响 /internal/** 服务间调用的双向校验。
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
-      BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
       SERVER_PORT: 18081
       MANAGEMENT_SERVER_PORT: 18081
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     ports:
       - "${TRIGGER_PORT:-18081}:18081"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -175,9 +161,6 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
-      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
@@ -187,7 +170,7 @@ services:
     ports:
       - "${ORCHESTRATOR_PORT:-18082}:18082"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -235,16 +218,13 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
-      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       LOGGING_FILE_NAME: /app/logs/batch-worker-import.log
       SERVER_PORT: 18083
       MANAGEMENT_SERVER_PORT: 18083
     ports:
       - "${WORKER_IMPORT_PORT:-18083}:18083"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -294,16 +274,13 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
-      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       LOGGING_FILE_NAME: /app/logs/batch-worker-export.log
       SERVER_PORT: 18084
       MANAGEMENT_SERVER_PORT: 18084
     ports:
       - "${WORKER_EXPORT_PORT:-18084}:18084"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -353,16 +330,13 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
-      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       LOGGING_FILE_NAME: /app/logs/batch-worker-process.log
       SERVER_PORT: 18086
       MANAGEMENT_SERVER_PORT: 18086
     ports:
       - "${WORKER_PROCESS_PORT:-18086}:18086"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -412,16 +386,13 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
-      # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       LOGGING_FILE_NAME: /app/logs/batch-worker-dispatch.log
       SERVER_PORT: 18085
       MANAGEMENT_SERVER_PORT: 18085
     ports:
       - "${WORKER_DISPATCH_PORT:-18085}:18085"
     volumes:
-      - batch-app-logs:/app/logs
+      - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
@@ -445,11 +416,4 @@ services:
 networks:
   batch-network:
     name: ${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network
-
-# 应用日志命名卷:替代原 `./logs/docker` bind 挂载。
-# CI 部署从 runner 工作区(非 Docker Desktop 共享路径)跑 up 时,bind 挂载的宿主机目录
-# 容器内不可写 → console-api 写 /logs/frontend.log 直接 crash。命名卷由 docker 管理、
-# 容器可写、与宿主机工作区路径无关(取日志用 docker logs / docker cp / 挂载该卷)。
-volumes:
-  batch-app-logs:
-    name: ${COMPOSE_PROJECT_NAME:-batch-platform}_app-logs
+    external: true

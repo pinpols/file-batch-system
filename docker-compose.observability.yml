@@ -1,10 +1,10 @@
 # 观测栈：Prometheus / Grafana / Loki / Jaeger / OTel Collector / Alertmanager / Exporters
-# 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f docker/compose/observability.yml up -d
+# 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 services:
 
   # ── 指标 ──────────────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:${PROMETHEUS_IMAGE_TAG:-v3.11.3}
+    image: prom/prometheus:v3.4.1
     container_name: batch-prometheus
     restart: unless-stopped
     entrypoint: ["/bin/sh", "/etc/prometheus/entrypoint.sh"]
@@ -124,7 +124,7 @@ services:
 
   # ── 基础设施 Exporters ───────────────────────────────────────────
   redis-exporter:
-    image: oliver006/redis_exporter:${REDIS_EXPORTER_IMAGE_TAG:-v1.84.0}
+    image: oliver006/redis_exporter:v1.73.0
     container_name: batch-redis-exporter
     restart: unless-stopped
     environment:
@@ -136,7 +136,7 @@ services:
         condition: service_healthy
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:${POSTGRES_EXPORTER_IMAGE_TAG:-v0.19.1}
+    image: prometheuscommunity/postgres-exporter:v0.16.0
     container_name: batch-postgres-exporter
     restart: unless-stopped
     environment:
@@ -148,7 +148,7 @@ services:
         condition: service_healthy
 
   kafka-exporter:
-    image: danielqsj/kafka-exporter:${KAFKA_EXPORTER_IMAGE_TAG:-v1.9.0}
+    image: danielqsj/kafka-exporter:v1.9.0
     container_name: batch-kafka-exporter
     restart: unless-stopped
     command: ["--kafka.server=kafka:29092"]
@@ -159,14 +159,14 @@ services:
         condition: service_healthy
 
   node-exporter:
-    image: prom/node-exporter:${NODE_EXPORTER_IMAGE_TAG:-v1.11.1}
+    image: prom/node-exporter:v1.9.1
     container_name: batch-node-exporter
     restart: unless-stopped
     networks:
       - batch-network
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:${CADVISOR_IMAGE_TAG:-v0.52.1}
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
     container_name: batch-cadvisor
     restart: unless-stopped
     privileged: true
