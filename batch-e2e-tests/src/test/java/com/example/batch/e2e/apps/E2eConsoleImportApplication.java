@@ -124,6 +124,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
     basePackages = {
       "com.example.batch.console.mapper",
       "com.example.batch.console.domain.audit.mapper",
+      "com.example.batch.console.domain.file.mapper",
       "com.example.batch.console.domain.governance.mapper",
       "com.example.batch.console.domain.job.mapper",
       "com.example.batch.console.domain.notification.mapper",
