@@ -27,7 +27,6 @@ import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.BatchDayQueryRequest;
 import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
-import com.example.batch.console.web.query.ConsoleAiAuditLogQueryRequest;
 import com.example.batch.console.web.query.DeadLetterQueryRequest;
 import com.example.batch.console.web.query.FileArrivalGroupQueryRequest;
 import com.example.batch.console.web.query.FileChainQueryRequest;
