@@ -6,7 +6,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.config.ConsoleResourceQueueApplicationService;
-import com.example.batch.console.mapper.ResourceQueueMapper;
+import com.example.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import com.example.batch.console.web.request.config.ResourceQueueCreateRequest;
 import com.example.batch.console.web.request.config.ResourceQueueUpdateRequest;

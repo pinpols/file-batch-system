@@ -12,7 +12,7 @@ import com.example.batch.console.web.request.job.RerunRequest;
 import com.example.batch.console.web.request.job.TaskReplayRequest;
 import com.example.batch.console.web.request.job.TriggerRequest;
 import com.example.batch.console.web.request.ops.BatchDayCatchUpRequest;
-import com.example.batch.console.web.request.ops.ConsoleCatchUpApprovalRequest;
+import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.response.file.ConsoleBatchDayCatchUpResponse;
 import java.util.List;
 import java.util.Map;

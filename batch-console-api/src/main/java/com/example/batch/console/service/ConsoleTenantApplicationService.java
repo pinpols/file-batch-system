@@ -7,7 +7,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.config.ConsoleTenantConfigCopyService;
-import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
+import com.example.batch.console.domain.ops.application.ConsoleTriggerProxyService;
 import com.example.batch.console.domain.param.TenantUpsertParam;
 import com.example.batch.console.domain.workflow.mapper.WorkflowRunMapper;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;

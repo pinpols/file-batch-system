@@ -30,7 +30,7 @@ import com.example.batch.console.mapper.BatchWindowMapper;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.mapper.ResourceQueueMapper;
+import com.example.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;

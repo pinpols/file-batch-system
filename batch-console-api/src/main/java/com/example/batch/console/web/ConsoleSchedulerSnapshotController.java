@@ -1,11 +1,11 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
+import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.cache.ConsoleQueryCacheService;
-import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotHistoryResponse;
-import com.example.batch.console.web.response.ops.ConsoleSchedulerSnapshotResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

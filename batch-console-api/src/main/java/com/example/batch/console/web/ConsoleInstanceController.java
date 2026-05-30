@@ -1,7 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
+import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;

@@ -10,7 +10,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.config.ConsoleConfigApprovalApplicationService;
 import com.example.batch.console.domain.entity.ConfigReleaseEntity;
-import com.example.batch.console.mapper.ConfigApprovalMapper;
+import com.example.batch.console.domain.ops.mapper.ConfigApprovalMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
 import com.example.batch.console.support.ConfigChangeLogBuilder;

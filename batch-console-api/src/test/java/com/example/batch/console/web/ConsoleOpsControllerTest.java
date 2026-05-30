@@ -10,14 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
-import com.example.batch.console.application.ops.ConsoleOutboxOpsApplicationService;
-import com.example.batch.console.service.ConsoleKafkaLagQueryService;
+import com.example.batch.console.domain.ops.application.ConsoleOpsApplicationService;
+import com.example.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
+import com.example.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
