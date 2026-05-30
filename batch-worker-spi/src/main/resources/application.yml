@@ -4,7 +4,8 @@
 # (不连业务库 —— 本 worker 只需平台库做 claim/lease/report,sql/proc executor 要库时另配低权限连接)。
 # 独立 K8s serviceaccount / 网络策略 / seccomp 由部署层(PR-3)下放。
 server:
-  port: ${BATCH_WORKER_SPI_PORT:18086}
+  # 18086 被 process worker 占用,SPI worker 用 18087(仅健康检查/指标)
+  port: ${BATCH_WORKER_SPI_PORT:18087}
 
 spring:
   application:
@@ -27,8 +28,8 @@ spring:
 
 batch:
   worker:
-    # worker_type=TASK(ADR-029 专属类型,对应 batch.task.dispatch.task topic)
-    type: TASK
+    # worker_type=SPI(ADR-029 专属类型,对应 batch.task.dispatch.spi topic)
+    type: SPI
     max-concurrent-tasks: ${BATCH_WORKER_SPI_MAX_CONCURRENT_TASKS:4}
     kafka:
       subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}
@@ -39,10 +40,10 @@ batch:
     # 两个 @ConfigurationProperties 同前缀共存,子键不冲突。
     spi:
       worker-code: ${BATCH_WORKER_SPI_CODE:spi-node-1}
-      worker-type: TASK
+      worker-type: SPI
       tenant-id: ${BATCH_WORKER_SPI_TENANT_ID:default-tenant}
       heartbeat-interval-millis: ${BATCH_WORKER_SPI_HEARTBEAT_INTERVAL_MILLIS:15000}
-      topic: ${BATCH_TOPIC_DISPATCH_TASK:batch.task.dispatch.task}
+      topic: ${BATCH_TOPIC_DISPATCH_SPI:batch.task.dispatch.spi}
       consumer-group-id: ${BATCH_WORKER_SPI_CONSUMER_GROUP_ID:batch-worker-spi}
       # 能力标签:声明本 worker 处理哪些 SPI taskType,orchestrator 按 resource_tag/capability 匹配
       capability-tags: ${BATCH_WORKER_SPI_CAPABILITY_TAGS:}

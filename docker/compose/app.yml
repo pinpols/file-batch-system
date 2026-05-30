@@ -442,6 +442,65 @@ services:
       orchestrator:
         condition: service_healthy
 
+  # ADR-029 专用 SPI worker(原子任务 shell/sql/stored-proc/http)。
+  # 注:此处 env 与 pipeline worker 对齐以保证 dev 启动一致;生产的最小权限隔离
+  # (独立低权限 DB role / IAM / 网络策略)由 helm chart(PR-3 worker-spi.yaml)下放,compose 不强制。
+  worker-spi:
+    profiles: ["apps"]
+    image: batch-worker-spi:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+      args:
+        MODULE: batch-worker-spi
+    container_name: batch-worker-spi
+    restart: unless-stopped
+    environment:
+      <<: *app-runtime-env
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      SPRING_FLYWAY_ENABLED: "false"
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
+      BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business}
+      BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
+      BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:?BATCH_BUSINESS_DB_PASSWORD is required}
+      BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
+      BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
+      BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
+      BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:?BATCH_MINIO_SECRET_KEY is required}
+      BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
+      BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
+      LOGGING_FILE_NAME: /app/logs/batch-worker-spi.log
+      SERVER_PORT: 18087
+      MANAGEMENT_SERVER_PORT: 18087
+    ports:
+      - "${WORKER_SPI_PORT:-18087}:18087"
+    volumes:
+      - ./logs/docker:/app/logs
+    networks:
+      - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18087/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      orchestrator:
+        condition: service_healthy
+
 networks:
   batch-network:
     name: ${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network
