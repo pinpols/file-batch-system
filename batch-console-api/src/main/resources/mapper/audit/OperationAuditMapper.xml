@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.audit.mapper.OperationAuditMapper">
+
+    <resultMap id="AuditRowMap" type="com.example.batch.console.domain.audit.mapper.OperationAuditMapper$AuditRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="aggregate_type" javaType="java.lang.String"/>
+            <arg column="aggregate_id" javaType="java.lang.String"/>
+            <arg column="action" javaType="java.lang.String"/>
+            <arg column="operator_id" javaType="java.lang.String"/>
+            <arg column="operator_role" javaType="java.lang.String"/>
+            <arg column="result" javaType="java.lang.String"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="params" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="ip_hash" javaType="java.lang.String"/>
+            <arg column="ua_hash" javaType="java.lang.String"/>
+            <arg column="event_version" javaType="java.lang.Integer"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <!-- INSERT:created_at 用 DB default(CURRENT_TIMESTAMP),event_version 由 Aspect 决定。
+         params JSONB 列写入时显式 ::jsonb 转换,Java 端传字符串,DB 自己 parse + 校验。 -->
+    <insert id="insert">
+        INSERT INTO batch.console_operation_audit (
+            tenant_id, aggregate_type, aggregate_id, action,
+            operator_id, operator_role,
+            result, error_code, error_message,
+            params,
+            trace_id, request_id, ip_hash, ua_hash,
+            event_version
+        ) VALUES (
+            #{e.tenantId}, #{e.aggregateType}, #{e.aggregateId}, #{e.action},
+            #{e.operatorId}, #{e.operatorRole},
+            #{e.result}, #{e.errorCode}, #{e.errorMessage},
+            <choose>
+                <when test="e.paramsJson != null">#{e.paramsJson}::jsonb</when>
+                <otherwise>NULL</otherwise>
+            </choose>,
+            #{e.traceId}, #{e.requestId}, #{e.ipHash}, #{e.uaHash},
+            #{e.eventVersion}
+        )
+    </insert>
+
+    <sql id="queryWhere">
+        <where>
+            <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
+            <if test="aggregateType != null and aggregateType != ''">AND aggregate_type = #{aggregateType}</if>
+            <if test="aggregateId != null and aggregateId != ''">AND aggregate_id = #{aggregateId}</if>
+            <if test="action != null and action != ''">AND action = #{action}</if>
+            <if test="operatorId != null and operatorId != ''">AND operator_id = #{operatorId}</if>
+            <if test="result != null and result != ''">AND result = #{result}</if>
+            <if test="traceId != null and traceId != ''">AND trace_id = #{traceId}</if>
+            <if test="startTime != null">AND created_at &gt;= #{startTime}</if>
+            <if test="endTime != null">AND created_at &lt;= #{endTime}</if>
+        </where>
+    </sql>
+
+    <select id="query" resultMap="AuditRowMap">
+        SELECT id, tenant_id, aggregate_type, aggregate_id, action,
+               operator_id, operator_role,
+               result, error_code, error_message,
+               params::text AS params,
+               trace_id, request_id, ip_hash, ua_hash,
+               event_version, created_at
+        FROM batch.console_operation_audit
+        <include refid="queryWhere"/>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM batch.console_operation_audit
+        <include refid="queryWhere"/>
+    </select>
+
+</mapper>

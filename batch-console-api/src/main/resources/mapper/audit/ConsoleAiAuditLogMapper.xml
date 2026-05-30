@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper">
+    <resultMap id="ConsoleAiAuditLogResultMap" type="com.example.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="request_id" property="requestId"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="prompt_category" property="promptCategory"/>
+        <result column="prompt_decision" property="promptDecision"/>
+        <result column="model_name" property="modelName"/>
+        <result column="prompt_hash" property="promptHash"/>
+        <result column="prompt_preview" property="promptPreview"/>
+        <result column="response_hash" property="responseHash"/>
+        <result column="response_preview" property="responsePreview"/>
+        <result column="refusal_reason" property="refusalReason"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.console_ai_audit_log (
+            tenant_id, request_id, trace_id, session_id, operator_id,
+            prompt_category, prompt_decision, model_name,
+            prompt_hash, prompt_preview, response_hash, response_preview, refusal_reason
+        ) values (
+            #{tenantId}, #{requestId}, #{traceId}, #{sessionId}, #{operatorId},
+            #{promptCategory}, #{promptDecision}, #{modelName},
+            #{promptHash}, #{promptPreview}, #{responseHash}, #{responsePreview}, #{refusalReason}
+        )
+    </insert>
+
+    <select id="selectByQuery" resultMap="ConsoleAiAuditLogResultMap">
+        select *
+        from batch.console_ai_audit_log
+        where tenant_id = #{tenantId}
+        <if test="sessionId != null and sessionId != ''">
+            and session_id = #{sessionId}
+        </if>
+        <if test="operatorId != null and operatorId != ''">
+            and operator_id = #{operatorId}
+        </if>
+        <if test="promptCategory != null and promptCategory != ''">
+            and prompt_category = #{promptCategory}
+        </if>
+        <if test="promptDecision != null and promptDecision != ''">
+            and prompt_decision = #{promptDecision}
+        </if>
+        <if test="fromTime != null">
+            and created_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and created_at &lt;= #{toTime}
+        </if>
+        order by id desc
+        <if test="pageRequest != null">
+            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.console_ai_audit_log
+        where tenant_id = #{tenantId}
+        <if test="sessionId != null and sessionId != ''">
+            and session_id = #{sessionId}
+        </if>
+        <if test="operatorId != null and operatorId != ''">
+            and operator_id = #{operatorId}
+        </if>
+        <if test="promptCategory != null and promptCategory != ''">
+            and prompt_category = #{promptCategory}
+        </if>
+        <if test="promptDecision != null and promptDecision != ''">
+            and prompt_decision = #{promptDecision}
+        </if>
+        <if test="fromTime != null">
+            and created_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and created_at &lt;= #{toTime}
+        </if>
+    </select>
+</mapper>
