@@ -2,7 +2,6 @@ package com.example.batch.console.domain.notification.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.console.application.config.ConsoleAlertRoutingApplicationService;
 import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;

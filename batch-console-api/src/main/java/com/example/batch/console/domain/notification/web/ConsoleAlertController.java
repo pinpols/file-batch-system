@@ -2,7 +2,6 @@ package com.example.batch.console.domain.notification.web;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.monitor.ConsoleAlertApplicationService;
 import com.example.batch.console.domain.audit.support.AuditAction;
 import com.example.batch.console.domain.notification.application.ConsoleAlertApplicationService;
 import com.example.batch.console.domain.notification.web.response.ConsoleAlertActionResponse;
