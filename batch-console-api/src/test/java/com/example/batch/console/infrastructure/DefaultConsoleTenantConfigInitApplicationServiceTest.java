@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
+import com.example.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
@@ -18,7 +19,6 @@ import com.example.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import com.example.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.infrastructure.config.TenantConfigInitApplyHandlers;
-import com.example.batch.console.mapper.AlertRoutingConfigMapper;
 import com.example.batch.console.mapper.BatchWindowMapper;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.CalendarHolidayMapper;

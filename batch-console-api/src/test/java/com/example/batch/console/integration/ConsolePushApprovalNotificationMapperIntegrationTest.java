@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.BatchConsoleApiApplication;
-import com.example.batch.console.domain.entity.ConsolePushApprovalNotificationEntity;
-import com.example.batch.console.mapper.ConsolePushApprovalNotificationMapper;
-import com.example.batch.console.support.push.PendingApprovalNotification;
+import com.example.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
+import com.example.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
+import com.example.batch.console.domain.notification.support.PendingApprovalNotification;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
