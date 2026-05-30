@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.sql;
+package com.example.batch.worker.spi.sql;
 
 import java.time.Duration;
 import java.util.Set;
