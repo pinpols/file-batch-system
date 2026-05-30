@@ -3,6 +3,7 @@ package com.example.batch.console.domain.job.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ops.ConsoleOrchestratorProxyService;
 import com.example.batch.console.domain.job.web.request.BatchDayOperateRequest;
+import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;

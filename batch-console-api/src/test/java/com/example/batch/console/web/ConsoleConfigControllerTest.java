@@ -20,7 +20,7 @@ import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.config.ConsoleConfigChangeLogResponse;
 import com.example.batch.console.web.response.config.ConsoleConfigReleaseResponse;
-import com.example.batch.console.web.response.ops.ConsoleSecretVersionResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleSecretVersionResponse;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

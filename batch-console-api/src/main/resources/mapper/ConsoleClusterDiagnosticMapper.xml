@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.batch.console.mapper.ConsoleClusterDiagnosticMapper">
+<mapper namespace="com.example.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper">
 
     <!-- record 投影：用 <constructor> 显式按 canonical constructor 入参顺序绑定列;
          避免依赖 MyBatis 的 mapUnderscoreToCamelCase / 参数名反射,跨 JDK / 编译开关稳定。 -->

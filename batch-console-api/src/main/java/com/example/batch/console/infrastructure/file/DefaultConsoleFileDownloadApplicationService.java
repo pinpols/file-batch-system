@@ -10,7 +10,7 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.file.ConsoleFileDownloadApplicationService;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.query.FileErrorRecordQuery;
-import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
+import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.mapper.FileErrorRecordMapper;
 import com.example.batch.console.mapper.FileRecordMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;

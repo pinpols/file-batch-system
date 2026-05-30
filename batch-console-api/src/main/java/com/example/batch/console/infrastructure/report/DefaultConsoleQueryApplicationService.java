@@ -39,7 +39,7 @@ import com.example.batch.console.domain.job.web.response.ConsoleJobStepInstanceR
 import com.example.batch.console.domain.job.web.response.ConsoleRetryScheduleResponse;
 import com.example.batch.console.infrastructure.query.ConsoleFileQueryService;
 import com.example.batch.console.infrastructure.query.ConsoleJobQueryService;
-import com.example.batch.console.infrastructure.query.ConsoleOpsQueryService;
+import com.example.batch.console.domain.ops.infrastructure.ConsoleOpsQueryService;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.FileArrivalGroupQueryRequest;
@@ -68,6 +68,18 @@ import com.example.batch.console.web.response.ops.ConsoleOutboxDeliveryLogRespon
 import com.example.batch.console.web.response.ops.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.web.response.ops.ConsolePendingCatchUpResponse;
 import com.example.batch.console.web.response.ops.ConsoleWorkerRegistryResponse;
+import com.example.batch.console.web.response.job.ConsoleJobDefinitionResponse;
+import com.example.batch.console.web.response.job.ConsoleJobExecutionLogResponse;
+import com.example.batch.console.web.response.job.ConsoleJobInstanceResponse;
+import com.example.batch.console.web.response.job.ConsoleJobPartitionResponse;
+import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse;
+import com.example.batch.console.web.response.job.ConsoleRetryScheduleResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleApprovalCommandResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
+import com.example.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;

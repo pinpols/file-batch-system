@@ -7,7 +7,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.ConsoleAsyncConfiguration;
 import com.example.batch.console.config.ConsoleRealtimeProperties;
-import com.example.batch.console.web.response.ops.ConsoleSseEventResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleSseEventResponse;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;

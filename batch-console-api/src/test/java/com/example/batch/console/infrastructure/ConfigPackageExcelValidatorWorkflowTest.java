@@ -13,6 +13,8 @@ import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.ResourceQueueMapper;
+import com.example.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.time.Instant;
 import java.util.LinkedHashMap;

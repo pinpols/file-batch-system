@@ -26,9 +26,9 @@ class DefaultConsoleReportExcelApplicationServiceTest {
   void shouldExportConfigReleasesWorkbook() throws Exception {
     ConsoleConfigApplicationService configService = mock(ConsoleConfigApplicationService.class);
     ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);
-    com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient
+    com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient
         orchestratorInternalRestClient =
-            mock(com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient.class);
+            mock(com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient.class);
     DefaultConsoleReportExcelApplicationService service =
         new DefaultConsoleReportExcelApplicationService(
             configService, queryService, orchestratorInternalRestClient, dateTimeSupport());

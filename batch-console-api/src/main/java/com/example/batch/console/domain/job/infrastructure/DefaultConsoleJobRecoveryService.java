@@ -12,6 +12,14 @@ import com.example.batch.console.domain.job.web.request.PartitionReplayRequest;
 import com.example.batch.console.domain.job.web.request.RerunRequest;
 import com.example.batch.console.domain.job.web.request.TaskReplayRequest;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
+import com.example.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport;
+import com.example.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.ApprovalSubmitContext;
+import com.example.batch.console.domain.ops.infrastructure.ConsoleJobOpsSupport.CompensationPayload;
+import com.example.batch.console.web.request.job.CompensateRequest;
+import com.example.batch.console.web.request.job.CompensationCommandRequest;
+import com.example.batch.console.web.request.job.PartitionReplayRequest;
+import com.example.batch.console.web.request.job.RerunRequest;
+import com.example.batch.console.web.request.job.TaskReplayRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

@@ -1,7 +1,7 @@
 package com.example.batch.console.domain.job.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.infrastructure.ops.OrchestratorInternalRestClient;
+import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
 import java.util.LinkedHashMap;

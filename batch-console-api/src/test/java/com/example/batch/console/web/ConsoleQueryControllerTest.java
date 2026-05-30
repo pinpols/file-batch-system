@@ -28,6 +28,8 @@ import com.example.batch.console.web.response.job.ConsoleJobStepInstanceResponse
 import com.example.batch.console.web.response.ops.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ops.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ops.ConsoleAuditLogResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleApprovalCommandResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleAuditLogResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;

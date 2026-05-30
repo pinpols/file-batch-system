@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.application.config.ConsoleTenantConfigCopyService;
-import com.example.batch.console.application.ops.ConsoleTriggerProxyService;
+import com.example.batch.console.domain.ops.application.ConsoleTriggerProxyService;
 import com.example.batch.console.domain.workflow.mapper.WorkflowRunMapper;
 import com.example.batch.console.domain.job.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;

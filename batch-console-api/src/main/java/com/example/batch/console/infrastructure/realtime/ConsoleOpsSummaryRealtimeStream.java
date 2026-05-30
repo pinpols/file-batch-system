@@ -1,10 +1,10 @@
 package com.example.batch.console.infrastructure.realtime;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.application.ops.ConsoleOpsApplicationService;
+import com.example.batch.console.domain.ops.application.ConsoleOpsApplicationService;
 import com.example.batch.console.config.ConsoleAsyncConfiguration;
 import com.example.batch.console.support.auth.ConsoleTenantGuard;
-import com.example.batch.console.web.response.ops.ConsoleOpsSummaryResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PreDestroy;
