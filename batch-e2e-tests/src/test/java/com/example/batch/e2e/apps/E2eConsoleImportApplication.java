@@ -121,7 +121,17 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
     basePackages = "com.example.batch.common.mapper",
     sqlSessionFactoryRef = "sqlSessionFactory")
 @MapperScan(
-    basePackages = "com.example.batch.console.mapper",
+    basePackages = {
+      "com.example.batch.console.mapper",
+      "com.example.batch.console.domain.audit.mapper",
+      "com.example.batch.console.domain.governance.mapper",
+      "com.example.batch.console.domain.job.mapper",
+      "com.example.batch.console.domain.notification.mapper",
+      "com.example.batch.console.domain.observability.mapper",
+      "com.example.batch.console.domain.ops.mapper",
+      "com.example.batch.console.domain.rbac.mapper",
+      "com.example.batch.console.domain.workflow.mapper"
+    },
     sqlSessionFactoryRef = "sqlSessionFactory",
     nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class)
 @MapperScan(
