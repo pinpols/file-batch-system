@@ -2,17 +2,11 @@ package com.example.batch.console.domain.job.application;
 
 <<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/application/job/ConsoleJobRecoveryService.java
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
-import com.example.batch.console.web.request.job.CompensateRequest;
-import com.example.batch.console.web.request.job.CompensationCommandRequest;
-import com.example.batch.console.web.request.job.PartitionReplayRequest;
-import com.example.batch.console.web.request.job.RerunRequest;
-import com.example.batch.console.web.request.job.TaskReplayRequest;
 import com.example.batch.console.domain.job.web.request.CompensateRequest;
 import com.example.batch.console.domain.job.web.request.CompensationCommandRequest;
 import com.example.batch.console.domain.job.web.request.PartitionReplayRequest;
 import com.example.batch.console.domain.job.web.request.RerunRequest;
 import com.example.batch.console.domain.job.web.request.TaskReplayRequest;
-import com.example.batch.console.web.request.ops.DeadLetterReplayRequest;
 
 /** 控制台作业恢复服务：补偿、重跑、死信重放、分区重放、任务重放。 */
 public interface ConsoleJobRecoveryService {

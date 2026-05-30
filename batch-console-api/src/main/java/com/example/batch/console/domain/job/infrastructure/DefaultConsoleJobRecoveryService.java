@@ -4,16 +4,8 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 <<<<<<< HEAD:batch-console-api/src/main/java/com/example/batch/console/infrastructure/job/DefaultConsoleJobRecoveryService.java
-import com.example.batch.console.application.job.ConsoleJobRecoveryService;
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.CompensationPayload;
-import com.example.batch.console.web.request.job.CompensateRequest;
-import com.example.batch.console.web.request.job.CompensationCommandRequest;
-import com.example.batch.console.web.request.job.PartitionReplayRequest;
-import com.example.batch.console.web.request.job.RerunRequest;
-import com.example.batch.console.web.request.job.TaskReplayRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import com.example.batch.console.domain.job.web.request.CompensateRequest;
 import com.example.batch.console.domain.job.web.request.CompensationCommandRequest;
@@ -21,9 +13,6 @@ import com.example.batch.console.domain.job.web.request.PartitionReplayRequest;
 import com.example.batch.console.domain.job.web.request.RerunRequest;
 import com.example.batch.console.domain.job.web.request.TaskReplayRequest;
 import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport;
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.ApprovalSubmitContext;
-import com.example.batch.console.infrastructure.query.ConsoleJobOpsSupport.CompensationPayload;
-import com.example.batch.console.web.request.ops.DeadLetterReplayRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
