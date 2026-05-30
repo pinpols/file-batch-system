@@ -21,7 +21,6 @@ import com.example.batch.console.domain.governance.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.governance.query.DeadLetterTaskQuery;
 import com.example.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
 import com.example.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
-import com.example.batch.console.domain.query.AlertEventQuery;
 import com.example.batch.console.domain.notification.query.AlertEventQuery;
 import com.example.batch.console.domain.notification.web.query.AlertEventQueryRequest;
 import com.example.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
