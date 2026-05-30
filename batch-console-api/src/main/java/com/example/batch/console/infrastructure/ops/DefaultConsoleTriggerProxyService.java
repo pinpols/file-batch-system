@@ -59,8 +59,9 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
 
   @Override
   public List<Object> triggerList() {
-    // 只读查询,trigger 不可达 → 降级为空 list + metrics(详见
+    // 只读查询,trigger 不可达 → DownstreamFallback 降级为空 list + metrics(详见
     // docs/runbook/downstream-degradation.md "trigger:list" 条目)。
+    // 状态变更(register / pause / resume / triggerAction)仍 fail-fast,见各方法的 callOrThrow。
     return downstreamFallback.callOrFallback(
         SVC,
         "list",
