@@ -35,6 +35,15 @@ public class StoredProcExecutorProperties {
   private String dataSourceBeanName = null;
 
   /**
+   * 允许通过 {@code parameters.dataSourceBean} 覆盖使用的 dataSource bean 白名单。
+   *
+   * <p>默认空 = 不允许任何覆盖:{@code parameters.dataSourceBean} 只能等于 {@link #dataSourceBeanName} (或缺省),否则抛
+   * {@code StoredProcValidationException}。任务级随意指定 bean 名等于让调用方任选连接 / 凭据,
+   * 是一条提权路径,所以默认锁死,需显式列入此白名单才放行。
+   */
+  private Set<String> allowedDataSourceBeans = Set.of();
+
+  /**
    * 过程名精确白名单(schema-qualified,如 "batch.refresh_metrics")。
    *
    * <p>与 {@link #allowedSchemas} 是 OR 关系:命中任一即放行。两者都空 = 允许全部(仅 dev / 信任环境)。 精确列举死板(每加一个
@@ -61,6 +70,41 @@ public class StoredProcExecutorProperties {
 
   /** 事务模式。false = 显式 commit/rollback;true = autoCommit。 */
   private boolean defaultAutoCommit = false;
+
+  /**
+   * 非 schema-qualified 过程名(无点)在 pin search_path 时使用的默认 schema。默认 "batch"。
+   *
+   * <p>CALL 前会 {@code SET LOCAL search_path = pg_catalog, <schema>},以固定解析目标、防止 调用方通过 session
+   * search_path 把过程解析到攻击者可控的 schema(search_path 注入 / shadowing)。 过程名已 schema-qualified 时用其
+   * schema,否则用本值。
+   */
+  private String defaultSchema = "batch";
+
+  /**
+   * REFCURSOR 单个结果集最大返回行数。默认 10000。
+   *
+   * <p>readRefCursor 读到此上限即停止(并设置 JDBC fetch size 避免一次性把整个游标拉进堆),输出标记 {@code
+   * truncated=true}。旧实现无行数上限,大游标会 OOM,本属性是内存保护。
+   */
+  private int maxRefCursorRows = 10000;
+
+  /**
+   * 是否在 CALL 前用 {@code has_function_privilege(current_user, 'schema.proc', 'EXECUTE')} 做 DB
+   * 原生授权校验。默认 false(不依赖真库,单测无需 docker)。
+   *
+   * <p>开启后多一次 PreparedStatement 往返:current_user 对目标过程无 EXECUTE 权限则在 CALL 前拒绝,
+   * 把授权下沉到数据库(纵深防御,白名单之外再加一层)。
+   */
+  private boolean verifyExecutePrivilege = false;
+
+  /**
+   * 是否允许调用 SECURITY DEFINER 过程。默认 true(保持现有行为,不做 DB 检查)。
+   *
+   * <p>SECURITY DEFINER 过程以其 <b>owner</b> 身份执行而非调用者(对应 PG {@code pg_proc.prosecdef = true}),
+   * 这是经典提权面:低权限 worker 角色可借此跑 owner 权限的逻辑。如需收紧,可在执行前查 {@code pg_proc.prosecdef} 并在本值为 false 时拒绝
+   * definer 过程——本 PR 仅提供属性 + 文档, 不实现该 DB 检查(留待 IT / 后续 PR)。
+   */
+  private boolean allowSecurityDefiner = true;
 
   /** 允许的 SQL Type 名集合(给 outParams 白名单)。常用全开;不允许 OTHER / STRUCT / ARRAY 等复合。 */
   private Set<String> allowedOutSqlTypes =

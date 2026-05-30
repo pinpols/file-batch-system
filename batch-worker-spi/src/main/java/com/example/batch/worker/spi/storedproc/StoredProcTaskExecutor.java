@@ -42,7 +42,8 @@ import org.springframework.stereotype.Component;
  *   <li>{@code outParams} (optional, List&lt;String&gt;):OUT 参数 SQL 类型名,如 {@code ["INTEGER",
  *       "VARCHAR"]}
  *   <li>{@code statementTimeoutSeconds} (optional, Long):覆盖默认超时,只能缩短
- *   <li>{@code dataSourceBean} (optional, String):覆盖配置的 dataSource bean 名
+ *   <li>{@code dataSourceBean} (optional, String):覆盖配置的 dataSource bean 名;若与配置的 {@code
+ *       dataSourceBeanName} 不同,必须在 {@code allowedDataSourceBeans} 白名单内,否则拒绝
  *   <li>{@code autoCommit} (optional, Boolean):覆盖默认事务模式
  * </ul>
  *
@@ -150,8 +151,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       }
     }
 
-    // dataSource
-    String dsBeanName = stringParam(params, PARAM_DS_BEAN, props.getDataSourceBeanName());
+    // dataSource — 覆盖 bean 名必须在白名单内
+    String requestedDsBean = stringParam(params, PARAM_DS_BEAN, null);
+    String dsBeanName = resolveDataSourceBean(requestedDsBean);
     DataSource ds =
         dsBeanName == null ? defaultDataSource : beanFactory.getBean(dsBeanName, DataSource.class);
 
@@ -174,7 +176,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     if (!hasExactList && !hasSchemaList) {
       return; // 两者都空 = 允许全部(仅 dev)
     }
-    boolean exactOk = props.getProcedureWhitelist().contains(procName);
+    // 精确匹配大小写无关化:PG identifier 默认折叠小写(unquoted),白名单也按小写比较,
+    // 避免 "BATCH.Proc" 这类大小写变体绕过/误拒(P-1)。
+    boolean exactOk = lowercaseSet(props.getProcedureWhitelist()).contains(toLowerKey(procName));
     String schema = schemaOf(procName);
     boolean schemaOk = schema != null && props.getAllowedSchemas().contains(schema);
     if (!exactOk && !schemaOk) {
@@ -192,6 +196,45 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   private static String schemaOf(String procName) {
     int dot = procName.indexOf('.');
     return dot > 0 ? procName.substring(0, dot) : null;
+  }
+
+  /** identifier 折叠为小写比较 key(PG unquoted identifier 折叠规则)。 */
+  private static String toLowerKey(String s) {
+    return s.toLowerCase(Locale.ROOT);
+  }
+
+  /** 把白名单整体小写化用于大小写无关精确匹配。 */
+  private static java.util.Set<String> lowercaseSet(java.util.Set<String> in) {
+    java.util.Set<String> out = new java.util.HashSet<>(in.size());
+    for (String s : in) {
+      out.add(toLowerKey(s));
+    }
+    return out;
+  }
+
+  /**
+   * 解析最终使用的 dataSource bean 名。{@code requested} 为 null = 用配置默认(返回 {@link
+   * StoredProcExecutorProperties#getDataSourceBeanName()})。若 {@code requested} 与配置默认不同, 则必须在 {@code
+   * allowedDataSourceBeans} 白名单内,否则抛 {@link StoredProcValidationException}。 提取为静态可测 helper。
+   */
+  static String resolveDataSourceBean(
+      String requested, String configured, java.util.Set<String> allowed) {
+    if (requested == null) {
+      return configured;
+    }
+    if (requested.equals(configured)) {
+      return requested;
+    }
+    if (allowed != null && allowed.contains(requested)) {
+      return requested;
+    }
+    throw new StoredProcValidationException(
+        "dataSourceBean not allowed: " + requested + ", allowedDataSourceBeans=" + allowed);
+  }
+
+  private String resolveDataSourceBean(String requested) {
+    return resolveDataSourceBean(
+        requested, props.getDataSourceBeanName(), props.getAllowedDataSourceBeans());
   }
 
   @SuppressWarnings("unchecked")
@@ -275,6 +318,14 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       try {
         conn.setAutoCommit(inv.autoCommit);
 
+        // 在同一事务内 pin search_path,固定过程解析目标(防 search_path shadowing/注入)。
+        pinSearchPath(conn, inv.procName);
+
+        // 可选 DB 原生授权:current_user 对目标过程无 EXECUTE 权限则在 CALL 前拒绝。
+        if (props.isVerifyExecutePrivilege()) {
+          requireExecutePrivilege(conn, inv.procName);
+        }
+
         try (CallableStatement cs = conn.prepareCall(call)) {
           cs.setQueryTimeout(inv.timeoutSec);
 
@@ -292,6 +343,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
           // 读 OUT 值
           Map<String, Object> outValues = new LinkedHashMap<>();
           List<List<Map<String, Object>>> resultSets = new ArrayList<>();
+          boolean output_truncated = false;
           for (int i = 0; i < inv.outTypes.size(); i++) {
             int pos = inv.inParams.size() + i + 1;
             String key = "p" + (i + 1);
@@ -299,9 +351,17 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
             if ("REF_CURSOR".equals(type)) {
               Object cursor = cs.getObject(pos);
               if (cursor instanceof ResultSet) {
-                resultSets.add(readRefCursor((ResultSet) cursor));
+                RefCursorResult rc = readRefCursor((ResultSet) cursor);
+                resultSets.add(rc.rows());
+                if (rc.truncated()) {
+                  outValues.put(key, "<REF_CURSOR truncated>");
+                  output_truncated = true;
+                } else {
+                  outValues.put(key, "<REF_CURSOR>");
+                }
+              } else {
+                outValues.put(key, "<REF_CURSOR>");
               }
-              outValues.put(key, "<REF_CURSOR>");
             } else {
               Object v = cs.getObject(pos);
               outValues.put(key, truncateIfNeeded(v));
@@ -315,6 +375,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
           Map<String, Object> output = new HashMap<>();
           output.put("outValues", outValues);
           output.put("resultSets", resultSets);
+          output.put("truncated", output_truncated);
           output.put("durationMillis", System.currentTimeMillis() - start);
 
           return TaskResult.ok(
@@ -392,12 +453,28 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  private List<Map<String, Object>> readRefCursor(ResultSet rs) throws SQLException {
+  /**
+   * 读 REFCURSOR,最多读 {@link StoredProcExecutorProperties#getMaxRefCursorRows()} 行。达到上限即停止, 不再继续
+   * {@code next()},标记 truncated;并设置 fetch size 避免驱动一次性把整个游标拉进堆(P-2)。
+   */
+  private RefCursorResult readRefCursor(ResultSet rs) throws SQLException {
+    int cap = props.getMaxRefCursorRows();
     List<Map<String, Object>> rows = new ArrayList<>();
+    boolean truncated = false;
     try (ResultSet r = rs) {
+      try {
+        // 提示驱动分批取,避免无界堆读。容量从上限和一个合理批量中取较小值。
+        r.setFetchSize(Math.min(cap > 0 ? cap : 1000, 1000));
+      } catch (SQLException ignore) {
+        // 部分驱动/REFCURSOR 不支持 setFetchSize,忽略(仍由下面的行数上限兜底)。
+      }
       ResultSetMetaData md = r.getMetaData();
       int cols = md.getColumnCount();
       while (r.next()) {
+        if (rows.size() >= cap) {
+          truncated = true;
+          break;
+        }
         Map<String, Object> row = new LinkedHashMap<>();
         for (int i = 1; i <= cols; i++) {
           row.put(md.getColumnLabel(i), r.getObject(i));
@@ -405,7 +482,52 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         rows.add(row);
       }
     }
-    return rows;
+    if (truncated) {
+      log.warn("REF_CURSOR truncated at maxRefCursorRows={}", cap);
+    }
+    return new RefCursorResult(rows, truncated);
+  }
+
+  /**
+   * 在当前事务内 pin search_path:{@code SET LOCAL search_path = pg_catalog, <schema>}。schema = 过程名
+   * schema(若 qualified)否则 {@link StoredProcExecutorProperties#getDefaultSchema()}。 防止调用方借 session
+   * search_path 把过程解析到攻击者可控 schema。仅在事务中生效(SET LOCAL),autoCommit=true 时无事务, 退化为对单条语句生效。非 PG /
+   * 不支持时静默忽略(由白名单 + 限定名兜底)。
+   */
+  private void pinSearchPath(Connection conn, String procName) {
+    String schema = schemaOf(procName);
+    if (schema == null) {
+      schema = props.getDefaultSchema();
+    }
+    // schema 已经过 PROC_NAME 正则校验(identifier 字符集),拼接安全;仍走静态 SQL。
+    String sql = "SET LOCAL search_path = pg_catalog, " + schema;
+    try (java.sql.Statement st = conn.createStatement()) {
+      st.execute(sql);
+    } catch (SQLException | RuntimeException ex) {
+      log.debug("pin search_path skipped: {}", ex.getMessage());
+    }
+  }
+
+  /**
+   * DB 原生授权:current_user 必须对目标过程有 EXECUTE 权限,否则抛 {@link StoredProcValidationException}。 仅在 {@code
+   * verifyExecutePrivilege=true} 时调用。
+   */
+  private void requireExecutePrivilege(Connection conn, String procName) {
+    String target =
+        procName.indexOf('.') > 0 ? procName : props.getDefaultSchema() + "." + procName;
+    String sql = "select has_function_privilege(current_user, ?, 'EXECUTE')";
+    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+      ps.setString(1, target);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next() && rs.getBoolean(1)) {
+          return;
+        }
+      }
+    } catch (SQLException ex) {
+      throw new StoredProcValidationException(
+          "EXECUTE privilege check failed for " + target + ": " + ex.getMessage());
+    }
+    throw new StoredProcValidationException("current_user lacks EXECUTE privilege on " + target);
   }
 
   private Object truncateIfNeeded(Object value) {
@@ -425,6 +547,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       DataSource dataSource,
       int timeoutSec,
       boolean autoCommit) {}
+
+  /** readRefCursor 结果:已读行 + 是否因 maxRefCursorRows 截断。 */
+  private record RefCursorResult(List<Map<String, Object>> rows, boolean truncated) {}
 
   static final class StoredProcValidationException extends RuntimeException {
     private static final long serialVersionUID = 1L;
