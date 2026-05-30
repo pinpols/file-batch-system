@@ -106,6 +106,21 @@ INSERT INTO batch.job_definition (
     (2003, 'tenant-finance', 'finance_recon_workflow', 'Finance Reconciliation Workflow', 'WORKFLOW', 'SETTLEMENT', 'MANUAL', NULL, 'Asia/Shanghai', 2, 'finance_export_queue', 'export', 'finance-calendar', 'night_window', 'MIXED', TRUE, 'AUTO', 'EXPONENTIAL', 3, 5400, 'com.example.FinanceReconWorkflowHandler', jsonb_build_object('type', 'object'), jsonb_build_object('sourcePartitions', jsonb_build_array(1,2)), 1, TRUE, 'Finance workflow job', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08')
 ON CONFLICT (id) DO NOTHING;
 
+-- ADR-029:专用 SPI worker(batch-worker-spi)示例原子任务 job。job_type='SPI' → 派发到
+-- batch.task.dispatch.spi,worker_group='spi'。default_params 携带 SPI executor 协议(taskType + 各自参数)。
+-- demo/sim 用样例;executor 默认全关,真跑需在 spi worker 上 enable + 配白名单/schema(见 ADR-029)。
+INSERT INTO batch.job_definition (
+    id, tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr, timezone, priority,
+    queue_code, worker_group, calendar_code, window_code, trigger_mode, dag_enabled, shard_strategy, retry_policy,
+    retry_max_count, timeout_seconds, execution_handler, param_schema, default_params, version, enabled, description,
+    created_by, updated_by, created_at, updated_at
+) VALUES
+    (2004, 'default-tenant', 'spi_shell_demo', 'SPI Shell Demo', 'SPI', 'GENERAL', 'MANUAL', NULL, 'Asia/Shanghai', 5, 'spi_queue', 'spi', 'default-calendar', 'always_open', 'MANUAL', FALSE, 'STATIC', 'EXPONENTIAL', 1, 300, NULL, jsonb_build_object('type', 'object'), jsonb_build_object('taskType', 'shell', 'command', '/bin/echo', 'args', jsonb_build_array('hello-from-spi')), 1, TRUE, 'SPI 示例:shell 原子任务', 'system', 'system', TIMESTAMPTZ '2026-05-30 08:00:00+08', TIMESTAMPTZ '2026-05-30 08:00:00+08'),
+    (2005, 'default-tenant', 'spi_sql_demo', 'SPI SQL Demo', 'SPI', 'GENERAL', 'MANUAL', NULL, 'Asia/Shanghai', 5, 'spi_queue', 'spi', 'default-calendar', 'always_open', 'MANUAL', FALSE, 'STATIC', 'EXPONENTIAL', 1, 300, NULL, jsonb_build_object('type', 'object'), jsonb_build_object('taskType', 'sql', 'sql', 'SELECT 1'), 1, TRUE, 'SPI 示例:sql 原子任务(只读 SELECT)', 'system', 'system', TIMESTAMPTZ '2026-05-30 08:00:00+08', TIMESTAMPTZ '2026-05-30 08:00:00+08'),
+    (2006, 'default-tenant', 'spi_stored_proc_demo', 'SPI Stored Proc Demo', 'SPI', 'GENERAL', 'MANUAL', NULL, 'Asia/Shanghai', 5, 'spi_queue', 'spi', 'default-calendar', 'always_open', 'MANUAL', FALSE, 'STATIC', 'EXPONENTIAL', 1, 300, NULL, jsonb_build_object('type', 'object'), jsonb_build_object('taskType', 'stored_proc', 'procedureName', 'batch.refresh_metrics'), 1, TRUE, 'SPI 示例:stored-proc 原子任务', 'system', 'system', TIMESTAMPTZ '2026-05-30 08:00:00+08', TIMESTAMPTZ '2026-05-30 08:00:00+08'),
+    (2007, 'default-tenant', 'spi_http_demo', 'SPI HTTP Demo', 'SPI', 'GENERAL', 'MANUAL', NULL, 'Asia/Shanghai', 5, 'spi_queue', 'spi', 'default-calendar', 'always_open', 'MANUAL', FALSE, 'STATIC', 'EXPONENTIAL', 1, 300, NULL, jsonb_build_object('type', 'object'), jsonb_build_object('taskType', 'http', 'url', 'https://example.internal/health', 'method', 'GET'), 1, TRUE, 'SPI 示例:http 原子任务', 'system', 'system', TIMESTAMPTZ '2026-05-30 08:00:00+08', TIMESTAMPTZ '2026-05-30 08:00:00+08')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO batch.workflow_definition (
     id, tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at
 ) VALUES
