@@ -445,6 +445,35 @@ workerSpi:
     topic: "batch.task.dispatch.spi"
     consumerGroup: "batch-worker-spi"
     lagThreshold: "20"
+  # ADR-029 出口最小权限:default-deny egress NetworkPolicy(模板 worker-spi-networkpolicy.yaml)。
+  # 默认关 —— 向后兼容,不改现有集群行为;dual-use executor 启用前 ops 务必打开并填好放行项。
+  networkPolicy:
+    enabled: false
+    egress:
+      # 平台 PostgreSQL(claim/lease 低权限库;绝不放行业务库)。
+      # to 用 ipBlock/CIDR 或 namespaceSelector+podSelector —— 按集群实际填。
+      postgresql:
+        enabled: true
+        port: 5432
+        to:
+          - ipBlock:
+              cidr: 0.0.0.0/0   # 占位:务必收窄到平台库实际 CIDR/Service
+      # Kafka(消费 batch.task.dispatch.spi + 回写结果)。
+      kafka:
+        enabled: true
+        port: 9092
+        to:
+          - ipBlock:
+              cidr: 0.0.0.0/0   # 占位:务必收窄到 Kafka broker 实际 CIDR/Service
+      # 显式放行的 SPI 出口目标(内部 API / 受信 DB 等)。每项: to(标准 NetworkPolicyPeer 列表)+ ports。
+      # 默认空 = 除 DNS/平台库/Kafka 外全部拒绝。
+      extra: []
+        # - to:
+        #     - ipBlock:
+        #         cidr: 10.20.0.0/16
+        #   ports:
+        #     - protocol: TCP
+        #       port: 443
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
