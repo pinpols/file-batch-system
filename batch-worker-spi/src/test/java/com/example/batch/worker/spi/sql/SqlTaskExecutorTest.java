@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.sql;
+package com.example.batch.worker.spi.sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;

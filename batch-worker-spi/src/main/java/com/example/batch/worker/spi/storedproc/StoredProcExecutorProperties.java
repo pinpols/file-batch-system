@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.storedproc;
+package com.example.batch.worker.spi.storedproc;
 
 import java.time.Duration;
 import java.util.Set;

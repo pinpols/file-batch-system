@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.http;
+package com.example.batch.worker.spi.http;
 
 import java.time.Duration;
 import java.util.Set;

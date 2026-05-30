@@ -1,4 +1,4 @@
-package com.example.batch.worker.core.spi.storedproc;
+package com.example.batch.worker.spi.storedproc;
 
 import com.example.batch.common.spi.task.BatchTaskExecutor;
 import com.example.batch.common.spi.task.ResourceKind;
