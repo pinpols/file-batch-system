@@ -44,4 +44,20 @@
         where tenant_id = #{tenantId}
           and status = #{status}
     </select>
+
+    <!-- ADR-035 P4 "我的 Worker":SDK 自托管 worker 按租户列出,heartbeat 倒序。 -->
+    <select id="selectSelfHostedByTenant" resultMap="WorkerRegistryResultMap">
+        select *
+        from batch.worker_registry
+        where tenant_id = #{tenantId}
+          and is_self_hosted = true
+        order by heartbeat_at desc nulls last, id desc
+    </select>
+
+    <select id="countSelfHostedByTenant" resultType="long">
+        select count(1)
+        from batch.worker_registry
+        where tenant_id = #{tenantId}
+          and is_self_hosted = true
+    </select>
 </mapper>
