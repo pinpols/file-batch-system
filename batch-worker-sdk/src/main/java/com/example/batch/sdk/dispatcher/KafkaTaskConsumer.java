@@ -42,6 +42,14 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private final Consumer<String, byte[]> consumer;
   private final AtomicBoolean running = new AtomicBoolean(true);
 
+  /**
+   * P1-4 #1.7:poll loop 因非预期 Throwable 退出时置 true。 与 {@link #running}=false 区分:running=false 可能是正常
+   * {@link #close()},crashed=true 表示无法继续消费,{@link
+   * com.example.batch.sdk.client.BatchPlatformClient#isHealthy()} 据此报 false 让 K8s liveness probe
+   * 重启进程。
+   */
+  private final AtomicBoolean crashed = new AtomicBoolean(false);
+
   /** P0 hardening:in-flight 达上限时 pause 当前 partition;掉下来再 resume。Zeebe maxJobsActive 模式。 */
   private volatile boolean paused = false;
 
@@ -122,7 +130,11 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     } catch (org.apache.kafka.common.errors.WakeupException wakeup) {
       // 正常 stop 触发
     } catch (Throwable t) {
-      log.error("KafkaTaskConsumer poll loop died", t);
+      // P1-4 #1.7:非预期退出 — 置 crashed + running=false,让 BatchPlatformClient.isHealthy() 报 false,
+      // 不静默死。K8s liveness probe / 运维监控由此感知到 worker 实质已停消费。
+      crashed.set(true);
+      running.set(false);
+      log.error("KafkaTaskConsumer poll loop died (marked crashed)", t);
     } finally {
       try {
         consumer.close();
@@ -198,6 +210,14 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   /** 暴露给测试:当前 running 状态。 */
   boolean isRunning() {
     return running.get();
+  }
+
+  /**
+   * P1-4 #1.7:poll loop 是否因非预期 Throwable 退出。正常 {@link #close()} 不会让此返回 true。 供 {@link
+   * com.example.batch.sdk.client.BatchPlatformClient#isHealthy()} 判定。
+   */
+  public boolean hasCrashed() {
+    return crashed.get();
   }
 
   /** 给 BatchPlatformClient 注入额外 properties(实际项目会扩展 SASL / SSL 等)。 */
