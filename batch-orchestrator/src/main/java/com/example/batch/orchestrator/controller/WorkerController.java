@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.controller;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
+import com.example.batch.common.dto.WorkerHeartbeatResponse;
 import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.controller.request.WorkerDrainRequest;
 import com.example.batch.orchestrator.controller.request.WorkerTenantRequest;
@@ -36,10 +37,13 @@ public class WorkerController {
     return workerRegistryService.register(request);
   }
 
+  // SDK Phase 2 §2.3:心跳回包从 WorkerRegistryEntity 改为下发 platform directive。
+  // 老 worker 忽略响应体(worker-core toBodilessEntity / SDK 旧版不消费),切换无 break。
   @PostMapping("/{workerCode}/heartbeat")
-  public WorkerRegistryEntity heartbeat(
+  public WorkerHeartbeatResponse heartbeat(
       @PathVariable String workerCode, @RequestBody(required = false) WorkerHeartbeatDto request) {
-    return workerRegistryService.heartbeat(workerCode, request);
+    WorkerRegistryEntity worker = workerRegistryService.heartbeat(workerCode, request);
+    return WorkerHeartbeatResponse.fromWorkerState(worker.status(), worker.maxConcurrent());
   }
 
   @PostMapping("/{workerCode}/deactivate")

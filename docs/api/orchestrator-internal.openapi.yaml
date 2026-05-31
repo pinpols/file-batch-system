@@ -63,11 +63,11 @@ paths:
               $ref: '#/components/schemas/WorkerHeartbeatDto'
       responses:
         '200':
-          description: 心跳成功
+          description: 心跳成功,回包为 platform directive(SDK Phase 2 §2.3)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkerRegistryEntity'
+                $ref: '#/components/schemas/WorkerHeartbeatResponse'
 
   /internal/workers/{workerCode}/deactivate:
     post:
@@ -236,6 +236,30 @@ components:
         workerCode: {type: string}
         status: {type: string}
         lastHeartbeatAt: {type: string, format: date-time}
+
+    WorkerHeartbeatResponse:
+      type: object
+      description: 心跳回包 platform directive(SDK Phase 2 §2.3),SDK 据此驱动 4 态状态机
+      properties:
+        platformStatus:
+          type: string
+          description: "平台期望态;当前 NORMAL / DRAINING,PAUSED/DEGRADED 预留"
+        desiredMaxConcurrent:
+          type: integer
+          nullable: true
+          description: "平台希望的最大并发(worker_registry.max_concurrent);null=不下发"
+        shouldDrain:
+          type: boolean
+          description: "true=停止认领新任务、跑完在手任务后下线"
+        pausedTaskTypes:
+          type: array
+          items: {type: string}
+          description: "被暂停的 taskType;当前恒空,预留"
+        nextHeartbeatHint:
+          type: integer
+          nullable: true
+          description: "建议下次心跳间隔(秒);null=不下发,SDK 用本地配置"
+      required: [platformStatus, shouldDrain, pausedTaskTypes]
 
     TaskClaimRequest:
       type: object
