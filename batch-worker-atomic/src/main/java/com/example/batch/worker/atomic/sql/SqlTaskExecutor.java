@@ -136,20 +136,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
               + props.getMaxStatementsPerJob());
     }
 
-    // 类型 + DDL 白名单校验
-    for (String stmt : statements) {
-      String type = detectStatementType(stmt);
-      if (!props.getAllowedStatementTypes().contains(type)) {
-        throw new SqlValidationException(
-            "statement type "
-                + type
-                + " not in allowedStatementTypes="
-                + props.getAllowedStatementTypes());
-      }
-      if ("DDL".equals(type)) {
-        validateDdlWhitelist(stmt);
-      }
-    }
+    // 三道闸模型:语句类型/DDL 不再由 app 白名单管控,放行范围 = 所连最小权限 DB 角色被授予的权限;
+    // OS 拒绝由 requireNonOsCapableRole(连接级角色闸)兜底。
 
     // dataSource(param 覆盖需命中 allowedDataSourceBeans)
     String dsBeanName = resolveDataSourceBeanName(params);
@@ -263,15 +251,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return out;
   }
 
-  /**
-   * 取首关键字粗分类语句类型。
-   *
-   * <p>PG 的 {@code DO $$...$$} 匿名代码块可执行任意过程化逻辑(含 DML/DDL),归为 {@code "DDL"} 走 DDL 白名单, 避免落到 {@code
-   * "OTHER"} 绕过校验。
-   *
-   * <p><b>安全提示</b>:把 {@code "OTHER"} 放进 {@link SqlExecutorProperties#getAllowedStatementTypes()}
-   * 约等于放开任意 SQL(无法识别的语句一律通过),生产慎用。
-   */
+  /** 取首关键字粗分类语句类型。三道闸模型下<b>不再做类型白名单校验</b>,本方法仅用于判定"是否全是 SELECT"以走只读事务 + statement_timeout 优化。 */
   static String detectStatementType(String stmt) {
     Matcher m = FIRST_KEYWORD.matcher(stmt);
     if (!m.find()) return "UNKNOWN";
@@ -298,23 +278,6 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       case "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "SET" -> "TX";
       default -> "OTHER";
     };
-  }
-
-  private void validateDdlWhitelist(String stmt) {
-    if (props.getDdlWhitelist().isEmpty()) {
-      throw new SqlValidationException("DDL not allowed (ddlWhitelist empty)");
-    }
-    String upper = stmt.toUpperCase(Locale.ROOT);
-    for (String allowed : props.getDdlWhitelist()) {
-      if (upper.contains(allowed.toUpperCase(Locale.ROOT))) {
-        return;
-      }
-    }
-    throw new SqlValidationException("DDL not in ddlWhitelist: " + summarize(stmt));
-  }
-
-  private static String summarize(String s) {
-    return s.length() <= 80 ? s : s.substring(0, 80) + "...";
   }
 
   /**

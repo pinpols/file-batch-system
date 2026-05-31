@@ -113,7 +113,7 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
             LocalDate.of(2026, 1, 15),
             TriggerType.API,
             seed.requestId(),
-            "e2e-tr-spi-seed",
+            "e2e-tr-atomic-seed",
             Map.of())); // 不传任何 launch 参数 —— 协议全来自 default_params
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);

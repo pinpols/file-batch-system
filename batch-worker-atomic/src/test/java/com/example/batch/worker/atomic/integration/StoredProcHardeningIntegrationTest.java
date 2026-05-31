@@ -135,8 +135,7 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     // 成功即证明 pin 把 spi_it 加进了 search_path(否则 it_proc 找不到会报错)。
     StoredProcExecutorProperties p = props();
     p.setDefaultSchema("spi_it");
-    p.setProcedureWhitelist(Set.of("it_proc")); // 非 qualified 需精确白名单放行
-    p.setAllowedSchemas(Set.of()); // 关 schema 放行,逼走 whitelist + pin
+    p.setAllowedSchemas(Set.of("spi_it")); // 非 qualified 名按 defaultSchema(spi_it)判 schema 放行 + pin
     TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "it_proc")));
     assertThat(r.success()).isTrue();
   }

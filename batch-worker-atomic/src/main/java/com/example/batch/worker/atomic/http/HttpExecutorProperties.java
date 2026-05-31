@@ -26,8 +26,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.executors.http")
 public class HttpExecutorProperties {
 
-  /** 总开关。默认 false。 */
-  private boolean enabled = false;
+  /** 总开关。默认 <b>true</b>(随 atomic worker 默认提供;出口受 SSRF 私网拦截 + 域名白名单约束)。 */
+  private boolean enabled = true;
 
   /** 给 http 任务挂的 task type。固定 "http"。 */
   private String taskType = "http";
