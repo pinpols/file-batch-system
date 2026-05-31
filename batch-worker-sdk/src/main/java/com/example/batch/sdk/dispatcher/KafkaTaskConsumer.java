@@ -2,16 +2,20 @@ package com.example.batch.sdk.dispatcher;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
@@ -35,11 +39,11 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private final BatchPlatformClientConfig config;
   private final TaskDispatcher dispatcher;
   private final ObjectMapper objectMapper;
-  private final KafkaConsumer<String, byte[]> consumer;
+  private final Consumer<String, byte[]> consumer;
   private final AtomicBoolean running = new AtomicBoolean(true);
 
   /** P0 hardening:in-flight 达上限时 pause 当前 partition;掉下来再 resume。Zeebe maxJobsActive 模式。 */
-  private boolean paused = false;
+  private volatile boolean paused = false;
 
   public KafkaTaskConsumer(BatchPlatformClientConfig config, TaskDispatcher dispatcher) {
     this(
@@ -50,11 +54,11 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
             .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
   }
 
-  /** test-friendly ctor:可注入 mock KafkaConsumer。 */
+  /** test-friendly ctor:可注入 mock Consumer(含 {@code MockConsumer})。 */
   KafkaTaskConsumer(
       BatchPlatformClientConfig config,
       TaskDispatcher dispatcher,
-      KafkaConsumer<String, byte[]> consumer,
+      Consumer<String, byte[]> consumer,
       ObjectMapper objectMapper) {
     this.config = config;
     this.dispatcher = dispatcher;
@@ -92,7 +96,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   /** 启动 poll loop。阻塞当前线程,通常在专用线程跑。 */
   @Override
   public void run() {
-    consumer.subscribe(Pattern.compile(config.getKafkaTopicPattern()));
+    consumer.subscribe(
+        Pattern.compile(config.getKafkaTopicPattern()), new PauseAwareRebalanceListener());
     log.info(
         "KafkaTaskConsumer started: tenant={}, topicPattern={}, group={}",
         config.getTenantId(),
@@ -205,5 +210,28 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     Properties out = new Properties();
     out.putAll(merged);
     return out;
+  }
+
+  /**
+   * Phase 1 §3.1 #1.3:rebalance 后 Kafka 不保留 partition 级别的 pause 状态, 新分到的 partition 默认 RESUMED。如果
+   * backpressure 期间发生 rebalance, 必须在 {@code onPartitionsAssigned} 立刻重新 pause 新拿到的 partition, 否则
+   * inFlight 已满时也会拉新消息,绕过 maxConcurrent 上限。
+   */
+  final class PauseAwareRebalanceListener implements ConsumerRebalanceListener {
+    @Override
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+      log.info("kafka partitions revoked: {}", partitions);
+    }
+
+    @Override
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+      log.info("kafka partitions assigned: {}", partitions);
+      if (paused && !partitions.isEmpty()) {
+        consumer.pause(partitions);
+        log.info(
+            "re-paused {} newly assigned partition(s) after rebalance (backpressure still active)",
+            partitions.size());
+      }
+    }
   }
 }

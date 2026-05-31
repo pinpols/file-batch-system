@@ -107,18 +107,22 @@ public class BatchPlatformClient {
     started = true;
   }
 
-  /** 优雅停 — 反注册 + 关 Kafka consumer + 等当前任务完成。 */
+  /**
+   * 优雅停 — 顺序见 Phase 1 §3.1 #1.1:
+   *
+   * <ol>
+   *   <li>Kafka consumer 先 wakeup + join — 停止接新 dispatch 消息
+   *   <li>Dispatcher drain — 等 in-flight handler 跑完(超时 30s),期间 heartbeat / lease 仍在跑 维持租约,避免
+   *       orchestrator 在 drain 中误判 worker 死了把任务派给别人
+   *   <li>Heartbeat / lease scheduler 关 — drain 完成后才停心跳
+   *   <li>Deactivate — 通知平台 OFFLINE(失败 swallow,不阻塞进程退出)
+   * </ol>
+   */
   public synchronized void stop() {
     if (!started) {
       return;
     }
     log.info("BatchPlatformClient stopping");
-    if (heartbeatScheduler != null) {
-      heartbeatScheduler.close();
-    }
-    if (leaseRenewalScheduler != null) {
-      leaseRenewalScheduler.close();
-    }
     if (kafkaConsumer != null) {
       kafkaConsumer.close();
     }
@@ -132,7 +136,12 @@ public class BatchPlatformClient {
     if (dispatcher != null) {
       dispatcher.stop();
     }
-    // 最后调 deactivate 通知平台释放 worker(失败 swallow,不阻塞进程退出)
+    if (heartbeatScheduler != null) {
+      heartbeatScheduler.close();
+    }
+    if (leaseRenewalScheduler != null) {
+      leaseRenewalScheduler.close();
+    }
     try {
       Map<String, Object> body = new HashMap<>();
       body.put("tenantId", config.getTenantId());
