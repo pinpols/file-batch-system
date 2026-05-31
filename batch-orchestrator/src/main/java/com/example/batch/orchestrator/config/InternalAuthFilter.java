@@ -75,7 +75,16 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     String apiKey = request.getHeader(HEADER_API_KEY);
     String tenantHeader = request.getHeader(HEADER_TENANT);
     if (apiKey != null && !apiKey.isBlank() && apiKeyVerifier != null) {
-      Optional<ApiKeyRecord> rec = apiKeyVerifier.verify(apiKey, tenantHeader);
+      // /internal/workers/* 和 /internal/tasks/* 走 worker 操作类 endpoint,强制
+      // worker.execute scope(老 key scopes='*' 通配通过,无需轮转)。
+      String requiredScope =
+          (uri.startsWith("/internal/workers/") || uri.startsWith("/internal/tasks/"))
+              ? ApiKeyVerifier.SCOPE_WORKER_EXECUTE
+              : null;
+      Optional<ApiKeyRecord> rec =
+          requiredScope == null
+              ? apiKeyVerifier.verify(apiKey, tenantHeader)
+              : apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, requiredScope);
       if (rec.isPresent()) {
         request.setAttribute(ATTR_RESOLVED_TENANT_ID, rec.get().tenantId());
         request.setAttribute(ATTR_API_KEY_RECORD, rec.get());
