@@ -87,6 +87,7 @@ batch:
         enabled: true
         allowed-statement-types:
           - SELECT
+        forbid-os-capable-role: false  # e2e 平台库是 superuser;角色闸在测试 profile 关
       shell:
         enabled: true
         # command-whitelist 留空 = 信任环境允许全部(e2e 只跑 /bin/echo)
@@ -94,11 +95,14 @@ batch:
         enabled: true
         allowed-schemas:
           - batch
+        # e2e 平台库是 superuser:关掉 OS 角色闸(否则被拒);allowSecurityDefiner 保持默认 false
+        forbid-os-capable-role: false
       http:
         enabled: true
-        # e2e 打本地 JDK HttpServer(127.0.0.1),需清掉默认 SSRF 黑名单(含 localhost/127.*);仅测试 profile
+        # e2e 打本地 JDK HttpServer(127.0.0.1):清 SSRF 黑名单 + 关 blockPrivateIps(否则 loopback 被拦);仅测试 profile
         blocked-host-patterns: []
         allowed-host-patterns: []
+        block-private-ips: false
   datasource:
     business:
       url: ${spring.datasource.url}

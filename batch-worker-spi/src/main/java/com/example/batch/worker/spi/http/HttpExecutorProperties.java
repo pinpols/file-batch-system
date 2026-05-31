@@ -69,4 +69,17 @@ public class HttpExecutorProperties {
 
   /** 允许的鉴权类型集合。默认 none / basic / bearer。 */
   private Set<String> allowedAuthTypes = Set.of("none", "basic", "bearer");
+
+  /**
+   * 是否在 glob 校验之后,把 host 解析为 IP 并拒绝内网 / 回环 / link-local / metadata 网段(SSRF 加固)。 默认 true:glob
+   * 黑名单只能字面匹配,无法挡住 octal / decimal IP literal、IPv4-mapped IPv6 ({@code ::ffff:169.254.169.254})、DNS
+   * rebinding 等绕过。
+   */
+  private boolean blockPrivateIps = true;
+
+  /**
+   * 为 true 时,空 {@link #allowedHostPatterns} 表示「拒绝全部」而非「允许全部」。 默认 false:保持空白名单 = 允许全部的现有行为(仅
+   * dev)。生产建议置 true 做 fail-closed。
+   */
+  private boolean enforceAllowlist = false;
 }

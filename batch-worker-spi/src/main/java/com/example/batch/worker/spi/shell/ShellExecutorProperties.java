@@ -63,4 +63,11 @@ public class ShellExecutorProperties {
 
   /** 允许的字符集白名单(command + args 必须命中)。默认 POSIX 友好 + 路径 + 数字字母连字符。 */
   private List<String> argRegexAllowlist = List.of("^[\\w\\-./@= :+,]*$");
+
+  /**
+   * 是否拒绝含 {@code ..} 父目录引用的 command / args(防路径穿越,如 {@code ../../etc/passwd})。默认 true。
+   *
+   * <p>只针对真正的 {@code ..} 路径段,合法子串(如 {@code foo..bar})不受影响。
+   */
+  private boolean rejectParentDirRefs = true;
 }

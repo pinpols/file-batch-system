@@ -32,6 +32,9 @@ class HttpTaskExecutorTest {
     props.setDefaultTimeout(Duration.ofSeconds(3));
     // 测试要打到 localhost:<port>,默认 blockedHostPatterns 含 localhost / 127.* → 覆盖为空
     props.setBlockedHostPatterns(Set.of());
+    // 本类测 HTTP 机制(打 127.0.0.1 mock),非 SSRF 策略;关 blockPrivateIps,SSRF 策略另见
+    // HttpTaskExecutorIpBlockTest
+    props.setBlockPrivateIps(false);
     executor = new HttpTaskExecutor(props);
 
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
