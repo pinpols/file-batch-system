@@ -125,6 +125,7 @@ class TaskDispatchExecutorTest {
         "HIGH",
         "msg-trace",
         "msg-idem",
-        Instant.parse("2026-04-27T12:00:00Z"));
+        Instant.parse("2026-04-27T12:00:00Z"),
+        null);
   }
 }

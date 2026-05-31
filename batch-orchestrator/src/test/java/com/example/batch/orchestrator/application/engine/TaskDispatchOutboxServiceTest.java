@@ -11,11 +11,16 @@ import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.event.DomainEvent;
 import com.example.batch.common.event.DomainEventPublisher;
+import com.example.batch.common.kafka.SchedulingContext;
+import com.example.batch.common.kafka.TaskDispatchMessage;
+import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.lang.reflect.Field;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,7 +51,8 @@ class TaskDispatchOutboxServiceTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    service = new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper);
+    service =
+        new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
     // @Lazy self 单测注入指向自己,绕过 Spring 代理
     Field selfField = TaskDispatchOutboxService.class.getDeclaredField("self");
     selfField.setAccessible(true);
@@ -212,6 +218,35 @@ class TaskDispatchOutboxServiceTest {
     ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
     verify(domainEventPublisher).publish(cap.capture());
     assertThat(cap.getValue().payload().toString()).contains("partition-idem-99");
+  }
+
+  // ===== SDK Phase 2 §2.1 schedulingContext =====
+
+  @Test
+  @DisplayName(
+      "schedulingContext 填 bizDate + 前后工作日 + attemptNo + triggerType,且 outbox payload 可往返反序列化")
+  void schedulingContextPopulated() {
+    JobInstanceEntity i = instance(100L, 5);
+    i.setBizDate(LocalDate.of(2026, 6, 1)); // 周一
+    i.setRunAttempt(2);
+    i.setTriggerType("SCHEDULED");
+    service.writeDispatchEvent(i, task(500L, null), null, "trace", null);
+
+    ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
+    verify(domainEventPublisher).publish(cap.capture());
+    // payload 是 outbox 落库的 Map;按真实 Kafka 投递路径往返回 record,验证 SDK 可消费的 wire 契约。
+    TaskDispatchMessage roundTrip =
+        JsonUtils.fromJson(JsonUtils.toJson(cap.getValue().payload()), TaskDispatchMessage.class);
+    SchedulingContext ctx = roundTrip.schedulingContext();
+    assertThat(ctx).isNotNull();
+    assertThat(ctx.bizDate()).isEqualTo(LocalDate.of(2026, 6, 1));
+    // 周一往前一个工作日 = 上周五 5/29
+    assertThat(ctx.prevBizDate()).isEqualTo(LocalDate.of(2026, 5, 29));
+    // 周一往后一个工作日 = 周二 6/2
+    assertThat(ctx.nextBizDate()).isEqualTo(LocalDate.of(2026, 6, 2));
+    assertThat(ctx.isHoliday()).isFalse();
+    assertThat(ctx.attemptNo()).isEqualTo(2);
+    assertThat(ctx.triggerType()).isEqualTo("SCHEDULED");
   }
 
   // ===== fixtures =====

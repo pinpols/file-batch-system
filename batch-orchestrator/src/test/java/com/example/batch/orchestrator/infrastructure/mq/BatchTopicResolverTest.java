@@ -83,6 +83,7 @@ class BatchTopicResolverTest {
         priorityBand,
         "trace-1",
         "idem-1",
-        BatchDateTimeSupport.utcNow());
+        BatchDateTimeSupport.utcNow(),
+        null);
   }
 }

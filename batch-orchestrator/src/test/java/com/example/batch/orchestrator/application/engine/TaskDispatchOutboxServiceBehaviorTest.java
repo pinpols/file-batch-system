@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.event.DomainEvent;
 import com.example.batch.common.event.DomainEventPublisher;
+import com.example.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -42,7 +43,8 @@ class TaskDispatchOutboxServiceBehaviorTest {
 
   @BeforeEach
   void setUp() {
-    service = new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper);
+    service =
+        new TaskDispatchOutboxService(domainEventPublisher, jobTaskMapper, new BizDateArithmetic());
     ReflectionTestUtils.setField(service, "self", service);
   }
 

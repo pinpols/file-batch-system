@@ -262,7 +262,8 @@ class SdkWireContractTest {
             "MEDIUM",
             "trace-abc",
             "idem-1",
-            Instant.parse("2026-05-31T10:00:00Z"));
+            Instant.parse("2026-05-31T10:00:00Z"),
+            null);
     JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(platform));
     assertThat(tree.get("schemaVersion").asText()).isEqualTo("v2");
 
