@@ -8,6 +8,8 @@ import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -35,6 +37,17 @@ public class TaskDispatcher {
   private final Map<String, SdkTaskHandler> handlers;
   private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
+  private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
+
+  /** 当前正在执行的 taskId 快照 — 给 {@link LeaseRenewalScheduler} 读。 */
+  public Set<Long> inFlightTaskIds() {
+    return Set.copyOf(inFlight);
+  }
+
+  /** 当前 in-flight 任务数 — 给 {@link HeartbeatScheduler} 读。 */
+  public int inFlightCount() {
+    return inFlight.size();
+  }
 
   public TaskDispatcher(
       BatchPlatformClientConfig config,
@@ -78,6 +91,7 @@ public class TaskDispatcher {
       claimBody.put("workerCode", config.getWorkerCode());
       claimBody.put("workerId", config.getWorkerCode()); // P2 后改 server 分配的 workerId
       httpClient.claim(msg.taskId(), idemClaim, claimBody);
+      inFlight.add(msg.taskId());
     } catch (Exception claimEx) {
       // CLAIM 失败通常是别 worker 已 claim 走,正常竞争,不 report(orchestrator 已 owned)
       log.info(
@@ -133,6 +147,8 @@ public class TaskDispatcher {
           "report failed for taskId={}, orchestrator will retry on lease timeout",
           msg.taskId(),
           reportEx);
+    } finally {
+      inFlight.remove(msg.taskId());
     }
   }
 

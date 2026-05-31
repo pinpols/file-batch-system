@@ -45,6 +45,9 @@ public class BatchPlatformClientConfig {
   /** Kafka poll 间隔。默认 200ms。 */
   @lombok.Builder.Default Duration kafkaPollInterval = Duration.ofMillis(200);
 
+  /** in-flight 任务的 lease 续约间隔。应 < orchestrator 端 lease TTL(默认 ~3min)的 1/2。 */
+  @lombok.Builder.Default Duration leaseRenewInterval = Duration.ofSeconds(60);
+
   public void validate() {
     Objects.requireNonNull(baseUrl, "baseUrl");
     if (baseUrl.endsWith("/")) {

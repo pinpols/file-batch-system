@@ -3,6 +3,8 @@ package com.example.batch.sdk.client;
 import com.example.batch.sdk.dispatcher.KafkaTaskConsumer;
 import com.example.batch.sdk.dispatcher.TaskDispatcher;
 import com.example.batch.sdk.internal.PlatformHttpClient;
+import com.example.batch.sdk.scheduler.HeartbeatScheduler;
+import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +50,8 @@ public class BatchPlatformClient {
   private TaskDispatcher dispatcher;
   private KafkaTaskConsumer kafkaConsumer;
   private Thread kafkaConsumerThread;
+  private HeartbeatScheduler heartbeatScheduler;
+  private LeaseRenewalScheduler leaseRenewalScheduler;
 
   private BatchPlatformClient(
       BatchPlatformClientConfig config, Map<String, SdkTaskHandler> handlers) {
@@ -90,8 +94,11 @@ public class BatchPlatformClient {
     this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
     this.kafkaConsumerThread.setDaemon(false);
     this.kafkaConsumerThread.start();
+    this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher);
+    this.heartbeatScheduler.start();
+    this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
+    this.leaseRenewalScheduler.start();
     started = true;
-    // TODO 后续 PR:Heartbeat scheduler + lease renewal
   }
 
   /** 优雅停 — 反注册 + 关 Kafka consumer + 等当前任务完成。 */
@@ -100,6 +107,12 @@ public class BatchPlatformClient {
       return;
     }
     log.info("BatchPlatformClient stopping");
+    if (heartbeatScheduler != null) {
+      heartbeatScheduler.close();
+    }
+    if (leaseRenewalScheduler != null) {
+      leaseRenewalScheduler.close();
+    }
     if (kafkaConsumer != null) {
       kafkaConsumer.close();
     }
