@@ -591,6 +591,47 @@ otel:
   samplingProbability: "0.1"
   logFormat: "ecs"                                        # structured JSON
 
+# ── Phase D · per-tenant worker pool（大租户物理隔离，默认空=不渲染）────────────
+# 见 docs/runbook/per-tenant-worker-onboarding.md。核心代码已 ready，这里只列要独立
+# 部署的 (tenantId, workerType) 组合；templates/worker-tenant.yaml 据此渲染独立
+# Deployment + Service（TENANT_SCOPED 订阅 + 独立 consumer group）。
+# 前提：orchestrator 必须 BATCH_MQ_ROUTING_MODE=TENANT（producer 才会发 base.{tenantId}）。
+#
+# tenantWorkerPools:
+#   - tenantId: bigcorp
+#     workerType: import          # import | export | process | dispatch | spi
+#     replicaCount: 3
+#     secretName: batch-platform-tenant-bigcorp-secret   # 引用 tenantIsolation 渲染的 Secret
+#     resources:
+#       requests: { cpu: "500m", memory: "768Mi" }
+#       limits:   { cpu: "2000m", memory: "2Gi" }
+#   - tenantId: bigcorp
+#     workerType: export
+#     replicaCount: 2
+tenantWorkerPools: []
+
+# ── Phase D · per-tenant 凭据 / 网络 / 资源隔离（默认空=不渲染）──────────────────
+# templates/tenant-isolation.yaml 据此渲染 per-tenant Secret / NetworkPolicy / ResourceQuota。
+#
+# tenantIsolation:
+#   - tenantId: bigcorp
+#     secret:
+#       enabled: true
+#       stringData:
+#         BATCH_SFTP_PASSWORD: "..."        # 覆盖共享 Secret 同名 key
+#         BATCH_MINIO_SECRET_KEY: "..."
+#     networkPolicy:
+#       enabled: true
+#       extraEgress: []                     # 集群外 RDS/Kafka 时补 ipBlock
+#     resourceQuota:
+#       enabled: false                      # 仅 per-tenant-namespace 形态开启
+#       hard:
+#         requests.cpu: "4"
+#         requests.memory: "8Gi"
+#         limits.cpu: "16"
+#         limits.memory: "32Gi"
+tenantIsolation: []
+
 # ── Prometheus ServiceMonitor (R7-A6-P1) ────────────
 # 需要集群安装 prometheus-operator (CRD: monitoring.coreos.com/v1)。enabled=false 时
 # templates/servicemonitor.yaml 直接跳过渲染，不影响 plain Prometheus 用 file_sd 抓取。
