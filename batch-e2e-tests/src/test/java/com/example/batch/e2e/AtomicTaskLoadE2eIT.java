@@ -29,10 +29,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * 负载/压力测试(testcontainers 级):并发往 SPI 专属 topic 灌 N 个原子任务,验证 SPI worker 在并发下 全部跑到终态 SUCCESS,无丢任务 /
+ * 负载/压力测试(testcontainers 级):并发往 原子任务专属 topic 灌 N 个原子任务,验证 原子任务 worker 在并发下 全部跑到终态 SUCCESS,无丢任务 /
  * 无卡死,并记录吞吐。
  *
- * <p>压的是真实派发链(orchestrator → Kafka batch.task.dispatch.atomic → SPI worker claim → 执行 → report),
+ * <p>压的是真实派发链(orchestrator → Kafka batch.task.dispatch.atomic → 原子任务 worker claim → 执行 → report),
  * 不是单元级 mock。worker 并发度由 batch.worker.max-concurrent-tasks 控制,N 大于并发度以制造排队。
  *
  * <p>注意:本测试验证的是<b>突发不丢任务</b>(全部终态 SUCCESS),不是吞吐基准 —— testcontainers 单 JVM + 单分区 topic + 每任务

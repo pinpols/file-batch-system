@@ -8,7 +8,7 @@ import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-/** 专用 Task SPI worker 心跳循环。 */
+/** 专用原子任务 worker 心跳循环。 */
 @Service
 public class AtomicWorkerLoop extends AbstractWorkerLoop {
 

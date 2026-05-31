@@ -61,7 +61,7 @@ batch:
       consumer-group-id: batch-worker-atomic
       capability-tags:
         - atomic-task
-    # 本地联调开启的 SPI 执行器(生产默认全关,按需开 + 配白名单/schema)
+    # 本地联调开启的 原子任务执行器(生产默认全关,按需开 + 配白名单/schema)
     executors:
       sql:
         enabled: true

@@ -33,7 +33,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
- * 端到端测试用 ApplicationContext:orchestrator + worker-core + 专用 SPI worker(batch-worker-atomic)同进程。
+ * 端到端测试用 ApplicationContext:orchestrator + worker-core + 专用原子任务 worker(batch-worker-atomic)同进程。
  *
  * <p>只扫 {@code com.example.batch.worker.atomic}(不扫任何 pipeline worker 包),故没有 {@code @Primary} 的
  * pipeline StepExecutionAdapter,worker-core 的 {@code DefaultStepExecutionAdapter} 作为唯一 adapter 把
