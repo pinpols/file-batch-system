@@ -4,9 +4,8 @@ import com.example.batch.sdk.handler.SdkAbstractExportHandler;
 import com.example.batch.sdk.handler.SdkRowResult;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,9 +34,10 @@ public class ExportEchoHandler extends SdkAbstractExportHandler<String> {
   }
 
   @Override
-  protected Iterator<String> streamRows(SdkTaskContext ctx, String query) {
+  protected Stream<String> streamRows(SdkTaskContext ctx, String query) {
     log.info("export sample: streamRows query={}", query);
-    return List.of("out-1", "out-2").iterator();
+    // 真业务:jdbcTemplate.queryForStream(query, rowMapper),模板会 try-with-resources 关掉 ResultSet
+    return Stream.of("out-1", "out-2");
   }
 
   @Override

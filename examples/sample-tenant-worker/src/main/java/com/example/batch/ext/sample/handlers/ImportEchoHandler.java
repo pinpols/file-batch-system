@@ -2,8 +2,8 @@ package com.example.batch.ext.sample.handlers;
 
 import com.example.batch.sdk.handler.SdkAbstractImportHandler;
 import com.example.batch.sdk.task.SdkTaskContext;
-import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,9 +32,9 @@ public class ImportEchoHandler extends SdkAbstractImportHandler<String> {
   }
 
   @Override
-  protected Iterator<String> readRows(SdkTaskContext ctx) {
-    // 真业务:逐行从文件 stream 读;这里模拟 3 行
-    return List.of("row-1", "row-2", "row-3").iterator();
+  protected Stream<String> readRows(SdkTaskContext ctx) {
+    // 真业务:逐行从文件 stream 读(如 Files.lines / jdbcTemplate.queryForStream),模板会 try-with-resources 关掉
+    return Stream.of("row-1", "row-2", "row-3");
   }
 
   @Override

@@ -5,10 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -40,8 +41,8 @@ class SdkAbstractProcessHandlerTest {
       }
 
       @Override
-      protected Iterator<Integer> selectInput(SdkTaskContext ctx) {
-        return input.iterator();
+      protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+        return input.stream();
       }
 
       @Override
@@ -148,7 +149,7 @@ class SdkAbstractProcessHandlerTest {
           }
 
           @Override
-          protected Iterator<Integer> selectInput(SdkTaskContext ctx) throws Exception {
+          protected Stream<Integer> selectInput(SdkTaskContext ctx) throws Exception {
             throw new IllegalStateException("select boom");
           }
 
@@ -208,8 +209,8 @@ class SdkAbstractProcessHandlerTest {
           }
 
           @Override
-          protected Iterator<Integer> selectInput(SdkTaskContext ctx) {
-            return ints(50).iterator();
+          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+            return ints(50).stream();
           }
 
           @Override
@@ -258,6 +259,77 @@ class SdkAbstractProcessHandlerTest {
   }
 
   @Test
+  @DisplayName("正常处理完 → 输入流 close() 被调用一次(释放 ResultSet)")
+  void shouldCloseInputStream_whenProcessingCompletes() {
+    // arrange
+    AtomicInteger closeCalls = new AtomicInteger();
+    var h =
+        new SdkAbstractProcessHandler<Integer, String>() {
+          @Override
+          public String taskType() {
+            return "test_process";
+          }
+
+          @Override
+          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+            return ints(50).stream().onClose(closeCalls::incrementAndGet);
+          }
+
+          @Override
+          protected String transform(SdkTaskContext ctx, Integer in) {
+            return "o" + in;
+          }
+
+          @Override
+          protected void upsert(SdkTaskContext ctx, List<String> batch) {}
+        };
+
+    // act
+    SdkTaskResult r = h.execute(CTX);
+
+    // assert
+    assertThat(r.success()).isTrue();
+    assertThat(closeCalls).hasValue(1);
+  }
+
+  @Test
+  @DisplayName("transform 中途抛异常 → 输入流仍 close()(try-with-resources 兜底,不泄露)")
+  void shouldCloseInputStream_whenTransformThrowsMidIteration() {
+    // arrange
+    AtomicInteger closeCalls = new AtomicInteger();
+    var h =
+        new SdkAbstractProcessHandler<Integer, String>() {
+          @Override
+          public String taskType() {
+            return "test_process";
+          }
+
+          @Override
+          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+            return ints(50).stream().onClose(closeCalls::incrementAndGet);
+          }
+
+          @Override
+          protected String transform(SdkTaskContext ctx, Integer in) {
+            if (in == 3) {
+              throw new RuntimeException("transform boom");
+            }
+            return "o" + in;
+          }
+
+          @Override
+          protected void upsert(SdkTaskContext ctx, List<String> batch) {}
+        };
+
+    // act
+    SdkTaskResult r = h.execute(CTX);
+
+    // assert
+    assertThat(r.success()).isFalse();
+    assertThat(closeCalls).hasValue(1);
+  }
+
+  @Test
   @DisplayName("不覆盖 batchSize() 时默认为 500")
   void shouldDefaultBatchSizeTo500() {
     // arrange — 不覆盖 batchSize(),用基类默认
@@ -269,8 +341,8 @@ class SdkAbstractProcessHandlerTest {
           }
 
           @Override
-          protected Iterator<Integer> selectInput(SdkTaskContext ctx) {
-            return List.<Integer>of().iterator();
+          protected Stream<Integer> selectInput(SdkTaskContext ctx) {
+            return Stream.of();
           }
 
           @Override

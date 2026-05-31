@@ -5,11 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,7 @@ class SdkAbstractExportHandlerTest {
   private static final class ProbeExportHandler extends SdkAbstractExportHandler<String> {
     final List<String> formatted = new ArrayList<>();
     final AtomicReference<String> seenQuery = new AtomicReference<>();
+    final AtomicInteger streamCloseCalls = new AtomicInteger();
     boolean writeOutCalled = false;
 
     private final List<String> rows;
@@ -74,12 +76,12 @@ class SdkAbstractExportHandlerTest {
     }
 
     @Override
-    protected Iterator<String> streamRows(SdkTaskContext c, String q) {
+    protected Stream<String> streamRows(SdkTaskContext c, String q) {
       seenQuery.set(q);
       if (streamRowsEx != null) {
         throw streamRowsEx;
       }
-      return rows.iterator();
+      return rows.stream().onClose(streamCloseCalls::incrementAndGet);
     }
 
     @Override
@@ -199,6 +201,36 @@ class SdkAbstractExportHandlerTest {
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("format boom");
     assertThat(h.writeOutCalled).isFalse();
+  }
+
+  @Test
+  @DisplayName("正常导完 → 行流 close() 被调用一次(释放 ResultSet)")
+  void closesRowStream_whenExportCompletes() {
+    // arrange
+    ProbeExportHandler h = ProbeExportHandler.ofRows(rows(50), null);
+
+    // act
+    SdkTaskResult r = h.execute(ctx());
+
+    // assert
+    assertThat(r.success()).isTrue();
+    assertThat(h.streamCloseCalls).hasValue(1);
+  }
+
+  @Test
+  @DisplayName("formatRow 中途抛异常 → 行流仍 close()(try-with-resources 兜底,不泄露)")
+  void closesRowStream_whenFormatRowThrowsMidIteration() {
+    // arrange
+    ProbeExportHandler h =
+        new ProbeExportHandler(
+            rows(5), "q", null, null, null, new IllegalStateException("format boom"), null);
+
+    // act
+    SdkTaskResult r = h.execute(ctx());
+
+    // assert
+    assertThat(r.success()).isFalse();
+    assertThat(h.streamCloseCalls).hasValue(1);
   }
 
   @Test

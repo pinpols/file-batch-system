@@ -2,9 +2,9 @@ package com.example.batch.ext.sample.handlers;
 
 import com.example.batch.sdk.handler.SdkAbstractProcessHandler;
 import com.example.batch.sdk.task.SdkTaskContext;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,9 +23,10 @@ public class ProcessEchoHandler extends SdkAbstractProcessHandler<String, String
   }
 
   @Override
-  protected Iterator<String> selectInput(SdkTaskContext ctx) {
+  protected Stream<String> selectInput(SdkTaskContext ctx) {
     log.info("process sample: selectInput for tenant={}", ctx.tenantId());
-    return List.of("alpha", "", "gamma").iterator();
+    // 真业务:jdbcTemplate.queryForStream(...),模板会 try-with-resources 关掉 ResultSet
+    return Stream.of("alpha", "", "gamma");
   }
 
   @Override
