@@ -35,6 +35,7 @@ class SqlTaskExecutorTest {
   void setUp() {
     props = new SqlExecutorProperties();
     props.setEnabled(true);
+    props.setForbidOsCapableRole(false); // mock 连接/superuser;角色闸拒绝路径由真 PG IT 验
     ds = mock(DataSource.class);
     beanFactory = mock(BeanFactory.class);
     executor = new SqlTaskExecutor(props, beanFactory, ds);

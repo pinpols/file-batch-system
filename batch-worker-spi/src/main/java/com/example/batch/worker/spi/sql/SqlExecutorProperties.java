@@ -50,6 +50,16 @@ public class SqlExecutorProperties {
   /** DDL 关键词白名单(allowedStatementTypes 含 DDL 时生效)。空 = 拒绝所有 DDL。 */
   private Set<String> ddlWhitelist = Set.of();
 
+  /**
+   * 是否拒绝以"有 OS 能力的 DB 角色"执行(默认 <b>true</b>,fail-closed)。
+   *
+   * <p>执行前查 {@code current_user}:superuser 或 {@code pg_execute_server_program} / {@code
+   * pg_read_server_files} / {@code pg_write_server_files} 成员即拒。这些是 {@code COPY ... PROGRAM} / 服务端文件
+   * / 不可信 PL 的前置;无之则 SQL 物理上碰不到 OS。这是堵 OS 的<b>硬保证</b>(黑名单可被混淆绕过,角色闸不会)。 生产应以最小权限非 superuser
+   * 角色连接;测试(testcontainers superuser)需显式置 false。
+   */
+  private boolean forbidOsCapableRole = true;
+
   /** 单 statement 超时。 */
   private Duration defaultStatementTimeout = Duration.ofSeconds(30);
 

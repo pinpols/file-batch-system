@@ -20,6 +20,7 @@ class SqlTaskExecutorHardeningTest {
   @BeforeEach
   void setUp() {
     props = new SqlExecutorProperties();
+    props.setForbidOsCapableRole(false);
     BeanFactory beanFactory = mock(BeanFactory.class);
     DataSource ds = mock(DataSource.class);
     executor = new SqlTaskExecutor(props, beanFactory, ds);

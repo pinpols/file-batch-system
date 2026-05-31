@@ -316,6 +316,30 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return s.length() <= 80 ? s : s.substring(0, 80) + "...";
   }
 
+  /**
+   * 代码层堵 OS 的硬保证:拒绝以 OS 能力角色执行 —— superuser 或 {@code pg_execute_server_program} / {@code
+   * pg_read_server_files} / {@code pg_write_server_files} 成员(COPY PROGRAM / 服务端文件 / 不可信 PL 的前置)。
+   */
+  private void requireNonOsCapableRole(Connection conn) {
+    String sql =
+        "select rolsuper"
+            + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
+            + " or pg_has_role(current_user, 'pg_read_server_files', 'USAGE')"
+            + " or pg_has_role(current_user, 'pg_write_server_files', 'USAGE')"
+            + " from pg_roles where rolname = current_user";
+    try (Statement st = conn.createStatement();
+        ResultSet rs = st.executeQuery(sql)) {
+      if (rs.next() && rs.getBoolean(1)) {
+        throw new SqlValidationException(
+            "refusing SQL on OS-capable DB role (superuser / pg_execute_server_program /"
+                + " pg_read_server_files / pg_write_server_files); connect as a least-privilege"
+                + " role");
+      }
+    } catch (SQLException ex) {
+      throw new SqlValidationException("OS-capable role check failed: " + ex.getMessage());
+    }
+  }
+
   // ─── execution ──────────────────────────────────────────────────────────────
 
   private TaskResult runStatements(TaskContext ctx, SqlInvocation inv) {
@@ -330,6 +354,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     boolean effectiveAutoCommit = inv.allSelect ? false : inv.autoCommit;
 
     try (Connection conn = inv.dataSource.getConnection()) {
+      // 代码层堵死 OS 的硬保证:拒绝 OS 能力角色(superuser / pg_execute_server_program / 服务端文件角色)。
+      if (props.isForbidOsCapableRole()) {
+        requireNonOsCapableRole(conn);
+      }
       boolean originalAutoCommit = conn.getAutoCommit();
       boolean originalReadOnly = conn.isReadOnly();
       try {

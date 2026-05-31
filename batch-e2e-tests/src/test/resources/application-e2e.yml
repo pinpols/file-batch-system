@@ -87,6 +87,7 @@ batch:
         enabled: true
         allowed-statement-types:
           - SELECT
+        forbid-os-capable-role: false  # e2e 平台库是 superuser;角色闸在测试 profile 关
       shell:
         enabled: true
         # command-whitelist 留空 = 信任环境允许全部(e2e 只跑 /bin/echo)

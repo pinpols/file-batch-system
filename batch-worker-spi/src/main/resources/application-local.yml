@@ -65,6 +65,7 @@ batch:
     executors:
       sql:
         enabled: true
+        forbid-os-capable-role: false  # 本地角色可能高权限;生产默认 true 兜底
       shell:
         enabled: true
       stored-proc:
