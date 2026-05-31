@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-05-31 — Phase 1 #SDK-P1-2 CLAIM 401/403 fail-fast + 5xx 指数退避
+
+- **范围**:1.2 `TaskDispatcher.claimWithRetry()` 按 HTTP 状态码分类:401/403 → `fatal` flag 置 true + `onMessage` 立刻 drop 后续消息(log ERROR);409 → INFO 给 peer;其它 4xx → WARN 放弃;5xx + 传输 `IOException` → `claimMax5xxRetries` 次指数退避(基准 `claimRetryBaseDelay`,200/400/800ms),耗尽放弃。新 `PlatformHttpException extends IOException` 暴露 `statusCode` + `isAuthError/isConflict/isServerError/isClientError`。`PlatformHttpClient` 非 2xx 改抛新异常(`IOException` 兼容,旧调用方 `catch (IOException)` 仍 OK)。
+- **实际 vs plan**:工作量 ~2h(plan 估 2h)持平。比 plan 多做:`BatchPlatformClientConfig` 加 `claimMax5xxRetries`(default 3)+ `claimRetryBaseDelay`(default 200ms),`@Builder(toBuilder = true)` 让测试能 derive 配置;暴露 `TaskDispatcher.isFatal()` 给后续 `BatchPlatformClient.isHealthy()`(#SDK-P1-4)消费。比 plan 少做:**没**真把 fatal 串到 `isHealthy()` 或 `System.exit` —— 只保证后续 dispatch 拒收 + log ERROR,让 K8s liveness / 运维介入(memory: `feedback_yagni`),留 P1-4 / P7-3 收。
+- **环境坑**:JDK 25 在 `/opt` 不存在,重做 P0/P1-1 那套:`curl /tmp/jdk25.tgz` → `tar` 到 `/opt/jdk25-extract/jdk-25.0.3` → symlink `/opt/jdk25`,cacerts 从系统 JDK 21 拷过去。容器重建会丢,下次 fire 重复一遍即可。
+- **测试结果**:`mvn -pl batch-worker-sdk test` 161/161 绿(原 146 + 新 10 `TaskDispatcherClaimRetryTest` + 5 `PlatformHttpExceptionTest`);旧 `TaskDispatcherTest.claimFailureDoesNotExecuteOrReport` 把裸 `IOException("409")` 换成 `PlatformHttpException(409, ...)` 才准。
+- **后续**:#SDK-P1-3 接力(`HeartbeatScheduler` 改 `scheduleWithFixedDelay` + `IOException` message 去 errBody 明文);依赖图(§15.8.A)纯 SDK 链是严格串行,本 PR merged 才能开 P1-3。
+
+---
+
 ## 2026-05-31 — Phase 1 #SDK-P1-1 stop() 顺序 + ConsumerRebalanceListener
 
 - **范围**:1.1 `BatchPlatformClient.stop()` 顺序倒置(Kafka 先 wakeup+join → dispatcher drain → heartbeat/lease close → deactivate)、1.3 `KafkaTaskConsumer` 新增 `PauseAwareRebalanceListener` 内部类,`onPartitionsAssigned()` 时若 backpressure 仍激活则 re-pause 新分到的 partition;附 6 测试(3 stop order + 3 rebalance)。

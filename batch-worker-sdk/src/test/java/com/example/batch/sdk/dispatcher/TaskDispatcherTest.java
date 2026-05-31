@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.internal.PlatformHttpClient;
+import com.example.batch.sdk.internal.PlatformHttpException;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
@@ -169,7 +170,7 @@ class TaskDispatcherTest {
   void claimFailureDoesNotExecuteOrReport() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
-        .thenThrow(new IOException("409 already claimed"));
+        .thenThrow(new PlatformHttpException(409, "409 already claimed"));
     AtomicBoolean executed = new AtomicBoolean();
     SdkTaskHandler handler =
         new SdkTaskHandler() {

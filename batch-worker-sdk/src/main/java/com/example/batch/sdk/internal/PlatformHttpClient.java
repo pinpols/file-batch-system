@@ -109,7 +109,10 @@ public class PlatformHttpClient {
       return objectMapper.readValue(resp.body(), Map.class);
     }
     String errBody = resp.body() == null ? "" : new String(resp.body(), StandardCharsets.UTF_8);
-    throw new IOException(
+    // 状态码下放给调用方(dispatcher / scheduler)按 401/403/409/5xx 分类处理;
+    // 见 PlatformHttpException javadoc。
+    throw new PlatformHttpException(
+        resp.statusCode(),
         "HTTP " + resp.statusCode() + " from " + url + " body=" + truncate(errBody, 500));
   }
 
