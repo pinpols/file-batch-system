@@ -4,6 +4,7 @@ import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
+import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
 import com.example.batch.worker.exports.jdbc.JdbcMappedExportSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,8 +68,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     List<Map<String, Object>> rows =
         txTemplate.execute(
             status -> {
-              com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(
-                  businessDataSource);
+              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
               return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
             });
     if (rows == null || rows.isEmpty()) {
@@ -127,8 +127,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     List<Map<String, Object>> rows =
         txTemplate.execute(
             status -> {
-              com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(
-                  businessDataSource);
+              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
               return jdbcTemplate.queryForList(finalSql, sqlArgs);
             });
     if (rows == null || rows.isEmpty()) {
