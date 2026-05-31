@@ -11,7 +11,7 @@ import lombok.Value;
  * <p>关键字段:
  *
  * <ul>
- *   <li>{@link #baseUrl}:平台 console-api / orchestrator 暴露的 {@code /api/internal/*} 根 URL
+ *   <li>{@link #baseUrl}:平台 console-api / orchestrator 暴露的 {@code /internal/*} 根 URL
  *   <li>{@link #apiKey}:租户在 console "我的 Worker" 页申请的 API Key(P2 上线后启用,P1 阶段可为 null)
  *   <li>{@link #tenantId}:本 worker 归属租户
  *   <li>{@link #workerCode}:worker 标识,跨重启稳定;同 tenant 内唯一

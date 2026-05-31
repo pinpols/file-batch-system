@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 任务 lease 续约 — 按 {@link BatchPlatformClientConfig#getLeaseRenewInterval()} 周期遍历 dispatcher 的
  * {@link TaskDispatcher#inFlightTaskIds() in-flight set},对每个 taskId 调 {@code
- * /api/internal/tasks/{id}/renew-lease}。
+ * /internal/tasks/{id}/renew-lease}。
  *
  * <p>单 task 续约失败(404 / 已被回收)→ 记 warn,不抛(下轮再试,或自然走完 dispatcher 流程)。整体 tick 异常被吞,scheduler 不死。
  */

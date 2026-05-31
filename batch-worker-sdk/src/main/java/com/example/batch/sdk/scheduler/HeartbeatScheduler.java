@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 心跳上报 — 按 {@link BatchPlatformClientConfig#getHeartbeatInterval()} 周期 POST {@code
- * /api/internal/workers/heartbeat}。
+ * /internal/workers/heartbeat}。
  *
  * <p>body 含 {@code workerCode / tenantId / inFlightTaskCount / maxConcurrent / status},让
  * orchestrator 知道这 worker 是活的、容量情况。HTTP 失败不抛(orchestrator 端 missed-heartbeat 阈值兜底)。
