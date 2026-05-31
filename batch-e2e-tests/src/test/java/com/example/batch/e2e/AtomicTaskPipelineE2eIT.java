@@ -31,7 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * 端到端测试:专用 SPI worker 四类原子任务主链路成功闭环(ADR-029)。
+ * 端到端测试:专用原子任务 worker 四类原子任务主链路成功闭环(ADR-029)。
  *
  * <p>链路路径(以 sql 为例):
  *
@@ -39,12 +39,12 @@ import org.springframework.test.context.jdbc.Sql;
  * launch(job_type=ATOMIC, params={taskType:&lt;type&gt;, ...})
  *   → orchestrator 建 task/outbox(task_type=ATOMIC,payload 带子协议)
  *   → Kafka 派发到 batch.task.dispatch.atomic
- *   → SPI worker(只扫 worker.atomic,无 pipeline adapter)claim
+ *   → 原子任务 worker(只扫 worker.atomic,无 pipeline adapter)claim
  *   → DefaultStepExecutionAdapter 按 payload.taskType 路由到对应执行器执行
  *   → report → orchestrator 终态 SUCCESS
  * </pre>
  *
- * <p>四个执行器(sql/shell/stored-proc/http)各跑一条真实全链,验证派发拓扑(SPI 专属 topic)+ 子执行器路由(payload.taskType)+ 参数透传
+ * <p>四个执行器(sql/shell/stored-proc/http)各跑一条真实全链,验证派发拓扑(原子任务专属 topic)+ 子执行器路由(payload.taskType)+ 参数透传
  * + 终态闭环。
  */
 @SpringBootTest(

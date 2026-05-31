@@ -55,6 +55,12 @@ public final class SampleTenantWorker {
         BatchPlatformClient.builder(config)
             .register(new EchoHandler())
             .register(new SleepHandler())
+            // ADR-036 五大业务模板 sample(各 shape 一个 echo demo)
+            .register(new com.example.batch.ext.sample.handlers.AtomicEchoHandler())
+            .register(new com.example.batch.ext.sample.handlers.ImportEchoHandler())
+            .register(new com.example.batch.ext.sample.handlers.ExportEchoHandler())
+            .register(new com.example.batch.ext.sample.handlers.ProcessEchoHandler())
+            .register(new com.example.batch.ext.sample.handlers.DispatchEchoHandler())
             .build();
 
     Runtime.getRuntime()

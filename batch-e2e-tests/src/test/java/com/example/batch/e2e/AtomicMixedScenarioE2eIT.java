@@ -33,7 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * 仿真(testcontainers 级):一轮跑 4 类执行器混合 + 多轮重复(soak/variety),模拟真实多样负载下 SPI worker 的稳定性 —— 同一 worker
+ * 仿真(testcontainers 级):一轮跑 4 类执行器混合 + 多轮重复(soak/variety),模拟真实多样负载下 原子任务 worker 的稳定性 —— 同一 worker
  * 进程交错处理 sql/shell/stored-proc/http,全部跑到终态 SUCCESS。
  *
  * <p>与负载测试({@link AtomicTaskLoadE2eIT},单一类型高并发)互补:这里强调"类型多样 + 重复", 验证执行器注册表路由在混合流量下不串、不丢。
