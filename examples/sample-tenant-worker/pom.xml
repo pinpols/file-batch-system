@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ADR-035 Phase 1.4 示范:租户自托管 worker 进程(SDK 集成)。
+
+  关键点:
+  1. 不挂在主 reactor pom 下(独立 reactor),业务方按此模板复制到自己 repo
+  2. 唯一硬依赖 batch-worker-sdk(< 2MB:jackson + kafka-clients + slf4j-api + lombok provided)
+  3. 不引 Spring / batch-common / batch-worker-core,跟主项目松耦合
+  4. 业务方按 SdkTaskHandler 写自己的 handler,build BatchPlatformClient + start
+
+  跑:
+    mvn install -f examples/sample-tenant-worker/pom.xml
+    java -jar examples/sample-tenant-worker/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar
+  环境变量:BATCH_BASE_URL / BATCH_TENANT_ID / BATCH_WORKER_CODE / BATCH_KAFKA / BATCH_API_KEY
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.example.batch.ext</groupId>
+  <artifactId>sample-tenant-worker</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Batch Sample Tenant Worker (ADR-035 Phase 1.4 示范)</name>
+  <description>租户自托管 Worker 进程示范 — 集成 batch-worker-sdk 跑两个示例 handler</description>
+
+  <properties>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <batch-sdk.version>1.1.0-SNAPSHOT</batch-sdk.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.example.batch</groupId>
+      <artifactId>batch-worker-sdk</artifactId>
+      <version>${batch-sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>2.0.16</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.example.batch.ext.sample.SampleTenantWorker</mainClass>
+              <addClasspath>true</addClasspath>
+              <classpathPrefix>lib/</classpathPrefix>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>copy-deps</id>
+            <phase>package</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/lib</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

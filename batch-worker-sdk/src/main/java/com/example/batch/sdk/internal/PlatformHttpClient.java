@@ -12,7 +12,7 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 平台 {@code /api/internal/*} 调用封装(register / heartbeat / claim / report)。
+ * 平台 {@code /internal/*} 调用封装(register / heartbeat / claim / report)。
  *
  * <p>用 JDK {@link HttpClient}(不引第三方),JSON 序列化用 jackson。
  *
@@ -42,29 +42,29 @@ public class PlatformHttpClient {
 
   /** POST register — 注册 worker,返回 server 端确认。 */
   public Map<String, Object> register(Map<String, Object> body) throws IOException {
-    return postJson("/api/internal/workers/register", body, null);
+    return postJson("/internal/workers/register", body, null);
   }
 
   /** POST heartbeat — 上报心跳。 */
   public Map<String, Object> heartbeat(Map<String, Object> body) throws IOException {
-    return postJson("/api/internal/workers/heartbeat", body, null);
+    return postJson("/internal/workers/heartbeat", body, null);
   }
 
   /** POST claim — 抢任务,返回 effective task config 或 4xx(已被别 worker 拿走)。 */
   public Map<String, Object> claim(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
-    return postJson("/api/internal/tasks/" + taskId + "/claim", body, idempotencyKey);
+    return postJson("/internal/tasks/" + taskId + "/claim", body, idempotencyKey);
   }
 
   /** POST report — 上报结果(success / fail + output)。 */
   public Map<String, Object> report(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
-    return postJson("/api/internal/tasks/" + taskId + "/report", body, idempotencyKey);
+    return postJson("/internal/tasks/" + taskId + "/report", body, idempotencyKey);
   }
 
   /** POST renew-lease — 续约。 */
   public Map<String, Object> renewLease(Long taskId, Map<String, Object> body) throws IOException {
-    return postJson("/api/internal/tasks/" + taskId + "/renew-lease", body, null);
+    return postJson("/internal/tasks/" + taskId + "/renew-lease", body, null);
   }
 
   @SuppressWarnings("unchecked")
