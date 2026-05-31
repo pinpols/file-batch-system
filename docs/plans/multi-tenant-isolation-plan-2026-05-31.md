@@ -59,9 +59,9 @@
 ## 4. 实施序(关键)
 
 ```
-[现状] 共用一切,只有应用层 tenant_id
+[现状] 应用层 tenant_id + RLS 已上线(transition/fail-open,未真正生效)
         ↓
-[Phase A] 业务库 RLS                       ← 防御性必做,2-3 周
+[Phase A] 业务库 RLS — happy-path 已落地(#155/#158)  ← 剩 R1/R2/R3 收口才算真防御,约 1 周
         ↓
 [Phase D] Per-tenant worker pool(几乎免费)← 核心代码已 ready,只需 Helm 模板,1.5-2 周
         ↓
@@ -73,7 +73,7 @@
 ```
 
 **为什么这个序**:
-- Phase A 是"防御",最便宜、不破现状、所有租户受益,先做
+- Phase A 是"防御",最便宜、不破现状、所有租户受益 —— happy-path 已先做完(#155/#158),现在卡在 R1/R2/R3 收口
 - Phase B 是"escape hatch",独立于 A/C/D 完成时间,可并行
 - C/D 是"按需开通",有了 A+B 之后基本只在大租户合同里出现,**不必默认做**
 - E 是终态选项,几乎不该走(走了就该用 SDK)
@@ -85,53 +85,89 @@
 
 ## 5. 各 Phase 详细规划
 
-### Phase A · 业务库 PostgreSQL RLS(P0,必做)
+### Phase A · 业务库 PostgreSQL RLS(P0)
+
+> **状态更新(2026-05-31,按实际代码复核)— Phase A 的 happy-path 已落地并合并入 main,不再是待建工作:**
+> - PR #155「Phase A 6 步完整落地」+ PR #158「worker 写入入口包 `RlsTenantContextHolder` + SET LOCAL」已 merge 到 main。
+> - 已存在:`batch-common/.../rls/`(`RlsTenantContextHolder` / `RlsTenantSessionSupport` / `RlsPolicyHealthIndicator`)、`RlsTenantIsolationIntegrationTest` + `RlsPhaseAMigrationCoverageTest`、`scripts/db/business/rls-phase-a.sql`。
+> - worker 写入路径已经过 `RlsTenantContextHolder` 做 SET LOCAL(`AbstractPipelineStepExecutionAdapter` / `SqlTransformComputePlugin`)。
+> - **但当前是 transition / fail-open 模式,且账号 & 守护未收口 → RLS 现在不提供实际防护(见下方「出口红线」R1/R2/R3)。** 下面的「改造点 / Phase 拆解 / 出口」是历史规划,实际状态以红线为准。
 
 **目标**:在不改业务模型 / 不分库分 schema 的前提下,**DB 层强制 `tenant_id` 过滤**,杜绝「应用 SQL bug → 跨租户数据泄露」。
 
-**设计**:
+**设计(下面是目标 strict 形态;实际已落地的是 transition 形态,见注释)**:
 
 ```sql
 -- 启 RLS
 ALTER TABLE biz.customer_account ENABLE ROW LEVEL SECURITY;
 ALTER TABLE biz.customer_account FORCE ROW LEVEL SECURITY;
 
--- 按 session 变量过滤
+-- 目标 strict 形态(尚未上线):
 CREATE POLICY tenant_isolation ON biz.customer_account
   USING (tenant_id = current_setting('app.tenant_id', true))
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
+-- 实际已上线 transition 形态(rls-phase-a.sql):policy 名 tenant_isolation_transition,TO PUBLIC,
+--   USING/WITH CHECK 多一个 `current_setting('app.tenant_id', true) IS NULL OR = ''` 的逃逸分支
+--   → app.tenant_id 未设/空时放行全部(fail-OPEN,向后兼容)。全 worker 上 SET LOCAL 后,
+--      后续 PR 删逃逸分支转 strict(见 R2)。
+
 -- 应用侧:每个事务起来前 SET LOCAL app.tenant_id = 'ta'
 ```
 
-**改造点**:
-- `BatchPgSessionAutoConfiguration`(已有,管 statement_timeout / lock_timeout)→ 扩展 `app.tenant_id` 设值
-- worker 写之前 `tenant_id` 从 `job_instance.tenant_id` 取(已有),包装到 connection-scoped session var
-- 9 张 biz 表全加 policy(Flyway 1 migration)
-- 测试:`MultiTenantIsolationIntegrationTest` 扩 RLS 反例(故意不设 tenant → 期望 0 行)
-- 平台运维任务(跨租户聚合查询)用 `BYPASSRLS` DB role(单独账号,审计)
+**改造点(实现状态已标注)**:
+- ✅ `BatchPgSessionAutoConfiguration` / `HikariPgSessionSupport`(已有,管 statement_timeout / lock_timeout)→ 已扩展 `app.tenant_id` SET LOCAL
+- ✅ worker 写之前 `tenant_id` 经 `RlsTenantContextHolder` 包装到 connection-scoped session var(#158;**需复核是否覆盖 import/export/dispatch 全部直写路径**,目前确认到 pipeline step adapter + sql plugin)
+- ⚠️ 9 张 biz 表 + `batch.process_staging`(共 **10 张**)加 policy —— **不是 Flyway migration**,而是手工 psql 脚本 `scripts/db/business/rls-phase-a.sql`(`psql -d batch_business -f`);因 biz 表本身也非 Flyway 管(`create_biz_tables.sql` 由 ops/seed 脚本建)
+- ✅ 测试:新建 `RlsTenantIsolationIntegrationTest`(命中/绕过反例)+ `RlsPhaseAMigrationCoverageTest`(脚本覆盖白名单守护)—— **不是**「扩 `MultiTenantIsolationIntegrationTest`」
+- ⚠️ 平台运维聚合用 `BYPASSRLS` role —— 脚本创建的是 `batch_business_admin`(BYPASSRLS)+ `batch_business_writer`(应用,RLS 生效);**现役 `batch_user` 未收口(R1)**
 
-**Phase 拆解**:
-| 步骤 | 内容 | 估时 |
+**Phase 拆解(实际落地状态)**:
+| 步骤 | 内容 | 状态 |
 |---|---|---|
-| A1 | DB role 拆 `batch_user`(应用)/ `batch_admin_user`(BYPASSRLS,平台运维聚合)| 0.5 天 |
-| A2 | `BatchPgSessionAutoConfiguration` 加 `app.tenant_id` SET LOCAL 切面 | 1 天 |
-| A3 | Flyway 给 9 张 biz 表加 ENABLE RLS + FORCE RLS + policy | 1 天 |
-| A4 | 单测:RLS 命中/绕过 反例,验证 BYPASSRLS 仅平台聚合用 | 1 天 |
-| A5 | 故障演练:RLS 模式下跨租户 query 应失败,POLICY 漏配应被 ArchTest 拦 | 0.5 天 |
-| A6 | runbook + 监控:`pg_policies` 表加 healthcheck | 0.5 天 |
-
-**总 2-3 周**(含联调)。
+| A1 | DB role:脚本建 `batch_business_writer`(应用,RLS 生效)/ `batch_business_admin`(BYPASSRLS,平台聚合)| ⚠️ 部分 —— role 已建,但现役 `batch_user` 未迁移/未收口(R1) |
+| A2 | `BatchPgSessionAutoConfiguration` / `RlsTenantContextHolder` 加 `app.tenant_id` SET LOCAL | ✅ 已落地(#158;待复核全写路径覆盖) |
+| A3 | 给 10 张表加 ENABLE+FORCE+policy —— **手工 psql 脚本** `rls-phase-a.sql`(非 Flyway)| ✅ 已落地(transition 模式) |
+| A4 | 单测:`RlsTenantIsolationIntegrationTest` 命中/绕过反例 | ✅ 已落地 |
+| A5 | POLICY 漏配守护 —— 现为白名单(`EXPECTED_RLS_TABLES`)| ⚠️ 白名单会漏新表(R3) |
+| A6 | `RlsPolicyHealthIndicator`(`pg_policies` healthcheck)| ✅ 已落地(但也是白名单,R3)|
 
 **风险**:
 - 部分动态 SQL 拼接没走 session 变量 → 漏 policy → 反而被拒(应用报错而非泄露)。**好事,变可见错误**
 - 性能:RLS policy 加 `WHERE` 子句,索引必须含 `tenant_id` 作首字段(现有索引已有,审一遍)
 
-**出口**:
-- [ ] 9 张 biz 表 RLS 启用 + policy 部署
-- [ ] `MultiTenantIsolationIntegrationTest` 加 5 个 RLS 反例,全过
-- [ ] `pg_policies` healthcheck 集成 actuator
+**出口(happy-path 部分已达成)**:
+- [x] 10 张表(9 biz + `batch.process_staging`)RLS 启用 + policy 部署(transition 模式)
+- [x] `RlsTenantIsolationIntegrationTest` RLS 反例,全过
+- [x] `pg_policies` healthcheck 集成 actuator(`RlsPolicyHealthIndicator`)
 - [ ] runbook `docs/runbook/multi-tenant-rls.md` 写清 BYPASSRLS 何时用、policy 怎么 review
+
+**出口红线(阻断项 —— 不满足则 RLS 形同虚设,必须在 Phase A 真正收尾前全绿)**:
+
+> 上面的「出口」是功能完成度(已基本达成),这三条是**安全有效性**。任一未达成 → RLS 只是装了脚手架,不提供实际防护。当前三条**都未达成**。
+
+- [ ] **R1 · 现役业务账号必须被收口为非 owner / 非 superuser / NOBYPASSRLS。**
+  - 现状漏洞:`rls-phase-a.sql` 只对新建的 `batch_business_writer` 收口干净;真正在用的 `batch_user` 仅在 `NOT rolsuper` 时才 `ALTER ... NOBYPASSRLS`。**`ALTER ROLE NOBYPASSRLS` 治不了 superuser —— superuser 无视 RLS 是另一条独立通道,连 `FORCE` 都拦不住。** 若现役账号是 superuser 或 biz 表 owner,则 `pg_policies` 查得到 policy 但一行都不生效(静默失效)。
+  - 达成标准:核实生产/预发的 business DataSource 账号**不是 superuser、不是 biz 表 owner、无 BYPASSRLS**;worker 迁到 `batch_business_writer`;`batch_user` 权限收敛或停用。需 DBA 配合(改 `BusinessDataSourceProperties.username` + 回收 `batch_user`),脚本做不到。
+- [ ] **R2 · transition 模式必须翻成 strict —— 否则现在 fail-OPEN。**
+  - 现状漏洞:policy `TO PUBLIC` 且 `current_setting('app.tenant_id', true) IS NULL OR = '' → 允许全部`。即**任何忘记 `SET LOCAL app.tenant_id` 的连接都放行全表**,而「应用 SQL bug / 漏带 tenant_id」正是 RLS 要兜底的场景 → 当前模式下毫无兜底,RLS 等于装了没开。
+  - 进度:#158 已把 SET LOCAL 铺到 pipeline step 写入路径;达成标准 = 铺到**每一个** worker 写连接路径并验证后,删 `IS NULL/''` 逃逸分支转 strict(变量未设 → 0 行 / 拒写,fail-closed)。
+- [ ] **R3 · 守护从「白名单」翻成「闭世界」,且 fail-fast。**
+  - 现状漏洞:`RlsPolicyHealthIndicator.EXPECTED_RLS_TABLES` 是硬编码 Java 清单,`RlsPhaseAMigrationCoverageTest` 只校验「清单 ⊆ 脚本」。新增 `biz.foo` 若同时忘了加清单 + 忘了加脚本 → 该表 fail-open(跨租户可读),而 healthcheck 绿、test 绿、无报警。**biz 表会越来越多,白名单必漏且漏了静默泄露。**
+  - 达成标准:守护从**活动 catalog** 出发 —— 查 `pg_tables WHERE schemaname='biz'`,断言**每一张实际存在的表**都 `ENABLE+FORCE+有 policy`;硬编码清单退化为「已知豁免名单」(同 CLAUDE.md 4 张系统表豁免写法)。漏配 → 启动 fail-fast / CI 红,而非静默放行。
+
+**执行环节(R2/R3 判定逻辑在哪跑 —— 分层,主力是启动 fail-fast)**:
+
+> 前提:biz 表与 `rls-phase-a.sql` 都不归 Flyway 管(脚本由 ops/seed 跑),「建表后记得再跑 RLS 脚本」这个**执行顺序**最易断 —— 必须用机制兜,不能靠人记。
+
+| 层 | 环节 | 职责 |
+|---|---|---|
+| 主力 | **应用启动 fail-fast**(扫真实 business DS 的 `biz` schema,挂 `ArchiveSchemaDriftCheck` 同款 hook)| 闭世界校验,漏配 → 拒绝启动(非 health DOWN);只有连真实库才看得到脚本建的真实表 |
+| 最早 | **CI Testcontainers IT** | 容器内按真实顺序跑 `create_biz_tables.sql` + `rls-phase-a.sql`,再闭世界 diff `pg_tables(biz)` vs `pg_policies` |
+| 持续 | **actuator healthcheck**(`RlsPolicyHealthIndicator` 改闭世界)| 抓运行期被加表 / policy 被 DROP 的漂移 |
+| 根因(可选)| **PG event trigger 自动入册**(`ddl_command_end` 在 `biz` 建表自动 ENABLE/FORCE + 套标准 policy)| 加表零 RLS 步骤,彻底消除「记得跑脚本」的顺序问题;代价是 superuser 魔法 + 模板一刀切,表真多了再上 |
+
+> 闭世界判定写**一份**共享逻辑(扫 biz schema vs pg_policies),启动 fail-fast / CI IT / healthcheck 都复用它 —— single source of truth,别三处各写清单(那又退回白名单老问题)。
 
 ---
 
@@ -349,7 +385,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 
 | # | 问题 | 推荐 | 影响 |
 |---|---|---|---|
-| 1 | Phase A(RLS)是否做? | ✅ P0 必做 | 不做 = 永远有数据泄露风险,合规失分 |
+| 1 | Phase A(RLS)收尾(R1/R2/R3)是否做? | ✅ P0 必做 | happy-path 已上线但 fail-open;不收尾 = RLS 形同未做,数据泄露风险仍在 |
 | 2 | Phase B(SDK)是否做? | ✅ P1 推荐 | 不做 = 跨语言 / 自家依赖 / 数据驻留诉求没路径 |
 | 3 | Phase C(per-tenant schema)是否默认开? | ❌ 否决(§6.1)| 价值伪需求,运维爆炸 |
 | 4 | Phase D(per-tenant worker pool)是否做? | ✅ P1 几乎免费 | **核心代码已 ready**,只缺 Helm 模板,1.5-2 周搞定 |
@@ -360,7 +396,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 
 ## 8. 优先级 / 资源建议
 
-如果只能做 1 件:**Phase A(RLS)** — 收益 / 成本比最高,2-3 周拿下"DB 层有防御"承诺。
+如果只能做 1 件:**Phase A 收尾(R1/R2/R3)** — happy-path 已上线(#155/#158),但当前 transition/fail-open + 账号未收口 + 白名单守护 = "DB 层有防御"承诺还没兑现。收尾约 1 周,收益 / 成本比最高。
 
 如果做 2 件:**A + D(per-tenant worker pool)** — D 因为核心代码已 ready 几乎免费(1.5-2 周),立刻让大租户能要独立 pool。比 SDK 性价比更高(SDK 8-10 周)。
 
@@ -395,7 +431,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 | 里程碑 | 标志 |
 |---|---|
 | M1 | Plan + ADR-035 评审通过,owner 拍板做哪几 phase |
-| M2 | Phase A 上线 — 9 张 biz 表 RLS 启用,健康检查绿 |
+| M2 | ~~Phase A 上线 — RLS 启用,健康检查绿~~ ✅ 已达成(#155/#158,transition 模式)→ **M2' = R1/R2/R3 收口,strict 模式生效** |
 | M3 | Phase B SDK 样例 worker 端到端跑通,文档 published |
 | M4 | 1 个真实 SDK 接入租户 production 跑通 |
 | M5(可选)| 1 个 schema 隔离租户 + 1 个 per-tenant worker pool 试点 |
