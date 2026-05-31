@@ -36,6 +36,7 @@ class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
   private SqlTaskExecutor executor() {
     SqlExecutorProperties props = new SqlExecutorProperties();
     props.setEnabled(true);
+    props.setForbidOsCapableRole(false); // testcontainers superuser;角色闸拒绝路径单列 IT 验
     props.setAllowedStatementTypes(Set.of("SELECT"));
     return new SqlTaskExecutor(props, beanFactory, dataSource);
   }
@@ -58,6 +59,18 @@ class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
     // 默认只允许 SELECT;真库连接下 DELETE 仍被 validation 拦在执行前
     TaskResult r =
         executor().execute(ctx(Map.of("sql", "DELETE FROM batch.job_definition WHERE 1=0")));
+    assertThat(r.success()).isFalse();
+  }
+
+  @Test
+  void forbidOsCapableRoleRejectsSuperuserConnection() {
+    // testcontainers 连接是 superuser(OS 能力角色)→ forbidOsCapableRole=true 时代码层直接拒,连 SELECT 也不放。
+    SqlExecutorProperties props = new SqlExecutorProperties();
+    props.setEnabled(true);
+    props.setAllowedStatementTypes(Set.of("SELECT"));
+    props.setForbidOsCapableRole(true);
+    TaskResult r =
+        new SqlTaskExecutor(props, beanFactory, dataSource).execute(ctx(Map.of("sql", "SELECT 1")));
     assertThat(r.success()).isFalse();
   }
 }

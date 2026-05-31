@@ -5,8 +5,11 @@ import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
+import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -174,15 +177,87 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       }
     }
     if (props.getAllowedHostPatterns().isEmpty()) {
-      return; // 空白名单 = 允许全部(仅 dev)
+      // 空白名单:enforceAllowlist=false → 允许全部(仅 dev);=true → fail-closed 拒绝全部
+      if (props.isEnforceAllowlist()) {
+        throw new HttpValidationException(
+            "allowlist enforced but allowedHostPatterns empty (deny all): " + host);
+      }
+      validateResolvedIp(host);
+      return;
     }
     for (String pattern : props.getAllowedHostPatterns()) {
       if (matchesGlob(pattern.toLowerCase(Locale.ROOT), h)) {
+        validateResolvedIp(host);
         return;
       }
     }
     throw new HttpValidationException(
         "host not in allowedHostPatterns: " + host + ", allowed=" + props.getAllowedHostPatterns());
+  }
+
+  /**
+   * SSRF 加固:把 host 解析为 IP,任意一个落入内网 / 回环 / link-local / metadata 网段就拒绝。 字面 IP / 主机名都解析(getAllByName
+   * 对 IP literal 不走网络)。由 {@link HttpExecutorProperties#isBlockPrivateIps()} 控制(默认 true)。
+   */
+  private void validateResolvedIp(String host) {
+    if (!props.isBlockPrivateIps()) {
+      return;
+    }
+    InetAddress[] resolved;
+    try {
+      resolved = InetAddress.getAllByName(host);
+    } catch (UnknownHostException e) {
+      throw new HttpValidationException("host不能解析: " + host + " (" + e.getMessage() + ")");
+    }
+    for (InetAddress addr : resolved) {
+      if (isBlockedAddress(addr)) {
+        throw new HttpValidationException(
+            "host resolves to blocked address: " + host + " -> " + addr.getHostAddress());
+      }
+    }
+  }
+
+  /**
+   * 判定一个 {@link InetAddress} 是否属于必须拒绝的网段:回环 / link-local / site-local / any-local / 组播 /
+   * 169.254.0.0/16,以及其 IPv4-mapped-IPv6 形态({@code ::ffff:a.b.c.d})。 package-private 以便单测直接对 IP
+   * literal 校验,无需联网。
+   */
+  static boolean isBlockedAddress(InetAddress addr) {
+    if (addr.isLoopbackAddress()
+        || addr.isLinkLocalAddress()
+        || addr.isSiteLocalAddress()
+        || addr.isAnyLocalAddress()
+        || addr.isMulticastAddress()) {
+      return true;
+    }
+    // 169.254.0.0/16 (含 IPv4-mapped IPv6 的 ::ffff:169.254.x.x:取地址末 4 字节判定 v4 段)
+    byte[] raw = addr.getAddress();
+    byte[] v4 = null;
+    if (raw.length == 4) {
+      v4 = raw;
+    } else if (raw.length == 16 && (addr instanceof Inet6Address i6) && isIpv4Mapped(i6)) {
+      v4 = new byte[] {raw[12], raw[13], raw[14], raw[15]};
+    }
+    if (v4 != null) {
+      int b0 = v4[0] & 0xFF;
+      int b1 = v4[1] & 0xFF;
+      // 169.254.0.0/16 (link-local,某些映射形态 isLinkLocalAddress 可能漏判)
+      if (b0 == 169 && b1 == 254) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** {@code ::ffff:a.b.c.d} 形态:前 10 字节 0,第 11/12 字节为 0xFF。 */
+  private static boolean isIpv4Mapped(Inet6Address addr) {
+    byte[] b = addr.getAddress();
+    for (int i = 0; i < 10; i++) {
+      if (b[i] != 0) {
+        return false;
+      }
+    }
+    return (b[10] & 0xFF) == 0xFF && (b[11] & 0xFF) == 0xFF;
   }
 
   /** 简化 glob:{@code *} = 匹配 0+ 个非 {@code .} 字符;其他字符精确。 */
@@ -324,7 +399,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
   private TaskResult runOnce(Invocation inv, int attempt)
       throws java.io.IOException, InterruptedException {
-    HttpClient client = HttpClient.newBuilder().connectTimeout(inv.timeout).build();
+    // 显式禁止跟随重定向:重定向 target 不会再过 validateHost/validateResolvedIp,
+    // 否则攻击者可用 30x 把请求重定向到内网 / metadata,绕过上面的 SSRF 校验。
+    HttpClient client =
+        HttpClient.newBuilder()
+            .connectTimeout(inv.timeout)
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
 
     HttpRequest.Builder req = HttpRequest.newBuilder(inv.uri).timeout(inv.timeout);
     inv.headers.forEach(req::header);

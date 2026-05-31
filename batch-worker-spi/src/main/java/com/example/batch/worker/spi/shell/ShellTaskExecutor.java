@@ -73,7 +73,27 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   static final String PARAM_TIMEOUT_SECONDS = "timeoutSeconds";
   static final String PARAM_ENV = "env";
 
+  /** 匹配真正的 {@code ..} 路径段(行首/分隔符 + ".." + 分隔符/行尾),不误伤 {@code foo..bar}。 */
+  static final Pattern PARENT_DIR_REF = Pattern.compile("(^|[/\\\\])\\.\\.([/\\\\]|$)");
+
   private final ShellExecutorProperties props;
+
+  /** 包私有测试钩子:value 是否包含真正的 {@code ..} 父目录段。 */
+  static boolean hasParentDirRef(String arg) {
+    return arg != null && PARENT_DIR_REF.matcher(arg).find();
+  }
+
+  /**
+   * 每次 invocation 唯一的 reader-map / 线程命名前缀。用 AtomicLong 自增,避免 PID 复用导致两个任务的 stdout 串台(reader map
+   * 是实例级共享单例)。
+   */
+  private static final java.util.concurrent.atomic.AtomicLong INVOCATION_SEQ =
+      new java.util.concurrent.atomic.AtomicLong();
+
+  /** 包私有测试钩子:生成下一个 invocation id(单调递增,两次调用必不相同)。 */
+  static String nextInvocationId() {
+    return Long.toString(INVOCATION_SEQ.incrementAndGet());
+  }
 
   @Override
   public String taskType() {
@@ -130,6 +150,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
           "command not in whitelist: " + command + ", allowed=" + props.getCommandWhitelist());
     }
     validateAgainstRegex(command, "command");
+    validateNoParentDirRef(command, "command");
 
     // args
     List<String> args = parseArgs(params.get(PARAM_ARGS));
@@ -139,6 +160,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     }
     for (int i = 0; i < args.size(); i++) {
       validateAgainstRegex(args.get(i), "args[" + i + "]");
+      validateNoParentDirRef(args.get(i), "args[" + i + "]");
     }
 
     // timeout(只能缩短)
@@ -214,6 +236,13 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         fieldName + " contains disallowed characters: \"" + value + "\"");
   }
 
+  private void validateNoParentDirRef(String value, String fieldName) {
+    if (props.isRejectParentDirRefs() && hasParentDirRef(value)) {
+      throw new ShellValidationException(
+          fieldName + " contains parent-dir reference (..): \"" + value + "\"");
+    }
+  }
+
   // ─── workdir ────────────────────────────────────────────────────────────────
 
   private Path createIsolatedWorkdir(TaskContext ctx) {
@@ -282,14 +311,16 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       return TaskResult.fail("process start failed: " + e.getMessage(), e);
     }
 
+    // 每次 invocation 唯一 id,避免 PID 复用导致 reader map key 串台
+    String invocationId = nextInvocationId();
     try {
       // 异步读 stdout / stderr,防 buffer full block
       Thread stdoutThread =
           startReaderThread(
-              proc.getInputStream(), props.getMaxStdoutBytes(), "stdout-" + proc.pid());
+              proc.getInputStream(), props.getMaxStdoutBytes(), "stdout-" + invocationId);
       Thread stderrThread =
           startReaderThread(
-              proc.getErrorStream(), props.getMaxStderrBytes(), "stderr-" + proc.pid());
+              proc.getErrorStream(), props.getMaxStderrBytes(), "stderr-" + invocationId);
 
       boolean finished = proc.waitFor(inv.timeout.toMillis(), TimeUnit.MILLISECONDS);
       stdoutThread.join(1000);
