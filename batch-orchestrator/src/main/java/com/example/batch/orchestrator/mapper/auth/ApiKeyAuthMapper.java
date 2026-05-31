@@ -1,5 +1,6 @@
-package com.example.batch.orchestrator.auth;
+package com.example.batch.orchestrator.mapper.auth;
 
+import com.example.batch.orchestrator.auth.ApiKeyRecord;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;

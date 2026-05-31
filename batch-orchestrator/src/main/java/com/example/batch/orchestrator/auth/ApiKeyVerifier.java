@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.auth;
 
+import com.example.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
