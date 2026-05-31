@@ -3,9 +3,11 @@ package com.example.batch.sdk.dispatcher;
 import com.example.batch.sdk.client.BatchPlatformClient;
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.internal.PlatformHttpClient;
+import com.example.batch.sdk.internal.PlatformHttpException;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +46,12 @@ public class TaskDispatcher {
   /** P0 hardening:stop() 后置 true,onMessage 拒新消息(Zeebe JobWorker.close 模式)。 */
   private final AtomicBoolean draining = new AtomicBoolean(false);
 
+  /**
+   * P1-2 fail-fast:CLAIM 收到 401/403 后置 true,后续 onMessage 直接拒收(等 K8s liveness probe 拉起或运维人工介入)。 与
+   * {@link #draining} 区分:fatal 是"不可恢复",draining 是"主动 stop"。两者都让 onMessage 静默 drop。
+   */
+  private final AtomicBoolean fatal = new AtomicBoolean(false);
+
   /** MDC keys 公开给测试断言。 */
   static final String MDC_TRACE_ID = "traceId";
 
@@ -74,10 +82,11 @@ public class TaskDispatcher {
 
   /** 收到一条派单消息 — 提交到线程池异步处理(返回快,Kafka consumer 不阻塞)。 */
   public void onMessage(TaskDispatchMessage msg) {
-    if (draining.get()) {
-      // P0 hardening:已发起 stop,不接新消息(已 enqueue 的还会执行完)
+    if (draining.get() || fatal.get()) {
+      // P0 hardening:已发起 stop 或 P1-2 fail-fast 后,不接新消息
       log.info(
-          "dispatcher draining, skipping new dispatch msg taskId={}, jobCode={}",
+          "dispatcher {} , skipping new dispatch msg taskId={}, jobCode={}",
+          fatal.get() ? "fatal" : "draining",
           msg == null ? null : msg.taskId(),
           msg == null ? null : msg.jobCode());
       return;
@@ -115,25 +124,18 @@ public class TaskDispatcher {
 
     // CLAIM — body 对齐 TaskController.TaskClaimRequest(tenantId/workerId/partitionInvocationId)
     String idemClaim = BatchPlatformClient.newIdempotencyKey();
-    try {
-      Map<String, Object> claimBody = new HashMap<>();
-      claimBody.put("tenantId", msg.tenantId());
-      claimBody.put(
-          "workerId", config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
-      if (msg.runtimeAttributes() != null) {
-        Object pInv = msg.runtimeAttributes().get("partitionInvocationId");
-        if (pInv != null) claimBody.put("partitionInvocationId", pInv.toString());
-      }
-      httpClient.claim(msg.taskId(), idemClaim, claimBody);
-      inFlight.add(msg.taskId());
-    } catch (Exception claimEx) {
-      // CLAIM 失败通常是别 worker 已 claim 走,正常竞争,不 report(orchestrator 已 owned)
-      log.info(
-          "claim failed for taskId={} (likely taken by peer): {}",
-          msg.taskId(),
-          claimEx.getMessage());
+    Map<String, Object> claimBody = new HashMap<>();
+    claimBody.put("tenantId", msg.tenantId());
+    claimBody.put(
+        "workerId", config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
+    if (msg.runtimeAttributes() != null) {
+      Object pInv = msg.runtimeAttributes().get("partitionInvocationId");
+      if (pInv != null) claimBody.put("partitionInvocationId", pInv.toString());
+    }
+    if (!claimWithRetry(msg, idemClaim, claimBody)) {
       return;
     }
+    inFlight.add(msg.taskId());
 
     // EXECUTE
     SdkTaskContext ctx =
@@ -185,6 +187,107 @@ public class TaskDispatcher {
           reportEx);
     } finally {
       inFlight.remove(msg.taskId());
+    }
+  }
+
+  /**
+   * P1-2:CLAIM 重试 + fail-fast 分类。
+   *
+   * <ul>
+   *   <li>401/403 → fail-fast,标记 dispatcher fatal(后续 onMessage 拒收),log ERROR;返回 false
+   *   <li>409 → peer 已 claim(正常竞争),log INFO,返回 false(不 report)
+   *   <li>其它 4xx → 客户端构造错误(非鉴权),log WARN,返回 false(重试无益)
+   *   <li>5xx / 传输错误 → 指数退避重试 {@link BatchPlatformClientConfig#getClaimMax5xxRetries()} 次,
+   *       仍失败则放弃(orchestrator 自然会因 lease 超时重派)
+   * </ul>
+   *
+   * @return true=CLAIM 成功可进入 EXECUTE;false=已分类处理,不应继续
+   */
+  boolean claimWithRetry(TaskDispatchMessage msg, String idemKey, Map<String, Object> body) {
+    int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
+    long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
+    int attempt = 0;
+    while (true) {
+      try {
+        httpClient.claim(msg.taskId(), idemKey, body);
+        return true;
+      } catch (PlatformHttpException httpEx) {
+        if (httpEx.isAuthError()) {
+          // 鉴权失败:apiKey 配错 / 已 revoke → 重试无益,fail-fast 让运维介入(K8s liveness probe 拉起)
+          fatal.set(true);
+          log.error(
+              "CLAIM auth failed (HTTP {}) for taskId={}, marking dispatcher FATAL — "
+                  + "check apiKey / tenant ACL; SDK will reject subsequent dispatches",
+              httpEx.statusCode(),
+              msg.taskId());
+          return false;
+        }
+        if (httpEx.isConflict()) {
+          // 409:peer worker 已 claim,正常竞争,不 report(orchestrator 已 owned by peer)
+          log.info("CLAIM 409 for taskId={} (taken by peer), skipping", msg.taskId());
+          return false;
+        }
+        if (httpEx.isServerError()) {
+          // 5xx:平台侧问题,指数退避重试
+          if (attempt >= maxRetries) {
+            log.warn(
+                "CLAIM 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
+                    + "(orchestrator will redispatch on lease timeout)",
+                httpEx.statusCode(),
+                msg.taskId(),
+                maxRetries);
+            return false;
+          }
+          long delayMs = baseDelayMs << attempt; // 200 / 400 / 800 ms ...
+          log.info(
+              "CLAIM 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
+              httpEx.statusCode(),
+              msg.taskId(),
+              attempt + 1,
+              delayMs);
+          if (!sleepInterruptible(delayMs)) return false;
+          attempt++;
+          continue;
+        }
+        // 其它 4xx(400 / 404 / 422 ...):客户端构造问题,重试无益
+        log.warn(
+            "CLAIM client error (HTTP {}) for taskId={}, giving up: {}",
+            httpEx.statusCode(),
+            msg.taskId(),
+            httpEx.getMessage());
+        return false;
+      } catch (IOException ioEx) {
+        // 传输层错误(socket / read timeout / 中断包装)— 当 5xx 一样退避重试
+        if (attempt >= maxRetries) {
+          log.warn(
+              "CLAIM transport error for taskId={} exhausted {} retries, giving up: {}",
+              msg.taskId(),
+              maxRetries,
+              ioEx.getMessage());
+          return false;
+        }
+        long delayMs = baseDelayMs << attempt;
+        log.info(
+            "CLAIM transport error for taskId={} attempt={} retry in {}ms: {}",
+            msg.taskId(),
+            attempt + 1,
+            delayMs,
+            ioEx.getMessage());
+        if (!sleepInterruptible(delayMs)) return false;
+        attempt++;
+      }
+    }
+  }
+
+  /** 可被 interrupt 打断的 sleep;true=正常 sleep 完,false=被打断(应放弃重试)。 */
+  private static boolean sleepInterruptible(long ms) {
+    if (ms <= 0) return true;
+    try {
+      Thread.sleep(ms);
+      return true;
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      return false;
     }
   }
 
@@ -240,9 +343,14 @@ public class TaskDispatcher {
     MDC.remove(MDC_TASK_ID);
   }
 
-  /** 暴露给测试:draining 状态。 */
-  boolean isDraining() {
+  /** 暴露给测试 + 调用方:draining 状态(stop() 已发起,等待 in-flight 跑完)。 */
+  public boolean isDraining() {
     return draining.get();
+  }
+
+  /** 暴露给测试 + 调用方:fatal 状态(401/403 触发,不可恢复)。 */
+  public boolean isFatal() {
+    return fatal.get();
   }
 
   private static ThreadFactory namedThreadFactory(String prefix) {

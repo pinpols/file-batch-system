@@ -108,9 +108,18 @@ public class PlatformHttpClient {
       }
       return objectMapper.readValue(resp.body(), Map.class);
     }
-    String errBody = resp.body() == null ? "" : new String(resp.body(), StandardCharsets.UTF_8);
-    throw new IOException(
-        "HTTP " + resp.statusCode() + " from " + url + " body=" + truncate(errBody, 500));
+    // errBody 不进 exception message — 避免错误链一路打 INFO/WARN 时把平台错误 payload 写满日志,
+    // 也防止 token / 敏感字段泄露。完整 body 仅 DEBUG 级输出,排障开 DEBUG 看。见 #SDK-P1-3。
+    if (log.isDebugEnabled() && resp.body() != null && resp.body().length > 0) {
+      String errBody = new String(resp.body(), StandardCharsets.UTF_8);
+      log.debug(
+          "non-2xx response: status={} url={} body={}",
+          resp.statusCode(),
+          url,
+          truncate(errBody, 500));
+    }
+    throw new PlatformHttpException(
+        resp.statusCode(), "HTTP " + resp.statusCode() + " from " + url);
   }
 
   private static String truncate(String s, int max) {
