@@ -1,5 +1,7 @@
 package com.example.batch.sdk.client;
 
+import com.example.batch.sdk.dispatcher.KafkaTaskConsumer;
+import com.example.batch.sdk.dispatcher.TaskDispatcher;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import java.util.HashMap;
@@ -43,9 +45,9 @@ public class BatchPlatformClient {
   private final Map<String, SdkTaskHandler> handlers;
   private final PlatformHttpClient httpClient;
   private volatile boolean started = false;
-
-  // P1 阶段:Kafka consumer / scheduler 留 hook,完整实现 P2 + P3 落
-  // (本 commit 只完成 SDK 框架 + HTTP 协议层,Kafka 派单消费在下一个 PR)
+  private TaskDispatcher dispatcher;
+  private KafkaTaskConsumer kafkaConsumer;
+  private Thread kafkaConsumerThread;
 
   private BatchPlatformClient(
       BatchPlatformClientConfig config, Map<String, SdkTaskHandler> handlers) {
@@ -83,8 +85,13 @@ public class BatchPlatformClient {
     } catch (java.io.IOException e) {
       throw new RuntimeException("worker register failed", e);
     }
+    this.dispatcher = new TaskDispatcher(config, handlers, httpClient);
+    this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);
+    this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
+    this.kafkaConsumerThread.setDaemon(false);
+    this.kafkaConsumerThread.start();
     started = true;
-    // TODO P1 next PR:启动 Kafka consumer + heartbeat scheduler + task dispatcher
+    // TODO 后续 PR:Heartbeat scheduler + lease renewal
   }
 
   /** 优雅停 — 反注册 + 关 Kafka consumer + 等当前任务完成。 */
@@ -93,7 +100,19 @@ public class BatchPlatformClient {
       return;
     }
     log.info("BatchPlatformClient stopping");
-    // TODO 反注册 API + drain in-flight tasks + close kafka consumer
+    if (kafkaConsumer != null) {
+      kafkaConsumer.close();
+    }
+    if (kafkaConsumerThread != null) {
+      try {
+        kafkaConsumerThread.join(10_000);
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+      }
+    }
+    if (dispatcher != null) {
+      dispatcher.stop();
+    }
     started = false;
   }
 
