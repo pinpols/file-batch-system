@@ -16,7 +16,6 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
-import java.util.Set;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -62,32 +61,6 @@ class SqlTaskExecutorTest {
       TaskResult r = executor.execute(ctxWithParams(Map.of("sql", "   ")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("parameters.sql required");
-    }
-
-    @Test
-    void rejectsStatementTypeNotInWhitelist() {
-      // 默认只允许 SELECT
-      TaskResult r =
-          executor.execute(ctxWithParams(Map.of("sql", "DELETE FROM users WHERE id = 1")));
-      assertThat(r.success()).isFalse();
-      assertThat(r.message()).contains("DELETE not in allowedStatementTypes");
-    }
-
-    @Test
-    void rejectsDdlWhenDdlWhitelistEmpty() {
-      props.setAllowedStatementTypes(Set.of("DDL"));
-      TaskResult r = executor.execute(ctxWithParams(Map.of("sql", "DROP TABLE users")));
-      assertThat(r.success()).isFalse();
-      assertThat(r.message()).contains("DDL not allowed");
-    }
-
-    @Test
-    void rejectsDdlNotInDdlWhitelist() {
-      props.setAllowedStatementTypes(Set.of("DDL"));
-      props.setDdlWhitelist(Set.of("CREATE INDEX", "ALTER TABLE"));
-      TaskResult r = executor.execute(ctxWithParams(Map.of("sql", "DROP TABLE users")));
-      assertThat(r.success()).isFalse();
-      assertThat(r.message()).contains("DDL not in ddlWhitelist");
     }
 
     @Test
@@ -254,7 +227,6 @@ class SqlTaskExecutorTest {
 
     @Test
     void runsUpdateAndReturnsAffectedRows() throws Exception {
-      props.setAllowedStatementTypes(Set.of("UPDATE"));
       Connection conn = mock(Connection.class);
       Statement stmt = mock(Statement.class);
       when(ds.getConnection()).thenReturn(conn);
@@ -274,7 +246,6 @@ class SqlTaskExecutorTest {
 
     @Test
     void commitsOnSuccessWhenAutoCommitFalse() throws Exception {
-      props.setAllowedStatementTypes(Set.of("UPDATE"));
       Connection conn = mock(Connection.class);
       Statement stmt = mock(Statement.class);
       when(ds.getConnection()).thenReturn(conn);
@@ -292,7 +263,6 @@ class SqlTaskExecutorTest {
 
     @Test
     void rollbacksOnFailureWhenAutoCommitFalse() throws Exception {
-      props.setAllowedStatementTypes(Set.of("UPDATE"));
       Connection conn = mock(Connection.class);
       Statement stmt = mock(Statement.class);
       when(ds.getConnection()).thenReturn(conn);

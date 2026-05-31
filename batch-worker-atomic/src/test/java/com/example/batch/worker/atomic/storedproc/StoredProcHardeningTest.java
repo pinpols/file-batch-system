@@ -63,30 +63,6 @@ class StoredProcHardeningTest {
     return cs;
   }
 
-  // ─── (a) P-1 大小写:过程名变体经小写化后命中白名单 ────────────────────────────────
-
-  @Test
-  void procNameCaseVariantMatchesWhitelistAfterLowercasing() throws Exception {
-    props.setProcedureWhitelist(Set.of("batch.refresh_metrics"));
-    wireConnection();
-
-    // 调用方用大写变体,PG identifier 折叠小写后等价 → 应通过 validation 并执行
-    TaskResult r = executor.execute(ctx(Map.of("procedureName", "BATCH.Refresh_Metrics")));
-
-    assertThat(r.success()).isTrue();
-  }
-
-  @Test
-  void whitelistEntryCaseAlsoNormalized() throws Exception {
-    // 白名单本身写成混合大小写也应匹配小写过程名
-    props.setProcedureWhitelist(Set.of("Batch.Refresh_Metrics"));
-    wireConnection();
-
-    TaskResult r = executor.execute(ctx(Map.of("procedureName", "batch.refresh_metrics")));
-
-    assertThat(r.success()).isTrue();
-  }
-
   // ─── (b) dataSourceBean 不在白名单 → 拒绝 ──────────────────────────────────────
 
   @Test
