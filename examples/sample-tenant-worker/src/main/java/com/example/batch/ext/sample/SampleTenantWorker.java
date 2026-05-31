@@ -45,6 +45,10 @@ public final class SampleTenantWorker {
             .maxConcurrentTasks(4)
             .heartbeatInterval(Duration.ofSeconds(30))
             .leaseRenewInterval(Duration.ofSeconds(60))
+            // P3 Kafka SASL/SCRAM(prod 必填,本地联调不设走 PLAINTEXT)
+            .kafkaSecurityProtocol(System.getenv("BATCH_KAFKA_PROTOCOL"))
+            .kafkaSaslMechanism(System.getenv("BATCH_KAFKA_SASL_MECHANISM"))
+            .kafkaSaslJaasConfig(System.getenv("BATCH_KAFKA_SASL_JAAS"))
             .build();
 
     BatchPlatformClient client =

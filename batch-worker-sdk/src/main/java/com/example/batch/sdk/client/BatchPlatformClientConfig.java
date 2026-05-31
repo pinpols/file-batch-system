@@ -48,6 +48,23 @@ public class BatchPlatformClientConfig {
   /** in-flight 任务的 lease 续约间隔。应 < orchestrator 端 lease TTL(默认 ~3min)的 1/2。 */
   @lombok.Builder.Default Duration leaseRenewInterval = Duration.ofSeconds(60);
 
+  // ─── P3 Kafka SASL/SCRAM 鉴权 (per-tenant ACL) ─────────────────────────────
+  /**
+   * Kafka {@code security.protocol}。值如 {@code SASL_SSL / SASL_PLAINTEXT / PLAINTEXT};null 时不设(走
+   * client 默认 {@code PLAINTEXT})。
+   */
+  String kafkaSecurityProtocol;
+
+  /** Kafka {@code sasl.mechanism}。值如 {@code SCRAM-SHA-512 / SCRAM-SHA-256 / PLAIN}。 */
+  String kafkaSaslMechanism;
+
+  /**
+   * Kafka {@code sasl.jaas.config}。例: {@code
+   * org.apache.kafka.common.security.scram.ScramLoginModule required username="tenant-xyz"
+   * password="<scram-pwd>";}。从 K8s Secret 或环境变量注入,**不要硬编码**。
+   */
+  String kafkaSaslJaasConfig;
+
   public void validate() {
     Objects.requireNonNull(baseUrl, "baseUrl");
     if (baseUrl.endsWith("/")) {
