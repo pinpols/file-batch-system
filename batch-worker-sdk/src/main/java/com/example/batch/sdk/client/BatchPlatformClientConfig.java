@@ -11,7 +11,7 @@ import lombok.Value;
  * <p>关键字段:
  *
  * <ul>
- *   <li>{@link #baseUrl}:平台 console-api / orchestrator 暴露的 {@code /api/internal/*} 根 URL
+ *   <li>{@link #baseUrl}:平台 console-api / orchestrator 暴露的 {@code /internal/*} 根 URL
  *   <li>{@link #apiKey}:租户在 console "我的 Worker" 页申请的 API Key(P2 上线后启用,P1 阶段可为 null)
  *   <li>{@link #tenantId}:本 worker 归属租户
  *   <li>{@link #workerCode}:worker 标识,跨重启稳定;同 tenant 内唯一
@@ -44,6 +44,9 @@ public class BatchPlatformClientConfig {
 
   /** Kafka poll 间隔。默认 200ms。 */
   @lombok.Builder.Default Duration kafkaPollInterval = Duration.ofMillis(200);
+
+  /** in-flight 任务的 lease 续约间隔。应 < orchestrator 端 lease TTL(默认 ~3min)的 1/2。 */
+  @lombok.Builder.Default Duration leaseRenewInterval = Duration.ofSeconds(60);
 
   public void validate() {
     Objects.requireNonNull(baseUrl, "baseUrl");

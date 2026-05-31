@@ -52,7 +52,7 @@ class PlatformHttpClientTest {
     AtomicReference<String> seenAuth = new AtomicReference<>();
     AtomicReference<String> seenTenant = new AtomicReference<>();
     server.createContext(
-        "/api/internal/workers/register",
+        "/internal/workers/register",
         ex -> {
           seenAuth.set(ex.getRequestHeaders().getFirst("X-Batch-Api-Key"));
           seenTenant.set(ex.getRequestHeaders().getFirst("X-Batch-Tenant-Id"));
@@ -74,7 +74,7 @@ class PlatformHttpClientTest {
   void claimIncludesIdempotencyKey() throws IOException {
     AtomicReference<String> seenIdem = new AtomicReference<>();
     server.createContext(
-        "/api/internal/tasks/42/claim",
+        "/internal/tasks/42/claim",
         ex -> {
           seenIdem.set(ex.getRequestHeaders().getFirst("Idempotency-Key"));
           ex.sendResponseHeaders(200, -1);
@@ -89,7 +89,7 @@ class PlatformHttpClientTest {
   @Test
   void non2xxThrows() {
     server.createContext(
-        "/api/internal/workers/heartbeat",
+        "/internal/workers/heartbeat",
         ex -> {
           byte[] body = "{\"code\":\"FORBIDDEN\"}".getBytes(StandardCharsets.UTF_8);
           ex.sendResponseHeaders(403, body.length);
@@ -106,7 +106,7 @@ class PlatformHttpClientTest {
   @Test
   void reportEmptyResponseOk() throws IOException {
     server.createContext(
-        "/api/internal/tasks/99/report",
+        "/internal/tasks/99/report",
         ex -> {
           ex.sendResponseHeaders(204, -1);
           ex.close();

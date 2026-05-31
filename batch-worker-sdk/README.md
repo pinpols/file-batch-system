@@ -6,7 +6,7 @@
 
 - 单一 jar(目标 < 2 MB),依赖只 4 个:`jackson` / `kafka-clients` / `slf4j-api` / `lombok(provided)`
 - **不依赖** Spring / batch-common / 任何 framework
-- 通过 HTTP `/api/internal/*` + Kafka `batch.task.dispatch.<tenant>.*` 跟平台通信
+- 通过 HTTP `/internal/*` + Kafka `batch.task.dispatch.<tenant>.*` 跟平台通信
 
 ## 业务方典型用法
 
