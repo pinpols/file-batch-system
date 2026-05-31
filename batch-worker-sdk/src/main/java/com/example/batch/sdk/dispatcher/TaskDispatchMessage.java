@@ -1,5 +1,6 @@
 package com.example.batch.sdk.dispatcher;
 
+import com.example.batch.sdk.task.SdkSchedulingContext;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.Set;
  * @param taskInstanceId 本次执行的 instance ID
  * @param parameters 业务参数(jackson 反序列化)
  * @param runtimeAttributes 框架属性(traceId / bizDate / pipelineInstanceId 等)
+ * @param schedulingContext Phase 2 §2.1 调度上下文(bizDate / 前后业务日 / attemptNo / 触发来源);老平台不填则为 null
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TaskDispatchMessage(
@@ -33,7 +35,8 @@ public record TaskDispatchMessage(
     @JsonProperty("taskType") String taskType,
     @JsonProperty("taskInstanceId") String taskInstanceId,
     @JsonProperty("parameters") Map<String, Object> parameters,
-    @JsonProperty("runtimeAttributes") Map<String, Object> runtimeAttributes) {
+    @JsonProperty("runtimeAttributes") Map<String, Object> runtimeAttributes,
+    @JsonProperty("schedulingContext") SdkSchedulingContext schedulingContext) {
 
   /**
    * 当前 SDK 兼容的 major 版本集合(决策 #4:字符串 {@code "v1"} / {@code "v2"})。 收到不在集合的版本 → dispatcher reject +
@@ -45,8 +48,34 @@ public record TaskDispatchMessage(
   public static final String DEFAULT_SCHEMA_VERSION = "v1";
 
   /**
-   * 7 参兼容构造器 —— 历史构造方式(无 schemaVersion)继续可用,schemaVersion 走 {@link #DEFAULT_SCHEMA_VERSION}。新代码推荐用
-   * canonical 8 参构造,显式带 schemaVersion。
+   * 8 参兼容构造器 —— 带 schemaVersion 但无 schedulingContext(Phase 2 前的 canonical),schedulingContext 走
+   * null。
+   */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public TaskDispatchMessage(
+      String schemaVersion,
+      Long taskId,
+      String tenantId,
+      String jobCode,
+      String taskType,
+      String taskInstanceId,
+      Map<String, Object> parameters,
+      Map<String, Object> runtimeAttributes) {
+    this(
+        schemaVersion,
+        taskId,
+        tenantId,
+        jobCode,
+        taskType,
+        taskInstanceId,
+        parameters,
+        runtimeAttributes,
+        null);
+  }
+
+  /**
+   * 7 参兼容构造器 —— 历史构造方式(无 schemaVersion / schedulingContext)继续可用,schemaVersion 走 {@link
+   * #DEFAULT_SCHEMA_VERSION}。新代码推荐用 canonical 9 参构造,显式带 schemaVersion + schedulingContext。
    */
   public TaskDispatchMessage(
       Long taskId,
@@ -64,7 +93,8 @@ public record TaskDispatchMessage(
         taskType,
         taskInstanceId,
         parameters,
-        runtimeAttributes);
+        runtimeAttributes,
+        null);
   }
 
   /** 校验消息必备字段;不合规抛 {@link IllegalArgumentException},dispatcher 跳过该消息 + 上报 WARN。 */
