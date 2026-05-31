@@ -50,4 +50,45 @@ class TaskDispatchMessageTest {
             () -> new TaskDispatchMessage(1L, "tx", "j", "  ", "ti", Map.of(), Map.of()).validate())
         .hasMessageContaining("taskType");
   }
+
+  // ── schemaVersion 协议(Phase 0)──────────────────────────────────────────
+
+  @Test
+  void missingSchemaVersionDefaultsToV1AndPasses() {
+    new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of(), null).validate();
+    new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of(), "").validate();
+  }
+
+  @Test
+  void v1SchemaVersionPasses() {
+    new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of(), "v1").validate();
+    new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of(), "v1-rc").validate();
+    new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of(), "v1-beta").validate();
+  }
+
+  @Test
+  void unknownMajorRejected() {
+    assertThatThrownBy(
+            () ->
+                new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of(), "v2")
+                    .validate())
+        .isInstanceOf(TaskDispatchMessage.UnsupportedSchemaVersionException.class)
+        .hasMessageContaining("v2")
+        .hasMessageContaining("v1");
+    assertThatThrownBy(
+            () ->
+                new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of(), "v3-rc")
+                    .validate())
+        .isInstanceOf(TaskDispatchMessage.UnsupportedSchemaVersionException.class);
+  }
+
+  @Test
+  void deserializesWithSchemaVersionField() throws Exception {
+    String json =
+        "{\"schemaVersion\":\"v1\",\"taskId\":7,\"tenantId\":\"tx\",\"jobCode\":\"j\","
+            + "\"taskType\":\"t\",\"taskInstanceId\":\"ti\"}";
+    TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
+    assertThat(msg.schemaVersion()).isEqualTo("v1");
+    msg.validate();
+  }
 }

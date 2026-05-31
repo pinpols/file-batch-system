@@ -1,0 +1,303 @@
+openapi: 3.1.0
+info:
+  title: Batch Orchestrator Internal API
+  version: 0.1.0
+  x-last-updated: "2026-05-31"
+  x-changelog:
+    - date: "2026-05-31"
+      summary: "SDK 路线图 Phase 0 立基 — 新建 orchestrator-internal yaml,首批收录 SDK 用到的 /internal/workers/* + /internal/tasks/* endpoints + 5 个 wire schema(Register/Heartbeat/Claim/Renew/Report)。后续每次 /internal/* controller 变更必须同 PR 更新本 yaml。"
+  description: >
+    Internal protocol between orchestrator and tenant-self-hosted workers (batch-worker-sdk).
+    NOT exposed to the public internet — gated behind tenant API key (X-Batch-Api-Key) and
+    tenant isolation (X-Batch-Tenant-Id).
+
+    This file is the contract between orchestrator HTTP controllers and the SDK's
+    `PlatformHttpClient`. Any field name / type / endpoint path change must be reflected here
+    and in `SdkWireContractTest` (batch-orchestrator) within the same PR.
+
+    See `docs/plans/sdk-roadmap-2026-h2.md` §2 Phase 0 and
+    `docs/runbook/sdk-dual-rollout.md` for the dual-rollout discipline (orchestrator first,
+    SDK after, 2-week compatibility window).
+servers:
+  - url: http://localhost:8080
+    description: Local orchestrator
+tags:
+  - name: Workers
+    description: Worker lifecycle (register / heartbeat / deactivate / status).
+  - name: Tasks
+    description: Task execution (claim / report / renew / batch-renew).
+paths:
+  /internal/workers/register:
+    post:
+      tags: [Workers]
+      summary: Worker 注册 — SDK 启动时调用一次,平台 upsert worker_registry。
+      operationId: registerWorker
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/ApiKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "200":
+          description: 注册成功,返回 worker registry 实体。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerRegistryResponse"
+        "401":
+          description: API key 缺失 / 无效 — SDK 应 fail-fast 退出(SDK Phase 1 待办)。
+        "403":
+          description: API key scope 不允许该 tenant — SDK 应 fail-fast 退出。
+  /internal/workers/{workerCode}/heartbeat:
+    post:
+      tags: [Workers]
+      summary: Worker 心跳上报 — SDK 默认 10s 调一次。
+      operationId: heartbeatWorker
+      parameters:
+        - name: workerCode
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/ApiKeyHeader"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeartbeatRequest"
+      responses:
+        "200":
+          description: 心跳已记,返回最新 worker registry。后续 Phase 2 增加 platform directive(暂停 / 限流 / drain)。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerRegistryResponse"
+  /internal/workers/{workerCode}/deactivate:
+    post:
+      tags: [Workers]
+      summary: Worker 优雅下线 — SDK stop() 时调用,平台释放 worker。
+      operationId: deactivateWorker
+      parameters:
+        - name: workerCode
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/ApiKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeartbeatRequest"
+      responses:
+        "200":
+          description: 已下线。
+  /internal/tasks/{taskId}/claim:
+    post:
+      tags: [Tasks]
+      summary: 任务 CLAIM — worker 从 Kafka 收到派单后,必须先 CLAIM 才能执行(架构硬约束)。
+      operationId: claimTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/ApiKeyHeader"
+        - $ref: "#/components/parameters/IdempotencyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimRequest"
+      responses:
+        "200":
+          description: CLAIM 成功,返回 EffectiveTaskConfig(实时业务配置)。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveTaskConfigStub"
+        "409":
+          description: 已被其他 worker CLAIM(竞争失败),SDK 应 skip + ack Kafka,不 report。
+  /internal/tasks/{taskId}/report:
+    post:
+      tags: [Tasks]
+      summary: 任务执行结果上报 — SDK handler 执行完(成功 / 失败)调一次。
+      operationId: reportTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/ApiKeyHeader"
+        - $ref: "#/components/parameters/IdempotencyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+      responses:
+        "200":
+          description: 已收下,orchestrator 推进状态机。
+  /internal/tasks/{taskId}/renew:
+    post:
+      tags: [Tasks]
+      summary: 任务 lease 续约 — 长任务 SDK 周期调用(默认 60s/3min)。
+      operationId: renewTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/ApiKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenewRequest"
+      responses:
+        "200":
+          description: 续约成功。
+        "404":
+          description: lease 已过期 / task 已 revoked,SDK 应停止该任务并清理 in-flight(Phase 4 LeaseRenewalScheduler 增强)。
+components:
+  parameters:
+    TenantHeader:
+      name: X-Batch-Tenant-Id
+      in: header
+      required: true
+      schema: { type: string }
+      description: 租户 ID — 所有 /internal/* 必填,与 API key scope 双重校验。
+    ApiKeyHeader:
+      name: X-Batch-Api-Key
+      in: header
+      required: true
+      schema: { type: string }
+      description: 租户 API key(ADR-035)。
+    IdempotencyHeader:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string }
+      description: 写操作幂等键 — claim / report 必传(SDK 自动生成 sdk-UUID)。
+  schemas:
+    RegisterRequest:
+      type: object
+      x-sdk-mirror: "batch-worker-sdk:com.example.batch.sdk.wire.RegisterRequest"
+      x-platform-dto: "batch-common:com.example.batch.common.dto.WorkerHeartbeatDto"
+      properties:
+        tenantId: { type: string }
+        workerCode: { type: string }
+        workerGroup: { type: string }
+        status:
+          type: string
+          enum: [RUNNING, OFFLINE, DRAINING, DEGRADED, PAUSED]
+        hostName: { type: string }
+        hostIp: { type: string }
+        processId: { type: string }
+        heartbeatAt: { type: string, format: date-time }
+        capabilityTags:
+          type: array
+          items: { type: string }
+          description: SDK 注册的 taskType 列表(平台从此推断能跑哪些 type)。
+        currentLoad: { type: integer, minimum: 0 }
+      required: [tenantId, workerCode, status, heartbeatAt]
+    HeartbeatRequest:
+      type: object
+      x-sdk-mirror: "batch-worker-sdk:com.example.batch.sdk.wire.HeartbeatRequest"
+      x-platform-dto: "batch-common:com.example.batch.common.dto.WorkerHeartbeatDto"
+      properties:
+        tenantId: { type: string }
+        workerCode: { type: string }
+        workerGroup: { type: string }
+        status:
+          type: string
+          enum: [RUNNING, OFFLINE, DRAINING, DEGRADED, PAUSED]
+        hostName: { type: string }
+        hostIp: { type: string }
+        processId: { type: string }
+        heartbeatAt: { type: string, format: date-time }
+        capabilityTags:
+          type: array
+          items: { type: string }
+        currentLoad: { type: integer, minimum: 0 }
+      required: [tenantId, workerCode, status, heartbeatAt]
+    ClaimRequest:
+      type: object
+      x-sdk-mirror: "batch-worker-sdk:com.example.batch.sdk.wire.ClaimRequest"
+      x-platform-dto: "batch-orchestrator:com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest"
+      properties:
+        tenantId: { type: string }
+        workerId:
+          type: string
+          description: ADR-035 §9 — 当前等同 workerCode,后续 P4 由 server 分配。
+        partitionInvocationId:
+          type: string
+          description: ADR-014 — dispatch 时分配的 invocation id,mismatch 平台 reject CLAIM。
+      required: [tenantId, workerId]
+    RenewRequest:
+      type: object
+      x-sdk-mirror: "batch-worker-sdk:com.example.batch.sdk.wire.RenewRequest"
+      x-platform-dto: "batch-orchestrator:com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest"
+      properties:
+        tenantId: { type: string }
+        workerId: { type: string }
+        partitionInvocationId: { type: string }
+      required: [tenantId, workerId]
+    ReportRequest:
+      type: object
+      x-sdk-mirror: "batch-worker-sdk:com.example.batch.sdk.wire.ReportRequest"
+      x-platform-dto: "batch-orchestrator:com.example.batch.orchestrator.controller.request.TaskExecutionReportDto"
+      properties:
+        taskId: { type: integer, format: int64 }
+        tenantId: { type: string }
+        workerId: { type: string }
+        traceId: { type: string }
+        success: { type: boolean }
+        code: { type: string }
+        message: { type: string }
+        resultSummary: { type: string }
+        errorCode: { type: string }
+        highWaterMarkOut:
+          type: string
+          description: 增量水位(仅成功路径),空则不更新 job_instance.high_water_mark_out。
+        outputs:
+          type: object
+          additionalProperties: true
+          description: ADR-009 Stage 1.2 — workflow_node_run.output 来源。
+        partitionInvocationId: { type: string }
+        failureClass:
+          type: string
+          description: ADR-012 失败分类(仅 failure 路径)。
+        verifierFailures:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          description: ADR-030 §C/F 产物级失败(仅 success 路径)。每元素 {code, message, evidence}。
+      required: [taskId, tenantId, workerId, success]
+    WorkerRegistryResponse:
+      type: object
+      description: 平台返回的 worker registry 实体(部分字段;SDK 当前用 Map 解析,后续 Phase 5 强类型化)。
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        workerCode: { type: string }
+        status: { type: string }
+        lastHeartbeatAt: { type: string, format: date-time }
+      additionalProperties: true
+    EffectiveTaskConfigStub:
+      type: object
+      description: CLAIM 返回的 EffectiveTaskConfig(完整字段集见 batch-common EffectiveTaskConfig 源码;P1-2.1 起协议向前兼容,旧 worker 不解析仍可工作)。
+      additionalProperties: true

@@ -25,6 +25,14 @@
             <classifier>tests</classifier>
             <scope>test</scope>
         </dependency>
+        <!-- SDK 路线图 Phase 0:SdkWireContractTest 需要 reflect SDK wire records 比对平台 DTO 字段。
+             仅 test scope,不污染生产依赖。 -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-sdk</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
