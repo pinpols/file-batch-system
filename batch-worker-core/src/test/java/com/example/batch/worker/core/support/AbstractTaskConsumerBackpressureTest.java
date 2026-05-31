@@ -123,7 +123,7 @@ class AbstractTaskConsumerBackpressureTest {
     String msg =
         JsonUtils.toJson(
             new TaskDispatchMessage(
-                "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null));
+                "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
 
     Future<?> f1 =
         pool.submit(

@@ -87,7 +87,20 @@ class AbstractTaskConsumerTest {
     // Message targets worker-B, but this consumer is worker-A
     TaskDispatchMessage msg =
         new TaskDispatchMessage(
-            "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-B", null, "tr", "k", null);
+            "v2",
+            "t1",
+            1L,
+            null,
+            1L,
+            null,
+            null,
+            "IMPORT",
+            "worker-B",
+            null,
+            "tr",
+            "k",
+            null,
+            null);
     boolean result =
         (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
 
@@ -103,7 +116,20 @@ class AbstractTaskConsumerTest {
 
     TaskDispatchMessage msg =
         new TaskDispatchMessage(
-            "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-A", null, "tr", "k", null);
+            "v2",
+            "t1",
+            1L,
+            null,
+            1L,
+            null,
+            null,
+            "IMPORT",
+            "worker-A",
+            null,
+            "tr",
+            "k",
+            null,
+            null);
     ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
 
     verify(executor).execute(any(), anyString());
@@ -430,6 +456,7 @@ class AbstractTaskConsumerTest {
         null,
         "tr",
         "k",
+        null,
         null);
   }
 }

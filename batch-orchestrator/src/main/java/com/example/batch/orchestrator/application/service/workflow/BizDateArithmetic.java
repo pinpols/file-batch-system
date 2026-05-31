@@ -112,12 +112,28 @@ public class BizDateArithmetic {
     return Collections.emptyList();
   }
 
-  private LocalDate previousBusinessDay(LocalDate bizDate) {
+  /** 前一个工作日(周一~周五;暂不感知节假日)。 */
+  public LocalDate previousBusinessDay(LocalDate bizDate) {
+    if (bizDate == null) {
+      return null;
+    }
     LocalDate prev = bizDate.minusDays(1);
     while (isWeekend(prev)) {
       prev = prev.minusDays(1);
     }
     return prev;
+  }
+
+  /** 后一个工作日(周一~周五;暂不感知节假日)。 */
+  public LocalDate nextBusinessDay(LocalDate bizDate) {
+    if (bizDate == null) {
+      return null;
+    }
+    LocalDate next = bizDate.plusDays(1);
+    while (isWeekend(next)) {
+      next = next.plusDays(1);
+    }
+    return next;
   }
 
   private List<LocalDate> previousBusinessDays(LocalDate bizDate, int count) {
@@ -137,7 +153,8 @@ public class BizDateArithmetic {
     return dates;
   }
 
-  private boolean isWeekend(LocalDate date) {
+  /** 是否周末(周六/周日);当前节假日语义即周末近似。 */
+  public boolean isWeekend(LocalDate date) {
     DayOfWeek dow = date.getDayOfWeek();
     return dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
   }

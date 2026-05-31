@@ -5,14 +5,17 @@ import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.event.DomainEvent;
 import com.example.batch.common.event.DomainEventPublisher;
+import com.example.batch.common.kafka.SchedulingContext;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,7 @@ public class TaskDispatchOutboxService {
 
   private final DomainEventPublisher domainEventPublisher;
   private final JobTaskMapper jobTaskMapper;
+  private final BizDateArithmetic bizDateArithmetic;
 
   @Lazy @Autowired private TaskDispatchOutboxService self;
 
@@ -100,7 +104,8 @@ public class TaskDispatchOutboxService {
             resolvePriorityBand(jobInstance.getPriority()),
             traceId,
             idempotencyKey,
-            BatchDateTimeSupport.utcNow());
+            BatchDateTimeSupport.utcNow(),
+            buildSchedulingContext(jobInstance));
 
     // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
     // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
@@ -117,6 +122,34 @@ public class TaskDispatchOutboxService {
             .traceId(traceId)
             .priority(priority)
             .build());
+  }
+
+  /**
+   * SDK Phase 2 §2.1:构造随消息下沉的调度上下文。
+   *
+   * <p>仅填派发时刻已确定的不可变事实:
+   *
+   * <ul>
+   *   <li>bizDate / prevBizDate / nextBizDate:业务日及前后工作日(BizDateArithmetic 周末近似,暂不感知节假日);
+   *   <li>isHoliday:当前 = bizDate 是否周末(business_calendar 接入前的近似语义);
+   *   <li>attemptNo / triggerType:取自 job_instance;
+   *   <li>triggerCode / workflowRunId:平台暂无来源列,置 null,待后续补列。
+   * </ul>
+   */
+  private SchedulingContext buildSchedulingContext(JobInstanceEntity jobInstance) {
+    LocalDate bizDate = jobInstance.getBizDate();
+    LocalDate prevBizDate = bizDateArithmetic.previousBusinessDay(bizDate);
+    LocalDate nextBizDate = bizDateArithmetic.nextBusinessDay(bizDate);
+    Boolean isHoliday = bizDate != null ? bizDateArithmetic.isWeekend(bizDate) : null;
+    return new SchedulingContext(
+        bizDate,
+        prevBizDate,
+        nextBizDate,
+        isHoliday,
+        jobInstance.getRunAttempt(),
+        jobInstance.getTriggerType(),
+        null,
+        null);
   }
 
   /**
