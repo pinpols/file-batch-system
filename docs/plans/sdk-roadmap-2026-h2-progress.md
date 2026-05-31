@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-05-31 — Phase 1 #SDK-P1-4 metrics() POJO + isHealthy() + consumer 死时上报(Phase 1 收官)
+
+- **范围**:1.6 新增 `SdkClientMetrics` record(10 字段:tenant/worker/started/healthy/inFlight/maxConcurrent/handlerCount/dispatcherFatal/dispatcherDraining/consumerCrashed),`BatchPlatformClient.metrics()` 暴露快照 + `isHealthy()` 复合判定(started && !fatal && !crashed,drain 不算 unhealthy)。1.7 `KafkaTaskConsumer.run()` 在 `catch (Throwable)` 分支置 `crashed=true` + `running=false`,新增 `hasCrashed()` 公开 getter;`TaskDispatcher.isDraining()` 从 package-private 升 `public`(供 BatchPlatformClient 跨包读)。
+- **实际 vs plan**:工作量 ~2.5h(plan 估 3h)略低。比 plan 多做:`isHealthy()` 显式定义 drain 期=healthy(语义在 javadoc 钉死)避免后续 caller 误读;`SdkClientMetrics` 是 record(不可变快照)且字段以 javadoc 钉住 Prometheus label 用途。比 plan 少做:**没**真把 fatal/crashed 串到 `System.exit` 或 K8s liveness endpoint —— SDK 不假设宿主进程的 health 暴露方式,只提供 boolean(memory: `feedback_yagni`),由租户自决怎么暴露。
+- **环境坑**:JDK 25 仍要本地装(routine 第 4 次),`curl /opt/jdk25-extract`+ cacerts 拷 21,~30s 完成。下次 fire 是否归档下载脚本待 Phase 2 起手时一并评估。
+- **测试结果**:`mvn -pl batch-worker-sdk test` 170/170 绿(原 162 + 新 5 `BatchPlatformClientMetricsTest` + 新 3 `KafkaTaskConsumerCrashTest`);`KafkaTaskConsumerCrashTest` 用 Mockito mock `Consumer`(MockConsumer 在 SDK 测试集只用于 rebalance listener 单测,不真跑 run loop 避免 pattern subscribe 兼容性问题)。
+- **后续**:Phase 1 全部 PR 已合,Phase 2 (调度上下文下沉) 可起手;但 dual-rollout 纪律要求 ORCH-P2-1 先 merge → 观察 2 周(开发期可缩短到 1d CI green,PR 描述带 `dev-skip-dual-rollout`)再开 SDK-P2-1 / SDK-P2-2。
+
+---
+
 ## 2026-05-31 — Phase 1 #SDK-P1-3 HeartbeatScheduler fixed-delay + 异常 message 去 errBody 明文
 
 - **范围**:1.4 `HeartbeatScheduler.start()` 把 `scheduleAtFixedRate` 换成 `scheduleWithFixedDelay`(平台短暂卡顿后不追赶式连发心跳雪崩 orchestrator);1.5 `PlatformHttpClient` 非 2xx 路径把 errBody 从 exception message 拿掉(避免错误链一路 INFO/WARN 时把平台错误 payload + 潜在 token 写满日志),完整 body 只在 DEBUG 级输出 `non-2xx response: status=... url=... body=...`。
