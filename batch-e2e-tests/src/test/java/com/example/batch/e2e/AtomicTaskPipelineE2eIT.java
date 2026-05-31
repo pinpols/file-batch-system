@@ -139,7 +139,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
             LocalDate.of(2026, 1, 15),
             TriggerType.API,
             seed.requestId(),
-            "e2e-tr-spi",
+            "e2e-tr-atomic",
             params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);

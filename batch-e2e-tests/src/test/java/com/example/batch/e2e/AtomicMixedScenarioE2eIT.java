@@ -78,7 +78,7 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
 
       for (int round = 0; round < ROUNDS; round++) {
         for (Map<String, Object> params : mixedBatch(round, httpUrl)) {
-          dedupKeys.add(launch(params, "e2e-tr-spi-mixed-" + round));
+          dedupKeys.add(launch(params, "e2e-tr-atomic-mixed-" + round));
         }
       }
       e2eOutboxPublishSupport.publishAllPending(TENANT);

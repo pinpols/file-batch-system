@@ -117,7 +117,7 @@ Move-Item $pidNew $pidFile -Force
 
 Write-Host ""
 Write-Host "全部进程已在后台运行。端口（默认）："
-Write-Host "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | process 18086 | dispatch 18085 | spi 18087"
+Write-Host "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | process 18086 | dispatch 18085 | atomic 18087"
 Write-Host "  Postgres 15432 | Kafka 19092 | MinIO 19000 | Redis 16379（宿主机映射）"
 Write-Host "停止请执行: .\scripts\ps1\local\stop-all.ps1"
 
