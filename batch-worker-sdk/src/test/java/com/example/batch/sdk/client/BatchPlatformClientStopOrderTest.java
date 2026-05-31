@@ -77,9 +77,7 @@ class BatchPlatformClientStopOrderTest {
   void deactivateFailureSwallowedSoStopAlwaysFinishes() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    Mockito.doThrow(new IOException("network down"))
-        .when(http)
-        .deactivate(anyString(), any());
+    Mockito.doThrow(new IOException("network down")).when(http).deactivate(anyString(), any());
 
     inject(client, "httpClient", http);
     inject(client, "started", true);
