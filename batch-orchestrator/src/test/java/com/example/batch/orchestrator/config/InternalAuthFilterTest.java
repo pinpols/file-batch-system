@@ -40,7 +40,8 @@ class InternalAuthFilterTest {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/workers/heartbeat");
     req.addHeader("X-Batch-Api-Key", "raw-key");
     req.addHeader("X-Batch-Tenant-Id", "tx");
-    when(verifier.verify("raw-key", "tx"))
+    // /internal/workers/* + /internal/tasks/* 现在走 verifyWithScope(worker.execute)
+    when(verifier.verifyWithScope("raw-key", "tx", "worker.execute"))
         .thenReturn(Optional.of(new ApiKeyRecord(1L, "tx", "n", "*", true, null)));
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
@@ -58,7 +59,7 @@ class InternalAuthFilterTest {
     req.addHeader("X-Batch-Api-Key", "raw-key");
     req.addHeader("X-Batch-Tenant-Id", "tx");
     req.addHeader("X-Internal-Secret", "super-secret"); // 即使有 secret 也不 fallback
-    when(verifier.verify(any(), any())).thenReturn(Optional.empty());
+    when(verifier.verifyWithScope(any(), any(), anyString())).thenReturn(Optional.empty());
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
@@ -72,7 +73,7 @@ class InternalAuthFilterTest {
   void apiKeyWithoutTenantHeaderReturns401() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/workers/heartbeat");
     req.addHeader("X-Batch-Api-Key", "raw-key");
-    when(verifier.verify("raw-key", null)).thenReturn(Optional.empty());
+    when(verifier.verifyWithScope("raw-key", null, "worker.execute")).thenReturn(Optional.empty());
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);

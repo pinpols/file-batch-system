@@ -207,6 +207,17 @@
         on conflict (tenant_id, worker_code) do nothing
     </insert>
 
+    <!-- ADR-035 §2 自托管标识:SDK register 后由 service 触发(workerGroup=sdk-self-hosted)。
+         幂等更新,已是 true 时不再写。 -->
+    <update id="markSelfHosted">
+        update batch.worker_registry
+           set is_self_hosted = true,
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId}
+           and worker_code = #{workerCode}
+           and is_self_hosted = false
+    </update>
+
     <update id="updateById"
             parameterType="com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity">
         update batch.worker_registry
