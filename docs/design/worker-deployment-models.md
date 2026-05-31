@@ -163,6 +163,43 @@ orchestrator (launch workflow_run)
 
 **正确做法**:**所有调度都在平台 trigger + workflow 配置**,SDK 进程纯被动 poll Kafka 接活。
 
+#### E. 日切门闩(批量行为)与部署模式无关
+
+> 常见误解:"SDK 自托管走的是 Kafka 消息驱动,没有日切概念,前一日没结清也不会卡住。"——**错**。
+
+日切门闩(`BatchDayGateService`)在 orchestrator **launch 阶段**就执行 — 在写入 Kafka 派单消息**之前**:
+
+```
+trigger fire
+   │
+   ▼
+LaunchService.launch
+   │
+   ▼
+BatchDayGateService.evaluateAndApply  ← 日切门闩在这里
+   │ ┌─ALLOW──→ 写 trigger_request=ACCEPTED + outbox + Kafka 派单 ──→ worker(平台 / SDK)
+   │ ├─WAIT───→ 写 batch_day_waiting_launch + trigger_request=WAITING(**不发 Kafka**)
+   │ └─REJECT─→ 写 trigger_request=REJECTED(**不发 Kafka**)
+```
+
+WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所以:
+
+| 部署模式 | 日切门闩适用性 |
+|---|---|
+| 平台 worker | 完全适用 |
+| **自托管 SDK** | **完全适用,且无需 SDK 端任何配合** |
+| 混合(同 job 部分平台 + 部分 SDK) | 完全适用 |
+
+要让某 job 拥有"批量行为"(Day-1 没结清 Day-2 等待 / 拒绝):
+
+1. `business_calendar.day_rollover_policy` ∈ {`WAIT_PREVIOUS_DAY`, `REJECT_IF_PREVIOUS_OPEN`}
+2. `job_definition.calendar_code` 非空 + `previous_day_dependency_scope` ≠ `NONE`
+3. 触发时 `LaunchRequest.bizDate` 非空
+
+配置矩阵 + 自动释放时序 + 排查指引 → [`docs/runbook/batch-day-gate-howto.md`](../runbook/batch-day-gate-howto.md)。
+
+**反模式**:别在 SDK handler 里自己实现"前一日没完成就拒绝"。门闩职责在 orchestrator,SDK 重复实现 = 双重判定语义不一致。
+
 ### 4.2 自托管 **不享受** 的能力清单
 
 为避免选型时误判,把"自托管 worker 拿不到的"按 6 类列清楚。
