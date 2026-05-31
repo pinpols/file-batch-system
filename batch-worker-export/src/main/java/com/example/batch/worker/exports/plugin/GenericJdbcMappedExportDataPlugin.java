@@ -20,16 +20,26 @@ import org.springframework.stereotype.Component;
 public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
   private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
   private final ObjectMapper objectMapper;
   private final JdbcMappedExportSecurityProperties securityProperties;
+
+  /** Phase A RLS:export query 需 tx 包 SET LOCAL,触发 biz.* SELECT 时的 USING 过滤(防跨租户读)。 */
+  private final org.springframework.transaction.support.TransactionTemplate txTemplate;
 
   public GenericJdbcMappedExportDataPlugin(
       @Qualifier("exportBusinessDataSource") DataSource businessDataSource,
       ObjectMapper objectMapper,
       JdbcMappedExportSecurityProperties securityProperties) {
+    this.businessDataSource = businessDataSource;
     this.jdbcTemplate = new JdbcTemplate(businessDataSource);
     this.objectMapper = objectMapper;
     this.securityProperties = securityProperties;
+    this.txTemplate =
+        new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
+                businessDataSource));
+    this.txTemplate.setReadOnly(true);
   }
 
   @Override
@@ -55,8 +65,13 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     String sql =
         "SELECT " + cols + " FROM " + fq + " WHERE " + tenant + " = ? AND " + bno + " = ? LIMIT 1";
     List<Map<String, Object>> rows =
-        jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
-    if (rows.isEmpty()) {
+        txTemplate.execute(
+            status -> {
+              com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(
+                  businessDataSource);
+              return jdbcTemplate.queryForList(sql, context.tenantId(), context.batchNo());
+            });
+    if (rows == null || rows.isEmpty()) {
       return Map.of();
     }
     return new LinkedHashMap<>(rows.get(0));
@@ -97,16 +112,26 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
             .append(" WHERE ")
             .append(fk)
             .append(" = ?");
-    List<Map<String, Object>> rows;
+    String finalSql;
+    Object[] sqlArgs;
     if (cursor != null) {
       sql.append(" AND ").append(ob).append(" > ?");
       sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
-      rows = jdbcTemplate.queryForList(sql.toString(), batchId, cursor, pageSize);
+      finalSql = sql.toString();
+      sqlArgs = new Object[] {batchId, cursor, pageSize};
     } else {
       sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
-      rows = jdbcTemplate.queryForList(sql.toString(), batchId, pageSize);
+      finalSql = sql.toString();
+      sqlArgs = new Object[] {batchId, pageSize};
     }
-    if (rows.isEmpty()) {
+    List<Map<String, Object>> rows =
+        txTemplate.execute(
+            status -> {
+              com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(
+                  businessDataSource);
+              return jdbcTemplate.queryForList(finalSql, sqlArgs);
+            });
+    if (rows == null || rows.isEmpty()) {
       return DetailPage.empty();
     }
     Object nextCursor = null;
