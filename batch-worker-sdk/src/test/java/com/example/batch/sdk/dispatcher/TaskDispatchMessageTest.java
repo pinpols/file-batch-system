@@ -4,12 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class TaskDispatchMessageTest {
 
   private final ObjectMapper mapper = new ObjectMapper();
+
+  // 对齐真实 KafkaTaskConsumer:LocalDate 在线上以 int-array([2026,6,1])下发,需 JavaTimeModule。
+  private final ObjectMapper timeAwareMapper =
+      new ObjectMapper().registerModule(new JavaTimeModule());
 
   @Test
   void deserializesFromJson() throws Exception {
@@ -32,6 +38,35 @@ class TaskDispatchMessageTest {
             + "\"newPlatformField\":\"future\",\"anotherNewField\":42}";
     TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
     assertThat(msg.taskId()).isEqualTo(1L);
+  }
+
+  @Test
+  void deserializesSchedulingContext() throws Exception {
+    // 平台以 int-array 下发 LocalDate(WRITE_DATES_AS_TIMESTAMPS 默认开);triggerCode/workflowRunId 平台置 null
+    String json =
+        "{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"tt\","
+            + "\"schedulingContext\":{\"bizDate\":[2026,6,1],\"prevBizDate\":[2026,5,29],"
+            + "\"nextBizDate\":[2026,6,2],\"isHoliday\":false,\"attemptNo\":2,"
+            + "\"triggerType\":\"SCHEDULED\",\"triggerCode\":null,\"workflowRunId\":null}}";
+    TaskDispatchMessage msg = timeAwareMapper.readValue(json, TaskDispatchMessage.class);
+
+    assertThat(msg.schedulingContext()).isNotNull();
+    assertThat(msg.schedulingContext().bizDate()).isEqualTo(LocalDate.of(2026, 6, 1));
+    assertThat(msg.schedulingContext().prevBizDate()).isEqualTo(LocalDate.of(2026, 5, 29));
+    assertThat(msg.schedulingContext().nextBizDate()).isEqualTo(LocalDate.of(2026, 6, 2));
+    assertThat(msg.schedulingContext().isHoliday()).isFalse();
+    assertThat(msg.schedulingContext().attemptNo()).isEqualTo(2);
+    assertThat(msg.schedulingContext().triggerType()).isEqualTo("SCHEDULED");
+    assertThat(msg.schedulingContext().triggerCode()).isNull();
+    assertThat(msg.schedulingContext().workflowRunId()).isNull();
+  }
+
+  @Test
+  void schedulingContextNullWhenAbsent() throws Exception {
+    // 老平台不下发 schedulingContext → 字段为 null,SDK 不 break
+    String json = "{\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
+    TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
+    assertThat(msg.schedulingContext()).isNull();
   }
 
   @Test
