@@ -68,10 +68,22 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
-    // SASL(P3 启用 ACL 后):
-    // props.put("security.protocol", "SASL_SSL");
-    // props.put("sasl.mechanism", "SCRAM-SHA-512");
+    // P3:per-tenant Kafka SASL/SCRAM(ACL 路径)。三个字段都置空 → 走 PLAINTEXT(本地联调);
+    // 任一非空 → 全部按设值传给 Kafka client(prod 必填 protocol + mechanism + jaasConfig)。
+    if (notBlank(config.getKafkaSecurityProtocol())) {
+      props.put("security.protocol", config.getKafkaSecurityProtocol());
+    }
+    if (notBlank(config.getKafkaSaslMechanism())) {
+      props.put("sasl.mechanism", config.getKafkaSaslMechanism());
+    }
+    if (notBlank(config.getKafkaSaslJaasConfig())) {
+      props.put("sasl.jaas.config", config.getKafkaSaslJaasConfig());
+    }
     return new KafkaConsumer<>(props);
+  }
+
+  private static boolean notBlank(String s) {
+    return s != null && !s.isBlank();
   }
 
   /** 启动 poll loop。阻塞当前线程,通常在专用线程跑。 */

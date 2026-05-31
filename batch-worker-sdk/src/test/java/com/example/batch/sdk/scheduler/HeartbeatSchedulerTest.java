@@ -2,6 +2,8 @@ package com.example.batch.sdk.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -39,26 +41,26 @@ class HeartbeatSchedulerTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
-    verify(http).heartbeat(body.capture());
+    verify(http).heartbeat(eq("w-1"), body.capture());
     assertThat(body.getValue())
         .containsEntry("tenantId", "tx")
         .containsEntry("workerCode", "w-1")
-        .containsEntry("inFlightTaskCount", 2)
-        .containsEntry("maxConcurrentTasks", 4)
-        .containsEntry("status", "healthy");
+        .containsEntry("currentLoad", 2)
+        .containsEntry("status", "RUNNING")
+        .containsKey("heartbeatAt");
   }
 
   @Test
   void heartbeatFailureSwallowedDoesNotKillScheduler() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.heartbeat(any())).thenThrow(new IOException("503"));
+    when(http.heartbeat(anyString(), any())).thenThrow(new IOException("503"));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     HeartbeatScheduler s = new HeartbeatScheduler(cfg, http, dispatcher);
 
     s.tick(); // 不应抛
     s.tick();
 
-    verify(http, atLeastOnce()).heartbeat(any());
+    verify(http, atLeastOnce()).heartbeat(anyString(), any());
   }
 
   @Test
