@@ -38,7 +38,14 @@ public class RlsPolicyHealthIndicator implements HealthIndicator {
           "biz.transaction",
           "batch.process_staging");
 
-  public static final String EXPECTED_POLICY_NAME = "tenant_isolation_transition";
+  /** 翻转 transition → strict 期间,健康检查接受任一 policy 名(灰度兼容)。 */
+  public static final List<String> ACCEPTED_POLICY_NAMES =
+      List.of("tenant_isolation_transition", "tenant_isolation_strict");
+
+  /**
+   * @deprecated 改用 {@link #ACCEPTED_POLICY_NAMES}。保留是为了 PR #155 引用兼容。
+   */
+  @Deprecated public static final String EXPECTED_POLICY_NAME = "tenant_isolation_transition";
 
   private final DataSource businessDataSource;
 
@@ -92,16 +99,16 @@ public class RlsPolicyHealthIndicator implements HealthIndicator {
           }
         }
 
-        // 3. policy 是否存在
+        // 3. policy 是否存在 — 接受 transition 或 strict 任一(灰度兼容)
+        String policyInList = "('" + String.join("','", ACCEPTED_POLICY_NAMES) + "')";
         try (ResultSet rs =
             st.executeQuery(
                 "SELECT 1 FROM pg_policies WHERE schemaname='"
                     + schema
                     + "' AND tablename='"
                     + table
-                    + "' AND policyname='"
-                    + EXPECTED_POLICY_NAME
-                    + "'")) {
+                    + "' AND policyname IN "
+                    + policyInList)) {
           if (!rs.next()) missingPolicy.add(fqTable);
         }
       }

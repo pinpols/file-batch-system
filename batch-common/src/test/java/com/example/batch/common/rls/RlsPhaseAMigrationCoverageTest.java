@@ -11,30 +11,46 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Phase A 守护:scripts/db/business/rls-phase-a.sql 必须覆盖 {@link
- * RlsPolicyHealthIndicator#EXPECTED_RLS_TABLES} 全部表 — 防止新加业务表只改 healthcheck 清单忘记 写 migration,或反之。
+ * Phase A 守护:rls-phase-a.sql / rls-phase-a-strict.sql / rls-phase-a-rollback-to-transition.sql
+ * 三脚本必须覆盖 {@link RlsPolicyHealthIndicator#EXPECTED_RLS_TABLES} 全部表 — 防止新加业务表只改 healthcheck 清单忘记写
+ * migration,或反之。
  */
 class RlsPhaseAMigrationCoverageTest {
 
   @Test
   @DisplayName("rls-phase-a.sql 必须列出 EXPECTED_RLS_TABLES 内全部 biz/batch 表")
-  void rlsMigrationCoversAllExpectedTables() throws IOException {
+  void transitionMigrationCoversAllExpectedTables() throws IOException {
+    assertMigrationCoversAll("rls-phase-a.sql");
+  }
+
+  @Test
+  @DisplayName("rls-phase-a-strict.sql 必须列出 EXPECTED_RLS_TABLES 内全部 biz/batch 表")
+  void strictMigrationCoversAllExpectedTables() throws IOException {
+    assertMigrationCoversAll("rls-phase-a-strict.sql");
+  }
+
+  @Test
+  @DisplayName("rls-phase-a-rollback-to-transition.sql 必须列出 EXPECTED_RLS_TABLES 内全部 biz/batch 表")
+  void rollbackMigrationCoversAllExpectedTables() throws IOException {
+    assertMigrationCoversAll("rls-phase-a-rollback-to-transition.sql");
+  }
+
+  private void assertMigrationCoversAll(String filename) throws IOException {
     Path script =
         Path.of(System.getProperty("user.dir"))
             .getParent()
-            .resolve("scripts/db/business/rls-phase-a.sql");
-    assertThat(script).as("rls-phase-a.sql 必须存在").exists();
+            .resolve("scripts/db/business/" + filename);
+    assertThat(script).as(filename + " 必须存在").exists();
     String sql = Files.readString(script);
 
     List<String> missing = new ArrayList<>();
     for (String t : RlsPolicyHealthIndicator.EXPECTED_RLS_TABLES) {
-      // 短名出现即可(rls-phase-a.sql 里裸 'biz.customer_account' / format() 内)
       if (!sql.contains("'" + t + "'") && !sql.contains(t)) {
         missing.add(t);
       }
     }
     assertThat(missing)
-        .as("以下 EXPECTED_RLS_TABLES 在 rls-phase-a.sql 内找不到 — 加新表必须同步更新 migration")
+        .as("以下 EXPECTED_RLS_TABLES 在 " + filename + " 内找不到 — 加新表必须同步更新 3 个 migration")
         .isEmpty();
   }
 }
