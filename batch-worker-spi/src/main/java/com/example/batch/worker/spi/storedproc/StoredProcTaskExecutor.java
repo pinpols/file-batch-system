@@ -306,6 +306,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
   // ─── execution ──────────────────────────────────────────────────────────────
 
+  // NcssCount: stored proc 调用含 connection 生命周期 + IN/OUT 参数绑定 + 多结果集抽取,
+  // 拆分会让事务边界跨方法变难审。后续 PR 走 SpiConnectionManager.withConnection 重构时拆。
+  @SuppressWarnings("PMD.NcssCount")
   private TaskResult runCall(TaskContext ctx, Invocation inv) {
     long start = System.currentTimeMillis();
 

@@ -342,6 +342,9 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
   // ─── execution ──────────────────────────────────────────────────────────────
 
+  // NcssCount: SQL 执行循环含 connection 生命周期 + tx + 类型分支 + 多语句迭代,无法显著拆分而保持 finally restore 语义;
+  // 拆分会让 commit/rollback 边界跨方法变难审。后续 PR 走 SpiConnectionManager.withConnection 重构时拆开。
+  @SuppressWarnings("PMD.NcssCount")
   private TaskResult runStatements(TaskContext ctx, SqlInvocation inv) {
     long start = System.currentTimeMillis();
     long totalAffected = 0;
