@@ -3,6 +3,8 @@ package com.example.batch.sdk.client;
 import java.time.Duration;
 import java.util.Objects;
 import lombok.Builder;
+import lombok.Builder.Default;
+import lombok.NonNull;
 import lombok.Value;
 
 /**
@@ -24,29 +26,29 @@ import lombok.Value;
 @Builder
 public class BatchPlatformClientConfig {
 
-  @lombok.NonNull String baseUrl;
+  @NonNull String baseUrl;
   String apiKey;
-  @lombok.NonNull String tenantId;
-  @lombok.NonNull String workerCode;
+  @NonNull String tenantId;
+  @NonNull String workerCode;
 
-  @lombok.NonNull String kafkaBootstrap;
-  @lombok.NonNull String kafkaTopicPattern;
-  @lombok.NonNull String kafkaGroupId;
+  @NonNull String kafkaBootstrap;
+  @NonNull String kafkaTopicPattern;
+  @NonNull String kafkaGroupId;
 
   /** HTTP 调用超时(connect + read)。默认 10s。 */
-  @lombok.Builder.Default Duration httpTimeout = Duration.ofSeconds(10);
+  @Default Duration httpTimeout = Duration.ofSeconds(10);
 
   /** Heartbeat 上报间隔。默认 30s。 */
-  @lombok.Builder.Default Duration heartbeatInterval = Duration.ofSeconds(30);
+  @Default Duration heartbeatInterval = Duration.ofSeconds(30);
 
   /** 单 worker 进程最大并发处理任务数(线程池大小)。默认 4。 */
-  @lombok.Builder.Default int maxConcurrentTasks = 4;
+  @Default int maxConcurrentTasks = 4;
 
   /** Kafka poll 间隔。默认 200ms。 */
-  @lombok.Builder.Default Duration kafkaPollInterval = Duration.ofMillis(200);
+  @Default Duration kafkaPollInterval = Duration.ofMillis(200);
 
   /** in-flight 任务的 lease 续约间隔。应 < orchestrator 端 lease TTL(默认 ~3min)的 1/2。 */
-  @lombok.Builder.Default Duration leaseRenewInterval = Duration.ofSeconds(60);
+  @Default Duration leaseRenewInterval = Duration.ofSeconds(60);
 
   // ─── P3 Kafka SASL/SCRAM 鉴权 (per-tenant ACL) ─────────────────────────────
   /**
