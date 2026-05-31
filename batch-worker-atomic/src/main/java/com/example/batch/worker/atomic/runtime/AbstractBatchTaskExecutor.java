@@ -6,10 +6,10 @@ import com.example.batch.common.spi.task.TaskResult;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * ADR-035 §9 — SPI 执行器可选基类,提供模板方法 {@code validate → before → doExecute → after + finally cleanup}。
+ * ADR-035 §9 — 原子任务执行器可选基类,提供模板方法 {@code validate → before → doExecute → after + finally cleanup}。
  *
  * <p>本类**只让 batch-worker-atomic 内的执行器 opt-in extends**(SPI-only;pipeline 4 个 worker 仍直接 {@code
- * implements BatchTaskExecutor} 不动,零影响)。新增 / 重构 SPI 执行器时可继承本类拿前置 / 后置 / cleanup 钩子。
+ * implements BatchTaskExecutor} 不动,零影响)。新增 / 重构 原子任务执行器时可继承本类拿前置 / 后置 / cleanup 钩子。
  *
  * <p>**红线**(ADR-035 §9):
  *

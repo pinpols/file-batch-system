@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.BeanFactory;
 
 /**
- * ADR-035 §9 — SPI 执行器(sql / storedproc)共享的 DataSource 解析 + 角色闸 + 回调式 acquire/release。
+ * ADR-035 §9 — 原子任务执行器(sql / storedproc)共享的 DataSource 解析 + 角色闸 + 回调式 acquire/release。
  *
  * <p>本类**只能被 batch-worker-atomic 内的 SQL / StoredProc executor 使用**(SPI-only;pipeline 4 个 worker
  * 各自管自己模块内 DB 访问,不依赖本类),不破 ADR-035 §9 红线。

@@ -13,7 +13,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * 专用 Task SPI worker context-load 冒烟:验证 worker 能用真实 PG/Kafka(testcontainers)启动 —— consumer / loop /
+ * 专用原子任务 worker context-load 冒烟:验证 worker 能用真实 PG/Kafka(testcontainers)启动 —— consumer / loop /
  * route adapter / datasource / kafka 全部正确装配。executor 默认全关(@ConditionalOnProperty),本测 只验运行时骨架能起来。
  */
 @SpringBootTest(
