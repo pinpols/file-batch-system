@@ -4,6 +4,7 @@ import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.plugin.ImportLoadContext;
 import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
+import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
 import com.example.batch.worker.imports.jdbc.JdbcMappedImportSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -95,7 +96,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     // Phase A RLS:显式 tx 包 SET LOCAL + batchUpdate 共享同一 connection,触发 biz.* policy 过滤
     txTemplate.execute(
         status -> {
-          com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
           jdbcTemplate.batchUpdate(
               sql,
               new BatchPreparedStatementSetter() {

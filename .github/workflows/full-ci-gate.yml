@@ -162,7 +162,7 @@ jobs:
       - name: Run unit + IT (worker-import + worker-export + console-api)
         shell: bash
         run: |
-          mvn verify -pl batch-worker-import,batch-worker-export,batch-worker-spi,batch-console-api -am \
+          mvn verify -pl batch-worker-import,batch-worker-export,batch-worker-atomic,batch-console-api -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 

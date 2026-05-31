@@ -5,6 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
@@ -85,12 +86,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     // Phase A RLS:绑 tenant_id 到 ThreadLocal,plugin / mapper 进 @Transactional 时
     // 由 RlsTenantSessionSupport.applyIfPresent(businessDS) 取出并 SET LOCAL
     // app.tenant_id,触发 biz.* RLS policy 强制隔离。
-    com.example.batch.common.rls.RlsTenantContextHolder.set(request.tenantId());
+    RlsTenantContextHolder.set(request.tenantId());
     try {
       return doExecute(request, attributes, traceId);
     } finally {
       propagateRuntimeAttributes(sourceAttributes, attributes);
-      com.example.batch.common.rls.RlsTenantContextHolder.clear();
+      RlsTenantContextHolder.clear();
       BatchMdc.remove(StructuredLogField.TENANT_ID);
       BatchMdc.remove(StructuredLogField.TRACE_ID);
       BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);

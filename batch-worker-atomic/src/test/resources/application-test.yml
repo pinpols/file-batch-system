@@ -1,0 +1,13 @@
+spring:
+  flyway:
+    locations: classpath:db/migration
+
+batch:
+  scheduling:
+    # IT 不验证 @Scheduled 优雅收尾;关闭立即取消,避免 surefire fork 退出超时。
+    wait-for-tasks-to-complete-on-shutdown: false
+    await-termination-seconds: 1
+  worker:
+    atomic:
+      # 调慢心跳,IT 期间不噪声
+      heartbeat-interval-millis: 600000

@@ -57,7 +57,7 @@
         </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
-            <artifactId>batch-worker-spi</artifactId>
+            <artifactId>batch-worker-atomic</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

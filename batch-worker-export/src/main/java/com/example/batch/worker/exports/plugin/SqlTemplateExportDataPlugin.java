@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.plugin;
 
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
+import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import com.example.batch.worker.exports.sql.SqlTemplateExportSpec;
@@ -121,8 +122,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     List<Map<String, Object>> rows =
         txTemplate.execute(
             status -> {
-              com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(
-                  businessDataSource);
+              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
               return jdbc.queryForList(finalSql, finalParams);
             });
     if (rows == null || rows.isEmpty()) {

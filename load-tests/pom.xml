@@ -15,7 +15,7 @@
         mvn gatling:test -Dsimulation=SchedulingBacklogUnderLoadSimulation
         mvn gatling:test -Dsimulation=LaunchPipelineCompletionSimulation
         mvn gatling:test -Dsimulation=WorkerTaskLifecycleSimulation
-        mvn gatling:test -Dsimulation=SpiTaskDispatchSimulation -DjobCode=spi_sql_demo -DtenantId=default-tenant
+        mvn gatling:test -Dsimulation=AtomicTaskDispatchSimulation -DjobCode=spi_sql_demo -DtenantId=default-tenant
 
       目标环境参数（可通过 -D 或各环境 profile 覆盖）：
         -Dtrigger.baseUrl=http://localhost:8081

@@ -81,7 +81,7 @@ batch:
       heartbeat-interval-millis: 600000
       topic: batch.task.dispatch.spi
       consumer-group-id: batch-worker-spi-e2e
-    # SPI 执行器:e2e 全开 4 类做全链验证;仅在 batch-worker-spi 被扫描的 E2eSpiApplication 上下文生效
+    # SPI 执行器:e2e 全开 4 类做全链验证;仅在 batch-worker-atomic 被扫描的 E2eAtomicApplication 上下文生效
     executors:
       sql:
         enabled: true

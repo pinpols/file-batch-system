@@ -106,7 +106,7 @@ INSERT INTO batch.job_definition (
     (2003, 'tenant-finance', 'finance_recon_workflow', 'Finance Reconciliation Workflow', 'WORKFLOW', 'SETTLEMENT', 'MANUAL', NULL, 'Asia/Shanghai', 2, 'finance_export_queue', 'export', 'finance-calendar', 'night_window', 'MIXED', TRUE, 'AUTO', 'EXPONENTIAL', 3, 5400, 'com.example.FinanceReconWorkflowHandler', jsonb_build_object('type', 'object'), jsonb_build_object('sourcePartitions', jsonb_build_array(1,2)), 1, TRUE, 'Finance workflow job', 'system', 'system', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08')
 ON CONFLICT (id) DO NOTHING;
 
--- ADR-029:专用 SPI worker(batch-worker-spi)示例原子任务 job。job_type='SPI' → 派发到
+-- ADR-029:专用 SPI worker(batch-worker-atomic)示例原子任务 job。job_type='SPI' → 派发到
 -- batch.task.dispatch.spi,worker_group='spi'。default_params 携带 SPI executor 协议(taskType + 各自参数)。
 -- demo/sim 用样例;executor 默认全关,真跑需在 spi worker 上 enable + 配白名单/schema(见 ADR-029)。
 INSERT INTO batch.job_definition (

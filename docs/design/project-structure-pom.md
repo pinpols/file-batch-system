@@ -14,7 +14,7 @@ batch-platform
 ├── batch-worker-export
 ├── batch-worker-process
 ├── batch-worker-dispatch
-├── batch-worker-spi
+├── batch-worker-atomic
 ├── batch-console-api
 └── batch-e2e-tests        ← 端到端验收测试模块（独立 Maven 模块，非前端）
 ```
@@ -1503,7 +1503,7 @@ batch-platform
 ├── batch-worker-export
 ├── batch-worker-process
 ├── batch-worker-dispatch
-├── batch-worker-spi
+├── batch-worker-atomic
 ├── batch-console-api
 └── batch-e2e-tests        ← 端到端验收测试（E2E，独立模块）
 ```
@@ -1649,7 +1649,7 @@ batch-platform
 ├── batch-worker-export
 ├── batch-worker-process
 ├── batch-worker-dispatch
-├── batch-worker-spi
+├── batch-worker-atomic
 ├── batch-console-api
 └── batch-console-web（可选）
 ```

@@ -40,7 +40,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ $component }}
-          image: {{ include "batch-platform.image" (dict "root" . "name" "batch-worker-spi") }}
+          image: {{ include "batch-platform.image" (dict "root" . "name" "batch-worker-atomic") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- include "batch-platform.gracefulShutdownLifecycle" $svc.gracefulShutdown | nindent 10 }}
           securityContext:

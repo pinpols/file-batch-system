@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
@@ -283,7 +284,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   @Transactional(transactionManager = "processBusinessTransactionManager")
   public ProcessStageResult commit(ProcessJobContext context) {
     // Phase A RLS:tx 入口 SET LOCAL app.tenant_id,后续 INSERT/UPDATE biz.* 走 RLS policy 过滤
-    com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+    RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
     Map<String, Object> params = new LinkedHashMap<>();
