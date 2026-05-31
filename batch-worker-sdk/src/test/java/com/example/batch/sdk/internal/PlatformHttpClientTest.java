@@ -87,20 +87,26 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void non2xxThrows() {
+  void non2xxThrowsWithoutErrBodyLeak() {
     server.createContext(
         "/internal/workers/w-1/heartbeat",
         ex -> {
-          byte[] body = "{\"code\":\"FORBIDDEN\"}".getBytes(StandardCharsets.UTF_8);
+          // errBody 含潜在敏感字段(token / 内部错误码),不应出现在 exception message
+          byte[] body =
+              "{\"code\":\"FORBIDDEN\",\"detail\":\"token=secret-abc\"}"
+                  .getBytes(StandardCharsets.UTF_8);
           ex.sendResponseHeaders(403, body.length);
           ex.getResponseBody().write(body);
           ex.close();
         });
 
     assertThatThrownBy(() -> newClient().heartbeat("w-1", Map.of()))
-        .isInstanceOf(IOException.class)
+        .isInstanceOf(PlatformHttpException.class)
         .hasMessageContaining("HTTP 403")
-        .hasMessageContaining("FORBIDDEN");
+        .hasMessageContaining("/internal/workers/w-1/heartbeat")
+        .hasMessageNotContaining("FORBIDDEN")
+        .hasMessageNotContaining("secret-abc")
+        .hasMessageNotContaining("body=");
   }
 
   @Test

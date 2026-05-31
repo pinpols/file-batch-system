@@ -28,22 +28,36 @@ public class HeartbeatScheduler implements AutoCloseable {
 
   public HeartbeatScheduler(
       BatchPlatformClientConfig config, PlatformHttpClient httpClient, TaskDispatcher dispatcher) {
+    this(config, httpClient, dispatcher, defaultScheduler());
+  }
+
+  // 包内可见 — 单测注入 mock ScheduledExecutorService 验证 fixed-delay vs fixed-rate
+  HeartbeatScheduler(
+      BatchPlatformClientConfig config,
+      PlatformHttpClient httpClient,
+      TaskDispatcher dispatcher,
+      ScheduledExecutorService scheduler) {
     this.config = config;
     this.httpClient = httpClient;
     this.dispatcher = dispatcher;
-    this.scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "batch-sdk-heartbeat");
-              t.setDaemon(true);
-              return t;
-            });
+    this.scheduler = scheduler;
+  }
+
+  private static ScheduledExecutorService defaultScheduler() {
+    return Executors.newSingleThreadScheduledExecutor(
+        r -> {
+          Thread t = new Thread(r, "batch-sdk-heartbeat");
+          t.setDaemon(true);
+          return t;
+        });
   }
 
   public void start() {
     long intervalMs = config.getHeartbeatInterval().toMillis();
-    scheduler.scheduleAtFixedRate(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
-    log.info("HeartbeatScheduler started: interval={}ms", intervalMs);
+    // fixed-delay 而非 fixed-rate:平台短暂卡顿后,SDK 不应追赶式连发心跳把 orchestrator 雪崩,
+    // 而是每次 tick 完成后再等一个完整 interval。见 #SDK-P1-3。
+    scheduler.scheduleWithFixedDelay(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+    log.info("HeartbeatScheduler started: interval={}ms (fixed-delay)", intervalMs);
   }
 
   void tick() {
