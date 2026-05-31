@@ -151,9 +151,9 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | # | 任务 | 工作量 | 文件 |
 |---|---|---|---|
-| 1.1 | `stop()` 顺序倒置(Kafka 先 → drain → heartbeat/lease 最后 → deactivate) | 3h | `client/BatchPlatformClient.java` |
+| 1.1 | ~~`stop()` 顺序倒置(Kafka 先 → drain → heartbeat/lease 最后 → deactivate)~~ ✅ 2026-05-31 #SDK-P1-1 | 3h | `client/BatchPlatformClient.java` |
 | 1.2 | CLAIM 401/403 fail-fast,5xx 指数退避 | 2h | `dispatcher/TaskDispatcher.java` |
-| 1.3 | `ConsumerRebalanceListener.onPartitionsAssigned()` 处理 paused 状态恢复 | 4h | `dispatcher/KafkaTaskConsumer.java` |
+| 1.3 | ~~`ConsumerRebalanceListener.onPartitionsAssigned()` 处理 paused 状态恢复~~ ✅ 2026-05-31 #SDK-P1-1 | 4h | `dispatcher/KafkaTaskConsumer.java` |
 | 1.4 | `HeartbeatScheduler` 改 `scheduleWithFixedDelay`(避免追赶式) | 1h | `scheduler/HeartbeatScheduler.java` |
 | 1.5 | `IOException` message 去掉 errBody 明文(改 `log.debug`) | 1h | `internal/PlatformHttpClient.java` |
 | 1.6 | `BatchPlatformClient.metrics()` POJO + `isHealthy()` boolean | 2h | `client/BatchPlatformClient.java` |
@@ -163,7 +163,7 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | PR | 内容 | LoC 估 |
 |---|---|---|
-| #SDK-P1-1 | stop() 顺序 + ConsumerRebalanceListener | ~300 |
+| ~~#SDK-P1-1 stop() 顺序 + ConsumerRebalanceListener~~ ✅ 2026-05-31 | stop() 顺序 + ConsumerRebalanceListener | ~300 |
 | #SDK-P1-2 | CLAIM 401/403 fail-fast + 5xx 退避 | ~250 |
 | #SDK-P1-3 | HeartbeatScheduler 改 fixed-delay + IOException message | ~150 |
 | #SDK-P1-4 | metrics() + isHealthy() + consumer 死时上报 | ~300 |

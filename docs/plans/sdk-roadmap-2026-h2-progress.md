@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-05-31 — Phase 1 #SDK-P1-1 stop() 顺序 + ConsumerRebalanceListener
+
+- **范围**:1.1 `BatchPlatformClient.stop()` 顺序倒置(Kafka 先 wakeup+join → dispatcher drain → heartbeat/lease close → deactivate)、1.3 `KafkaTaskConsumer` 新增 `PauseAwareRebalanceListener` 内部类,`onPartitionsAssigned()` 时若 backpressure 仍激活则 re-pause 新分到的 partition;附 6 测试(3 stop order + 3 rebalance)。
+- **实际 vs plan**:工作量 ~3h(plan 估 3h+4h=7h)显著低于预算。比 plan 多做:把 `KafkaConsumer<String, byte[]>` 字段类型 widen 到 `Consumer<String, byte[]>` 让 MockConsumer 能注入;`paused` 字段加 `volatile`。比 plan 少做:Listener 没暴露 metric(`rebalance_count` 等),留给 P1-4 `metrics()` PR 顺手加。
+- **环境坑**:JDK 25 在 `/opt` 不存在,curl 从 `download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.tar.gz` 下载到 `/tmp/jdk25`,cacerts 从系统 JDK 21 拷过去解决 SSL 信任。后续 routine 启动复用 `/tmp/jdk25` 即可。
+- **测试结果**:`mvn -pl batch-worker-sdk test` 146/146 绿(原 140 + 新 6)。
+- **后续**:#SDK-P1-2(CLAIM 401/403 fail-fast)接力;依赖图(§15.8.A)纯 SDK 链是严格串行,本 PR merged 才能开 P1-2。
+
+---
+
 ## 2026-05-31 — ⚠️ Phase 0 代码完成,**push 被环境权限拦截**
 
 - **状态**:本地分支 `feature/sdk-phase-0-protocol-foundation` 已 commit 1 个 commit;`git push` 与 `mcp__github__push_files` / `create_branch` 均返回 `403 Permission to pinpols/file-batch-system.git denied to idengzhao`。GitHub MCP 鉴权身份是 `idengzhao`,但目标仓库 `pinpols/file-batch-system` 上没有 write 权限,无法走 routine 自动 push + create PR 流程。
