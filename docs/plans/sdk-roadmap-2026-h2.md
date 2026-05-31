@@ -434,6 +434,40 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 **合计 ~6 周(纯 BE + SDK)**;FE 后续按真实运营需求另起 mini-sprint。
 
+### ⚙️ 每 Phase 并发模式(不是所有 Phase 都拆 agent)
+
+**核心原则**:多 agent overhead 不是免费的(沟通 / rebase / 冲突解决),只在**真低耦合**时拆。
+
+| Phase | 并发模式 | 原因 | Agent 配置 |
+|---|---|---|---|
+| **Phase 0** | 🟢 单 agent(3d) | 1 个 PR 完成跨模块协议立基,拆 agent overhead > 收益 | Agent-Schema 一人 |
+| **Phase 1** | 🟡 单 agent 串行 4 PR(1w) | 纯 SDK,4 PR **频繁碰同一文件**(`BatchPlatformClient` / `TaskDispatcher` 多 PR touched),并行只增 rebase 冲突 | Agent-SDK 一人按顺序 |
+| **Phase 2** | 🟢 双 agent 严格串行(1.5w) | dual-rollout:ORCH 先 → 等 2 周观察 → SDK 跟。**强制串行,不能并行** | Agent-ORCH → Agent-SDK 接力 |
+| **Phase 3** ⭐ | 🟢🟢 **多 agent 全开**(2-3w) | 跨 4 方 + 文件低耦合,**最大收益**。M3.1 后端 Schema + ORCH + SDK + sample 4 路并行 | 4 个 agent 同时:Agent-Schema(Flyway)+ Agent-ORCH(派单 / register upsert)+ Agent-SDK(descriptor API)+ Agent-Docs(sample repo) |
+| **Phase 4** | 🟢 双 agent 严格串行(2w) | 同 Phase 2,dual-rollout 模式 | Agent-ORCH → Agent-SDK |
+| **Phase 5** | 🟢🟢 **多 agent 全并行**(2w) | P5-1/2/3/4 四件事(typed handler / testkit / fingerprint / OTel)**互不依赖** | 4 个 Agent-SDK 实例同时做不同 PR |
+| **Phase 6** | 🟡 按需,单 agent | 触发条件出现才做,通常 1-2 项 | — |
+| **Phase 7** | 🟢 单 agent 穿插(0.5w) | 小项,塞任意 phase 末尾 | 任何空 agent 顺手 |
+
+#### 拆 agent 的决策信号
+
+| 信号 | 拆 / 不拆 |
+|---|---|
+| 工作量 < 3 天 | ❌ 不拆 |
+| 同文件多 PR 触碰 | ❌ 不拆,串行做 |
+| 跨模块协议依赖(dual-rollout) | ✅ 拆,但**严格串行**(不是并行) |
+| 跨模块文件独立(SDK / orch / API) | ✅ 拆,可并行 |
+| 同模块新增独立功能(P5 四件事) | ✅ 拆,可并行 |
+| 文档 / 测试 / sample | ✅ 拆,跟代码并行 |
+
+#### 实际并发收益分布
+
+- **Phase 3**:2-3w → 1w 内(并发节省 ~60%)
+- **Phase 5**:2w → 1w 内(并发节省 ~50%)
+- **其他 Phase**:并发收益 < 20%,串行更稳
+
+**这就是为什么本 plan 不无脑"全程多 agent"** —— 错配会让 Phase 0/1/2 反慢(rebase 冲突 + 沟通成本)。
+
 ### FE 延后期的 workaround
 
 | 缺 FE 的能力 | 临时替代 |
