@@ -1,0 +1,153 @@
+{{/*
+Phase D · Per-tenant worker pool（按租户物理隔离 worker）。
+
+见 docs/plans/multi-tenant-isolation-plan-2026-05-31.md §Phase D
+见 docs/runbook/per-tenant-worker-onboarding.md
+
+核心代码已 ready（AbstractTaskConsumer / WorkerKafkaSubscribeProperties / BatchTopicResolver），
+本模板只补部署侧：遍历 .Values.tenantWorkerPools，为每个 (tenantId, workerType) 渲染一套
+独立 Deployment + Service（+ 可选 per-tenant Secret / ResourceQuota / NetworkPolicy）。
+
+隔离三要素（缺一不可，否则名义隔离实际仍混跑）：
+  1. SUBSCRIBE_MODE=TENANT_SCOPED + TENANT_ALLOWLIST={tenantId}
+       → worker 只订阅 ^base(\.(tenantId))?$，不接其它租户后缀 topic。
+  2. 独立 consumer group（batch-worker-{type}-{tenant}）
+       → 否则与共享池同组，Kafka 会把 base/其它后缀分区 rebalance 到本池，隔离失效。
+  3. orchestrator producer 切 BATCH_MQ_ROUTING_MODE=TENANT
+       → 该租户任务才会被发到 base.{tenantId} 后缀 topic（见 runbook D2）。
+
+注意 base topic：TENANT_SCOPED 仍订阅无后缀 base topic（兼容 SINGLE producer）。真正只接
+本租户流量依赖 producer 处于 TENANT 模式 + acceptsConfiguredTenantScope() 运行期再过滤一层。
+*/}}
+{{- $root := . }}
+{{- $typeMeta := dict
+  "import"   (dict "image" "batch-worker-import"   "port" 18083 "envPrefix" "IMPORT"   "baseTopic" "batch.task.dispatch.import")
+  "export"   (dict "image" "batch-worker-export"   "port" 18084 "envPrefix" "EXPORT"   "baseTopic" "batch.task.dispatch.export")
+  "process"  (dict "image" "batch-worker-process"  "port" 18086 "envPrefix" "PROCESS"  "baseTopic" "batch.task.dispatch.process")
+  "dispatch" (dict "image" "batch-worker-dispatch" "port" 18085 "envPrefix" "DISPATCH" "baseTopic" "batch.task.dispatch.dispatch")
+  "spi"      (dict "image" "batch-worker-spi"      "port" 18087 "envPrefix" "SPI"      "baseTopic" "batch.task.dispatch.spi")
+}}
+{{- range $pool := .Values.tenantWorkerPools }}
+{{- $tenant := required "tenantWorkerPools[].tenantId is required" $pool.tenantId }}
+{{- $wt := required "tenantWorkerPools[].workerType is required (import|export|process|dispatch|spi)" $pool.workerType | lower }}
+{{- $meta := get $typeMeta $wt }}
+{{- if not $meta }}{{ fail (printf "tenantWorkerPools: unknown workerType %q (expect import|export|process|dispatch|spi)" $wt) }}{{- end }}
+{{- $component := printf "worker-%s-%s" $wt $tenant }}
+{{- $port := $meta.port | int }}
+{{- $group := printf "batch-worker-%s-%s" $wt $tenant }}
+{{- $secretName := $pool.secretName | default "" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "batch-platform.fullname" $root }}-{{ $component }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) $root) | nindent 4 }}
+    batch.example.com/tenant: {{ $tenant | quote }}
+    batch.example.com/worker-type: {{ $wt | quote }}
+spec:
+  replicas: {{ $pool.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 8 }}
+        batch.example.com/tenant: {{ $tenant | quote }}
+      {{- with $root.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "batch-platform.imagePullSecrets" $root | nindent 6 }}
+      terminationGracePeriodSeconds: {{ $pool.terminationGracePeriodSeconds | default 180 }}
+      securityContext:
+        {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      {{- with $pool.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "batch-platform.image" (dict "root" $root "name" $meta.image) }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+          securityContext:
+            {{- toYaml $root.Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $port }}
+              protocol: TCP
+          env:
+            - name: JAVA_OPTS_EXTRA
+              value: {{ $pool.javaOptsExtra | default "-XX:MaxDirectMemorySize=1g" | quote }}
+            - name: BATCH_MANAGEMENT_PORT
+              value: {{ $port | quote }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_PORT
+              value: {{ $port | quote }}
+            # ── 隔离三要素 1+2（见本文件顶部注释）────────────────────────
+            - name: BATCH_WORKER_KAFKA_SUBSCRIBE_MODE
+              value: "TENANT_SCOPED"
+            - name: BATCH_WORKER_KAFKA_TENANT_ALLOWLIST
+              value: {{ $tenant | quote }}
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_TENANT_ID
+              value: {{ $tenant | quote }}
+            # 独立 consumer group：与共享池区分，杜绝跨池 partition rebalance
+            - name: BATCH_WORKER_{{ $meta.envPrefix }}_CONSUMER_GROUP_ID
+              value: {{ $group | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "batch-platform.configmapName" $root }}
+            - secretRef:
+                name: {{ include "batch-platform.secretName" $root }}
+            {{- if $secretName }}
+            # per-tenant 凭据（SFTP / MinIO / 业务库专属账号）覆盖共享 Secret 中的同名 key
+            - secretRef:
+                name: {{ $secretName }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: {{ $port }}
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: {{ $port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml ($pool.resources | default (dict "requests" (dict "cpu" "500m" "memory" "768Mi") "limits" (dict "cpu" "2000m" "memory" "2Gi"))) | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- include "batch-platform.scheduling" $root | nindent 6 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "batch-platform.fullname" $root }}-{{ $component }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) $root) | nindent 4 }}
+    batch.example.com/tenant: {{ $tenant | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) $root) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}

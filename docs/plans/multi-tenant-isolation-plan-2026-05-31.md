@@ -200,9 +200,16 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 
 **设计**:
 
-- Helm chart 参数化 tenantId,模板 `worker-import-{tenant}`
-- Kafka topic naming:`batch.task.dispatch.tenant.{tenantId}.import`(跟 ADR-035 SDK 一致命名)
-- orchestrator producer mode 切 TENANT,根据 `(tenant_id, worker_type)` 派 topic
+- Helm chart 参数化 tenantId,模板 `worker-tenant.yaml`(渲染 `worker-{type}-{tenant}`)
+- Kafka topic naming:`batch.task.dispatch.{type}.{tenantId}`(如 `batch.task.dispatch.import.bigcorp`)。
+  这是 `BatchTopicResolver` TENANT 模式实际产出(`base + "." + tenantId`),也是 worker `TENANT_SCOPED`
+  订阅正则 `^base(\.(tenantId))?$` 能命中的形态。**订正**:早前草稿写的
+  `batch.task.dispatch.tenant.{tenantId}.{type}` 与代码不符,会导致投不进 / 订不到。详见
+  `docs/runbook/per-tenant-worker-onboarding.md` §1。
+- orchestrator producer mode 切 TENANT(`BATCH_MQ_ROUTING_MODE=TENANT`,**默认已是 TENANT**),
+  根据 `(tenant_id, worker_type)` 派 topic
+- per-tenant 池**必须用独立 consumer group**(`batch-worker-{type}-{tenant}`),否则与共享池同组
+  会被 Kafka 跨池 rebalance,隔离失效(runbook §2 第 2 要素)
 - per-tenant K8s ResourceQuota / ServiceAccount / Secret(凭据隔离)
 
 **Phase 拆解(修订后)**:
@@ -228,12 +235,16 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - 运维成本 ↑(N 倍租户 = N 倍升级 / 监控 alert),但 Helm template + GitOps 可自动化
 - **建议**:大租户接入时默认走这条(代码 ready,代价低);**不**要等到 SDK 才考虑
 
-**出口**:
-- [ ] 1 个示范大租户独立 worker pool 跑通(手工或自动化均可)
-- [ ] Helm chart `worker-import-tenant.yaml` 模板
-- [ ] Kafka topic 自动创建脚本 + topic 命名规约文档
-- [ ] 文档:`docs/runbook/per-tenant-worker-onboarding.md`
-- [ ] 演练:示范租户 worker 挂 → 其他租户无感
+**出口**(部署物料已交付;跑通 / 演练需 live 集群,留勾):
+- [ ] 1 个示范大租户独立 worker pool 跑通(手工或自动化均可)— 步骤见 runbook §3,待集群执行
+- [x] Helm chart `templates/worker-tenant.yaml` 模板(覆盖 import 等全 worker 类型)
+- [x] Kafka topic 自动创建脚本 `scripts/data/init-tenant-topics.sh` + topic 命名规约文档(runbook §1)
+- [x] 文档:`docs/runbook/per-tenant-worker-onboarding.md`
+- [ ] 演练:示范租户 worker 挂 → 其他租户无感 — 脚本见 runbook §4,待集群执行
+
+> 配套:per-tenant 凭据 / NetworkPolicy / ResourceQuota 模板 `templates/tenant-isolation.yaml`;
+> values 开关 `tenantWorkerPools` / `tenantIsolation`(默认空,不影响现有渲染)。
+> D6(console「租户 worker 池状态」只读页)是应用代码(FE+BE),不在本出口标准内,单列 feature 分支跟进。
 
 ---
 

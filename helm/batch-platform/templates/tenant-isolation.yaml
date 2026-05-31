@@ -1,0 +1,96 @@
+{{/*
+Phase D · per-tenant 凭据 / 资源 / 网络隔离（D4 + D5）。
+
+见 docs/runbook/per-tenant-worker-onboarding.md
+
+遍历 .Values.tenantIsolation，为每个租户按需渲染：
+  - Secret        (D5) per-tenant 凭据（SFTP / MinIO / 业务库专属账号）。worker-tenant.yaml
+                  里 pool.secretName 引用它，envFrom 覆盖共享 Secret 同名 key。
+  - NetworkPolicy (D4) 按 pod label batch.example.com/tenant 选中本租户 worker，限制 ingress。
+  - ResourceQuota (D4) 噪声邻居防护。⚠ ResourceQuota 是 namespace 级、无 pod selector，
+                  只有「每租户独立 namespace」部署形态下才真正只约束该租户。同 namespace 混部
+                  时它约束整个 namespace —— 因此默认 enabled:false，仅在 per-tenant-namespace
+                  模式下开启。
+*/}}
+{{- $root := . }}
+{{- range $t := .Values.tenantIsolation }}
+{{- $tenant := required "tenantIsolation[].tenantId is required" $t.tenantId }}
+{{- $full := include "batch-platform.fullname" $root }}
+{{- if and $t.secret $t.secret.enabled }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $full }}-tenant-{{ $tenant }}-secret
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" $root | nindent 4 }}
+    batch.example.com/tenant: {{ $tenant | quote }}
+type: Opaque
+{{- with $t.secret.stringData }}
+stringData:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with $t.secret.data }}
+data:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
+{{- if and $t.networkPolicy $t.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-tenant-{{ $tenant }}-netpol
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" $root | nindent 4 }}
+    batch.example.com/tenant: {{ $tenant | quote }}
+spec:
+  podSelector:
+    matchLabels:
+      batch.example.com/tenant: {{ $tenant | quote }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # 仅放行同 release 的 pod（orchestrator 注册回调 + Prometheus scrape）访问 actuator/http。
+    # kubelet 健康探针来自节点本身，不经 NetworkPolicy，无需显式放行。
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $root.Release.Name }}
+  egress:
+    # DNS 必放，否则连不上任何服务名。
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # 其余出向（Kafka / Postgres / Redis / MinIO / orchestrator）。
+    # MVP 默认放行同 namespace + 集群内；锁到具体 CIDR（managed RDS/Kafka 在集群外时）
+    # 需补 ipBlock，见 networkPolicy.extraEgress。
+    - to:
+        - namespaceSelector: {}
+    {{- with $t.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if and $t.resourceQuota $t.resourceQuota.enabled }}
+---
+# ⚠ namespace 级配额。仅在「该租户独占此 namespace」时使用（见本文件顶部说明）。
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ $full }}-tenant-{{ $tenant }}-quota
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" $root | nindent 4 }}
+    batch.example.com/tenant: {{ $tenant | quote }}
+spec:
+  hard:
+    {{- toYaml $t.resourceQuota.hard | nindent 4 }}
+{{- end }}
+{{- end }}
