@@ -60,7 +60,7 @@ flowchart LR
     WE["worker-export<br/>PREPARE → ... → COMPLETE"]:::worker
     WP["worker-process<br/>PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK<br/>(WAP+bookends · staging 中转)"]:::worker
     WD["worker-dispatch<br/>PREPARE → ... → COMPLETE"]:::worker
-    WSPI["worker-spi<br/>原子任务 shell/sql/stored-proc/http<br/>(ADR-029 隔离)"]:::worker
+    WSPI["worker-atomic<br/>原子任务 shell/sql/stored-proc/http<br/>(ADR-029 隔离)"]:::worker
   end
 
   subgraph DATA ["数据落地"]

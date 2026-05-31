@@ -7,7 +7,7 @@
   serviceMonitor.enabled=true 才渲染。
 */}}
 {{- if .Values.serviceMonitor.enabled }}
-{{- $components := list "console-api" "trigger" "orchestrator" "worker-import" "worker-export" "worker-dispatch" "worker-process" "worker-spi" }}
+{{- $components := list "console-api" "trigger" "orchestrator" "worker-import" "worker-export" "worker-dispatch" "worker-process" "worker-atomic" }}
 {{- range $component := $components }}
 ---
 apiVersion: monitoring.coreos.com/v1

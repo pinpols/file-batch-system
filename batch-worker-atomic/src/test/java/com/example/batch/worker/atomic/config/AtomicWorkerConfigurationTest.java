@@ -12,24 +12,24 @@ class AtomicWorkerConfigurationTest {
   void implementsWorkerConfigurationAndExposesIdentity() {
     AtomicWorkerConfiguration cfg =
         new AtomicWorkerConfiguration(
-            "spi-node-1",
-            "SPI",
+            "atomic-node-1",
+            "ATOMIC",
             "default-tenant",
             15000L,
-            "batch.task.dispatch.spi",
-            "batch-worker-spi",
+            "batch.task.dispatch.atomic",
+            "batch-worker-atomic",
             List.of("shell", "sql"));
     assertThat(cfg).isInstanceOf(WorkerConfiguration.class);
-    assertThat(cfg.workerCode()).isEqualTo("spi-node-1");
-    assertThat(cfg.workerType()).isEqualTo("SPI");
-    assertThat(cfg.topic()).isEqualTo("batch.task.dispatch.spi");
+    assertThat(cfg.workerCode()).isEqualTo("atomic-node-1");
+    assertThat(cfg.workerType()).isEqualTo("ATOMIC");
+    assertThat(cfg.topic()).isEqualTo("batch.task.dispatch.atomic");
     assertThat(cfg.capabilityTags()).containsExactly("shell", "sql");
   }
 
   @Test
   void normalizesNullCapabilityTagsToEmpty() {
     AtomicWorkerConfiguration cfg =
-        new AtomicWorkerConfiguration("c", "SPI", "t", 15000L, "topic", "grp", null);
+        new AtomicWorkerConfiguration("c", "ATOMIC", "t", 15000L, "topic", "grp", null);
     assertThat(cfg.capabilityTags()).isNotNull().isEmpty();
   }
 }

@@ -7,7 +7,7 @@ Services:
   worker-import: http://{{ include "batch-platform.fullname" . }}-worker-import:{{ .Values.workerImport.service.port }}
   worker-export: http://{{ include "batch-platform.fullname" . }}-worker-export:{{ .Values.workerExport.service.port }}
   worker-dispatch: http://{{ include "batch-platform.fullname" . }}-worker-dispatch:{{ .Values.workerDispatch.service.port }}
-  worker-spi: http://{{ include "batch-platform.fullname" . }}-worker-spi:{{ .Values.workerSpi.service.port }}
+  worker-atomic: http://{{ include "batch-platform.fullname" . }}-worker-atomic:{{ .Values.workerAtomic.service.port }}
 
 {{- if .Values.consoleApi.ingress.enabled }}
 Console API ingress hosts:

@@ -32,8 +32,8 @@ import org.springframework.test.context.jdbc.Sql;
  * 负载/压力测试(testcontainers 级):并发往 SPI 专属 topic 灌 N 个原子任务,验证 SPI worker 在并发下 全部跑到终态 SUCCESS,无丢任务 /
  * 无卡死,并记录吞吐。
  *
- * <p>压的是真实派发链(orchestrator → Kafka batch.task.dispatch.spi → SPI worker claim → 执行 → report), 不是单元级
- * mock。worker 并发度由 batch.worker.max-concurrent-tasks 控制,N 大于并发度以制造排队。
+ * <p>压的是真实派发链(orchestrator → Kafka batch.task.dispatch.atomic → SPI worker claim → 执行 → report),
+ * 不是单元级 mock。worker 并发度由 batch.worker.max-concurrent-tasks 控制,N 大于并发度以制造排队。
  *
  * <p>注意:本测试验证的是<b>突发不丢任务</b>(全部终态 SUCCESS),不是吞吐基准 —— testcontainers 单 JVM + 单分区 topic + 每任务
  * claim/report HTTP 往返,有效吞吐很低(~1 task/10s 级),与生产无关。 生产吞吐/SLO 基准用 load-tests 的 {@code
@@ -65,7 +65,7 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
     for (int i = 0; i < TASK_COUNT; i++) {
       LaunchSeed seed =
           E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-              jdbcTemplate, TENANT, "SPI", "spi", TriggerType.API);
+              jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
       dedupKeys.add(seed.dedupKey());
 
       Map<String, Object> params = new LinkedHashMap<>();

@@ -5,8 +5,8 @@
     - envFromSecretName:独立受限 secret(平台库 claim/lease 用低权限账号,不含业务库/MinIO 凭据)
     - 配 NetworkPolicy 限制出向(只允许平台库 + kafka + 显式放行的 SPI 目标)
 */ -}}
-{{- $component := "worker-spi" }}
-{{- $svc := .Values.workerSpi }}
+{{- $component := "worker-atomic" }}
+{{- $svc := .Values.workerAtomic }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -31,7 +31,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      {{- with .Values.workerSpi.serviceAccountName }}
+      {{- with .Values.workerAtomic.serviceAccountName }}
       serviceAccountName: {{ . }}
       {{- end }}
       {{- include "batch-platform.imagePullSecrets" . | nindent 6 }}
@@ -61,10 +61,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "batch-platform.configmapName" . }}
-            # 最小权限:优先用 workerSpi.envFromSecretName 指定的受限 secret;未配则回退共享 secret
+            # 最小权限:优先用 workerAtomic.envFromSecretName 指定的受限 secret;未配则回退共享 secret
             # (回退仅为不阻断起步;生产强烈建议配独立受限 secret,见 ADR-029)。
             - secretRef:
-                name: {{ .Values.workerSpi.envFromSecretName | default (include "batch-platform.secretName" .) }}
+                name: {{ .Values.workerAtomic.envFromSecretName | default (include "batch-platform.secretName" .) }}
           {{- with $svc.startupProbe }}
           startupProbe:
             {{- toYaml . | nindent 12 }}

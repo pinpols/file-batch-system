@@ -29,7 +29,7 @@ public class AtomicWorkerLoop extends AbstractWorkerLoop {
 
   @Override
   protected String workerGroup() {
-    return "spi";
+    return "atomic";
   }
 
   @Override

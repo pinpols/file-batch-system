@@ -36,10 +36,10 @@ import org.springframework.test.context.jdbc.Sql;
  * <p>链路路径(以 sql 为例):
  *
  * <pre>
- * launch(job_type=SPI, params={taskType:&lt;type&gt;, ...})
- *   → orchestrator 建 task/outbox(task_type=SPI,payload 带子协议)
- *   → Kafka 派发到 batch.task.dispatch.spi
- *   → SPI worker(只扫 worker.spi,无 pipeline adapter)claim
+ * launch(job_type=ATOMIC, params={taskType:&lt;type&gt;, ...})
+ *   → orchestrator 建 task/outbox(task_type=ATOMIC,payload 带子协议)
+ *   → Kafka 派发到 batch.task.dispatch.atomic
+ *   → SPI worker(只扫 worker.atomic,无 pipeline adapter)claim
  *   → DefaultStepExecutionAdapter 按 payload.taskType 路由到对应执行器执行
  *   → report → orchestrator 终态 SUCCESS
  * </pre>
@@ -126,11 +126,11 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   // ─── helpers ─────────────────────────────────────────────────────────────────
 
-  /** 起一个 job_type=SPI 的任务,把 params 作为 payload 透传,等终态 SUCCESS。 */
+  /** 起一个 job_type=ATOMIC 的任务,把 params 作为 payload 透传,等终态 SUCCESS。 */
   private void launchAndAwaitSuccess(Map<String, Object> params) {
     LaunchSeed seed =
         E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "SPI", "spi", TriggerType.API);
+            jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
 
     launchService.launch(
         new LaunchRequest(

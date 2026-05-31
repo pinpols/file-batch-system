@@ -17,8 +17,8 @@ public class BatchMqTopicsPropertiesTest {
   void resolveDispatchTopic_returnsTaskTopicForTaskWorkerType() {
     BatchMqTopicsProperties properties = new BatchMqTopicsProperties();
 
-    // ADR-029:SPI worker_type → 专属 batch.task.dispatch.spi(大小写不敏感)
-    assertThat(properties.resolveDispatchTopic("SPI")).isEqualTo("batch.task.dispatch.spi");
-    assertThat(properties.resolveDispatchTopic("spi")).isEqualTo("batch.task.dispatch.spi");
+    // ADR-029:ATOMIC worker_type → 专属 batch.task.dispatch.atomic(大小写不敏感)
+    assertThat(properties.resolveDispatchTopic("ATOMIC")).isEqualTo("batch.task.dispatch.atomic");
+    assertThat(properties.resolveDispatchTopic("atomic")).isEqualTo("batch.task.dispatch.atomic");
   }
 }

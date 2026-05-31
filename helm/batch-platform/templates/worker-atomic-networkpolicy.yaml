@@ -1,17 +1,17 @@
 {{- /*
-  ADR-029 worker-spi 出口最小权限:default-deny egress NetworkPolicy。
+  ADR-029 worker-atomic 出口最小权限:default-deny egress NetworkPolicy。
   dual-use(shell/sql/stored-proc)能力一旦启用,worker 进程具备 RCE 级能力;
   本 policy 把出向收紧到「只放行运行所需」:DNS、平台 PostgreSQL、Kafka,以及 ops 在
-  values.workerSpi.networkPolicy.egress.extra 显式列举的 CIDR/端口。其余出向一律拒绝。
+  values.workerAtomic.networkPolicy.egress.extra 显式列举的 CIDR/端口。其余出向一律拒绝。
 
-  默认 OFF(.Values.workerSpi.networkPolicy.enabled=false)—— 向后兼容,不改变现有集群行为;
+  默认 OFF(.Values.workerAtomic.networkPolicy.enabled=false)—— 向后兼容,不改变现有集群行为;
   ops 在确认隔离部署(独立 SA / 独立低权限库 / 受限 secret)后显式开启。
 
-  NOTE: 仅 selector 命中 worker-spi pod;不影响其它 worker 模板。
+  NOTE: 仅 selector 命中 worker-atomic pod;不影响其它 worker 模板。
 */ -}}
-{{- if .Values.workerSpi.networkPolicy.enabled }}
-{{- $component := "worker-spi" }}
-{{- $np := .Values.workerSpi.networkPolicy }}
+{{- if .Values.workerAtomic.networkPolicy.enabled }}
+{{- $component := "worker-atomic" }}
+{{- $np := .Values.workerAtomic.networkPolicy }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -43,7 +43,7 @@ spec:
           port: {{ .port | default 5432 }}
     {{- end }}
     {{- end }}
-    # (3) Kafka —— 消费 batch.task.dispatch.spi + 回写结果
+    # (3) Kafka —— 消费 batch.task.dispatch.atomic + 回写结果
     {{- with $np.egress.kafka }}
     {{- if .enabled }}
     - to:
