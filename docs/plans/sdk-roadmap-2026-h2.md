@@ -941,6 +941,108 @@ SKIP_SDK_CHECKS=1 git push
 
 这两类是历史上**最频繁被 CI pr-gate 拦下**的(memory: `feedback_mvn_build_gotchas` 同类教训),**push 前本地过一遍** > 等 CI 来扇耳光。
 
+### 15.9 单对话连续执行模式(自动跑完 + checkpoint)
+
+> 适用场景:你**不想盯进度**,希望 AI agent 在一个对话里**连续做完所有 phase**,只在关键节点停下来让你 review + merge PR。
+
+#### A. 执行流(无人值守 + checkpoint 制)
+
+```
+agent 在一个对话里顺序执行:
+
+Phase 0 完成 → push PR → 不等你 merge,直接开下一个
+       ↓
+Phase 1 完成 → push PR(基于 Phase 0 分支,堆叠 PR)
+       ↓
+Phase 2 完成 → push PR
+       ↓
+... 一直到 checkpoint 才停下报告
+
+每完成一个 phase,agent 自动:
+  - plan doc 对应待办划线 + 加日期 + PR 号
+  - 简短一句"Phase N 完成,PR #X,继续"
+  - 不等你回应,直接开下一个
+```
+
+#### B. 处理"看似阻塞"的事(agent 跳过 / 真停)
+
+| 情况 | agent 行为 |
+|---|---|
+| **dual-rollout 2 周等待** | **跳过** —— 开发阶段不真等,在 PR 描述里标"实际部署时观察 2 周" |
+| **PR 没 merge 下一 phase 怎么开** | 堆叠 PR(base = 上一个 PR 的 feature 分支),GitHub 支持 |
+| **测试跑得慢** | 每 phase 只跑自己模块测试,不跑全仓 verify(memory: `feedback_p1a_no_full_test`) |
+| **CI 还没反馈** | 不等 CI,本地 `mvn clean compile + test -pl` 绿就 push |
+| **架构歧义 / 决策点 #12** | **停** —— 报告 + 等你回 |
+| **真 bug / 真编译错** | **停** —— debug 或上报 |
+
+#### C. 3 个强制 Checkpoint(agent 主动停)
+
+| Checkpoint | 时点 | 累积 PR 数 | 你要做什么 |
+|---|---|---|---|
+| **CP-1** | Phase 0 + 1 完成 | ~5 PR | review 协议基础 + SDK 硬伤修复 |
+| **CP-2** | Phase 2 + 3 完成 | ~13 PR | review 调度上下文 + taskType 注册 |
+| **CP-3** | Phase 4 + 5 + 7 完成 | ~20 PR | review 长任务 + 开发体验,全收尾 |
+
+每个 checkpoint **不超过 8 小时**(agent 累积工作 + 文件读写量大概上限),你回来:**review 一批 PR + merge + 说"继续"** → agent 接 CP-N+1。
+
+#### D. agent 启动话术
+
+```
+启动,自动连续执行所有 phase,checkpoint 时停下
+```
+
+agent 立刻:
+
+1. 忽略 PR #190 等待 merge 的事(基于当前状态起跑)
+2. 拉新分支 `feature/sdk-phase-0` 开 Phase 0
+3. Phase 0 完 push PR → **不停**,开 Phase 1 分支 `feature/sdk-phase-1`(base = phase-0)
+4. 一直堆到 **CP-1** 报告
+5. 你回来 merge / 反馈,说"继续",agent 接 CP-2
+
+#### E. 现实限制(诚实期望管理)
+
+| 限制 | 影响 |
+|---|---|
+| **上下文压缩** | 7 phase 累积代码 + 测试输出,大概 Phase 4-5 之间触发压缩,可能丢细节 |
+| **真 bug 时** | agent 停下诊断,不硬干 |
+| **PR review 是你的活** | agent 只 push 不 merge,异步 review |
+| **决策点遇到歧义** | agent 停下问你,但大部分已在「决策记录」定 |
+| **不真等 dual-rollout** | dev 阶段跳过 2 周等待,部署阶段才真等(部署计划另算) |
+
+#### F. agent 能做 / 不能做
+
+| ✅ 能做 | ❌ 不能做 |
+|---|---|
+| 代码 + 测试 + push + PR 自动化 | 替你 merge PR(sign-off 权限) |
+| plan doc 同步划线(进度可追溯) | 替你做 W8 决策(看真实数据) |
+| 按「决策记录」已定的事执行 | 架构歧义自己决定 |
+| 遇到块停下报告,不硬干 | 真实 6 周跑完(物理 dual-rollout / 生产观察必须真等) |
+| pre-push hook 自检每次都跑 | — |
+
+#### G. 跟其他执行模式对比
+
+| 模式 | 你的工作量 | 总墙钟 | 风险 |
+|---|---|---|---|
+| 完全手动(每 phase 开新对话) | 高,每 phase 都陪跑 | 6 周 | 低 |
+| 多窗口手动并行(§15.2) | 中,review × N 窗口 | 4 周 | 中 |
+| **本模式(单对话连续 + checkpoint)** | **低,3 次 checkpoint review** | **1-2 天 dev + 部署观察 2-4 周** | **中**(上下文压缩) |
+| /schedule routines | 中低,merge 时机分散 | 4-5 周 | 中(routine 不擅长意外) |
+| /loop 单对话自动 | 中,对话要一直开 | 4 周 | 高(对话挂 = 中断) |
+
+#### H. 适用 / 不适用
+
+**✅ 适用**:
+- 你想最小化交互,只在 PR review 时介入
+- dev 阶段集中冲刺(deployment 验证另开窗口)
+- 已经按「决策记录」定好所有原则性问题
+- 你信任 agent 在 7 phase 内不引入大架构错误
+
+**❌ 不适用**:
+- 你想细看每一步实现细节
+- 真实租户已经在跑,需要严格 dual-rollout
+- 多个团队 review 不同 phase
+- 高度不确定的探索式开发(本 plan 不属于,plan 已成型)
+
 ---
 
 ## 16. 验收标准(Acceptance Criteria)
