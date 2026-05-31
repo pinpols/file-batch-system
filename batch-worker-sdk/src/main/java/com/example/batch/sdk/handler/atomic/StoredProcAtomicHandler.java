@@ -2,6 +2,7 @@ package com.example.batch.sdk.handler.atomic;
 
 import com.example.batch.sdk.handler.SdkAbstractAtomicHandler;
 import com.example.batch.sdk.task.SdkTaskContext;
+import java.nio.charset.StandardCharsets;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -153,20 +154,19 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
     if (!(value instanceof String s)) {
       return value;
     }
-    byte[] bytes = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
     if (bytes.length <= config.maxOutBytesPerParam()) {
       return s;
     }
     // 截断到字节上限(可能切断多字节字符,用 String 解码兜底)
-    String truncated =
-        new String(bytes, 0, config.maxOutBytesPerParam(), java.nio.charset.StandardCharsets.UTF_8);
+    String truncated = new String(bytes, 0, config.maxOutBytesPerParam(), StandardCharsets.UTF_8);
     return truncated + "...[truncated " + bytes.length + " bytes]";
   }
 
   /** 闸 4 — current_user 对目标过程无 EXECUTE 权限则拒(has_function_privilege)。 */
   private void requireExecutePrivilege(Connection conn, String procName) throws Exception {
     String sql = "select has_function_privilege(current_user, ?, 'EXECUTE')";
-    try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+    try (PreparedStatement ps = conn.prepareStatement(sql)) {
       // has_function_privilege 需要 regprocedure 形式(proc 名 + 参数签名);简化:用 proc 名 + "()" 兜底,
       // 真业务过程有参数时建议直接给 schema-qualified 名,PG 会按名解析。无参或重载场景由 DB 报错兜底。
       ps.setString(1, procName);
