@@ -11,9 +11,9 @@ import java.util.Set;
  * <p>设计原则:**只保留 SDK 框架真正需要的字段**,其余 jackson 用 {@link JsonIgnoreProperties}{@code
  * (ignoreUnknown=true)} 包容,让 SDK 不会因平台新加字段而 break。
  *
- * <p>Phase 0 ({@code docs/plans/sdk-roadmap-2026-h2.md} §2)起携带 {@code schemaVersion} —
- * 平台派单时填 {@code "v1"} / {@code "v2"} 等;SDK 解析时通过 {@link #SUPPORTED_MAJOR_VERSIONS}
- * 检查主版本,未知 major 直接 reject(防错乱)。缺字段时 fallback {@code "v1"}(兼容老平台)。
+ * <p>Phase 0 ({@code docs/plans/sdk-roadmap-2026-h2.md} §2)起携带 {@code schemaVersion} — 平台派单时填
+ * {@code "v1"} / {@code "v2"} 等;SDK 解析时通过 {@link #SUPPORTED_MAJOR_VERSIONS} 检查主版本,未知 major 直接
+ * reject(防错乱)。缺字段时 fallback {@code "v1"}(兼容老平台)。
  *
  * @param schemaVersion 协议主版本号(如 {@code "v1"} / {@code "v2"} / {@code "v2-rc"});缺字段当 {@code "v1"} 解析
  * @param taskId orchestrator 主键
@@ -36,8 +36,8 @@ public record TaskDispatchMessage(
     @JsonProperty("runtimeAttributes") Map<String, Object> runtimeAttributes) {
 
   /**
-   * 当前 SDK 兼容的 major 版本集合(决策 #4:字符串 {@code "v1"} / {@code "v2"})。 收到不在集合的版本 → dispatcher reject + 上报
-   * WARN,不调 handler,等运维升级 SDK。
+   * 当前 SDK 兼容的 major 版本集合(决策 #4:字符串 {@code "v1"} / {@code "v2"})。 收到不在集合的版本 → dispatcher reject +
+   * 上报 WARN,不调 handler,等运维升级 SDK。
    */
   public static final Set<String> SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2");
 
@@ -45,8 +45,8 @@ public record TaskDispatchMessage(
   public static final String DEFAULT_SCHEMA_VERSION = "v1";
 
   /**
-   * 7 参兼容构造器 —— 历史构造方式(无 schemaVersion)继续可用,schemaVersion 走 {@link
-   * #DEFAULT_SCHEMA_VERSION}。新代码推荐用 canonical 8 参构造,显式带 schemaVersion。
+   * 7 参兼容构造器 —— 历史构造方式(无 schemaVersion)继续可用,schemaVersion 走 {@link #DEFAULT_SCHEMA_VERSION}。新代码推荐用
+   * canonical 8 参构造,显式带 schemaVersion。
    */
   public TaskDispatchMessage(
       Long taskId,
@@ -88,8 +88,7 @@ public record TaskDispatchMessage(
     }
     // 截断到首个非字母数字字符前(支持 "v2-rc" / "v2.1" / "v2_x" 等后缀格式)
     int end = 0;
-    while (end < schemaVersion.length()
-        && Character.isLetterOrDigit(schemaVersion.charAt(end))) {
+    while (end < schemaVersion.length() && Character.isLetterOrDigit(schemaVersion.charAt(end))) {
       end++;
     }
     return end > 0 ? schemaVersion.substring(0, end) : DEFAULT_SCHEMA_VERSION;

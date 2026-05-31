@@ -10,7 +10,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  *
  * <ul>
  *   <li>{@code tenantId} —— 必填,多租隔离
- *   <li>{@code workerId} —— SDK 端 {@code workerCode}(ADR-035 §9:workerId==workerCode,P4 后 server 分配)
+ *   <li>{@code workerId} —— SDK 端 {@code workerCode}(ADR-035 §9:workerId==workerCode,P4 后 server
+ *       分配)
  *   <li>{@code partitionInvocationId} —— ADR-014:可选;mismatched invocation 平台 reject
  * </ul>
  *

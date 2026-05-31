@@ -35,7 +35,8 @@ import org.junit.jupiter.api.Test;
  */
 class SdkWireContractTest {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
+  private static final ObjectMapper MAPPER =
+      new ObjectMapper().registerModule(new JavaTimeModule());
 
   // ─── /internal/workers/register ─────────────────────────────────────────
 
@@ -198,7 +199,19 @@ class SdkWireContractTest {
   void reportRequestUsesOutputsNotOutput() throws Exception {
     ReportRequest sdkSide =
         new ReportRequest(
-            1L, "t", "w", null, true, null, null, null, null, null, Map.of("k", "v"), null, null,
+            1L,
+            "t",
+            "w",
+            null,
+            true,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Map.of("k", "v"),
+            null,
+            null,
             null);
     JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
     // 平台 TaskExecutionReportDto 字段名是 outputs(复数);若 SDK 写 output(单数)
@@ -256,7 +269,8 @@ class SdkWireContractTest {
     // SDK 端反序列化能识别 schemaVersion 且认可 v2。
     com.example.batch.sdk.dispatcher.TaskDispatchMessage sdk =
         MAPPER.readValue(
-            MAPPER.writeValueAsBytes(platform), com.example.batch.sdk.dispatcher.TaskDispatchMessage.class);
+            MAPPER.writeValueAsBytes(platform),
+            com.example.batch.sdk.dispatcher.TaskDispatchMessage.class);
     assertThat(sdk.schemaVersion()).isEqualTo("v2");
     assertThat(sdk.isSchemaSupported()).isTrue();
   }
