@@ -64,6 +64,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   public static final String STAGING_TABLE = "batch.process_staging";
 
   private final NamedParameterJdbcTemplate jdbc;
+  private final DataSource businessDataSource;
   private final ObjectMapper objectMapper;
   private final SqlTransformComputeSecurityProperties security;
   private final SqlTransformComputeSqlValidator sqlValidator;
@@ -74,6 +75,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       ObjectMapper objectMapper,
       SqlTransformComputeSecurityProperties security,
       ProcessMetrics metrics) {
+    this.businessDataSource = processBusinessDataSource;
     JdbcTemplate template = new JdbcTemplate(processBusinessDataSource);
     template.setQueryTimeout(
         Math.max(1, security == null ? 60 : security.getQueryTimeoutSeconds()));
@@ -280,6 +282,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   @Override
   @Transactional(transactionManager = "processBusinessTransactionManager")
   public ProcessStageResult commit(ProcessJobContext context) {
+    // Phase A RLS:tx 入口 SET LOCAL app.tenant_id,后续 INSERT/UPDATE biz.* 走 RLS policy 过滤
+    com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
     Map<String, Object> params = new LinkedHashMap<>();

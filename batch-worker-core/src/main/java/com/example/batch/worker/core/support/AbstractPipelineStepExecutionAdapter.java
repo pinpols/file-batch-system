@@ -82,10 +82,15 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         new LinkedHashMap<>(sourceAttributes == null ? Map.of() : sourceAttributes);
     String traceId = resolveTraceId(attributes);
     injectMdc(request, attributes, traceId);
+    // Phase A RLS:绑 tenant_id 到 ThreadLocal,plugin / mapper 进 @Transactional 时
+    // 由 RlsTenantSessionSupport.applyIfPresent(businessDS) 取出并 SET LOCAL
+    // app.tenant_id,触发 biz.* RLS policy 强制隔离。
+    com.example.batch.common.rls.RlsTenantContextHolder.set(request.tenantId());
     try {
       return doExecute(request, attributes, traceId);
     } finally {
       propagateRuntimeAttributes(sourceAttributes, attributes);
+      com.example.batch.common.rls.RlsTenantContextHolder.clear();
       BatchMdc.remove(StructuredLogField.TENANT_ID);
       BatchMdc.remove(StructuredLogField.TRACE_ID);
       BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
