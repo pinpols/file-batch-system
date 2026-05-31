@@ -38,6 +38,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private final KafkaConsumer<String, byte[]> consumer;
   private final AtomicBoolean running = new AtomicBoolean(true);
 
+  /** P0 hardening:in-flight 达上限时 pause 当前 partition;掉下来再 resume。Zeebe maxJobsActive 模式。 */
+  private boolean paused = false;
+
   public KafkaTaskConsumer(BatchPlatformClientConfig config, TaskDispatcher dispatcher) {
     this(
         config,
@@ -98,6 +101,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
 
     try {
       while (running.get()) {
+        applyBackpressure();
         ConsumerRecords<String, byte[]> records = consumer.poll(config.getKafkaPollInterval());
         if (records.isEmpty()) continue;
         for (ConsumerRecord<String, byte[]> rec : records) {
@@ -121,6 +125,29 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         log.warn("kafka consumer close error: {}", e.getMessage());
       }
       log.info("KafkaTaskConsumer stopped");
+    }
+  }
+
+  /**
+   * P0 hardening(borrowed from Zeebe maxJobsActive):in-flight 已满则 pause assigned partitions, 队列降下来再
+   * resume。注意 pause/resume 是按 partition 维度,**不停 poll loop**(否则 consumer heartbeat 也会停 → consumer
+   * group rebalance 把当前 worker 踢)。
+   */
+  private void applyBackpressure() {
+    int max = config.getMaxConcurrentTasks();
+    int inFlight = dispatcher.inFlightCount();
+    if (inFlight >= max) {
+      if (!paused && !consumer.assignment().isEmpty()) {
+        consumer.pause(consumer.assignment());
+        paused = true;
+        log.info("backpressure pause: inFlight={} >= max={}", inFlight, max);
+      }
+    } else {
+      if (paused && !consumer.assignment().isEmpty()) {
+        consumer.resume(consumer.assignment());
+        paused = false;
+        log.info("backpressure resume: inFlight={} < max={}", inFlight, max);
+      }
     }
   }
 

@@ -14,8 +14,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 
 /**
  * 任务派发器 — Kafka consumer 收到 {@link TaskDispatchMessage} 后:claim → execute handler → report。
@@ -38,6 +40,15 @@ public class TaskDispatcher {
   private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
   private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
+
+  /** P0 hardening:stop() 后置 true,onMessage 拒新消息(Zeebe JobWorker.close 模式)。 */
+  private final AtomicBoolean draining = new AtomicBoolean(false);
+
+  /** MDC keys 公开给测试断言。 */
+  static final String MDC_TRACE_ID = "traceId";
+
+  static final String MDC_TENANT_ID = "tenantId";
+  static final String MDC_TASK_ID = "taskId";
 
   /** 当前正在执行的 taskId 快照 — 给 {@link LeaseRenewalScheduler} 读。 */
   public Set<Long> inFlightTaskIds() {
@@ -63,6 +74,14 @@ public class TaskDispatcher {
 
   /** 收到一条派单消息 — 提交到线程池异步处理(返回快,Kafka consumer 不阻塞)。 */
   public void onMessage(TaskDispatchMessage msg) {
+    if (draining.get()) {
+      // P0 hardening:已发起 stop,不接新消息(已 enqueue 的还会执行完)
+      log.info(
+          "dispatcher draining, skipping new dispatch msg taskId={}, jobCode={}",
+          msg == null ? null : msg.taskId(),
+          msg == null ? null : msg.jobCode());
+      return;
+    }
     try {
       msg.validate();
     } catch (IllegalArgumentException ex) {
@@ -74,6 +93,16 @@ public class TaskDispatcher {
 
   /** 单消息处理:claim → execute → report。所有异常都被 catch。 */
   void processInWorkerThread(TaskDispatchMessage msg) {
+    // P0 hardening:把 trace 信息塞 MDC,所有 handler 日志(claim/execute/report)自动带 traceId/tenantId/taskId
+    setupMdc(msg);
+    try {
+      processCore(msg);
+    } finally {
+      clearMdc();
+    }
+  }
+
+  private void processCore(TaskDispatchMessage msg) {
     SdkTaskHandler handler = handlers.get(msg.taskType());
     if (handler == null) {
       log.error(
@@ -178,9 +207,10 @@ public class TaskDispatcher {
     }
   }
 
-  /** 优雅停 — 不接新任务,等 in-flight 完成(timeout 30s),强制关。 */
+  /** 优雅停 — 不接新任务(draining flag),等 in-flight 完成(timeout 30s),强制关。 */
   public void stop() {
-    log.info("TaskDispatcher stopping, draining in-flight tasks");
+    draining.set(true); // P0 hardening:立刻拒新消息(Kafka 已 polled 出还没 dispatch 的会走 onMessage skip)
+    log.info("TaskDispatcher draining + stopping, in-flight={}", inFlight.size());
     executor.shutdown();
     try {
       if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
@@ -191,6 +221,28 @@ public class TaskDispatcher {
       Thread.currentThread().interrupt();
       executor.shutdownNow();
     }
+  }
+
+  /** P0 hardening — MDC trace 透传。 */
+  private static void setupMdc(TaskDispatchMessage msg) {
+    if (msg == null) return;
+    if (msg.runtimeAttributes() != null) {
+      Object trace = msg.runtimeAttributes().get(MDC_TRACE_ID);
+      if (trace != null) MDC.put(MDC_TRACE_ID, trace.toString());
+    }
+    if (msg.tenantId() != null) MDC.put(MDC_TENANT_ID, msg.tenantId());
+    if (msg.taskId() != null) MDC.put(MDC_TASK_ID, String.valueOf(msg.taskId()));
+  }
+
+  private static void clearMdc() {
+    MDC.remove(MDC_TRACE_ID);
+    MDC.remove(MDC_TENANT_ID);
+    MDC.remove(MDC_TASK_ID);
+  }
+
+  /** 暴露给测试:draining 状态。 */
+  boolean isDraining() {
+    return draining.get();
   }
 
   private static ThreadFactory namedThreadFactory(String prefix) {
