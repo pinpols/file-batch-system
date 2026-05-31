@@ -29,16 +29,25 @@ import org.springframework.stereotype.Component;
 public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
   private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
   private final ObjectMapper objectMapper;
   private final JdbcMappedImportSecurityProperties securityProperties;
+
+  /** Phase A RLS:loadChunk 的 batchUpdate 需显式 tx 包 SET LOCAL,policy 才生效。 */
+  private final org.springframework.transaction.support.TransactionTemplate txTemplate;
 
   public GenericJdbcMappedImportLoadPlugin(
       @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource,
       ObjectMapper objectMapper,
       JdbcMappedImportSecurityProperties securityProperties) {
+    this.businessDataSource = importBusinessDataSource;
     this.jdbcTemplate = new JdbcTemplate(importBusinessDataSource);
     this.objectMapper = objectMapper;
     this.securityProperties = securityProperties;
+    this.txTemplate =
+        new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
+                importBusinessDataSource));
   }
 
   @Override
@@ -83,21 +92,27 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
           spec.conflictColumns());
     }
     int n = records.size();
-    jdbcTemplate.batchUpdate(
-        sql,
-        new BatchPreparedStatementSetter() {
-          @Override
-          public void setValues(PreparedStatement ps, int i) throws SQLException {
-            Object[] args = buildArgs(insertCols, spec, records.get(i), context);
-            for (int j = 0; j < args.length; j++) {
-              ps.setObject(j + 1, args[j]);
-            }
-          }
+    // Phase A RLS:显式 tx 包 SET LOCAL + batchUpdate 共享同一 connection,触发 biz.* policy 过滤
+    txTemplate.execute(
+        status -> {
+          com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+          jdbcTemplate.batchUpdate(
+              sql,
+              new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(PreparedStatement ps, int i) throws SQLException {
+                  Object[] args = buildArgs(insertCols, spec, records.get(i), context);
+                  for (int j = 0; j < args.length; j++) {
+                    ps.setObject(j + 1, args[j]);
+                  }
+                }
 
-          @Override
-          public int getBatchSize() {
-            return n;
-          }
+                @Override
+                public int getBatchSize() {
+                  return n;
+                }
+              });
+          return null;
         });
     return n;
   }

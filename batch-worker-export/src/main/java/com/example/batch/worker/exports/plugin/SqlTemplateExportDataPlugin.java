@@ -34,14 +34,19 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   public static final String PLUGIN_ID = "sql_template_export";
 
   private final NamedParameterJdbcTemplate jdbc;
+  private final DataSource businessDataSource;
   private final ObjectMapper objectMapper;
   private final SqlTemplateExportSecurityProperties security;
   private final SqlTemplateExportSqlValidator sqlValidator;
+
+  /** Phase A RLS:read 路径 tx 包 SET LOCAL,触发 biz.* USING 过滤(防跨租户读)。 */
+  private final org.springframework.transaction.support.TransactionTemplate txTemplate;
 
   public SqlTemplateExportDataPlugin(
       @Qualifier("exportBusinessDataSource") DataSource businessDataSource,
       ObjectMapper objectMapper,
       SqlTemplateExportSecurityProperties security) {
+    this.businessDataSource = businessDataSource;
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
     template.setQueryTimeout(
         Math.max(1, security == null ? 30 : security.getQueryTimeoutSeconds()));
@@ -49,6 +54,11 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     this.objectMapper = objectMapper;
     this.security = security;
     this.sqlValidator = new SqlTemplateExportSqlValidator(security);
+    this.txTemplate =
+        new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(
+                businessDataSource));
+    this.txTemplate.setReadOnly(true);
   }
 
   @Override
@@ -106,8 +116,16 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     }
     params.put("__limit", limit);
 
-    List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
-    if (rows.isEmpty()) {
+    final String finalSql = sql;
+    final Map<String, Object> finalParams = params;
+    List<Map<String, Object>> rows =
+        txTemplate.execute(
+            status -> {
+              com.example.batch.common.rls.RlsTenantSessionSupport.applyIfPresent(
+                  businessDataSource);
+              return jdbc.queryForList(finalSql, finalParams);
+            });
+    if (rows == null || rows.isEmpty()) {
       return DetailPage.empty();
     }
 
