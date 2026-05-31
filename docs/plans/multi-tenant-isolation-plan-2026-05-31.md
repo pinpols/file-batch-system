@@ -133,6 +133,33 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - [ ] `pg_policies` healthcheck 集成 actuator
 - [ ] runbook `docs/runbook/multi-tenant-rls.md` 写清 BYPASSRLS 何时用、policy 怎么 review
 
+**出口红线(阻断项 —— 不满足则 RLS 形同虚设,必须在 Phase A 结束前全绿)**:
+
+> 以下三条是 RLS 能不能真正起到「DB 层兜底」的前提。前面的「出口」是功能完成度,这三条是安全有效性。任一未达成 → RLS 只是装了脚手架,不提供实际防护。
+
+- [ ] **R1 · 现役业务账号必须被收口为非 owner / 非 superuser / NOBYPASSRLS。**
+  - 现状漏洞:`rls-phase-a.sql` 只对新建的 `batch_business_writer` 收口干净;真正在用的 `batch_user` 仅在 `NOT rolsuper` 时才 `ALTER ... NOBYPASSRLS`。**`ALTER ROLE NOBYPASSRLS` 治不了 superuser —— superuser 无视 RLS 是另一条独立通道,连 `FORCE` 都拦不住。** 若现役账号是 superuser 或 biz 表 owner,则 `pg_policies` 查得到 policy,但一行都不生效(静默失效)。
+  - 达成标准:核实生产/预发的 business DataSource 账号**不是 superuser、不是 biz 表 owner、无 BYPASSRLS**;worker 迁移到 `batch_business_writer`;`batch_user` 权限收敛或停用。此步需 DBA 配合(改 `BusinessDataSourceProperties.username` + 回收 `batch_user` 权限),Flyway/脚本做不到。
+- [ ] **R2 · transition 模式必须翻成 strict —— 否则现在 fail-OPEN。**
+  - 现状漏洞:policy 是 `TO PUBLIC` 且 `current_setting('app.tenant_id', true) IS NULL OR = '' → 允许全部`。即**任何忘记 `SET LOCAL app.tenant_id` 的连接都放行全表**,而「应用 SQL bug / 漏带 tenant_id」正是 RLS 要兜底的场景 → 当前模式下毫无兜底,RLS 等于装了没开。
+  - 达成标准:A2 的 `SET LOCAL app.tenant_id` 切面铺到**每一个** worker 连接路径并验证;随后 PR 删掉 `IS NULL/''` 分支转 strict(变量未设 → 0 行 / 拒写,fail-closed)。
+- [ ] **R3 · 守护从「白名单」翻成「闭世界」,且 fail-fast。**
+  - 现状漏洞:`RlsPolicyHealthIndicator.EXPECTED_RLS_TABLES` 是硬编码 Java 清单,`RlsPhaseAMigrationCoverageTest` 只校验「清单 ⊆ migration」。新增 `biz.foo` 若同时忘了加清单 + 忘了加 migration → 该表 fail-open(跨租户可读),而 healthcheck 绿、test 绿、无任何报警。**biz 表会越来越多,白名单必然漏,且漏了静默泄露。**
+  - 达成标准:守护逻辑从**活动 catalog** 出发 —— 查 `pg_tables WHERE schemaname='biz'`,断言**每一张实际存在的表**都 `ENABLE+FORCE+有 tenant_isolation policy`;硬编码清单退化为「已知豁免名单」(同 CLAUDE.md 4 张系统表豁免写法)。漏配 → 启动 fail-fast / CI 红,而非静默放行。
+
+**执行环节(R2/R3 的判定逻辑在哪跑 —— 分层,主力是启动 fail-fast)**:
+
+> 前提:biz 表本身不归 Flyway 管(`create_biz_tables.sql` 是 ops/seed/e2e 脚本建的),`rls-phase-a.sql` 也是手工 psql 脚本。所以「建表后记得再跑 RLS 脚本」这个**执行顺序**是最易断的一环 —— 必须用机制兜,不能靠人记。
+
+| 层 | 环节 | 职责 | 为什么在这 |
+|---|---|---|---|
+| 主力 | **应用启动 fail-fast**(扫真实 business DS 的 `biz` schema,挂 `ArchiveSchemaDriftCheck` 同款启动 hook) | 闭世界校验,漏配 → **拒绝启动**(非 health DOWN) | biz 表是脚本建的、只有连真实库才看得到真实表;保证 worker 绝不带无保护的表跑起来 |
+| 最早 | **CI Testcontainers IT** | 容器内按真实顺序跑 `create_biz_tables.sql` + `rls-phase-a.sql`,再闭世界 diff `pg_tables(biz)` vs `pg_policies` | 把漏配挡在合并前,反馈最快 |
+| 持续 | **actuator healthcheck**(现有 `RlsPolicyHealthIndicator` 改闭世界) | 抓运行期被加表 / policy 被 DROP 的漂移 | 启动后才发生的变更 |
+| 根因(可选) | **PG event trigger 自动入册**(`ddl_command_end` 在 `biz` 建表自动 ENABLE/FORCE + 套标准 policy) | 加表零 RLS 步骤,彻底消除「记得跑脚本」的顺序问题 | 代价:superuser 拥有的「魔法」、policy 模板一刀切、与显式 schema-as-code 风格略冲;表真多了再上 |
+
+> 落地要点:闭世界判定写**一份**共享逻辑(扫 biz schema vs pg_policies),启动 fail-fast 当主力调它、CI IT 复用它、healthcheck 复用它 —— single source of truth,别三处各写一遍清单(那又退回白名单老问题)。
+
 ---
 
 ### Phase B · 租户自托管 Worker SDK(P1)
