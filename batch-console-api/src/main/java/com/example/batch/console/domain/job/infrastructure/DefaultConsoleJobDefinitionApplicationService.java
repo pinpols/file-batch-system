@@ -8,6 +8,7 @@ import com.example.batch.console.domain.job.application.ConsoleJobDefinitionAppl
 import com.example.batch.console.domain.job.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.job.mapper.JobDefinitionMapper;
 import com.example.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
+import com.example.batch.console.domain.job.support.BuiltinTaskTypeGuard;
 import com.example.batch.console.domain.job.web.request.JobDefinitionCopyRequest;
 import com.example.batch.console.domain.job.web.request.JobDefinitionCreateRequest;
 import com.example.batch.console.domain.job.web.request.JobDefinitionUpdateRequest;
@@ -47,6 +48,7 @@ public class DefaultConsoleJobDefinitionApplicationService
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
+  private final BuiltinTaskTypeGuard builtinTaskTypeGuard;
 
   @Override
   public ConsoleJobDefinitionResponse detail(Long id, String tenantId) {
@@ -59,6 +61,9 @@ public class DefaultConsoleJobDefinitionApplicationService
 
   @Override
   public ConsoleJobDefinitionResponse create(JobDefinitionCreateRequest request) {
+    // ADR-035 §使用边界:builtin SPI 4 件套(shell/sql/stored_proc/http)只许平台 ADMIN 引用,
+    // 租户走 SDK 自托管。controller 类级 @PreAuthorize ROLE_ADMIN 已是第一道,本守门 defense in depth。
+    builtinTaskTypeGuard.assertAllowed(request.getJobType());
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(tenantId, request.getJobCode());

@@ -31,6 +31,7 @@
         <module>batch-worker-process</module>
         <module>batch-worker-dispatch</module>
         <module>batch-worker-spi</module>
+        <module>batch-worker-sdk</module>
         <module>batch-console-api</module>
         <module>batch-e2e-tests</module>
     </modules>
