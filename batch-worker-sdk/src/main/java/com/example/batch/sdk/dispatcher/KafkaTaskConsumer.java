@@ -167,6 +167,16 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           ex.getMessage());
       return;
     }
+    // Phase 0 §2.1:reject 未知 major schema(避免老 SDK 误解平台新 v3 消息)
+    if (!msg.isSchemaSupported()) {
+      log.warn(
+          "rejecting kafka task dispatch message with unsupported schemaVersion={} at topic={}, offset={}, taskId={}; upgrade SDK",
+          msg.schemaVersion(),
+          rec.topic(),
+          rec.offset(),
+          msg.taskId());
+      return;
+    }
     dispatcher.onMessage(msg);
   }
 

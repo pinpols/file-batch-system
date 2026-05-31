@@ -25,6 +25,14 @@
             <classifier>tests</classifier>
             <scope>test</scope>
         </dependency>
+        <!-- Phase 0 §2.1:test-scope 引入 SDK,跑 SdkWireContractTest 防协议字段漂移。
+             SDK 自身不依赖 batch-common(隔离租户进程依赖),因此反向引入安全。 -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-sdk</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

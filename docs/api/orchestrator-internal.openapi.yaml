@@ -1,0 +1,347 @@
+openapi: 3.1.0
+info:
+  title: Batch Orchestrator Internal API (SDK protocol)
+  version: 0.1.0
+  x-last-updated: "2026-05-31"
+  x-changelog:
+    - date: "2026-05-31"
+      summary: "[Phase 0] 初版立 yaml(plan §2 决策 #2)。覆盖 /internal/workers/* 和 /internal/tasks/* 给 SDK / 准客户消费;不含管理面 console-api 路径(见 console-api.openapi.yaml)。"
+  description: >
+    Orchestrator 暴露给 self-hosted SDK / 内部 worker 的 `/internal/*` 协议。这套接口的 schema
+    是 ADR-035 §9 「两套绑定」契约的 source of truth —— SDK 端的 wire DTOs
+    (`com.example.batch.sdk.wire.*`) 必须保持一致,字段重命名 / 删除 / 新增走
+    `docs/runbook/sdk-dual-rollout.md` 双向滚动纪律。
+
+    本文件**只描述 SDK 可见的内部协议**,不暴露给 FE / 外部消费者(不在 console-api Swagger UI)。
+    pr-gate CI 会对照 `WorkerController` / `TaskController` 漂移检测(见 `CLAUDE.md` 「API 文档同步」段)。
+
+servers:
+  - url: http://orchestrator-internal:8081
+    description: 内部网络 only(不走 ingress)
+
+tags:
+  - name: workers
+    description: Worker 注册 / 心跳 / 下线 / 状态管理(`WorkerController`)
+  - name: tasks
+    description: 任务认领 / 上报 / 续租(`TaskController`)
+
+paths:
+  /internal/workers/register:
+    post:
+      tags: [workers]
+      summary: Worker 注册(idempotent on workerCode)
+      operationId: registerWorker
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerHeartbeatDto'
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerRegistryEntity'
+
+  /internal/workers/{workerCode}/heartbeat:
+    post:
+      tags: [workers]
+      summary: Worker 周期心跳(默认 30s 一次)
+      operationId: workerHeartbeat
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerHeartbeatDto'
+      responses:
+        '200':
+          description: 心跳成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerRegistryEntity'
+
+  /internal/workers/{workerCode}/deactivate:
+    post:
+      tags: [workers]
+      summary: Worker 主动下线(优雅停)
+      operationId: deactivateWorker
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerHeartbeatDto'
+      responses:
+        '200': {description: 下线成功}
+
+  /internal/workers/{workerCode}/status:
+    post:
+      tags: [workers]
+      summary: 更新 worker status(平台运维用)
+      operationId: updateWorkerStatus
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerHeartbeatDto'
+      responses:
+        '200':
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerRegistryEntity'
+
+  /internal/tasks/{taskId}/claim:
+    post:
+      tags: [tasks]
+      summary: 认领任务(返回 EffectiveTaskConfig)
+      operationId: claimTask
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskClaimRequest'
+      responses:
+        '200':
+          description: 认领成功;body 为 EffectiveTaskConfig(P1-2.1 起平台返回业务参数实时快照)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveTaskConfig'
+        '409': {description: 任务已被其他 worker 认领}
+
+  /internal/tasks/{taskId}/report:
+    post:
+      tags: [tasks]
+      summary: 上报任务执行结果
+      operationId: reportTask
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskExecutionReportDto'
+      responses:
+        '200': {description: 上报成功}
+
+  /internal/tasks/{taskId}/renew:
+    post:
+      tags: [tasks]
+      summary: 续租 lease(防 lease 超时被回收)
+      operationId: renewTaskLease
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: {type: integer, format: int64}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskClaimRequest'
+      responses:
+        '200': {description: 续租成功}
+
+  /internal/tasks/leases/renew-batch:
+    post:
+      tags: [tasks]
+      summary: 批量续租(ADR-016)
+      operationId: renewTaskLeaseBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskLeaseRenewBatchRequest'
+      responses:
+        '200':
+          description: 批量续租结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLeaseRenewBatchResponse'
+
+components:
+  schemas:
+    WorkerHeartbeatDto:
+      type: object
+      description: 同一 schema 用于 register / heartbeat / deactivate / updateStatus
+      properties:
+        tenantId: {type: string}
+        workerCode: {type: string}
+        workerGroup: {type: string, nullable: true}
+        status: {type: string, description: "RUNNING / DRAINING / OFFLINE"}
+        hostName: {type: string, nullable: true}
+        hostIp: {type: string, nullable: true}
+        processId: {type: string, nullable: true}
+        heartbeatAt: {type: string, format: date-time}
+        capabilityTags:
+          type: array
+          items: {type: string}
+          description: "Worker 注册时上报支持的 taskType 列表"
+          nullable: true
+        currentLoad:
+          type: integer
+          description: "in-flight 任务数;null/负值平台 normalize 为 0"
+          nullable: true
+      required: [tenantId, workerCode, status, heartbeatAt]
+
+    WorkerRegistryEntity:
+      type: object
+      description: orchestrator 持久化的 worker 记录(部分字段)
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        workerCode: {type: string}
+        status: {type: string}
+        lastHeartbeatAt: {type: string, format: date-time}
+
+    TaskClaimRequest:
+      type: object
+      description: claim / renew 共用 schema
+      properties:
+        tenantId: {type: string}
+        workerId: {type: string, description: "SDK 端 == workerCode(ADR-035 §9)"}
+        partitionInvocationId:
+          type: string
+          nullable: true
+          description: "ADR-014;mismatched invocation 平台 reject"
+      required: [tenantId, workerId]
+
+    TaskExecutionReportDto:
+      type: object
+      properties:
+        taskId: {type: integer, format: int64}
+        tenantId: {type: string}
+        workerId: {type: string}
+        traceId: {type: string, nullable: true}
+        success: {type: boolean}
+        code: {type: string, nullable: true}
+        message: {type: string, nullable: true}
+        resultSummary: {type: string, nullable: true}
+        errorCode:
+          type: string
+          nullable: true
+          description: "严禁错名 errorClass — 平台读 errorCode"
+        highWaterMarkOut:
+          type: string
+          nullable: true
+          description: "增量执行水位高点;null 表示无变化"
+        outputs:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: "ADR-009 Stage 1.2 节点产出;严禁错名 output(单数)"
+        partitionInvocationId: {type: string, nullable: true}
+        failureClass:
+          type: string
+          nullable: true
+          description: "ADR-012;允许取值见 FailureClass enum"
+        verifierFailures:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: true
+            description: "ADR-030 §C/F {code, message, evidence}"
+      required: [taskId, tenantId, workerId, success]
+
+    EffectiveTaskConfig:
+      type: object
+      description: claim 成功时平台返回的业务参数实时快照(字段集见 batch-common/.../EffectiveTaskConfig.java)
+
+    TaskLeaseRenewBatchRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskLeaseRenewItemPayload'
+
+    TaskLeaseRenewItemPayload:
+      type: object
+      properties:
+        tenantId: {type: string}
+        taskId: {type: integer, format: int64}
+        workerId: {type: string}
+        partitionInvocationId: {type: string, nullable: true}
+
+    TaskLeaseRenewBatchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskLeaseRenewResultPayload'
+
+    TaskLeaseRenewResultPayload:
+      type: object
+      properties:
+        taskId: {type: integer, format: int64}
+        success: {type: boolean}
+        message: {type: string, nullable: true}
+
+    TaskDispatchMessage:
+      type: object
+      description: >
+        Kafka 派单消息(平台 producer → SDK consumer)。Phase 0 起携带 schemaVersion(默认 "v1",当前
+        平台发 "v2");SDK 收到未知 major(非 v1/v2) 直接 reject 防错乱。
+      properties:
+        schemaVersion:
+          type: string
+          description: "v1 / v2 / v2-rc;缺字段当 v1 解析"
+          default: "v1"
+        tenantId: {type: string}
+        jobInstanceId: {type: integer, format: int64, nullable: true}
+        jobPartitionId: {type: integer, format: int64, nullable: true}
+        taskId: {type: integer, format: int64}
+        instanceNo: {type: string, nullable: true}
+        jobCode: {type: string}
+        workerType: {type: string, description: "等同 task_type;消费端按此过滤"}
+        selectedWorkerId: {type: string, nullable: true, description: "非空走 direct dispatch topic"}
+        priorityBand: {type: string, description: "HIGH / MEDIUM / LOW"}
+        traceId: {type: string, nullable: true}
+        idempotencyKey: {type: string}
+        dispatchAt: {type: string, format: date-time}
+      required: [tenantId, taskId, jobCode, workerType, idempotencyKey, dispatchAt]
