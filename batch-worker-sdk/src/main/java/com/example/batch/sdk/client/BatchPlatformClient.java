@@ -160,6 +160,46 @@ public class BatchPlatformClient {
     return "sdk-" + UUID.randomUUID();
   }
 
+  /**
+   * Phase 1 §3.1 #1.6:运行时指标快照,供租户对接到自家 Prometheus / Micrometer。 字段说明见 {@link SdkClientMetrics}。
+   * 线程安全(全部读 volatile / atomic 状态)。
+   */
+  public SdkClientMetrics metrics() {
+    boolean startedSnap = started;
+    boolean fatal = dispatcher != null && dispatcher.isFatal();
+    boolean draining = dispatcher != null && dispatcher.isDraining();
+    boolean crashed = kafkaConsumer != null && kafkaConsumer.hasCrashed();
+    int inFlight = dispatcher == null ? 0 : dispatcher.inFlightCount();
+    return new SdkClientMetrics(
+        config.getTenantId(),
+        config.getWorkerCode(),
+        startedSnap,
+        startedSnap && !fatal && !crashed,
+        inFlight,
+        config.getMaxConcurrentTasks(),
+        handlers.size(),
+        fatal,
+        draining,
+        crashed);
+  }
+
+  /**
+   * Phase 1 §3.1 #1.6:liveness/readiness 信号。{@code true} = SDK 仍在正常接派单。
+   *
+   * <ul>
+   *   <li>未 start → false(还没 ready)
+   *   <li>CLAIM 401/403 之后 dispatcher fatal → false(鉴权失效,运维介入)
+   *   <li>Kafka poll loop 因 Throwable 死 → false(参考 #1.7)
+   *   <li>drain 中 → true(graceful 状态,lease 仍在续约)
+   * </ul>
+   */
+  public boolean isHealthy() {
+    if (!started) return false;
+    boolean fatal = dispatcher != null && dispatcher.isFatal();
+    boolean crashed = kafkaConsumer != null && kafkaConsumer.hasCrashed();
+    return !fatal && !crashed;
+  }
+
   // ─── Builder ────────────────────────────────────────────────────────────────
 
   public static final class Builder {
