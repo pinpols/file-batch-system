@@ -1,6 +1,7 @@
 package com.example.batch.sdk.scheduler;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
+import com.example.batch.sdk.dispatcher.HeartbeatDirective;
 import com.example.batch.sdk.dispatcher.TaskDispatcher;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import java.time.Instant;
@@ -69,7 +70,9 @@ public class HeartbeatScheduler implements AutoCloseable {
       body.put("heartbeatAt", Instant.now().toString());
       body.put("currentLoad", dispatcher.inFlightCount());
       // capabilityTags 留空(可选);workerGroup/hostName/hostIp/processId 平台从 register 拿
-      httpClient.heartbeat(config.getWorkerCode(), body);
+      Map<String, Object> resp = httpClient.heartbeat(config.getWorkerCode(), body);
+      // Phase 2 §2.4:回包是 platform directive,据此驱动 dispatcher 4 态状态机
+      dispatcher.applyPlatformDirective(HeartbeatDirective.fromResponse(resp));
     } catch (Throwable t) {
       // 不能让心跳异常杀掉 scheduler — fixed-rate 一旦抛会停
       log.warn("heartbeat failed: {}", t.getMessage());

@@ -18,6 +18,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 
@@ -52,6 +53,14 @@ public class TaskDispatcher {
    */
   private final AtomicBoolean fatal = new AtomicBoolean(false);
 
+  /**
+   * SDK Phase 2 §2.4:平台指令驱动的 4 态状态机。心跳回包(见 {@link HeartbeatDirective})每次 tick 更新此态; {@code PAUSED}
+   * / {@code DRAINING} 时 {@link #onMessage} 拒新任务,{@link KafkaTaskConsumer} 据此 pause partition(不丢
+   * offset,可恢复)。区别于 {@link #draining}(本地主动 stop)/ {@link #fatal}(不可恢复鉴权失效)。
+   */
+  private final AtomicReference<WorkerRuntimeState> platformState =
+      new AtomicReference<>(WorkerRuntimeState.NORMAL);
+
   /** MDC keys 公开给测试断言。 */
   static final String MDC_TRACE_ID = "traceId";
 
@@ -66,6 +75,34 @@ public class TaskDispatcher {
   /** 当前 in-flight 任务数 — 给 {@link HeartbeatScheduler} 读。 */
   public int inFlightCount() {
     return inFlight.size();
+  }
+
+  /**
+   * SDK Phase 2 §2.4:心跳回包驱动状态机。由 {@link HeartbeatScheduler} 每次 tick 调用,把平台指令映射到 {@link
+   * WorkerRuntimeState};态变化时 log INFO(运维可见 console 暂停 / 排空的秒级生效)。
+   */
+  public void applyPlatformDirective(HeartbeatDirective directive) {
+    if (directive == null) return;
+    WorkerRuntimeState next = directive.toRuntimeState();
+    WorkerRuntimeState prev = platformState.getAndSet(next);
+    if (prev != next) {
+      log.info(
+          "platform directive: worker runtime state {} -> {} (platformStatus={}, shouldDrain={})",
+          prev,
+          next,
+          directive.platformStatus(),
+          directive.shouldDrain());
+    }
+  }
+
+  /** 当前平台指令态 — 给 {@link KafkaTaskConsumer} backpressure 与测试读。 */
+  public WorkerRuntimeState platformState() {
+    return platformState.get();
+  }
+
+  /** 平台是否允许认领新任务(NORMAL / DEGRADED 是,PAUSED / DRAINING 否)。 */
+  public boolean platformAcceptsNewTasks() {
+    return platformState.get().acceptsNewTasks();
   }
 
   public TaskDispatcher(
@@ -89,6 +126,15 @@ public class TaskDispatcher {
           fatal.get() ? "fatal" : "draining",
           msg == null ? null : msg.taskId(),
           msg == null ? null : msg.jobCode());
+      return;
+    }
+    if (!platformState.get().acceptsNewTasks()) {
+      // Phase 2 §2.4:平台 PAUSED / DRAINING — 拒新任务。正常路径下 KafkaTaskConsumer 已 pause partition
+      // 不再投递,此处是防御性兜底(pause 生效前可能有消息已在途)。
+      log.info(
+          "dispatcher platformState={}, skipping new dispatch msg taskId={}",
+          platformState.get(),
+          msg == null ? null : msg.taskId());
       return;
     }
     try {
