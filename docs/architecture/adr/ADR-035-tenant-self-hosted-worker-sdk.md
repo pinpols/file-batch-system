@@ -276,6 +276,113 @@ P1-P3 阶段:`workerId == workerCode`(SDK 默认行为)。P4 后由 server 在 r
 
 均可通过 `BatchPlatformClientConfig` 覆盖。
 
+## SDK 增强 — 业界参照 + triage(2026-05-31)
+
+P1.5 后 SDK 核心闭环已通,对照同形态开源系统(control plane + tenant 自托管 worker)扫一遍,列出值得借鉴的实践、当前 SDK 已覆盖的、以及暂不引入的,作为后续演进的依据。
+
+### 参照系统
+
+| 系统 | 形态 | 借鉴关注点 |
+|---|---|---|
+| Camunda 8 Zeebe Job Worker | gRPC long-poll activate + complete/fail | batch activation / capacity / drain;5 语言 SDK |
+| Temporal Worker(Java/Go/TS SDK)| long-poll task queue + Activity heartbeat + retry policy | Heartbeat 带 progress(失败重试断点续);RetryPolicy server-config |
+| GitLab Runner | register token + poll jobs + custom executor 插件 | executor 抽象(Shell/Docker/K8s/SSH);config.toml capability tags |
+| GitHub Actions self-hosted runner | poll 拉任务 + ephemeral 模式 | runner labels = capability,server 按 label 路由 |
+| Apache DolphinScheduler Worker | Netty 长连接 + master 分发 | worker-group + tenant 路由 |
+| AWS Step Functions Activity Worker | `GetActivityTask` long-poll + `SendTaskHeartbeat` + `SendTaskSuccess` | ARN-based 注册,标准化 token |
+| Spring Cloud Task | Spring Boot 自治进程 | lifecycle event(无 control plane pull,形态不同) |
+
+### 11 项 triage:**只 3 项 P0,8 项 defer**
+
+诚实分级:多数业界实践 value:context = mismatch,不应照抄。本节列入决策依据。
+
+#### 🔴 P0 — SDK-only 必做(本 ADR 配套 PR 落地)
+
+| # | 项 | 借鉴出处 | 为什么真值得做 |
+|---|---|---|---|
+| **1** | **Kafka consumer capacity-aware pause** — `inFlight >= maxConcurrentTasks` 时 `consumer.pause(assignment)`,降下来 resume | Zeebe `maxJobsActive` | 当前 SDK 配 `maxConcurrentTasks=4` 但 consumer 不知道,可能 poll 出 100 条派给 4 线程,后 96 条等到 lease 超时被回收 — prod 真风险 |
+| **2** | **Dispatcher `draining` flag** — stop() 后拒新 CLAIM(已 polled 出的消息不再触发新 claim),只完成已认领 | Zeebe `JobWorker.close` | `stop()` 当前关 Kafka + 等 in-flight,但 **Kafka 关之前已 poll 出来还没 dispatch 的消息会被新 CLAIM 又被强切** |
+| **3** | **OTel trace 自动入 MDC** — `TaskDispatcher.processInWorkerThread` 在 handler.execute 前 `MDC.put(traceId/tenantId/taskId)`,finally remove | Temporal interceptor | 当前 SDK 拿到 `runtimeAttributes.traceId` 但业务 handler 要自己 put,容易漏 — 跨服务故障排查时串不起来 |
+
+理由:不动平台,纯 SDK 内部修;改完直接提升 prod 健壮性 + 可观测性。工作量 ~1.5d。
+
+#### 🟡 P1 — defer(平台改动大,先看真痛点)
+
+| # | 项 | defer 理由 |
+|---|---|---|
+| Heartbeat 带 progress payload(Temporal Activity heartbeat)| 长任务断点续 — **目前 5 抽象类(ADR-036)+ 业务上无长任务**(租户业务都 stateless 短调用);真需要时 server 加列 + SDK API 一起改 |
+| End-to-end cancel(Temporal/Zeebe job cancel)| 运维 cancel — **lease 超时自动回收够用**;真需要时 server 加 Kafka cancel topic;`SdkTaskHandler.cancel(taskId)` 已有默认 no-op 占位 |
+| Server-side retry policy(Temporal RetryPolicy)| SDK 本地 `fixed(3, 2s)` + server lease 兜底 — **目前足够**,集中配置是大规模治理需要,我们 1~N 个租户先不上 |
+| Capability tags 完整路由(Temporal Task Queue / GHA labels)| 已部分有(register 上报 `capabilityTags`),**没真"按 tag 派单"诉求**(都按 worker_type 路由够用);扩了用不上 |
+| `SdkTestEngine` 测试框架(Zeebe `ZeebeTestEngine`)| 框架级测试工具 — **目前 0 个真租户**,先看 1-2 个早期租户怎么写测试再决定要不要造轮子,过早抽象跟真需求脱节 |
+
+#### 🟢 P2 — 不做
+
+| # | 项 | 不做理由 |
+|---|---|---|
+| Worker versioning / compat(Temporal worker version)| SDK 1.x 没稳定,加版本协议是给已稳定 SDK 用的,过早 |
+| 多语言 SDK(Python/Go)| ADR-035 §决策 P7 已 mark optional;先 Java 跑出真业务再说 |
+| protobuf 多语言生成基建(Zeebe 风格)| 投入大;Java SDK 形态已定,改 protobuf 等于推翻重做 |
+
+#### ✅ 已对齐
+
+| # | 项 | 状态 |
+|---|---|---|
+| Idempotency-Key 协议(Temporal activity id / Zeebe job key)| SDK 已在 claim/report header 带 |
+| 协议 vs 语言绑定分离(Temporal/Zeebe 多语言策略)| ADR-035 §9 已明示:wire 协议是契约,Java `BatchTaskExecutor` + `SdkTaskHandler` 只是绑定,通过契约测试守门 |
+| Kafka push(vs Temporal/Zeebe long-poll)| 大批量场景 consumer group rebalance 弹缩友好,**我们这个不需要改** |
+| Tenant ACL 物理隔离(P3 SASL/SCRAM per-tenant)| 比 Temporal/Zeebe 的 namespace 软隔离更硬;**已超过业界标准做法** |
+
+### P0 三件实现要点
+
+#### 1. Capacity-aware pause(`KafkaTaskConsumer`)
+
+```java
+// poll loop 内,每次 poll 前判断
+if (dispatcher.inFlightCount() >= config.getMaxConcurrentTasks()) {
+  if (!paused) { consumer.pause(consumer.assignment()); paused = true; }
+} else {
+  if (paused) { consumer.resume(consumer.assignment()); paused = false; }
+}
+```
+
+注意:`pause`/`resume` 是按 partition 维度,不停 poll loop(否则 heartbeat 也停 → consumer group rebalance 踢)。Kafka client 推荐做法。
+
+#### 2. Draining flag(`TaskDispatcher`)
+
+```java
+private volatile boolean draining = false;
+
+public void onMessage(TaskDispatchMessage msg) {
+  if (draining) { log.info("dispatcher draining, skipping msg taskId={}", msg.taskId()); return; }
+  // 现有逻辑...
+}
+
+public void stop() {
+  draining = true;       // 拒新消息(已在 executor 队列的还会跑)
+  log.info("TaskDispatcher draining + stopping");
+  // 现有 shutdown 逻辑...
+}
+```
+
+#### 3. OTel MDC(`TaskDispatcher.processInWorkerThread`)
+
+```java
+String traceId = str(msg.runtimeAttributes().get("traceId"));
+try {
+  if (traceId != null) MDC.put("traceId", traceId);
+  MDC.put("tenantId", msg.tenantId());
+  MDC.put("taskId", String.valueOf(msg.taskId()));
+  // ... claim → handler.execute → report ...
+} finally {
+  MDC.remove("traceId");
+  MDC.remove("tenantId");
+  MDC.remove("taskId");
+}
+```
+
+包在 dispatcher 层 = 所有 handler(裸 `SdkTaskHandler` 或 ADR-036 的 `SdkAbstract*Handler` 子类)都自动拿到,不依赖 ADR-036 落地。
+
 ## 关联文档
 
 - Plan: `docs/plans/multi-tenant-isolation-plan-2026-05-31.md`(本 ADR 是 Phase B 的详细设计)
