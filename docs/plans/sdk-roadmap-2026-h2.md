@@ -26,6 +26,59 @@
 - **不为指标写测试**(memory: `feedback_coverage_principle`)
 - **🔵 FE 开发可延后**:本 plan 标 🔵 的项为 FE 工作,**默认推迟到 BE 完成验证后再启动**。BE / SDK 侧完成 = 可通过 API / 命令行 / SQL 验证即视为 phase 出口达成,FE 不阻塞 SDK 发版。
 
+### 决策记录(2026-05-31 定稿)
+
+> 启动前 17 个核心决策 + 2 个隐藏决策已落定,本节作为不可变 record。后续 phase 启动不再重新决策,除非有充分理由(在 §14 维护章追加 changelog)。
+
+#### 🔴 Phase 0 前定(立刻)
+
+| # | 决策点 | 选择 | 落地位置 |
+|---|---|---|---|
+| 1 | 资源 | **2 人并行**(SDK + Platform),FE 按需 | §10 双人并行版 |
+| 2 | `/internal/*` OpenAPI | **新建 `docs/api/orchestrator-internal.openapi.yaml`**(SDK 准客户),跟 console-api yaml 分开 | Phase 0 与 wire DTO 一起立 |
+| 3 | dual-rollout 兼容窗口 | **2 周** | §4.2 / §15.5 |
+| 4 | `schemaVersion` 初始值 | **字符串 `"v1"`**(便于 `v2-rc` / `v2-beta`) | §2.1 |
+| 5 | PR tracking 工具 | **GitHub milestone `sdk-h2-2026`** | §13 启动检查清单 |
+| 6 | Phase sign-off | **你 + ADR-035 owner 双签** | §13 |
+
+#### 🟡 Phase 3 前定
+
+| # | 决策点 | 选择 | 落地位置 |
+|---|---|---|---|
+| 7 | taskType code 命名 | **`tenant_<tenantId>_<verb>`** 全小写下划线 | sdk-task-type-configuration.md §3.1 |
+| 8 | taskType 版本化 | **`_v2` 后缀** | §6.2 不兼容升级 |
+| 9 | sample-tenant-worker 位置 | **主 repo `samples/sample-tenant-worker/`** | §5.1 M3.1 待办 |
+| 10 | 跨租户灰度 | **立刻**:按 taskType code(`_v1`/`_v2`);**P5/P6**:按 buildId 增量加 | Phase 3 / Phase 6 |
+| 11 | `effective_parameters` 字段类型 | **JSONB** | Phase 3 M3.1 待办 |
+
+#### 🟢 Phase 4+ 前定(中期)
+
+| # | 决策点 | 选择 | 落地位置 |
+|---|---|---|---|
+| 12 | Phase 4 砍不砍 checkpoint/progress | **W8 时根据真实租户任务时长决定**:都 <5min → 砍;>10min → 全做 | Phase 4 §6.2 决策点 |
+| 13 | lease TTL 默认值 | **保持 60s/3min**(偏保守但稳妥) | SDK 配置不动 |
+| 14 | testkit 子模块名 | **`batch-worker-sdk-testkit`**(`-testkit` 后缀业界标准) | Phase 5 §7.1 |
+| 15 | OTel 依赖方式 | **可选依赖**(`<optional>true</optional>`,保持 SDK 2MB) | Phase 5 §7.1 |
+| 16 | typed handler 风格 | **`SdkTypedTaskHandler<I, O>` 基类**(显式 + 编译期类型校验) | Phase 5 §7.1 |
+| 17 | Payload codec 形态 | **只给接口 + 文档示例,不内置加密实现** | Phase 6 §8.1 |
+
+#### 🔵 隐藏决策
+
+| # | 决策点 | 选择 |
+|---|---|---|
+| 隐-1 | Phase 收官 retrospective | **每 Phase 结束 5 行 retro**:实际 vs plan diff + 经验,写在 `docs/plans/sdk-roadmap-2026-h2-progress.md` |
+| 隐-2 | 协议 PR 回滚策略 | **默认 revert**;留 1 周观察期才允许 hotfix 兼容补丁 |
+
+#### 决策修订
+
+若 phase 实施过程中发现某条决策需要改:
+
+1. 在 §14 维护章追加 changelog(日期 + 决策 # + 旧值 → 新值 + 理由)
+2. 同步本节表格(划线旧值,补新值)
+3. 影响范围 ≥ 1 个 phase 的修订需要 ADR-035 owner 二次签字
+
+---
+
 ### Roadmap 全景
 
 ```
