@@ -23,7 +23,7 @@ import lombok.Value;
  * </ul>
  */
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class BatchPlatformClientConfig {
 
   @NonNull String baseUrl;
@@ -49,6 +49,13 @@ public class BatchPlatformClientConfig {
 
   /** in-flight 任务的 lease 续约间隔。应 < orchestrator 端 lease TTL(默认 ~3min)的 1/2。 */
   @Default Duration leaseRenewInterval = Duration.ofSeconds(60);
+
+  // ─── P1-2 CLAIM 重试策略 ───────────────────────────────────────────────────
+  /** CLAIM 收到 5xx / 传输错误时的最大额外重试次数(0 = 不重试,仅首试)。401/403 永远 fail-fast, 409 / 其它 4xx 永远不重试。默认 3。 */
+  @Default int claimMax5xxRetries = 3;
+
+  /** CLAIM 5xx 重试的基准退避(实际:{@code base * 2^attempt})。默认 200ms。 */
+  @Default Duration claimRetryBaseDelay = Duration.ofMillis(200);
 
   // ─── P3 Kafka SASL/SCRAM 鉴权 (per-tenant ACL) ─────────────────────────────
   /**
