@@ -84,12 +84,17 @@ public class TaskDispatcher {
       return;
     }
 
-    // CLAIM
+    // CLAIM — body 对齐 TaskController.TaskClaimRequest(tenantId/workerId/partitionInvocationId)
     String idemClaim = BatchPlatformClient.newIdempotencyKey();
     try {
       Map<String, Object> claimBody = new HashMap<>();
-      claimBody.put("workerCode", config.getWorkerCode());
-      claimBody.put("workerId", config.getWorkerCode()); // P2 后改 server 分配的 workerId
+      claimBody.put("tenantId", msg.tenantId());
+      claimBody.put(
+          "workerId", config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
+      if (msg.runtimeAttributes() != null) {
+        Object pInv = msg.runtimeAttributes().get("partitionInvocationId");
+        if (pInv != null) claimBody.put("partitionInvocationId", pInv.toString());
+      }
       httpClient.claim(msg.taskId(), idemClaim, claimBody);
       inFlight.add(msg.taskId());
     } catch (Exception claimEx) {
@@ -128,17 +133,19 @@ public class TaskDispatcher {
       result = SdkTaskResult.fail(t);
     }
 
-    // REPORT
+    // REPORT — body 对齐 TaskExecutionReportDto(taskId/tenantId/workerId/success/message/outputs/...)
     String idemReport = BatchPlatformClient.newIdempotencyKey();
     try {
       Map<String, Object> body = new HashMap<>();
-      body.put("workerCode", config.getWorkerCode());
+      body.put("taskId", msg.taskId());
+      body.put("tenantId", msg.tenantId());
+      body.put("workerId", config.getWorkerCode());
       body.put("success", result.success());
       body.put("message", result.message());
-      body.put("output", result.output());
+      body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
       if (result.error() != null) {
-        body.put("errorClass", result.error().getClass().getName());
-        body.put("errorMessage", result.error().getMessage());
+        body.put("errorCode", result.error().getClass().getSimpleName());
+        body.put("resultSummary", result.error().getMessage());
       }
       httpClient.report(msg.taskId(), idemReport, body);
     } catch (Exception reportEx) {
@@ -156,12 +163,14 @@ public class TaskDispatcher {
     String idem = BatchPlatformClient.newIdempotencyKey();
     try {
       Map<String, Object> body = new HashMap<>();
-      body.put("workerCode", config.getWorkerCode());
+      body.put("taskId", msg.taskId());
+      body.put("tenantId", msg.tenantId());
+      body.put("workerId", config.getWorkerCode());
       body.put("success", false);
       body.put("message", message);
       if (error != null) {
-        body.put("errorClass", error.getClass().getName());
-        body.put("errorMessage", error.getMessage());
+        body.put("errorCode", error.getClass().getSimpleName());
+        body.put("resultSummary", error.getMessage());
       }
       httpClient.report(msg.taskId(), idem, body);
     } catch (Exception ex) {

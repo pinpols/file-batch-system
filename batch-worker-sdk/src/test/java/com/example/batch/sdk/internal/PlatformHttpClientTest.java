@@ -89,7 +89,7 @@ class PlatformHttpClientTest {
   @Test
   void non2xxThrows() {
     server.createContext(
-        "/internal/workers/heartbeat",
+        "/internal/workers/w-1/heartbeat",
         ex -> {
           byte[] body = "{\"code\":\"FORBIDDEN\"}".getBytes(StandardCharsets.UTF_8);
           ex.sendResponseHeaders(403, body.length);
@@ -97,10 +97,24 @@ class PlatformHttpClientTest {
           ex.close();
         });
 
-    assertThatThrownBy(() -> newClient().heartbeat(Map.of()))
+    assertThatThrownBy(() -> newClient().heartbeat("w-1", Map.of()))
         .isInstanceOf(IOException.class)
         .hasMessageContaining("HTTP 403")
         .hasMessageContaining("FORBIDDEN");
+  }
+
+  @Test
+  void deactivateCallsWorkerPath() throws IOException {
+    AtomicReference<String> seenPath = new AtomicReference<>();
+    server.createContext(
+        "/internal/workers/w-1/deactivate",
+        ex -> {
+          seenPath.set(ex.getRequestURI().getPath());
+          ex.sendResponseHeaders(204, -1);
+          ex.close();
+        });
+    newClient().deactivate("w-1", Map.of("tenantId", "tx"));
+    assertThat(seenPath.get()).isEqualTo("/internal/workers/w-1/deactivate");
   }
 
   @Test

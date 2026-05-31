@@ -6,6 +6,7 @@ import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.scheduler.HeartbeatScheduler;
 import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
 import com.example.batch.sdk.task.SdkTaskHandler;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,11 +79,16 @@ public class BatchPlatformClient {
         config.getTenantId(),
         config.getWorkerCode(),
         handlers.keySet());
+    // body 对齐 WorkerHeartbeatDto(tenantId/workerCode/workerGroup/status/heartbeatAt/
+    // currentLoad/capabilityTags),taskTypes 走 capabilityTags(平台从此推断 worker 能跑哪些 type)
     Map<String, Object> body = new HashMap<>();
     body.put("tenantId", config.getTenantId());
     body.put("workerCode", config.getWorkerCode());
-    body.put("taskTypes", List.copyOf(handlers.keySet()));
-    body.put("maxConcurrentTasks", config.getMaxConcurrentTasks());
+    body.put("workerGroup", "sdk-self-hosted");
+    body.put("status", "RUNNING");
+    body.put("heartbeatAt", Instant.now().toString());
+    body.put("currentLoad", 0);
+    body.put("capabilityTags", List.copyOf(handlers.keySet()));
     try {
       Map<String, Object> resp = httpClient.register(body);
       log.info("BatchPlatformClient registered: response={}", resp);
@@ -125,6 +131,17 @@ public class BatchPlatformClient {
     }
     if (dispatcher != null) {
       dispatcher.stop();
+    }
+    // 最后调 deactivate 通知平台释放 worker(失败 swallow,不阻塞进程退出)
+    try {
+      Map<String, Object> body = new HashMap<>();
+      body.put("tenantId", config.getTenantId());
+      body.put("workerCode", config.getWorkerCode());
+      body.put("status", "OFFLINE");
+      body.put("heartbeatAt", Instant.now().toString());
+      httpClient.deactivate(config.getWorkerCode(), body);
+    } catch (Exception ex) {
+      log.warn("deactivate call failed (ignored): {}", ex.getMessage());
     }
     started = false;
   }

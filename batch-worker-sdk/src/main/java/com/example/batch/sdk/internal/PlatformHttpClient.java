@@ -12,18 +12,18 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 平台 {@code /internal/*} 调用封装(register / heartbeat / claim / report)。
- *
- * <p>用 JDK {@link HttpClient}(不引第三方),JSON 序列化用 jackson。
- *
- * <p>每个 HTTP 调用都带:
+ * 平台 {@code /internal/*} 调用封装。路径与 body 字段集对齐 batch-orchestrator 真实 controller:
  *
  * <ul>
- *   <li>{@code X-Batch-Api-Key} header(P2 启用)
- *   <li>{@code X-Batch-Tenant-Id} header
- *   <li>{@code Idempotency-Key} header(claim / report 等写操作)
- *   <li>{@code Content-Type: application/json}
+ *   <li>{@code WorkerController}:{@code POST /internal/workers/register} / {@code POST
+ *       /internal/workers/{workerCode}/heartbeat} / {@code POST
+ *       /internal/workers/{workerCode}/deactivate}
+ *   <li>{@code TaskController}:{@code POST /internal/tasks/{taskId}/claim} / {@code POST
+ *       /internal/tasks/{taskId}/report} / {@code POST /internal/tasks/{taskId}/renew}
  * </ul>
+ *
+ * <p>用 JDK {@link HttpClient}(不引第三方),JSON 序列化用 jackson。每个调用都带 {@code X-Batch-Api-Key}(P2)+ {@code
+ * X-Batch-Tenant-Id} + 写操作的 {@code Idempotency-Key}。
  */
 @Slf4j
 public class PlatformHttpClient {
@@ -40,31 +40,38 @@ public class PlatformHttpClient {
             .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   }
 
-  /** POST register — 注册 worker,返回 server 端确认。 */
+  /** POST /internal/workers/register — body schema = WorkerHeartbeatDto。 */
   public Map<String, Object> register(Map<String, Object> body) throws IOException {
     return postJson("/internal/workers/register", body, null);
   }
 
-  /** POST heartbeat — 上报心跳。 */
-  public Map<String, Object> heartbeat(Map<String, Object> body) throws IOException {
-    return postJson("/internal/workers/heartbeat", body, null);
+  /** POST /internal/workers/{workerCode}/heartbeat — body schema = WorkerHeartbeatDto。 */
+  public Map<String, Object> heartbeat(String workerCode, Map<String, Object> body)
+      throws IOException {
+    return postJson("/internal/workers/" + workerCode + "/heartbeat", body, null);
   }
 
-  /** POST claim — 抢任务,返回 effective task config 或 4xx(已被别 worker 拿走)。 */
+  /** POST /internal/workers/{workerCode}/deactivate — SDK stop 时优雅下线。 */
+  public Map<String, Object> deactivate(String workerCode, Map<String, Object> body)
+      throws IOException {
+    return postJson("/internal/workers/" + workerCode + "/deactivate", body, null);
+  }
+
+  /** POST /internal/tasks/{taskId}/claim — body=TaskClaimRequest,返回 EffectiveTaskConfig JSON。 */
   public Map<String, Object> claim(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
     return postJson("/internal/tasks/" + taskId + "/claim", body, idempotencyKey);
   }
 
-  /** POST report — 上报结果(success / fail + output)。 */
+  /** POST /internal/tasks/{taskId}/report — body schema = TaskExecutionReportDto。 */
   public Map<String, Object> report(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
     return postJson("/internal/tasks/" + taskId + "/report", body, idempotencyKey);
   }
 
-  /** POST renew-lease — 续约。 */
-  public Map<String, Object> renewLease(Long taskId, Map<String, Object> body) throws IOException {
-    return postJson("/internal/tasks/" + taskId + "/renew-lease", body, null);
+  /** POST /internal/tasks/{taskId}/renew — body=TaskClaimRequest(同 claim 字段集)。 */
+  public Map<String, Object> renew(Long taskId, Map<String, Object> body) throws IOException {
+    return postJson("/internal/tasks/" + taskId + "/renew", body, null);
   }
 
   @SuppressWarnings("unchecked")

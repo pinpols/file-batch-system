@@ -39,14 +39,14 @@ class LeaseRenewalSchedulerTest {
 
     s.tick();
 
-    verify(http).renewLease(eq(10L), any());
-    verify(http).renewLease(eq(20L), any());
-    verify(http).renewLease(eq(30L), any());
+    verify(http).renew(eq(10L), any());
+    verify(http).renew(eq(20L), any());
+    verify(http).renew(eq(30L), any());
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
-    verify(http, times(3)).renewLease(anyLong(), body.capture());
-    assertThat(body.getValue()).containsEntry("workerCode", "w-1");
+    verify(http, times(3)).renew(anyLong(), body.capture());
+    assertThat(body.getValue()).containsEntry("workerId", "w-1").containsEntry("tenantId", "tx");
   }
 
   @Test
@@ -58,20 +58,20 @@ class LeaseRenewalSchedulerTest {
 
     s.tick();
 
-    verify(http, never()).renewLease(anyLong(), any());
+    verify(http, never()).renew(anyLong(), any());
   }
 
   @Test
   void singleTaskFailureDoesNotStopOthers() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.renewLease(eq(10L), any())).thenThrow(new IOException("404 expired"));
+    when(http.renew(eq(10L), any())).thenThrow(new IOException("404 expired"));
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L, 20L));
     LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
 
     s.tick(); // 不应抛
 
-    verify(http).renewLease(eq(20L), any()); // 20 还是被尝试
+    verify(http).renew(eq(20L), any()); // 20 还是被尝试
   }
 
   private static <T> T eq(T v) {
