@@ -92,6 +92,12 @@ public interface WorkerRegistryMapper {
   int insert(WorkerRegistryEntity record);
 
   /**
+   * ADR-035 §2 — 标记 worker 为租户自托管(SDK 注册)。Service 在 register 路径检测 {@code
+   * workerGroup="sdk-self-hosted"} 时调用。新建 worker 入库默认 false,本方法后置 update;幂等。
+   */
+  int markSelfHosted(@Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
+
+  /**
    * register / status / drain 等更新路径的统一 upsert：按 id 全字段覆盖 status / heartbeat_at / current_load /
    * capability_tags / drain_started_at / drain_deadline_at；不参与 CAS（worker_registry 不是状态机推进核心， 业务上由
    * mapper.touchHeartbeat / markDecommissioned 等单字段 SQL 接管热路径，本方法仅供 register / forceOffline

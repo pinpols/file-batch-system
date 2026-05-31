@@ -73,6 +73,42 @@ class ApiKeyVerifierTest {
     verify(mapper, never()).findActiveByHashAndTenant(any(), any());
   }
 
+  // ─── ADR-035 scope 校验 ────────────────────────────────────────────────
+
+  @Test
+  void verifyWithScopeRequiresScope() {
+    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
+        .thenReturn(Optional.of(new ApiKeyRecord(1L, "tx", "k", "read.only", true, null)));
+    assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isEmpty();
+  }
+
+  @Test
+  void verifyWithScopeAcceptsWildcard() {
+    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
+        .thenReturn(Optional.of(new ApiKeyRecord(1L, "tx", "k", "*", true, null)));
+    assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();
+  }
+
+  @Test
+  void verifyWithScopeAcceptsExplicitScope() {
+    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
+        .thenReturn(
+            Optional.of(new ApiKeyRecord(1L, "tx", "k", "read, worker.execute", true, null)));
+    assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();
+  }
+
+  @Test
+  void scopesAllowParser() {
+    assertThat(ApiKeyVerifier.scopesAllow("*", "anything")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllow("worker.execute,read", "worker.execute")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllow("worker.execute read", "read")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllow("  worker.execute  ", "worker.execute")).isTrue();
+    assertThat(ApiKeyVerifier.scopesAllow("read", "worker.execute")).isFalse();
+    assertThat(ApiKeyVerifier.scopesAllow("", "anything")).isFalse();
+    assertThat(ApiKeyVerifier.scopesAllow(null, "anything")).isFalse();
+    assertThat(ApiKeyVerifier.scopesAllow("anything", null)).isTrue();
+  }
+
   @Test
   void touchAsyncSwallowsExceptions() {
     // touch 失败不应让 verify 异常,因为 hit 已写到 Optional 里(touch 是异步副作用)

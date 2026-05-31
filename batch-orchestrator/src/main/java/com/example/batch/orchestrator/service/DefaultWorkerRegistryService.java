@@ -76,7 +76,13 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     } else {
       registry = registry.withHeartbeat(newStatus, heartbeatAt, newLoad, newTags);
     }
-    return persist(registry);
+    WorkerRegistryEntity saved = persist(registry);
+    // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让
+    // console "我的 Worker" 页过滤。幂等。
+    if ("sdk-self-hosted".equals(request.workerGroup())) {
+      workerRegistryMapper.markSelfHosted(request.tenantId(), request.workerCode());
+    }
+    return saved;
   }
 
   @Override
