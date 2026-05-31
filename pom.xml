@@ -88,7 +88,7 @@
         <!-- SPIKE: Resilience4j SB4 兼容验证(spike/resilience4j-sb4)。
              2.3.0 是 R4J 给 SB3 的最新版,本 spike 验 SB4.0.6 + JDK25 是否能跑。
              结论见 docs/spike/resilience4j-sb4-compat.md。 -->
-        <resilience4j.version>2.3.0</resilience4j.version>
+        <resilience4j.version>2.4.0</resilience4j.version>
     </properties>
 
     <dependencyManagement>
