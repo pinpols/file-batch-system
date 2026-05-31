@@ -300,6 +300,23 @@ ADR-035 §8.B 留口 + 用户决策(2026-05-31):除了 `SdkAbstractAtomicHandler
 
 参数全从 `ctx.parameters()` 读(sql / procedureName / url / command 等),配置从构造器注入(DataSource / 白名单 / 限额)。
 
+### SQL / StoredProc 约束完整对齐平台(2026-05-31 补)
+
+四类实现初版后,逐项核对平台 `SqlExecutorProperties` / `StoredProcExecutorProperties`,补齐缺口:
+
+**SqlAtomicHandler** — 补 `maxStatementsPerJob`(默认 50)+ `defaultAutoCommit`(默认 false):
+- 之前 `st.execute(sql)` 直执行,PG simple query protocol 允许 `;` 分隔多语句一次跑且**无上限** → 现拆语句 + 超 maxStatementsPerJob 拒绝
+- 显式事务(全部成功 commit / 任一失败 rollback)
+- `allowedDataSourceBeans` 结构上 N/A(SDK DataSource 构造器注入,无 bean 名覆盖攻击面)
+
+**StoredProcAtomicHandler** — 补 `verifyExecutePrivilege`(opt-in 第 4 闸)+ `maxOutBytesPerParam`(默认 64k)+ `defaultAutoCommit`:
+- 第 4 闸:执行前 `has_function_privilege(current_user, proc, 'EXECUTE')` 校验,无权限拒
+- OUT 值超 64k 字节截断 + 标记
+- 显式事务
+- `maxRefCursorRows` N/A(SDK 不支持 REF_CURSOR);`allowedDataSourceBeans` N/A
+
+对齐后 SQL = 角色闸 + 资源限制(语句类型白名单两边都已被 #182 收敛删除);StoredProc = 三道闸 + 第 4 闸 EXECUTE 校验 + 资源限制,与平台一致。
+
 ## 验收
 
 - [x] `SdkAbstractTaskHandler` + 5 个 `SdkAbstract*Handler` 类落地
