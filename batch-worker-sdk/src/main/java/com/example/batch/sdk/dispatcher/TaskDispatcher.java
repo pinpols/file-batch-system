@@ -343,8 +343,8 @@ public class TaskDispatcher {
     MDC.remove(MDC_TASK_ID);
   }
 
-  /** 暴露给测试:draining 状态。 */
-  boolean isDraining() {
+  /** 暴露给测试 + 调用方:draining 状态(stop() 已发起,等待 in-flight 跑完)。 */
+  public boolean isDraining() {
     return draining.get();
   }
 
