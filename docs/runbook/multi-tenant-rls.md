@@ -97,12 +97,14 @@ WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
 
 翻之前必须每一项 ✅:
 
-- [x] **A.** 所有 biz.* 写入/读取路径已接线(见 §3.2 表,4 个 plugin + 1 个 adapter)
-- [ ] **B.** sim 跑全链路一遍,日志无 `RLS SET LOCAL failed` warn(`scripts/sim/05-load.sh + 07-spi-load.sh`)
-- [ ] **C.** 生产 prod-shadow 跑 ≥ 1 周,actuator/health 持续绿,无 `RLS SET LOCAL failed` log
-- [ ] **D.** 加新 IT:`RlsStrictModePreflightIT` 模拟 strict policy + 漏 SET 路径(返 0 行 / INSERT 抛),反例覆盖
-- [ ] **E.** Release notes 公告 + on-call playbook 加「strict 模式回滚 = `ALTER POLICY ... USING (旧 expression)`」热补脚本
-- [ ] **F.** runbook §6「Symptom: 应用 SELECT 返 0 行」从「可能原因」升级为「strict 模式标准排查路径」
+- [x] **A.** 所有 biz.* 写入/读取路径已接线(见 §3.2 表,4 个 plugin + 1 个 adapter)— PR #155/#158/#160
+- [ ] **B.** sim 跑全链路一遍,日志无 `RLS SET LOCAL failed` warn(`scripts/sim/05-load.sh + 07-spi-load.sh`)— **待运维生产前跑**
+- [ ] **C.** 生产 prod-shadow 跑 ≥ 1 周,actuator/health 持续绿,无 `RLS SET LOCAL failed` log — **待运维**
+- [x] **D.** `RlsStrictModePreflightIntegrationTest` 7 个 test 覆盖 transition + strict + 漏 SET + 回滚 — PR(当前)
+- [x] **E.** Release notes / on-call 翻转手册 — `docs/runbook/multi-tenant-rls-strict-rollout.md`,回滚脚本 `rls-phase-a-rollback-to-transition.sql` — PR(当前)
+- [x] **F.** runbook §6 已升级为「strict 模式标准排查路径」+ 5 步排查优先级 — PR #161
+
+**4/6 已完成,剩 B/C 是运维侧观察期任务**。代码侧 ready,部署侧择时翻。
 
 ### 3.4 翻 strict 模式 PR 内容(预告)
 
