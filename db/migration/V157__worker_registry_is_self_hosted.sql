@@ -9,8 +9,7 @@ ALTER TABLE batch.worker_registry
     ADD COLUMN IF NOT EXISTS is_self_hosted BOOLEAN NOT NULL DEFAULT FALSE;
 
 COMMENT ON COLUMN batch.worker_registry.is_self_hosted IS
-    'ADR-035 自托管标识:true=SDK 注册的租户自托管 worker(批 batch-worker-sdk);false=平台代部署内建 worker(默认)';
+    'ADR-035 自托管标识:true=SDK 注册的租户自托管 worker(batch-worker-sdk);false=平台代部署内建 worker(默认)';
 
--- 同步 archive 表(CLAUDE.md §archive 冷表对齐)
-ALTER TABLE archive.worker_registry_archive
-    ADD COLUMN IF NOT EXISTS is_self_hosted BOOLEAN NOT NULL DEFAULT FALSE;
+-- 注:worker_registry 不在 archive 范围内(无 worker_registry_archive 表;CLAUDE.md §archive 冷表对齐
+-- 针对的是 instance/run/task 这类历史表)。本列无需镜像。

@@ -5,6 +5,7 @@ import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
+import com.example.batch.worker.spi.runtime.SpiConnectionManager;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -306,117 +307,92 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
   // ─── execution ──────────────────────────────────────────────────────────────
 
-  // NcssCount: stored proc 调用含 connection 生命周期 + IN/OUT 参数绑定 + 多结果集抽取,
-  // 拆分会让事务边界跨方法变难审。后续 PR 走 SpiConnectionManager.withConnection 重构时拆。
-  @SuppressWarnings("PMD.NcssCount")
   private TaskResult runCall(TaskContext ctx, Invocation inv) {
     long start = System.currentTimeMillis();
-
     int totalParams = inv.inParams.size() + inv.outTypes.size();
+    SpiConnectionManager.Options opts =
+        SpiConnectionManager.Options.defaults()
+            .withAutoCommit(inv.autoCommit)
+            // 角色闸用 executor 本地实现(StoredProcValidationException 保留 i18n 语义)
+            .withForbidOsCapableRole(false);
 
-    try (Connection conn = inv.dataSource.getConnection()) {
-      // 真 PROCEDURE 发原生 CALL,FUNCTION 仍走 {call} 转义(见 buildCallSql)。
-      String call = buildCallSql(conn, inv.procName, totalParams);
-      boolean originalAutoCommit = conn.getAutoCommit();
-      try {
-        conn.setAutoCommit(inv.autoCommit);
-
-        // 在同一事务内 pin search_path,固定过程解析目标(防 search_path shadowing/注入)。
-        pinSearchPath(conn, inv.procName);
-
-        // 代码层堵死 OS:① 拒绝 OS 能力角色(无之则过程物理上碰不到 OS)② 拒绝 SECURITY DEFINER(借 owner 提权绕过①)。
-        if (props.isForbidOsCapableRole()) {
-          requireNonOsCapableRole(conn);
-        }
-        if (!props.isAllowSecurityDefiner()) {
-          requireNotSecurityDefiner(conn, inv.procName);
-        }
-
-        // 可选 DB 原生授权:current_user 对目标过程无 EXECUTE 权限则在 CALL 前拒绝。
-        if (props.isVerifyExecutePrivilege()) {
-          requireExecutePrivilege(conn, inv.procName);
-        }
-
-        try (CallableStatement cs = conn.prepareCall(call)) {
-          cs.setQueryTimeout(inv.timeoutSec);
-
-          // IN params (positions 1..N)
-          for (int i = 0; i < inv.inParams.size(); i++) {
-            cs.setObject(i + 1, inv.inParams.get(i));
-          }
-          // OUT params (positions N+1..N+M)
-          for (int i = 0; i < inv.outTypes.size(); i++) {
-            cs.registerOutParameter(inv.inParams.size() + i + 1, toSqlType(inv.outTypes.get(i)));
-          }
-
-          cs.execute();
-
-          // 读 OUT 值
-          Map<String, Object> outValues = new LinkedHashMap<>();
-          List<List<Map<String, Object>>> resultSets = new ArrayList<>();
-          boolean output_truncated = false;
-          for (int i = 0; i < inv.outTypes.size(); i++) {
-            int pos = inv.inParams.size() + i + 1;
-            String key = "p" + (i + 1);
-            String type = inv.outTypes.get(i);
-            if ("REF_CURSOR".equals(type)) {
-              Object cursor = cs.getObject(pos);
-              if (cursor instanceof ResultSet) {
-                RefCursorResult rc = readRefCursor((ResultSet) cursor);
-                resultSets.add(rc.rows());
-                if (rc.truncated()) {
-                  outValues.put(key, "<REF_CURSOR truncated>");
-                  output_truncated = true;
-                } else {
-                  outValues.put(key, "<REF_CURSOR>");
-                }
-              } else {
-                outValues.put(key, "<REF_CURSOR>");
-              }
-            } else {
-              Object v = cs.getObject(pos);
-              outValues.put(key, truncateIfNeeded(v));
+    try {
+      return SpiConnectionManager.withConnection(
+          inv.dataSource,
+          opts,
+          conn -> {
+            String call = buildCallSql(conn, inv.procName, totalParams);
+            // 同一事务内 pin search_path,固定过程解析(防 search_path shadowing/注入)
+            pinSearchPath(conn, inv.procName);
+            // 堵死 OS:① 角色 ② SECURITY DEFINER(借 owner 提权绕过①)
+            if (props.isForbidOsCapableRole()) {
+              requireNonOsCapableRole(conn);
             }
-          }
-
-          if (!inv.autoCommit) {
-            conn.commit();
-          }
-
-          Map<String, Object> output = new HashMap<>();
-          output.put("outValues", outValues);
-          output.put("resultSets", resultSets);
-          output.put("truncated", output_truncated);
-          output.put("durationMillis", System.currentTimeMillis() - start);
-
-          return TaskResult.ok(
-              "called "
-                  + inv.procName
-                  + " (in="
-                  + inv.inParams.size()
-                  + ", out="
-                  + inv.outTypes.size()
-                  + ")",
-              output);
-        }
-      } catch (SQLException | RuntimeException ex) {
-        if (!inv.autoCommit) {
-          try {
-            conn.rollback();
-          } catch (SQLException rollbackEx) {
-            log.warn("rollback failed: {}", rollbackEx.getMessage());
-          }
-        }
-        throw ex;
-      } finally {
-        try {
-          conn.setAutoCommit(originalAutoCommit);
-        } catch (SQLException restoreEx) {
-          log.warn("restore autoCommit failed: {}", restoreEx.getMessage());
-        }
-      }
+            if (!props.isAllowSecurityDefiner()) {
+              requireNotSecurityDefiner(conn, inv.procName);
+            }
+            if (props.isVerifyExecutePrivilege()) {
+              requireExecutePrivilege(conn, inv.procName);
+            }
+            return execCallableStatement(conn, call, inv, start);
+          });
     } catch (SQLException ex) {
       return TaskResult.fail("stored proc call failed: " + ex.getMessage(), ex);
+    }
+  }
+
+  private TaskResult execCallableStatement(Connection conn, String call, Invocation inv, long start)
+      throws SQLException {
+    try (CallableStatement cs = conn.prepareCall(call)) {
+      cs.setQueryTimeout(inv.timeoutSec);
+      for (int i = 0; i < inv.inParams.size(); i++) {
+        cs.setObject(i + 1, inv.inParams.get(i));
+      }
+      for (int i = 0; i < inv.outTypes.size(); i++) {
+        cs.registerOutParameter(inv.inParams.size() + i + 1, toSqlType(inv.outTypes.get(i)));
+      }
+      cs.execute();
+
+      Map<String, Object> outValues = new LinkedHashMap<>();
+      List<List<Map<String, Object>>> resultSets = new ArrayList<>();
+      boolean outputTruncated = false;
+      for (int i = 0; i < inv.outTypes.size(); i++) {
+        int pos = inv.inParams.size() + i + 1;
+        String key = "p" + (i + 1);
+        String type = inv.outTypes.get(i);
+        if ("REF_CURSOR".equals(type)) {
+          Object cursor = cs.getObject(pos);
+          if (cursor instanceof ResultSet) {
+            RefCursorResult rc = readRefCursor((ResultSet) cursor);
+            resultSets.add(rc.rows());
+            if (rc.truncated()) {
+              outValues.put(key, "<REF_CURSOR truncated>");
+              outputTruncated = true;
+            } else {
+              outValues.put(key, "<REF_CURSOR>");
+            }
+          } else {
+            outValues.put(key, "<REF_CURSOR>");
+          }
+        } else {
+          outValues.put(key, truncateIfNeeded(cs.getObject(pos)));
+        }
+      }
+
+      Map<String, Object> output = new HashMap<>();
+      output.put("outValues", outValues);
+      output.put("resultSets", resultSets);
+      output.put("truncated", outputTruncated);
+      output.put("durationMillis", System.currentTimeMillis() - start);
+      return TaskResult.ok(
+          "called "
+              + inv.procName
+              + " (in="
+              + inv.inParams.size()
+              + ", out="
+              + inv.outTypes.size()
+              + ")",
+          output);
     }
   }
 
