@@ -151,6 +151,45 @@ kubectl scale deploy/batch-platform-worker-import-bigcorp -n batch --replicas=3
 - [ ] Kafka topic 自动创建脚本 `scripts/data/init-tenant-topics.sh` + 命名规约（§1）
 - [ ] 本手册 `docs/runbook/per-tenant-worker-onboarding.md`
 - [ ] 故障演练：示范租户 worker 挂 → 其它租户无感（§4）
+- [ ] 自托管租户 Kafka SASL/SCRAM ACL 已 apply,且跨租户 topic 访问被拒(§5.1)
+
+## 5.1 Kafka SASL/SCRAM ACL (ADR-035 Phase 3,自托管 worker 必须)
+
+主项目可信 worker 走共享 PLAINTEXT(集群内信任域),但**租户自托管 worker** 跑在租户自己的 K8s 里,Kafka 必须开 SASL/SCRAM,且 ACL 必须只允许该租户访问自己的 topic/group。否则任一租户拿到 bootstrap 地址就能消费所有 dispatch topic。
+
+**onboarding 步骤**(每个新自托管租户跑一次):
+
+```sh
+# 1. 在 Kafka broker 容器里跑 ACL 初始化(需要 admin-client.properties 有管理员 SASL 凭据)
+KAFKA_BOOTSTRAP_SERVER=kafka:29092 \
+ADMIN_CONFIG=/opt/kafka/config/admin-client.properties \
+TENANT_ID=bigcorp \
+TENANT_PASSWORD="$(openssl rand -base64 32)" \
+WORKER_TYPES=import,export,process \
+  sh scripts/data/init-tenant-kafka-acl.sh
+
+# 2. 脚本输出 sasl.jaas.config 一行,拷到 K8s Secret(或租户自己环境变量)
+kubectl -n batch create secret generic bigcorp-kafka-sasl \
+  --from-literal=BATCH_KAFKA_PROTOCOL=SASL_SSL \
+  --from-literal=BATCH_KAFKA_SASL_MECHANISM=SCRAM-SHA-512 \
+  --from-literal=BATCH_KAFKA_SASL_JAAS='org.apache.kafka.common.security.scram.ScramLoginModule required username="batch-tenant-bigcorp" password="...";'
+
+# 3. 租户的 worker deployment envFrom 该 secret;SDK 自动透传到 KafkaConsumer
+```
+
+**验证隔离**:
+
+```sh
+# 用 tenant-A 的 credential 试着消费 tenant-B 的 topic,应该被 ACL 拒绝(TopicAuthorizationException)
+kafka-console-consumer.sh --bootstrap-server kafka:29092 \
+  --consumer.config /tmp/tenant-a-client.properties \
+  --topic batch.task.dispatch.import.tenant-b --from-beginning
+# → ERROR org.apache.kafka.common.errors.TopicAuthorizationException
+```
+
+**轮换密码**:重新跑步骤 1(同名 user --add-config 会覆盖 SCRAM credential),更新 Secret,触发 worker 重启即生效。ACL 不动。
+
+**密码轮换告警**:轮换后旧 password worker pod 会立刻断 SASL 鉴权失败;建议先滚动新 Secret + 灰度重启,再 alter SCRAM credential。
 
 ## 6. 范围边界（不做）
 

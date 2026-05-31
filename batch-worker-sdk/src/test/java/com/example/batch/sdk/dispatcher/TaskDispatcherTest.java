@@ -83,8 +83,12 @@ class TaskDispatcherTest {
     assertThat(reportBody.getValue())
         .containsEntry("success", true)
         .containsEntry("message", "done");
-    assertThat((Map<String, Object>) reportBody.getValue().get("output"))
+    assertThat((Map<String, Object>) reportBody.getValue().get("outputs"))
         .containsEntry("rows", 100);
+    assertThat(reportBody.getValue())
+        .containsEntry("taskId", 42L)
+        .containsEntry("tenantId", "tx")
+        .containsEntry("workerId", "w-1");
   }
 
   // ─── handler 异常兜底 ────────────────────────────────────────────────────────
@@ -113,7 +117,8 @@ class TaskDispatcherTest {
     assertThat(reportBody.getValue())
         .containsEntry("success", false)
         .containsEntry("message", "biz boom")
-        .containsEntry("errorClass", "java.lang.RuntimeException");
+        .containsEntry("errorCode", "RuntimeException")
+        .containsEntry("resultSummary", "biz boom");
   }
 
   @Test

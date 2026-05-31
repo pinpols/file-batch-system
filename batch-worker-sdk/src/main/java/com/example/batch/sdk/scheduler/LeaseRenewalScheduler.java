@@ -51,9 +51,11 @@ public class LeaseRenewalScheduler implements AutoCloseable {
       if (ids.isEmpty()) return;
       for (Long taskId : ids) {
         try {
-          httpClient.renewLease(taskId, Map.of("workerCode", config.getWorkerCode()));
+          // body 对齐 TaskController.TaskClaimRequest(tenantId/workerId/partitionInvocationId)
+          httpClient.renew(
+              taskId, Map.of("tenantId", config.getTenantId(), "workerId", config.getWorkerCode()));
         } catch (Throwable t) {
-          log.warn("renew-lease failed for taskId={}: {}", taskId, t.getMessage());
+          log.warn("renew failed for taskId={}: {}", taskId, t.getMessage());
         }
       }
     } catch (Throwable outer) {
