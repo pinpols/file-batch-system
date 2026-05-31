@@ -149,21 +149,34 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
    * P0 hardening(borrowed from Zeebe maxJobsActive):in-flight 已满则 pause assigned partitions, 队列降下来再
    * resume。注意 pause/resume 是按 partition 维度,**不停 poll loop**(否则 consumer heartbeat 也会停 → consumer
    * group rebalance 把当前 worker 踢)。
+   *
+   * <p>Phase 2 §2.4:平台 PAUSED / DRAINING(见 {@link TaskDispatcher#platformAcceptsNewTasks()})也触发同样的
+   * partition pause —— 用 pause 而非 consume-and-drop,offset 不前进,平台恢复 NORMAL 后从原位继续消费,不丢任务。
    */
-  private void applyBackpressure() {
+  void applyBackpressure() {
     int max = config.getMaxConcurrentTasks();
     int inFlight = dispatcher.inFlightCount();
-    if (inFlight >= max) {
+    boolean platformPaused = !dispatcher.platformAcceptsNewTasks();
+    boolean shouldPause = inFlight >= max || platformPaused;
+    if (shouldPause) {
       if (!paused && !consumer.assignment().isEmpty()) {
         consumer.pause(consumer.assignment());
         paused = true;
-        log.info("backpressure pause: inFlight={} >= max={}", inFlight, max);
+        log.info(
+            "consumer pause: inFlight={} max={} platformState={}",
+            inFlight,
+            max,
+            dispatcher.platformState());
       }
     } else {
       if (paused && !consumer.assignment().isEmpty()) {
         consumer.resume(consumer.assignment());
         paused = false;
-        log.info("backpressure resume: inFlight={} < max={}", inFlight, max);
+        log.info(
+            "consumer resume: inFlight={} max={} platformState={}",
+            inFlight,
+            max,
+            dispatcher.platformState());
       }
     }
   }
