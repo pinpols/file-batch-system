@@ -114,10 +114,10 @@
 
 | # | 任务 | 工作量 | 责任 |
 |---|---|---|---|
-| 0.1 | `TaskDispatchMessage.schemaVersion` 字段(`"v1"`)+ reject 未知 major | 1h | BE |
-| 0.2 | SDK 自有 wire DTO records(`RegisterRequest` / `HeartbeatRequest` / `ClaimRequest` / `ReportRequest` / `RenewRequest`),放 `sdk/wire/` | 4h | SDK |
-| 0.3 | `SdkWireContractTest` —— SDK record 反序列化到平台 DTO 不丢字段,CI 拦截漂移 | 2h | BE |
-| 0.4 | Dual-rollout 指南文档(SDK / orchestrator 交错升级) | 1h | Docs |
+| 0.1 | ~~`TaskDispatchMessage.schemaVersion` 字段(`"v1"`)+ reject 未知 major~~ ✅ 2026-05-31 #SDK-P0-1 | 1h | BE |
+| 0.2 | ~~SDK 自有 wire DTO records(`RegisterRequest` / `HeartbeatRequest` / `ClaimRequest` / `ReportRequest` / `RenewRequest`),放 `sdk/wire/`~~ ✅ 2026-05-31 #SDK-P0-1 | 4h | SDK |
+| 0.3 | ~~`SdkWireContractTest` —— SDK record 反序列化到平台 DTO 不丢字段,CI 拦截漂移~~ ✅ 2026-05-31 #SDK-P0-1 | 2h | BE |
+| 0.4 | ~~Dual-rollout 指南文档(SDK / orchestrator 交错升级)~~ ✅ 2026-05-31 #SDK-P0-1 | 1h | Docs |
 
 ### 2.2 DoD
 

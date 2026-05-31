@@ -35,6 +35,54 @@ class TaskDispatchMessageTest {
   }
 
   @Test
+  void schemaVersionDefaultsToV1WhenMissing() throws Exception {
+    String json = "{\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
+    TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
+    assertThat(msg.schemaVersion()).isNull(); // 缺字段反序列化为 null
+    assertThat(msg.resolvedMajor()).isEqualTo("v1"); // 但 resolvedMajor fallback v1
+    assertThat(msg.isSchemaSupported()).isTrue();
+  }
+
+  @Test
+  void schemaVersionSupportedWhenV1OrV2() throws Exception {
+    for (String v : new String[] {"v1", "v2", "v1-rc", "v2-beta", "v2.1"}) {
+      String json =
+          "{\"schemaVersion\":\""
+              + v
+              + "\",\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
+      TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
+      assertThat(msg.isSchemaSupported()).as("schemaVersion=%s should be supported", v).isTrue();
+    }
+  }
+
+  @Test
+  void schemaVersionRejectedWhenUnknownMajor() throws Exception {
+    for (String v : new String[] {"v3", "v3-rc", "v99", "vNext", "1", "draft"}) {
+      String json =
+          "{\"schemaVersion\":\""
+              + v
+              + "\",\"taskId\":1,\"tenantId\":\"tx\",\"jobCode\":\"j\",\"taskType\":\"t\"}";
+      TaskDispatchMessage msg = mapper.readValue(json, TaskDispatchMessage.class);
+      assertThat(msg.isSchemaSupported()).as("schemaVersion=%s should be rejected", v).isFalse();
+    }
+  }
+
+  @Test
+  void resolvedMajorStripsSuffix() {
+    TaskDispatchMessage msg =
+        new TaskDispatchMessage("v2-rc", 1L, "tx", "j", "t", "ti", Map.of(), Map.of());
+    assertThat(msg.resolvedMajor()).isEqualTo("v2");
+  }
+
+  @Test
+  void compatConstructorDefaultsSchemaVersion() {
+    TaskDispatchMessage msg = new TaskDispatchMessage(1L, "tx", "j", "t", "ti", Map.of(), Map.of());
+    // 7 参兼容构造 → schemaVersion 填默认值,supported = true
+    assertThat(msg.schemaVersion()).isEqualTo("v1");
+    assertThat(msg.isSchemaSupported()).isTrue();
+  }
+
+  @Test
   void validateRejectsMissingFields() {
     assertThatThrownBy(
             () ->
