@@ -5,6 +5,7 @@ import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * ADR-036 — Process 模板:tenant → tenant(transform 写回)。
@@ -19,8 +20,11 @@ import java.util.List;
  */
 public abstract class SdkAbstractProcessHandler<I, O> extends SdkAbstractTaskHandler {
 
-  /** 读输入行(从租户表 select)。 */
-  protected abstract Iterator<I> selectInput(SdkTaskContext ctx) throws Exception;
+  /**
+   * 读输入行(从租户表 select)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放; 租户可直接返 {@code
+   * jdbcTemplate.queryForStream(...)}。
+   */
+  protected abstract Stream<I> selectInput(SdkTaskContext ctx) throws Exception;
 
   /** 单行转换 I→O;返回 null 表示该行 skip(不写)。 */
   protected abstract O transform(SdkTaskContext ctx, I input) throws Exception;
@@ -38,18 +42,20 @@ public abstract class SdkAbstractProcessHandler<I, O> extends SdkAbstractTaskHan
     try {
       SdkRowResult counts = new SdkRowResult();
       List<O> buf = new ArrayList<>(batchSize());
-      Iterator<I> it = selectInput(ctx);
-      while (it.hasNext()) {
-        O out = transform(ctx, it.next());
-        if (out != null) {
-          buf.add(out);
-          counts.incSuccess();
-        } else {
-          counts.incSkipped();
-        }
-        if (buf.size() >= batchSize()) {
-          upsert(ctx, buf);
-          buf.clear();
+      try (Stream<I> rows = selectInput(ctx)) {
+        Iterator<I> it = rows.iterator();
+        while (it.hasNext()) {
+          O out = transform(ctx, it.next());
+          if (out != null) {
+            buf.add(out);
+            counts.incSuccess();
+          } else {
+            counts.incSkipped();
+          }
+          if (buf.size() >= batchSize()) {
+            upsert(ctx, buf);
+            buf.clear();
+          }
         }
       }
       if (!buf.isEmpty()) {

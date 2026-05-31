@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +27,7 @@ class SdkAbstractImportHandlerTest {
     private final boolean failOnLoad;
     final AtomicInteger openCalls = new AtomicInteger();
     final AtomicInteger readCalls = new AtomicInteger();
+    final AtomicInteger streamCloseCalls = new AtomicInteger();
     final List<Integer> loadBatchSizes = new ArrayList<>();
 
     RecordingImportHandler(
@@ -65,12 +66,12 @@ class SdkAbstractImportHandlerTest {
     }
 
     @Override
-    protected Iterator<Integer> readRows(SdkTaskContext ctx) throws Exception {
+    protected Stream<Integer> readRows(SdkTaskContext ctx) throws Exception {
       readCalls.incrementAndGet();
       if (failOnRead) {
         throw new IllegalStateException("readRows boom");
       }
-      return rows.iterator();
+      return rows.stream().onClose(streamCloseCalls::incrementAndGet);
     }
 
     @Override
@@ -177,6 +178,34 @@ class SdkAbstractImportHandlerTest {
     assertThat(result.success()).isFalse();
     assertThat(handler.readCalls).hasValue(0);
     assertThat(handler.loadBatchSizes).isEmpty();
+  }
+
+  @Test
+  @DisplayName("正常读完 → 行流 close() 被调用一次(释放 ResultSet/InputStream)")
+  void shouldCloseRowStream_whenIterationCompletes() {
+    // arrange
+    RecordingImportHandler handler = RecordingImportHandler.of(rows(100), 30);
+
+    // act
+    SdkTaskResult result = handler.execute(CTX);
+
+    // assert
+    assertThat(result.success()).isTrue();
+    assertThat(handler.streamCloseCalls).hasValue(1);
+  }
+
+  @Test
+  @DisplayName("loadBatch 中途抛异常 → 行流仍 close()(try-with-resources 兜底,不泄露)")
+  void shouldCloseRowStream_whenLoadBatchThrowsMidIteration() {
+    // arrange
+    RecordingImportHandler handler = new RecordingImportHandler(rows(100), 30, false, false, true);
+
+    // act
+    SdkTaskResult result = handler.execute(CTX);
+
+    // assert
+    assertThat(result.success()).isFalse();
+    assertThat(handler.streamCloseCalls).hasValue(1);
   }
 
   @Test
