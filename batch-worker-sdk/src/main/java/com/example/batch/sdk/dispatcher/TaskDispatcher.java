@@ -146,7 +146,8 @@ public class TaskDispatcher {
             msg.taskId(),
             config.getWorkerCode(),
             msg.parameters() == null ? Map.of() : msg.parameters(),
-            msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes());
+            msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes(),
+            msg.schedulingContext());
 
     SdkTaskResult result;
     try {
