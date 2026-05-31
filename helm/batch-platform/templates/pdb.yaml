@@ -20,7 +20,7 @@ PodDisruptionBudget for each application module.
     (dict "name" "worker-import"   "values" .Values.workerImport)
     (dict "name" "worker-export"   "values" .Values.workerExport)
     (dict "name" "worker-dispatch" "values" .Values.workerDispatch)
-    (dict "name" "worker-spi"      "values" .Values.workerSpi)
+    (dict "name" "worker-atomic"   "values" .Values.workerAtomic)
 }}
 {{- range $components }}
 {{- $component := .name }}

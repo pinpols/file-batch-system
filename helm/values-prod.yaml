@@ -149,8 +149,8 @@ workerDispatch:
     failureThreshold: 18
 
 # ADR-029 专用 SPI worker(原子任务 shell/sql/stored-proc/http)。最小权限隔离:
-# 生产务必另配 workerSpi.serviceAccountName / envFromSecretName(独立低权限凭据)。
-workerSpi:
+# 生产务必另配 workerAtomic.serviceAccountName / envFromSecretName(独立低权限凭据)。
+workerAtomic:
   replicaCount: 1
   hpa:
     enabled: true

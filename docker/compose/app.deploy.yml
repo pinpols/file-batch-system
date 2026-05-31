@@ -42,7 +42,7 @@ services:
   worker-dispatch:
     image: ghcr.io/pinpols/worker-dispatch:${IMAGE_TAG:-latest}
     pull_policy: always
-  # ADR-029 专用 SPI worker(原子任务);服务定义在 app.yml,这里只覆盖镜像
-  worker-spi:
-    image: ghcr.io/pinpols/worker-spi:${IMAGE_TAG:-latest}
+  # ADR-029 专用 atomic worker(原子任务);服务定义在 app.yml,这里只覆盖镜像
+  worker-atomic:
+    image: ghcr.io/pinpols/worker-atomic:${IMAGE_TAG:-latest}
     pull_policy: always

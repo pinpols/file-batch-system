@@ -123,7 +123,7 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   private String launch(Map<String, Object> params, String triggerId) {
     LaunchSeed seed =
         E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "SPI", "spi", TriggerType.API);
+            jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
     launchService.launch(
         new LaunchRequest(
             TENANT,

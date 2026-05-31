@@ -10,7 +10,7 @@
 - `worker-import`
 - `worker-export`
 - `worker-dispatch`
-- `worker-spi`
+- `worker-atomic`
 - 可选 `otel-collector`
 
 ## 核心文件

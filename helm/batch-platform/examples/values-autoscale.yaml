@@ -71,11 +71,11 @@ workerDispatch:
     consumerGroup: "batch-worker-dispatch"
 
 # ADR-029 专用 SPI worker(原子任务)— KEDA 按 spi 派发 topic lag 扩缩
-workerSpi:
+workerAtomic:
   keda:
     enabled: true
     minReplicas: 1
     maxReplicas: 4
     lagThreshold: "10"
-    topic: "batch.task.dispatch.spi"
-    consumerGroup: "batch-worker-spi"
+    topic: "batch.task.dispatch.atomic"
+    consumerGroup: "batch-worker-atomic"

@@ -8,7 +8,7 @@ $pidFile = Join-Path $root "logs\start-all.pids"
 $composeEnvFile = Get-EnvValue "COMPOSE_ENV_FILE" ".env.local"
 
 $phases = @(
-  @("阶段 1/3：停止 worker-import / worker-export / worker-process / worker-dispatch / worker-spi", @("worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-spi"))),
+  @("阶段 1/3：停止 worker-import / worker-export / worker-process / worker-dispatch / worker-atomic", @("worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-atomic"))),
   @("阶段 2/3：停止 trigger / console", @("trigger", "console")),
   @("阶段 3/3：停止 orchestrator", @("orchestrator"))
 )

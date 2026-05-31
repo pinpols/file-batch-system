@@ -15,11 +15,11 @@ import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
  * 负载测试:ADR-029 专用 SPI worker 原子任务派发吞吐/时延。
- *   POST /api/triggers/launch  (batch-trigger)  → job_type=SPI → batch.task.dispatch.spi
+ *   POST /api/triggers/launch  (batch-trigger)  → job_type=ATOMIC → batch.task.dispatch.atomic
  *
- * <p>前置:目标库已 seed SPI job(scripts/db/test-seed/platform_seed.sql 的 spi_sql_demo,
+ * <p>前置:目标库已 seed 原子任务 job(scripts/db/test-seed/platform_seed.sql 的 atomic_sql_demo,
  * default_params 自带 {taskType:sql, sql:'SELECT 1'},故 launch params 留空即可),且 batch-worker-atomic
- * 进程在跑(start-all.sh 已含 worker-spi)。SPI 执行器需在该 worker 上 enable(默认全关)。
+ * 进程在跑(start-all.sh 已含 worker-atomic)。执行器需在该 worker 上 enable(默认全关)。
  *
  * <p>本 sim 压的是 launch 派发路径的 SLO(写 p95 + 错误率);执行完成的端到端时延用
  * {@code LaunchPipelineCompletionSimulation} 同款 poll 模式另测。
@@ -27,14 +27,14 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * <p>Run:
  * <pre>
  *   mvn gatling:test -Dsimulation=AtomicTaskDispatchSimulation \
- *       -DjobCode=spi_sql_demo -DtenantId=default-tenant \
+ *       -DjobCode=atomic_sql_demo -DtenantId=default-tenant \
  *       -Dusers.peak=50 -Dduration.seconds=180
  * </pre>
  */
 public class AtomicTaskDispatchSimulation extends Simulation {
 
     private static final String SPI_JOB_CODE =
-            System.getProperty("jobCode", "spi_sql_demo");
+            System.getProperty("jobCode", "atomic_sql_demo");
 
     private final HttpProtocolBuilder httpProtocol = http
             .baseUrl(GatlingConfig.TRIGGER_BASE_URL)

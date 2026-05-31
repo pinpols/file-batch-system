@@ -25,13 +25,13 @@ Phase D · Per-tenant worker pool（按租户物理隔离 worker）。
   "export"   (dict "image" "batch-worker-export"   "port" 18084 "envPrefix" "EXPORT"   "baseTopic" "batch.task.dispatch.export")
   "process"  (dict "image" "batch-worker-process"  "port" 18086 "envPrefix" "PROCESS"  "baseTopic" "batch.task.dispatch.process")
   "dispatch" (dict "image" "batch-worker-dispatch" "port" 18085 "envPrefix" "DISPATCH" "baseTopic" "batch.task.dispatch.dispatch")
-  "spi"      (dict "image" "batch-worker-atomic"      "port" 18087 "envPrefix" "SPI"      "baseTopic" "batch.task.dispatch.spi")
+  "atomic"   (dict "image" "batch-worker-atomic"      "port" 18087 "envPrefix" "ATOMIC"   "baseTopic" "batch.task.dispatch.atomic")
 }}
 {{- range $pool := .Values.tenantWorkerPools }}
 {{- $tenant := required "tenantWorkerPools[].tenantId is required" $pool.tenantId }}
-{{- $wt := required "tenantWorkerPools[].workerType is required (import|export|process|dispatch|spi)" $pool.workerType | lower }}
+{{- $wt := required "tenantWorkerPools[].workerType is required (import|export|process|dispatch|atomic)" $pool.workerType | lower }}
 {{- $meta := get $typeMeta $wt }}
-{{- if not $meta }}{{ fail (printf "tenantWorkerPools: unknown workerType %q (expect import|export|process|dispatch|spi)" $wt) }}{{- end }}
+{{- if not $meta }}{{ fail (printf "tenantWorkerPools: unknown workerType %q (expect import|export|process|dispatch|atomic)" $wt) }}{{- end }}
 {{- $component := printf "worker-%s-%s" $wt $tenant }}
 {{- $port := $meta.port | int }}
 {{- $group := printf "batch-worker-%s-%s" $wt $tenant }}

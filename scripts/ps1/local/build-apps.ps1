@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> 复制可执行 jar 到 build/runtime-jars/..."
 $modules = @("batch-orchestrator", "batch-trigger", "batch-console-api", "batch-worker-import", "batch-worker-export", "batch-worker-process", "batch-worker-dispatch", "batch-worker-atomic")
-$names = @("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-spi")
+$names = @("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-atomic")
 
 for ($i = 0; $i -lt $modules.Count; $i++) {
   $module = $modules[$i]

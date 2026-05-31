@@ -50,7 +50,7 @@ fi
 
 echo "==> 复制可执行 jar 到 build/runtime-jars/..."
 MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch batch-worker-atomic)
-NAMES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-spi)
+NAMES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic)
 for i in "${!MODULES[@]}"; do
   module="${MODULES[$i]}"
   name="${NAMES[$i]}"

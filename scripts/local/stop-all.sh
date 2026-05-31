@@ -18,7 +18,7 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
 # 全量扫描顺序（兜底轮询）；分阶段停止时按 PHASE 使用子集
 RUNTIME_JAVA_NAMES=(
-  worker-import worker-export worker-process worker-dispatch worker-spi
+  worker-import worker-export worker-process worker-dispatch worker-atomic
   trigger console
   orchestrator
 )
@@ -123,7 +123,7 @@ _legacy_module_for_runtime() {
     worker-export) echo batch-worker-export ;;
     worker-process) echo batch-worker-process ;;
     worker-dispatch) echo batch-worker-dispatch ;;
-    worker-spi) echo batch-worker-atomic ;;
+    worker-atomic) echo batch-worker-atomic ;;
     *) echo "" ;;
   esac
 }
@@ -235,7 +235,7 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE"
 fi
 
-stop_phase "阶段 1/3：停止 worker-import / worker-export / worker-process / worker-dispatch / worker-spi" worker-import worker-export worker-process worker-dispatch worker-spi
+stop_phase "阶段 1/3：停止 worker-import / worker-export / worker-process / worker-dispatch / worker-atomic" worker-import worker-export worker-process worker-dispatch worker-atomic
 stop_phase "阶段 2/3：停止 trigger / console" trigger console
 stop_phase "阶段 3/3：停止 orchestrator" orchestrator
 
@@ -259,7 +259,7 @@ _check_port_residual() {
     "worker-export"
     "worker-process"
     "worker-dispatch"
-    "worker-spi"
+    "worker-atomic"
   )
   local ports=(
     "${BATCH_ORCHESTRATOR_PORT:-18082}"
@@ -269,7 +269,7 @@ _check_port_residual() {
     "${BATCH_WORKER_EXPORT_PORT:-18084}"
     "${BATCH_WORKER_PROCESS_PORT:-18086}"
     "${BATCH_WORKER_DISPATCH_PORT:-18085}"
-    "${BATCH_WORKER_SPI_PORT:-18087}"
+    "${BATCH_WORKER_ATOMIC_PORT:-18087}"
   )
   local residuals=()
   local i

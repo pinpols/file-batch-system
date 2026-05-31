@@ -87,7 +87,7 @@ class DefaultStepExecutionAdapterTest {
 
   @Test
   void shouldRouteByPayloadTaskTypeAndPassParams() {
-    // job_type=SPI ⇒ stepCode="SPI";真正子类型 + 参数都在 payload 里。
+    // job_type=ATOMIC ⇒ stepCode="ATOMIC";真正子类型 + 参数都在 payload 里。
     BatchTaskExecutor sql =
         stub(
             "sql",
@@ -104,7 +104,7 @@ class DefaultStepExecutionAdapterTest {
             new StepExecutionRequest(
                 "t1",
                 "job-1",
-                "SPI",
+                "ATOMIC",
                 "w-1",
                 Map.of("payload", "{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}")));
 

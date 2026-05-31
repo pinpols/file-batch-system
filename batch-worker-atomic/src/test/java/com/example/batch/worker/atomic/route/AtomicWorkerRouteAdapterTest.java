@@ -10,7 +10,7 @@ class AtomicWorkerRouteAdapterTest {
   @Test
   void buildDefaultRoute_declaresTaskWorkerTypeAndAvailable() {
     WorkerRouteModel route = new AtomicWorkerRouteAdapter().buildDefaultRoute();
-    assertThat(route.getWorkerType()).isEqualTo("SPI");
+    assertThat(route.getWorkerType()).isEqualTo("ATOMIC");
     assertThat(route.getAvailable()).isTrue();
   }
 }
