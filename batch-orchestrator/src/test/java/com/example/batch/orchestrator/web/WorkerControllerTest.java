@@ -1,13 +1,16 @@
 package com.example.batch.orchestrator.web;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
@@ -90,5 +93,55 @@ class WorkerControllerTest {
         .andExpect(status().isOk());
 
     verify(workerDrainGovernanceService).warmup("t1", "worker-1");
+  }
+
+  // SDK Phase 2 §2.3:心跳回包下发 platform directive
+
+  @Test
+  void heartbeatReturnsNormalDirectiveForOnlineWorker() throws Exception {
+    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+        .thenReturn(onlineWorker("ONLINE", 8));
+
+    mockMvc
+        .perform(
+            post("/internal/workers/worker-1/heartbeat")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.platformStatus").value("NORMAL"))
+        .andExpect(jsonPath("$.shouldDrain").value(false))
+        .andExpect(jsonPath("$.desiredMaxConcurrent").value(8))
+        .andExpect(jsonPath("$.pausedTaskTypes").isEmpty());
+  }
+
+  @Test
+  void heartbeatReturnsDrainDirectiveForDrainingWorker() throws Exception {
+    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+        .thenReturn(onlineWorker("DRAINING", 8));
+
+    mockMvc
+        .perform(
+            post("/internal/workers/worker-1/heartbeat")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.platformStatus").value("DRAINING"))
+        .andExpect(jsonPath("$.shouldDrain").value(true));
+  }
+
+  private WorkerRegistryEntity onlineWorker(String status, Integer maxConcurrent) {
+    return new WorkerRegistryEntity(
+        1L,
+        "t1",
+        "worker-1",
+        "import",
+        null,
+        null,
+        status,
+        BatchDateTimeSupport.utcNow(),
+        2,
+        maxConcurrent,
+        null,
+        null);
   }
 }
