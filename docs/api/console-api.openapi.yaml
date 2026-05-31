@@ -2275,6 +2275,54 @@ paths:
               schema:
                 type: string
                 format: binary
+  /api/console/my-workers:
+    get:
+      tags: [Workers]
+      summary: List self-hosted (SDK) workers for current tenant (ADR-035 P4)
+      operationId: listMyWorkers
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of self-hosted workers (is_self_hosted=true), heartbeat_at desc
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/console/my-workers/count:
+    get:
+      tags: [Workers]
+      summary: Count self-hosted workers for current tenant (dashboard)
+      operationId: countMyWorkers
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Count of self-hosted workers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data: { type: integer, format: int64 }
   /api/console/workers/{workerCode}/drain:
     post:
       tags: [Workers]
