@@ -35,8 +35,8 @@ import org.springframework.stereotype.Component;
  * </ol>
  *
  * <p>实际生产中 4 个 pipeline worker 都注册了 {@code @Primary},Pipeline 任务永远走 Pipeline 路径; 专用
- * batch-worker-spi 进程不含任何 Pipeline adapter,故原子任务派发命中本类。设计见 {@code docs/design/task-spi-design.md}
- * §4.4。
+ * batch-worker-atomic 进程不含任何 Pipeline adapter,故原子任务派发命中本类。设计见 {@code
+ * docs/design/task-spi-design.md} §4.4。
  */
 @Slf4j
 @Component

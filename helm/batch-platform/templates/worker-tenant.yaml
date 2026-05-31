@@ -25,7 +25,7 @@ Phase D · Per-tenant worker pool（按租户物理隔离 worker）。
   "export"   (dict "image" "batch-worker-export"   "port" 18084 "envPrefix" "EXPORT"   "baseTopic" "batch.task.dispatch.export")
   "process"  (dict "image" "batch-worker-process"  "port" 18086 "envPrefix" "PROCESS"  "baseTopic" "batch.task.dispatch.process")
   "dispatch" (dict "image" "batch-worker-dispatch" "port" 18085 "envPrefix" "DISPATCH" "baseTopic" "batch.task.dispatch.dispatch")
-  "spi"      (dict "image" "batch-worker-spi"      "port" 18087 "envPrefix" "SPI"      "baseTopic" "batch.task.dispatch.spi")
+  "spi"      (dict "image" "batch-worker-atomic"      "port" 18087 "envPrefix" "SPI"      "baseTopic" "batch.task.dispatch.spi")
 }}
 {{- range $pool := .Values.tenantWorkerPools }}
 {{- $tenant := required "tenantWorkerPools[].tenantId is required" $pool.tenantId }}

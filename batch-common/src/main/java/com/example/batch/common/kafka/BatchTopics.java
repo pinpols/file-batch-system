@@ -6,7 +6,7 @@ public final class BatchTopics {
   public static final String TASK_DISPATCH_EXPORT = "batch.task.dispatch.export";
   public static final String TASK_DISPATCH_PROCESS = "batch.task.dispatch.process";
   public static final String TASK_DISPATCH_DISPATCH = "batch.task.dispatch.dispatch";
-  // ADR-029:专用 SPI worker(batch-worker-spi)的派发 topic,不跟 pipeline worker 混用。
+  // ADR-029:专用 SPI worker(batch-worker-atomic)的派发 topic,不跟 pipeline worker 混用。
   public static final String TASK_DISPATCH_SPI = "batch.task.dispatch.spi";
   public static final String TASK_RESULT = "batch.task.result";
   public static final String TASK_RETRY = "batch.task.retry";

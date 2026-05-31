@@ -28,7 +28,7 @@ LEGACY_JAR_MODULES=(
   batch-worker-export
   batch-worker-process
   batch-worker-dispatch
-  batch-worker-spi
+  batch-worker-atomic
   batch-trigger
   batch-console-api
   batch-orchestrator
@@ -123,7 +123,7 @@ _legacy_module_for_runtime() {
     worker-export) echo batch-worker-export ;;
     worker-process) echo batch-worker-process ;;
     worker-dispatch) echo batch-worker-dispatch ;;
-    worker-spi) echo batch-worker-spi ;;
+    worker-spi) echo batch-worker-atomic ;;
     *) echo "" ;;
   esac
 }
