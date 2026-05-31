@@ -53,21 +53,123 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
   @Override
   protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
     String sql = readSql(ctx);
+    List<String> statements = splitStatements(sql);
+    if (statements.isEmpty()) {
+      throw new IllegalArgumentException("no executable SQL statement found");
+    }
+    if (statements.size() > config.maxStatementsPerJob()) {
+      throw new IllegalArgumentException(
+          "too many statements: "
+              + statements.size()
+              + " > maxStatementsPerJob="
+              + config.maxStatementsPerJob());
+    }
     try (Connection conn = dataSource.getConnection()) {
       if (config.forbidOsCapableRole()) {
         assertNotOsCapableRole(conn);
       }
-      try (Statement st = conn.createStatement()) {
-        st.setQueryTimeout(config.statementTimeoutSeconds());
-        boolean hasRs = st.execute(sql);
-        if (hasRs) {
-          try (ResultSet rs = st.getResultSet()) {
-            return readResultSet(rs);
+      return runStatements(conn, statements);
+    }
+  }
+
+  /** 按 defaultAutoCommit 决定事务边界,逐条执行,聚合 affectedRows + 最后一个 ResultSet。 */
+  private Map<String, Object> runStatements(Connection conn, List<String> statements)
+      throws Exception {
+    boolean autoCommit = config.defaultAutoCommit();
+    boolean originalAutoCommit = conn.getAutoCommit();
+    long totalAffected = 0;
+    Map<String, Object> lastResultSet = null;
+    try {
+      conn.setAutoCommit(autoCommit);
+      for (String one : statements) {
+        try (Statement st = conn.createStatement()) {
+          st.setQueryTimeout(config.statementTimeoutSeconds());
+          boolean hasRs = st.execute(one);
+          if (hasRs) {
+            try (ResultSet rs = st.getResultSet()) {
+              lastResultSet = readResultSet(rs);
+            }
+          } else {
+            int affected = st.getUpdateCount();
+            if (affected > 0) totalAffected += affected;
           }
         }
-        return Map.of("affectedRows", st.getUpdateCount());
+      }
+      if (!autoCommit) conn.commit();
+    } catch (Exception ex) {
+      if (!autoCommit) {
+        try {
+          conn.rollback();
+        } catch (Exception rbEx) {
+          log.warn("rollback failed: {}", rbEx.getMessage());
+        }
+      }
+      throw ex;
+    } finally {
+      try {
+        conn.setAutoCommit(originalAutoCommit);
+      } catch (Exception restoreEx) {
+        log.warn("restore autoCommit failed: {}", restoreEx.getMessage());
       }
     }
+    if (lastResultSet != null) {
+      lastResultSet.put("statementCount", statements.size());
+      lastResultSet.put("totalAffectedRows", totalAffected);
+      return lastResultSet;
+    }
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("statementCount", statements.size());
+    out.put("affectedRows", totalAffected);
+    return out;
+  }
+
+  /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内的 `;`。简化版,不处理 dollar-quote。 */
+  static List<String> splitStatements(String sql) {
+    List<String> out = new ArrayList<>();
+    StringBuilder buf = new StringBuilder();
+    boolean inSingle = false;
+    boolean inDouble = false;
+    boolean inLineComment = false;
+    boolean inBlockComment = false;
+    char prev = 0;
+    for (int i = 0; i < sql.length(); i++) {
+      char c = sql.charAt(i);
+      if (inLineComment) {
+        if (c == '\n') inLineComment = false;
+        buf.append(c);
+      } else if (inBlockComment) {
+        if (prev == '*' && c == '/') inBlockComment = false;
+        buf.append(c);
+      } else if (inSingle) {
+        if (c == '\'') inSingle = false;
+        buf.append(c);
+      } else if (inDouble) {
+        if (c == '"') inDouble = false;
+        buf.append(c);
+      } else if (prev == '-' && c == '-') {
+        inLineComment = true;
+        buf.append(c);
+      } else if (prev == '/' && c == '*') {
+        inBlockComment = true;
+        buf.append(c);
+      } else if (c == '\'') {
+        inSingle = true;
+        buf.append(c);
+      } else if (c == '"') {
+        inDouble = true;
+        buf.append(c);
+      } else if (c == ';') {
+        String stmt = buf.toString().trim();
+        if (!stmt.isEmpty()) out.add(stmt);
+        buf.setLength(0);
+      } else {
+        buf.append(c);
+      }
+      prev = c;
+    }
+    String tail = buf.toString().trim();
+    if (!tail.isEmpty()) out.add(tail);
+    return out;
   }
 
   @Override

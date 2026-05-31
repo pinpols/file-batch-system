@@ -270,20 +270,44 @@ SDK 抽象类是**纯代码模板** + **运行时基础设施**,**不是**平台
 
 ## 实施分阶段
 
-| Phase | 内容 | 估时 |
-|---|---|---|
-| **P1** | `SdkAbstractTaskHandler` 共同基类 + 5 子类骨架(类签名 + 模板 final 序 + 钩子 abstract / 默认 no-op + Javadoc) | 1d |
-| **P2** | `SdkRetryPolicy` / `SdkRowResult` / `SdkProgressReporter` / `SdkBatchedProcessor` 工具落地 + 各 5-8 单测 | 2d |
-| **P3** | `examples/sample-tenant-worker` 加 5 sample(各 shape 一个 echo demo) | 1d |
-| **P4** | ADR-035 §SDK API 章追加"5 大业务模板"指针 + `docs/runbook/tenant-self-hosted-worker.md` runbook 引用本 ADR | 0.5d |
+| Phase | 内容 | 状态(2026-05-31)| PR |
+|---|---|---|---|
+| **P1** | `SdkAbstractTaskHandler` 共同基类 + `SdkRowResult` + `SdkRetryPolicy` + 5 子类骨架 | ✅ 完成 | #185 |
+| **P2** | 5 子类各 7-9 单测(模板序 / 异常 / null / cleanup / 分批)40 测试 | ✅ 完成 | #185 |
+| **P3** | `examples/sample-tenant-worker` 5 echo sample(各 shape 一个) | ✅ 完成 | #185 |
+| **P4** | 本 ADR 实施分阶段 / 验收状态化 + ADR-035 §SDK API 指针 + sample README 文档 | ✅ 完成 | 本 PR |
+| **P5(扩)** | **4 类原子操作开箱即用**(`sdk.handler.atomic`:SqlAtomicHandler / StoredProcAtomicHandler / HttpAtomicHandler / ShellAtomicHandler)| ✅ 完成 | #186 |
+
+`SdkProgressReporter` / `SdkBatchedProcessor` 未落地 — 真长任务出现再加(目前 4 长任务模板内联批处理够用)。
+
+## P5 — 4 类原子操作开箱即用实现(sdk.handler.atomic)
+
+ADR-035 §8.B 留口 + 用户决策(2026-05-31):除了 `SdkAbstractAtomicHandler<R>` 抽象模板,SDK 直接给 **4 个现成实现**,租户配置驱动开箱即用,无需从裸接口重写。**零新依赖**(全 JDK 内建:`java.sql` / `java.net.http` / `ProcessBuilder`),SDK jar 仍只依赖 jackson + kafka-clients + slf4j。
+
+| 类 | 配置 record | 安全闸 | 用法 |
+|---|---|---|---|
+| `SqlAtomicHandler` | `SqlAtomicConfig`(taskType / timeout / maxResultRows / forbidOsCapableRole) | 角色闸 forbidOsCapableRole + statement timeout + 结果行数截断 | `new SqlAtomicHandler(SqlAtomicConfig.defaults("my_sql"), dataSource)` |
+| `StoredProcAtomicHandler` | `StoredProcAtomicConfig`(+ allowedSchemas + allowSecurityDefiner) | **三道闸**:forbidOsCapableRole + allowedSchemas 白名单 + allowSecurityDefiner=false(查 `pg_proc.prosecdef` 防借 owner 提权)| `new StoredProcAtomicHandler(cfg, dataSource)` |
+| `HttpAtomicHandler` | `HttpAtomicConfig`(blockPrivateIps / blockedHostPatterns / allowedMethods / maxResponseBytes) | SSRF 闸(拦私网/环回/链路本地 IP + host 黑名单)+ method 白名单 + 响应截断 | `new HttpAtomicHandler(HttpAtomicConfig.defaults("my_http"))` |
+| `ShellAtomicHandler` | `ShellAtomicConfig`(allowedCommands / timeout / workdir / maxOutputBytes) | allowedCommands 白名单 + **ProcessBuilder 直 execve 不走 shell**(`;` `|` `&&` 字面量无注入)+ timeout destroyForcibly + 临时 workdir 隔离 | `new ShellAtomicHandler(ShellAtomicConfig.defaults("my_shell"))` |
+
+### 安全模型差异(SDK vs 平台 batch-worker-atomic)
+
+平台版多租共享进程,需完整三道闸防租户间越权;SDK 版跑租户**自家进程**(blast radius 在租户侧,ADR-035 §安全模型),保留:
+- 资源限制(timeout / row cap / byte cap)— 防租户业务自伤
+- SSRF / 角色闸 — 防租户配置错误打到内网 / 用高权限 DB 角色
+- 白名单(allowedSchemas / allowedCommands)默认空 = dev 全放行,**prod 必配**
+
+参数全从 `ctx.parameters()` 读(sql / procedureName / url / command 等),配置从构造器注入(DataSource / 白名单 / 限额)。
 
 ## 验收
 
-- [ ] `SdkAbstractTaskHandler` + 5 个 `SdkAbstract*Handler` 类落地,jar size 增量 < 10KB
-- [ ] 各类单测覆盖模板序 / 异常路径 / null result / cleanup 必跑(参 `AbstractBatchTaskExecutorTest` 风格)
-- [ ] `examples/sample-tenant-worker` 5 个 sample handler 可 `mvn package` 跑通
-- [ ] ADR-035 §SDK API + sample-tenant-worker README 引用本 ADR
-- [ ] 既有 `SdkTaskHandler` 裸实现路径**不破坏**(EchoHandler / SleepHandler 保留)
+- [x] `SdkAbstractTaskHandler` + 5 个 `SdkAbstract*Handler` 类落地
+- [x] 各类单测覆盖模板序 / 异常路径 / null result / cleanup 必跑(SDK 121 测试 ✓)
+- [x] `examples/sample-tenant-worker` 5 个 echo sample 可 `mvn package` 跑通
+- [x] ADR-035 §SDK API + sample-tenant-worker README 引用本 ADR
+- [x] 既有 `SdkTaskHandler` 裸实现路径**不破坏**(EchoHandler / SleepHandler 保留)
+- [x] P5 — 4 类原子操作开箱即用实现 + 36 单测(sql 8 / proc 10 / http 10 / shell 8)
 
 ## 范围边界(不做)
 

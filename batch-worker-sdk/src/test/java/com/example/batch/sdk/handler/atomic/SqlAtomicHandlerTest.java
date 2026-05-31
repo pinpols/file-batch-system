@@ -97,7 +97,7 @@ class SqlAtomicHandlerTest {
 
     // assert
     assertThat(result.success()).isTrue();
-    assertThat(result.output()).containsEntry("affectedRows", 7);
+    assertThat(result.output()).containsEntry("affectedRows", 7L);
   }
 
   @Test
@@ -140,7 +140,7 @@ class SqlAtomicHandlerTest {
     when(connection.createStatement()).thenReturn(statement);
     when(statement.execute(anyString())).thenReturn(false);
     when(statement.getUpdateCount()).thenReturn(0);
-    var cfg = new SqlAtomicConfig("sql", 30, 10000, false);
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, false);
 
     // act
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
@@ -164,7 +164,7 @@ class SqlAtomicHandlerTest {
     when(meta.getColumnLabel(1)).thenReturn("n");
     when(rs.next()).thenReturn(true);
     when(rs.getObject(1)).thenReturn(9);
-    var cfg = new SqlAtomicConfig("sql", 30, 2, true);
+    var cfg = new SqlAtomicConfig("sql", 30, 2, 50, false, true);
 
     // act
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("SELECT * FROM big"));
@@ -181,7 +181,7 @@ class SqlAtomicHandlerTest {
     stubRoleGateAllows();
     when(statement.execute(anyString())).thenReturn(false);
     when(statement.getUpdateCount()).thenReturn(0);
-    var cfg = new SqlAtomicConfig("sql", 45, 10000, true);
+    var cfg = new SqlAtomicConfig("sql", 45, 10000, 50, false, true);
 
     // act
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
@@ -196,5 +196,73 @@ class SqlAtomicHandlerTest {
   void shouldExposeTaskType_fromConfig() {
     var handler = new SqlAtomicHandler(SqlAtomicConfig.defaults("tenant_sql"), dataSource);
     assertThat(handler.taskType()).isEqualTo("tenant_sql");
+  }
+
+  // ─── 对齐平台:maxStatementsPerJob + 多语句 + autoCommit ──────────────────────
+
+  @Test
+  @DisplayName("超 maxStatementsPerJob → fail(不连 DB)")
+  void shouldRejectTooManyStatements_whenExceedMax() {
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 2, false, true);
+    SdkTaskResult result =
+        new SqlAtomicHandler(cfg, dataSource)
+            .execute(ctx("UPDATE a SET x=1; UPDATE b SET y=2; UPDATE c SET z=3;"));
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("too many statements");
+  }
+
+  @Test
+  @DisplayName("多语句逐条执行 + affectedRows 聚合 + statementCount")
+  void shouldRunMultipleStatements_andAggregate() throws Exception {
+    Statement probe = mock(Statement.class);
+    ResultSet probeRs = mock(ResultSet.class);
+    when(probe.executeQuery(anyString())).thenReturn(probeRs);
+    when(probeRs.next()).thenReturn(true);
+    when(probeRs.getBoolean(1)).thenReturn(false);
+    Statement st1 = mock(Statement.class);
+    Statement st2 = mock(Statement.class);
+    when(st1.execute(anyString())).thenReturn(false);
+    when(st1.getUpdateCount()).thenReturn(3);
+    when(st2.execute(anyString())).thenReturn(false);
+    when(st2.getUpdateCount()).thenReturn(4);
+    when(connection.createStatement()).thenReturn(probe).thenReturn(st1).thenReturn(st2);
+
+    SdkTaskResult result =
+        new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource)
+            .execute(ctx("UPDATE a SET x=1; UPDATE b SET y=2;"));
+
+    assertThat(result.success()).isTrue();
+    assertThat(result.output())
+        .containsEntry("statementCount", 2)
+        .containsEntry("affectedRows", 7L);
+  }
+
+  @Test
+  @DisplayName("defaultAutoCommit=false → 全部成功后 commit")
+  void shouldCommit_whenAutoCommitFalse() throws Exception {
+    stubRoleGateAllows();
+    when(statement.execute(anyString())).thenReturn(false);
+    when(statement.getUpdateCount()).thenReturn(1);
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, true);
+
+    SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
+
+    assertThat(result.success()).isTrue();
+    // 注:setAutoCommit(false) 会被调 2 次(进入设 + finally restore,mock 默认 originalAutoCommit=false),只验
+    // commit
+    verify(connection).commit();
+  }
+
+  @Test
+  @DisplayName("defaultAutoCommit=false + 执行异常 → rollback")
+  void shouldRollback_onErrorWhenAutoCommitFalse() throws Exception {
+    stubRoleGateAllows();
+    when(statement.execute(anyString())).thenThrow(new java.sql.SQLException("boom"));
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, true);
+
+    SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
+
+    assertThat(result.success()).isFalse();
+    verify(connection).rollback();
   }
 }
