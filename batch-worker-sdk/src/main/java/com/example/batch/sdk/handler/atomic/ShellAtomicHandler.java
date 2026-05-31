@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -109,7 +110,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
   }
 
   private Map<String, Object> runProcess(List<String> cmd, Path workdir)
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, TimeoutException {
     ProcessBuilder pb = new ProcessBuilder(cmd).directory(workdir.toFile());
     pb.redirectErrorStream(false);
 
@@ -128,7 +129,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
       process.destroyForcibly();
       stdoutThread.join();
       stderrThread.join();
-      throw new RuntimeException(
+      throw new TimeoutException(
           "shell command timeout after " + config.timeoutSeconds() + "s: " + cmd.get(0));
     }
 
