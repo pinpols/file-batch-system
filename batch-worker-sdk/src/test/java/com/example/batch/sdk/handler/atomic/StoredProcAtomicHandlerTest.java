@@ -143,7 +143,8 @@ class StoredProcAtomicHandlerTest {
   @DisplayName("闸 2:schema 不在白名单 → SecurityException → fail")
   void shouldFail_whenSchemaNotAllowed() {
     StoredProcAtomicConfig cfg =
-        new StoredProcAtomicConfig("stored_proc", Set.of("batch"), false, true, 60);
+        new StoredProcAtomicConfig(
+            "stored_proc", Set.of("batch"), false, true, false, 60, 65536, false);
 
     SdkTaskResult r =
         new StoredProcAtomicHandler(cfg, dataSource)
@@ -161,7 +162,8 @@ class StoredProcAtomicHandlerTest {
     stubSecDefGate(false);
     stubCall();
     StoredProcAtomicConfig cfg =
-        new StoredProcAtomicConfig("stored_proc", Set.of("batch"), false, true, 60);
+        new StoredProcAtomicConfig(
+            "stored_proc", Set.of("batch"), false, true, false, 60, 65536, false);
 
     SdkTaskResult r =
         new StoredProcAtomicHandler(cfg, dataSource)
@@ -211,7 +213,7 @@ class StoredProcAtomicHandlerTest {
     stubRoleGate(false);
     stubCall();
     StoredProcAtomicConfig cfg =
-        new StoredProcAtomicConfig("stored_proc", Set.of(), true, true, 60);
+        new StoredProcAtomicConfig("stored_proc", Set.of(), true, true, false, 60, 65536, false);
 
     SdkTaskResult r =
         new StoredProcAtomicHandler(cfg, dataSource)
@@ -245,5 +247,100 @@ class StoredProcAtomicHandlerTest {
     assertThat(StoredProcAtomicHandler.buildCall("batch.foo", 0)).isEqualTo("{call batch.foo()}");
     assertThat(StoredProcAtomicHandler.buildCall("batch.foo", 3))
         .isEqualTo("{call batch.foo(?,?,?)}");
+  }
+
+  // ─── 对齐平台:闸 4 verifyExecutePrivilege + maxOutBytesPerParam + autoCommit ───
+
+  /** 把 has_function_privilege 查询接到 execPs/execRs(按 SQL 文本路由,与角色/secdef 区分)。 */
+  private void stubAllGateQueries(boolean osCapable, boolean secdef, boolean hasExec)
+      throws Exception {
+    PreparedStatement execPs = mock(PreparedStatement.class);
+    ResultSet execRs = mock(ResultSet.class);
+    when(connection.prepareStatement(anyString()))
+        .thenAnswer(
+            inv -> {
+              String sql = inv.getArgument(0);
+              if (sql.contains("pg_execute_server_program")) return rolePs;
+              if (sql.contains("has_function_privilege")) return execPs;
+              return secdefPs;
+            });
+    when(rolePs.executeQuery()).thenReturn(roleRs);
+    when(roleRs.next()).thenReturn(true);
+    when(roleRs.getBoolean(1)).thenReturn(osCapable);
+    when(secdefPs.executeQuery()).thenReturn(secdefRs);
+    when(secdefRs.next()).thenReturn(true);
+    when(secdefRs.getBoolean(1)).thenReturn(secdef);
+    when(execPs.executeQuery()).thenReturn(execRs);
+    when(execRs.next()).thenReturn(true);
+    when(execRs.getBoolean(1)).thenReturn(hasExec);
+  }
+
+  @Test
+  @DisplayName("闸 4:verifyExecutePrivilege=true + 无 EXECUTE 权限 → fail")
+  void shouldFail_whenNoExecutePrivilege() throws Exception {
+    stubAllGateQueries(false, false, false); // 无 exec 权限
+    stubCall();
+    var cfg =
+        new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, true, 60, 65536, false);
+    SdkTaskResult r =
+        new StoredProcAtomicHandler(cfg, dataSource)
+            .execute(ctx(Map.of("procedureName", "batch.refresh")));
+    assertThat(r.success()).isFalse();
+    assertThat(r.message()).contains("EXECUTE privilege");
+    verify(callableStatement, never()).execute();
+  }
+
+  @Test
+  @DisplayName("闸 4:verifyExecutePrivilege=true + 有权限 → 放行")
+  void shouldPass_whenHasExecutePrivilege() throws Exception {
+    stubAllGateQueries(false, false, true); // 有 exec 权限
+    stubCall();
+    when(callableStatement.getObject(1)).thenReturn(1);
+    var cfg =
+        new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, true, 60, 65536, false);
+    SdkTaskResult r =
+        new StoredProcAtomicHandler(cfg, dataSource)
+            .execute(
+                ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
+    assertThat(r.success()).isTrue();
+  }
+
+  @Test
+  @DisplayName("maxOutBytesPerParam:OUT 超上限 → 截断 + 标记")
+  void shouldTruncateOut_whenExceedMaxBytes() throws Exception {
+    stubGateQueries();
+    stubRoleGate(false);
+    stubSecDefGate(false);
+    stubCall();
+    String big = "x".repeat(100);
+    when(callableStatement.getObject(1)).thenReturn(big);
+    var cfg =
+        new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, false, 60, 10, false);
+    SdkTaskResult r =
+        new StoredProcAtomicHandler(cfg, dataSource)
+            .execute(
+                ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("VARCHAR"))));
+    assertThat(r.success()).isTrue();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> out = (Map<String, Object>) r.output().get("outValues");
+    assertThat((String) out.get("p1")).startsWith("xxxxxxxxxx").contains("truncated");
+  }
+
+  @Test
+  @DisplayName("defaultAutoCommit=false → 成功后 commit")
+  void shouldCommit_whenAutoCommitFalse() throws Exception {
+    stubGateQueries();
+    stubRoleGate(false);
+    stubSecDefGate(false);
+    stubCall();
+    when(callableStatement.getObject(1)).thenReturn(1);
+    var cfg =
+        new StoredProcAtomicConfig("stored_proc", Set.of(), false, true, false, 60, 65536, false);
+    SdkTaskResult r =
+        new StoredProcAtomicHandler(cfg, dataSource)
+            .execute(
+                ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
+    assertThat(r.success()).isTrue();
+    verify(connection).commit();
   }
 }

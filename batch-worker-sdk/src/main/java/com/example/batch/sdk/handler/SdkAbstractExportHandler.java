@@ -3,6 +3,7 @@ package com.example.batch.sdk.handler;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.Iterator;
+import java.util.stream.Stream;
 
 /**
  * ADR-036 — Export 模板:tenant → external(tenant DB → file)。
@@ -20,8 +21,11 @@ public abstract class SdkAbstractExportHandler<R> extends SdkAbstractTaskHandler
   /** 构造查询(从 ctx.parameters 拼 SQL / 过滤条件)。 */
   protected abstract String buildQuery(SdkTaskContext ctx) throws Exception;
 
-  /** 按 query 流式读租户表行。 */
-  protected abstract Iterator<R> streamRows(SdkTaskContext ctx, String query) throws Exception;
+  /**
+   * 按 query 流式读租户表行。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放; 租户可直接返 {@code
+   * jdbcTemplate.queryForStream(query, rowMapper)}。
+   */
+  protected abstract Stream<R> streamRows(SdkTaskContext ctx, String query) throws Exception;
 
   /** 单行格式化写出(写一行到 sink)。 */
   protected abstract void formatRow(SdkTaskContext ctx, R row) throws Exception;
@@ -36,10 +40,12 @@ public abstract class SdkAbstractExportHandler<R> extends SdkAbstractTaskHandler
       openSink(ctx);
       String q = buildQuery(ctx);
       SdkRowResult counts = new SdkRowResult();
-      Iterator<R> it = streamRows(ctx, q);
-      while (it.hasNext()) {
-        formatRow(ctx, it.next());
-        counts.incSuccess();
+      try (Stream<R> rows = streamRows(ctx, q)) {
+        Iterator<R> it = rows.iterator();
+        while (it.hasNext()) {
+          formatRow(ctx, it.next());
+          counts.incSuccess();
+        }
       }
       SdkTaskResult r = writeOut(ctx, counts);
       return r == null

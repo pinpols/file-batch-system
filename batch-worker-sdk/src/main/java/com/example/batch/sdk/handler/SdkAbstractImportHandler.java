@@ -5,14 +5,18 @@ import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
 /** ADR-036 — Import 模板:external → tenant(file → tenant DB)。 */
 public abstract class SdkAbstractImportHandler<R> extends SdkAbstractTaskHandler {
   /** 打开数据源(连 SFTP / 下载文件 / 开 stream)。 */
   protected abstract void openSource(SdkTaskContext ctx) throws Exception;
 
-  /** 返回行迭代器(逐行解析)。 */
-  protected abstract Iterator<R> readRows(SdkTaskContext ctx) throws Exception;
+  /**
+   * 返回行流(逐行解析)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} / {@code InputStream}
+   * 在读完或异常时都释放;租户可直接返 {@code jdbcTemplate.queryForStream(...)} / {@code Files.lines(...)}。
+   */
+  protected abstract Stream<R> readRows(SdkTaskContext ctx) throws Exception;
 
   /** 批量写入租户自家目标表。 */
   protected abstract void loadBatch(SdkTaskContext ctx, List<R> batch) throws Exception;
@@ -28,11 +32,13 @@ public abstract class SdkAbstractImportHandler<R> extends SdkAbstractTaskHandler
       openSource(ctx);
       SdkRowResult counts = new SdkRowResult();
       List<R> buf = new ArrayList<>(batchSize());
-      Iterator<R> it = readRows(ctx);
-      while (it.hasNext()) {
-        buf.add(it.next());
-        if (buf.size() >= batchSize()) {
-          flush(ctx, buf, counts);
+      try (Stream<R> rows = readRows(ctx)) {
+        Iterator<R> it = rows.iterator();
+        while (it.hasNext()) {
+          buf.add(it.next());
+          if (buf.size() >= batchSize()) {
+            flush(ctx, buf, counts);
+          }
         }
       }
       if (!buf.isEmpty()) {

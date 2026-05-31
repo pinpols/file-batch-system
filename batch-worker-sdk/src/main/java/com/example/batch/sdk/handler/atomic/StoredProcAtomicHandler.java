@@ -91,8 +91,23 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
       if (!config.allowSecurityDefiner()) {
         requireNotSecurityDefiner(conn, procName);
       }
+      // 闸 4 — EXECUTE 权限校验(opt-in,对齐平台 verifyExecutePrivilege)
+      if (config.verifyExecutePrivilege()) {
+        requireExecutePrivilege(conn, procName);
+      }
+      return runCall(conn, procName, inParams, outTypes, totalParams);
+    }
+  }
 
-      try (CallableStatement cs = conn.prepareCall(buildCall(procName, totalParams))) {
+  /** 按 defaultAutoCommit 决定事务边界,执行 CALL,读 OUT(按 maxOutBytesPerParam 截断)。 */
+  private Map<String, Object> runCall(
+      Connection conn, String procName, List<Object> inParams, List<String> outTypes, int total)
+      throws Exception {
+    boolean autoCommit = config.defaultAutoCommit();
+    boolean originalAutoCommit = conn.getAutoCommit();
+    try {
+      conn.setAutoCommit(autoCommit);
+      try (CallableStatement cs = conn.prepareCall(buildCall(procName, total))) {
         cs.setQueryTimeout(config.statementTimeoutSeconds());
         for (int i = 0; i < inParams.size(); i++) {
           cs.setObject(i + 1, inParams.get(i));
@@ -104,8 +119,9 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
 
         Map<String, Object> outValues = new LinkedHashMap<>();
         for (int i = 0; i < outTypes.size(); i++) {
-          outValues.put("p" + (i + 1), cs.getObject(inParams.size() + i + 1));
+          outValues.put("p" + (i + 1), truncateOut(cs.getObject(inParams.size() + i + 1)));
         }
+        if (!autoCommit) conn.commit();
 
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("outValues", outValues);
@@ -113,6 +129,52 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
         log.info(
             "stored proc {} called (in={}, out={})", procName, inParams.size(), outTypes.size());
         return output;
+      }
+    } catch (Exception ex) {
+      if (!autoCommit) {
+        try {
+          conn.rollback();
+        } catch (Exception rbEx) {
+          log.warn("rollback failed: {}", rbEx.getMessage());
+        }
+      }
+      throw ex;
+    } finally {
+      try {
+        conn.setAutoCommit(originalAutoCommit);
+      } catch (Exception restoreEx) {
+        log.warn("restore autoCommit failed: {}", restoreEx.getMessage());
+      }
+    }
+  }
+
+  /** OUT 值字符串化后超 maxOutBytesPerParam(UTF-8 字节)则截断 + 标记。 */
+  private Object truncateOut(Object value) {
+    if (!(value instanceof String s)) {
+      return value;
+    }
+    byte[] bytes = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    if (bytes.length <= config.maxOutBytesPerParam()) {
+      return s;
+    }
+    // 截断到字节上限(可能切断多字节字符,用 String 解码兜底)
+    String truncated =
+        new String(bytes, 0, config.maxOutBytesPerParam(), java.nio.charset.StandardCharsets.UTF_8);
+    return truncated + "...[truncated " + bytes.length + " bytes]";
+  }
+
+  /** 闸 4 — current_user 对目标过程无 EXECUTE 权限则拒(has_function_privilege)。 */
+  private void requireExecutePrivilege(Connection conn, String procName) throws Exception {
+    String sql = "select has_function_privilege(current_user, ?, 'EXECUTE')";
+    try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+      // has_function_privilege 需要 regprocedure 形式(proc 名 + 参数签名);简化:用 proc 名 + "()" 兜底,
+      // 真业务过程有参数时建议直接给 schema-qualified 名,PG 会按名解析。无参或重载场景由 DB 报错兜底。
+      ps.setString(1, procName);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (rs.next() && !rs.getBoolean(1)) {
+          throw new SecurityException(
+              "current_user lacks EXECUTE privilege on procedure: " + procName);
+        }
       }
     }
   }
