@@ -51,6 +51,7 @@ public record TaskDispatchMessage(
    * 8 参兼容构造器 —— 带 schemaVersion 但无 schedulingContext(Phase 2 前的 canonical),schedulingContext 走
    * null。
    */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public TaskDispatchMessage(
       String schemaVersion,
       Long taskId,
