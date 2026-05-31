@@ -43,4 +43,9 @@ public record TaskDispatchMessage(
     String priorityBand,
     String traceId,
     String idempotencyKey,
-    Instant dispatchAt) {}
+    Instant dispatchAt,
+    /**
+     * SDK Phase 2 §2.1:派单时刻确定的调度上下文(bizDate / 前后业务日 / 重试序号 / 触发来源)。 这些是任务的不可变事实,随消息下沉供 SDK handler
+     * 直接读取,无需回调平台查。可空(老消息 / 无上下文场景)。
+     */
+    SchedulingContext schedulingContext) {}
