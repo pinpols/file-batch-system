@@ -70,7 +70,7 @@
 
 - 租户代码跑在租户自己机器 → blast radius 在租户侧
 - 平台只校验 API key + ACL,所有租户输入(REPORT body / heartbeat metric)按 untrusted 处理(JSON schema 校验)
-- ADR-029 的 `batch-worker-spi`(SQL/StoredProc/HTTP **3 件套**)定位不变 — 仍是「平台代部署的内建 dual-use worker」;**shell 不在平台内建集内**(理由见 §8)
+- ADR-029 的 `batch-worker-atomic`(SQL/StoredProc/HTTP **3 件套**)定位不变 — 仍是「平台代部署的内建 dual-use worker」;**shell 不在平台内建集内**(理由见 §8)
 
 ### 4. 范围边界(不做)
 
@@ -135,24 +135,24 @@
 
 ### 8. Shell 执行能力 — 平台内建但默认 OFF + 租户自托管为主
 
-**结论**(2026-05-31 修订):`ShellTaskExecutor` **作为平台内建 SPI 提供**(在 `batch-worker-spi.shell` 包),但 **默认完全关闭**(`batch.worker.executors.shell.enabled=false`,bean 不注册 / SPI registry 找不到 "shell" type)。需要在平台侧开 shell 的部署**必须显式 opt-in**并自行承担风险(下方"启用风险"清单)。租户跑 shell **首选自托管 SDK** 形态(§A/B)。
+**结论**(2026-05-31 修订):`ShellTaskExecutor` **作为平台内建 SPI 提供**(在 `batch-worker-atomic.shell` 包),但 **默认完全关闭**(`batch.worker.executors.shell.enabled=false`,bean 不注册 / SPI registry 找不到 "shell" type)。需要在平台侧开 shell 的部署**必须显式 opt-in**并自行承担风险(下方"启用风险"清单)。租户跑 shell **首选自托管 SDK** 形态(§A/B)。
 
 **启用风险**(opt-in 前必须了解):in-process shell 命令继承 worker **进程**身份 / 挂载卷 / ServiceAccount token,任何 app 层白名单都堵不住;多租户共享部署里一个租户的 shell 命令可触及其它租户数据 / 平台凭据。要在平台侧安全跑 shell 真正的隔离需要"一次性隔离 compute"(K8sPodOperator / 容器 per-task / microVM),撞 ADR-027「挑 worker √ vs 挑机器 ✗」边界。本系统平台域内常规任务由 SQL/StoredProc/HTTP + 文件 pipeline 覆盖,通常**无须** shell。
 
 **安全加固**(`ShellTaskExecutor` 已实现):不走 shell 解释器(execve 直接调命令,无 injection);command 白名单 + arg 限制;workdir 隔离;输出截断;timeout 限制。
 
-**前置条件**(开 shell 前):per-tenant worker pool(`batch-worker-spi-{tenant}`)单独部署 + RBAC 隔离 + ServiceAccount 收窄 + 不挂任何共享 secret 卷;否则等价 RCE。
+**前置条件**(开 shell 前):per-tenant worker pool(`batch-worker-atomic-{tenant}`)单独部署 + RBAC 隔离 + ServiceAccount 收窄 + 不挂任何共享 secret 卷;否则等价 RCE。
 
 **为什么租户自托管下可以**:按本 ADR §3,租户代码跑在租户自己机器、blast radius 在租户侧,平台进程不加载它。所以"租户要 shell"= 租户在自家 SDK worker 里跑,平台不暴露。两种落地形态:
 
 | 形态 | 做法 | 平台是否提供代码 |
 |---|---|---|
 | **A. 租户自写**(推荐 / 默认) | 租户照 `examples/sftp-push-executor` 写一个 `ProcessBuilder` executor,`taskType` 自取,放进自家 SDK worker | 否 —— 平台只给 SDK + 协议 |
-| **B. 平台出 example shell executor** | 平台把 `ShellTaskExecutor` 作为 **SDK example/参考实现**发布,租户 opt-in 拷进自家 worker;**平台 `batch-worker-spi` 永不启用它** | 是(仅 example,非平台内建) |
+| **B. 平台出 example shell executor** | 平台把 `ShellTaskExecutor` 作为 **SDK example/参考实现**发布,租户 opt-in 拷进自家 worker;**平台 `batch-worker-atomic` 永不启用它** | 是(仅 example,非平台内建) |
 
-**软线**(原"红线"已 2026-05-31 翻转 — 用户决策):平台代运维的 `batch-worker-spi` **默认不启用 shell**(`enabled=false`,bean 不注册),需要 opt-in 才生效;一旦 opt-in,部署侧必须按"启用风险"清单做 per-tenant pool + 收窄 RBAC,否则等价 RCE。租户跑 shell 的**默认推荐路径仍是自托管 SDK** worker(§A),平台内建仅为「特殊场景 opt-in」。
+**软线**(原"红线"已 2026-05-31 翻转 — 用户决策):平台代运维的 `batch-worker-atomic` **默认不启用 shell**(`enabled=false`,bean 不注册),需要 opt-in 才生效;一旦 opt-in,部署侧必须按"启用风险"清单做 per-tenant pool + 收窄 RBAC,否则等价 RCE。租户跑 shell 的**默认推荐路径仍是自托管 SDK** worker(§A),平台内建仅为「特殊场景 opt-in」。
 
-**当前代码现状**(2026-05-31):`batch-worker-spi.shell.ShellTaskExecutor` 已存在并以 `@ConditionalOnProperty(batch.worker.executors.shell.enabled, havingValue="true")` 守门;`ShellExecutorProperties.enabled` 默认 false。本节修订后**保留代码不动**,文档红线翻转为软线 + 明确 opt-in 风险。
+**当前代码现状**(2026-05-31):`batch-worker-atomic.shell.ShellTaskExecutor` 已存在并以 `@ConditionalOnProperty(batch.worker.executors.shell.enabled, havingValue="true")` 守门;`ShellExecutorProperties.enabled` 默认 false。本节修订后**保留代码不动**,文档红线翻转为软线 + 明确 opt-in 风险。
 
 ### 9. 两套绑定 + 一个 wire 协议:内部演进与漂移防护
 
@@ -164,12 +164,12 @@
 **真正的契约是 wire 协议**(Kafka 派单 payload + HTTP `/internal/*` register/heartbeat/claim/report 的 JSON 格式),`BatchTaskExecutor` 与 `SdkTaskHandler` 只是它的两套语言绑定 —— 与本 ADR §决策「核心契约 = HTTP+Kafka 协议,SDK 只是 Java 友好封装」一致。由此两条决策:
 
 **(a) SPI 内部重构不碰 `BatchTaskExecutor` —— 理由是保护平台 8 个实现(不是 SDK)。**
-`batch-worker-spi` 的内部演进(生命周期钩子、连接池统一)一律落在 `batch-worker-spi` 模块内,不改 `batch-common` 的 `BatchTaskExecutor`(含不加 `default` 方法)。改它的真实 blast radius 是**平台侧 8 个实现** + 示例,全部被迫跟改;SDK 因为不依赖它,不直接受影响。两个具体例子:
+`batch-worker-atomic` 的内部演进(生命周期钩子、连接池统一)一律落在 `batch-worker-atomic` 模块内,不改 `batch-common` 的 `BatchTaskExecutor`(含不加 `default` 方法)。改它的真实 blast radius 是**平台侧 8 个实现** + 示例,全部被迫跟改;SDK 因为不依赖它,不直接受影响。两个具体例子:
 
 | 改动 | 落点 | 影响面 |
 |---|---|---|
-| **`AbstractBatchTaskExecutor` 基类**(模板方法:`validate → before → doExecute → after` + `finally` 保证 `cleanup`,给执行器自己的前置/结束步骤) | `batch-worker-spi` 内,**只让 SPI 执行器 `extends`** | SPI-only;pipeline 的 `XxxTaskExecutor` 仍直接 `implements BatchTaskExecutor` 不动,**零影响** ✅ |
-| **`SpiConnectionManager`**(统一 DataSource 解析 + `allowedDataSourceBeans` 闸 + 有界连接池策略 + 角色闸 + `withConnection` 回调式 acquire/release/rollback) | `batch-worker-spi` 内,**只被 SPI 的 sql/storedproc 用** | SPI-only;pipeline 4 个 worker 各自管自己模块内的 DB 访问,**零影响** ✅ |
+| **`AbstractBatchTaskExecutor` 基类**(模板方法:`validate → before → doExecute → after` + `finally` 保证 `cleanup`,给执行器自己的前置/结束步骤) | `batch-worker-atomic` 内,**只让 SPI 执行器 `extends`** | SPI-only;pipeline 的 `XxxTaskExecutor` 仍直接 `implements BatchTaskExecutor` 不动,**零影响** ✅ |
+| **`SpiConnectionManager`**(统一 DataSource 解析 + `allowedDataSourceBeans` 闸 + 有界连接池策略 + 角色闸 + `withConnection` 回调式 acquire/release/rollback) | `batch-worker-atomic` 内,**只被 SPI 的 sql/storedproc 用** | SPI-only;pipeline 4 个 worker 各自管自己模块内的 DB 访问,**零影响** ✅ |
 
 **(b) SDK ↔ 平台靠 wire 协议对齐,防两套绑定漂移。**
 两套 Java 类各自演进,真正要守的是它们对**同一 wire payload** 的映射不分叉(否则同一 taskType 在平台 worker vs 租户 SDK worker 行为不一致)。约束:

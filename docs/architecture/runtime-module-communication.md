@@ -23,7 +23,7 @@ flowchart LR
   WI["batch-worker-import"]
   WE["batch-worker-export"]
   WP["batch-worker-process"]
-  WSPI["batch-worker-spi"]
+  WSPI["batch-worker-atomic"]
   M["MinIO bucket<br/>batch-dev"]
 
   P["batch_platform<br/>trigger_request<br/>trigger_outbox_event (V80, ADR-010)<br/>job_definition<br/>job_instance<br/>job_partition<br/>job_task<br/>workflow_run<br/>workflow_node_run (output JSONB, ADR-009)<br/>worker_registry<br/>retry_schedule<br/>dead_letter_task<br/>outbox_event<br/>file_record<br/>file_channel_config<br/>file_dispatch_record<br/>file_audit_log<br/>..."]

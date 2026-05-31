@@ -143,7 +143,7 @@ maven_module_for() {
     worker-export)   echo "batch-worker-export" ;;
     worker-process)  echo "batch-worker-process" ;;
     worker-dispatch) echo "batch-worker-dispatch" ;;
-    worker-spi)      echo "batch-worker-spi" ;;
+    worker-spi)      echo "batch-worker-atomic" ;;
   esac
 }
 

@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>同一 {@code taskType} 重复注册启动期 fail-fast,清晰报错(防 Spring + ServiceLoader 双重注入)。
  *
- * <p>P0 Phase 5:支持 {@link BatchWorkerSpiProperties#getEnabledTaskTypes()} 白名单过滤,实现 "同一 worker
+ * <p>P0 Phase 5:支持 {@link BatchWorkerAtomicProperties#getEnabledTaskTypes()} 白名单过滤,实现 "同一 worker
  * 进程注册多个 taskType"的能力(空集 = 不过滤,向后兼容)。
  *
  * <p>设计依据:{@code docs/design/task-spi-design.md} §3.4 + §Phase 5。
@@ -42,12 +42,14 @@ public class BatchTaskExecutorRegistry {
 
   @Autowired
   public BatchTaskExecutorRegistry(
-      List<BatchTaskExecutor> springBeans, ObjectProvider<BatchWorkerSpiProperties> propsProvider) {
+      List<BatchTaskExecutor> springBeans,
+      ObjectProvider<BatchWorkerAtomicProperties> propsProvider) {
     this(springBeans, resolveFilter(propsProvider));
   }
 
-  private static Set<String> resolveFilter(ObjectProvider<BatchWorkerSpiProperties> propsProvider) {
-    BatchWorkerSpiProperties props = propsProvider.getIfAvailable();
+  private static Set<String> resolveFilter(
+      ObjectProvider<BatchWorkerAtomicProperties> propsProvider) {
+    BatchWorkerAtomicProperties props = propsProvider.getIfAvailable();
     return props == null ? Set.of() : Set.copyOf(props.getEnabledTaskTypes());
   }
 

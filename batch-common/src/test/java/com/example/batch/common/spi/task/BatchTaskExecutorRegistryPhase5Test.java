@@ -9,12 +9,12 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
-/** Phase 5:enabled-task-types 白名单过滤行为(BatchWorkerSpiProperties)。 */
+/** Phase 5:enabled-task-types 白名单过滤行为(BatchWorkerAtomicProperties)。 */
 class BatchTaskExecutorRegistryPhase5Test {
 
   @Test
   void noPropsBeanRegistersAll() {
-    // Spring 容器内无 BatchWorkerSpiProperties bean → 不过滤
+    // Spring 容器内无 BatchWorkerAtomicProperties bean → 不过滤
     BatchTaskExecutorRegistry registry =
         new BatchTaskExecutorRegistry(
             List.of(stub("import"), stub("shell"), stub("http")), providerOf(null));
@@ -24,7 +24,7 @@ class BatchTaskExecutorRegistryPhase5Test {
 
   @Test
   void emptyEnabledSetRegistersAll() {
-    BatchWorkerSpiProperties props = new BatchWorkerSpiProperties();
+    BatchWorkerAtomicProperties props = new BatchWorkerAtomicProperties();
     props.setEnabledTaskTypes(Set.of()); // 空集 = 不过滤
 
     BatchTaskExecutorRegistry registry =
@@ -35,7 +35,7 @@ class BatchTaskExecutorRegistryPhase5Test {
 
   @Test
   void enabledSetFiltersToWhitelist() {
-    BatchWorkerSpiProperties props = new BatchWorkerSpiProperties();
+    BatchWorkerAtomicProperties props = new BatchWorkerAtomicProperties();
     props.setEnabledTaskTypes(Set.of("import", "shell"));
 
     BatchTaskExecutorRegistry registry =
@@ -51,7 +51,7 @@ class BatchTaskExecutorRegistryPhase5Test {
 
   @Test
   void enabledSetWithUnknownTypesRegistersIntersectionOnly() {
-    BatchWorkerSpiProperties props = new BatchWorkerSpiProperties();
+    BatchWorkerAtomicProperties props = new BatchWorkerAtomicProperties();
     // 白名单含一个不存在的 type → 不报错,只注册存在的
     props.setEnabledTaskTypes(Set.of("import", "nonexistent"));
 

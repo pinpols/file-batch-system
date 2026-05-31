@@ -108,7 +108,7 @@ function Get-MavenModuleForApp {
     "worker-export" { return "batch-worker-export" }
     "worker-process" { return "batch-worker-process" }
     "worker-dispatch" { return "batch-worker-dispatch" }
-    "worker-spi" { return "batch-worker-spi" }
+    "worker-spi" { return "batch-worker-atomic" }
     default { throw "未知模块 '$Name'" }
   }
 }

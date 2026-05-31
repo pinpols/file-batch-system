@@ -21,7 +21,7 @@ public enum JobType implements DictEnum {
   PROCESS("PROCESS", "加工任务"),
   DISPATCH("DISPATCH", "分发任务"),
   WORKFLOW("WORKFLOW", "工作流任务"),
-  /** ADR-029:原子任务(Task SPI:shell/sql/stored-proc/http),由专用 batch-worker-spi 执行。 */
+  /** ADR-029:原子任务(Task SPI:shell/sql/stored-proc/http),由专用 batch-worker-atomic 执行。 */
   SPI("SPI", "SPI 原子任务");
 
   private final String code;
