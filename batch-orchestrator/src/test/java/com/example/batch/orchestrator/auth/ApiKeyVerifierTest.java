@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
