@@ -5,6 +5,7 @@ import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
+import com.example.batch.worker.spi.runtime.SpiConnectionManager;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -342,100 +343,81 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
 
   // ─── execution ──────────────────────────────────────────────────────────────
 
-  // NcssCount: SQL 执行循环含 connection 生命周期 + tx + 类型分支 + 多语句迭代,无法显著拆分而保持 finally restore 语义;
-  // 拆分会让 commit/rollback 边界跨方法变难审。后续 PR 走 SpiConnectionManager.withConnection 重构时拆开。
-  @SuppressWarnings("PMD.NcssCount")
   private TaskResult runStatements(TaskContext ctx, SqlInvocation inv) {
     long start = System.currentTimeMillis();
-    long totalAffected = 0;
-    List<Map<String, Object>> lastResultSet = List.of();
-    int lastResultRows = 0;
-    boolean truncated = false;
+    ExecResult execResult = new ExecResult();
 
-    // 全 SELECT 时强制走显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段查询内生效。
-    // 写任务保持原有 autoCommit 语义,不受影响。
+    // 全 SELECT 时强制显式事务(autoCommit off),使 READ ONLY + SET LOCAL statement_timeout 在整段内生效。
+    // 写任务保持原有 autoCommit 语义。
     boolean effectiveAutoCommit = inv.allSelect ? false : inv.autoCommit;
+    SpiConnectionManager.Options opts =
+        SpiConnectionManager.Options.defaults()
+            .withAutoCommit(effectiveAutoCommit)
+            .withReadOnly(inv.allSelect)
+            // 角色闸用 executor 本地实现(error message + 异常类型保留 i18n / SqlValidationException 语义),
+            // 不走 manager 的 SecurityException 实现。
+            .withForbidOsCapableRole(false);
 
-    try (Connection conn = inv.dataSource.getConnection()) {
-      // 代码层堵死 OS 的硬保证:拒绝 OS 能力角色(superuser / pg_execute_server_program / 服务端文件角色)。
-      if (props.isForbidOsCapableRole()) {
-        requireNonOsCapableRole(conn);
-      }
-      boolean originalAutoCommit = conn.getAutoCommit();
-      boolean originalReadOnly = conn.isReadOnly();
-      try {
-        conn.setAutoCommit(effectiveAutoCommit);
-        // 全 SELECT 时强制 READ ONLY 事务,并设服务端 statement_timeout(与 setQueryTimeout 双保险)
-        if (inv.allSelect) {
-          conn.setReadOnly(true);
-          try (Statement guard = conn.createStatement()) {
-            guard.execute("SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L));
-          } catch (SQLException setEx) {
-            log.warn("SET LOCAL statement_timeout failed: {}", setEx.getMessage());
-          }
-        }
-
-        for (String sql : inv.statements) {
-          try (Statement stmt = conn.createStatement()) {
-            stmt.setQueryTimeout(inv.timeoutSec);
-            boolean hasResultSet = stmt.execute(sql);
-            if (hasResultSet) {
-              try (ResultSet rs = stmt.getResultSet()) {
-                FetchResult fr = fetchResults(rs);
-                lastResultSet = fr.rows;
-                lastResultRows = fr.actualCount;
-                truncated = truncated || fr.truncated;
-              }
-            } else {
-              int affected = stmt.getUpdateCount();
-              if (affected > 0) {
-                totalAffected += affected;
+    try {
+      SpiConnectionManager.withConnection(
+          inv.dataSource,
+          opts,
+          conn -> {
+            if (props.isForbidOsCapableRole()) {
+              requireNonOsCapableRole(conn);
+            }
+            if (inv.allSelect) {
+              try (Statement guard = conn.createStatement()) {
+                guard.execute("SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L));
+              } catch (SQLException setEx) {
+                log.warn("SET LOCAL statement_timeout failed: {}", setEx.getMessage());
               }
             }
-          }
-        }
-
-        if (!effectiveAutoCommit) {
-          conn.commit();
-        }
-      } catch (SQLException | RuntimeException ex) {
-        if (!effectiveAutoCommit) {
-          try {
-            conn.rollback();
-          } catch (SQLException rollbackEx) {
-            log.warn("sql rollback failed: {}", rollbackEx.getMessage());
-          }
-        }
-        throw ex;
-      } finally {
-        try {
-          conn.setAutoCommit(originalAutoCommit);
-        } catch (SQLException restoreEx) {
-          log.warn("restore autoCommit failed: {}", restoreEx.getMessage());
-        }
-        if (inv.allSelect) {
-          try {
-            conn.setReadOnly(originalReadOnly);
-          } catch (SQLException restoreEx) {
-            log.warn("restore readOnly failed: {}", restoreEx.getMessage());
-          }
-        }
-      }
+            for (String sql : inv.statements) {
+              try (Statement stmt = conn.createStatement()) {
+                stmt.setQueryTimeout(inv.timeoutSec);
+                boolean hasResultSet = stmt.execute(sql);
+                if (hasResultSet) {
+                  try (ResultSet rs = stmt.getResultSet()) {
+                    FetchResult fr = fetchResults(rs);
+                    execResult.lastResultSet = fr.rows;
+                    execResult.lastResultRows = fr.actualCount;
+                    execResult.truncated = execResult.truncated || fr.truncated;
+                  }
+                } else {
+                  int affected = stmt.getUpdateCount();
+                  if (affected > 0) {
+                    execResult.totalAffected += affected;
+                  }
+                }
+              }
+            }
+            return null;
+          });
     } catch (SQLException ex) {
       return TaskResult.fail("sql failed: " + ex.getMessage(), ex);
     }
 
     Map<String, Object> output = new HashMap<>();
     output.put("statementCount", inv.statements.size());
-    output.put("totalAffectedRows", totalAffected);
-    output.put("lastResultRows", lastResultRows);
-    output.put("resultTruncated", truncated);
+    output.put("totalAffectedRows", execResult.totalAffected);
+    output.put("lastResultRows", execResult.lastResultRows);
+    output.put("resultTruncated", execResult.truncated);
     output.put("durationMillis", System.currentTimeMillis() - start);
     if (props.isIncludeResultSet()) {
-      output.put("lastResultSet", lastResultSet);
+      output.put("lastResultSet", execResult.lastResultSet);
     }
     return TaskResult.ok(
-        "executed " + inv.statements.size() + " statement(s), affected=" + totalAffected, output);
+        "executed " + inv.statements.size() + " statement(s), affected=" + execResult.totalAffected,
+        output);
+  }
+
+  /** 单次执行结果聚合 — 给 lambda 内闭包写。 */
+  private static final class ExecResult {
+    long totalAffected;
+    List<Map<String, Object>> lastResultSet = List.of();
+    int lastResultRows;
+    boolean truncated;
   }
 
   private FetchResult fetchResults(ResultSet rs) throws SQLException {
