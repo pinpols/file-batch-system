@@ -14,7 +14,9 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
-/** 专用 Task SPI worker 的 Kafka 消费者:消费 batch.task.dispatch.spi,执行 shell/sql/stored-proc/http 原子任务。 */
+/**
+ * 专用 Task SPI worker 的 Kafka 消费者:消费 batch.task.dispatch.atomic,执行 shell/sql/stored-proc/http 原子任务。
+ */
 @Service
 public class AtomicTaskConsumer extends AbstractTaskConsumer {
 

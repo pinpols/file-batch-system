@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  *
  * <ol>
  *   <li>执行器子类型:优先取 payload 里的 {@code taskType}(SPI 协议字段,如 shell/sql/stored_proc/http), 缺失时回退 {@code
- *       stepCode}(= job_task.task_type)。job_type=SPI 的任务,task_type 也是 "SPI", 真正的子类型只在 payload
+ *       stepCode}(= job_task.task_type)。job_type=ATOMIC 的任务,task_type 也是 "ATOMIC", 真正的子类型只在 payload
  *       里,故必须优先读 payload。
  *   <li>参数:解析 payload(= job_definition.default_params / launch 参数 JSON)为 Map 传给 {@link
  *       TaskContext}。

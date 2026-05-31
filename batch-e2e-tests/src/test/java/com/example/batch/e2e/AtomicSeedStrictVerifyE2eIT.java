@@ -30,8 +30,8 @@ import org.springframework.test.context.jdbc.Sql;
 
 /**
  * 真实数据严格验证(testcontainers 级):用 <b>生产形态</b> 的 SPI job 定义跑真链 —— 执行器协议(taskType + 参数) 放在 {@code
- * job_definition.default_params}(对齐 scripts/db/test-seed/platform_seed.sql 里的 spi_*_demo), launch 时
- * <b>不传任何参数</b>,验证 default_params → effectiveParams → payload → 子执行器 这条真实生产路径成立。
+ * job_definition.default_params}(对齐 scripts/db/test-seed/platform_seed.sql 里的 atomic_*_demo),
+ * launch 时 <b>不传任何参数</b>,验证 default_params → effectiveParams → payload → 子执行器 这条真实生产路径成立。
  *
  * <p>与 {@link AtomicTaskPipelineE2eIT}(参数走 LaunchRequest)互补:这里覆盖"管理员在 job 定义里配好协议、调度只给 jobCode"
  * 的真实使用方式,是严格(真实数据,非合成入参)验证。
@@ -96,7 +96,7 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
   private void runSeedJob(String defaultParamsJson) {
     LaunchSeed seed =
         E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-            jdbcTemplate, TENANT, "SPI", "spi", TriggerType.API);
+            jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
 
     // 把执行器协议写进 job_definition.default_params(生产形态:管理员配好,调度只给 jobCode)
     jdbcTemplate.update(

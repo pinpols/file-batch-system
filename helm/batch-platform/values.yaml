@@ -410,7 +410,7 @@ workerProcess:
 # ADR-029 专用 Task SPI worker:dual-use(RCE 级 shell/stored-proc)能力隔离进程。
 # 最小权限部署:配独立 serviceAccountName + 独立受限 envFromSecretName(平台库 claim/lease 用
 # 低权限账号,不含业务库/MinIO 凭据)+ NetworkPolicy 限制出向。executors 默认全关,按需开。
-workerSpi:
+workerAtomic:
   javaOptsExtra: ""
   replicaCount: 1
   port: 18087
@@ -442,10 +442,10 @@ workerSpi:
     maxReplicas: 4
     pollingInterval: 30
     cooldownPeriod: 120
-    topic: "batch.task.dispatch.spi"
-    consumerGroup: "batch-worker-spi"
+    topic: "batch.task.dispatch.atomic"
+    consumerGroup: "batch-worker-atomic"
     lagThreshold: "20"
-  # ADR-029 出口最小权限:default-deny egress NetworkPolicy(模板 worker-spi-networkpolicy.yaml)。
+  # ADR-029 出口最小权限:default-deny egress NetworkPolicy(模板 worker-atomic-networkpolicy.yaml)。
   # 默认关 —— 向后兼容,不改现有集群行为;dual-use executor 启用前 ops 务必打开并填好放行项。
   networkPolicy:
     enabled: false
@@ -458,7 +458,7 @@ workerSpi:
         to:
           - ipBlock:
               cidr: 0.0.0.0/0   # 占位:务必收窄到平台库实际 CIDR/Service
-      # Kafka(消费 batch.task.dispatch.spi + 回写结果)。
+      # Kafka(消费 batch.task.dispatch.atomic + 回写结果)。
       kafka:
         enabled: true
         port: 9092
@@ -628,7 +628,7 @@ otel:
 #
 # tenantWorkerPools:
 #   - tenantId: bigcorp
-#     workerType: import          # import | export | process | dispatch | spi
+#     workerType: import          # import | export | process | dispatch | atomic
 #     replicaCount: 3
 #     secretName: batch-platform-tenant-bigcorp-secret   # 引用 tenantIsolation 渲染的 Secret
 #     resources:

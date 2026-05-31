@@ -79,7 +79,7 @@ if ((Get-EnvValue "BUILD" "0") -eq "1") {
 }
 
 Write-Host "==> 检查应用端口占用..."
-@("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-spi") | ForEach-Object {
+@("orchestrator", "trigger", "console", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-atomic") | ForEach-Object {
   $port = [int](Get-AppPort $_)
   $pids = @(Get-ProcessIdsByPort -Port $port | Where-Object { $_ -and $_ -ne $PID })
   foreach ($processId in $pids) {

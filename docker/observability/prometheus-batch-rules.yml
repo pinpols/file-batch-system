@@ -2,7 +2,7 @@ groups:
   - name: batch-platform
     rules:
       - alert: BatchServiceDown
-        expr: up{job=~"batch-(console-api|trigger|orchestrator|worker-import|worker-export|worker-process|worker-dispatch|worker-spi)"} == 0
+        expr: up{job=~"batch-(console-api|trigger|orchestrator|worker-import|worker-export|worker-process|worker-dispatch|worker-atomic)"} == 0
         for: 2m
         labels:
           severity: critical

@@ -442,10 +442,10 @@ services:
       orchestrator:
         condition: service_healthy
 
-  # ADR-029 专用 SPI worker(原子任务 shell/sql/stored-proc/http)。
+  # ADR-029 专用 atomic worker(原子任务 shell/sql/stored-proc/http)。
   # 注:此处 env 与 pipeline worker 对齐以保证 dev 启动一致;生产的最小权限隔离
-  # (独立低权限 DB role / IAM / 网络策略)由 helm chart(PR-3 worker-spi.yaml)下放,compose 不强制。
-  worker-spi:
+  # (独立低权限 DB role / IAM / 网络策略)由 helm chart(PR-3 worker-atomic.yaml)下放,compose 不强制。
+  worker-atomic:
     profiles: ["apps"]
     image: batch-worker-atomic:${APP_IMAGE_TAG:-local}
     build:
@@ -478,7 +478,7 @@ services:
       SERVER_PORT: 18087
       MANAGEMENT_SERVER_PORT: 18087
     ports:
-      - "${WORKER_SPI_PORT:-18087}:18087"
+      - "${WORKER_ATOMIC_PORT:-18087}:18087"
     volumes:
       - ./logs/docker:/app/logs
     networks:

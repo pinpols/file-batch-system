@@ -11,5 +11,5 @@ workerExport:
 workerDispatch:
   replicaCount: 1
 
-workerSpi:
+workerAtomic:
   replicaCount: 1

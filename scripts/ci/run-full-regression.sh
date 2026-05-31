@@ -213,7 +213,7 @@ rollout_and_probe_release() {
   local timeout="$3"
   local readiness_timeout_seconds="$4"
   local local_port_base="${BATCH_DEPLOY_SMOKE_LOCAL_PORT_BASE:-18080}"
-  local components=(console-api trigger orchestrator worker-import worker-export worker-process worker-dispatch worker-spi)
+  local components=(console-api trigger orchestrator worker-import worker-export worker-process worker-dispatch worker-atomic)
   local index=0
 
   for component in "${components[@]}"; do
@@ -300,7 +300,7 @@ deploy_smoke() {
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-export"
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-process"
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-dispatch"
-  assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-spi"
+  assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-atomic"
   assert_manifest_contains "$render_dir/default.yaml" "kind: ConfigMap"
   assert_manifest_contains "$render_dir/default.yaml" "kind: Secret"
 
@@ -310,7 +310,7 @@ deploy_smoke() {
   assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-export"
   assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-process"
   assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-dispatch"
-  assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-spi"
+  assert_manifest_contains "$render_dir/prod.yaml" "name: ${release_name}-worker-atomic"
 
   if [[ "${BATCH_DEPLOY_SMOKE_KEEP_RENDERED:-false}" != "true" ]]; then
     rm -rf "$render_dir"
@@ -371,7 +371,7 @@ deployment_verification() {
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-export"
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-process"
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-dispatch"
-  assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-spi"
+  assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-worker-atomic"
 
   if [[ "${BATCH_DEPLOY_VERIFICATION_KEEP_RENDERED:-false}" != "true" ]]; then
     rm -rf "$render_dir"
