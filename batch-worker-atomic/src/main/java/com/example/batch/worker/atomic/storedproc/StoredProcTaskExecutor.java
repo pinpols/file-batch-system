@@ -168,26 +168,21 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   }
 
   /**
-   * 放行校验:procedureWhitelist(精确)与 allowedSchemas(schema 级)是 OR 关系,命中任一即放行。 两者都空 = 允许全部(仅 dev /
-   * 信任环境)。schema 级用于"把可信 schema 整个放行,新增过程零配置"。
+   * 放行校验:仅按 allowedSchemas(schema 级)放行。空 = 允许全部(仅 dev;授权由最小权限 DB 角色保证)。 非 schema-qualified 过程名按 pin
+   * 用的 defaultSchema 判定。
    */
   private void requireAllowed(String procName) {
-    boolean hasExactList = !props.getProcedureWhitelist().isEmpty();
-    boolean hasSchemaList = !props.getAllowedSchemas().isEmpty();
-    if (!hasExactList && !hasSchemaList) {
-      return; // 两者都空 = 允许全部(仅 dev)
+    if (props.getAllowedSchemas().isEmpty()) {
+      return; // 空 = 允许全部(仅 dev;授权由最小权限角色保证)
     }
-    // 精确匹配大小写无关化:PG identifier 默认折叠小写(unquoted),白名单也按小写比较,
-    // 避免 "BATCH.Proc" 这类大小写变体绕过/误拒(P-1)。
-    boolean exactOk = lowercaseSet(props.getProcedureWhitelist()).contains(toLowerKey(procName));
     String schema = schemaOf(procName);
-    boolean schemaOk = schema != null && props.getAllowedSchemas().contains(schema);
-    if (!exactOk && !schemaOk) {
+    if (schema == null) {
+      schema = props.getDefaultSchema();
+    }
+    if (!props.getAllowedSchemas().contains(schema)) {
       throw new StoredProcValidationException(
-          "procedureName not allowed: "
+          "procedureName schema not allowed: "
               + procName
-              + ", allowedProcedures="
-              + props.getProcedureWhitelist()
               + ", allowedSchemas="
               + props.getAllowedSchemas());
     }
@@ -197,20 +192,6 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   private static String schemaOf(String procName) {
     int dot = procName.indexOf('.');
     return dot > 0 ? procName.substring(0, dot) : null;
-  }
-
-  /** identifier 折叠为小写比较 key(PG unquoted identifier 折叠规则)。 */
-  private static String toLowerKey(String s) {
-    return s.toLowerCase(Locale.ROOT);
-  }
-
-  /** 把白名单整体小写化用于大小写无关精确匹配。 */
-  private static java.util.Set<String> lowercaseSet(java.util.Set<String> in) {
-    java.util.Set<String> out = new java.util.HashSet<>(in.size());
-    for (String s : in) {
-      out.add(toLowerKey(s));
-    }
-    return out;
   }
 
   /**

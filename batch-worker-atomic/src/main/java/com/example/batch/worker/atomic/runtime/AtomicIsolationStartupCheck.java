@@ -32,13 +32,13 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>若启用 ≥1 个:打一条醒目 WARN,提醒 ADR-029 最小权限要求。
- *   <li>若 {@code batch.worker.spi.require-isolation=true} 且启用了 dual-use executor 且 {@code
- *       batch.worker.spi.isolation-acknowledged} 不为 true:fail-fast 抛 {@link IllegalStateException}。
- *       这给生产一个「强制 ops 显式 ack 已完成隔离部署」的闸门。
+ *   <li>若 {@code batch.worker.atomic.require-isolation=true} 且启用了 dual-use executor 且 {@code
+ *       batch.worker.atomic.isolation-acknowledged} 不为 true:fail-fast 抛 {@link
+ *       IllegalStateException}。 这给生产一个「强制 ops 显式 ack 已完成隔离部署」的闸门。
  * </ul>
  *
  * <p><b>为何用 {@link Environment} 读 require-isolation / isolation-acknowledged 而非新增
- * {@code @ConfigurationProperties}</b>:{@code batch.worker.spi} 前缀已被 {@code
+ * {@code @ConfigurationProperties}</b>:{@code batch.worker.atomic} 前缀已被 {@code
  * AtomicWorkerConfiguration} (record)与 {@code BatchWorkerAtomicProperties} 绑定。再加一个绑同前缀的 properties
  * 类会与现有 record 产生构造绑定冲突 (record 强类型构造无法容忍未知子键的部分绑定语义),因此本类直接用 {@code Environment.getProperty} 读两个
  * boolean flag,零绑定侵入。

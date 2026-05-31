@@ -49,13 +49,14 @@ batch:
       capability-tags: ${BATCH_WORKER_ATOMIC_CAPABILITY_TAGS:}
       # 注册哪些 SPI taskType(空=全注册)
       enabled-types: ${BATCH_WORKER_ATOMIC_ENABLED_TYPES:}
-    # dual-use 执行器:默认全关,按需 + 配白名单/schema/超时再开(见 ADR-029)
+    # dual-use 执行器:sql/stored-proc/http 默认开(三道闸约束:schema/user 白名单 + 资源限制 + OS 拒绝,见 ADR-029);
+    # shell 默认关(沙盒方案未定前不开放,见 ADR-035 §8)。
     executors:
       shell:
         enabled: ${BATCH_WORKER_ATOMIC_SHELL_ENABLED:false}
       stored-proc:
-        enabled: ${BATCH_WORKER_ATOMIC_STORED_PROC_ENABLED:false}
+        enabled: ${BATCH_WORKER_ATOMIC_STORED_PROC_ENABLED:true}
       sql:
-        enabled: ${BATCH_WORKER_ATOMIC_SQL_ENABLED:false}
+        enabled: ${BATCH_WORKER_ATOMIC_SQL_ENABLED:true}
       http:
-        enabled: ${BATCH_WORKER_ATOMIC_HTTP_ENABLED:false}
+        enabled: ${BATCH_WORKER_ATOMIC_HTTP_ENABLED:true}

@@ -6,27 +6,29 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * {@link StoredProcTaskExecutor} 配置 — 默认全关。
+ * {@link StoredProcTaskExecutor} 配置 — 默认开启,放行范围由所连 DB 角色 + schema 白名单决定。
  *
  * <p>设计依据:{@code docs/design/task-spi-design.md}。
  *
- * <p>安全防护链:
+ * <p>三道闸安全模型(不再用高维护的精确过程白名单):
  *
  * <ol>
- *   <li>{@link #enabled}:总开关,默认 false
- *   <li>{@link #dataSourceBeanName}:用哪个 dataSource(生产推荐独立低权限 datasource)
- *   <li>{@link #procedureWhitelist}:存储过程名白名单(schema-qualified),空 = 允许全部(不推荐)
- *   <li>{@link #defaultStatementTimeout}:CALL 超时
- *   <li>{@link #maxOutBytesPerParam}:单个 OUT 参数返回值的最大字节数(LOB / 大字符串截断)
- *   <li>{@link #defaultAutoCommit}:事务模式
+ *   <li><b>schema/user 白名单</b>:{@link #dataSourceBeanName} / {@link #allowedDataSourceBeans} 锁连接/凭据
+ *       + {@link #allowedSchemas} 按 schema 放行
+ *   <li><b>资源限制</b>:{@link #defaultStatementTimeout} / {@link #maxRefCursorRows} / {@link
+ *       #maxOutBytesPerParam}
+ *   <li><b>代码层 OS 拒绝</b>:{@link #forbidOsCapableRole} 拒 OS 能力角色;{@link #allowSecurityDefiner}=false
+ *       拒 definer 提权
  * </ol>
+ *
+ * <p>{@link #enabled} 默认 true。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.executors.stored-proc")
 public class StoredProcExecutorProperties {
 
-  /** 总开关。默认 false。 */
-  private boolean enabled = false;
+  /** 总开关。默认 <b>true</b>(随 atomic worker 默认提供;真边界是最小权限 DB 角色 + schema 白名单 + 三道闸)。 */
+  private boolean enabled = true;
 
   /** 给 stored proc 任务挂的 task type。固定 "stored_proc"。 */
   private String taskType = "stored_proc";
@@ -44,18 +46,10 @@ public class StoredProcExecutorProperties {
   private Set<String> allowedDataSourceBeans = Set.of();
 
   /**
-   * 过程名精确白名单(schema-qualified,如 "batch.refresh_metrics")。
-   *
-   * <p>与 {@link #allowedSchemas} 是 OR 关系:命中任一即放行。两者都空 = 允许全部(仅 dev / 信任环境)。 精确列举死板(每加一个
-   * 过程都要改),日常优先用 {@link #allowedSchemas} 按 schema 放行。
-   */
-  private Set<String> procedureWhitelist = Set.of();
-
-  /**
    * Schema 级允许清单(如 "batch" / "app")。命中 = 该 schema 下的所有过程都放行,新增过程零配置。
    *
    * <p>这是推荐的日常用法:把可信 schema(如自家 batch 业务库)整个放行,既不用逐个列过程,又挡住 {@code pg_catalog} / {@code public} 等逃逸
-   * schema。与 {@link #procedureWhitelist} OR;两者都空 = 允许全部(仅 dev)。
+   * schema。空 = 允许全部(仅 dev;授权由最小权限角色保证)。
    *
    * <p>注意:schema 级放行 = 信任该 schema 下"现在和将来的所有过程",请确保该 schema 的 DDL 写权限受控 (能建过程的人 = 能让 worker
    * 执行任意逻辑)。

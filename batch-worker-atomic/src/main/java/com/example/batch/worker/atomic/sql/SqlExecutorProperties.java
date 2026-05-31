@@ -6,29 +6,29 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * {@link SqlTaskExecutor} 配置 — 默认全关,业务方按需开 + 配 dataSource bean 名 + 配 DDL 白名单。
+ * {@link SqlTaskExecutor} 配置 — 默认开启,放行范围由所连 DB 角色决定(运维配置)。
  *
  * <p>设计依据:{@code docs/design/task-spi-design.md}。
  *
- * <p>安全防护链:
+ * <p>三道闸安全模型(不再用高维护的 app 语句白名单):
  *
  * <ol>
- *   <li>{@link #enabled}:总开关,默认 false → bean 不注册
- *   <li>{@link #dataSourceBeanName}:用哪个 dataSource 跑(默认走主库;生产建议建专用低权限 DB role + 独立 datasource bean)
- *   <li>{@link #allowedStatementTypes}:语句类型白名单(SELECT / INSERT / UPDATE / DELETE / DDL / CALL / 其它)
- *   <li>{@link #ddlWhitelist}:DDL 关键词白名单(allowedStatementTypes 含 "DDL" 时生效)
- *   <li>{@link #defaultStatementTimeout}:单 statement 超时(setQueryTimeout)
- *   <li>{@link #maxStatementsPerJob}:单任务最多语句数,防一次塞 1000 条
- *   <li>{@link #defaultAutoCommit}:默认事务模式(false = 显式 commit/rollback)
- *   <li>{@link #maxResultRows}:SELECT 结果行数上限,超出截断 + WARN
+ *   <li><b>schema/user 白名单</b>:{@link #dataSourceBeanName} / {@link #allowedDataSourceBeans} 锁连接 /
+ *       凭据,最小权限 DB role 才是真边界
+ *   <li><b>资源限制</b>:{@link #defaultStatementTimeout} / {@link #maxStatementsPerJob} / {@link
+ *       #maxResultRows}
+ *   <li><b>代码层 OS 拒绝</b>:{@link #forbidOsCapableRole} 拒 superuser / pg_execute_server_program 等 OS
+ *       能力角色
  * </ol>
+ *
+ * <p>语句类型 / DDL 不再由 app 白名单管控 —— 放行范围 = 所连 DB 角色被授予的权限。{@link #enabled} 默认 true。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.executors.sql")
 public class SqlExecutorProperties {
 
-  /** 总开关。默认 false。 */
-  private boolean enabled = false;
+  /** 总开关。默认 <b>true</b>(随 atomic worker 默认提供;真边界是最小权限 DB 角色 + 三道闸)。 */
+  private boolean enabled = true;
 
   /** 给 sql 任务挂的 task type。固定 "sql"。 */
   private String taskType = "sql";
@@ -43,12 +43,6 @@ public class SqlExecutorProperties {
    * 切到任意高权限 datasource。
    */
   private Set<String> allowedDataSourceBeans = Set.of();
-
-  /** 允许的语句类型集合。默认只允许 SELECT(读)。生产按需放开。 */
-  private Set<String> allowedStatementTypes = Set.of("SELECT");
-
-  /** DDL 关键词白名单(allowedStatementTypes 含 DDL 时生效)。空 = 拒绝所有 DDL。 */
-  private Set<String> ddlWhitelist = Set.of();
 
   /**
    * 是否拒绝以"有 OS 能力的 DB 角色"执行(默认 <b>true</b>,fail-closed)。
