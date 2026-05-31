@@ -74,7 +74,7 @@ public class BatchDayOperationService {
     insertOperationAudit(command, current, target, operator, now);
     int released =
         command.action() == BatchDayOperation.RELEASE
-            ? releaseWaitingLaunches(target, operator)
+            ? releaseWaitingLaunchesForBatchDay(target, operator)
             : 0;
     return new BatchDayOperationResult(target, released);
   }
@@ -163,7 +163,16 @@ public class BatchDayOperationService {
     }
   }
 
-  private int releaseWaitingLaunches(BatchDayInstanceEntity releasedDay, String operator) {
+  /**
+   * 为已放行的批量日(`day_status` ∈ {SETTLED / SKIPPED / MANUAL_RELEASED})释放后一日 WAITING 启动请求。
+   *
+   * <p>逐条调用 {@link LaunchService#launch} 重新走 gate;成功后 {@code markReleased}。 调用方需自行确保入参 {@code
+   * releasedDay} 处于可放行终态 — 本方法不再校验,只做批量释放动作。 自动调度入口 {@link
+   * com.example.batch.orchestrator.infrastructure.scheduler.BatchDayWaitingReleaseScheduler} 与人工
+   * {@link BatchDayOperation#RELEASE} 共用本方法,确保两条路径行为一致。
+   */
+  public int releaseWaitingLaunchesForBatchDay(
+      BatchDayInstanceEntity releasedDay, String operator) {
     LocalDate waitingBizDate =
         releasedDay.bizDate() == null ? null : releasedDay.bizDate().plusDays(1);
     if (waitingBizDate == null) {
