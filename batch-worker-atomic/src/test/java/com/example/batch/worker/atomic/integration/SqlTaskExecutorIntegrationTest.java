@@ -9,6 +9,7 @@ import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.atomic.BatchWorkerAtomicApplication;
 import com.example.batch.worker.atomic.sql.SqlExecutorProperties;
 import com.example.batch.worker.atomic.sql.SqlTaskExecutor;
+import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -68,8 +69,7 @@ class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
     assertThat(r.output()).containsEntry("resultTruncated", true);
     assertThat(r.output()).containsEntry("lastResultRows", 50); // 真实行数全数
     @SuppressWarnings("unchecked")
-    java.util.List<java.util.Map<String, Object>> rows =
-        (java.util.List<java.util.Map<String, Object>>) r.output().get("lastResultSet");
+    List<Map<String, Object>> rows = (List<Map<String, Object>>) r.output().get("lastResultSet");
     assertThat(rows).hasSize(5); // 被截到 maxResultRows
   }
 

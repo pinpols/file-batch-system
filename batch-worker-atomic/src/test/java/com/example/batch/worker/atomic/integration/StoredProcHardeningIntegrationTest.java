@@ -9,6 +9,7 @@ import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.atomic.BatchWorkerAtomicApplication;
 import com.example.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import com.example.batch.worker.atomic.storedproc.StoredProcTaskExecutor;
+import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -163,12 +165,11 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     jdbc.execute("GRANT USAGE ON SCHEMA spi_it TO " + role);
 
     String baseUrl;
-    try (java.sql.Connection conn = dataSource.getConnection()) {
+    try (Connection conn = dataSource.getConnection()) {
       baseUrl = conn.getMetaData().getURL();
     }
 
-    org.springframework.jdbc.datasource.DriverManagerDataSource lowPrivDs =
-        new org.springframework.jdbc.datasource.DriverManagerDataSource(baseUrl, role, pwd);
+    DriverManagerDataSource lowPrivDs = new DriverManagerDataSource(baseUrl, role, pwd);
     try {
       StoredProcExecutorProperties p = props();
       p.setVerifyExecutePrivilege(true);
