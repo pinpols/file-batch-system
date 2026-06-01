@@ -75,6 +75,23 @@ public interface JobTaskMapper {
       @Param("taskPayload") String taskPayload);
 
   /**
+   * ORCH-P4-1：worker 经 renew 上报进度 / checkpoint 快照。仅 RUNNING task 可写(终态后忽略)，同步刷新 heartbeat_at。
+   *
+   * @return 更新行数(0 表示 task 不存在 / 非 RUNNING)
+   */
+  int updateHeartbeatDetails(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("heartbeatDetails") String heartbeatDetails);
+
+  /**
+   * ORCH-P4-1：平台请求取消(运维 cancel 端点 / ORCH-P4-2 超时)，置 cancel_requested=true。仅 RUNNING task 有意义。
+   *
+   * @return 更新行数(0 表示 task 不存在 / 非 RUNNING)
+   */
+  int requestCancel(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /**
    * 与 {@link JobPartitionMapper#closeNonTerminalPartitionsForTerminalInstance} 配对：实例终态下仍为非终态的 task
    * 批量收口。
    */

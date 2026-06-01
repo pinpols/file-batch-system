@@ -74,6 +74,27 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  void recordHeartbeat_delegatesToAssignmentService() {
+    var expected = new TaskAssignmentService.TaskHeartbeatResult(true, true);
+    when(taskAssignmentService.recordHeartbeat("t1", 1L, "w1", "inv-1", "{}")).thenReturn(expected);
+
+    var result = service.recordHeartbeat("t1", 1L, "w1", "inv-1", "{}");
+
+    assertThat(result).isSameAs(expected);
+    verify(taskAssignmentService).recordHeartbeat("t1", 1L, "w1", "inv-1", "{}");
+  }
+
+  @Test
+  void requestCancel_delegatesToAssignmentService() {
+    when(taskAssignmentService.requestCancel("t1", 1L)).thenReturn(true);
+
+    boolean result = service.requestCancel("t1", 1L);
+
+    assertThat(result).isTrue();
+    verify(taskAssignmentService).requestCancel("t1", 1L);
+  }
+
+  @Test
   void updateTaskStatus_delegatesToAssignmentService() {
     JobTaskEntity task = new JobTaskEntity();
     when(taskAssignmentService.updateTaskStatus("t1", 1L, "RUNNING", null, null)).thenReturn(task);

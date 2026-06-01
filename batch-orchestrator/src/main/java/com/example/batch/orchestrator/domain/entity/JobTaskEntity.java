@@ -27,6 +27,15 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
    */
   private String effectiveParameters;
 
+  /** ORCH-P4-1 worker 经 renew 上报的进度 / checkpoint 快照(JSON 文本，mapper {@code ::jsonb} 入库)。敏感凭据禁入。 */
+  private String heartbeatDetails;
+
+  /** ORCH-P4-1 最近一次带 details 的心跳时间(UTC)。 */
+  private Instant heartbeatAt;
+
+  /** ORCH-P4-1 平台请求取消标记；renew response 回带，SDK 主动停(不等 lease 超时)。 */
+  private Boolean cancelRequested;
+
   private String resultSummary;
   private String errorCode;
 

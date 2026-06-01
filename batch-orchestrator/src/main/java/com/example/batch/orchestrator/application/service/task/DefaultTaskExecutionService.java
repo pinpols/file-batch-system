@@ -54,6 +54,22 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
   }
 
   @Override
+  public TaskAssignmentService.TaskHeartbeatResult recordHeartbeat(
+      String tenantId,
+      Long taskId,
+      String workerCode,
+      String partitionInvocationId,
+      String detailsJson) {
+    return taskAssignmentService.recordHeartbeat(
+        tenantId, taskId, workerCode, partitionInvocationId, detailsJson);
+  }
+
+  @Override
+  public boolean requestCancel(String tenantId, Long taskId) {
+    return taskAssignmentService.requestCancel(tenantId, taskId);
+  }
+
+  @Override
   public JobTaskEntity updateTaskStatus(
       String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage) {
     return taskAssignmentService.updateTaskStatus(

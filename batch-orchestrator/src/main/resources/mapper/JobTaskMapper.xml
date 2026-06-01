@@ -17,6 +17,9 @@
         <result column="version" property="version"/>
         <result column="task_payload" property="taskPayload"/>
         <result column="effective_parameters" property="effectiveParameters"/>
+        <result column="heartbeat_details" property="heartbeatDetails"/>
+        <result column="heartbeat_at" property="heartbeatAt"/>
+        <result column="cancel_requested" property="cancelRequested"/>
         <result column="result_summary" property="resultSummary"/>
         <result column="error_code" property="errorCode"/>
         <result column="error_message" property="errorMessage"/>
@@ -215,6 +218,26 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+    </update>
+
+    <update id="updateHeartbeatDetails">
+        update batch.job_task
+        set heartbeat_details = #{heartbeatDetails}::jsonb,
+            heartbeat_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and task_status = 'RUNNING'
+    </update>
+
+    <update id="requestCancel">
+        update batch.job_task
+        set cancel_requested = true,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and task_status = 'RUNNING'
+          and cancel_requested = false
     </update>
 
     <update id="closeNonTerminalTasksForTerminalInstance">

@@ -14,12 +14,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.TaskController;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,7 +31,7 @@ class TaskControllerTest {
 
   private final TaskExecutionService taskExecutionService = mock(TaskExecutionService.class);
   private final TaskControllerApplicationService taskControllerApplicationService =
-      new TaskControllerApplicationService(taskExecutionService);
+      new TaskControllerApplicationService(taskExecutionService, new ObjectMapper());
 
   private final MockMvc mockMvc =
       MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
@@ -169,20 +171,56 @@ class TaskControllerTest {
   }
 
   @Test
-  void shouldReturn200WhenRenewSucceeds() throws Exception {
-    when(taskExecutionService.renewTaskLease("t1", 7L, "w1", null)).thenReturn(true);
+  void shouldReturn200WithCancelFalseWhenRenewSucceeds() throws Exception {
+    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
+        .thenReturn(new TaskHeartbeatResult(true, false));
 
     mockMvc
         .perform(
             post("/internal/tasks/7/renew")
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.cancelRequested").value(false));
+  }
+
+  @Test
+  void shouldReturnCancelRequestedTrueWhenPlatformCancelled() throws Exception {
+    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
+        .thenReturn(new TaskHeartbeatResult(true, true));
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/7/renew")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.cancelRequested").value(true));
+  }
+
+  @Test
+  void shouldPersistHeartbeatDetailsWhenRenewCarriesDetails() throws Exception {
+    when(taskExecutionService.recordHeartbeat(eq("t1"), eq(7L), eq("w1"), any(), any()))
+        .thenReturn(new TaskHeartbeatResult(true, false));
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/7/renew")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    "{\"tenantId\":\"t1\",\"workerId\":\"w1\",\"details\":{\"processed\":42}}"))
         .andExpect(status().isOk());
+
+    ArgumentCaptor<String> details = ArgumentCaptor.forClass(String.class);
+    verify(taskExecutionService)
+        .recordHeartbeat(eq("t1"), eq(7L), eq("w1"), any(), details.capture());
+    assertThat(details.getValue()).contains("\"processed\":42");
   }
 
   @Test
   void shouldReturn409WhenRenewRejected() throws Exception {
-    when(taskExecutionService.renewTaskLease("t1", 7L, "w1", null)).thenReturn(false);
+    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
+        .thenReturn(new TaskHeartbeatResult(false, false));
 
     mockMvc
         .perform(
@@ -190,6 +228,20 @@ class TaskControllerTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isConflict());
+  }
+
+  @Test
+  void shouldReturn200WhenCancelRequested() throws Exception {
+    when(taskExecutionService.requestCancel("t1", 7L)).thenReturn(true);
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/7/cancel")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"reason\":\"manual\"}"))
+        .andExpect(status().isOk());
+
+    verify(taskExecutionService).requestCancel("t1", 7L);
   }
 
   @Test

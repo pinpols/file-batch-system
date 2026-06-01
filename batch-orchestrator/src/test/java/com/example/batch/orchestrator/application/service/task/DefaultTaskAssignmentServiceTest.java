@@ -228,6 +228,69 @@ class DefaultTaskAssignmentServiceTest {
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
   }
 
+  // ===== recordHeartbeat (ORCH-P4-1) =====
+
+  @Test
+  @DisplayName("recordHeartbeat: 续租失败 → leaseRenewed=false,不写 details / 不读取消标记")
+  void recordHeartbeatLeaseFails() {
+    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(null);
+
+    var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"p\":1}");
+
+    assertThat(result.leaseRenewed()).isFalse();
+    assertThat(result.cancelRequested()).isFalse();
+    verify(jobTaskMapper, never()).updateHeartbeatDetails(anyString(), anyLong(), anyString());
+  }
+
+  @Test
+  @DisplayName("recordHeartbeat: 续租成功 + details 非空 → 写 details,回带 cancelRequested")
+  void recordHeartbeatWritesDetailsAndReadsCancel() {
+    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+    t.setJobPartitionId(50L);
+    t.setAssignedWorkerCode("w1");
+    t.setCancelRequested(true);
+    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
+
+    var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"processed\":42}");
+
+    assertThat(result.leaseRenewed()).isTrue();
+    assertThat(result.cancelRequested()).isTrue();
+    verify(jobTaskMapper).updateHeartbeatDetails("ta", 100L, "{\"processed\":42}");
+  }
+
+  @Test
+  @DisplayName("recordHeartbeat: details 为 null → 不写 details,仅续租 + 读取消标记")
+  void recordHeartbeatSkipsDetailsWhenNull() {
+    JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
+    t.setJobPartitionId(50L);
+    t.setAssignedWorkerCode("w1");
+    when(jobTaskMapper.selectById(eq("ta"), eq(100L))).thenReturn(t);
+    when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(1);
+
+    var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", null);
+
+    assertThat(result.leaseRenewed()).isTrue();
+    assertThat(result.cancelRequested()).isFalse();
+    verify(jobTaskMapper, never()).updateHeartbeatDetails(anyString(), anyLong(), anyString());
+  }
+
+  // ===== requestCancel (ORCH-P4-1) =====
+
+  @Test
+  @DisplayName("requestCancel: mapper 命中 RUNNING task → true")
+  void requestCancelMarksRunningTask() {
+    when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(1);
+    assertThat(service.requestCancel("ta", 100L)).isTrue();
+  }
+
+  @Test
+  @DisplayName("requestCancel: 非 RUNNING / 不存在 / 已请求 → false")
+  void requestCancelNoMatch() {
+    when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(0);
+    assertThat(service.requestCancel("ta", 100L)).isFalse();
+  }
+
   // ===== updateTaskStatus =====
 
   @Test
