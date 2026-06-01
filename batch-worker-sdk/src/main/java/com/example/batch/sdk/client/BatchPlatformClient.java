@@ -6,7 +6,9 @@ import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.scheduler.HeartbeatScheduler;
 import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
 import com.example.batch.sdk.task.SdkTaskHandler;
+import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +91,11 @@ public class BatchPlatformClient {
     body.put("heartbeatAt", Instant.now().toString());
     body.put("currentLoad", 0);
     body.put("capabilityTags", List.copyOf(handlers.keySet()));
+    // Phase 3 M3.1:声明了 descriptor 的 handler 随 register 上报 taskTypes[](平台 upsert 到 registry)。
+    List<SdkTaskTypeDescriptor> descriptors = collectDescriptors();
+    if (!descriptors.isEmpty()) {
+      body.put("taskTypes", descriptors);
+    }
     try {
       Map<String, Object> resp = httpClient.register(body);
       log.info("BatchPlatformClient registered: response={}", resp);
@@ -105,6 +112,21 @@ public class BatchPlatformClient {
     this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
     this.leaseRenewalScheduler.start();
     started = true;
+  }
+
+  /**
+   * 收集声明了 descriptor 的 handler —— code 以 {@link SdkTaskHandler#taskType()} 为权威(覆盖 descriptor 里 可能漏填
+   * / 写错的 code),保证 register 上报的 code 与派单路由一致。
+   */
+  List<SdkTaskTypeDescriptor> collectDescriptors() {
+    List<SdkTaskTypeDescriptor> out = new ArrayList<>();
+    for (Map.Entry<String, SdkTaskHandler> entry : handlers.entrySet()) {
+      SdkTaskTypeDescriptor descriptor = entry.getValue().descriptor();
+      if (descriptor != null) {
+        out.add(descriptor.withCode(entry.getKey()));
+      }
+    }
+    return out;
   }
 
   /**
