@@ -1,7 +1,8 @@
-package com.example.batch.sdk.handler;
+package com.example.batch.sdk.handler.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.sdk.handler.SdkRowResult;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.ArrayList;

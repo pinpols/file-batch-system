@@ -352,9 +352,13 @@ class SdkAbstractProcessHandlerTest {
 
           @Override
           protected void upsert(SdkTaskContext ctx, List<String> batch) {}
+
+          int exposedBatchSize() {
+            return batchSize();
+          }
         };
 
     // assert
-    assertThat(h.batchSize()).isEqualTo(500);
+    assertThat(h.exposedBatchSize()).isEqualTo(500);
   }
 }
