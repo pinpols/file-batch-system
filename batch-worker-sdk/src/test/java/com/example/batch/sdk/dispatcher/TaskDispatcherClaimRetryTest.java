@@ -196,6 +196,65 @@ class TaskDispatcherClaimRetryTest {
     verify(http, never()).report(anyLong(), anyString(), any());
   }
 
+  // ─── P7-2:CLAIM/REPORT 连续 4xx 达阈值 → fail-fast ──────────────────────────────
+
+  @Test
+  void consecutiveClientErrorsTripFatalAtThreshold() throws Exception {
+    BatchPlatformClientConfig threshold3 =
+        config.toBuilder().clientErrorFailFastThreshold(3).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(400, "bad request"));
+    dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
+
+    dispatcher.processInWorkerThread(msg());
+    assertThat(dispatcher.isFatal()).isFalse(); // 1 次,未达阈值
+    dispatcher.processInWorkerThread(msg());
+    assertThat(dispatcher.isFatal()).isFalse(); // 2 次
+    dispatcher.processInWorkerThread(msg());
+    assertThat(dispatcher.isFatal()).isTrue(); // 第 3 次连续 4xx → fatal
+    assertThat(dispatcher.consecutiveClientErrors()).isEqualTo(3);
+  }
+
+  @Test
+  void successfulClaimResetsClientErrorStreak() throws Exception {
+    BatchPlatformClientConfig threshold3 =
+        config.toBuilder().clientErrorFailFastThreshold(3).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    AtomicInteger calls = new AtomicInteger();
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenAnswer(
+            inv -> {
+              if (calls.incrementAndGet() <= 2) {
+                throw new PlatformHttpException(404, "task gone");
+              }
+              return Map.of();
+            });
+    dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
+
+    dispatcher.processInWorkerThread(msg()); // 404 → 1
+    dispatcher.processInWorkerThread(msg()); // 404 → 2
+    assertThat(dispatcher.consecutiveClientErrors()).isEqualTo(2);
+    dispatcher.processInWorkerThread(msg()); // 成功 claim + report → 归零
+
+    assertThat(dispatcher.consecutiveClientErrors()).isZero();
+    assertThat(dispatcher.isFatal()).isFalse();
+  }
+
+  @Test
+  void clientErrorFailFastDisabledWhenThresholdZero() throws Exception {
+    BatchPlatformClientConfig disabled = config.toBuilder().clientErrorFailFastThreshold(0).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(404, "task gone"));
+    dispatcher = new TaskDispatcher(disabled, Map.of("tt", noopHandler()), http);
+
+    for (int i = 0; i < 10; i++) {
+      dispatcher.processInWorkerThread(msg());
+    }
+    assertThat(dispatcher.isFatal()).isFalse(); // 阈值 0 = 关闭,永不触发
+  }
+
   // ─── 传输错误(generic IOException)→ 当 5xx 退避重试 ────────────────────────────
 
   @Test

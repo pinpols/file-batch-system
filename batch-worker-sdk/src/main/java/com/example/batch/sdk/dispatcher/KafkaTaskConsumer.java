@@ -15,6 +15,8 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -52,6 +54,13 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
 
   /** P0 hardening:in-flight 达上限时 pause 当前 partition;掉下来再 resume。Zeebe maxJobsActive 模式。 */
   private volatile boolean paused = false;
+
+  /**
+   * P7-1:最近一次 poll 后读到的 Kafka {@code records-lag-max}(所有 assigned partition 的最大滞后条数)。 {@code -1}
+   * 表示尚未知(未 poll 过 / consumer 未暴露该指标)。只在 poll 线程写,{@code volatile} 供 {@link #consumerLagMax()} 跨线程读
+   * —— 避免在 metrics 线程直接碰非线程安全的 {@link Consumer}。
+   */
+  private volatile long consumerLagMax = -1L;
 
   public KafkaTaskConsumer(BatchPlatformClientConfig config, TaskDispatcher dispatcher) {
     this(
@@ -116,6 +125,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       while (running.get()) {
         applyBackpressure();
         ConsumerRecords<String, byte[]> records = consumer.poll(config.getKafkaPollInterval());
+        refreshConsumerLag();
         if (records.isEmpty()) continue;
         for (ConsumerRecord<String, byte[]> rec : records) {
           handleRecord(rec);
@@ -181,6 +191,31 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
   }
 
+  /**
+   * P7-1:在 poll 线程读 Kafka client 自带的 {@code records-lag-max} 指标(consumer-fetch-manager-metrics
+   * group)写入 {@link #consumerLagMax}。只在 poll 线程触碰 {@link Consumer},满足其单线程约束;指标缺失(如刚启动 / mock
+   * consumer)时保持上一次值不动。
+   */
+  private void refreshConsumerLag() {
+    try {
+      for (Map.Entry<MetricName, ? extends Metric> e : consumer.metrics().entrySet()) {
+        if ("records-lag-max".equals(e.getKey().name())) {
+          Object value = e.getValue().metricValue();
+          if (value instanceof Number n) {
+            double d = n.doubleValue();
+            // Kafka 无数据时给 NaN / -Inf,只在拿到有限非负值时更新
+            if (Double.isFinite(d) && d >= 0) {
+              consumerLagMax = (long) d;
+            }
+          }
+          return;
+        }
+      }
+    } catch (RuntimeException ex) {
+      log.debug("refreshConsumerLag skipped: {}", ex.getMessage());
+    }
+  }
+
   private void handleRecord(ConsumerRecord<String, byte[]> rec) {
     if (rec.value() == null || rec.value().length == 0) {
       log.warn("empty kafka message at topic={}, offset={}, skipping", rec.topic(), rec.offset());
@@ -231,6 +266,14 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
    */
   public boolean hasCrashed() {
     return crashed.get();
+  }
+
+  /**
+   * P7-1:最近一次 poll 观测到的最大 consumer lag(条数),{@code -1} = 未知。供 {@link
+   * com.example.batch.sdk.client.BatchPlatformClient#metrics()} 透出给租户监控。
+   */
+  public long consumerLagMax() {
+    return consumerLagMax;
   }
 
   /** 给 BatchPlatformClient 注入额外 properties(实际项目会扩展 SASL / SSL 等)。 */

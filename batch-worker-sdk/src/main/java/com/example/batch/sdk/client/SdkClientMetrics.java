@@ -23,6 +23,7 @@ package com.example.batch.sdk.client;
  * @param dispatcherFatal CLAIM 401/403 后置位,后续 dispatch 全部 drop(参考 P1-2)
  * @param dispatcherDraining stop() 已发起,等待 in-flight 跑完
  * @param consumerCrashed Kafka poll loop 因非预期 Throwable 退出(参考 #1.7)
+ * @param kafkaConsumerLag 最近一次 poll 观测到的最大 consumer lag(条数),{@code -1} = 未知(参考 P7-1)
  */
 public record SdkClientMetrics(
     String tenantId,
@@ -34,4 +35,5 @@ public record SdkClientMetrics(
     int registeredHandlerCount,
     boolean dispatcherFatal,
     boolean dispatcherDraining,
-    boolean consumerCrashed) {}
+    boolean consumerCrashed,
+    long kafkaConsumerLag) {}
