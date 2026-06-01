@@ -1,6 +1,7 @@
 package com.example.batch.sdk.idempotent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
@@ -207,6 +208,31 @@ class SdkIdempotentHandlerTest {
 
     // assert:A100 执行 1 次(第二次命中),B200 执行 1 次 → 共 2
     assertThat(handler.executions).hasValue(2);
+  }
+
+  /** find() 抛运行时异常的 fake store —— 验证装饰器不吞,透传给 dispatcher 兜底。 */
+  static final class ThrowingStore implements SdkIdempotencyStore {
+    @Override
+    public Optional<SdkIdempotencyRecord> find(String key) {
+      throw new IllegalStateException("store backend down");
+    }
+
+    @Override
+    public void record(String key, SdkIdempotencyRecord record, long ttlMillis) {}
+  }
+
+  @Test
+  @DisplayName("store.find() 抛异常 → 装饰器不吞,原样透传(由 dispatcher 兜底转 fail report),业务不执行")
+  void shouldPropagate_whenStoreFindThrows() {
+    // arrange
+    AnnotatedHandler handler = new AnnotatedHandler();
+    SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, new ThrowingStore());
+
+    // act + assert:find 抛的 RuntimeException 直接冒泡(契约:不在装饰器层吞)
+    assertThatThrownBy(() -> wrapped.execute(ctx(Map.of("orderId", "A100"))))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("store backend down");
+    assertThat(handler.executions).hasValue(0); // find 先于 execute,故业务未跑
   }
 
   @Test

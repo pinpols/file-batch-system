@@ -115,6 +115,20 @@ class LeaseRenewalSchedulerTest {
   }
 
   @Test
+  void revoked404LeaseSignalsCancellationSameAs410() throws Exception {
+    // 固化:renewOne 对 404 与 410 走同一分支(lease 被回收),都翻转取消信号避免双跑。
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.renew(eq(10L), any())).thenThrow(new PlatformHttpException(404, "not found"));
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
+    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
+
+    s.tick();
+
+    verify(dispatcher).markCancelled(10L, "lease-revoked");
+  }
+
+  @Test
   void progressSnapshotIncludedAsDetails() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
