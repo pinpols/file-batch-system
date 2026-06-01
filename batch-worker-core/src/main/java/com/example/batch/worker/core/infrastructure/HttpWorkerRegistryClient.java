@@ -125,6 +125,8 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
             ? BatchDateTimeSupport.utcNow()
             : registration.getLastHeartbeatAt().toInstant(),
         registration.getCapabilityTags(),
-        registration.getCurrentLoad());
+        registration.getCurrentLoad(),
+        // file-pipeline worker 不声明自定义 taskType(仅 SDK 自托管 worker 用,见 SDK Phase 3 M3.1)
+        null);
   }
 }

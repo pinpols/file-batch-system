@@ -3,9 +3,11 @@ package com.example.batch.orchestrator.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
+import com.example.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
 import com.example.batch.sdk.wire.ClaimRequest;
 import com.example.batch.sdk.wire.HeartbeatRequest;
 import com.example.batch.sdk.wire.RegisterRequest;
@@ -53,7 +55,8 @@ class SdkWireContractTest {
             "12345",
             Instant.parse("2026-05-31T10:00:00Z"),
             List.of("echo", "sleep"),
-            3);
+            3,
+            null);
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
@@ -68,6 +71,45 @@ class SdkWireContractTest {
     assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:00:00Z"));
     assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
     assertThat(platformSide.currentLoad()).isEqualTo(3);
+    assertThat(platformSide.taskTypes()).isNull();
+  }
+
+  @Test
+  void registerRequestTaskTypeDescriptorDeserializesAcrossBoundary() throws Exception {
+    // Phase 3 M3.1:SDK SdkTaskTypeDescriptor → 平台 WorkerTaskTypeDescriptorDto 字段名 1:1。
+    SdkTaskTypeDescriptor descriptor =
+        new SdkTaskTypeDescriptor(
+            "tenant_acme_import",
+            "每日对账导入",
+            "v1",
+            Map.of("batchSize", 1000),
+            Map.of("type", "object", "required", List.of("sourcePath")),
+            List.of("bizDate"));
+    RegisterRequest sdkSide =
+        new RegisterRequest(
+            "tenant-acme",
+            "worker-1",
+            "sdk-self-hosted",
+            "RUNNING",
+            null,
+            null,
+            null,
+            Instant.parse("2026-05-31T10:00:00Z"),
+            List.of("tenant_acme_import"),
+            0,
+            List.of(descriptor));
+
+    WorkerHeartbeatDto platformSide =
+        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
+
+    assertThat(platformSide.taskTypes()).hasSize(1);
+    WorkerTaskTypeDescriptorDto dto = platformSide.taskTypes().get(0);
+    assertThat(dto.code()).isEqualTo("tenant_acme_import");
+    assertThat(dto.displayName()).isEqualTo("每日对账导入");
+    assertThat(dto.version()).isEqualTo("v1");
+    assertThat(dto.defaults()).containsEntry("batchSize", 1000);
+    assertThat(dto.inputSchema()).containsEntry("type", "object");
+    assertThat(dto.templateVariables()).containsExactly("bizDate");
   }
 
   // ─── /internal/workers/{workerCode}/heartbeat ───────────────────────────

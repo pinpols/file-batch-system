@@ -13,7 +13,9 @@ public record WorkerHeartbeatDto(
     String processId,
     Instant heartbeatAt,
     List<String> capabilityTags,
-    Integer currentLoad) {
+    Integer currentLoad,
+    // SDK Phase 3 M3.1 — register 时上报自定义 taskType 描述符;heartbeat 不带(null)。
+    List<WorkerTaskTypeDescriptorDto> taskTypes) {
   public WorkerHeartbeatDto {
     Integer normalizedCurrentLoad = currentLoad;
     if (normalizedCurrentLoad == null || normalizedCurrentLoad < 0) {
