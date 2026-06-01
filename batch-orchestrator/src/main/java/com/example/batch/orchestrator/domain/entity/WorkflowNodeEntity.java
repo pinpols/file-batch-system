@@ -23,6 +23,10 @@ public class WorkflowNodeEntity {
   private String retryPolicy;
   private Integer retryMaxCount;
   private Integer timeoutSeconds;
+
+  /** ORCH-P4-2 task 级 startToClose timeout（秒）；NULL/0 = 无 timeout，超时平台主动 cancel。 */
+  private Integer taskTimeoutSeconds;
+
   private String nodeParams;
 
   /** ADR-018 跨批量日依赖声明（JSONB 数组）；NULL = 无跨日依赖。 */

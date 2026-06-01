@@ -92,6 +92,13 @@ public interface JobTaskMapper {
   int requestCancel(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   /**
+   * ORCH-P4-2：startToClose 超时候选——RUNNING 且 started_at 已超过 task_timeout_seconds 且尚未请求取消。
+   *
+   * @param limit 单次扫描上限，避免长事务
+   */
+  List<JobTaskEntity> selectTaskTimeoutCandidates(@Param("limit") int limit);
+
+  /**
    * 与 {@link JobPartitionMapper#closeNonTerminalPartitionsForTerminalInstance} 配对：实例终态下仍为非终态的 task
    * 批量收口。
    */

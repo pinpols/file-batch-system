@@ -356,6 +356,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       fanOutIndex++;
       task.setTaskPayload(taskPayload);
       task.setDryRun(plan.isDryRun());
+      // ORCH-P4-2：派单期把节点 startToClose timeout 拷到 task，让 TaskTimeoutEnforcer 自洽扫 job_task。
+      task.setTaskTimeoutSeconds(workflowNode.getTaskTimeoutSeconds());
       taskExecutionServiceProvider.getObject().createTask(task);
       if (decision.isDispatchable()
           && partitionLifecycleService.releaseForDispatch(
