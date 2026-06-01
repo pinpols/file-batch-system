@@ -16,6 +16,7 @@
         <result column="assigned_worker_code" property="assignedWorkerCode"/>
         <result column="version" property="version"/>
         <result column="task_payload" property="taskPayload"/>
+        <result column="effective_parameters" property="effectiveParameters"/>
         <result column="result_summary" property="resultSummary"/>
         <result column="error_code" property="errorCode"/>
         <result column="error_message" property="errorMessage"/>
@@ -41,6 +42,7 @@
             task_status,
             assigned_worker_code,
             task_payload,
+            effective_parameters,
             result_summary,
             error_code,
             error_message,
@@ -59,6 +61,7 @@
             #{taskStatus},
             #{assignedWorkerCode},
             #{taskPayload,jdbcType=VARCHAR}::jsonb,
+            #{effectiveParameters,jdbcType=VARCHAR}::jsonb,
             #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{errorCode},
             #{errorMessage},
