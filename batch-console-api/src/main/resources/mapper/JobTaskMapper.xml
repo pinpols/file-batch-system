@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.ops.mapper.JobTaskMapper">
+    <resultMap id="JobTaskHeartbeatResultMap" type="com.example.batch.console.domain.ops.entity.JobTaskHeartbeatEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="task_status" property="taskStatus"/>
+        <result column="heartbeat_details" property="heartbeatDetails"/>
+        <result column="heartbeat_at" property="heartbeatAt"/>
+        <result column="cancel_requested" property="cancelRequested"/>
+    </resultMap>
+
+    <!-- ORCH-P4-1：heartbeat_details JSONB 以 ::text 读出,service 再解析为 JSON 透传 FE。
+         租户维度强制(tenant_id 无条件入 WHERE),跨租户读不到。 -->
+    <select id="selectHeartbeatByTenantAndId" resultMap="JobTaskHeartbeatResultMap">
+        select id, tenant_id, task_status,
+               heartbeat_details::text as heartbeat_details,
+               heartbeat_at, cancel_requested
+        from batch.job_task
+        where id = #{taskId}
+          and tenant_id = #{tenantId}
+    </select>
+</mapper>
