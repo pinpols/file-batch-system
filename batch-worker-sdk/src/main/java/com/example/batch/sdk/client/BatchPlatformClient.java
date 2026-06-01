@@ -2,6 +2,7 @@ package com.example.batch.sdk.client;
 
 import com.example.batch.sdk.dispatcher.KafkaTaskConsumer;
 import com.example.batch.sdk.dispatcher.TaskDispatcher;
+import com.example.batch.sdk.idempotent.SdkIdempotencyStore;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.scheduler.HeartbeatScheduler;
 import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
@@ -49,6 +50,7 @@ public class BatchPlatformClient {
   private final BatchPlatformClientConfig config;
   private final Map<String, SdkTaskHandler> handlers;
   private final PlatformHttpClient httpClient;
+  private final SdkIdempotencyStore idempotencyStore;
   private volatile boolean started = false;
   private TaskDispatcher dispatcher;
   private KafkaTaskConsumer kafkaConsumer;
@@ -57,10 +59,13 @@ public class BatchPlatformClient {
   private LeaseRenewalScheduler leaseRenewalScheduler;
 
   private BatchPlatformClient(
-      BatchPlatformClientConfig config, Map<String, SdkTaskHandler> handlers) {
+      BatchPlatformClientConfig config,
+      Map<String, SdkTaskHandler> handlers,
+      SdkIdempotencyStore idempotencyStore) {
     config.validate();
     this.config = config;
     this.handlers = Map.copyOf(handlers);
+    this.idempotencyStore = idempotencyStore;
     this.httpClient = new PlatformHttpClient(config);
   }
 
@@ -115,7 +120,7 @@ public class BatchPlatformClient {
     } catch (java.io.IOException e) {
       throw new RuntimeException("worker register failed", e);
     }
-    this.dispatcher = new TaskDispatcher(config, handlers, httpClient);
+    this.dispatcher = new TaskDispatcher(config, handlers, httpClient, idempotencyStore);
     this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);
     this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
     this.kafkaConsumerThread.setDaemon(false);
@@ -248,9 +253,19 @@ public class BatchPlatformClient {
   public static final class Builder {
     private final BatchPlatformClientConfig config;
     private final Map<String, SdkTaskHandler> handlers = new ConcurrentHashMap<>();
+    private SdkIdempotencyStore idempotencyStore;
 
     private Builder(BatchPlatformClientConfig config) {
       this.config = config;
+    }
+
+    /**
+     * SDK-P5 auto-wrap:注入声明式幂等所需的去重存储(可选)。注册了标 {@code @Idempotent} 的 handler 时必须设置,否则 {@link
+     * TaskDispatcher} 构造期 fail-fast。无幂等 handler 时无需调用。
+     */
+    public Builder idempotencyStore(SdkIdempotencyStore store) {
+      this.idempotencyStore = store;
+      return this;
     }
 
     public Builder register(SdkTaskHandler handler) {
@@ -266,7 +281,7 @@ public class BatchPlatformClient {
     }
 
     public BatchPlatformClient build() {
-      return new BatchPlatformClient(config, handlers);
+      return new BatchPlatformClient(config, handlers, idempotencyStore);
     }
   }
 }
