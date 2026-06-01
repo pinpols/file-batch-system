@@ -119,7 +119,9 @@ class DefaultLaunchServiceTest {
     when(batchDaySelfProvider.getObject()).thenReturn(launchBatchDayService);
     launchParamResolver =
         new LaunchParamResolver(
-            timezoneProvider, new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider));
+            timezoneProvider,
+            new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+            mock(com.example.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper.class));
     service =
         new DefaultLaunchService(
             launchValidationService,
