@@ -215,6 +215,8 @@ components:
         hostName: {type: string, nullable: true}
         hostIp: {type: string, nullable: true}
         processId: {type: string, nullable: true}
+        buildId: {type: string, nullable: true, description: "SDK-P5-3 运行指纹:租户应用构建标识;仅 register 上报"}
+        sdkVersion: {type: string, nullable: true, description: "SDK-P5-3 运行指纹:worker 链接的 batch-worker-sdk 库版本;仅 register 上报"}
         heartbeatAt: {type: string, format: date-time}
         capabilityTags:
           type: array
