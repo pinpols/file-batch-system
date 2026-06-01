@@ -6,7 +6,11 @@
 | 示范 | 演示的扩展模型 | 产出 | 部署到哪 |
 |---|---|---|---|
 | [`sftp-push-executor`](sftp-push-executor/) | **Task SPI 插件** | 一个 jar | 平台 worker 的 classpath |
-| [`sample-tenant-worker`](sample-tenant-worker/) | **自托管 SDK worker** | 一个独立进程 | 租户自己的机房 |
+| [`sample-tenant-worker`](sample-tenant-worker/) | **自托管 SDK worker(纯 Java)** | 一个独立进程 | 租户自己的机房 |
+| [`sample-tenant-worker-spring`](sample-tenant-worker-spring/) | **自托管 SDK worker(Spring Boot starter)** | 一个独立进程 | 租户自己的机房 |
+
+> `sample-tenant-worker` 与 `sample-tenant-worker-spring` 是**同一自托管能力的两种接入**(手写 `main` wiring vs Spring 自动装配),
+> 按租户技术栈二选一,对比见 [Spring 示例 README](sample-tenant-worker-spring/README.md#两种接入对比)。core SDK 始终 Spring-free,Spring 仅是可选 starter。
 
 ---
 
