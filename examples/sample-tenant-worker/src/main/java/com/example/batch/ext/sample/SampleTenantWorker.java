@@ -1,5 +1,6 @@
 package com.example.batch.ext.sample;
 
+import com.example.batch.ext.sample.handlers.*;
 import com.example.batch.sdk.client.BatchPlatformClient;
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.task.SdkTaskContext;
@@ -56,11 +57,11 @@ public final class SampleTenantWorker {
             .register(new EchoHandler())
             .register(new SleepHandler())
             // ADR-036 五大业务模板 sample(各 shape 一个 echo demo)
-            .register(new com.example.batch.ext.sample.handlers.AtomicEchoHandler())
-            .register(new com.example.batch.ext.sample.handlers.ImportEchoHandler())
-            .register(new com.example.batch.ext.sample.handlers.ExportEchoHandler())
-            .register(new com.example.batch.ext.sample.handlers.ProcessEchoHandler())
-            .register(new com.example.batch.ext.sample.handlers.DispatchEchoHandler())
+            .register(new AtomicEchoHandler())
+            .register(new ImportEchoHandler())
+            .register(new ExportEchoHandler())
+            .register(new ProcessEchoHandler())
+            .register(new DispatchEchoHandler())
             .build();
 
     Runtime.getRuntime()

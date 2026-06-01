@@ -1,0 +1,26 @@
+# Spring Boot 租户自托管 worker 配置示范。
+# 敏感值(api-key / SASL 密码)走环境变量,不要硬编码到本文件。
+batch:
+  worker-sdk:
+    enabled: true                 # 默认 true;设 false 可让进程起来但不真连平台(本地调试 / 灰度)
+    base-url: ${BATCH_BASE_URL:https://batch.example.com}
+    api-key: ${BATCH_API_KEY:}    # P2 启用;P1 阶段可空
+    tenant-id: ${BATCH_TENANT_ID:tenant-a}
+    worker-code: ${BATCH_WORKER_CODE:tenant-a-worker-1}
+    kafka-bootstrap: ${BATCH_KAFKA:kafka.example.com:9092}
+    kafka-topic-pattern: ${BATCH_TOPIC_PATTERN:batch.task.dispatch.tenant-a.*}
+    kafka-group-id: ${BATCH_KAFKA_GROUP:tenant-a-workers}
+    build-id: ${BATCH_BUILD_ID:}  # 建议 CI 注入 git 短 SHA / 镜像 tag,勿放敏感信息
+    # 可调项(均有默认,按需覆盖):
+    max-concurrent-tasks: 4
+    heartbeat-interval: 30s
+    lease-renew-interval: 60s
+    # P3 Kafka SASL/SCRAM(prod 必填,本地联调不设走 PLAINTEXT):
+    kafka-security-protocol: ${BATCH_KAFKA_PROTOCOL:}
+    kafka-sasl-mechanism: ${BATCH_KAFKA_SASL_MECHANISM:}
+    kafka-sasl-jaas-config: ${BATCH_KAFKA_SASL_JAAS:}
+
+# worker 是后台进程,非 web 应用
+spring:
+  main:
+    web-application-type: none
