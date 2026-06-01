@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.sdk.handler.SdkAbstractTaskHandler;
+import com.example.batch.sdk.handler.SdkRetryPolicy;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
@@ -150,6 +152,59 @@ class SdkRetryableHandlerTest {
     // assert
     assertThat(result.success()).isTrue();
     assertThat(handler.calls).hasValue(2);
+  }
+
+  /** 业务返回 fail 但无 Throwable(error()==null)的 handler;计数执行次数。 */
+  @RetryOn(
+      value = IllegalStateException.class,
+      maxAttempts = 4,
+      initialDelayMillis = 1,
+      backoff = RetryOn.Backoff.FIXED)
+  static class NoErrorFailHandler implements SdkTaskHandler {
+    final AtomicInteger calls = new AtomicInteger();
+
+    @Override
+    public String taskType() {
+      return "no_error_fail";
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      calls.incrementAndGet();
+      return SdkTaskResult.fail("business says no"); // error() == null
+    }
+  }
+
+  @Test
+  @DisplayName("业务 fail 但 error()==null → isRetryable(null) 为 false,不重试,返该 fail 结果(仅 1 次调用)")
+  void shouldNotRetry_whenFailResultHasNullError() {
+    // arrange:fail("msg") 不挂 Throwable
+    NoErrorFailHandler handler = new NoErrorFailHandler();
+    SdkTaskHandler wrapped = SdkRetryableHandler.wrap(handler);
+
+    // act
+    SdkTaskResult result = wrapped.execute(CTX);
+
+    // assert:failure==null → 不可重试 → 立即返回原 fail 结果,不进重试循环
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).isEqualTo("business says no");
+    assertThat(handler.calls).hasValue(1);
+  }
+
+  @Test
+  @DisplayName("EXPONENTIAL backoff 的 nextDelay 被 maxDelayMillis 截断(Math.min 封顶)")
+  void shouldCapDelay_whenExponentialExceedsMaxDelay() {
+    // arrange:initial=100ms,倍数 2,maxDelay=250ms
+    SdkRetryPolicy policy =
+        SdkRetryPolicy.exponential(10, Duration.ofMillis(100), Duration.ofMillis(250));
+
+    // act + assert:100 -> 200(<250,不截) -> 400 截到 250 -> 500 仍截到 250
+    Duration d1 = policy.nextDelay(Duration.ofMillis(100));
+    assertThat(d1).isEqualTo(Duration.ofMillis(200));
+    Duration d2 = policy.nextDelay(d1);
+    assertThat(d2).isEqualTo(Duration.ofMillis(250)); // 400 封顶到 250
+    Duration d3 = policy.nextDelay(d2);
+    assertThat(d3).isEqualTo(Duration.ofMillis(250)); // 500 仍封顶
   }
 
   @Test
