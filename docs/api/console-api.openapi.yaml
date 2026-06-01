@@ -2402,6 +2402,82 @@ paths:
                     additionalProperties: true
         '404':
           description: Task type not found for tenant
+  /api/console/atomic-task-types/schema:
+    get:
+      tags: [Workers]
+      summary: Built-in atomic task type schemas (sql/shell/stored_proc/http) — params + security gates (FE 2-B)
+      operationId: getAtomicTaskTypeSchema
+      responses:
+        '200':
+          description: Static schema catalog of the 4 built-in atomic task types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskType: { type: string }
+                        displayName: { type: string }
+                        enabledByDefault: { type: boolean }
+                        parameters:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name: { type: string }
+                              type: { type: string }
+                              required: { type: boolean }
+                              description: { type: string }
+                        securityGates:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              field: { type: string }
+                              meaning: { type: string }
+  /api/console/tasks/{taskId}/heartbeat-details:
+    get:
+      tags: [Workers]
+      summary: Latest heartbeat progress/checkpoint details for a task (FE 2-C, tenant-scoped)
+      operationId: getTaskHeartbeatDetails
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest heartbeat details (details=null when no heartbeat yet)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      taskId: { type: integer, format: int64 }
+                      taskStatus: { type: string }
+                      details: { type: object, additionalProperties: true, nullable: true }
+                      heartbeatAt: { type: string, format: date-time, nullable: true }
+                      cancelRequested: { type: boolean }
+        '404':
+          description: Task not found for tenant
   /api/console/workers/{workerCode}/drain:
     post:
       tags: [Workers]
