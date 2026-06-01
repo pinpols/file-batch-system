@@ -73,6 +73,7 @@ class BatchPlatformClientMetricsTest {
     assertThat(m.dispatcherFatal()).isFalse();
     assertThat(m.dispatcherDraining()).isFalse();
     assertThat(m.consumerCrashed()).isFalse();
+    assertThat(m.kafkaConsumerLag()).isEqualTo(-1L); // 无 consumer → 未知
   }
 
   @Test
@@ -85,6 +86,7 @@ class BatchPlatformClientMetricsTest {
     when(dispatcher.isDraining()).thenReturn(false);
     when(dispatcher.inFlightCount()).thenReturn(3);
     when(consumer.hasCrashed()).thenReturn(false);
+    when(consumer.consumerLagMax()).thenReturn(42L);
 
     inject(client, "started", true);
     inject(client, "dispatcher", dispatcher);
@@ -95,6 +97,7 @@ class BatchPlatformClientMetricsTest {
     assertThat(m.started()).isTrue();
     assertThat(m.healthy()).isTrue();
     assertThat(m.inFlightTaskCount()).isEqualTo(3);
+    assertThat(m.kafkaConsumerLag()).isEqualTo(42L);
   }
 
   @Test

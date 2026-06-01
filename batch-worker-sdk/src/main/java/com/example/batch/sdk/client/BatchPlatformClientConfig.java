@@ -57,6 +57,14 @@ public class BatchPlatformClientConfig {
   /** CLAIM 5xx 重试的基准退避(实际:{@code base * 2^attempt})。默认 200ms。 */
   @Default Duration claimRetryBaseDelay = Duration.ofMillis(200);
 
+  // ─── P7-2 CLAIM/REPORT 连续 4xx fail-fast ──────────────────────────────────
+  /**
+   * P7-2:CLAIM / REPORT 连续(非鉴权、非 409)4xx 客户端错误达此阈值 → 标记 dispatcher FATAL(后续拒新派单、 {@code
+   * isHealthy()} 报 false 让 K8s liveness probe 拉起)。任一次成功调用重置计数。 持续 4xx 通常意味 SDK 版本 / 契约不匹配, 重试无益,应
+   * fail-fast 让运维介入。{@code 0} = 关闭此机制。默认 5。 鉴权 401/403 仍是首次即 fatal(P1-2),不受此阈值影响。
+   */
+  @Default int clientErrorFailFastThreshold = 5;
+
   // ─── P3 Kafka SASL/SCRAM 鉴权 (per-tenant ACL) ─────────────────────────────
   /**
    * Kafka {@code security.protocol}。值如 {@code SASL_SSL / SASL_PLAINTEXT / PLAINTEXT};null 时不设(走

@@ -403,11 +403,11 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | # | 任务 | 工作量 |
 |---|---|---|
-| 7.1 | Kafka consumer lag 自检 + 暴露到 `metrics()` | 0.3d |
-| 7.2 | CLAIM / REPORT 连续失败 fail-fast 阈值(N 次连续 4xx → 退出) | 0.3d |
-| 7.3 | `register()` 失败时进程退出码非 0(K8s 拉起重试) | 0.1d |
+| 7.1 | ~~Kafka consumer lag 自检 + 暴露到 `metrics()`~~ ✅ 2026-06-01 #P7-1(`SdkClientMetrics.kafkaConsumerLag`,poll 线程读 `records-lag-max`) | 0.3d |
+| 7.2 | ~~CLAIM / REPORT 连续失败 fail-fast 阈值(N 次连续 4xx → 退出)~~ ✅ 2026-06-01 #P7-2(`clientErrorFailFastThreshold` 默认 5,连续非鉴权 4xx 置 fatal) | 0.3d |
+| 7.3 | ~~`register()` 失败时进程退出码非 0(K8s 拉起重试)~~ ✅ 2026-06-01 #P7-3(`start()` 抛异常契约 + sample `main` `System.exit(1)`) | 0.1d |
 
-可跟任何其他 phase 一起做,不单开 sprint。
+可跟任何其他 phase 一起做,不单开 sprint。**Phase 7 完成。**
 
 ---
 
