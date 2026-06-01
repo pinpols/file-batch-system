@@ -27,6 +27,17 @@ public interface TaskExecutionService {
   boolean renewTaskLease(
       String tenantId, Long taskId, String workerCode, String partitionInvocationId);
 
+  /** ORCH-P4-1：心跳 = 续租 + 进度上报 + 取消感知。详见 {@link TaskAssignmentService#recordHeartbeat}。 */
+  TaskAssignmentService.TaskHeartbeatResult recordHeartbeat(
+      String tenantId,
+      Long taskId,
+      String workerCode,
+      String partitionInvocationId,
+      String detailsJson);
+
+  /** ORCH-P4-1：平台请求取消 RUNNING task。详见 {@link TaskAssignmentService#requestCancel}。 */
+  boolean requestCancel(String tenantId, Long taskId);
+
   JobTaskEntity updateTaskStatus(
       String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage);
 

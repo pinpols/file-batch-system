@@ -13,20 +13,27 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest;
+import com.example.batch.orchestrator.controller.request.TaskCancelRequest;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
+import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护 worker → orchestrator HTTP 入口的边界处理:
@@ -38,6 +45,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>renewBatch: 逐条独立结果,异常不中断,空入参返空
  * </ul>
  */
+@ExtendWith(MockitoExtension.class)
 class TaskControllerApplicationServiceTest {
 
   @Mock private TaskExecutionService taskExecutionService;
@@ -46,8 +54,7 @@ class TaskControllerApplicationServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
-    service = new TaskControllerApplicationService(taskExecutionService);
+    service = new TaskControllerApplicationService(taskExecutionService, new ObjectMapper());
   }
 
   // ===== claim =====
@@ -177,23 +184,69 @@ class TaskControllerApplicationServiceTest {
     assertThat(cap.getValue().verifierFailures()).isNull();
   }
 
-  // ===== renew =====
+  // ===== renew (ORCH-P4-1 心跳) =====
 
   @Test
-  @DisplayName("renew: renewTaskLease 返 false → 抛 CONFLICT")
+  @DisplayName("renew: 续租失败(leaseRenewed=false)→ 抛 CONFLICT")
   void renewThrowsWhenLeaseRejected() {
-    when(taskExecutionService.renewTaskLease(anyString(), anyLong(), anyString(), any()))
-        .thenReturn(false);
-    assertThatThrownBy(() -> service.renew(100L, new TaskClaimRequest("ta", "w1", "inv-1")))
+    when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
+        .thenReturn(new TaskHeartbeatResult(false, false));
+    assertThatThrownBy(
+            () -> service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null)))
         .isInstanceOf(BizException.class);
   }
 
   @Test
-  @DisplayName("renew: 成功 → 不抛")
-  void renewSucceedsSilently() {
-    when(taskExecutionService.renewTaskLease(eq("ta"), eq(100L), eq("w1"), eq("inv-1")))
-        .thenReturn(true);
-    service.renew(100L, new TaskClaimRequest("ta", "w1", "inv-1"));
+  @DisplayName("renew: 续租成功且未取消 → 返回 cancelRequested=false")
+  void renewSucceedsWithoutCancel() {
+    when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
+        .thenReturn(new TaskHeartbeatResult(true, false));
+    TaskHeartbeatResponse resp =
+        service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null));
+    assertThat(resp.cancelRequested()).isFalse();
+  }
+
+  @Test
+  @DisplayName("renew: 平台已请求取消 → 返回 cancelRequested=true(cancel push)")
+  void renewReturnsCancelRequested() {
+    when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
+        .thenReturn(new TaskHeartbeatResult(true, true));
+    TaskHeartbeatResponse resp =
+        service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null));
+    assertThat(resp.cancelRequested()).isTrue();
+  }
+
+  @Test
+  @DisplayName("renew: details 非空 → 序列化为 JSON 文本透传给 recordHeartbeat")
+  void renewSerializesDetails() {
+    when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
+        .thenReturn(new TaskHeartbeatResult(true, false));
+    service.renew(
+        100L,
+        new TaskHeartbeatRequest("ta", "w1", "inv-1", Map.of("processed", 5000, "total", 50000)));
+    ArgumentCaptor<String> detailsCaptor = ArgumentCaptor.forClass(String.class);
+    verify(taskExecutionService)
+        .recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), detailsCaptor.capture());
+    assertThat(detailsCaptor.getValue()).contains("\"processed\":5000").contains("\"total\":50000");
+  }
+
+  @Test
+  @DisplayName("renew: details 为 null → 传 null,仅续租不写进度")
+  void renewWithoutDetailsPassesNull() {
+    when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
+        .thenReturn(new TaskHeartbeatResult(true, false));
+    service.renew(100L, new TaskHeartbeatRequest("ta", "w1", "inv-1", null));
+    verify(taskExecutionService).recordHeartbeat("ta", 100L, "w1", "inv-1", null);
+  }
+
+  // ===== cancel (ORCH-P4-1) =====
+
+  @Test
+  @DisplayName("cancel: 委托 requestCancel;非 RUNNING / 不存在也不抛(幂等)")
+  void cancelDelegatesAndSwallows() {
+    when(taskExecutionService.requestCancel("ta", 100L)).thenReturn(false);
+    service.cancel(100L, new TaskCancelRequest("ta", "manual abort"));
+    verify(taskExecutionService).requestCancel("ta", 100L);
   }
 
   // ===== renewBatch =====

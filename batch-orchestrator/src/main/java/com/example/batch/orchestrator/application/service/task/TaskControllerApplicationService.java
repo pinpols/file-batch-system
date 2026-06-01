@@ -6,18 +6,25 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest;
+import com.example.batch.orchestrator.controller.request.TaskCancelRequest;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
+import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewItemPayload;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewResultPayload;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.annotation.Timed;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -32,9 +39,11 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TaskControllerApplicationService {
 
   private final TaskExecutionService taskExecutionService;
+  private final ObjectMapper objectMapper;
 
   @Timed(
       value = "batch.task.claim.duration",
@@ -77,12 +86,47 @@ public class TaskControllerApplicationService {
     taskExecutionService.applyTaskOutcome(command);
   }
 
-  public void renew(Long taskId, TaskClaimRequest request) {
-    boolean renewed =
-        taskExecutionService.renewTaskLease(
-            request.tenantId(), taskId, request.workerId(), request.partitionInvocationId());
-    if (!renewed) {
+  /**
+   * ORCH-P4-1：心跳 = 续租 + 进度上报 + 取消感知。续租失败 → 409;成功则(可选)落 details 并回带 {@code cancelRequested}, SDK
+   * 据此主动停长循环(不等 lease 超时)。
+   */
+  public TaskHeartbeatResponse renew(Long taskId, TaskHeartbeatRequest request) {
+    String detailsJson = serializeDetails(taskId, request.details());
+    TaskHeartbeatResult result =
+        taskExecutionService.recordHeartbeat(
+            request.tenantId(),
+            taskId,
+            request.workerId(),
+            request.partitionInvocationId(),
+            detailsJson);
+    if (!result.leaseRenewed()) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
+    }
+    return new TaskHeartbeatResponse(result.cancelRequested());
+  }
+
+  /** ORCH-P4-1：运维 / 平台请求取消 RUNNING task;非 RUNNING / 不存在则静默成功(幂等,无需让运维区分)。 */
+  public void cancel(Long taskId, TaskCancelRequest request) {
+    boolean marked = taskExecutionService.requestCancel(request.tenantId(), taskId);
+    log.info(
+        "task cancel requested: tenant={} taskId={} reason={} marked={}",
+        request.tenantId(),
+        taskId,
+        request.reason(),
+        marked);
+  }
+
+  /** details 非空时序列化为 JSON 文本(存 job_task.heartbeat_details);序列化失败降级为跳过 details,不阻塞续租。 */
+  private String serializeDetails(Long taskId, Object details) {
+    if (details == null) {
+      return null;
+    }
+    try {
+      return objectMapper.writeValueAsString(details);
+    } catch (JsonProcessingException e) {
+      log.warn(
+          "heartbeat details serialize failed, skipped: taskId={} err={}", taskId, e.toString());
+      return null;
     }
   }
 

@@ -7,6 +7,7 @@ import com.example.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
 import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
 import com.example.batch.sdk.wire.ClaimRequest;
 import com.example.batch.sdk.wire.HeartbeatRequest;
@@ -156,16 +157,17 @@ class SdkWireContractTest {
   // ─── /internal/tasks/{taskId}/renew ─────────────────────────────────────
 
   @Test
-  void renewRequestDeserializesToTaskClaimRequest() throws Exception {
-    // renew 复用 TaskClaimRequest schema(同字段集)
+  void renewRequestDeserializesToTaskHeartbeatRequest() throws Exception {
+    // ORCH-P4-1:renew 绑定 TaskHeartbeatRequest;旧 SDK 仅发 3 字段,details=null 向前兼容。
     RenewRequest sdkSide = new RenewRequest("tenant-acme", "worker-1", null);
 
-    TaskClaimRequest platformSide =
-        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskClaimRequest.class);
+    TaskHeartbeatRequest platformSide =
+        MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), TaskHeartbeatRequest.class);
 
     assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
     assertThat(platformSide.workerId()).isEqualTo("worker-1");
     assertThat(platformSide.partitionInvocationId()).isNull();
+    assertThat(platformSide.details()).isNull();
   }
 
   // ─── /internal/tasks/{taskId}/report ────────────────────────────────────
