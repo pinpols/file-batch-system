@@ -24,8 +24,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护 worker 注册表关键不变量:
@@ -37,6 +38,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>deactivate 走 updateStatus OFFLINE
  * </ul>
  */
+@ExtendWith(MockitoExtension.class)
 class DefaultWorkerRegistryServiceTest {
 
   @Mock private WorkerRegistryMapper mapper;
@@ -46,7 +48,6 @@ class DefaultWorkerRegistryServiceTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    MockitoAnnotations.openMocks(this);
     service = new DefaultWorkerRegistryService(mapper, customTaskTypeRegistryMapper);
     // @Lazy self 字段注入,单元测下用反射手动指向自己 (走非事务路径)
     Field self = DefaultWorkerRegistryService.class.getDeclaredField("self");

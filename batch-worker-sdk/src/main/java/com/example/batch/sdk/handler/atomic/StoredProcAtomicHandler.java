@@ -201,7 +201,7 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
       return List.of();
     }
     if (raw instanceof List<?> list) {
-      return new ArrayList<>((List<Object>) list);
+      return List.copyOf((List<Object>) list);
     }
     throw new IllegalArgumentException("parameters.inParams must be a list");
   }

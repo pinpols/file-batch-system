@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-06-01
+- **CLAUDE.md §Java 编码细则 #3 添测试豁免**:`@Autowired` field 注入除了原有的 `@Lazy self` AOP workaround 例外,新增第二类豁免 — `@SpringBootTest` IT 测试。理由:全仓 IT 测继承 `AbstractIntegrationTest` 走 Spring 测试惯例,77 处 `@Autowired private Foo foo;` 已是事实标准,Spring `@SpringBootTest` 下构造器注入需要额外 ParameterResolver 协调且生态不偏好。本规则只豁免 IT 测试,生产代码继续严格执行构造器注入。最近 2 天扫到 17 处看似违反实为这条豁免覆盖,不予迁移。
+
 ### 2026-05-21
 - **ADR-032 控制台 4 角色 RBAC 重设计 落地**:`ROLE_CONFIG_ADMIN` 合并升级为 `ROLE_ADMIN`(V149 自动迁移),新增 `ROLE_TENANT_ADMIN`(本租户管理员,租户自服务发放员工)。新矩阵:平台 ADMIN/AUDITOR × 租户 TENANT_ADMIN/TENANT_USER。`ConsoleUserAccountService` 增 4 层守卫(Service 强制注入 tenantId / 跨租户拒绝 / 角色越授拒绝)。`canSwitchTenant` 收敛为 ADMIN+AUDITOR,TENANT_ADMIN 绑定自己租户。详见 `docs/architecture/adr/ADR-032-four-role-rbac-redesign.md`。
 - **CLAUDE.md §测试约定 新增**:扫 454 单测 + 23 IT(最近 3 天 diff)归纳已成事实的统一项 + 新代码标准:JUnit5 + AssertJ + Mockito 三件套已 100% 统一(无 JUnit4 / Hamcrest / EasyMock 混入);新单测一律 `@ExtendWith(MockitoExtension.class)` 声明式 mock 初始化(避免命令式 `openMocks`);方法命名首选 `shouldX_whenY()`,接受现存 `xxx_when_yyy()` 下划线风格;集成测必须 `extends AbstractIntegrationTest` 复用 Testcontainers base;`@DisplayName` / `@Nested` / AAA 注释推荐但不强制。**不做大规模 rename**(跟平行会话冲突风险高),只锁约定止血。

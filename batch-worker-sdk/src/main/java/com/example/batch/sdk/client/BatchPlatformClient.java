@@ -8,6 +8,7 @@ import com.example.batch.sdk.scheduler.HeartbeatScheduler;
 import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -117,8 +118,9 @@ public class BatchPlatformClient {
     try {
       Map<String, Object> resp = httpClient.register(body);
       log.info("BatchPlatformClient registered: response={}", resp);
-    } catch (java.io.IOException e) {
-      throw new RuntimeException("worker register failed", e);
+    } catch (IOException e) {
+      throw new BatchSdkClientException(
+          BatchSdkClientException.Stage.REGISTER, "worker register failed", e);
     }
     this.dispatcher = new TaskDispatcher(config, handlers, httpClient, idempotencyStore);
     this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);

@@ -20,8 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -65,8 +67,8 @@ public class OpenLineageEmitter {
               1,
               Math.max(1, props.getEmitThreads()),
               30L,
-              java.util.concurrent.TimeUnit.SECONDS,
-              new java.util.concurrent.LinkedBlockingQueue<>(256),
+              TimeUnit.SECONDS,
+              new LinkedBlockingQueue<>(256),
               r -> {
                 Thread t = new Thread(r, "openlineage-emit");
                 t.setDaemon(true);

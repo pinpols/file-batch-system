@@ -23,8 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -33,7 +31,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 // SseTicketService used in mock() call below
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class ConsoleAuthenticationFilterTest {
 
   @Mock private ConsoleJwtService jwtService;
@@ -210,7 +207,7 @@ class ConsoleAuthenticationFilterTest {
     // R4-P1-1：validate 返回 TicketPayload，含签发时角色集
     com.example.batch.console.domain.observability.service.SseTicketService.TicketPayload payload =
         new com.example.batch.console.domain.observability.service.SseTicketService.TicketPayload(
-            "alice", "t1", java.util.Set.of("ROLE_USER"));
+            "alice", "t1", Set.of("ROLE_USER"));
     when(sseTicketService.validate("ticket-1")).thenReturn(payload);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -224,7 +221,7 @@ class ConsoleAuthenticationFilterTest {
     assertThat(request.getAttribute(ConsoleAuthenticationFilter.TICKET_PRINCIPAL_ATTR))
         .isEqualTo(payload);
 
-    when(sseTicketService.validate("ticket-1")).thenReturn(null);
+    // 第二次 dispatch:filter 应从 request attribute 缓存里取,不再调用 sseTicketService.validate
     filter.doFilterInternal(request, response, chain);
 
     verify(sseTicketService, times(1)).validate("ticket-1");

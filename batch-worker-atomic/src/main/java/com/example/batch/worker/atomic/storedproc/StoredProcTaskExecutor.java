@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
@@ -96,7 +97,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        java.util.Set.of(ResourceKind.DB),
+        Set.of(ResourceKind.DB),
         false, // 存过通常有副作用
         true,
         props.getDefaultStatementTimeout());
@@ -199,8 +200,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
    * StoredProcExecutorProperties#getDataSourceBeanName()})。若 {@code requested} 与配置默认不同, 则必须在 {@code
    * allowedDataSourceBeans} 白名单内,否则抛 {@link StoredProcValidationException}。 提取为静态可测 helper。
    */
-  static String resolveDataSourceBean(
-      String requested, String configured, java.util.Set<String> allowed) {
+  static String resolveDataSourceBean(String requested, String configured, Set<String> allowed) {
     if (requested == null) {
       return configured;
     }
@@ -225,7 +225,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       return List.of();
     }
     if (raw instanceof List<?>) {
-      return new ArrayList<>((List<Object>) raw);
+      @SuppressWarnings("unchecked")
+      List<Object> typed = (List<Object>) raw;
+      return List.copyOf(typed);
     }
     throw new StoredProcValidationException("parameters.inParams must be a list");
   }
