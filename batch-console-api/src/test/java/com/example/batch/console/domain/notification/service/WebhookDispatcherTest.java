@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 import com.example.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -38,7 +40,7 @@ class WebhookDispatcherTest {
     // R3-P1-11：原 Thread.sleep(200) flaky；CI 低 CPU 时异步任务可能还没运行就被 verifyNoInteractions
     // 假阳通过。改用 CountDownLatch — stub findEnabledSubscriptions 在被调用时 countDown，
     // 主线程 await 后才执行 verify，保证 async 任务确实进入了 dispatchOne 入口（且因空列表早 return）。
-    java.util.concurrent.CountDownLatch findCalled = new java.util.concurrent.CountDownLatch(1);
+    CountDownLatch findCalled = new CountDownLatch(1);
     when(webhookService.findEnabledSubscriptions("tenant-a"))
         .thenAnswer(
             inv -> {
@@ -48,7 +50,7 @@ class WebhookDispatcherTest {
 
     dispatcher.dispatchAsync("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", null);
 
-    assertThat(findCalled.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+    assertThat(findCalled.await(2, TimeUnit.SECONDS)).isTrue();
     // findEnabledSubscriptions 已返回空列表 → 同一 task 内立刻早返回，
     // 后续 deliveryLogRepository 调用必然不会发生
     verifyNoInteractions(deliveryLogRepository);

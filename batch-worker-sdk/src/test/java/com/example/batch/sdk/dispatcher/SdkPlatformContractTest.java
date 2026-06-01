@@ -16,6 +16,7 @@ import com.example.batch.sdk.task.SdkTaskResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -112,7 +113,7 @@ class SdkPlatformContractTest {
     simulated.put("workerCode", "w-1");
     simulated.put("workerGroup", "sdk-self-hosted");
     simulated.put("status", "RUNNING");
-    simulated.put("heartbeatAt", java.time.Instant.now().toString());
+    simulated.put("heartbeatAt", Instant.now().toString());
     simulated.put("currentLoad", 0);
     simulated.put("capabilityTags", List.of("echo", "sleep"));
 

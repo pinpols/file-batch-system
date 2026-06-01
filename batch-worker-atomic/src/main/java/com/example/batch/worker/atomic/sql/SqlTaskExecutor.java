@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
@@ -89,7 +90,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        java.util.Set.of(ResourceKind.DB),
+        Set.of(ResourceKind.DB),
         // SELECT 幂等,UPDATE/INSERT/DELETE/DDL 不幂等,无法静态判断 → 保守标 false
         false,
         true,

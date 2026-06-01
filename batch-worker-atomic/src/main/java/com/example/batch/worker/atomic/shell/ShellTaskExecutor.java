@@ -18,8 +18,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -87,8 +89,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
    * 每次 invocation 唯一的 reader-map / 线程命名前缀。用 AtomicLong 自增,避免 PID 复用导致两个任务的 stdout 串台(reader map
    * 是实例级共享单例)。
    */
-  private static final java.util.concurrent.atomic.AtomicLong INVOCATION_SEQ =
-      new java.util.concurrent.atomic.AtomicLong();
+  private static final AtomicLong INVOCATION_SEQ = new AtomicLong();
 
   /** 包私有测试钩子:生成下一个 invocation id(单调递增,两次调用必不相同)。 */
   static String nextInvocationId() {
@@ -103,7 +104,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        java.util.Set.of(ResourceKind.CPU, ResourceKind.DISK),
+        Set.of(ResourceKind.CPU, ResourceKind.DISK),
         false, // shell 任务不视为幂等(side-effects 未知),失败需人工 review
         true, // 支持 cancel(destroyForcibly)
         props.getDefaultTimeout());

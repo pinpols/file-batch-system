@@ -15,7 +15,6 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.mapper.FileRecordLookupMapper;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -318,7 +317,7 @@ public class WorkflowNodePayloadBuilder {
   public List<Object> resolveFanOutItems(String itemsExpr, WorkflowRunEntity workflowRun) {
     Object resolved = workflowParamResolver.resolve(itemsExpr, loadWorkflowRunContext(workflowRun));
     if (resolved instanceof List<?> list) {
-      return new ArrayList<>(list);
+      return List.copyOf(list);
     }
     throw BizException.of(
         ResultCode.INVALID_ARGUMENT, "error.workflow.fan_out_items_not_array", itemsExpr);
