@@ -268,11 +268,14 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     task.setVersion(0L);
     // V88: 拷 priority (源 = SchedulePlan.priority, 由 DefaultSchedulePlanBuilder 从 job_definition 读)
     task.setPriority(context.creation().scheduling().plan().getPriority());
+    Map<String, Object> effectiveParams = context.creation().execution().effectiveParams();
     task.setTaskPayload(
         buildPayloadJson(
             context.creation().execution().request(),
             context.creation().execution().jobInstance(),
-            context.creation().execution().effectiveParams()));
+            effectiveParams));
+    // ORCH-P3-3 生效参数审计快照（合并后、wire 注入前），与 task_payload 解耦
+    task.setEffectiveParameters(effectiveParams == null ? null : JsonUtils.toJson(effectiveParams));
     task.setDryRun(Boolean.TRUE.equals(context.creation().execution().jobInstance().getDryRun()));
     return task;
   }
