@@ -163,6 +163,32 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
   @Override
   @Transactional
+  public TaskHeartbeatResult recordHeartbeat(
+      String tenantId,
+      Long taskId,
+      String workerCode,
+      String partitionInvocationId,
+      String detailsJson) {
+    boolean renewed = renewTaskLease(tenantId, taskId, workerCode, partitionInvocationId);
+    if (!renewed) {
+      return new TaskHeartbeatResult(false, false);
+    }
+    if (Texts.hasText(detailsJson)) {
+      jobTaskMapper.updateHeartbeatDetails(tenantId, taskId, detailsJson);
+    }
+    JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
+    boolean cancelRequested = task != null && Boolean.TRUE.equals(task.getCancelRequested());
+    return new TaskHeartbeatResult(true, cancelRequested);
+  }
+
+  @Override
+  @Transactional
+  public boolean requestCancel(String tenantId, Long taskId) {
+    return jobTaskMapper.requestCancel(tenantId, taskId) > 0;
+  }
+
+  @Override
+  @Transactional
   public JobTaskEntity updateTaskStatus(
       String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage) {
     JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);

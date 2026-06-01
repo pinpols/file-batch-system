@@ -2,7 +2,10 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.orchestrator.application.service.task.TaskControllerApplicationService;
+import com.example.batch.orchestrator.controller.request.TaskCancelRequest;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+import com.example.batch.orchestrator.controller.request.TaskHeartbeatRequest;
+import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -15,8 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 任务执行生命周期内部控制器，基础路径 {@code /internal/tasks}。 提供 Worker 与 Orchestrator 之间的任务交互端点： {@code POST
- * /{taskId}/claim} 认领任务、{@code POST /{taskId}/report} 上报执行结果、 {@code POST /{taskId}/renew}
- * 续期心跳租约、{@code POST /leases/renew-batch} 批量续租（ADR-016）。仅限 Worker 节点通过内部网络调用。
+ * /{taskId}/claim} 认领任务、{@code POST /{taskId}/report} 上报执行结果、 {@code POST /{taskId}/renew} 心跳(续租 +
+ * 进度上报 + 取消感知,ORCH-P4-1)、{@code POST /{taskId}/cancel} 请求取消(ORCH-P4-1)、 {@code POST
+ * /leases/renew-batch} 批量续租（ADR-016）。仅限 Worker 节点 / 运维内部网络调用。
  *
  * <p>{@code claim} 端点 P1-2.1 起返回 {@link EffectiveTaskConfig} body(认领成功时);旧版 worker 不解析 body
  * 仍可正常工作(HTTP 200 即认为成功),协议向前兼容。
@@ -40,8 +44,18 @@ public class TaskController {
   }
 
   @PostMapping("/{taskId}/renew")
-  public void renew(@PathVariable Long taskId, @RequestBody TaskClaimRequest request) {
-    taskControllerApplicationService.renew(taskId, request);
+  public TaskHeartbeatResponse renew(
+      @PathVariable Long taskId, @RequestBody TaskHeartbeatRequest request) {
+    return taskControllerApplicationService.renew(taskId, request);
+  }
+
+  /**
+   * ORCH-P4-1：运维 / 平台请求取消 RUNNING task。置 cancel_requested=true,SDK 下次 renew 收到 {@code
+   * cancelRequested=true} 后主动停(不等 lease 超时)。幂等:重复 / 对非 RUNNING task 调用均返回 200。
+   */
+  @PostMapping("/{taskId}/cancel")
+  public void cancel(@PathVariable Long taskId, @RequestBody TaskCancelRequest request) {
+    taskControllerApplicationService.cancel(taskId, request);
   }
 
   @PostMapping("/leases/renew-batch")
