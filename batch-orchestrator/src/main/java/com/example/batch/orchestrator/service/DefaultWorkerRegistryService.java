@@ -1,14 +1,18 @@
 package com.example.batch.orchestrator.service;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
+import com.example.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import com.example.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
 import com.example.batch.orchestrator.domain.value.JsonbString;
+import com.example.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -35,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
   private final WorkerRegistryMapper workerRegistryMapper;
+  private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
 
   @Lazy @Autowired private DefaultWorkerRegistryService self;
 
@@ -82,7 +87,34 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     if ("sdk-self-hosted".equals(request.workerGroup())) {
       workerRegistryMapper.markSelfHosted(request.tenantId(), request.workerCode());
     }
+    upsertDeclaredTaskTypes(request);
     return saved;
+  }
+
+  /**
+   * SDK Phase 3 M3.1:把 register 上报的 {@code taskTypes[].descriptor} upsert 到 {@code
+   * custom_task_type_registry}(source=SDK_DECLARED)。heartbeat 不带 taskTypes(null),仅 register 刷新。
+   * descriptor 全文序列化为 JSON 存 JSONB;code 以 SDK 端 {@code SdkTaskHandler.taskType()} 为权威(SDK 装配已对齐)。
+   */
+  private void upsertDeclaredTaskTypes(WorkerHeartbeatDto request) {
+    List<WorkerTaskTypeDescriptorDto> taskTypes = request.taskTypes();
+    if (taskTypes == null || taskTypes.isEmpty()) {
+      return;
+    }
+    for (WorkerTaskTypeDescriptorDto descriptor : taskTypes) {
+      if (descriptor == null || descriptor.code() == null || descriptor.code().isBlank()) {
+        continue;
+      }
+      customTaskTypeRegistryMapper.upsertDeclared(
+          CustomTaskTypeUpsertParam.builder()
+              .tenantId(request.tenantId())
+              .taskTypeCode(descriptor.code())
+              .displayName(descriptor.displayName())
+              .descriptor(JsonUtils.toJson(descriptor))
+              .descriptorVersion(descriptor.version())
+              .declaredByWorkerCode(request.workerCode())
+              .build());
+    }
   }
 
   @Override

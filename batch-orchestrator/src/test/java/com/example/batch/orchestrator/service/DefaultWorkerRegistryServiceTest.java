@@ -10,13 +10,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
+import com.example.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import com.example.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
+import com.example.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,13 +40,14 @@ import org.mockito.MockitoAnnotations;
 class DefaultWorkerRegistryServiceTest {
 
   @Mock private WorkerRegistryMapper mapper;
+  @Mock private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
 
   private DefaultWorkerRegistryService service;
 
   @BeforeEach
   void setUp() throws Exception {
     MockitoAnnotations.openMocks(this);
-    service = new DefaultWorkerRegistryService(mapper);
+    service = new DefaultWorkerRegistryService(mapper, customTaskTypeRegistryMapper);
     // @Lazy self 字段注入,单元测下用反射手动指向自己 (走非事务路径)
     Field self = DefaultWorkerRegistryService.class.getDeclaredField("self");
     self.setAccessible(true);
@@ -52,6 +57,21 @@ class DefaultWorkerRegistryServiceTest {
   private WorkerHeartbeatDto dto(String status) {
     return new WorkerHeartbeatDto(
         "ta", "w1", "default", status, "host", "1.2.3.4", "pid", Instant.now(), List.of(), 1, null);
+  }
+
+  private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
+    return new WorkerHeartbeatDto(
+        "ta",
+        "w1",
+        "sdk-self-hosted",
+        WorkerRegistryStatus.ONLINE.code(),
+        "host",
+        "1.2.3.4",
+        "pid",
+        Instant.now(),
+        List.of(),
+        1,
+        taskTypes);
   }
 
   private WorkerRegistryEntity entityWithStatus(String status) {
@@ -178,6 +198,56 @@ class DefaultWorkerRegistryServiceTest {
     service.register(dto(null));
 
     verify(mapper).updateById(any());
+  }
+
+  // ===== register: 自定义 taskType descriptor upsert (SDK Phase 3 M3.1) =====
+
+  @Test
+  @DisplayName(
+      "register: 上报 taskTypes[] → 每个 descriptor upsert 到 custom_task_type_registry(code 权威)")
+  void registerUpsertsDeclaredTaskTypes() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    WorkerTaskTypeDescriptorDto descriptor =
+        new WorkerTaskTypeDescriptorDto(
+            "tenant_ta_import", "导入", "v1", Map.of("batchSize", 500), null, null);
+
+    service.register(dtoWithTaskTypes(List.of(descriptor)));
+
+    verify(customTaskTypeRegistryMapper)
+        .upsertDeclared(
+            org.mockito.ArgumentMatchers.argThat(
+                (CustomTaskTypeUpsertParam p) ->
+                    "tenant_ta_import".equals(p.getTaskTypeCode())
+                        && "导入".equals(p.getDisplayName())
+                        && "v1".equals(p.getDescriptorVersion())
+                        && "w1".equals(p.getDeclaredByWorkerCode())
+                        && p.getDescriptor() != null
+                        && p.getDescriptor().contains("batchSize")));
+  }
+
+  @Test
+  @DisplayName("register: taskTypes 为 null(file-pipeline worker) → 不触发 upsert")
+  void registerWithoutTaskTypesSkipsUpsert() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    service.register(dto(null));
+
+    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+  }
+
+  @Test
+  @DisplayName("register: descriptor.code 空白 → 跳过该条 upsert(不落脏 code)")
+  void registerSkipsBlankCodeDescriptor() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    WorkerTaskTypeDescriptorDto blank =
+        new WorkerTaskTypeDescriptorDto(" ", "x", "v1", null, null, null);
+
+    service.register(dtoWithTaskTypes(List.of(blank)));
+
+    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
   }
 
   // ===== updateStatus / deactivate =====
