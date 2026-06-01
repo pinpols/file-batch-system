@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.ops.mapper.CustomTaskTypeMapper">
+    <resultMap id="CustomTaskTypeResultMap" type="com.example.batch.console.domain.ops.entity.CustomTaskTypeEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="task_type_code" property="taskTypeCode"/>
+        <result column="display_name" property="displayName"/>
+        <result column="descriptor" property="descriptor"/>
+        <result column="descriptor_version" property="descriptorVersion"/>
+        <result column="source" property="source"/>
+        <result column="declared_by_worker_code" property="declaredByWorkerCode"/>
+        <result column="status" property="status"/>
+        <result column="first_declared_at" property="firstDeclaredAt"/>
+        <result column="last_declared_at" property="lastDeclaredAt"/>
+    </resultMap>
+
+    <!-- SDK Phase 3 M3.1：descriptor JSONB 以 ::text 读出原样透传 FE。 -->
+    <select id="selectActiveByTenant" resultMap="CustomTaskTypeResultMap">
+        select id, tenant_id, task_type_code, display_name,
+               descriptor::text as descriptor, descriptor_version, source,
+               declared_by_worker_code, status, first_declared_at, last_declared_at
+        from batch.custom_task_type_registry
+        where tenant_id = #{tenantId}
+          and status = 'ACTIVE'
+        order by last_declared_at desc nulls last, id desc
+    </select>
+
+    <select id="countActiveByTenant" resultType="long">
+        select count(1)
+        from batch.custom_task_type_registry
+        where tenant_id = #{tenantId}
+          and status = 'ACTIVE'
+    </select>
+
+    <select id="selectByTenantAndCode" resultMap="CustomTaskTypeResultMap">
+        select id, tenant_id, task_type_code, display_name,
+               descriptor::text as descriptor, descriptor_version, source,
+               declared_by_worker_code, status, first_declared_at, last_declared_at
+        from batch.custom_task_type_registry
+        where tenant_id = #{tenantId}
+          and task_type_code = #{taskTypeCode}
+    </select>
+</mapper>
