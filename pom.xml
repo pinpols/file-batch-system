@@ -32,6 +32,7 @@
         <module>batch-worker-dispatch</module>
         <module>batch-worker-atomic</module>
         <module>batch-worker-sdk</module>
+        <module>batch-worker-sdk-testkit</module>
         <module>batch-console-api</module>
         <module>batch-e2e-tests</module>
     </modules>
