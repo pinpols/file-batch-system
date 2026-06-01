@@ -1,5 +1,6 @@
 package com.example.batch.sdk.handler;
 
+import com.example.batch.sdk.handler.typed.SdkAbstractTypedDispatchHandler;
 import com.example.batch.sdk.task.SdkTaskContext;
 import java.util.List;
 import java.util.Map;

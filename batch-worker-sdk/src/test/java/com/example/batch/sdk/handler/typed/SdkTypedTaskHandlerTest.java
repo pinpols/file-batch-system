@@ -1,8 +1,10 @@
-package com.example.batch.sdk.task;
+package com.example.batch.sdk.handler.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.sdk.task.SdkTaskContext;
+import com.example.batch.sdk.task.SdkTaskResult;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,6 @@
-package com.example.batch.sdk.task;
+package com.example.batch.sdk.handler.typed;
 
+import com.example.batch.sdk.task.SdkTaskContext;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;

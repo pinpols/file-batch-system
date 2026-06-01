@@ -1,8 +1,9 @@
-package com.example.batch.sdk.handler;
+package com.example.batch.sdk.handler.typed;
 
+import com.example.batch.sdk.handler.SdkAbstractTaskHandler;
+import com.example.batch.sdk.handler.SdkRowResult;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
-import com.example.batch.sdk.task.SdkTypedParameters;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Iterator;
 import java.util.stream.Stream;
