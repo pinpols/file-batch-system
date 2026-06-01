@@ -47,4 +47,23 @@ class SdkTaskContextTest {
     assertThat(ctx.triggerCode()).isNull();
     assertThat(ctx.workflowRunId()).isNull();
   }
+
+  @Test
+  void isCancelledReflectsSignal() {
+    CancellationSignal signal = new CancellationSignal();
+    SdkTaskContext ctx =
+        new SdkTaskContext("t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of(), null, signal);
+
+    assertThat(ctx.isCancelled()).isFalse();
+    signal.cancel();
+    assertThat(ctx.isCancelled()).isTrue();
+  }
+
+  @Test
+  void isCancelledFalseWhenNoSignalSupplied() {
+    // 兼容构造未传信号 → 构造器补空信号,isCancelled() 返回 false 而非 NPE
+    SdkTaskContext ctx = new SdkTaskContext("t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of());
+
+    assertThat(ctx.isCancelled()).isFalse();
+  }
 }
