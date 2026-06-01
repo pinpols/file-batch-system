@@ -14,9 +14,10 @@ import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护 workflow_run 终态 outbox 写入:
@@ -27,6 +28,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>幂等键、event_type、aggregate_type、payload 内容齐全
  * </ul>
  */
+@ExtendWith(MockitoExtension.class)
 class WorkflowTerminalOutboxServiceTest {
 
   @Mock private DomainEventPublisher domainEventPublisher;
@@ -37,7 +39,6 @@ class WorkflowTerminalOutboxServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     service = new WorkflowTerminalOutboxService(domainEventPublisher, openLineageEmitter);
   }
 

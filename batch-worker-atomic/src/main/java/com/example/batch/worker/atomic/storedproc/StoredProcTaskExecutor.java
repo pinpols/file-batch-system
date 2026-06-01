@@ -226,7 +226,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       return List.of();
     }
     if (raw instanceof List<?>) {
-      return new ArrayList<>((List<Object>) raw);
+      @SuppressWarnings("unchecked")
+      List<Object> typed = (List<Object>) raw;
+      return List.copyOf(typed);
     }
     throw new StoredProcValidationException("parameters.inParams must be a list");
   }

@@ -114,7 +114,8 @@ public class BatchPlatformClient {
       Map<String, Object> resp = httpClient.register(body);
       log.info("BatchPlatformClient registered: response={}", resp);
     } catch (IOException e) {
-      throw new RuntimeException("worker register failed", e);
+      throw new BatchSdkClientException(
+          BatchSdkClientException.Stage.REGISTER, "worker register failed", e);
     }
     this.dispatcher = new TaskDispatcher(config, handlers, httpClient);
     this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);
