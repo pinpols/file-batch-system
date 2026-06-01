@@ -4,6 +4,7 @@ import com.example.batch.sdk.client.BatchPlatformClient;
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.internal.PlatformHttpException;
+import com.example.batch.sdk.task.CancellationSignal;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
@@ -43,6 +44,13 @@ public class TaskDispatcher {
   private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
   private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
+
+  /**
+   * SDK-P4-1:in-flight task 的取消信号表。{@link LeaseRenewalScheduler} 读到 renew response 的 {@code
+   * cancelRequested=true} 或 lease 被回收(404/410)时,经 {@link #markCancelled(Long)} 翻转;handler 在长循环里调
+   * {@code ctx.isCancelled()} 感知,主动停。
+   */
+  private final Map<Long, CancellationSignal> cancellations = new ConcurrentHashMap<>();
 
   /** P0 hardening:stop() 后置 true,onMessage 拒新消息(Zeebe JobWorker.close 模式)。 */
   private final AtomicBoolean draining = new AtomicBoolean(false);
@@ -188,6 +196,8 @@ public class TaskDispatcher {
       return;
     }
     inFlight.add(msg.taskId());
+    CancellationSignal cancellation = new CancellationSignal();
+    cancellations.put(msg.taskId(), cancellation);
 
     // EXECUTE
     SdkTaskContext ctx =
@@ -199,7 +209,8 @@ public class TaskDispatcher {
             config.getWorkerCode(),
             msg.parameters() == null ? Map.of() : msg.parameters(),
             msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes(),
-            msg.schedulingContext());
+            msg.schedulingContext(),
+            cancellation);
 
     SdkTaskResult result;
     try {
@@ -251,6 +262,24 @@ public class TaskDispatcher {
           reportEx);
     } finally {
       inFlight.remove(msg.taskId());
+      cancellations.remove(msg.taskId());
+    }
+  }
+
+  /**
+   * SDK-P4-1:平台请求取消(renew response {@code cancelRequested=true} / lease 被回收)时,由 {@link
+   * LeaseRenewalScheduler} 调用翻转对应 task 的取消信号。task 不在 in-flight(已结束 / 未知)时静默忽略。
+   *
+   * @param reason 取消来源,仅日志用(如 "platform-cancel" / "lease-revoked")
+   */
+  public void markCancelled(Long taskId, String reason) {
+    if (taskId == null) {
+      return;
+    }
+    CancellationSignal signal = cancellations.get(taskId);
+    if (signal != null && !signal.isCancelled()) {
+      signal.cancel();
+      log.info("task cancellation signalled: taskId={} reason={}", taskId, reason);
     }
   }
 

@@ -22,6 +22,7 @@ import java.util.Objects;
  * @param parameters 用户定义的任务参数(来自 job_definition.parameters JSON)
  * @param runtimeAttributes 平台注入的运行时属性(traceId / bizDate / pipelineInstanceId 等)
  * @param schedulingContext Phase 2 调度上下文;老平台未下发时为 null,便捷 getter 一律 null-safe
+ * @param cancellation Phase 4 取消信号;由 dispatcher 注入,null 时构造器补一个永不取消的空信号(getter null-safe)
  */
 public record SdkTaskContext(
     String tenantId,
@@ -31,7 +32,8 @@ public record SdkTaskContext(
     String workerId,
     Map<String, Object> parameters,
     Map<String, Object> runtimeAttributes,
-    SdkSchedulingContext schedulingContext) {
+    SdkSchedulingContext schedulingContext,
+    CancellationSignal cancellation) {
 
   public SdkTaskContext {
     Objects.requireNonNull(tenantId, "tenantId");
@@ -39,6 +41,30 @@ public record SdkTaskContext(
     Objects.requireNonNull(taskId, "taskId");
     parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
     runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
+    cancellation = cancellation == null ? new CancellationSignal() : cancellation;
+  }
+
+  /** 8 参兼容构造器 —— Phase 4 前的构造方式继续可用,cancellation 走空信号。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public SdkTaskContext(
+      String tenantId,
+      String jobCode,
+      String taskInstanceId,
+      Long taskId,
+      String workerId,
+      Map<String, Object> parameters,
+      Map<String, Object> runtimeAttributes,
+      SdkSchedulingContext schedulingContext) {
+    this(
+        tenantId,
+        jobCode,
+        taskInstanceId,
+        taskId,
+        workerId,
+        parameters,
+        runtimeAttributes,
+        schedulingContext,
+        null);
   }
 
   /** 7 参兼容构造器 —— Phase 2 前的构造方式继续可用,schedulingContext 走 null。 */
@@ -51,6 +77,24 @@ public record SdkTaskContext(
       Map<String, Object> parameters,
       Map<String, Object> runtimeAttributes) {
     this(tenantId, jobCode, taskInstanceId, taskId, workerId, parameters, runtimeAttributes, null);
+  }
+
+  /**
+   * 平台是否已请求取消本 task(运维 cancel / ORCH-P4-2 超时 / lease 被回收)。
+   *
+   * <p>长任务 handler 应在循环里周期 check,例如:
+   *
+   * <pre>{@code
+   * for (var batch : batches) {
+   *   if (ctx.isCancelled()) {
+   *     return SdkTaskResult.fail("cancelled by platform");
+   *   }
+   *   process(batch);
+   * }
+   * }</pre>
+   */
+  public boolean isCancelled() {
+    return cancellation.isCancelled();
   }
 
   /** 实例业务日;无调度上下文时返回 null。 */
