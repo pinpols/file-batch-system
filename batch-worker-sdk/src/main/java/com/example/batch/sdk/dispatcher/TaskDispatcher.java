@@ -2,8 +2,13 @@ package com.example.batch.sdk.dispatcher;
 
 import com.example.batch.sdk.client.BatchPlatformClient;
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
+import com.example.batch.sdk.idempotent.Idempotent;
+import com.example.batch.sdk.idempotent.SdkIdempotencyStore;
+import com.example.batch.sdk.idempotent.SdkIdempotentHandler;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.internal.PlatformHttpException;
+import com.example.batch.sdk.retry.RetryOn;
+import com.example.batch.sdk.retry.SdkRetryableHandler;
 import com.example.batch.sdk.task.CancellationSignal;
 import com.example.batch.sdk.task.ProgressReporter;
 import com.example.batch.sdk.task.SdkTaskContext;
@@ -131,12 +136,39 @@ public class TaskDispatcher {
       BatchPlatformClientConfig config,
       Map<String, SdkTaskHandler> handlers,
       PlatformHttpClient httpClient) {
+    this(config, handlers, httpClient, null);
+  }
+
+  /**
+   * SDK-P5 auto-wrap:注册时自动探测 handler 上的 {@link Idempotent} / {@link RetryOn} 注解并织入装饰器,接入方无需手工
+   * {@code wrap}。织入顺序固定 <b>idempotent 外 / retry 内</b>:幂等先查 key,未命中才进重试执行单元,重试到成功后记一次幂等。
+   *
+   * @param idempotencyStore 声明式幂等所需的去重存储;若没有任何 handler 标 {@link Idempotent} 可传 {@code null},否则在此构造期
+   *     fail-fast(见 {@link SdkIdempotentHandler#wrapAround})
+   */
+  public TaskDispatcher(
+      BatchPlatformClientConfig config,
+      Map<String, SdkTaskHandler> handlers,
+      PlatformHttpClient httpClient,
+      SdkIdempotencyStore idempotencyStore) {
     this.config = config;
-    this.handlers = Map.copyOf(handlers);
+    Map<String, SdkTaskHandler> decorated = new HashMap<>(handlers.size());
+    handlers.forEach((type, handler) -> decorated.put(type, decorate(handler, idempotencyStore)));
+    this.handlers = Map.copyOf(decorated);
     this.httpClient = httpClient;
     this.executor =
         Executors.newFixedThreadPool(
             config.getMaxConcurrentTasks(), namedThreadFactory("batch-sdk-dispatch"));
+  }
+
+  /**
+   * 按声明式注解给单个 handler 织入装饰器链。两个 {@code wrapAround} 的 {@code source} 都传原始 {@code h}(注解只在原始 class 上),
+   * {@code delegate} 串起来形成 idempotent(retry(h)) 的链。
+   */
+  private static SdkTaskHandler decorate(SdkTaskHandler h, SdkIdempotencyStore store) {
+    SdkTaskHandler chain = SdkRetryableHandler.wrapAround(h, h); // 内层:retry
+    chain = SdkIdempotentHandler.wrapAround(h, chain, store); // 外层:idempotent
+    return chain;
   }
 
   /** 收到一条派单消息 — 提交到线程池异步处理(返回快,Kafka consumer 不阻塞)。 */

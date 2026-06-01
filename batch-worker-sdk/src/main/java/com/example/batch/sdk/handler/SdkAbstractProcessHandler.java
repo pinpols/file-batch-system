@@ -1,10 +1,9 @@
 package com.example.batch.sdk.handler;
 
+import com.example.batch.sdk.handler.typed.SdkAbstractTypedProcessHandler;
 import com.example.batch.sdk.task.SdkTaskContext;
-import com.example.batch.sdk.task.SdkTaskResult;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -15,10 +14,14 @@ import java.util.stream.Stream;
  *
  * <p>适用:租户表 → 业务计算(报表预聚合 / 维表 join / 业务规则推导)→ 写回租户表。 钩子里的所有状态由租户进程持有,平台只看终态 + counts(ADR-035 §6)。
  *
+ * <p>本类是 {@link SdkAbstractTypedProcessHandler} 在「裸 Map 任务入参」下的特例:钩子只收 {@code ctx},模板循环复用 typed 基类。
+ * 需要强类型任务入参时直接用 {@link SdkAbstractTypedProcessHandler}。
+ *
  * @param <I> 输入行类型
  * @param <O> 输出行类型
  */
-public abstract class SdkAbstractProcessHandler<I, O> extends SdkAbstractTaskHandler {
+public abstract class SdkAbstractProcessHandler<I, O>
+    extends SdkAbstractTypedProcessHandler<Map<String, Object>, I, O, Void> {
 
   /**
    * 读输入行(从租户表 select)。模板用 try-with-resources 关闭,保证背后的 {@code ResultSet} 在读完或异常时都释放; 租户可直接返 {@code
@@ -32,38 +35,21 @@ public abstract class SdkAbstractProcessHandler<I, O> extends SdkAbstractTaskHan
   /** 批量 upsert 输出行到租户表。 */
   protected abstract void upsert(SdkTaskContext ctx, List<O> batch) throws Exception;
 
-  /** 批大小,默认 500,可覆盖。 */
-  protected int batchSize() {
-    return 500;
+  @Override
+  protected final Stream<I> selectInput(Map<String, Object> params, SdkTaskContext ctx)
+      throws Exception {
+    return selectInput(ctx);
   }
 
   @Override
-  protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
-    try {
-      SdkRowResult counts = new SdkRowResult();
-      List<O> buf = new ArrayList<>(batchSize());
-      try (Stream<I> rows = selectInput(ctx)) {
-        Iterator<I> it = rows.iterator();
-        while (it.hasNext()) {
-          O out = transform(ctx, it.next());
-          if (out != null) {
-            buf.add(out);
-            counts.incSuccess();
-          } else {
-            counts.incSkipped();
-          }
-          if (buf.size() >= batchSize()) {
-            upsert(ctx, buf);
-            buf.clear();
-          }
-        }
-      }
-      if (!buf.isEmpty()) {
-        upsert(ctx, buf);
-      }
-      return SdkTaskResult.ok("processed " + counts.success() + " rows", counts.toOutput());
-    } catch (Exception e) {
-      return SdkTaskResult.fail(e);
-    }
+  protected final O transform(Map<String, Object> params, SdkTaskContext ctx, I row)
+      throws Exception {
+    return transform(ctx, row);
+  }
+
+  @Override
+  protected final void upsert(Map<String, Object> params, SdkTaskContext ctx, List<O> batch)
+      throws Exception {
+    upsert(ctx, batch);
   }
 }

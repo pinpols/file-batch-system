@@ -1,7 +1,10 @@
-package com.example.batch.sdk.task;
+package com.example.batch.sdk.handler.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.sdk.task.SdkTaskContext;
+import com.example.batch.sdk.task.SdkTaskResult;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -81,6 +84,28 @@ class SdkTypedTaskHandlerTest {
     assertThat(result.success()).isTrue();
     assertThat(handler.seen.sourcePath()).isNull();
     assertThat(handler.seen.batchSize()).isZero();
+  }
+
+  @Test
+  void handleExceptionBubblesUpToDispatcher() {
+    // 契约:handle() 抛异常不被 execute() 吞,透传给 TaskDispatcher 统一兜底转 fail + REPORT failure。
+    // 仅入参反序列化失败(IllegalArgumentException 来自 convertValue)才在 execute 内转 fail。
+    SdkTypedTaskHandler<ImportRequest, ImportResult> handler =
+        new SdkTypedTaskHandler<>() {
+          @Override
+          public String taskType() {
+            return "boom";
+          }
+
+          @Override
+          protected ImportResult handle(ImportRequest req, SdkTaskContext ctx) {
+            throw new IllegalStateException("business failure");
+          }
+        };
+
+    assertThatThrownBy(() -> handler.execute(ctxWith(Map.of("sourcePath", "/x", "batchSize", 1))))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("business failure");
   }
 
   @Test

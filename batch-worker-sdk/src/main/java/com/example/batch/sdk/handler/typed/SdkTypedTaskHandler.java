@@ -1,9 +1,9 @@
-package com.example.batch.sdk.task;
+package com.example.batch.sdk.handler.typed;
 
-import com.fasterxml.jackson.databind.JavaType;
+import com.example.batch.sdk.task.SdkTaskContext;
+import com.example.batch.sdk.task.SdkTaskHandler;
+import com.example.batch.sdk.task.SdkTaskResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import java.util.Map;
 
 /**
  * 类型安全的任务执行基类 — SDK Phase 5 / SDK-P5-1。
@@ -35,49 +35,34 @@ import java.util.Map;
  *
  * <p>需要显式失败 / 自定义 message-without-exception 的场景,继续用原始 {@link SdkTaskHandler} 接口。
  *
+ * <p>入参反序列化逻辑复用 {@link SdkTypedParameters}(与 handler 包的 typed 行流模板共享同一实现)。
+ *
  * @param <I> 入参类型(从 parameters 反序列化)
  * @param <O> 业务结果类型(序列化进 output)
  */
 public abstract class SdkTypedTaskHandler<I, O> implements SdkTaskHandler {
 
-  private final ObjectMapper objectMapper;
-  private final JavaType inputType;
+  private final SdkTypedParameters<I> params;
 
   protected SdkTypedTaskHandler() {
-    this(defaultObjectMapper());
+    this(SdkTypedParameters.defaultObjectMapper());
   }
 
   protected SdkTypedTaskHandler(ObjectMapper objectMapper) {
-    this.objectMapper = objectMapper;
-    this.inputType = resolveInputType(objectMapper);
-  }
-
-  /** 默认 mapper —— 对齐 SDK 其它组件(JavaTimeModule 支持 LocalDate 等时间类型)。 */
-  private static ObjectMapper defaultObjectMapper() {
-    return new ObjectMapper().registerModule(new JavaTimeModule());
-  }
-
-  /** 从泛型超类解析 {@code I} 的 Jackson 类型;无法解析(裸用泛型)→ 退化为 Object。 */
-  private JavaType resolveInputType(ObjectMapper mapper) {
-    JavaType self = mapper.getTypeFactory().constructType(getClass());
-    JavaType[] params = mapper.getTypeFactory().findTypeParameters(self, SdkTypedTaskHandler.class);
-    if (params == null || params.length == 0) {
-      return mapper.getTypeFactory().constructType(Object.class);
-    }
-    return params[0];
+    this.params = SdkTypedParameters.forHandler(objectMapper, this, SdkTypedTaskHandler.class, 0);
   }
 
   @Override
   public final SdkTaskResult execute(SdkTaskContext ctx) {
     I input;
     try {
-      input = objectMapper.convertValue(ctx.parameters(), inputType);
+      input = params.parse(ctx);
     } catch (IllegalArgumentException ex) {
       return SdkTaskResult.fail(
           "invalid parameters for taskType=" + taskType() + ": " + ex.getMessage(), ex);
     }
     O output = handle(input, ctx);
-    return SdkTaskResult.ok(successMessage(output), toOutputMap(output));
+    return SdkTaskResult.ok(successMessage(output), params.toOutputMap(output));
   }
 
   /** 业务实现 —— 拿强类型入参,返业务结果。抛异常即失败(框架兜底)。 */
@@ -86,14 +71,5 @@ public abstract class SdkTypedTaskHandler<I, O> implements SdkTaskHandler {
   /** 成功时的 message,默认 {@code "ok"};按需重写返摘要。 */
   protected String successMessage(O output) {
     return "ok";
-  }
-
-  private Map<String, Object> toOutputMap(O output) {
-    if (output == null) {
-      return Map.of();
-    }
-    JavaType mapType =
-        objectMapper.getTypeFactory().constructMapType(Map.class, String.class, Object.class);
-    return objectMapper.convertValue(output, mapType);
   }
 }

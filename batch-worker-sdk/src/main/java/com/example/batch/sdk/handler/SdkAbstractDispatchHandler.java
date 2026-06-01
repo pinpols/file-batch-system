@@ -1,13 +1,21 @@
 package com.example.batch.sdk.handler;
 
+import com.example.batch.sdk.handler.typed.SdkAbstractTypedDispatchHandler;
 import com.example.batch.sdk.task.SdkTaskContext;
-import com.example.batch.sdk.task.SdkTaskResult;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
+import java.util.Map;
 
-/** ADR-036 — Dispatch 模板:tenant → external push(DB → HTTP/SFTP)。 */
-@Slf4j
-public abstract class SdkAbstractDispatchHandler<R> extends SdkAbstractTaskHandler {
+/**
+ * ADR-036 — Dispatch 模板:tenant → external push(DB → HTTP/SFTP)。单条失败计 failed 不中断整批。
+ *
+ * <p>本类是 {@link SdkAbstractTypedDispatchHandler} 在「裸 Map 入参」下的特例:钩子只收 {@code ctx},模板循环复用 typed 基类。
+ * 需要强类型入参时直接用 {@link SdkAbstractTypedDispatchHandler}。
+ *
+ * @param <R> payload 行类型
+ */
+public abstract class SdkAbstractDispatchHandler<R>
+    extends SdkAbstractTypedDispatchHandler<Map<String, Object>, Void, R> {
+
   /** 选出待推送的 payload 列表。 */
   protected abstract List<R> selectPayload(SdkTaskContext ctx) throws Exception;
 
@@ -21,25 +29,26 @@ public abstract class SdkAbstractDispatchHandler<R> extends SdkAbstractTaskHandl
   protected void onResponse(SdkTaskContext ctx, R item, Object response) throws Exception {}
 
   @Override
-  protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
-    try {
-      SdkRowResult counts = new SdkRowResult();
-      List<R> items = selectPayload(ctx);
-      for (R item : items) {
-        try {
-          Object req = buildRequest(ctx, item);
-          Object resp = push(ctx, req);
-          onResponse(ctx, item, resp);
-          counts.incSuccess();
-        } catch (Exception itemEx) {
-          counts.incFailed();
-          log.warn("dispatch item failed: {}", itemEx.getMessage());
-        }
-      }
-      return SdkTaskResult.ok(
-          "dispatched " + counts.success() + "/" + counts.total(), counts.toOutput());
-    } catch (Exception e) {
-      return SdkTaskResult.fail(e);
-    }
+  protected final List<R> selectPayload(Map<String, Object> input, SdkTaskContext ctx)
+      throws Exception {
+    return selectPayload(ctx);
+  }
+
+  @Override
+  protected final Object buildRequest(Map<String, Object> input, SdkTaskContext ctx, R item)
+      throws Exception {
+    return buildRequest(ctx, item);
+  }
+
+  @Override
+  protected final Object push(Map<String, Object> input, SdkTaskContext ctx, Object request)
+      throws Exception {
+    return push(ctx, request);
+  }
+
+  @Override
+  protected final void onResponse(
+      Map<String, Object> input, SdkTaskContext ctx, R item, Object response) throws Exception {
+    onResponse(ctx, item, response);
   }
 }

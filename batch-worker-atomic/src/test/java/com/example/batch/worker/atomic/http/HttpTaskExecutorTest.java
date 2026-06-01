@@ -387,5 +387,61 @@ class HttpTaskExecutorTest {
       // POST 不重试,只 1 次
       assertThat(calls.get()).isEqualTo(1);
     }
+
+    @Test
+    void getExhaustsAllRetriesAndFailMessageContainsAttemptCount() {
+      // GET 幂等:连接持续失败(I/O 异常)→ 用尽 maxRetries+1 次,fail message 含次数。
+      // 用一个保留为不可路由的端口(server 已起但 path 未注册不会触发 I/O 失败,故指向已关端口)。
+      props.setMaxRetries(2);
+      props.setRetryBackoff(Duration.ofMillis(5));
+      props.setDefaultTimeout(Duration.ofMillis(200));
+      // 把 server 停掉,使每次连接都被拒(ConnectException)。
+      server.stop(0);
+      server = null;
+
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("url", "http://127.0.0.1:" + serverPort + "/x")));
+
+      assertThat(r.success()).isFalse();
+      // maxRetries=2 → 首次 + 2 次重试 = 3 次尝试,fail message 报次数。
+      assertThat(r.message()).contains("http failed after 3 attempts");
+    }
+
+    @Test
+    void doesNotFollowRedirectToInternalHost() {
+      // SSRF 加固:服务端 301 指向内网/metadata,执行器禁止跟随 → 直接拿到 30x,不打内网。
+      server.createContext(
+          "/redirect",
+          ex -> {
+            ex.getResponseHeaders().add("Location", "http://169.254.169.254/latest/meta-data/");
+            ex.sendResponseHeaders(301, -1);
+            ex.close();
+          });
+
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("url", url("/redirect"), "expectStatus", 301)));
+
+      // followRedirects=NEVER:返回 301 本身(未跟随到内网);expectStatus=301 命中 → 不跟随得证。
+      assertThat(r.success()).isTrue();
+      assertThat(r.output()).containsEntry("statusCode", 301);
+    }
+  }
+
+  // ─── enforce allowlist (deny-all) ────────────────────────────────────────────
+
+  @Nested
+  class EnforceAllowlist {
+
+    @Test
+    void emptyAllowlistDeniesAllWhenEnforced() {
+      // enforceAllowlist=true + 空 allowedHostPatterns → fail-closed 拒绝全部。
+      props.setEnforceAllowlist(true);
+      props.setAllowedHostPatterns(Set.of());
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/anything"))));
+
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("deny all");
+    }
   }
 }
