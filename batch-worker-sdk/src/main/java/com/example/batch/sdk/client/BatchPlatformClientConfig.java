@@ -1,7 +1,10 @@
 package com.example.batch.sdk.client;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 import lombok.Builder;
 import lombok.Builder.Default;
 import lombok.NonNull;
@@ -87,6 +90,79 @@ public class BatchPlatformClientConfig {
    * password="<scram-pwd>";}。从 K8s Secret 或环境变量注入,**不要硬编码**。
    */
   String kafkaSaslJaasConfig;
+
+  /**
+   * 从环境变量构造配置(默认前缀 {@code BATCH_SDK_})—— 租户无需在 {@code main()} 里手写一堆 {@code System.getenv}。
+   *
+   * <p>必填:{@code <prefix>BASE_URL / TENANT_ID / WORKER_CODE / KAFKA_BOOTSTRAP / KAFKA_TOPIC_PATTERN
+   * / KAFKA_GROUP_ID}。可选:{@code API_KEY / BUILD_ID / MAX_CONCURRENT_TASKS /
+   * HEARTBEAT_INTERVAL_SECONDS / HTTP_TIMEOUT_SECONDS / KAFKA_SECURITY_PROTOCOL /
+   * KAFKA_SASL_MECHANISM / KAFKA_SASL_JAAS_CONFIG}。缺必填项一次性报全。
+   */
+  public static BatchPlatformClientConfig fromEnv() {
+    return fromEnv("BATCH_SDK_");
+  }
+
+  /** 同 {@link #fromEnv()},自定义前缀。 */
+  public static BatchPlatformClientConfig fromEnv(String prefix) {
+    return fromEnv(prefix, System::getenv);
+  }
+
+  /** 可注入环境查找函数的版本(测试用)。 */
+  static BatchPlatformClientConfig fromEnv(String prefix, UnaryOperator<String> env) {
+    List<String> missing = new ArrayList<>();
+    String baseUrl = required(env, prefix, "BASE_URL", missing);
+    String tenantId = required(env, prefix, "TENANT_ID", missing);
+    String workerCode = required(env, prefix, "WORKER_CODE", missing);
+    String kafkaBootstrap = required(env, prefix, "KAFKA_BOOTSTRAP", missing);
+    String kafkaTopicPattern = required(env, prefix, "KAFKA_TOPIC_PATTERN", missing);
+    String kafkaGroupId = required(env, prefix, "KAFKA_GROUP_ID", missing);
+    if (!missing.isEmpty()) {
+      throw new IllegalArgumentException(
+          "missing required env vars: " + String.join(", ", missing));
+    }
+
+    BatchPlatformClientConfigBuilder builder =
+        builder()
+            .baseUrl(baseUrl)
+            .tenantId(tenantId)
+            .workerCode(workerCode)
+            .kafkaBootstrap(kafkaBootstrap)
+            .kafkaTopicPattern(kafkaTopicPattern)
+            .kafkaGroupId(kafkaGroupId)
+            .apiKey(env.apply(prefix + "API_KEY"))
+            .buildId(env.apply(prefix + "BUILD_ID"))
+            .kafkaSecurityProtocol(env.apply(prefix + "KAFKA_SECURITY_PROTOCOL"))
+            .kafkaSaslMechanism(env.apply(prefix + "KAFKA_SASL_MECHANISM"))
+            .kafkaSaslJaasConfig(env.apply(prefix + "KAFKA_SASL_JAAS_CONFIG"));
+
+    String maxConcurrent = env.apply(prefix + "MAX_CONCURRENT_TASKS");
+    if (maxConcurrent != null && !maxConcurrent.isBlank()) {
+      builder.maxConcurrentTasks(Integer.parseInt(maxConcurrent.trim()));
+    }
+    String heartbeat = env.apply(prefix + "HEARTBEAT_INTERVAL_SECONDS");
+    if (heartbeat != null && !heartbeat.isBlank()) {
+      builder.heartbeatInterval(Duration.ofSeconds(Long.parseLong(heartbeat.trim())));
+    }
+    String httpTimeout = env.apply(prefix + "HTTP_TIMEOUT_SECONDS");
+    if (httpTimeout != null && !httpTimeout.isBlank()) {
+      builder.httpTimeout(Duration.ofSeconds(Long.parseLong(httpTimeout.trim())));
+    }
+
+    BatchPlatformClientConfig config = builder.build();
+    config.validate();
+    return config;
+  }
+
+  private static String required(
+      UnaryOperator<String> env, String prefix, String key, List<String> missing) {
+    String value = env.apply(prefix + key);
+    if (value == null || value.isBlank()) {
+      missing.add(prefix + key);
+      return null;
+    }
+    return value.trim();
+  }
 
   public void validate() {
     Objects.requireNonNull(baseUrl, "baseUrl");
