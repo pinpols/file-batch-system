@@ -200,8 +200,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
    * StoredProcExecutorProperties#getDataSourceBeanName()})。若 {@code requested} 与配置默认不同, 则必须在 {@code
    * allowedDataSourceBeans} 白名单内,否则抛 {@link StoredProcValidationException}。 提取为静态可测 helper。
    */
-  static String resolveDataSourceBean(
-      String requested, String configured, java.util.Set<String> allowed) {
+  static String resolveDataSourceBean(String requested, String configured, Set<String> allowed) {
     if (requested == null) {
       return configured;
     }
