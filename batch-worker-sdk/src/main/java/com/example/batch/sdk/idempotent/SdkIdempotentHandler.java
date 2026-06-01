@@ -38,16 +38,40 @@ public final class SdkIdempotentHandler implements SdkTaskHandler {
   }
 
   /**
-   * 若 {@code delegate} 标了 {@link Idempotent} 则包装,否则原样返回。
+   * 若 {@code delegate} 标了 {@link Idempotent} 则包装,否则原样返回。等价 {@link #wrapAround}(delegate, delegate,
+   * store)。
    *
    * @param delegate 被包 handler
    * @param store 租户注入的去重存储
    * @return 包装后的 handler(或原 handler)
    */
   public static SdkTaskHandler wrap(SdkTaskHandler delegate, SdkIdempotencyStore store) {
-    Idempotent ann = delegate.getClass().getAnnotation(Idempotent.class);
+    return wrapAround(delegate, delegate, store);
+  }
+
+  /**
+   * 组合友好工厂:从 {@code source} 的运行时类读 {@link Idempotent},命中则把 {@code delegate} 包一层幂等,否则原样返回 {@code
+   * delegate}。
+   *
+   * <p>与 {@link #wrap} 的区别:注解从 {@code source}(原始 handler)读,而非从可能已被其他装饰器包过的 {@code delegate} 读 —— 多层
+   * 嵌套时内层 wrapper 的 class 没有注解也不影响判定。
+   *
+   * <p>命中注解但 {@code store == null} → fail-fast 抛 {@link IllegalStateException}(声明了幂等却没注入存储,属装配错误,
+   * 越早暴露越好);无注解则不要求 store。
+   *
+   * @param source 提供 {@link Idempotent} 注解的原始 handler
+   * @param delegate 实际被包装执行的 handler(可能已被内层装饰器包过)
+   * @param store 租户注入的去重存储(命中注解时必填)
+   */
+  public static SdkTaskHandler wrapAround(
+      SdkTaskHandler source, SdkTaskHandler delegate, SdkIdempotencyStore store) {
+    Idempotent ann = source.getClass().getAnnotation(Idempotent.class);
     if (ann == null) {
       return delegate;
+    }
+    if (store == null) {
+      throw new IllegalStateException(
+          "handler taskType=" + source.taskType() + " 声明了 @Idempotent 但未注入 SdkIdempotencyStore");
     }
     return new SdkIdempotentHandler(delegate, store, ann);
   }

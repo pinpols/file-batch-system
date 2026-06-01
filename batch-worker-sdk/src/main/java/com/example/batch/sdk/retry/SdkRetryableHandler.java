@@ -37,9 +37,25 @@ public final class SdkRetryableHandler implements SdkTaskHandler {
     this.policy = buildPolicy(annotation);
   }
 
-  /** 若 {@code delegate} 标了 {@link RetryOn} 则包装,否则原样返回。 */
+  /**
+   * 若 {@code delegate} 标了 {@link RetryOn} 则包装,否则原样返回。等价 {@link #wrapAround}(delegate, delegate)。
+   */
   public static SdkTaskHandler wrap(SdkTaskHandler delegate) {
-    RetryOn ann = delegate.getClass().getAnnotation(RetryOn.class);
+    return wrapAround(delegate, delegate);
+  }
+
+  /**
+   * 组合友好工厂:从 {@code source} 的运行时类读 {@link RetryOn},命中则把 {@code delegate} 包一层重试,否则原样返回 {@code
+   * delegate}。
+   *
+   * <p>与 {@link #wrap} 的区别:注解从 {@code source}(原始 handler)读,而非从可能已被其他装饰器包过的 {@code delegate} 读。这样多层
+   * 装饰器嵌套时,内层 wrapper 的 class 没有注解也不影响判定 —— 上层只需把原始 handler 作为 {@code source} 传入。
+   *
+   * @param source 提供 {@link RetryOn} 注解的原始 handler
+   * @param delegate 实际被包装执行的 handler(可能已被内层装饰器包过)
+   */
+  public static SdkTaskHandler wrapAround(SdkTaskHandler source, SdkTaskHandler delegate) {
+    RetryOn ann = source.getClass().getAnnotation(RetryOn.class);
     if (ann == null) {
       return delegate;
     }
