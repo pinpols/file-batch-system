@@ -78,8 +78,7 @@ public class DefaultLaunchService implements LaunchService {
     String traceId = resolveTraceId(request);
     LaunchRequest routedRequest = launchBatchDayService.routeLateArrivalIfNeeded(request, loaded);
     Map<String, Object> effectiveParams =
-        launchParamResolver.mergeLaunchParams(
-            loaded.jobDefinition(), routedRequest.triggerType(), routedRequest.params());
+        launchParamResolver.mergeLaunchParams(loaded.jobDefinition(), routedRequest);
     BatchDayGateService.GateDecision gateDecision =
         batchDayGateService.evaluateAndApply(routedRequest, loaded, effectiveParams, traceId);
     if (!gateDecision.allowed()) {
