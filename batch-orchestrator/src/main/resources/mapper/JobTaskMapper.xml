@@ -32,6 +32,7 @@
         <result column="updated_at" property="updatedAt"/>
         <result column="failure_class" property="failureClass"/>
         <result column="dry_run" property="dryRun"/>
+        <result column="task_timeout_seconds" property="taskTimeoutSeconds"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobTaskEntity"
@@ -54,7 +55,8 @@
             priority,
             started_at,
             finished_at,
-            dry_run
+            dry_run,
+            task_timeout_seconds
         ) values (
             #{tenantId},
             #{jobInstanceId},
@@ -76,7 +78,8 @@
             <choose>
                 <when test="dryRun != null">#{dryRun}</when>
                 <otherwise>false</otherwise>
-            </choose>
+            </choose>,
+            #{taskTimeoutSeconds}
         )
     </insert>
 
@@ -229,6 +232,20 @@
           and id = #{id}
           and task_status = 'RUNNING'
     </update>
+
+    <!-- ORCH-P4-2：startToClose 超时候选（RUNNING 且超过 task_timeout_seconds 且尚未请求取消） -->
+    <select id="selectTaskTimeoutCandidates" resultMap="JobTaskResultMap">
+        select *
+        from batch.job_task
+        where task_status = 'RUNNING'
+          and cancel_requested = false
+          and started_at is not null
+          and task_timeout_seconds is not null
+          and task_timeout_seconds &gt; 0
+          and started_at &lt; current_timestamp - (task_timeout_seconds * interval '1 second')
+        order by started_at asc, id asc
+        limit #{limit}
+    </select>
 
     <update id="requestCancel">
         update batch.job_task

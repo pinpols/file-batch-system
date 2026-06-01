@@ -53,6 +53,9 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
   /** ADR-026 dry-run 演练标记；从父 job_partition.dry_run 透传。 */
   private Boolean dryRun;
 
+  /** ORCH-P4-2 派单期拷自 workflow_node.task_timeout_seconds；TaskTimeoutEnforcer 据此软取消超时 task。 */
+  private Integer taskTimeoutSeconds;
+
   @Override
   public String getStatus() {
     return taskStatus;
