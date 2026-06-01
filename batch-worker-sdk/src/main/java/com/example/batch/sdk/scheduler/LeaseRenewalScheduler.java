@@ -4,6 +4,7 @@ import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.dispatcher.TaskDispatcher;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.internal.PlatformHttpException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -70,9 +71,14 @@ public class LeaseRenewalScheduler implements AutoCloseable {
   private void renewOne(Long taskId) {
     try {
       // body 对齐 TaskHeartbeatRequest(tenantId/workerId/partitionInvocationId/details)
-      Map<String, Object> resp =
-          httpClient.renew(
-              taskId, Map.of("tenantId", config.getTenantId(), "workerId", config.getWorkerCode()));
+      Map<String, Object> body = new HashMap<>();
+      body.put("tenantId", config.getTenantId());
+      body.put("workerId", config.getWorkerCode());
+      Map<String, Object> details = dispatcher.progressSnapshot(taskId);
+      if (details != null) {
+        body.put("details", details); // SDK-P4-2:handler reportProgress 快照,落 job_task
+      }
+      Map<String, Object> resp = httpClient.renew(taskId, body);
       if (resp != null && Boolean.TRUE.equals(resp.get("cancelRequested"))) {
         dispatcher.markCancelled(taskId, "platform-cancel");
       }
