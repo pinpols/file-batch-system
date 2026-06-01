@@ -26,6 +26,34 @@ java -jar examples/sample-tenant-worker/target/sample-tenant-worker-1.0.0-SNAPSH
 |---|---|
 | `echo`  | 把 `parameters` 原样回吐,演示最小契约 |
 | `sleep` | 按 `parameters.millis` sleep,演示长任务 + lease 自动续约 |
+| `sample_import_echo` | ADR-036 Import 模板 + **SDK P3 M3.1 `descriptor()` 端到端示范** |
+| `sample_export_echo` / `sample_process_echo` / `sample_dispatch_echo` / `sample_atomic_echo` | ADR-036 其余四类业务模板 sample |
+
+## descriptor() 端到端(SDK Phase 3 M3.1)
+
+`ImportEchoHandler` 重写了 `SdkTaskHandler.descriptor()`,声明 taskType 元数据:
+
+```java
+@Override
+public SdkTaskTypeDescriptor descriptor() {
+  return SdkTaskTypeDescriptor.builder()
+      .displayName("示范导入(echo)")
+      .version("v1")
+      .defaults(Map.of("batchSize", 2, "targetTable", "staging_${bizDate}"))
+      .inputSchema(Map.of("type", "object", "required", List.of("sourcePath"), ...))
+      .templateVariables(List.of("bizDate", "dataIntervalStart", "dataIntervalEnd"))
+      .build();
+}
+```
+
+声明后的完整链路:
+
+1. **register 上报** — worker 启动 register 时,SDK 收集所有非 null `descriptor()`,以 `taskType()` 为权威 `code`,随 `POST /internal/workers/register` 的 `taskTypes[]` 上报平台。
+2. **平台 upsert** — orchestrator 把 descriptor upsert 到 `batch.custom_task_type_registry`(状态 `ACTIVE`,记录 `last_declared_at`)。
+3. **console 查询** — 租户/平台管理员经 `GET /api/console/custom-task-types?tenantId=` 列出、`/{taskTypeCode}` 看 descriptor 全文(API-P3-1),据 `inputSchema` 渲染表单、据 `defaults` 预填。
+4. **派单合并** — orchestrator 派单时按 `descriptor.defaults < job default_params < node.parameters` 三级合并,并对 `${bizDate}` 等模板变量做替换(ORCH-P3-2b),合并后的 `effective_parameters` 落 `job_task`(ORCH-P3-3)。
+
+> **凭据纪律**:SFTP 密码 / S3 secret 等敏感值**禁止**走 `defaults` —— 它们会落库 `custom_task_type_registry` 并回显 console。凭据一律走 worker 进程的环境变量。
 
 ## 验证
 
@@ -36,6 +64,8 @@ echo handler taskId=N params={...}
 ```
 
 `sleep` Job 配 `millis=120000`,看 worker 在执行期间每 60s 触发一次 `LeaseRenewalScheduler`。
+
+descriptor 验证:启动 sample worker(register 成功)后,经 console 查 `GET /api/console/custom-task-types?tenantId=<你的租户>`,应能看到 `sample_import_echo` 一行,`descriptor` 字段含上面声明的 defaults/inputSchema。
 
 ## 业务方落地
 
