@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper">
+
+    <!--
+      CustomTaskTypeRegistryEntity 是 java record(不可变),用 <constructor> 显式映射。
+      参数顺序必须与 record canonical constructor 完全一致:
+        (id, tenantId, taskTypeCode, displayName, descriptor, descriptorVersion,
+         source, declaredByWorkerCode, status,
+         firstDeclaredAt, lastDeclaredAt, createdAt, updatedAt)
+      descriptor 是 JSONB;以 ::text 读出为字符串。
+    -->
+    <resultMap id="customTaskTypeMap"
+               type="com.example.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="task_type_code" javaType="java.lang.String"/>
+            <arg column="display_name" javaType="java.lang.String"/>
+            <arg column="descriptor_text" javaType="java.lang.String"/>
+            <arg column="descriptor_version" javaType="java.lang.String"/>
+            <arg column="source" javaType="java.lang.String"/>
+            <arg column="declared_by_worker_code" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="first_declared_at" javaType="java.time.Instant"/>
+            <arg column="last_declared_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="selectColumns">
+        id, tenant_id, task_type_code, display_name,
+        descriptor::text as descriptor_text,
+        descriptor_version, source, declared_by_worker_code, status,
+        first_declared_at, last_declared_at, created_at, updated_at
+    </sql>
+
+    <!-- SDK 上报 upsert:首次 insert(source=SDK_DECLARED / status=ACTIVE 走 DB DEFAULT),
+         冲突(tenant_id, task_type_code)即刷新 descriptor / 版本 / 上报 worker / last_declared_at,
+         并把曾被标 DEPRECATED 的 code 复活为 ACTIVE。 -->
+    <insert id="upsertDeclared"
+            parameterType="com.example.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam">
+        insert into batch.custom_task_type_registry (
+            tenant_id, task_type_code, display_name, descriptor, descriptor_version,
+            source, declared_by_worker_code, status,
+            first_declared_at, last_declared_at, created_at, updated_at
+        ) values (
+            #{tenantId}, #{taskTypeCode}, #{displayName},
+            cast(#{descriptor} as jsonb), #{descriptorVersion},
+            'SDK_DECLARED', #{declaredByWorkerCode}, 'ACTIVE',
+            current_timestamp, current_timestamp, current_timestamp, current_timestamp
+        )
+        on conflict (tenant_id, task_type_code) do update
+           set display_name            = excluded.display_name,
+               descriptor              = excluded.descriptor,
+               descriptor_version      = excluded.descriptor_version,
+               declared_by_worker_code = excluded.declared_by_worker_code,
+               status                  = 'ACTIVE',
+               last_declared_at        = current_timestamp,
+               updated_at              = current_timestamp
+    </insert>
+
+    <select id="selectByTenantAndCode" resultMap="customTaskTypeMap">
+        select <include refid="selectColumns"/>
+          from batch.custom_task_type_registry
+         where tenant_id = #{tenantId}
+           and task_type_code = #{taskTypeCode}
+    </select>
+
+    <select id="selectActiveByTenant" resultMap="customTaskTypeMap">
+        select <include refid="selectColumns"/>
+          from batch.custom_task_type_registry
+         where tenant_id = #{tenantId}
+           and status = 'ACTIVE'
+         order by task_type_code
+    </select>
+
+</mapper>
