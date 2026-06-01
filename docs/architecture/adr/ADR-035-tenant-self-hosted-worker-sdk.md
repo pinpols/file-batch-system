@@ -43,6 +43,38 @@
 
 **严格不含**:MyBatis / Flyway / Redis / OTel / Spring Boot 服务端组件。目标:`batch-worker-sdk` jar < 2 MB,只引 jackson + http client + kafka-client。
 
+### 1.1 可选模块 `batch-worker-sdk-spring-boot-starter`
+
+为 Spring Boot 租户提供可选 starter,但 **core SDK 不绑定 Spring**:
+
+| 模块 | 定位 | 依赖边界 |
+|---|---|---|
+| `batch-worker-sdk` | 核心 SDK,非 Spring 租户直接依赖 | 不含 Spring / Boot / MyBatis / Flyway / Redis;继续守 `jar < 2 MB` |
+| `batch-worker-sdk-spring-boot-starter` | 可选适配层,给 Spring Boot 租户省掉手写 `main()` wiring | 依赖 core + `spring-boot-autoconfigure`;不把 Spring 类塞进 core jar |
+
+这是对 CLAUDE.md "固定 10 模块"的显式例外,性质同 `batch-worker-sdk-testkit`:属于 SDK 发布/适配模块,不是新增平台运行时服务模块,不改变 trigger / orchestrator / worker / console-api 主链。比照 ADR-029 的模块数例外,本节作为评审依据;真正创建模块时同步更新 CLAUDE.md 模块说明。
+
+**版本策略**:
+- v1 只声明支持仓库当前基线 Spring Boot 4.x;不承诺 Boot 3.x 兼容矩阵。
+- Maven version 走根工程 `${revision}` + flatten,与 `batch-worker-sdk-testkit` 一致。
+
+**starter 行为**:
+- 配置前缀:`batch.worker-sdk.*`。字段覆盖 `BatchPlatformClientConfig` 现有参数,包括 `base-url` / `api-key` / `tenant-id` / `worker-code` / Kafka / timeout / heartbeat / lease / retry / SASL / `build-id`。
+- 启用开关:`batch.worker-sdk.enabled`,默认 `true`。用 `@ConditionalOnProperty(name = "batch.worker-sdk.enabled", havingValue = "true", matchIfMissing = true)` 守住自启动生命周期;`enabled=false` 时仍允许 properties 绑定、`BatchPlatformClientConfig` bean 创建与 client wiring,但不注册 `SmartLifecycle` 自启动 bean,便于测试和高级租户复用配置。
+- 暴露 `BatchPlatformClientConfig` bean,并加 `@ConditionalOnMissingBean(BatchPlatformClientConfig.class)`。普通租户走 properties → config 默认转换;高级租户可自己提供整个 config bean 或做后处理,starter 后续使用该 bean。
+- 暴露 `BatchPlatformClient` bean,加 `@ConditionalOnMissingBean(BatchPlatformClient.class)`。构建时收集容器内所有 `SdkTaskHandler` bean 并逐个 `.register()`。
+- `SdkIdempotencyStore` 用 `ObjectProvider<SdkIdempotencyStore>` 可选注入:容器有且唯一时 `.idempotencyStore(store)`,没有则跳过;不因缺 bean 报错。
+- 生命周期用 `SmartLifecycle` 托管 `BatchPlatformClient.start()` / `stop()`。`getPhase()` 给较大值(例如 `Integer.MAX_VALUE - 100`):启动晚于 DataSource / handler 等业务 bean,关闭时先停 SDK client,避免依赖资源先被 Spring 关闭。`SmartLifecycle` 只在 `batch.worker-sdk.enabled=true` 时注册,`isAutoStartup()` 与开关保持一致。
+- 自动装配注册文件使用 Boot 3/4 标准路径:`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`。
+
+**v1 必带测试**:
+- 使用 `ApplicationContextRunner`,不启动真容器、不连平台、不连 Kafka。
+- 覆盖 properties → `BatchPlatformClientConfig` 绑定。
+- 覆盖用户自定义 `BatchPlatformClientConfig` bean 覆盖默认转换。
+- 覆盖多个 `SdkTaskHandler` bean 自动注册到 client。
+- 覆盖 `ObjectProvider<SdkIdempotencyStore>`:有 bean 时注入,无 bean 时跳过。
+- 覆盖 `batch.worker-sdk.enabled=false`:可完成绑定和 bean override 验证,但不注册 `SmartLifecycle` 自启动 bean。
+
 ### 2. 平台侧改造
 
 **鉴权**(P2 落地 — 双轨 filter `InternalAuthFilter`,实现见 batch-orchestrator):
@@ -202,6 +234,7 @@
 | **P1.3: 心跳 + lease renewal** | HeartbeatScheduler(30s)+ LeaseRenewalScheduler(60s,< server TTL/2) | ✅ 待 merge | #165 |
 | **P1.4: sample-tenant-worker E2E 示范** | 独立 reactor + echo/sleep handler + Shutdown hook | ✅ 待 merge | #165 |
 | **P1.5: 协议对齐 + 契约测试** | SDK 路径/body 字段对齐真 BE DTO + SdkPlatformContractTest 守门 | ✅ 待 merge | #167 |
+| **P1.6: Spring Boot starter(可选)** | `batch-worker-sdk-spring-boot-starter`:properties 绑定 + handler 自动注册 + SmartLifecycle + ApplicationContextRunner 守门 | ✅ 本地完成 | TBD |
 | **P2: 鉴权** | `InternalAuthFilter` 双路径(API Key + legacy secret)+ ApiKeyVerifier;**复用** `batch.api_key`(不另建 service_principal) | ✅ 待 merge | #166 |
 | **P3: Kafka ACL** | SDK SASL/SCRAM config 字段 + `init-tenant-kafka-acl.sh` + onboarding runbook §5.1 | ✅ 待 merge | #167 |
 | **P4: console 我的 Worker** | BE:`is_self_hosted` 列 + GET /api/console/my-workers;FE:列表页 + API key 自助轮转 | 🚧 BE 进行中,FE 未开始 | TBD |
@@ -221,10 +254,12 @@
 | Kafka ACL 改造影响现有部署 | 现有 4 内建 worker 仍用旧 topic 名,通过 ACL 配 default-tenant 维持兼容 |
 | 租户 worker 滥用 REPORT 投毒 | REPORT body 已有 JSON schema 校验,加每 worker_code 速率限制 |
 | 文档 / sample 维护负担 | 接入 repo 独立仓库,版本号跟 `batch-worker-sdk` 对齐;CI 测 sample 编译通过即可 |
+| starter Spring Boot 版本错配 | v1 明确只支持 Boot 4.x;Boot 3.x 兼容需单独评估和测试矩阵,不混入 core SDK |
 
 ## 验收
 
 - [x] `batch-worker-sdk` jar published(本地 Maven repo;jar size 34K,目标 < 2MB)
+- [x] 可选 `batch-worker-sdk-spring-boot-starter` 只依赖 core + Boot autoconfigure,并有 ApplicationContextRunner 覆盖 properties / override / handler / lifecycle wiring
 - [ ] 一个 sample 租户 worker 进程能注册、消费、REPORT、出现在「我的 Worker」页(待 K8s 环境实测)
 - [x] `InternalAuthFilter` 支持 API Key 路径(P2 完成);全局强制启用待 P4 切换
 - [ ] Kafka per-tenant topic + SASL/ACL 实测一个租户不能消费另一个租户 topic(脚本就绪,待 K8s 实测)

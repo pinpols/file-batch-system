@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ADR-035 P1.6 示范:Spring Boot 租户自托管 worker(经 batch-worker-sdk-spring-boot-starter 接入)。
+
+  对照 ../sample-tenant-worker(纯 Java,手写 main wiring):
+  - 本示例不写 main wiring:starter 自动从 application.yml 绑定配置、自动注册所有 SdkTaskHandler bean、
+    用 SmartLifecycle 托管 start/stop。
+  - 业务只需:@SpringBootApplication + 把 handler 声明成 @Component + 填 application.yml。
+
+  跑:
+    mvn spring-boot:run -f examples/sample-tenant-worker-spring/pom.xml
+  或:
+    mvn package -f examples/sample-tenant-worker-spring/pom.xml
+    java -jar examples/sample-tenant-worker-spring/target/sample-tenant-worker-spring-1.0.0-SNAPSHOT.jar
+
+  说明:本示例独立于主 reactor(自带 spring-boot-starter-parent),业务方可整目录复制到自己 repo。
+  仅支持仓库基线 Spring Boot 4.x(Boot 3.x 暂不承诺兼容)。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.6</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.example.batch.ext</groupId>
+  <artifactId>sample-tenant-worker-spring</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Batch Sample Tenant Worker — Spring Boot (ADR-035 P1.6 示范)</name>
+  <description>Spring Boot 租户自托管 Worker 示范 — 经 starter 自动装配 BatchPlatformClient</description>
+
+  <properties>
+    <java.version>25</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <batch-sdk.version>1.1.0-SNAPSHOT</batch-sdk.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.example.batch</groupId>
+      <artifactId>batch-worker-sdk-spring-boot-starter</artifactId>
+      <version>${batch-sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>
