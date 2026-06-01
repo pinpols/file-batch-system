@@ -15,6 +15,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleAtomicTaskTypeSchemaService {
 
+  private static final String STRING = "string";
+  private static final String NUMBER = "number";
+  private static final String BOOLEAN = "boolean";
+  private static final String LIST = "list";
+  private static final String MAP = "map";
+
   private static final List<AtomicTaskTypeSchema> CATALOG =
       List.of(
           new AtomicTaskTypeSchema(
@@ -22,10 +28,10 @@ public class ConsoleAtomicTaskTypeSchemaService {
               "SQL 执行",
               true,
               List.of(
-                  new ParamSpec("sql", "string", true, "要执行的 SQL(非空)"),
-                  new ParamSpec("dataSourceBean", "string", false, "目标数据源 bean 名(受白名单限定)"),
-                  new ParamSpec("statementTimeoutSeconds", "number", false, "语句超时秒数"),
-                  new ParamSpec("autoCommit", "boolean", false, "是否自动提交")),
+                  new ParamSpec("sql", STRING, true, "要执行的 SQL(非空)"),
+                  new ParamSpec("dataSourceBean", STRING, false, "目标数据源 bean 名(受白名单限定)"),
+                  new ParamSpec("statementTimeoutSeconds", NUMBER, false, "语句超时秒数"),
+                  new ParamSpec("autoCommit", BOOLEAN, false, "是否自动提交")),
               List.of(
                   new SecurityGate("allowedDataSourceBeans", "数据源白名单,空=仅 dev 全放行"),
                   new SecurityGate("forbidOsCapableRole", "禁止使用带 OS 能力的 DB 角色"),
@@ -35,12 +41,12 @@ public class ConsoleAtomicTaskTypeSchemaService {
               "存储过程调用",
               true,
               List.of(
-                  new ParamSpec("procedureName", "string", true, "存储过程名(受 allowedSchemas 限定)"),
-                  new ParamSpec("inParams", "list", false, "入参,有序列表"),
-                  new ParamSpec("outParams", "list", false, "出参 SQL 类型列表"),
-                  new ParamSpec("statementTimeoutSeconds", "number", false, "语句超时秒数"),
-                  new ParamSpec("dataSourceBean", "string", false, "目标数据源 bean 名(受白名单限定)"),
-                  new ParamSpec("autoCommit", "boolean", false, "是否自动提交")),
+                  new ParamSpec("procedureName", STRING, true, "存储过程名(受 allowedSchemas 限定)"),
+                  new ParamSpec("inParams", LIST, false, "入参,有序列表"),
+                  new ParamSpec("outParams", LIST, false, "出参 SQL 类型列表"),
+                  new ParamSpec("statementTimeoutSeconds", NUMBER, false, "语句超时秒数"),
+                  new ParamSpec("dataSourceBean", STRING, false, "目标数据源 bean 名(受白名单限定)"),
+                  new ParamSpec("autoCommit", BOOLEAN, false, "是否自动提交")),
               List.of(
                   new SecurityGate("allowedSchemas", "schema 白名单(默认 schema=batch)"),
                   new SecurityGate("allowedDataSourceBeans", "数据源白名单"),
@@ -52,10 +58,10 @@ public class ConsoleAtomicTaskTypeSchemaService {
               "Shell 命令",
               false,
               List.of(
-                  new ParamSpec("command", "string", true, "命令(须在 commandWhitelist 内)"),
-                  new ParamSpec("args", "list", false, "参数,字符串列表"),
-                  new ParamSpec("timeoutSeconds", "number", false, "超时秒数"),
-                  new ParamSpec("env", "map", false, "环境变量,仅透传 allowedEnvKeys 内的 key")),
+                  new ParamSpec("command", STRING, true, "命令(须在 commandWhitelist 内)"),
+                  new ParamSpec("args", LIST, false, "参数,字符串列表"),
+                  new ParamSpec("timeoutSeconds", NUMBER, false, "超时秒数"),
+                  new ParamSpec("env", MAP, false, "环境变量,仅透传 allowedEnvKeys 内的 key")),
               List.of(
                   new SecurityGate("commandWhitelist", "命令白名单(默认空=全禁,需平台配置)"),
                   new SecurityGate("workdirBase", "临时工作目录隔离根"),
@@ -67,13 +73,13 @@ public class ConsoleAtomicTaskTypeSchemaService {
               "HTTP 调用",
               true,
               List.of(
-                  new ParamSpec("url", "string", true, "目标 URL(受 host 白/黑名单 + SSRF 校验)"),
-                  new ParamSpec("method", "string", false, "HTTP 方法(默认 GET,受 allowedMethods 限定)"),
-                  new ParamSpec("headers", "map", false, "请求头"),
-                  new ParamSpec("body", "string", false, "请求体"),
-                  new ParamSpec("timeoutSeconds", "number", false, "超时秒数"),
-                  new ParamSpec("expectStatus", "number", false, "期望响应状态码"),
-                  new ParamSpec("auth", "map", false, "鉴权配置(受 allowedAuthTypes 限定)")),
+                  new ParamSpec("url", STRING, true, "目标 URL(受 host 白/黑名单 + SSRF 校验)"),
+                  new ParamSpec("method", STRING, false, "HTTP 方法(默认 GET,受 allowedMethods 限定)"),
+                  new ParamSpec("headers", MAP, false, "请求头"),
+                  new ParamSpec("body", STRING, false, "请求体"),
+                  new ParamSpec("timeoutSeconds", NUMBER, false, "超时秒数"),
+                  new ParamSpec("expectStatus", NUMBER, false, "期望响应状态码"),
+                  new ParamSpec("auth", MAP, false, "鉴权配置(受 allowedAuthTypes 限定)")),
               List.of(
                   new SecurityGate("allowedHostPatterns", "出口域名白名单(空=仅 dev 全放行)"),
                   new SecurityGate("blockedHostPatterns", "出口域名黑名单(优先于白名单,默认拒 metadata/localhost)"),
