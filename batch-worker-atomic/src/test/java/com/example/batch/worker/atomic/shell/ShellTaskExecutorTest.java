@@ -174,6 +174,39 @@ class ShellTaskExecutorTest {
     }
 
     @Test
+    void requestedTimeoutLongerThanDefaultIsClampedToDefault() {
+      // 业务请求 timeoutSeconds=30(远大于 default),只能缩短不能拉长 → 实际用 default(0.3s)。
+      // sleep 5s 远超 default,故应按 default 超时被杀(而非按 30s 等待)。
+      props.setDefaultTimeout(Duration.ofMillis(300));
+      long start = System.currentTimeMillis();
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of("command", "/bin/sleep", "args", List.of("5"), "timeoutSeconds", 30)));
+      long elapsed = System.currentTimeMillis() - start;
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("timed out after 0s"); // default 0.3s → toSeconds()=0
+      // 证明没按请求的 30s 等:总耗时远小于 30s(给足 reader join 余量)
+      assertThat(elapsed).isLessThan(10_000L);
+    }
+
+    @Test
+    void requestedTimeoutShorterThanDefaultIsHonored() {
+      // 请求值 < default → 取请求值(缩短允许)。default 10s,请求 1s,sleep 5s → 按 1s 超时。
+      props.setDefaultTimeout(Duration.ofSeconds(10));
+      long start = System.currentTimeMillis();
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of("command", "/bin/sleep", "args", List.of("5"), "timeoutSeconds", 1)));
+      long elapsed = System.currentTimeMillis() - start;
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("timed out after 1s");
+      // 按 1s 缩短超时,远早于 default 10s 或 sleep 5s
+      assertThat(elapsed).isLessThan(5_000L);
+    }
+
+    @Test
     void envIsScrubbedAndBatchVarsInjected() throws Exception {
       // /usr/bin/env 打印所有 env vars
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/usr/bin/env")));

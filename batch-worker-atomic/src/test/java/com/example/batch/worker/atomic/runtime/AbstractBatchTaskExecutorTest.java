@@ -143,6 +143,52 @@ class AbstractBatchTaskExecutorTest {
   }
 
   @Test
+  void beforeFailureSkipsDoExecuteAndCleanup() {
+    // before 抛异常时 started 仍为 false(在 started=true 之前抛),cleanup 不应跑;
+    // 与 validate 失败一样落在 started=false 分支,但 before 确实被调用过。
+    AtomicInteger beforeCount = new AtomicInteger();
+    AtomicInteger doExecuteCount = new AtomicInteger();
+    AtomicInteger cleanupCount = new AtomicInteger();
+    AbstractBatchTaskExecutor exec =
+        new AbstractBatchTaskExecutor() {
+          @Override
+          public String taskType() {
+            return "tt";
+          }
+
+          @Override
+          public TaskCapability capability() {
+            return TaskCapability.of();
+          }
+
+          @Override
+          protected void before(TaskContext c) {
+            beforeCount.incrementAndGet();
+            throw new IllegalStateException("acquire failed");
+          }
+
+          @Override
+          protected TaskResult doExecute(TaskContext c) {
+            doExecuteCount.incrementAndGet();
+            return TaskResult.ok();
+          }
+
+          @Override
+          protected void cleanup(TaskContext c) {
+            cleanupCount.incrementAndGet();
+          }
+        };
+
+    TaskResult r = exec.execute(ctx());
+
+    assertThat(r.success()).isFalse();
+    assertThat(r.error()).isInstanceOf(IllegalStateException.class).hasMessage("acquire failed");
+    assertThat(beforeCount.get()).isEqualTo(1); // before 跑过
+    assertThat(doExecuteCount.get()).isZero(); // doExecute 未跑
+    assertThat(cleanupCount.get()).isZero(); // started=false → cleanup 不跑
+  }
+
+  @Test
   void nullResultTreatedAsFailure() {
     AbstractBatchTaskExecutor exec =
         new AbstractBatchTaskExecutor() {

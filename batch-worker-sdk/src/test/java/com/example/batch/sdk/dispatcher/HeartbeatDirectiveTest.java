@@ -74,6 +74,26 @@ class HeartbeatDirectiveTest {
   }
 
   @Test
+  void malformedFieldShapesDegradeGracefully() {
+    // 平台回包字段类型不对(pausedTaskTypes 非 List、数值字段是非数字字符串)→ 不抛,降级:
+    // status 仍读到(任意值都当字符串),非 List 的 paused → 空,非数字的 int 字段 → null
+    Map<String, Object> resp = new HashMap<>();
+    resp.put("platformStatus", "NORMAL");
+    resp.put("pausedTaskTypes", "not-a-list"); // 错误形状
+    resp.put("desiredMaxConcurrent", "eight"); // 非数字
+    resp.put("nextHeartbeatHint", "soon"); // 非数字
+    resp.put("shouldDrain", "yes"); // 非 Boolean.TRUE → 当 false
+
+    HeartbeatDirective d = HeartbeatDirective.fromResponse(resp);
+
+    assertThat(d.pausedTaskTypes()).isEmpty();
+    assertThat(d.desiredMaxConcurrent()).isNull();
+    assertThat(d.nextHeartbeatHint()).isNull();
+    assertThat(d.shouldDrain()).isFalse();
+    assertThat(d.toRuntimeState()).isEqualTo(WorkerRuntimeState.NORMAL);
+  }
+
+  @Test
   void drainTakesPrecedenceOverStatus() {
     // shouldDrain=true 即使 platformStatus 说别的也优先 DRAINING
     Map<String, Object> resp = new HashMap<>();

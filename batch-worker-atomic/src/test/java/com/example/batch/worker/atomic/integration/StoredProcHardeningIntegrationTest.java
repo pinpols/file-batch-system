@@ -9,6 +9,7 @@ import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.atomic.BatchWorkerAtomicApplication;
 import com.example.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import com.example.batch.worker.atomic.storedproc.StoredProcTaskExecutor;
+import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -146,6 +148,42 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
     p.setVerifyExecutePrivilege(true);
     TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
     assertThat(r.success()).isTrue(); // current_user 有 EXECUTE → has_function_privilege 通过
+  }
+
+  @Test
+  void verifyExecutePrivilegeRejectsWhenCurrentUserLacksExecute() throws Exception {
+    // 构造低权限角色 + 一个 REVOKE 掉 PUBLIC EXECUTE 的过程,用该角色单独连接执行:
+    // verifyExecutePrivilege=true 时 has_function_privilege 应判定无权 → fail,message 含权限字样。
+    String role = "spi_lowpriv_" + Long.toHexString(System.nanoTime());
+    String pwd = "lp_pwd";
+    jdbc.execute(
+        "CREATE PROCEDURE spi_it.it_proc_restricted() LANGUAGE plpgsql AS $$ BEGIN"
+            + " INSERT INTO spi_it.marker(note) VALUES ('restricted'); END $$");
+    // PG 过程默认对 PUBLIC 授予 EXECUTE;先收回再建低权限角色,使其确实无权。
+    jdbc.execute("REVOKE EXECUTE ON PROCEDURE spi_it.it_proc_restricted() FROM PUBLIC");
+    jdbc.execute("CREATE ROLE " + role + " LOGIN PASSWORD '" + pwd + "'");
+    jdbc.execute("GRANT USAGE ON SCHEMA spi_it TO " + role);
+
+    String baseUrl;
+    try (Connection conn = dataSource.getConnection()) {
+      baseUrl = conn.getMetaData().getURL();
+    }
+
+    DriverManagerDataSource lowPrivDs = new DriverManagerDataSource(baseUrl, role, pwd);
+    try {
+      StoredProcExecutorProperties p = props();
+      p.setVerifyExecutePrivilege(true);
+      StoredProcTaskExecutor exec = new StoredProcTaskExecutor(p, beanFactory, lowPrivDs);
+
+      TaskResult r = exec.execute(ctx(Map.of("procedureName", "spi_it.it_proc_restricted")));
+
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).containsIgnoringCase("EXECUTE privilege");
+    } finally {
+      // 先回收授权(GRANT USAGE 会让角色被对象依赖,直接 DROP 会报 2BP01)。
+      jdbc.execute("REVOKE ALL ON SCHEMA spi_it FROM " + role);
+      jdbc.execute("DROP ROLE IF EXISTS " + role);
+    }
   }
 
   @Test
