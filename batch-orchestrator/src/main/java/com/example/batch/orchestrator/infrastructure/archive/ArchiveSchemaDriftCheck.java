@@ -67,7 +67,9 @@ public class ArchiveSchemaDriftCheck {
           // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
           "trigger_outbox_event",
           // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
-          "dead_letter_task");
+          "dead_letter_task",
+          // V159 (SDK Phase 3 M3.1) — custom_task_type_registry 归档表;租户自定义 taskType 注册。
+          "custom_task_type_registry");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
