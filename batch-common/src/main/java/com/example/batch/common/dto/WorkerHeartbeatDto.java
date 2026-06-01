@@ -11,6 +11,9 @@ public record WorkerHeartbeatDto(
     String hostName,
     String hostIp,
     String processId,
+    // SDK Phase 5 / SDK-P5-3 运行指纹:租户应用构建标识 + 链接的 SDK 库版本;仅 register 上报,heartbeat 不带(null)。
+    String buildId,
+    String sdkVersion,
     Instant heartbeatAt,
     List<String> capabilityTags,
     Integer currentLoad,

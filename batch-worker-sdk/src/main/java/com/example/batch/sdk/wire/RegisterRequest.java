@@ -32,6 +32,9 @@ public record RegisterRequest(
     String hostName,
     String hostIp,
     String processId,
+    // SDK Phase 5 / SDK-P5-3 运行指纹:租户应用构建标识 + 链接的 SDK 库版本。
+    String buildId,
+    String sdkVersion,
     Instant heartbeatAt,
     List<String> capabilityTags,
     Integer currentLoad,

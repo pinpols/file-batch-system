@@ -121,6 +121,9 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         registration.getHost(),
         null,
         null,
+        // buildId / sdkVersion: file-pipeline worker 非 SDK 自托管,不上报运行指纹(SDK-P5-3)
+        null,
+        null,
         registration.getLastHeartbeatAt() == null
             ? BatchDateTimeSupport.utcNow()
             : registration.getLastHeartbeatAt().toInstant(),
