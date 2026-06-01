@@ -1,4 +1,4 @@
-package com.example.batch.sdk.handler;
+package com.example.batch.sdk.handler.typed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
