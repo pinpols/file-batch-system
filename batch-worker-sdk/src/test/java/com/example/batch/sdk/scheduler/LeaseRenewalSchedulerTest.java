@@ -115,6 +115,40 @@ class LeaseRenewalSchedulerTest {
   }
 
   @Test
+  void progressSnapshotIncludedAsDetails() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
+    when(dispatcher.progressSnapshot(10L)).thenReturn(Map.of("processed", 5, "total", 100));
+    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
+
+    s.tick();
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    verify(http).renew(eq(10L), body.capture());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> details = (Map<String, Object>) body.getValue().get("details");
+    assertThat(details).containsEntry("processed", 5).containsEntry("total", 100);
+  }
+
+  @Test
+  void noProgressOmitsDetails() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    when(dispatcher.inFlightTaskIds()).thenReturn(Set.of(10L));
+    when(dispatcher.progressSnapshot(10L)).thenReturn(null);
+    LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg, http, dispatcher);
+
+    s.tick();
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
+    verify(http).renew(eq(10L), body.capture());
+    assertThat(body.getValue()).doesNotContainKey("details").containsEntry("workerId", "w-1");
+  }
+
+  @Test
   void otherHttpErrorDoesNotSignal() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.renew(eq(10L), any())).thenThrow(new PlatformHttpException(500, "boom"));

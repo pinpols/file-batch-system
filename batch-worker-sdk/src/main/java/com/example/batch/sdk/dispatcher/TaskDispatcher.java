@@ -5,6 +5,7 @@ import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.internal.PlatformHttpException;
 import com.example.batch.sdk.task.CancellationSignal;
+import com.example.batch.sdk.task.ProgressReporter;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
@@ -51,6 +52,13 @@ public class TaskDispatcher {
    * {@code ctx.isCancelled()} 感知,主动停。
    */
   private final Map<Long, CancellationSignal> cancellations = new ConcurrentHashMap<>();
+
+  /**
+   * SDK-P4-2:in-flight task 的进度上报槽表。handler 经 {@code ctx.reportProgress(..)} 写最新快照;{@link
+   * LeaseRenewalScheduler} 每次续租 tick 经 {@link #progressSnapshot(Long)} 读出,作为 renew 请求体的 {@code
+   * details} 捎给平台。task 结束随 cancellations 一起清理。
+   */
+  private final Map<Long, ProgressReporter> progressReporters = new ConcurrentHashMap<>();
 
   /** P0 hardening:stop() 后置 true,onMessage 拒新消息(Zeebe JobWorker.close 模式)。 */
   private final AtomicBoolean draining = new AtomicBoolean(false);
@@ -198,6 +206,8 @@ public class TaskDispatcher {
     inFlight.add(msg.taskId());
     CancellationSignal cancellation = new CancellationSignal();
     cancellations.put(msg.taskId(), cancellation);
+    ProgressReporter progress = new ProgressReporter();
+    progressReporters.put(msg.taskId(), progress);
 
     // EXECUTE
     SdkTaskContext ctx =
@@ -210,7 +220,8 @@ public class TaskDispatcher {
             msg.parameters() == null ? Map.of() : msg.parameters(),
             msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes(),
             msg.schedulingContext(),
-            cancellation);
+            cancellation,
+            progress);
 
     SdkTaskResult result;
     try {
@@ -263,6 +274,7 @@ public class TaskDispatcher {
     } finally {
       inFlight.remove(msg.taskId());
       cancellations.remove(msg.taskId());
+      progressReporters.remove(msg.taskId());
     }
   }
 
@@ -281,6 +293,19 @@ public class TaskDispatcher {
       signal.cancel();
       log.info("task cancellation signalled: taskId={} reason={}", taskId, reason);
     }
+  }
+
+  /**
+   * SDK-P4-2:读出某 in-flight task 最近一次 {@code ctx.reportProgress(..)} 的快照,给 {@link
+   * LeaseRenewalScheduler} 作为续租 {@code details} 捎给平台。task 不在 in-flight 或从未上报 → 返回 null(续租体不带
+   * details)。
+   */
+  public Map<String, Object> progressSnapshot(Long taskId) {
+    if (taskId == null) {
+      return null;
+    }
+    ProgressReporter reporter = progressReporters.get(taskId);
+    return reporter == null ? null : reporter.latest();
   }
 
   /**
