@@ -67,7 +67,17 @@ public final class SampleTenantWorker {
         .addShutdownHook(new Thread(client::stop, "sample-worker-shutdown-hook"));
 
     log.info("starting sample tenant worker for tenant={}", config.getTenantId());
-    client.start();
+    // P7-3:register 失败 → start() 抛异常,此处不吞,记 FATAL 后以非 0 退出码结束,
+    // 让 K8s / systemd 重启拉起(register 失败多为平台不可达 / apiKey 失效 / 配置错误)。
+    try {
+      client.start();
+    } catch (RuntimeException startEx) {
+      log.error(
+          "FATAL: BatchPlatformClient.start() failed for tenant={}, exiting non-zero for restart",
+          config.getTenantId(),
+          startEx);
+      System.exit(1);
+    }
   }
 
   private static String requireEnv(String name) {

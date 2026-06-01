@@ -54,6 +54,12 @@ public class TaskDispatcher {
   private final AtomicBoolean fatal = new AtomicBoolean(false);
 
   /**
+   * P7-2:CLAIM / REPORT 连续(非鉴权、非 409)4xx 客户端错误计数。达 {@link
+   * BatchPlatformClientConfig#getClientErrorFailFastThreshold()} → 置 {@link #fatal};任一次成功调用归零。
+   */
+  private final AtomicInteger consecutiveClientErrors = new AtomicInteger(0);
+
+  /**
    * SDK Phase 2 §2.4:平台指令驱动的 4 态状态机。心跳回包(见 {@link HeartbeatDirective})每次 tick 更新此态; {@code PAUSED}
    * / {@code DRAINING} 时 {@link #onMessage} 拒新任务,{@link KafkaTaskConsumer} 据此 pause partition(不丢
    * offset,可恢复)。区别于 {@link #draining}(本地主动 stop)/ {@link #fatal}(不可恢复鉴权失效)。
@@ -226,8 +232,19 @@ public class TaskDispatcher {
         body.put("resultSummary", result.error().getMessage());
       }
       httpClient.report(msg.taskId(), idemReport, body);
+      resetClientErrorStreak();
+    } catch (PlatformHttpException httpEx) {
+      // REPORT 失败:orchestrator 会因 lease 超时自动 retry 派单。非鉴权 4xx 计入连续错误,持续则 fail-fast(P7-2)。
+      log.error(
+          "report failed (HTTP {}) for taskId={}, orchestrator will retry on lease timeout",
+          httpEx.statusCode(),
+          msg.taskId(),
+          httpEx);
+      if (httpEx.isClientError() && !httpEx.isAuthError() && !httpEx.isConflict()) {
+        recordClientError(httpEx.statusCode(), msg.taskId(), "REPORT");
+      }
     } catch (Exception reportEx) {
-      // REPORT 失败:orchestrator 会因为 lease 超时自动 retry 派单。我们已尽力,记 error 给运维查。
+      // 传输层 / 其它错误:orchestrator lease 超时兜底重派,记 error 给运维查。
       log.error(
           "report failed for taskId={}, orchestrator will retry on lease timeout",
           msg.taskId(),
@@ -257,6 +274,7 @@ public class TaskDispatcher {
     while (true) {
       try {
         httpClient.claim(msg.taskId(), idemKey, body);
+        resetClientErrorStreak();
         return true;
       } catch (PlatformHttpException httpEx) {
         if (httpEx.isAuthError()) {
@@ -302,6 +320,7 @@ public class TaskDispatcher {
             httpEx.statusCode(),
             msg.taskId(),
             httpEx.getMessage());
+        recordClientError(httpEx.statusCode(), msg.taskId(), "CLAIM");
         return false;
       } catch (IOException ioEx) {
         // 传输层错误(socket / read timeout / 中断包装)— 当 5xx 一样退避重试
@@ -324,6 +343,30 @@ public class TaskDispatcher {
         attempt++;
       }
     }
+  }
+
+  /**
+   * P7-2:记一次(非鉴权、非 409)4xx 客户端错误。连续达阈值 → fatal。{@code op} 仅用于日志(CLAIM / REPORT)。 阈值 ≤ 0
+   * 时关闭(只计数不触发)。
+   */
+  private void recordClientError(int statusCode, long taskId, String op) {
+    int threshold = config.getClientErrorFailFastThreshold();
+    int count = consecutiveClientErrors.incrementAndGet();
+    if (threshold > 0 && count >= threshold && fatal.compareAndSet(false, true)) {
+      log.error(
+          "{} client error (HTTP {}) for taskId={} reached {} consecutive 4xx — marking dispatcher"
+              + " FATAL; likely SDK/contract mismatch, SDK will reject subsequent dispatches and"
+              + " report unhealthy for K8s restart",
+          op,
+          statusCode,
+          taskId,
+          count);
+    }
+  }
+
+  /** P7-2:一次成功的 CLAIM / REPORT 归零连续 4xx 计数。 */
+  private void resetClientErrorStreak() {
+    consecutiveClientErrors.set(0);
   }
 
   /** 可被 interrupt 打断的 sleep;true=正常 sleep 完,false=被打断(应放弃重试)。 */
@@ -398,6 +441,11 @@ public class TaskDispatcher {
   /** 暴露给测试 + 调用方:fatal 状态(401/403 触发,不可恢复)。 */
   public boolean isFatal() {
     return fatal.get();
+  }
+
+  /** P7-2:当前连续(非鉴权、非 409)4xx 客户端错误计数,暴露给测试断言。 */
+  int consecutiveClientErrors() {
+    return consecutiveClientErrors.get();
   }
 
   private static ThreadFactory namedThreadFactory(String prefix) {
