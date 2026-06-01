@@ -23,6 +23,7 @@ import java.util.Objects;
  * @param runtimeAttributes 平台注入的运行时属性(traceId / bizDate / pipelineInstanceId 等)
  * @param schedulingContext Phase 2 调度上下文;老平台未下发时为 null,便捷 getter 一律 null-safe
  * @param cancellation Phase 4 取消信号;由 dispatcher 注入,null 时构造器补一个永不取消的空信号(getter null-safe)
+ * @param progress Phase 4 进度上报槽;由 dispatcher 注入,null 时构造器补一个空槽(handler 调 reportProgress 即写入)
  */
 public record SdkTaskContext(
     String tenantId,
@@ -33,7 +34,8 @@ public record SdkTaskContext(
     Map<String, Object> parameters,
     Map<String, Object> runtimeAttributes,
     SdkSchedulingContext schedulingContext,
-    CancellationSignal cancellation) {
+    CancellationSignal cancellation,
+    ProgressReporter progress) {
 
   public SdkTaskContext {
     Objects.requireNonNull(tenantId, "tenantId");
@@ -42,9 +44,35 @@ public record SdkTaskContext(
     parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
     runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
     cancellation = cancellation == null ? new CancellationSignal() : cancellation;
+    progress = progress == null ? new ProgressReporter() : progress;
   }
 
-  /** 8 参兼容构造器 —— Phase 4 前的构造方式继续可用,cancellation 走空信号。 */
+  /** 9 参兼容构造器 —— SDK-P4-1 的构造方式继续可用,progress 走空槽。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public SdkTaskContext(
+      String tenantId,
+      String jobCode,
+      String taskInstanceId,
+      Long taskId,
+      String workerId,
+      Map<String, Object> parameters,
+      Map<String, Object> runtimeAttributes,
+      SdkSchedulingContext schedulingContext,
+      CancellationSignal cancellation) {
+    this(
+        tenantId,
+        jobCode,
+        taskInstanceId,
+        taskId,
+        workerId,
+        parameters,
+        runtimeAttributes,
+        schedulingContext,
+        cancellation,
+        null);
+  }
+
+  /** 8 参兼容构造器 —— Phase 4 前的构造方式继续可用,cancellation / progress 走空。 */
   @SuppressWarnings("PMD.ExcessiveParameterList")
   public SdkTaskContext(
       String tenantId,
@@ -64,6 +92,7 @@ public record SdkTaskContext(
         parameters,
         runtimeAttributes,
         schedulingContext,
+        null,
         null);
   }
 
@@ -95,6 +124,26 @@ public record SdkTaskContext(
    */
   public boolean isCancelled() {
     return cancellation.isCancelled();
+  }
+
+  /**
+   * 上报进度 / checkpoint 快照 —— 下一次 lease 续租 tick 会把最新快照作为 {@code details} 捎给平台,落 job_task 供 console
+   * 任务详情读取。「最新值覆盖」语义:频繁调用只保留最近一次,不积压。
+   *
+   * <p><b>禁传敏感凭据</b>(DB 密码 / OAuth secret 走环境变量,roadmap §5.5)。details 不得含 null 键 / 值。
+   *
+   * <p>长任务 handler 典型用法:
+   *
+   * <pre>{@code
+   * int done = 0;
+   * for (var batch : batches) {
+   *   process(batch);
+   *   ctx.reportProgress(Map.of("processed", done += batch.size(), "total", total));
+   * }
+   * }</pre>
+   */
+  public void reportProgress(Map<String, Object> details) {
+    progress.report(details);
   }
 
   /** 实例业务日;无调度上下文时返回 null。 */

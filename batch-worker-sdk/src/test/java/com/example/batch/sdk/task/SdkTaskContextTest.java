@@ -66,4 +66,29 @@ class SdkTaskContextTest {
 
     assertThat(ctx.isCancelled()).isFalse();
   }
+
+  @Test
+  void reportProgressWritesLatestSnapshot() {
+    ProgressReporter reporter = new ProgressReporter();
+    SdkTaskContext ctx =
+        new SdkTaskContext(
+            "t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of(), null, null, reporter);
+
+    assertThat(reporter.latest()).isNull();
+    ctx.reportProgress(Map.of("processed", 10, "total", 100));
+    assertThat(reporter.latest()).containsEntry("processed", 10).containsEntry("total", 100);
+
+    // 最新值覆盖语义:再报一次只留最近一次
+    ctx.reportProgress(Map.of("processed", 50, "total", 100));
+    assertThat(reporter.latest()).containsEntry("processed", 50);
+  }
+
+  @Test
+  void reportProgressNoOpSafeWhenNoReporterSupplied() {
+    // 兼容构造未传 reporter → 构造器补空槽,reportProgress 不 NPE
+    SdkTaskContext ctx = new SdkTaskContext("t1", "job-1", "ti-1", 42L, "w1", Map.of(), Map.of());
+
+    ctx.reportProgress(Map.of("processed", 1));
+    assertThat(ctx.progress().latest()).containsEntry("processed", 1);
+  }
 }
