@@ -255,6 +255,76 @@ class TaskDispatcherClaimRetryTest {
     assertThat(dispatcher.isFatal()).isFalse(); // 阈值 0 = 关闭,永不触发
   }
 
+  // ─── P7-2:REPORT 路径的非鉴权、非 409 4xx 也计入 consecutiveClientErrors ──────────
+
+  @Test
+  void reportNonAuthNon409ClientErrorCountsTowardStreak() throws Exception {
+    BatchPlatformClientConfig threshold3 =
+        config.toBuilder().clientErrorFailFastThreshold(3).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of()); // CLAIM 成功
+    when(http.report(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(422, "unprocessable")); // REPORT 422
+    dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
+
+    dispatcher.processInWorkerThread(msg());
+    // CLAIM 成功会先 resetClientErrorStreak,REPORT 422 再 +1 → 净 1
+    assertThat(dispatcher.consecutiveClientErrors()).isEqualTo(1);
+    assertThat(dispatcher.isFatal()).isFalse();
+  }
+
+  @Test
+  void reportAuthErrorDoesNotCountTowardStreak() throws Exception {
+    BatchPlatformClientConfig threshold3 =
+        config.toBuilder().clientErrorFailFastThreshold(3).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of());
+    when(http.report(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(401, "unauthorized")); // 鉴权类不计入此计数器
+    dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
+
+    dispatcher.processInWorkerThread(msg());
+
+    // CLAIM 成功归零,REPORT 401 是鉴权类(!isAuthError 守卫)→ 不 +1
+    assertThat(dispatcher.consecutiveClientErrors()).isZero();
+    assertThat(dispatcher.isFatal()).isFalse();
+  }
+
+  @Test
+  void reportConflictDoesNotCountTowardStreak() throws Exception {
+    BatchPlatformClientConfig threshold3 =
+        config.toBuilder().clientErrorFailFastThreshold(3).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of());
+    when(http.report(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(409, "already reported")); // 409 不计入
+    dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
+
+    dispatcher.processInWorkerThread(msg());
+
+    assertThat(dispatcher.consecutiveClientErrors()).isZero();
+    assertThat(dispatcher.isFatal()).isFalse();
+  }
+
+  @Test
+  void interveningClaimSuccessResetsReportErrorStreakSoReportOnly4xxNeverTripsFatal()
+      throws Exception {
+    BatchPlatformClientConfig threshold3 =
+        config.toBuilder().clientErrorFailFastThreshold(3).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any())).thenReturn(Map.of());
+    when(http.report(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(400, "bad report body"));
+    dispatcher = new TaskDispatcher(threshold3, Map.of("tt", noopHandler()), http);
+
+    // 契约:每轮 CLAIM 成功先归零,REPORT 400 再 +1 → 净每轮维持 1,REPORT-only 4xx 不会累积触发 fatal
+    dispatcher.processInWorkerThread(msg());
+    dispatcher.processInWorkerThread(msg());
+    dispatcher.processInWorkerThread(msg());
+    assertThat(dispatcher.consecutiveClientErrors()).isEqualTo(1);
+    assertThat(dispatcher.isFatal()).isFalse();
+  }
+
   // ─── 传输错误(generic IOException)→ 当 5xx 退避重试 ────────────────────────────
 
   @Test

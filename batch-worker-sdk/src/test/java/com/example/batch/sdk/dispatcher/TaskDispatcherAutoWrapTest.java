@@ -8,12 +8,15 @@ import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.idempotent.Idempotent;
 import com.example.batch.sdk.idempotent.SdkIdempotencyRecord;
 import com.example.batch.sdk.idempotent.SdkIdempotencyStore;
+import com.example.batch.sdk.idempotent.SdkIdempotentHandler;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.retry.RetryOn;
 import com.example.batch.sdk.retry.RetryOn.Backoff;
+import com.example.batch.sdk.retry.SdkRetryableHandler;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
+import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -148,6 +151,63 @@ class TaskDispatcherAutoWrapTest {
     }
   }
 
+  /** 同时标两注解,但 execute 永远抛匹配异常 → 重试耗尽仍失败,验证幂等外层不 record。 */
+  @Idempotent(key = "fail:{tenantId}:{orderId}")
+  @RetryOn(
+      value = IllegalStateException.class,
+      maxAttempts = 3,
+      initialDelayMillis = 1,
+      backoff = Backoff.FIXED)
+  static class AlwaysFailingBothHandler implements SdkTaskHandler {
+    final AtomicInteger executions = new AtomicInteger();
+
+    @Override
+    public String taskType() {
+      return "tt";
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      executions.incrementAndGet();
+      throw new IllegalStateException("permanent boom");
+    }
+  }
+
+  /** 标两注解 + 自定义 descriptor / cancel,验证 auto-wrap 后元数据方法透传到原始 handler。 */
+  @Idempotent(key = "meta:{tenantId}:{orderId}")
+  @RetryOn(
+      value = IllegalStateException.class,
+      maxAttempts = 2,
+      initialDelayMillis = 1,
+      backoff = Backoff.FIXED)
+  static class MetadataHandler implements SdkTaskHandler {
+    final AtomicInteger cancelCalls = new AtomicInteger();
+    String lastCancelArg;
+    final SdkTaskTypeDescriptor descriptor =
+        SdkTaskTypeDescriptor.builder().code("ignored-by-framework").build();
+
+    @Override
+    public String taskType() {
+      return "meta_type";
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      return SdkTaskResult.ok();
+    }
+
+    @Override
+    public void cancel(String taskInstanceId) {
+      cancelCalls.incrementAndGet();
+      this.lastCancelArg = taskInstanceId;
+    }
+
+    @Override
+    public SdkTaskTypeDescriptor descriptor() {
+      return descriptor;
+    }
+  }
+
   /** 无注解。 */
   static class PlainHandler implements SdkTaskHandler {
     final AtomicInteger executions = new AtomicInteger();
@@ -273,6 +333,52 @@ class TaskDispatcherAutoWrapTest {
 
     // assert
     assertThat(handler.executions.get()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("两注解 + 重试耗尽仍 fail → idempotent 外层不 record;同 key 再来仍会重新执行")
+  void shouldNotRecordIdempotent_whenRetryExhaustsAndFails() {
+    // arrange
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    AlwaysFailingBothHandler handler = new AlwaysFailingBothHandler();
+    RecordingStore store = new RecordingStore();
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
+
+    // act — retry 内层把 3 次都吃掉仍失败,idempotent 外层拿到失败结果(success=false)
+    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+
+    // assert:执行了 maxAttempts=3 次,失败 → 未记录(留给平台重派 / 重试)
+    assertThat(handler.executions.get()).isEqualTo(3);
+    assertThat(store.recordCalls.get()).isZero();
+    assertThat(store.findCalls.get()).isEqualTo(1);
+
+    // act — 同 key 再来:因上轮没记录,find 未命中,会重新进 retry 再跑 3 次
+    dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
+
+    // assert
+    assertThat(handler.executions.get()).isEqualTo(6); // 又跑 3 次
+    assertThat(store.recordCalls.get()).isZero();
+    assertThat(store.findCalls.get()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("auto-wrap 后 taskType / descriptor / cancel 透传到原始 handler(装饰器不丢元数据)")
+  void shouldDelegateMetadataMethods_whenWrapped() {
+    // arrange:按 TaskDispatcher.decorate 同样的顺序(retry 内 / idempotent 外)织入两层装饰器
+    MetadataHandler original = new MetadataHandler();
+    SdkTaskHandler retryWrapped = SdkRetryableHandler.wrapAround(original, original);
+    SdkTaskHandler wrapped =
+        SdkIdempotentHandler.wrapAround(original, retryWrapped, new RecordingStore());
+
+    // assert:不是原始实例(已被两层装饰),但元数据方法全透传
+    assertThat(wrapped).isNotSameAs(original);
+    assertThat(wrapped.taskType()).isEqualTo("meta_type");
+    assertThat(wrapped.descriptor()).isSameAs(original.descriptor);
+
+    // act + assert:cancel 透传到底层原始 handler
+    wrapped.cancel("ti-77");
+    assertThat(original.cancelCalls.get()).isEqualTo(1);
+    assertThat(original.lastCancelArg).isEqualTo("ti-77");
   }
 
   @Test
