@@ -97,6 +97,13 @@ public class BatchPlatformClient {
     body.put("heartbeatAt", Instant.now().toString());
     body.put("currentLoad", 0);
     body.put("capabilityTags", List.copyOf(handlers.keySet()));
+    // SDK-P5-3 运行指纹:host/pid 尽力采集,buildId 由租户 config 注入,sdkVersion 读 jar manifest;
+    // 全部尽力而为(null 字段由 NON_NULL 序列化策略略过,平台列可空)。
+    putIfPresent(body, "hostName", WorkerFingerprint.hostName());
+    putIfPresent(body, "hostIp", WorkerFingerprint.hostIp());
+    putIfPresent(body, "processId", WorkerFingerprint.processId());
+    putIfPresent(body, "buildId", config.getBuildId());
+    putIfPresent(body, "sdkVersion", WorkerFingerprint.sdkVersion());
     // Phase 3 M3.1:声明了 descriptor 的 handler 随 register 上报 taskTypes[](平台 upsert 到 registry)。
     List<SdkTaskTypeDescriptor> descriptors = collectDescriptors();
     if (!descriptors.isEmpty()) {
@@ -181,6 +188,12 @@ public class BatchPlatformClient {
       log.warn("deactivate call failed (ignored): {}", ex.getMessage());
     }
     started = false;
+  }
+
+  private static void putIfPresent(Map<String, Object> body, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      body.put(key, value);
+    }
   }
 
   /** 给业务可见的工具方法 — 让自己生成 idempotency-key。 */

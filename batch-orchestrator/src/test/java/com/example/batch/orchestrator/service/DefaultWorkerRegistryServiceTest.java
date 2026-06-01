@@ -56,7 +56,19 @@ class DefaultWorkerRegistryServiceTest {
 
   private WorkerHeartbeatDto dto(String status) {
     return new WorkerHeartbeatDto(
-        "ta", "w1", "default", status, "host", "1.2.3.4", "pid", Instant.now(), List.of(), 1, null);
+        "ta",
+        "w1",
+        "default",
+        status,
+        "host",
+        "1.2.3.4",
+        "pid",
+        "build-1",
+        "sdk-1",
+        Instant.now(),
+        List.of(),
+        1,
+        null);
   }
 
   private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
@@ -68,6 +80,8 @@ class DefaultWorkerRegistryServiceTest {
         "host",
         "1.2.3.4",
         "pid",
+        "build-1",
+        "sdk-1",
         Instant.now(),
         List.of(),
         1,

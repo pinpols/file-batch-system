@@ -54,6 +54,8 @@ class SdkWireContractTest {
             "host-a",
             "10.0.0.1",
             "12345",
+            "build-9",
+            "sdk-2.1.0",
             Instant.parse("2026-05-31T10:00:00Z"),
             List.of("echo", "sleep"),
             3,
@@ -69,6 +71,8 @@ class SdkWireContractTest {
     assertThat(platformSide.hostName()).isEqualTo("host-a");
     assertThat(platformSide.hostIp()).isEqualTo("10.0.0.1");
     assertThat(platformSide.processId()).isEqualTo("12345");
+    assertThat(platformSide.buildId()).isEqualTo("build-9");
+    assertThat(platformSide.sdkVersion()).isEqualTo("sdk-2.1.0");
     assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:00:00Z"));
     assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
     assertThat(platformSide.currentLoad()).isEqualTo(3);
@@ -92,6 +96,8 @@ class SdkWireContractTest {
             "worker-1",
             "sdk-self-hosted",
             "RUNNING",
+            null,
+            null,
             null,
             null,
             null,

@@ -77,9 +77,24 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
               newLoad,
               null, // maxConcurrent: 走 DB DEFAULT 10 (V87)
               null,
-              null);
+              null,
+              request.hostName(),
+              request.hostIp(),
+              request.processId(),
+              request.buildId(),
+              request.sdkVersion());
     } else {
-      registry = registry.withHeartbeat(newStatus, heartbeatAt, newLoad, newTags);
+      // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
+      // 保留旧值。
+      registry =
+          registry
+              .withHeartbeat(newStatus, heartbeatAt, newLoad, newTags)
+              .withFingerprint(
+                  request.hostName(),
+                  request.hostIp(),
+                  request.processId(),
+                  request.buildId(),
+                  request.sdkVersion());
     }
     WorkerRegistryEntity saved = persist(registry);
     // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让

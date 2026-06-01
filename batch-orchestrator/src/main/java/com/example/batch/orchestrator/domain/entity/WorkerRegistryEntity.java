@@ -27,7 +27,52 @@ public record WorkerRegistryEntity(
     Integer currentLoad,
     Integer maxConcurrent,
     Instant drainStartedAt,
-    Instant drainDeadlineAt) {
+    Instant drainDeadlineAt,
+    // SDK Phase 5 / SDK-P5-3 运行指纹（均可空，非 SDK 的文件 pipeline worker 不上报）。
+    String hostName,
+    String hostIp,
+    String processId,
+    String buildId,
+    String sdkVersion) {
+
+  /**
+   * 兼容构造器：不带运行指纹（hostName/hostIp/processId/buildId/sdkVersion），全置 null。 缓存重建 / 选择器 /
+   * 测试等不关心指纹的路径沿用此入口，避免大面积改 canonical 调用点。
+   */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public WorkerRegistryEntity(
+      Long id,
+      String tenantId,
+      String workerCode,
+      String workerGroup,
+      JsonbString capabilityTags,
+      String resourceTag,
+      String status,
+      Instant heartbeatAt,
+      Integer currentLoad,
+      Integer maxConcurrent,
+      Instant drainStartedAt,
+      Instant drainDeadlineAt) {
+    this(
+        id,
+        tenantId,
+        workerCode,
+        workerGroup,
+        capabilityTags,
+        resourceTag,
+        status,
+        heartbeatAt,
+        currentLoad,
+        maxConcurrent,
+        drainStartedAt,
+        drainDeadlineAt,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
   /** 心跳更新：状态、心跳时间、负载、能力标签。 */
   public WorkerRegistryEntity withHeartbeat(
       String status, Instant heartbeatAt, Integer currentLoad, JsonbString capabilityTags) {
@@ -43,7 +88,12 @@ public record WorkerRegistryEntity(
         currentLoad,
         maxConcurrent,
         drainStartedAt,
-        drainDeadlineAt);
+        drainDeadlineAt,
+        hostName,
+        hostIp,
+        processId,
+        buildId,
+        sdkVersion);
   }
 
   /** 仅更新状态（如 OFFLINE）。 */
@@ -60,7 +110,12 @@ public record WorkerRegistryEntity(
         currentLoad,
         maxConcurrent,
         drainStartedAt,
-        drainDeadlineAt);
+        drainDeadlineAt,
+        hostName,
+        hostIp,
+        processId,
+        buildId,
+        sdkVersion);
   }
 
   /** 开始排空：设置 DRAINING 状态和排空窗口。 */
@@ -78,7 +133,12 @@ public record WorkerRegistryEntity(
         currentLoad,
         maxConcurrent,
         drainStartedAt,
-        drainDeadlineAt);
+        drainDeadlineAt,
+        hostName,
+        hostIp,
+        processId,
+        buildId,
+        sdkVersion);
   }
 
   /** 标记已下线：清除排空时间戳。 */
@@ -95,6 +155,34 @@ public record WorkerRegistryEntity(
         currentLoad,
         maxConcurrent,
         null,
-        null);
+        null,
+        hostName,
+        hostIp,
+        processId,
+        buildId,
+        sdkVersion);
+  }
+
+  /** SDK-P5-3：刷新运行指纹（register 路径，worker 重启可能换 host / 升 SDK 版本）。 */
+  public WorkerRegistryEntity withFingerprint(
+      String hostName, String hostIp, String processId, String buildId, String sdkVersion) {
+    return new WorkerRegistryEntity(
+        id,
+        tenantId,
+        workerCode,
+        workerGroup,
+        capabilityTags,
+        resourceTag,
+        status,
+        heartbeatAt,
+        currentLoad,
+        maxConcurrent,
+        drainStartedAt,
+        drainDeadlineAt,
+        hostName,
+        hostIp,
+        processId,
+        buildId,
+        sdkVersion);
   }
 }

@@ -49,7 +49,8 @@
       WorkerRegistryEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, workerCode, workerGroup, capabilityTags, resourceTag, status,
-         heartbeatAt, currentLoad, drainStartedAt, drainDeadlineAt)
+         heartbeatAt, currentLoad, maxConcurrent, drainStartedAt, drainDeadlineAt,
+         hostName, hostIp, processId, buildId, sdkVersion)
       capability_tags 是 JSONB；通过 ::text 转字符串再走 JsonbStringTypeHandler 包装。
     -->
     <resultMap id="workerRegistryMap"
@@ -69,6 +70,11 @@
             <arg column="max_concurrent" javaType="java.lang.Integer"/>
             <arg column="drain_started_at" javaType="java.time.Instant"/>
             <arg column="drain_deadline_at" javaType="java.time.Instant"/>
+            <arg column="host_name" javaType="java.lang.String"/>
+            <arg column="host_ip" javaType="java.lang.String"/>
+            <arg column="process_id" javaType="java.lang.String"/>
+            <arg column="build_id" javaType="java.lang.String"/>
+            <arg column="sdk_version" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -76,7 +82,8 @@
         id, tenant_id, worker_code, worker_group,
         capability_tags::text as capability_tags_text,
         resource_tag, status, heartbeat_at, current_load, max_concurrent,
-        drain_started_at, drain_deadline_at
+        drain_started_at, drain_deadline_at,
+        host_name, host_ip, process_id, build_id, sdk_version
     </sql>
 
     <select id="selectByTenantAndWorkerCode" resultMap="workerRegistryMap">
@@ -180,6 +187,7 @@
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, max_concurrent, drain_started_at, drain_deadline_at,
+            host_name, host_ip, process_id, build_id, sdk_version,
             created_at, updated_at
         ) values (
             #{tenantId}, #{workerCode}, #{workerGroup},
@@ -202,6 +210,7 @@
                 <otherwise>10</otherwise>
             </choose>,
             #{drainStartedAt}, #{drainDeadlineAt},
+            #{hostName}, #{hostIp}, #{processId}, #{buildId}, #{sdkVersion},
             current_timestamp, current_timestamp
         )
         on conflict (tenant_id, worker_code) do nothing
@@ -230,6 +239,11 @@
                max_concurrent     = coalesce(#{maxConcurrent}, max_concurrent),
                drain_started_at   = #{drainStartedAt},
                drain_deadline_at  = #{drainDeadlineAt},
+               host_name          = coalesce(#{hostName}, host_name),
+               host_ip            = coalesce(#{hostIp}, host_ip),
+               process_id         = coalesce(#{processId}, process_id),
+               build_id           = coalesce(#{buildId}, build_id),
+               sdk_version        = coalesce(#{sdkVersion}, sdk_version),
                updated_at         = current_timestamp
          where id = #{id}
     </update>
