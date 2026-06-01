@@ -51,7 +51,7 @@ class DefaultWorkerRegistryServiceTest {
 
   private WorkerHeartbeatDto dto(String status) {
     return new WorkerHeartbeatDto(
-        "ta", "w1", "default", status, "host", "1.2.3.4", "pid", Instant.now(), List.of(), 1);
+        "ta", "w1", "default", status, "host", "1.2.3.4", "pid", Instant.now(), List.of(), 1, null);
   }
 
   private WorkerRegistryEntity entityWithStatus(String status) {

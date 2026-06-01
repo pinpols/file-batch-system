@@ -225,7 +225,37 @@ components:
           type: integer
           description: "in-flight 任务数;null/负值平台 normalize 为 0"
           nullable: true
+        taskTypes:
+          type: array
+          items: {$ref: '#/components/schemas/WorkerTaskTypeDescriptorDto'}
+          description: "SDK Phase 3 M3.1 自定义 taskType 描述符;仅 register 上报,heartbeat 不带(null)"
+          nullable: true
       required: [tenantId, workerCode, status, heartbeatAt]
+
+    WorkerTaskTypeDescriptorDto:
+      type: object
+      description: SDK 声明的自定义 taskType 描述符(SDK Phase 3 M3.1),平台 upsert 到 custom_task_type_registry
+      properties:
+        code:
+          type: string
+          description: "taskType 唯一标识;以 SdkTaskHandler.taskType() 为权威"
+        displayName: {type: string, nullable: true}
+        version: {type: string, nullable: true}
+        defaults:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: "派单参数默认值;敏感凭据禁止放此(走环境变量)"
+        inputSchema:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: "JSON Schema 片段,console 据此渲染表单"
+        templateVariables:
+          type: array
+          items: {type: string}
+          nullable: true
+          description: "可用模板变量名(如 bizDate)"
 
     WorkerRegistryEntity:
       type: object

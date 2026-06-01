@@ -1,5 +1,6 @@
 package com.example.batch.sdk.wire;
 
+import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
@@ -33,4 +34,6 @@ public record RegisterRequest(
     String processId,
     Instant heartbeatAt,
     List<String> capabilityTags,
-    Integer currentLoad) {}
+    Integer currentLoad,
+    // SDK Phase 3 M3.1 — 自定义 taskType 描述符;heartbeat 不带,仅 register 上报。
+    List<SdkTaskTypeDescriptor> taskTypes) {}
