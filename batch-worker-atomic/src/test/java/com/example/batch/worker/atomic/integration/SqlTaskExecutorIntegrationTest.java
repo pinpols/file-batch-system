@@ -9,6 +9,7 @@ import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.atomic.BatchWorkerAtomicApplication;
 import com.example.batch.worker.atomic.sql.SqlExecutorProperties;
 import com.example.batch.worker.atomic.sql.SqlTaskExecutor;
+import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,26 @@ class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
     // 真结果集:42 应出现在 output
     assertThat(r.output()).isNotNull();
     assertThat(r.output().toString()).contains("42");
+  }
+
+  @Test
+  void truncatesResultSetBeyondMaxResultRows() {
+    // maxResultRows 设小值,用真 PG generate_series 触发结果集截断:
+    // resultTruncated=true,lastResultRows 仍报真实行数,lastResultSet 行数被截到上限。
+    SqlExecutorProperties props = new SqlExecutorProperties();
+    props.setEnabled(true);
+    props.setForbidOsCapableRole(false);
+    props.setMaxResultRows(5);
+    SqlTaskExecutor exec = new SqlTaskExecutor(props, beanFactory, dataSource);
+
+    TaskResult r = exec.execute(ctx(Map.of("sql", "SELECT g FROM generate_series(1, 50) g")));
+
+    assertThat(r.success()).isTrue();
+    assertThat(r.output()).containsEntry("resultTruncated", true);
+    assertThat(r.output()).containsEntry("lastResultRows", 50); // 真实行数全数
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> rows = (List<Map<String, Object>>) r.output().get("lastResultSet");
+    assertThat(rows).hasSize(5); // 被截到 maxResultRows
   }
 
   @Test
