@@ -2,6 +2,7 @@ package com.example.batch.sdk.handler;
 
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskResult;
+import com.example.batch.sdk.task.SdkTypedParameters;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Iterator;

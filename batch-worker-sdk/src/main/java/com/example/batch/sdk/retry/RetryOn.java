@@ -14,8 +14,7 @@ import java.lang.annotation.Target;
  * CLAIM,本注解针对一次执行内的瞬时失败(如外部 HTTP/DB 抖动)就地重试,不回平台。
  *
  * <p><b>织入方式</b>:与 {@link com.example.batch.sdk.idempotent.Idempotent} 一致,用显式装饰器 {@link
- * SdkRetryableHandler#wrap}(SDK core 禁 Spring,不走 AOP),复用 {@link
- * com.example.batch.sdk.handler.SdkRetryPolicy} 退避逻辑。
+ * SdkRetryableHandler#wrap}(SDK core 禁 Spring,不走 AOP),复用 {@link SdkRetryPolicy} 退避逻辑。
  *
  * <p><b>匹配规则</b>:抛出的异常 {@code isInstanceOf} {@link #value()} 任一类型才重试(子类匹配);不匹配的异常**原样透传**,
  * 不重试、不吞。达到 {@link #maxAttempts()} 仍失败 → 抛最后一次异常(由上层 handler 模板兜底转 fail)。

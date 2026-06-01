@@ -1,6 +1,5 @@
 package com.example.batch.sdk.retry;
 
-import com.example.batch.sdk.handler.SdkRetryPolicy;
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
