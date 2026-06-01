@@ -1,4 +1,4 @@
-package com.example.batch.ext.sample.spring;
+package com.example.batch.ext.sample.spring.handlers;
 
 import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
