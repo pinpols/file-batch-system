@@ -82,23 +82,23 @@
 ### Roadmap 全景
 
 ```
-[Phase 0] 协议基础 (W1, 3d)
+[Phase 0] 协议基础 (W1, 3d)                   ✅ 完成 #SDK-P0-1
     ↓
-[Phase 1] SDK 硬伤修复 (W1-2, 1w)            ← 纯 SDK 可独立发版
+[Phase 1] SDK 硬伤修复 (W1-2, 1w)            ✅ 完成 #200 #201 +#SDK-P1-1/2
     ↓
-[Phase 2] 调度上下文下沉 (W2-4, 1.5w)         ← 平台双向通讯
+[Phase 2] 调度上下文下沉 (W2-4, 1.5w)         ✅ 完成 #202 #203 #204 #206
     ↓
-[Phase 3] taskType 注册 ⭐ (W4-7, 2-3w)       ← BE 优先,FE 延后
-    ├── M3.1 后端通 (W4-5)   ✅ 必做
-    └── M3.2 console UI      🔵 FE,可延后
+[Phase 3] taskType 注册 ⭐ (W4-7, 2-3w)
+    ├── M3.1 后端通 (W4-5)   ✅ 完成 #207–#213
+    └── M3.2 console UI      🔵 FE,延后(BE endpoint #212 已就绪)
     ↓
-[Phase 4] 长任务可控性 (W8-9, 2w)             ← BE 必做,UI 🔵 延后
+[Phase 4] 长任务可控性 (W8-9, 2w)             ✅ BE 完成 #215–#218(UI 🔵 延后)
     ↓
-[Phase 5] 开发体验 (W9-10, 2w)                ← testkit / 类型安全(纯 SDK)
+[Phase 5] 开发体验 (W9-10, 2w)                ✅ 完成 #219 #220 #221(OTel ⏸ 延后)
     │
-    └── [Phase 6] 合规企业级 (按需)            ← 真实需求驱动
+    └── [Phase 6] 合规企业级 (按需)            ⏸ YAGNI,需求驱动
 
-[Phase 7] 观测性收尾 (可穿插任何 phase, 0.5w)
+[Phase 7] 观测性收尾 (可穿插任何 phase, 0.5w)  ✅ 完成 #214
 
 🔵 = FE 工作,默认延后到 BE 完成验证后启动,不阻塞 SDK 发版
 ```
@@ -188,10 +188,10 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | # | 任务 | 工作量 | 模块 |
 |---|---|---|---|
-| 2.1 | `TaskDispatchMessage.schedulingContext`(bizDate/prev/next/isHoliday/attemptNo/triggerCode/triggerType/workflowRunId) | 1d | orchestrator |
-| 2.2 | `SdkTaskContext` 7 个 getter:`bizDate() / prevBizDate() / nextBizDate() / isHoliday() / attemptNo() / triggerCode() / workflowRunId()` | 0.3d | SDK |
-| 2.3 | Heartbeat response 加 platform directive:`platformStatus / desiredMaxConcurrent / shouldDrain / pausedTaskTypes / nextHeartbeatHint` | 1.5d | orchestrator |
-| 2.4 | SDK 4 态状态机:`NORMAL / DEGRADED / PAUSED / DRAINING`,`dispatcher` + `KafkaTaskConsumer` 联动 | 0.5d | SDK |
+| 2.1 | ~~`TaskDispatchMessage.schedulingContext`(bizDate/prev/next/isHoliday/attemptNo/triggerCode/triggerType/workflowRunId)~~ ✅ 2026-06-01 #202 | 1d | orchestrator |
+| 2.2 | ~~`SdkTaskContext` 7 个 getter:`bizDate() / prevBizDate() / nextBizDate() / isHoliday() / attemptNo() / triggerCode() / workflowRunId()`~~ ✅ 2026-06-01 #204 | 0.3d | SDK |
+| 2.3 | ~~Heartbeat response 加 platform directive:`platformStatus / desiredMaxConcurrent / shouldDrain / pausedTaskTypes / nextHeartbeatHint`~~ ✅ 2026-06-01 #203 | 1.5d | orchestrator |
+| 2.4 | ~~SDK 4 态状态机:`NORMAL / DEGRADED / PAUSED / DRAINING`,`dispatcher` + `KafkaTaskConsumer` 联动~~ ✅ 2026-06-01 #206 | 0.5d | SDK |
 
 ### 4.2 dual-rollout 关键纪律
 
@@ -203,10 +203,10 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | PR | 模块 | 内容 |
 |---|---|---|
-| #ORCH-P2-1 | orchestrator | `schedulingContext` 派单时填(`TaskDispatchService` + `BatchDateService` 集成) |
-| #ORCH-P2-2 | orchestrator | Heartbeat response 加 platform directive |
-| #SDK-P2-1 | SDK | `SdkTaskContext` 7 个 getter + 反序列化 |
-| #SDK-P2-2 | SDK | platformStatus 4 态状态机 + dispatcher/consumer 联动 |
+| ~~#ORCH-P2-1~~ ✅ #202 | orchestrator | `schedulingContext` 派单时填(`TaskDispatchService` + `BatchDateService` 集成) |
+| ~~#ORCH-P2-2~~ ✅ #203 | orchestrator | Heartbeat response 加 platform directive |
+| ~~#SDK-P2-1~~ ✅ #204 | SDK | `SdkTaskContext` 7 个 getter + 反序列化 |
+| ~~#SDK-P2-2~~ ✅ #206 | SDK | platformStatus 4 态状态机 + dispatcher/consumer 联动 |
 
 ### 4.4 DoD
 
@@ -228,13 +228,13 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | # | 任务 | 工作量 | 模块 |
 |---|---|---|---|
-| 3.1.1 | `custom_task_type_registry` 表 + Flyway V160 + archive 镜像(CLAUDE.md 红线) | 4h | orchestrator |
-| 3.1.2 | `SdkTaskTypeDescriptor` API + `SdkTaskHandler.descriptor()` 可选方法 | 4h | SDK |
-| 3.1.3 | SDK `register()` body 加 `taskTypes[].descriptor` 段 | 2h | SDK |
-| 3.1.4 | orchestrator register handler upsert 到 registry(`source=SDK_DECLARED`) | 6h | orchestrator |
-| 3.1.5 | orchestrator `TaskDispatchService` 派单合并 `defaults + node.parameters + 模板替换` | 1d | orchestrator |
-| 3.1.6 | `task.effective_parameters JSONB` 字段(审计快照) | 4h | orchestrator |
-| 3.1.7 | `sample-tenant-worker/` 示例 repo(ADR-035 路线图 P1.4 项) | 1d | SDK + docs |
+| 3.1.1 | ~~`custom_task_type_registry` 表 + Flyway V160 + archive 镜像(CLAUDE.md 红线)~~ ✅ 2026-06-01 #207(实际 V159) | 4h | orchestrator |
+| 3.1.2 | ~~`SdkTaskTypeDescriptor` API + `SdkTaskHandler.descriptor()` 可选方法~~ ✅ 2026-06-01 #208 | 4h | SDK |
+| 3.1.3 | ~~SDK `register()` body 加 `taskTypes[].descriptor` 段~~ ✅ 2026-06-01 #208 | 2h | SDK |
+| 3.1.4 | ~~orchestrator register handler upsert 到 registry(`source=SDK_DECLARED`)~~ ✅ 2026-06-01 #209 | 6h | orchestrator |
+| 3.1.5 | ~~orchestrator `TaskDispatchService` 派单合并 `defaults + node.parameters + 模板替换`~~ ✅ 2026-06-01 #210 | 1d | orchestrator |
+| 3.1.6 | ~~`task.effective_parameters JSONB` 字段(审计快照)~~ ✅ 2026-06-01 #211 | 4h | orchestrator |
+| 3.1.7 | ~~`sample-tenant-worker/` 示例 repo(ADR-035 路线图 P1.4 项)~~ ✅ 2026-06-01 #213 | 1d | SDK + docs |
 
 ### 5.2 M3.2 — console UI 跟上 🔵 **FE,可延后**(1-1.5 周)
 
@@ -253,12 +253,12 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | PR | 模块 | 内容 |
 |---|---|---|
-| #ORCH-P3-1 | orchestrator | `custom_task_type_registry` 表 + Flyway V160 + archive |
-| #ORCH-P3-2 | orchestrator | register upsert + 派单合并 |
-| #SDK-P3-1 | SDK | `SdkTaskTypeDescriptor` API + register 上报 |
-| #SDK-P3-2 | SDK | sample-tenant-worker 示例 repo |
-| #ORCH-P3-3 | orchestrator | `task.effective_parameters` 字段 + 写入逻辑 |
-| #API-P3-1 | console-api | `/console/custom-task-types/*` |
+| ~~#ORCH-P3-1~~ ✅ #207 | orchestrator | `custom_task_type_registry` 表 + Flyway V159 + archive |
+| ~~#ORCH-P3-2~~ ✅ #209 #210 | orchestrator | register upsert + 派单合并 |
+| ~~#SDK-P3-1~~ ✅ #208 | SDK | `SdkTaskTypeDescriptor` API + register 上报 |
+| ~~#SDK-P3-2~~ ✅ #213 | SDK | sample-tenant-worker 示例 repo |
+| ~~#ORCH-P3-3~~ ✅ #211 | orchestrator | `task.effective_parameters` 字段 + 写入逻辑 |
+| ~~#API-P3-1~~ ✅ #212 | console-api | `/console/custom-task-types/*` |
 | #FE-P3-1 🔵 | FE | "我的 taskType" 页(**延后**) |
 | #FE-P3-2 🔵 | FE | 工作流编辑器按 schema 渲染 + 模板补全(**延后**) |
 
@@ -294,11 +294,11 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | # | 任务 | 工作量 | 模块 | 状态 |
 |---|---|---|---|---|
-| 4.1 | Heartbeat 携带任意 details(合并 progress / checkpoint / lease 续约同 endpoint) | 1.5d | orchestrator + SDK | ✅ |
-| 4.2 | `workflow_node.taskTimeout`(startToClose 语义),平台超时强制 cancel | 1d | orchestrator | ✅ |
-| 4.3 | Cancel push:heartbeat response 携带 `cancelRequested`(不等 60s 轮询) | 0.5d | orchestrator | ✅ |
-| 4.4 | `SdkTaskContext.isCancelled()` + 长循环 check 文档示例 | 0.5d | SDK | ✅ |
-| 4.5 | LeaseRenewalScheduler 检测 lease revoked(404/410)→ 标记 task revoked | 0.5d | SDK | ✅ |
+| 4.1 | Heartbeat 携带任意 details(合并 progress / checkpoint / lease 续约同 endpoint) | 1.5d | orchestrator + SDK | ✅ 2026-06-01 #215 #218 |
+| 4.2 | `workflow_node.taskTimeout`(startToClose 语义),平台超时强制 cancel | 1d | orchestrator | ✅ 2026-06-01 #216 |
+| 4.3 | Cancel push:heartbeat response 携带 `cancelRequested`(不等 60s 轮询) | 0.5d | orchestrator | ✅ 2026-06-01 #215 |
+| 4.4 | `SdkTaskContext.isCancelled()` + 长循环 check 文档示例 | 0.5d | SDK | ✅ 2026-06-01 #217 |
+| 4.5 | LeaseRenewalScheduler 检测 lease revoked(404/410)→ 标记 task revoked | 0.5d | SDK | ✅ 2026-06-01 #217 |
 | 4.6 | console "任务详情" 页显示最新 heartbeat details(进度 / checkpoint) | 1d | FE | 🔵 延后 |
 
 ### 6.2 决策点
@@ -315,10 +315,10 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | PR | 模块 | 内容 |
 |---|---|---|
-| #ORCH-P4-1 | orchestrator | Heartbeat 接收 details + cancel push 字段 |
-| #ORCH-P4-2 | orchestrator | `workflow_node.taskTimeout` + 超时 cancel 逻辑 |
-| #SDK-P4-1 | SDK | `SdkTaskContext.isCancelled()` + 长循环 check |
-| #SDK-P4-2 | SDK | LeaseRenewal 检测 revoked + heartbeat details API |
+| ~~#ORCH-P4-1~~ ✅ #215 | orchestrator | Heartbeat 接收 details + cancel push 字段 |
+| ~~#ORCH-P4-2~~ ✅ #216 | orchestrator | `workflow_node.taskTimeout` + 超时 cancel 逻辑 |
+| ~~#SDK-P4-1~~ ✅ #217 | SDK | `SdkTaskContext.isCancelled()` + 长循环 check |
+| ~~#SDK-P4-2~~ ✅ #218 | SDK | LeaseRenewal 检测 revoked + heartbeat details API |
 | #FE-P4-1 🔵 | FE | 任务详情页显示 details(**延后**) |
 
 ### 6.4 DoD
@@ -344,11 +344,11 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | # | 任务 | 工作量 |
 |---|---|---|
-| 5.1 | `SdkTypedTaskHandler<I, O>` 泛型基类,框架 Jackson 反序列化 parameters → I,handler 返回 O | 1d |
-| 5.2 | `batch-worker-sdk-testkit` 子模块:`FakeBatchPlatform` + 嵌入 EmbeddedKafka | 2-3d |
-| 5.3 | `@BatchWorkerTest` JUnit5 扩展 + `TaskDispatchMessage.Builder` 测试夹具 | 1d |
-| 5.4 | Worker fingerprint:`register()` 上报 `buildId / sdkVersion / hostName / pid` | 0.3d |
-| 5.5 | OTel context propagation:`runtimeAttributes.traceparent` + 可选依赖 | 0.5d |
+| 5.1 | ~~`SdkTypedTaskHandler<I, O>` 泛型基类,框架 Jackson 反序列化 parameters → I,handler 返回 O~~ ✅ 2026-06-01 #219 | 1d |
+| 5.2 | ~~`batch-worker-sdk-testkit` 子模块:`FakeBatchPlatform` + 嵌入 EmbeddedKafka~~ ✅ 2026-06-01 #221 | 2-3d |
+| 5.3 | ~~`@BatchWorkerTest` JUnit5 扩展 + `TaskDispatchMessage.Builder` 测试夹具~~ ✅ 2026-06-01 #221(随 P5-2 合并;Builder 改名 `TaskDispatchMessageBuilder`) | 1d |
+| 5.4 | ~~Worker fingerprint:`register()` 上报 `buildId / sdkVersion / hostName / pid`~~ ✅ 2026-06-01 #220 | 0.3d |
+| 5.5 | OTel context propagation:`runtimeAttributes.traceparent` + 可选依赖 ⏸ 延后(租户提需求再做,见 §7.2) | 0.5d |
 
 ### 7.2 决策点
 
@@ -359,10 +359,10 @@ mvn -pl batch-orchestrator test -Dtest=SdkWireContractTest
 
 | PR | 内容 |
 |---|---|
-| #SDK-P5-1 | `SdkTypedTaskHandler<I, O>` + Jackson 集成 |
-| #SDK-P5-2 | `batch-worker-sdk-testkit` 新子模块 + FakeBatchPlatform |
-| #SDK-P5-3 | Worker fingerprint |
-| #SDK-P5-4 | OTel context propagation(可选依赖) |
+| ~~#SDK-P5-1~~ ✅ #219 | `SdkTypedTaskHandler<I, O>` + Jackson 集成 |
+| ~~#SDK-P5-2~~ ✅ #221 | `batch-worker-sdk-testkit` 新子模块 + FakeBatchPlatform(含 @BatchWorkerTest + Builder) |
+| ~~#SDK-P5-3~~ ✅ #220 | Worker fingerprint |
+| #SDK-P5-4 ⏸ 延后 | OTel context propagation(可选依赖) |
 
 ### 7.4 DoD
 
