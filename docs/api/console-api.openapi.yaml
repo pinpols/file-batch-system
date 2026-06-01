@@ -2323,6 +2323,85 @@ paths:
                   code: { type: string }
                   message: { type: string }
                   data: { type: integer, format: int64 }
+  /api/console/custom-task-types:
+    get:
+      tags: [Workers]
+      summary: List ACTIVE SDK-declared custom task types for current tenant (SDK Phase 3 M3.1)
+      operationId: listCustomTaskTypes
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of ACTIVE custom task types, last_declared_at desc
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/console/custom-task-types/count:
+    get:
+      tags: [Workers]
+      summary: Count ACTIVE custom task types for current tenant
+      operationId: countCustomTaskTypes
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Count of ACTIVE custom task types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data: { type: integer, format: int64 }
+  /api/console/custom-task-types/{taskTypeCode}:
+    get:
+      tags: [Workers]
+      summary: Get a single custom task type detail (incl. descriptor full text)
+      operationId: getCustomTaskType
+      parameters:
+        - name: taskTypeCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Custom task type detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    additionalProperties: true
+        '404':
+          description: Task type not found for tenant
   /api/console/workers/{workerCode}/drain:
     post:
       tags: [Workers]
