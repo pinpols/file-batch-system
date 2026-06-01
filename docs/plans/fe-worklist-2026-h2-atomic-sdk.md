@@ -12,13 +12,13 @@
 
 | 区块 | 来源 | 触发条件 | 工作量 | BE 依赖 |
 |---|---|---|---|---|
-| **A. SDK 自定义 taskType** | roadmap §5.2 / §7.2 | 第一个租户运营提需求 | ~6d | ✅ 端点实在可起 FE(`ConsoleCustomTaskTypeController`) |
-| **B. Atomic 内置四类配置 UI** | 本文新增(roadmap 未覆盖) | 运营要在 console 配 sql/shell/http/proc 节点 | ~4-5d | ⚠️ 缺 schema 读端点(见 §2-B) |
-| **C. 长任务可观测** | roadmap §6.1 4.6 | 长任务真实跑起来 + 运维提需求 | ~1d | ⚠️ details 已落库但 console-api 无读端点(见 §2-C) |
+| **A. SDK 自定义 taskType** | roadmap §5.2 / §7.2 | 第一个租户运营提需求 | ~6d 桌面 | ✅ 已就绪 |
+| **B. Atomic 内置四类配置 UI** | 本文新增(roadmap 未覆盖) | 运营要在 console 配 sql/shell/http/proc 节点 | ~4-5d 桌面 | ✅ 已就绪(#228) |
+| **C. 长任务可观测** | roadmap §6.1 4.6 | 长任务真实跑起来 + 运维提需求 | ~1d 桌面 + ~0.5d 移动 | ✅ 已就绪(#228) |
 
-> 🔵 = 默认延后 · ✅ = BE 已就绪可起 FE · ⚠️ = 起 FE 前需先补一小段 BE
+> 🔵 = 默认延后 · ✅ = BE 已就绪可起 FE
 >
-> **2026-06-01 实地核对**(以 origin/main 代码为准,非凭 PR 号推断):A 区端点存在;B/C 区读端点**尚不存在**,详见 §2。
+> **2026-06-01 更新**:三区 BE 读端点已全部就位(#228),FE 不再被 BE 阻塞。**开工前必读 §3 横切约束**(设计体系套用 / 移动端逐区 / 测试义务):A/B 桌面专属,**仅 C 需移动端跟进**;新页面套 Element Plus + tokens、走 `gen:api` 类型、补 Vitest + 桌面 e2e。
 
 ---
 
@@ -51,15 +51,51 @@
 
 ## 2. BE 读端点前置(FE 起 B / C 前必做)
 
-> **2026-06-01 实地核对结论**:A 区端点已实在,FE 可立刻开;**B / C 区起 FE 前各缺一个 console-api 读端点**,否则 FE 拿不到数据。建议 FE 起 A 区的同时,并行让 BE 补下面两个小端点(各 ~0.5d),端点一好 FE 再接 B / C。
+> **2026-06-01 更新**:三个区的 BE 读端点**已全部就位**(2-B / 2-C 端点由 PR #228 合入 main)。FE 三区均可开工;BE 不再是阻塞项。
 
-| 前置 | 现状(origin/main) | 要补的端点 | 阻塞谁 | 临时替代 |
-|---|---|---|---|---|
-| **A 区** | ✅ `ConsoleCustomTaskTypeController` 已有 `GET /api/console/custom-task-types`(列表)/ `/count` / `/{taskTypeCode}`(详情) | 无 —— 直接用 | — | — |
-| **2-B** | ❌ 无 atomic 内置四类 schema 端点 | `GET /console/atomic-task-types/schema` 返回 sql/shell/stored_proc/http 四类的字段 schema + 安全闸说明(取自各 `*ExecutorProperties`,单一权威源) | B 区表单渲染 | FE 硬编码四类表单(接受 executor 改字段就漂移) |
-| **2-C** | ❌ details 已落库(#215/#218 写入),但 console-api **无对外读端点** | `GET /console/tasks/{taskId}/heartbeat-details`(或并入任务详情)返回最新 progress / checkpoint | C 区进度页 | 直接 SQL 查 `task` / `task_progress` 表(§4 workaround) |
+| 前置 | 现状 | 端点 |
+|---|---|---|
+| **A 区** | ✅ 已有(`ConsoleCustomTaskTypeController`) | `GET /api/console/custom-task-types`(列表)/ `/count` / `/{taskTypeCode}`(详情) |
+| **2-B** | ✅ 已补(#228) | `GET /api/console/atomic-task-types/schema` —— 四类参数 schema + 安全闸静态目录 |
+| **2-C** | ✅ 已补(#228) | `GET /api/console/tasks/{taskId}/heartbeat-details` —— 按租户读最新 progress / checkpoint,无心跳 details=null |
 
-> ⚠️ A 区真实路径是 `/api/console/custom-task-types`(带 `/api` 前缀),本文 A 区表格里"读什么 BE"的旧路径是估的,**以本节核对值为准**。
+> 路径以 `/api/console/` 前缀为准。两个新端点已进 `console-api.openapi.yaml`,**FE 跑 `npm run gen:api` 即可拿到类型**(见 §3.3)。
+
+---
+
+## 3. FE 实现约束(设计对齐 / 移动端 / 测试)
+
+> 前端仓 `batch-console`(Vue3 + Vite + Element Plus)。新页面**套现有体系**,别自创风格、别漏移动端和测试。本节是 A/B/C 三区开工前必读的横切约束。
+
+### 3.1 设计体系对齐(套用,不自创)
+
+- **组件库**:Element Plus(`el-*`),图标 `@element-plus/icons-vue`。
+- **页面骨架**:`PageContainer → PageHeader → SectionCard`;列表用 `ProTable` + `ListPageQueryBar`(分页默认 15,`[15/30/50/100]`);详情用 `el-tabs` + `el-descriptions`;状态用 `StatusTag`。
+- **视觉**:颜色 / 间距 / 圆角**只用 `src/styles/tokens.css` 的变量**(`--color-primary` / `--page-section-gap` / `--radius-content` 等),**禁硬编码** px / 色值;需兼容 dark + compact 两套。
+- **文案**:全部走 i18n `t('namespace.key')`,`zh-CN` / `en-US` 1:1。
+- **API 接入**:走 `src/api/*.ts` 模块(禁在 `.vue` 里直接 new axios);类型用 `src/types/api.generated.ts`(禁手写 DTO),见 §3.3。
+- **安全**:禁 `v-html`,不可信内容用 `v-safe-html`(DOMPurify)。
+
+### 3.2 移动端逐区判定(opt-in,不自动生成)
+
+移动端是**独立 `/m/` 路由树**(`src/views-mobile/`,`M*` 页,iOS Liquid Glass 风),桌面加页**不会自动带出**移动端。逐区:
+
+| 区 | 桌面 | 移动端 | 理由 |
+|---|---|---|---|
+| A 自定义 taskType(注册/版本/健康度) | ✅ | ❌ 不做 | 管理员/编辑器重操作,桌面专属 |
+| B atomic 内置四类节点配置 | ✅ | ❌ 不做 | 工作流编排不在手机做(移动端 `MWorkflowViewer` 仅只读) |
+| **C 任务心跳进度页** | ✅ | ⚠️ **要做** | 运维在手机看长任务进度是真实场景;已有 `MJobInstanceDetail` 下钻页,加进度展示(进度条 + details) |
+
+→ 净增移动端工作仅 **C 一个**(`views-mobile/` 加进度展示 + `/m` 路由),A/B 桌面即可。
+
+### 3.3 测试义务 + 契约同步
+
+- **Vitest 单测**:api 模块(`src/api/*.ts`)+ 表单 / schema 渲染逻辑(逻辑抽到 `.ts` 测,不直接测 SFC);同目录 `*.test.ts`,describe 用对象/函数名、it 描述行为(不加 "should")。
+- **Playwright e2e**:桌面关键路径(auth/nav 可达 + 列表/详情/保存);spec 放 `e2e/*.spec.ts`。
+- **移动端不写 Playwright**(仓内约定:移动端是薄壳,逻辑靠桌面单测覆盖)——C 的移动端加 Vitest 即可。
+- **契约同步**:BE 改了 `console-api.openapi.yaml` → FE 跑 `npm run gen:api` 重生成类型,CI `gen:api:check` 卡漂移。
+  - ✅ 本批两个新端点(2-B / 2-C)**已进 yaml**(#228),FE 起 B/C 前先 `npm run gen:api` 即可拿到 `AtomicTaskTypeSchema` / `TaskHeartbeatDetailsResponse` 类型,无需手写。
+- **开工前自查**:`npm run lint` + `npm run typecheck` + `npm run build` 本地过再提 PR。
 
 ---
 
