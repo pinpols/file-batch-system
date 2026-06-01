@@ -71,10 +71,32 @@ public final class SdkRetryPolicy {
     throw last == null ? new IllegalStateException("retry exhausted with no exception") : last;
   }
 
-  private Duration nextDelay(Duration current) {
+  /** 最大尝试次数(含首次)。 */
+  public int maxAttempts() {
+    return maxAttempts;
+  }
+
+  /** 首次退避间隔。 */
+  public Duration initialDelay() {
+    return initialDelay;
+  }
+
+  /**
+   * 第 {@code attempt} 次失败后(1-based)的下一次退避间隔,复用本策略的 multiplier / maxDelay 封顶逻辑。 供声明式重试装饰器 {@code
+   * SdkRetryableHandler} 驱动自己的重试循环时复用退避数列,避免重复实现退避数学。
+   *
+   * @param current 当前已用的间隔
+   * @return 下一次间隔(指数策略递增封顶;固定策略恒等)
+   */
+  public Duration nextDelay(Duration current) {
     long next = (long) (current.toMillis() * multiplier);
     long capped = Math.min(next, maxDelay.toMillis());
     return Duration.ofMillis(capped);
+  }
+
+  /** 按当前策略阻塞退避;中断转 {@link IllegalStateException}。供装饰器复用。 */
+  public static void sleepFor(Duration d) {
+    sleep(d);
   }
 
   private static void sleep(Duration d) {
