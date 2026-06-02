@@ -1,0 +1,48 @@
+# Ruff configuration for batch-worker-sdk.
+#
+# Style/lint baseline: strict but pragmatic. Tests get a bit of slack
+# (no required docstrings, allow magic numbers / asserts) since pytest
+# idioms clash with some defaults.
+
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+extend-exclude = [
+    "build",
+    "dist",
+    ".venv",
+]
+
+[lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "RUF",    # ruff-specific
+    "PL",     # pylint subset
+    "PT",     # pytest style
+    "ASYNC",  # async-correctness
+]
+ignore = [
+    "PLR0913",  # too-many-arguments: SDK ctors will exceed; we'll revisit in P1
+    "PLR2004",  # magic-value-comparison: noisy in tests
+    "E501",    # line-length handled by formatter
+]
+
+[lint.per-file-ignores]
+"tests/**" = [
+    "PLR2004",  # magic numbers OK in tests
+    "S101",    # asserts are the whole point
+]
+
+[lint.isort]
+known-first-party = ["batch_worker_sdk"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

@@ -1,0 +1,12 @@
+# Python-specific ignores (root .gitignore already covers .venv/.pytest_cache/.mypy_cache/.ruff_cache).
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
