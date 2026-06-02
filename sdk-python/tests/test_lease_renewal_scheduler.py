@@ -1,22 +1,20 @@
-"""``batch_worker_sdk.scheduler._lease.LeaseRenewalScheduler`` 的测试(P3)。
+"""Tests for ``batch_worker_sdk.scheduler._lease.LeaseRenewalScheduler`` (Lane T P3).
 
-6 个用例:
+5 cases per Lane T brief T4(Lane A 删原 #6 getattr fallback 用例:
+``mark_cancel_requested`` 已是 ``DispatcherLike`` 协议必选方法,缺失=类型错误,
+无需运行时探测):
 
-1. in-flight 为空时 tick 是 no-op(不发 HTTP)。
-2. ``cancelRequested=True`` → 用 reason 触发 ``mark_cancel_requested``。
-3. 404 lease-revoked → 触发 ``mark_cancel_requested`` 并带 ``"lease-revoked"``。
-4. 一个任务失败不影响同 tick 内其它任务。
-5. ``start()`` + ``stop()`` 生命周期干净。
-6. dispatcher 缺 ``mark_cancel_requested``(取消能力尚未接入)
-   时退化为 WARN 日志,不崩溃。
+1. Empty in-flight set → tick is a no-op (no HTTP calls).
+2. ``cancelRequested=True`` → ``mark_cancel_requested`` invoked with reason.
+3. 404 lease-revoked → ``mark_cancel_requested`` with ``"lease-revoked"``.
+4. One task failing does not affect other tasks in the same tick.
+5. ``start()`` + ``stop()`` lifecycle is clean.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any
-
-import pytest
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import PersistentClientError, TransientError
@@ -41,23 +39,10 @@ class _Dispatcher:
         self.cancel_calls.append((task_id, reason))
 
 
-class _DispatcherWithoutCancel:
-    """用例 #6 用 —— 模拟尚未挂上取消扩展时的 dispatcher。"""
-
-    def in_flight_count(self) -> int:
-        return 1
-
-    def in_flight_task_ids(self) -> set[int]:
-        return {77}
-
-    def apply_platform_directive(self, directive: Any) -> None:
-        return None
-
-
 class _Http:
     def __init__(self) -> None:
         self.calls: list[int] = []
-        # task_id → 响应 / 异常
+        # Map task_id → response/exception
         self.responses: dict[int, dict[str, Any]] = {}
         self.errors: dict[int, BaseException] = {}
 
@@ -82,8 +67,9 @@ def _cfg() -> BatchPlatformClientConfig:
 async def test_tick_with_empty_inflight_makes_no_http_calls() -> None:
     sched = LeaseRenewalScheduler(_cfg(), _Http(), _Dispatcher(set()))  # type: ignore[arg-type]
     await sched.tick()
-    # 除"没有异常 + 没有 HTTP 调用"外不需要别的断言;dispatcher
-    # 空集如果触发网络 I/O,这里会卡在 _Http 缺失的 mock 上。
+    # No assertion needed beyond "no exception" + no HTTP calls; if the
+    # dispatcher's empty set triggered network I/O this test would hang
+    # waiting on _Http's missing mock.
 
 
 async def test_cancel_requested_triggers_dispatcher_mark() -> None:
@@ -117,9 +103,9 @@ async def test_one_failure_does_not_block_other_tasks() -> None:
 
     await sched.tick()
 
-    # 三个 task_id 都尝试过,与顺序、失败无关。
+    # All three task_ids attempted, regardless of order or failure.
     assert sorted(http.calls) == [1, 2, 3]
-    # 只有 task 3 触发了 cancel;task 1 ok,task 2 失败。
+    # Only task 3 should have triggered cancel; task 1 ok, task 2 failed.
     assert dispatcher.cancel_calls == [(3, "platform-cancel")]
 
 
@@ -129,19 +115,3 @@ async def test_start_and_stop_run_cleanly() -> None:
     assert sched.running
     await sched.stop()
     assert not sched.running
-
-
-async def test_missing_mark_cancel_on_dispatcher_logs_warn(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    dispatcher = _DispatcherWithoutCancel()
-    http = _Http()
-    http.responses[77] = {"cancelRequested": True}
-    sched = LeaseRenewalScheduler(_cfg(), http, dispatcher)  # type: ignore[arg-type]
-
-    await sched.tick()  # 不能抛
-
-    assert any(
-        "mark_cancel_requested" in r.message and "not yet wired" in r.message
-        for r in caplog.records
-    )

@@ -42,13 +42,14 @@ from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import AuthError, PlatformError
 from batch_worker_sdk.handler.handler import SdkTaskHandler
 from batch_worker_sdk.internal._http import PlatformHttpClient
+from batch_worker_sdk.task.cancellation import CancellationSignal
 from batch_worker_sdk.task.state import WorkerRuntimeState
 
 logger = logging.getLogger(__name__)
 
 # Python SDK 能识别的 schema 主版本前缀。对齐 Java
-# ``TaskDispatchMessage.isSchemaSupported()`` —— 接受 "v2" 大版本。
-_SUPPORTED_SCHEMA_PREFIXES = ("v2",)
+# ``TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2")``。
+_SUPPORTED_SCHEMA_PREFIXES = ("v1", "v2")
 
 
 class TaskDispatcher:
@@ -74,7 +75,12 @@ class TaskDispatcher:
         self._http = http
         self._handlers: dict[str, SdkTaskHandler] = dict(handlers or {})
         self._in_flight: dict[int, asyncio.Task[None]] = {}
-        self._cancel_requested: dict[int, str] = {}
+        # task_id → CancellationSignal,handler 在 ctx 上持有同一引用;
+        # LeaseRenewalScheduler 通过 mark_cancel_requested(task_id, reason)
+        # 翻其 asyncio.Event。普通 dict;**single-event-loop only;not
+        # thread-safe**(与 _in_flight 一致,owner 是 dispatcher 所在的
+        # 唯一 asyncio loop)。
+        self._cancel_signals: dict[int, CancellationSignal] = {}
         self._draining: bool = False
         self._fatal: bool = False
         self._runtime_state: WorkerRuntimeState = WorkerRuntimeState.NORMAL
@@ -133,21 +139,33 @@ class TaskDispatcher:
     # ─── 取消信号 ────────────────────────────────────────────────────
 
     def mark_cancel_requested(self, task_id: int, reason: str) -> None:
-        """记录一次取消请求(由 LeaseRenewalScheduler 在收到 platform cancel-requested
-        信号时调用)。
+        """翻转 in-flight task 的 :class:`CancellationSignal`。
 
-        当前实现把 ``(task_id, reason)`` 暂存到 ``_cancel_requested`` map;handler
-        可通过 ``ctx.is_cancelled()`` / ``CancellationSignal`` 自行轮询。后续可
-        升级为协作式 ``asyncio.CancelledError`` 注入。
+        由 :class:`LeaseRenewalScheduler` 在 renew 响应里收到
+        ``cancelRequested=true`` 或 lease 被吊销(404/410)时调用。Handler
+        在 :class:`SdkTaskContext` 上持有同一份 ``CancellationSignal``,
+        在长循环里轮询 ``ctx.cancel_signal.is_cancellation_requested`` 或
+        ``await ctx.cancel_signal.wait_cancelled()``。
+
+        对未知 ``task_id``(已完成 / 已 cleanup)只 DEBUG,不抛 —— 续约
+        tick 与 handler done callback 之间是 race,容忍单向丢失是正常路径。
+        ``CancellationSignal.mark_cancelled`` 本身幂等,重复调用安全。
         """
-        if task_id in self._cancel_requested:
-            return
-        self._cancel_requested[task_id] = reason
-        logger.info("task %s marked cancel-requested: reason=%s", task_id, reason)
+        signal = self._cancel_signals.get(task_id)
+        if signal is not None:
+            signal.mark_cancelled()
+            logger.info("task %s cancellation marked: %s", task_id, reason)
+        else:
+            logger.debug(
+                "mark_cancel_requested for unknown task_id=%s (already done?) reason=%s",
+                task_id,
+                reason,
+            )
 
     def is_cancel_requested(self, task_id: int) -> bool:
         """Handler 内轮询用:平台有没有要求取消这条 task。"""
-        return task_id in self._cancel_requested
+        signal = self._cancel_signals.get(task_id)
+        return signal is not None and signal.is_cancellation_requested
 
     # ─── 消息入口 ────────────────────────────────────────────────────
 
@@ -206,11 +224,17 @@ class TaskDispatcher:
             logger.debug("taskId=%s already in-flight, dropping duplicate", task_id)
             return
 
+        # 先建 CancellationSignal:_process 未来构造 SdkTaskContext 时会从
+        # ``_cancel_signals[task_id]`` 取同一份 signal 注入 ctx;
+        # LeaseRenewalScheduler 同步翻其 event,handler 通过 ctx 拿到 True。
+        self._cancel_signals[task_id] = CancellationSignal()
+
         task = asyncio.create_task(self._process(task_id, msg), name=f"task-{task_id}")
         self._in_flight[task_id] = task
 
         def _cleanup(_t: asyncio.Task[None], tid: int = task_id) -> None:
             self._in_flight.pop(tid, None)
+            self._cancel_signals.pop(tid, None)
 
         task.add_done_callback(_cleanup)
 
