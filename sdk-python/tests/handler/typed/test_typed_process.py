@@ -1,4 +1,4 @@
-"""Tests for ``SdkAbstractTypedProcessHandler``."""
+"""``SdkAbstractTypedProcessHandler`` 的测试。"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class _MyProcess(SdkAbstractTypedProcessHandler[_Req, dict, dict, BaseModel]):
 
     def transform(self, params, ctx, row):  # type: ignore[override]
         if params.only_even and row["i"] % 2 != 0:
-            return None  # skip odd
+            return None  # 奇数跳过
         return {"out": row["i"] * 10}
 
     def upsert(self, params, ctx, batch):  # type: ignore[override]
@@ -41,7 +41,7 @@ class _MyProcess(SdkAbstractTypedProcessHandler[_Req, dict, dict, BaseModel]):
 async def test_typed_process_skips_when_transform_returns_none() -> None:
     h = _MyProcess()
     r = await h.execute(make_ctx({"only_even": True}))
-    # 0,2,4 -> 3 outputs; batch_size 2 -> [2,1]
+    # 0,2,4 -> 3 个输出;batch_size 2 -> [2,1]
     assert [len(b) for b in h.upserts] == [2, 1]
     assert r.success is True
     assert r.output["success"] == 3

@@ -1,4 +1,4 @@
-"""Tests for :class:`FileImportHandler` — csv / jsonl / empty / missing-file."""
+""":class:`FileImportHandler` 的测试 —— csv / jsonl / 空文件 / 文件缺失。"""
 
 from __future__ import annotations
 
@@ -13,14 +13,14 @@ from batch_worker_sdk.task.context import SdkTaskContext
 
 
 class _CollectingImportHandler(FileImportHandler):
-    """Test subclass: collects every batch into an in-memory list."""
+    """测试子类:把每个 batch 收进内存 list。"""
 
     def __init__(self, config: FileImportConfig) -> None:
         super().__init__(config)
         self.batches: list[list[dict[str, Any]]] = []
 
     async def _load_batch(self, ctx: SdkTaskContext, batch: list[dict[str, Any]]) -> None:
-        # Defensive copy so caller-side mutation doesn't pollute assertions.
+        # 防御性 copy:避免调用方修改污染断言。
         self.batches.append([dict(r) for r in batch])
 
     @property
@@ -72,7 +72,7 @@ async def test_csv_import_chunks_by_batch_size(tmp_path: Path) -> None:
     result = await handler.execute(_ctx(str(src)))
 
     assert result.success is True
-    # 5 rows, batch_size=2 → batches of [2, 2, 1]
+    # 5 行,batch_size=2 → batch 大小依次 [2, 2, 1]
     assert [len(b) for b in handler.batches] == [2, 2, 1]
 
 

@@ -1,4 +1,4 @@
-"""Unit tests for the ``@batch_task`` decorator."""
+"""``@batch_task`` 装饰器的单元测试。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from batch_worker_sdk.testkit import make_test_context
 
 @pytest.fixture(autouse=True)
 def _reset_registry():
-    """Each test starts with an empty registry — avoid cross-test bleed."""
+    """每个测试都从空 registry 开始,避免相互污染。"""
     _clear_registered_handlers()
     yield
     _clear_registered_handlers()
@@ -32,7 +32,7 @@ def test_decorator_registers_handler() -> None:
     handlers = collect_registered_handlers()
     assert len(handlers) == 1
     assert handlers[0].task_type() == "job-a"
-    # The returned object satisfies the structural Protocol.
+    # 返回对象满足结构化 Protocol。
     assert isinstance(handlers[0], SdkTaskHandler)
 
 
@@ -68,7 +68,7 @@ def test_collect_returns_snapshot_copy() -> None:
     a = collect_registered_handlers()
     a.clear()
     b = collect_registered_handlers()
-    assert len(b) == 1  # internal registry untouched
+    assert len(b) == 1  # 内部 registry 未受影响
 
 
 def test_empty_task_type_rejected() -> None:

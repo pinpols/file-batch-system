@@ -1,4 +1,4 @@
-"""Tests for :class:`QueryExportHandler` — 1 row / chunked rows / query failure."""
+""":class:`QueryExportHandler` 的测试 —— 单行 / 分块多行 / 查询失败。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from batch_worker_sdk.task.context import SdkTaskContext
 
 
 class _FakeQueryHandler(QueryExportHandler):
-    """Test subclass: yields a configurable in-memory row list."""
+    """测试子类:yield 一份可配置的内存 row list。"""
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ async def test_export_single_row_csv(tmp_path: Path) -> None:
     assert result.success is True
     assert result.output["success"] == 1
     text = out.read_text(encoding="utf-8")
-    # header + one data row
+    # 表头 + 一行数据
     assert text.splitlines() == ["id,name", "1,Alice"]
 
 
@@ -69,7 +69,7 @@ async def test_export_thousand_rows_streamed(tmp_path: Path) -> None:
     assert result.success is True
     assert result.output["success"] == 1000
     lines = out.read_text(encoding="utf-8").splitlines()
-    # 1000 data rows + 1 header
+    # 1000 行数据 + 1 行表头
     assert len(lines) == 1001
     assert lines[0] == "id,v"
     assert lines[1] == "0,x0"
@@ -114,7 +114,7 @@ async def test_export_missing_output_path_fails(tmp_path: Path) -> None:
         parameters={},
     )
 
-    # tmp_path unused — required by pytest fixture signature only
+    # tmp_path 没用 —— 只是 pytest fixture 签名需要
     _ = tmp_path
 
     result = await handler.execute(ctx)

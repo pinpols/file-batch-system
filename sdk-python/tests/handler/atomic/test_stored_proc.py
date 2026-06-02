@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`batch_worker_sdk.handler.atomic._stored_proc`."""
+""":mod:`batch_worker_sdk.handler.atomic._stored_proc` 的单元测试。"""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ class FakeConn:
         return "CALL"
 
     async def fetchval(self, query: str, *args: Any) -> Any:
-        # Disambiguate by query content.
+        # 通过 query 内容区分用途。
         q = query.lower()
         if "rolsuper" in q:
             return self.os_capable
