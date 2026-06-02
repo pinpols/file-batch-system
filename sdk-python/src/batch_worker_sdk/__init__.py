@@ -2,8 +2,10 @@
 
 Phase 1 status: HTTP client + retry/backoff + config validation (Lane Q).
 P0.5 (Lane R) added the public **API surface** mirroring the Java SDK's
-contracts. Kafka consumer (P2), scheduler (P3), FSM + cancel (P4), and
-testkit (P5) land in subsequent lanes. See ``README.md`` Roadmap.
+contracts. P3 (Lane T, this PR) added :class:`BatchPlatformClient`,
+the heartbeat / lease schedulers, and heartbeat-directive parsing.
+Kafka consumer (P2, Lane S), FSM + cancel (P4, Lane U), and testkit
+(P5, Lane V) land in subsequent lanes. See ``README.md`` Roadmap.
 
 Public surface:
 
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 from batch_worker_sdk._version import __version__
 from batch_worker_sdk.cancellation import CancellationSignal
+from batch_worker_sdk.client import BatchPlatformClient
 from batch_worker_sdk.config import BatchPlatformClientConfig
 from batch_worker_sdk.context import SdkTaskContext
 from batch_worker_sdk.descriptor import SdkTaskTypeDescriptor
@@ -45,6 +48,7 @@ from batch_worker_sdk.state import WorkerRuntimeState
 
 __all__: list[str] = [
     "AuthError",
+    "BatchPlatformClient",
     "BatchPlatformClientConfig",
     "CancellationSignal",
     "ConflictError",
