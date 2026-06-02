@@ -1,13 +1,11 @@
-"""Process shape — tenant -> tenant transform pipeline (ADR-036).
+"""Process 形态 —— 租户 -> 租户 转换流水线(ADR-036)。
 
-Python equivalent of Java ``SdkAbstractProcessHandler<I, O>``. Template
-order::
+对齐 Java ``SdkAbstractProcessHandler<I, O>``。模板执行序::
 
-    _open_input (async iterator of InputRow) -> _transform (per row) ->
-    _write_output (per OutputRow)
+    _open_input (InputRow 异步迭代器) -> _transform (逐行) ->
+    _write_output (逐 OutputRow)
 
-``_transform`` returning ``None`` marks the row as ``skipped`` (matches
-Java semantics).
+``_transform`` 返回 ``None`` 时该行标记为 ``skipped``(与 Java 语义一致)。
 """
 
 from __future__ import annotations
@@ -26,30 +24,29 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 
 class SdkAbstractProcessHandler[InputRow, OutputRow](SdkAbstractTaskHandler):
-    """Tenant-DB -> tenant-DB transform pipeline.
+    """租户库 -> 租户库 的转换流水线。
 
-    Mirror of Java ``SdkAbstractProcessHandler<I, O>``. The Python
-    base flattens the per-row vs batch-write split into a single
-    ``_write_output(ctx, output)`` hook — Java's typed base buffers and
-    bulk-upserts; tenants who need that here can buffer inside their
-    own ``_write_output``. (The shape contract — null transform =
-    skip; per-row success/skipped counters — stays 1:1 with Java.)
+    对齐 Java ``SdkAbstractProcessHandler<I, O>``。Python 基类把
+    "逐行写" 与 "批量写" 的拆分合并为单一 ``_write_output(ctx, output)``
+    钩子 —— Java typed 基类做缓冲与批量 upsert;Python 这边需要的话
+    在自己的 ``_write_output`` 里缓冲即可。(形态契约 —— transform 返
+    null = 跳过、逐行 success/skipped 计数 —— 与 Java 1:1 一致。)
     """
 
     @abstractmethod
     def _open_input(self, ctx: SdkTaskContext) -> AsyncIterator[InputRow]:
-        """Return an async iterator over input rows."""
+        """返回输入行的异步迭代器。"""
 
     @abstractmethod
     async def _transform(self, ctx: SdkTaskContext, input_row: InputRow) -> OutputRow | None:
-        """Convert one input row to an output row.
+        """把一条输入行转换为一条输出行。
 
-        Returning ``None`` marks the row as ``skipped`` (no write).
+        返回 ``None`` 时该行标记为 ``skipped``(不写出)。
         """
 
     @abstractmethod
     async def _write_output(self, ctx: SdkTaskContext, output_row: OutputRow) -> None:
-        """Persist one output row."""
+        """持久化单条输出行。"""
 
     @final
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:

@@ -1,10 +1,10 @@
-"""Export shape — tenant -> external template (ADR-036).
+"""Export 形态 —— 租户 -> 外部 模板(ADR-036)。
 
-Python equivalent of Java ``SdkAbstractExportHandler``: tenant DB -> file
-(or other sink). Template order::
+对齐 Java ``SdkAbstractExportHandler``:租户库 -> 文件(或其他 sink)。
+模板执行序::
 
-    _open_destination -> _query_rows (async iterator) ->
-    _write_row (per row) -> (finally) _close_destination
+    _open_destination -> _query_rows (异步迭代器) ->
+    _write_row (逐行) -> (finally) _close_destination
 """
 
 from __future__ import annotations
@@ -24,27 +24,27 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 
 class SdkAbstractExportHandler[R](SdkAbstractTaskHandler):
-    """Tenant-DB -> file/external export shape.
+    """租户库 -> 文件 / 外部 sink 的导出形态。
 
-    Mirror of Java ``SdkAbstractExportHandler<R>``. Java's ``Stream<R>
-    streamRows`` becomes an :class:`typing.AsyncIterator`; row-formatting
-    and the sink open/close pair are async methods.
+    对齐 Java ``SdkAbstractExportHandler<R>``。Java 的 ``Stream<R>
+    streamRows`` 在 Python 里改为 :class:`typing.AsyncIterator`;
+    行格式化与 sink 的 open/close 对称都是异步方法。
     """
 
     async def _open_destination(self, ctx: SdkTaskContext) -> None:
-        """Open the output sink (create file / S3 multipart / writer). Default no-op."""
+        """打开输出 sink(建文件 / S3 multipart / writer)。默认空实现。"""
         return None
 
     @abstractmethod
     def _query_rows(self, ctx: SdkTaskContext) -> AsyncIterator[R]:
-        """Return an async iterator of source rows."""
+        """返回源行的异步迭代器。"""
 
     @abstractmethod
     async def _write_row(self, ctx: SdkTaskContext, row: R) -> None:
-        """Format and write a single row to the sink."""
+        """格式化并写出单行到 sink。"""
 
     async def _close_destination(self, ctx: SdkTaskContext) -> None:
-        """Flush / close / upload. Default no-op."""
+        """flush / close / 上传。默认空实现。"""
         return None
 
     @final
@@ -69,7 +69,7 @@ class SdkAbstractExportHandler[R](SdkAbstractTaskHandler):
             )
         finally:
             if opened:
-                # Cleanup failures are silenced so the main result isn't replaced.
+                # 清理失败静默,避免覆盖主结果。
                 with contextlib.suppress(Exception):
                     await self._close_destination(ctx)
 

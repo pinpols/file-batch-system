@@ -1,17 +1,15 @@
-"""``@batch_task`` decorator — onboarding shortcut.
+"""``@batch_task`` 装饰器 —— 上手快捷方式。
 
-Mirrors the FastAPI / Spring-starter style declarative registration. A
-tenant writes a single ``async def`` and decorates it; the decorator
-wraps the function in an :class:`SdkTaskHandler`-compatible object and
-appends it to a module-level registry so the platform client can
-``collect_registered_handlers()`` at startup.
+对齐 FastAPI / Spring-starter 的声明式注册风格。租户写一个 ``async def``
+并加装饰器,装饰器把函数包成与 :class:`SdkTaskHandler` 兼容的对象,
+追加到模块级注册表,平台 client 启动时调 ``collect_registered_handlers()``
+拉取即可。
 
-Java SDK equivalent: ``batch-worker-sdk-spring-boot-starter`` auto
-scans ``@BatchTask``-annotated beans. Python keeps it framework-free —
-just a module-level list — so it works for both plain ``asyncio`` apps
-and FastAPI/Litestar/etc.
+Java SDK 对应物:``batch-worker-sdk-spring-boot-starter`` 自动扫描
+``@BatchTask`` 注解 bean。Python 保持框架无关 —— 仅模块级 list —— 因此
+裸 ``asyncio`` 应用与 FastAPI/Litestar 等都能用。
 
-Example::
+示例::
 
     from batch_worker_sdk import batch_task, SdkTaskContext, SdkTaskResult
 
@@ -37,12 +35,11 @@ _REGISTERED_HANDLERS: list[SdkTaskHandler] = []
 
 
 class _DecoratedHandler:
-    """Concrete :class:`SdkTaskHandler` wrapping a decorated coroutine function.
+    """包装被装饰协程函数的具体 :class:`SdkTaskHandler`。
 
-    Implemented as a plain class (not a closure) so ``isinstance`` and
-    ``repr`` show something meaningful in tests / logs. Satisfies the
-    runtime-checkable :class:`SdkTaskHandler` protocol structurally;
-    no inheritance required.
+    用普通类(而非闭包)实现,这样 ``isinstance`` 和 ``repr`` 在测试 / 日志
+    里有可读输出。结构化满足运行时可校验的 :class:`SdkTaskHandler`
+    protocol,无需继承。
     """
 
     def __init__(
@@ -70,8 +67,7 @@ class _DecoratedHandler:
     def __repr__(self) -> str:
         return f"<batch_task handler task_type={self._task_type!r} fn={self._fn.__qualname__}>"
 
-    # Expose the wrapped function so unit tests can call the underlying
-    # coroutine directly without going through ``execute``.
+    # 暴露被包装的函数,便于单测直接调底层协程,不必走 ``execute``。
     @property
     def wrapped(self) -> HandlerFn:
         return self._fn
@@ -81,20 +77,18 @@ def batch_task(
     task_type: str,
     descriptor: SdkTaskTypeDescriptor | None = None,
 ) -> Callable[[HandlerFn], _DecoratedHandler]:
-    """Register an async function as an SDK task handler.
+    """将一个 async 函数注册为 SDK 任务 handler。
 
     Args:
-        task_type: Globally unique task-type code (must match
-            ``job_definition.job_type``). Non-empty after strip.
-        descriptor: Optional :class:`SdkTaskTypeDescriptor`; when given
-            its ``task_type`` must equal ``task_type`` above (we fail
-            fast on mismatch to avoid silent dispatch routing bugs).
+        task_type: 全局唯一任务类型码(必须与 ``job_definition.job_type`` 一致)。
+            strip 后非空。
+        descriptor: 可选 :class:`SdkTaskTypeDescriptor`;给出时其 ``task_type``
+            必须等于上面的 ``task_type``(不一致直接 fail-fast,避免静默分派路由 bug)。
 
     Returns:
-        A decorator that wraps the coroutine function in an
-        :class:`SdkTaskHandler`-compatible object and side-effects the
-        module-level registry. The returned object is what
-        :func:`collect_registered_handlers` yields.
+        装饰器,将协程函数包成 :class:`SdkTaskHandler` 兼容对象,并副作用地
+        登记到模块级注册表。返回的对象即 :func:`collect_registered_handlers`
+        所产出的元素。
     """
     if not isinstance(task_type, str) or not task_type.strip():
         raise ValueError("batch_task: task_type must be a non-empty string")
@@ -105,8 +99,8 @@ def batch_task(
         )
 
     def _wrap(fn: HandlerFn) -> _DecoratedHandler:
-        # Reject sync callables early — the SDK is async-only and a sync
-        # function would silently coroutine-wrap with a confusing error.
+        # 提前拒绝同步可调用对象 —— SDK 仅异步,同步函数被静默包成协程时
+        # 错误信息会非常迷惑。
         if not _is_coroutine_function(fn):
             raise TypeError(
                 f"batch_task: handler {fn!r} must be `async def`; the SDK is async-only"
@@ -119,28 +113,25 @@ def batch_task(
 
 
 def collect_registered_handlers() -> list[SdkTaskHandler]:
-    """Return a snapshot of all handlers registered via :func:`batch_task`.
+    """返回所有通过 :func:`batch_task` 注册的 handler 的快照。
 
-    Returns a **copy** — callers cannot mutate the internal registry
-    (matches the immutable-snapshot convention from
-    :meth:`FakeBatchPlatform.get_reports`).
+    返回**副本** —— 调用方无法改动内部注册表(与
+    :meth:`FakeBatchPlatform.get_reports` 的不可变快照约定一致)。
     """
     return list(_REGISTERED_HANDLERS)
 
 
 def _clear_registered_handlers() -> None:
-    """Reset the registry — **tests only**, leading underscore = private.
+    """重置注册表 —— **仅测试用**,前缀下划线表示私有。
 
-    Useful for parametrized tests that need to assert a clean slate; not
-    part of the public API.
+    便于参数化测试断言一个干净起点;不属于公开 API。
     """
     _REGISTERED_HANDLERS.clear()
 
 
 def _is_coroutine_function(fn: Any) -> bool:
-    """Thin wrapper around :func:`inspect.iscoroutinefunction`.
+    """对 :func:`inspect.iscoroutinefunction` 的薄封装。
 
-    Centralized so tests can monkeypatch one symbol if needed; behaviour
-    is identical to a direct call.
+    集中一处便于测试 monkeypatch 单一符号;行为与直接调用一致。
     """
     return inspect.iscoroutinefunction(fn)

@@ -1,14 +1,13 @@
-"""Dispatch shape — tenant -> external push (ADR-036).
+"""Dispatch 形态 —— 租户 -> 外部推送(ADR-036)。
 
-Python equivalent of Java ``SdkAbstractDispatchHandler``: fan-out push
-to many external targets (HTTP / SFTP / queue). Per-target failures are
-counted as ``failed`` and **do not** abort the batch — same semantics as
-the Java ``SdkAbstractTypedDispatchHandler`` template loop.
+对齐 Java ``SdkAbstractDispatchHandler``:扇出推送到多个外部 target
+(HTTP / SFTP / 消息队列)。单 target 失败计入 ``failed`` 并**不**中止
+批次 —— 语义与 Java ``SdkAbstractTypedDispatchHandler`` 模板循环一致。
 
-Template order::
+模板执行序::
 
-    _resolve_targets (async iterator of Target) ->
-    _dispatch_to_target (per target; may raise -> failed++)
+    _resolve_targets (Target 的异步迭代器) ->
+    _dispatch_to_target (单 target;抛异常 -> failed++)
 """
 
 from __future__ import annotations
@@ -28,24 +27,22 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 logger = logging.getLogger(__name__)
 
-DispatchResult = Any  # opaque per-target response
+DispatchResult = Any  # 每个 target 的不透明响应
 
 
 class SdkAbstractDispatchHandler[T](SdkAbstractTaskHandler):
-    """Fan-out push to many external targets.
+    """扇出推送到多个外部 target。
 
-    Mirror of Java ``SdkAbstractDispatchHandler<R>``. The Python form
-    collapses Java's 4-hook split (``selectPayload`` / ``buildRequest``
-    / ``push`` / ``onResponse``) into a 2-hook contract
-    (``_resolve_targets`` / ``_dispatch_to_target``) — tenants who need
-    finer granularity layer it inside their own
-    ``_dispatch_to_target``. The fan-out semantics (per-target catch,
-    increment-failed, continue) match Java 1:1.
+    对齐 Java ``SdkAbstractDispatchHandler<R>``。Python 版把 Java 的 4 钩子
+    (``selectPayload`` / ``buildRequest`` / ``push`` / ``onResponse``)
+    合并成 2 钩子契约(``_resolve_targets`` / ``_dispatch_to_target``)——
+    需要更细粒度的租户在自己的 ``_dispatch_to_target`` 内部分层即可。
+    扇出语义(逐 target catch、failed++、继续)与 Java 1:1 一致。
     """
 
     @abstractmethod
     def _resolve_targets(self, ctx: SdkTaskContext) -> AsyncIterator[T]:
-        """Return an async iterator over targets / payload items."""
+        """返回 target / payload 项的异步迭代器。"""
 
     @abstractmethod
     async def _dispatch_to_target(
@@ -53,7 +50,7 @@ class SdkAbstractDispatchHandler[T](SdkAbstractTaskHandler):
         ctx: SdkTaskContext,
         target: T,
     ) -> DispatchResult:
-        """Push to a single target. Raise to count this target as failed."""
+        """推送到单个 target。抛异常即本 target 计为失败。"""
 
     @final
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:

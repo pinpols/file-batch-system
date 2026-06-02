@@ -1,11 +1,9 @@
-"""Handler subpackage — mirror of Java ``com.example.batch.sdk.handler``.
+"""Handler 子包 —— 对齐 Java ``com.example.batch.sdk.handler``。
 
-Houses the :class:`SdkTaskHandler` Protocol, the declarative
-``@batch_task`` decorator, and the 5 shape ABCs that mirror the Java
-``handler/`` root (``SdkAbstractTaskHandler`` + 5 shape subclasses +
-``SdkRowResult``). Subpackages :mod:`atomic`, :mod:`builtin`, and
-:mod:`typed` are placeholders for the Java ``handler/atomic/``,
-``handler/builtin/``, and ``handler/typed/`` lanes.
+承载 :class:`SdkTaskHandler` Protocol、声明式 ``@batch_task`` 装饰器,以及对齐
+Java ``handler/`` 根目录的 5 个形态抽象类(``SdkAbstractTaskHandler`` + 5 个
+形态子类 + ``SdkRowResult``)。子包 :mod:`atomic`、:mod:`builtin`、:mod:`typed`
+对齐 Java handler/{atomic,builtin,typed} 子包。
 """
 
 from __future__ import annotations
