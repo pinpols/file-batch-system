@@ -1,4 +1,4 @@
-"""Unit tests for SdkRowResult counter / to_output rendering."""
+"""SdkRowResult 计数器 / to_output 渲染的单元测试。"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def test_to_output_omits_zero_buckets() -> None:
     r.add_success(3)
     out = r.to_output()
     assert out == {"success": 3, "total": 3}
-    # No skipped / failed / reject keys when zero.
+    # zero 时不输出 skipped / failed / reject 这些 key。
     assert "skipped" not in out
     assert "failed" not in out
     assert "reject" not in out

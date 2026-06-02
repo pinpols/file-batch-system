@@ -1,9 +1,8 @@
-"""Unit tests for :class:`FakeBatchPlatform`.
+""":class:`FakeBatchPlatform` 单元测试。
 
-Mirrors Java ``FakeBatchPlatformSelfTest``. Drives the fake via
-``httpx.AsyncClient`` directly (no SDK ``BatchPlatformClient``
-dependency — Lane T owns that) so this file passes regardless of
-whether Lane T has merged yet.
+镜像 Java 侧的 ``FakeBatchPlatformSelfTest``。直接通过
+``httpx.AsyncClient`` 驱动 fake(不依赖 SDK 的 ``BatchPlatformClient``,
+后者由 client 模块负责),这样无论 client 模块是否就位都不影响本文件。
 """
 
 from __future__ import annotations
@@ -30,8 +29,8 @@ async def test_start_returns_base_url_and_stop_is_idempotent() -> None:
     assert url.startswith("http://127.0.0.1:")
     assert fp.base_url == url
     await fp.stop()
-    await fp.stop()  # idempotent
-    # After stop, base_url access must fail loud — there's no server to hit.
+    await fp.stop()  # 幂等
+    # stop 之后访问 base_url 必须显式失败 —— 没有 server 可打。
     with pytest.raises(RuntimeError):
         _ = fp.base_url
 

@@ -1,4 +1,4 @@
-"""Tests for ``SdkTypedTaskHandler`` — single-method typed entry point."""
+"""``SdkTypedTaskHandler`` —— 单方法 typed 入口的测试。"""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ async def test_typed_task_handler_happy_path() -> None:
 @pytest.mark.asyncio
 async def test_typed_task_handler_invalid_params_returns_fail() -> None:
     h = _Greeter()
-    r = await h.execute(make_ctx({"name": "alice"}))  # missing `n`
+    r = await h.execute(make_ctx({"name": "alice"}))  # 缺 `n` 字段
     assert r.success is False
     assert "invalid parameters for taskType=greet" in (r.message or "")
     assert r.output["errorCode"] == "INVALID_TYPED_PARAMS"

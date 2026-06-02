@@ -1,12 +1,12 @@
-"""Handler registration contract.
+"""Handler 注册契约。
 
-For each of the 11 concrete handlers (4 atomic + 3 builtin + 4 typed):
+对 11 个具体 handler(4 atomic + 3 builtin + 4 typed)各自验证:
 
-* `task_type()` returns a non-empty string;
-* `descriptor()` is callable and returns either `None` or an
-  `SdkTaskTypeDescriptor` instance (no exception);
-* the instance satisfies the `SdkTaskHandler` Protocol via
-  `isinstance` (it is `@runtime_checkable`).
+* `task_type()` 返回非空字符串;
+* `descriptor()` 可调用,返回 `None` 或 `SdkTaskTypeDescriptor`
+  实例(不抛异常);
+* 实例通过 `isinstance` 满足 `SdkTaskHandler` Protocol
+  (后者已 `@runtime_checkable`)。
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from batch_worker_sdk.handler.handler import SdkTaskHandler
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
 from tests.handler.conftest import get_attr, require_module
 
-# (module dotted path, class name) for each of the 11 concrete handlers.
+# 11 个具体 handler 的 (模块 dotted path, 类名)。
 ATOMIC_HANDLERS = [
     ("batch_worker_sdk.handler.atomic.sql", "SqlAtomicHandler"),
     ("batch_worker_sdk.handler.atomic.shell", "ShellAtomicHandler"),
@@ -41,17 +41,16 @@ ALL_HANDLERS = ATOMIC_HANDLERS + BUILTIN_HANDLERS + TYPED_HANDLERS
 
 
 def _instantiate(dotted: str, cls_name: str):
-    """Instantiate a handler with no-arg or with minimal fakes if needed."""
+    """无参实例化 handler;必要时用最小 fake 兜底。"""
     mod = require_module(dotted)
     cls = get_attr(mod, cls_name)
-    # Concrete handlers must be constructible without args (parameters come
-    # via SdkTaskContext). Typed abstract bases need a minimal subclass.
+    # 具体 handler 必须能无参构造(参数由 SdkTaskContext 提供)。
+    # typed 抽象基类需要写个最小子类。
     try:
         return cls()
     except TypeError:
-        # Typed abstract → make a no-op subclass that fills all abstract
-        # methods with stubs; we only need to introspect task_type and
-        # descriptor, not actually execute.
+        # typed 抽象 → 做一个 no-op 子类把所有抽象方法填上桩;
+        # 我们只 introspect task_type 与 descriptor,不真跑 execute。
 
         class _Stub(cls):  # type: ignore[misc, valid-type]
             def task_type(self) -> str:
@@ -60,7 +59,7 @@ def _instantiate(dotted: str, cls_name: str):
             def _stub(self, *a: Any, **kw: Any) -> Any:
                 return None
 
-            # Fill in anything else abstract with a permissive stub.
+            # 其余还抽象的成员用宽松桩兜底。
             def __getattr__(self, item: str) -> Any:  # pragma: no cover
                 return self._stub
 
@@ -88,15 +87,15 @@ def test_descriptor_does_not_raise(dotted: str, cls_name: str) -> None:
 @pytest.mark.parametrize(("dotted", "cls_name"), ALL_HANDLERS)
 def test_satisfies_sdk_task_handler_protocol(dotted: str, cls_name: str) -> None:
     instance = _instantiate(dotted, cls_name)
-    # SdkTaskHandler is @runtime_checkable so isinstance() checks the
-    # structural shape (task_type / execute / descriptor / cancel).
+    # SdkTaskHandler 是 @runtime_checkable,isinstance() 检查结构化
+    # 形状(task_type / execute / descriptor / cancel)。
     assert isinstance(instance, SdkTaskHandler), (
         f"{cls_name} does not satisfy the SdkTaskHandler Protocol"
     )
 
 
 def test_no_duplicate_task_types_across_concrete_handlers() -> None:
-    """The 7 always-concrete handlers (atomic + builtin) must have distinct task_types."""
+    """7 个始终具体的 handler(atomic + builtin)task_types 必须互不相同。"""
     seen: dict[str, str] = {}
     for dotted, cls_name in ATOMIC_HANDLERS + BUILTIN_HANDLERS:
         instance = _instantiate(dotted, cls_name)

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`batch_worker_sdk.handler.atomic._http`."""
+""":mod:`batch_worker_sdk.handler.atomic._http` 的单元测试。"""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ async def test_http_rejects_method_outside_allowlist() -> None:
 
 
 async def test_http_ssrf_blocks_loopback_literal_ip() -> None:
-    config = HttpAtomicConfig(task_type="http")  # block_private_ips defaults to True
+    config = HttpAtomicConfig(task_type="http")  # block_private_ips 默认 True
     handler = HttpAtomicHandler(
         config, client=_client_with(httpx.MockTransport(lambda r: httpx.Response(200)))
     )
