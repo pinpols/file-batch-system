@@ -124,6 +124,15 @@ class ShellTaskExecutorTest {
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("timeoutSeconds must be positive");
     }
+
+    @Test
+    void rejectsSensitiveCredentialInParameters_LaneC() {
+      // Lane C:parameters 含 password 字段直接 FAILED,error 含 SENSITIVE_DATA_IN_PARAMETERS 标识
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "password", "leak123")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("SENSITIVE_DATA_IN_PARAMETERS");
+    }
   }
 
   // ─── Capability / metadata ──────────────────────────────────────────────────

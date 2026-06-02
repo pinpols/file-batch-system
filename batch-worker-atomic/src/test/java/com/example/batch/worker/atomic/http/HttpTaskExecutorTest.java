@@ -122,6 +122,31 @@ class HttpTaskExecutorTest {
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("auth.token required");
     }
+
+    @Test
+    void rejectsSensitiveCredentialInParameters_LaneC() {
+      // 顶层 password 字段(非 auth 协议)直接拒
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(Map.of("url", "http://api.example.com", "myPassword", "leak")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("SENSITIVE_DATA_IN_PARAMETERS");
+    }
+
+    @Test
+    void allowsAuthSubtreeAsHttpProtocol_LaneC() {
+      // auth.password / auth.token 是 HTTP executor 显式协议,允许通过 Lane C 闸门(继续按 protocol 走)
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(
+                  Map.of(
+                      "url",
+                      "http://api.example.com",
+                      "auth",
+                      Map.of("type", "bearer", "token", "tk"))));
+      // 这里不要求成功(URL 是假的会走真实请求),只要 Lane C 不拦即可:错误信息不含 SENSITIVE
+      assertThat(r.message()).doesNotContain("SENSITIVE_DATA_IN_PARAMETERS");
+    }
   }
 
   // ─── Host black/whitelist ───────────────────────────────────────────────────
