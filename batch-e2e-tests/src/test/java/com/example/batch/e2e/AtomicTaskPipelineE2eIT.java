@@ -56,6 +56,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.BIZ_SCHEMA,
     })
 @Tag("e2e")
+@Tag("critical")
 class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

@@ -33,7 +33,9 @@ from batch_worker_sdk.cancellation import CancellationSignal
 from batch_worker_sdk.client import BatchPlatformClient
 from batch_worker_sdk.config import BatchPlatformClientConfig
 from batch_worker_sdk.context import SdkTaskContext
+from batch_worker_sdk.decorator import batch_task, collect_registered_handlers
 from batch_worker_sdk.descriptor import SdkTaskTypeDescriptor
+from batch_worker_sdk.dispatcher import TaskDispatcher
 from batch_worker_sdk.exceptions import (
     AuthError,
     ConflictError,
@@ -59,7 +61,10 @@ __all__: list[str] = [
     "SdkTaskHandler",
     "SdkTaskResult",
     "SdkTaskTypeDescriptor",
+    "TaskDispatcher",
     "TransientError",
     "WorkerRuntimeState",
     "__version__",
+    "batch_task",
+    "collect_registered_handlers",
 ]

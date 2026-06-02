@@ -30,6 +30,7 @@ classifiers = [
 dependencies = [
     "httpx>=0.27",
     "pydantic>=2.7",
+    "aiokafka>=0.11",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +40,12 @@ dev = [
     "pytest-httpx>=0.30",
     "ruff>=0.6",
     "mypy>=1.10",
+    "aiohttp>=3.10",
+]
+# P5 (Lane V) — in-process test fake (FakeBatchPlatform) needs aiohttp.
+# Kept optional so production tenant workers don't pay for the dep.
+testkit = [
+    "aiohttp>=3.10",
 ]
 
 [project.urls]

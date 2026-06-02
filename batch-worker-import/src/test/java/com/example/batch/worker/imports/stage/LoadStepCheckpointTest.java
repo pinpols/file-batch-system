@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.plugin.IdempotencyCapability;
 import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.worker.core.config.WorkerCheckpointProperties;
@@ -65,6 +66,11 @@ class LoadStepCheckpointTest {
   @BeforeEach
   void setUp() {
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+    // ADR-038 R3-3:续跑开关开时 LoadStep 会校验 plugin 幂等能力;mock 默认返回 null,需显式 stub。
+    // disabled 路径不会触发(不调 idempotencyCapability),用 lenient 避免 UnnecessaryStubbing。
+    org.mockito.Mockito.lenient()
+        .when(plugin.idempotencyCapability())
+        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
     registry = new ImportLoadPluginRegistry(List.of(plugin));
     workerConfig =
         new ImportWorkerConfiguration(

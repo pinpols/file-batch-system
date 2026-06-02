@@ -7,4 +7,4 @@ package metadata and the runtime ``__version__``.
 
 from __future__ import annotations
 
-__version__: str = "0.4.0a0"
+__version__: str = "0.5.0a0"
