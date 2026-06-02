@@ -7,6 +7,7 @@ import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
+import com.example.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -145,7 +146,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         }
       }
     } catch (ShellValidationException ex) {
-      return TaskResult.fail(ex.getMessage());
+      return AtomicErrorCode.fail(AtomicErrorCode.CONFIG_INVALID, ex.getMessage());
     } catch (BizException ex) {
       // Lane C 凭据拒入:任务直接 FAILED,error message 含 SENSITIVE_DATA_IN_PARAMETERS 标识
       log.warn(
@@ -155,14 +156,18 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
           ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
               ? "?"
               : ex.getMessageArgs()[1]);
-      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "shell executor unexpected error: tenantId={}, jobCode={}",
           ctx.tenantId(),
           ctx.jobCode(),
           ex);
-      return TaskResult.fail(ex);
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.EXECUTION_FAILED,
+          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
+          ex);
     }
   }
 
@@ -341,7 +346,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     try {
       proc = pb.start();
     } catch (IOException e) {
-      return TaskResult.fail("process start failed: " + e.getMessage(), e);
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.EXECUTION_FAILED, "process start failed: " + e.getMessage(), e);
     }
 
     // 每次 invocation 唯一 id,避免 PID 复用导致 reader map key 串台
@@ -366,7 +372,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
 
       if (!finished) {
         proc.destroyForcibly();
-        return TaskResult.fail(
+        return AtomicErrorCode.fail(
+            AtomicErrorCode.TIMEOUT,
             "timed out after " + inv.timeout.toSeconds() + "s",
             new ShellTimeoutException(inv.timeout));
       }
@@ -383,11 +390,18 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       if (proc.exitValue() == 0) {
         return TaskResult.ok("exit=0", output);
       }
-      return TaskResult.fail("exit=" + proc.exitValue() + " stderr=" + summarize(stderr));
+      boolean truncated =
+          (stdout != null && stdout.truncated) || (stderr != null && stderr.truncated);
+      AtomicErrorCode code =
+          truncated ? AtomicErrorCode.RESOURCE_EXHAUSTED : AtomicErrorCode.EXECUTION_FAILED;
+      // 失败路径只带 error_code,不回写完整 output(保持与现有 TaskResult.fail 语义对齐;
+      // exitCode / stdout / stderr 仍在 log 里可追溯)
+      return AtomicErrorCode.fail(
+          code, "exit=" + proc.exitValue() + " stderr=" + summarize(stderr));
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
       proc.destroyForcibly();
-      return TaskResult.fail("interrupted", ie);
+      return AtomicErrorCode.fail(AtomicErrorCode.KILLED, "interrupted", ie);
     }
   }
 

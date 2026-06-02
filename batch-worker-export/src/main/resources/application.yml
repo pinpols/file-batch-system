@@ -27,6 +27,11 @@ spring:
 
 batch:
   worker:
+    # ADR-029 classpath 隔离守护:本 worker 不应携带 batch-worker-atomic 模块的 dual-use executor 类。
+    # 若 pom.xml 误引 batch-worker-atomic 依赖,启动期 fail-fast(默认关 + 本处显式 opt-in)。
+    atomic:
+      isolation-check:
+        enabled: true
     # Worker 类型（IMPORT/EXPORT/DISPATCH）
     type: EXPORT
     # 实例内并发上限（背压）：建议按任务重量与 DB 连接池匹配
@@ -80,3 +85,4 @@ batch:
         maximum-pool-size: ${BATCH_WORKER_EXPORT_BUSINESS_DB_MAX_POOL_SIZE:20}
         minimum-idle: ${BATCH_WORKER_EXPORT_BUSINESS_DB_MIN_IDLE:5}
         leak-detection-threshold: ${BATCH_WORKER_EXPORT_BUSINESS_DB_LEAK_DETECTION_THRESHOLD_MS:60000}
+

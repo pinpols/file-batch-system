@@ -7,6 +7,7 @@ import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
+import com.example.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
@@ -139,7 +140,16 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       }
       return runWithRetry(ctx, inv);
     } catch (HttpValidationException ex) {
-      return TaskResult.fail(ex.getMessage());
+      // 域名/IP/SSRF/方法白名单 vs 入参格式问题:都分流到 SECURITY_REJECTED / CONFIG_INVALID
+      boolean security =
+          ex.getMessage() != null
+              && (ex.getMessage().contains("blocked")
+                  || ex.getMessage().contains("allowedHostPatterns")
+                  || ex.getMessage().contains("allowlist")
+                  || ex.getMessage().contains("resolves to blocked"));
+      return AtomicErrorCode.fail(
+          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID,
+          ex.getMessage());
     } catch (BizException ex) {
       log.warn(
           "http executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
@@ -148,14 +158,18 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
               ? "?"
               : ex.getMessageArgs()[1]);
-      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "http executor unexpected error: tenantId={}, jobCode={}",
           ctx.tenantId(),
           ctx.jobCode(),
           ex);
-      return TaskResult.fail(ex);
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.EXECUTION_FAILED,
+          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
+          ex);
     }
   }
 
@@ -415,9 +429,16 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> outWithAttempts = new HashMap<>(result.output());
         outWithAttempts.put("attempts", attempt);
         outWithAttempts.put("durationMillis", System.currentTimeMillis() - start);
-        return result.success()
-            ? TaskResult.ok(result.message(), outWithAttempts)
-            : TaskResult.fail(result.message());
+        if (result.success()) {
+          return TaskResult.ok(result.message(), outWithAttempts);
+        }
+        // 失败路径:只透传 error_code,不带成功 output(保持与原 TaskResult.fail 语义对齐)
+        String existingCode = (String) result.output().get(AtomicErrorCode.OUTPUT_KEY);
+        AtomicErrorCode code =
+            existingCode == null
+                ? AtomicErrorCode.EXECUTION_FAILED
+                : AtomicErrorCode.valueOf(existingCode);
+        return AtomicErrorCode.fail(code, result.message());
       } catch (java.io.IOException | InterruptedException ex) {
         lastException = ex;
         if (Thread.currentThread().isInterrupted()) {
@@ -434,7 +455,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         }
       }
     }
-    return TaskResult.fail(
+    // I/O 异常重试耗尽 = TIMEOUT / 网络层失败,归到 EXECUTION_FAILED(底层无法静态分辨 connect timeout vs read fail)
+    return AtomicErrorCode.fail(
+        AtomicErrorCode.EXECUTION_FAILED,
         "http failed after "
             + maxAttempts
             + " attempts: "
@@ -488,7 +511,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     boolean expectMatch =
         inv.expectedStatus.isEmpty() || inv.expectedStatus.contains(resp.statusCode());
     if (!expectMatch) {
-      return TaskResult.fail(
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.EXECUTION_FAILED,
           "status " + resp.statusCode() + " not in expected " + inv.expectedStatus);
     }
     return TaskResult.ok("status=" + resp.statusCode(), output);
