@@ -51,7 +51,7 @@ class SdkAbstractAtomicHandler[R](SdkAbstractTaskHandler):
                 output=self.as_output(await self._do_invoke(ctx)),
                 message="invoked",
             )
-        except Exception as ex:  # noqa: BLE001 — shape-level catch by design
+        except Exception as ex:
             return SdkTaskResult.fail(
                 HANDLER_ERROR_CODE,
                 str(ex) or type(ex).__name__,
