@@ -7,6 +7,7 @@ import com.example.batch.sdk.idempotent.SdkIdempotencyStore;
 import com.example.batch.sdk.idempotent.SdkIdempotentHandler;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.example.batch.sdk.internal.PlatformHttpException;
+import com.example.batch.sdk.internal.ThrottledLogger;
 import com.example.batch.sdk.retry.RetryOn;
 import com.example.batch.sdk.retry.SdkRetryableHandler;
 import com.example.batch.sdk.task.CancellationSignal;
@@ -51,6 +52,12 @@ public class TaskDispatcher {
   private final PlatformHttpClient httpClient;
   private final ExecutorService executor;
   private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Lane J:高频路径(claim 5xx 重试、平台态门控、4xx 持续等)log 节流;同 key 在 60s 内只放行第一条, 其余抑制并计数,下次放行附 suppressed
+   * 计数。窗口选 60s 是「人眼可读 + 不丢运维线索」折中。
+   */
+  private final ThrottledLogger throttledLog = ThrottledLogger.create(log, Duration.ofSeconds(60));
 
   /**
    * SDK-P4-1:in-flight task 的取消信号表。{@link LeaseRenewalScheduler} 读到 renew response 的 {@code
@@ -185,8 +192,9 @@ public class TaskDispatcher {
     }
     if (!platformState.get().acceptsNewTasks()) {
       // Phase 2 §2.4:平台 PAUSED / DRAINING — 拒新任务。正常路径下 KafkaTaskConsumer 已 pause partition
-      // 不再投递,此处是防御性兜底(pause 生效前可能有消息已在途)。
-      log.info(
+      // 不再投递,此处是防御性兜底(pause 生效前可能有消息已在途)。高频路径走 throttledLog 防刷屏。
+      throttledLog.info(
+          "platform_state_" + platformState.get(),
           "dispatcher platformState={}, skipping new dispatch msg taskId={}",
           platformState.get(),
           msg == null ? null : msg.taskId());
@@ -196,6 +204,18 @@ public class TaskDispatcher {
       msg.validate();
     } catch (IllegalArgumentException ex) {
       log.warn("skipping invalid dispatch message: {}", ex.getMessage());
+      return;
+    }
+    // Lane J §J1:租户自检 fail-safe。Kafka topic 模式 `batch.task.dispatch.<tenant>.*` + consumer group
+    // + ACL 已隔离;若 consumer group 配置失误或 ACL 漂移导致拿到非本租户消息,这里 ERROR + drop,
+    // 不 ack offset 留给后续 redeliver / 人工介入,本进程不处理避免串任务。
+    if (!config.getTenantId().equals(msg.tenantId())) {
+      log.error(
+          "tenant_mismatch_drop: configured={} got={} taskId={} — possible ACL drift or consumer"
+              + " group misconfiguration",
+          config.getTenantId(),
+          msg.tenantId(),
+          msg.taskId());
       return;
     }
     executor.execute(() -> processInWorkerThread(msg));
@@ -380,9 +400,10 @@ public class TaskDispatcher {
           return false;
         }
         if (httpEx.isServerError()) {
-          // 5xx:平台侧问题,指数退避重试
+          // 5xx:平台侧问题,指数退避重试。耗尽场景在平台抖动时会同时被 N 个 worker 命中,走 throttledLog 防刷屏。
           if (attempt >= maxRetries) {
-            log.warn(
+            throttledLog.warn(
+                "claim_5xx_exhausted",
                 "CLAIM 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
                     + "(orchestrator will redispatch on lease timeout)",
                 httpEx.statusCode(),
@@ -401,8 +422,10 @@ public class TaskDispatcher {
           attempt++;
           continue;
         }
-        // 其它 4xx(400 / 404 / 422 ...):客户端构造问题,重试无益
-        log.warn(
+        // 其它 4xx(400 / 404 / 422 ...):客户端构造问题,重试无益。SDK/合约不匹配场景下每条 dispatch
+        // 都会触发,走 throttledLog 节流(同时 recordClientError 仍正常计数,到阈值会 fatal)。
+        throttledLog.warn(
+            "claim_client_error_" + httpEx.statusCode(),
             "CLAIM client error (HTTP {}) for taskId={}, giving up: {}",
             httpEx.statusCode(),
             msg.taskId(),
@@ -410,9 +433,11 @@ public class TaskDispatcher {
         recordClientError(httpEx.statusCode(), msg.taskId(), "CLAIM");
         return false;
       } catch (IOException ioEx) {
-        // 传输层错误(socket / read timeout / 中断包装)— 当 5xx 一样退避重试
+        // 传输层错误(socket / read timeout / 中断包装)— 当 5xx 一样退避重试。网络故障同样会 N worker
+        // 同时刷屏,走 throttledLog 节流。
         if (attempt >= maxRetries) {
-          log.warn(
+          throttledLog.warn(
+              "claim_transport_exhausted",
               "CLAIM transport error for taskId={} exhausted {} retries, giving up: {}",
               msg.taskId(),
               maxRetries,
