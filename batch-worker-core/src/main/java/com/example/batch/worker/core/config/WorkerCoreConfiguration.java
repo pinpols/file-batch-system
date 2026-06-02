@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Import;
   WorkerExecutionTimeoutProperties.class,
   WorkerReportOutboxProperties.class,
   WorkerLeaseProperties.class,
-  WorkerWatchdogSchedulerProperties.class
+  WorkerWatchdogSchedulerProperties.class,
+  WorkerCheckpointProperties.class
 })
 public class WorkerCoreConfiguration {}
