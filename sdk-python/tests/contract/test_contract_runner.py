@@ -80,11 +80,7 @@ def _discover_fixtures() -> list[Path]:
     if not _FIXTURES_DIR.is_dir():
         return []
     skip = {"fixture-schema"}
-    return sorted(
-        p
-        for p in _FIXTURES_DIR.glob("*.json")
-        if p.is_file() and p.stem not in skip
-    )
+    return sorted(p for p in _FIXTURES_DIR.glob("*.json") if p.is_file() and p.stem not in skip)
 
 
 _FIXTURES = _discover_fixtures()
