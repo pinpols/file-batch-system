@@ -1,9 +1,9 @@
-"""Typed Dispatch template — Java parity:
-``SdkAbstractTypedDispatchHandler<I, O, R>``.
+"""Typed Dispatch 模板 —— 对齐 Java
+``SdkAbstractTypedDispatchHandler<I, O, R>``。
 
-Template order: ``select_payload -> build_request (per item) -> push
--> on_response``. Single-item failure increments ``failed`` and does
-NOT abort the batch (matches Java's per-item ``try/catch -> incFailed``).
+模板顺序:``select_payload -> build_request(逐项) -> push -> on_response``。
+单项失败递增 ``failed``,**不**中断整批(对齐 Java 的逐项
+``try/catch -> incFailed``)。
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
 class SdkAbstractTypedDispatchHandler[ParamsT: BaseModel, OutputT: BaseModel, TargetT](
     SdkAbstractTaskHandler
 ):
-    """Typed Dispatch handler — tenant -> external push (DB -> HTTP/SFTP)."""
+    """Typed Dispatch handler —— 租户 -> 外部下推(DB -> HTTP/SFTP)。"""
 
     _params_model: type[BaseModel] | None = None
 
@@ -44,7 +44,7 @@ class SdkAbstractTypedDispatchHandler[ParamsT: BaseModel, OutputT: BaseModel, Ta
         if cls._params_model is None:
             cls._params_model = _resolve_params_model(cls, SdkAbstractTypedDispatchHandler)
 
-    # ---- tenant hooks ----------------------------------------------------
+    # ---- 租户钩子 --------------------------------------------------------
 
     @abstractmethod
     def select_payload(self, params: ParamsT, ctx: SdkTaskContext) -> list[TargetT]: ...
@@ -67,7 +67,7 @@ class SdkAbstractTypedDispatchHandler[ParamsT: BaseModel, OutputT: BaseModel, Ta
     def summarize(self, params: ParamsT, counts: SdkRowResult) -> OutputT | None:
         return None
 
-    # ---- template --------------------------------------------------------
+    # ---- 模板 ------------------------------------------------------------
 
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
         model = self._params_model

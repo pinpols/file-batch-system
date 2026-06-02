@@ -1,19 +1,15 @@
-"""Per-task cancellation signal (P4 implementation).
+"""单任务取消信号(P4 实现)。
 
-Mirrors Java ``com.example.batch.sdk.task.CancellationSignal``. The Java
-side relies on ``volatile boolean`` for cross-thread visibility between
-the lease-renewal scheduler thread (which flips the bit on
-``cancelRequested=true`` from a renew response) and the handler thread
-(which polls in its long loop).
+对齐 Java ``com.example.batch.sdk.task.CancellationSignal``。Java 侧用
+``volatile boolean`` 保证跨线程可见性:租约续期调度器线程在 renew 响应里
+看到 ``cancelRequested=true`` 时翻转 bit,handler 线程在长循环里轮询。
 
-Python's equivalent is :class:`asyncio.Event`:
+Python 对等物是 :class:`asyncio.Event`:
 
-- ``set`` / ``is_set`` are atomic w.r.t. the asyncio loop,
-- the event doubles as an **awaitable**, so a handler that needs to
-  ``select``-style multiplex IO + cancellation can
-  ``await signal.wait_cancelled()`` without busy-polling, and
-- repeated ``mark_cancelled()`` calls are **idempotent**
-  (``Event.set`` is a no-op after the first call).
+- ``set`` / ``is_set`` 在 asyncio loop 内是原子的;
+- event 同时是 **awaitable**,需要 ``select`` 风格多路复用 IO + 取消的
+  handler 可以 ``await signal.wait_cancelled()``,不必忙轮询;
+- 重复调用 ``mark_cancelled()`` 是 **幂等** 的(``Event.set`` 首次之后是 no-op)。
 """
 
 from __future__ import annotations
@@ -22,12 +18,11 @@ import asyncio
 
 
 class CancellationSignal:
-    """Single-bit cooperative cancellation flag for one task execution.
+    """单任务执行的协作式取消单 bit 标志。
 
-    Long-running handlers should poll :attr:`is_cancellation_requested`
-    in their loop and return early when set, instead of waiting for the
-    natural lease timeout. Async handlers that need to multiplex IO
-    with cancellation can ``await wait_cancelled()`` directly.
+    长跑 handler 应在循环里轮询 :attr:`is_cancellation_requested`,置位
+    时尽早返回,而非等到租约自然超时。需要把 IO 和取消同时多路复用的
+    异步 handler 可以直接 ``await wait_cancelled()``。
     """
 
     __slots__ = ("_event",)
@@ -37,23 +32,22 @@ class CancellationSignal:
 
     @property
     def is_cancellation_requested(self) -> bool:
-        """``True`` when the platform has asked this task to stop."""
+        """平台请求此任务停止时返回 ``True``。"""
         return self._event.is_set()
 
     def mark_cancelled(self) -> None:
-        """Flip the signal — called by the lease-renewal scheduler.
+        """翻转信号 —— 由租约续期调度器调用。
 
-        Idempotent: subsequent calls are no-ops. Package-internal in
-        spirit; tests may call it directly to simulate platform
-        cancellation.
+        幂等:再次调用为 no-op。语义上是包内私有;测试可以直接调它来模拟
+        平台取消。
         """
         self._event.set()
 
     async def wait_cancelled(self) -> None:
-        """Suspend until :meth:`mark_cancelled` has been called.
+        """挂起直到有人调用 :meth:`mark_cancelled`。
 
-        Returns immediately if the signal is already set. Lets a
-        handler multiplex IO with cancellation via :func:`asyncio.wait`:
+        若信号已置位则立即返回。让 handler 通过 :func:`asyncio.wait` 把 IO
+        与取消多路复用:
 
         .. code-block:: python
 

@@ -1,17 +1,13 @@
-"""Typed handler templates — mirror of Java
-``com.example.batch.sdk.handler.typed``.
+"""Typed handler 模板 —— 对齐 Java ``com.example.batch.sdk.handler.typed``。
 
-Provides strongly-typed (pydantic-backed) variants of the 5 SDK
-handler shapes: a single-method :class:`SdkTypedTaskHandler` for
-arbitrary tasks, and 4 row-flow templates (Import/Export/Process/
-Dispatch) whose ``Params`` generic is closed on a pydantic
-``BaseModel`` subclass. The framework deserializes
-``ctx.parameters`` once at task start; tenant code receives a
-validated model instance — no manual ``ctx.parameters["foo"]``
-casting.
+提供 5 种 SDK handler 形态的强类型(pydantic 支撑)变体:单方法
+:class:`SdkTypedTaskHandler`(任意任务),以及 4 个行流水模板
+(Import/Export/Process/Dispatch),它们的 ``Params`` 泛型在 pydantic
+``BaseModel`` 子类上闭合。框架在任务起始时一次性反序列化
+``ctx.parameters``;租户代码拿到的是经过校验的模型实例 —— 无需手工
+``ctx.parameters["foo"]`` 强转。
 
-Public surface intentionally matches Java naming so the Java↔Python
-parity tests stay 1:1.
+公开命名刻意与 Java 对齐,以便 Java ↔ Python 对等测试保持 1:1。
 """
 
 from __future__ import annotations

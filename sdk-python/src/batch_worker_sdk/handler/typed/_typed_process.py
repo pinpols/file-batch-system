@@ -1,11 +1,10 @@
-"""Typed Process template — Java parity:
-``SdkAbstractTypedProcessHandler<P, IN, OUT, O>``.
+"""Typed Process 模板 —— 对齐 Java
+``SdkAbstractTypedProcessHandler<P, IN, OUT, O>``。
 
-Template order: ``select_input -> transform (per row; None -> skip)
--> upsert (batched) -> summarize``. Strongly-typed pydantic params,
-weakly-typed in/out row types (``InRowT`` / ``OutRowT`` are tenant
-domain types — rarely pydantic, often dicts or dataclasses, kept
-parametric).
+模板顺序:``select_input -> transform(逐行;None -> 跳过)
+-> upsert(批量) -> summarize``。强类型 pydantic 入参,弱类型 in/out
+行类型(``InRowT`` / ``OutRowT`` 是租户领域类型 —— 很少是 pydantic,
+通常是 dict 或 dataclass,保持参数化)。
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
 class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, OutputT: BaseModel](
     SdkAbstractTaskHandler
 ):
-    """Typed Process handler — tenant -> tenant (transform & write back)."""
+    """Typed Process handler —— 租户 -> 租户(变换并回写)。"""
 
     _params_model: type[BaseModel] | None = None
     DEFAULT_BATCH_SIZE = 500
@@ -45,7 +44,7 @@ class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, Output
         if cls._params_model is None:
             cls._params_model = _resolve_params_model(cls, SdkAbstractTypedProcessHandler)
 
-    # ---- tenant hooks ----------------------------------------------------
+    # ---- 租户钩子 --------------------------------------------------------
 
     @abstractmethod
     def select_input(
@@ -54,7 +53,7 @@ class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, Output
 
     @abstractmethod
     def transform(self, params: ParamsT, ctx: SdkTaskContext, row: InRowT) -> OutRowT | None:
-        """Return ``None`` to skip the row (counts as ``skipped``)."""
+        """返回 ``None`` 表示跳过该行(计入 ``skipped``)。"""
         ...
 
     @abstractmethod
@@ -66,7 +65,7 @@ class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, Output
     def summarize(self, params: ParamsT, counts: SdkRowResult) -> OutputT | None:
         return None
 
-    # ---- template --------------------------------------------------------
+    # ---- 模板 ------------------------------------------------------------
 
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
         model = self._params_model

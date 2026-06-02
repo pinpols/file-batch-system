@@ -1,10 +1,9 @@
-"""Task execution result (P0.5 stub).
+"""任务执行结果(对齐 Java SdkTaskResult)。
 
-Mirrors Java ``com.example.batch.sdk.task.SdkTaskResult``. SDK
-framework serializes this to the platform REPORT protocol on handler
-return. Atomic Lane K error codes (``AtomicErrorCode``) are written
-into ``output`` (e.g. ``output['errorCode'] = 'ATOMIC_TIMEOUT'``) so
-the platform-side error taxonomy stays language-agnostic.
+对齐 Java ``com.example.batch.sdk.task.SdkTaskResult``。Handler 返回后
+SDK 框架将其序列化为平台 REPORT 协议。Atomic Lane K 错误码
+(``AtomicErrorCode``)写入 ``output``(例如
+``output['errorCode'] = 'ATOMIC_TIMEOUT'``),让平台侧错误分类保持语言无关。
 """
 
 from __future__ import annotations
@@ -15,18 +14,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SdkTaskResult(BaseModel):
-    """What a handler returns; the SDK turns it into a REPORT call."""
+    """Handler 的返回值;SDK 将其转换为 REPORT 调用。"""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     success: bool
-    """``True`` → orchestrator marks SUCCESS; ``False`` → FAILED + retry/compensate."""
+    """``True`` → orchestrator 标记 SUCCESS;``False`` → FAILED + 重试 / 补偿。"""
 
     output: dict[str, Any] = Field(default_factory=dict)
-    """Business output Map — forwarded as downstream ``runtimeAttributes``."""
+    """业务输出 Map —— 作为下游 ``runtimeAttributes`` 透传。"""
 
     message: str | None = None
-    """Free-form summary (success) or error text (failure); landed in audit log."""
+    """自由文本摘要(成功)或错误说明(失败);落入审计日志。"""
 
     @classmethod
     def success_with(
@@ -34,7 +33,7 @@ class SdkTaskResult(BaseModel):
         output: dict[str, Any] | None = None,
         message: str | None = None,
     ) -> Self:
-        """Build a success result (aligns with Java ``SdkTaskResult.ok``)."""
+        """构造成功结果(对齐 Java ``SdkTaskResult.ok``)。"""
         return cls(success=True, output=output or {}, message=message or "ok")
 
     @classmethod
@@ -44,13 +43,12 @@ class SdkTaskResult(BaseModel):
         message: str,
         cause: Exception | None = None,
     ) -> Self:
-        """Build a failure result with an error code in ``output``.
+        """构造带错误码的失败结果。
 
-        ``code`` is placed under ``output['errorCode']`` (aligns with the
-        atomic Lane K ``AtomicErrorCode`` convention). ``cause``, when
-        provided, is summarized into ``output['errorClass']`` —
-        full stacktrace serialization lands in P1+ when the wire adapter
-        exists.
+        ``code`` 放入 ``output['errorCode']``(对齐 atomic Lane K
+        ``AtomicErrorCode`` 约定)。若提供 ``cause``,其类名归入
+        ``output['errorClass']`` —— 完整 stacktrace 序列化等 P1+ wire 适配器
+        到位再做。
         """
         output: dict[str, Any] = {"errorCode": code}
         if cause is not None:

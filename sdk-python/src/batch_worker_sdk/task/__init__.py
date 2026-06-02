@@ -1,9 +1,9 @@
-"""Task subpackage — mirror of Java ``com.example.batch.sdk.task``.
+"""Task 子包 —— 对齐 Java ``com.example.batch.sdk.task``。
 
-Data + execution-context models: :class:`SdkTaskContext`,
-:class:`SdkTaskResult`, :class:`SdkTaskTypeDescriptor`,
-:class:`WorkerRuntimeState`, :class:`ProgressReporter`,
-:class:`CancellationSignal`.
+数据 + 执行上下文模型::class:`SdkTaskContext`、
+:class:`SdkTaskResult`、:class:`SdkTaskTypeDescriptor`、
+:class:`WorkerRuntimeState`、:class:`ProgressReporter`、
+:class:`CancellationSignal`。
 """
 
 from __future__ import annotations
