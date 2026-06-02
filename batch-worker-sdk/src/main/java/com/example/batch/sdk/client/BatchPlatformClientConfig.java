@@ -148,6 +148,11 @@ public class BatchPlatformClientConfig {
     if (httpTimeout != null && !httpTimeout.isBlank()) {
       builder.httpTimeout(Duration.ofSeconds(Long.parseLong(httpTimeout.trim())));
     }
+    // Lane I:lease 续约间隔也开放 env 覆盖,方便运维联调 heartbeat / lease 配比
+    String leaseRenew = env.apply(prefix + "LEASE_RENEW_INTERVAL_SECONDS");
+    if (leaseRenew != null && !leaseRenew.isBlank()) {
+      builder.leaseRenewInterval(Duration.ofSeconds(Long.parseLong(leaseRenew.trim())));
+    }
 
     BatchPlatformClientConfig config = builder.build();
     config.validate();
@@ -172,6 +177,64 @@ public class BatchPlatformClientConfig {
     if (maxConcurrentTasks < 1 || maxConcurrentTasks > 64) {
       throw new IllegalArgumentException(
           "maxConcurrentTasks must be 1..64, got " + maxConcurrentTasks);
+    }
+    validateTimings();
+  }
+
+  /**
+   * Lane I:启动期 cross-field 时序校验。任何一条不满足 → 抛 {@link IllegalStateException} fail-fast, 让进程以非 0
+   * 退出码挂掉,由 K8s / systemd 拉起 + 运维介入。
+   *
+   * <p>规则(均为务实经验值,运维问题里高频出现的):
+   *
+   * <ul>
+   *   <li>{@code heartbeatInterval >= 1s} — 防止极端配置刷爆 orch
+   *   <li>{@code leaseRenewInterval >= 5s} — 同上
+   *   <li>{@code leaseRenewInterval <= heartbeatInterval × 3} — 避免 lease 续约比心跳还少,task 半路被 orch
+   *       误判租约过期回收。注意:server 端真正的 lease TTL SDK 不知道,这里用 heartbeatInterval × 3 做"代理上限",经验上 orch 默认
+   *       TTL ~3min、heartbeat 默认 30s 的组合下安全;若 orch TTL 调更短,租户应同步调小 heartbeatInterval
+   *   <li>{@code httpTimeout <= heartbeatInterval / 2} — 避免单次心跳超时排队后 backlog 把 scheduler 拖死
+   * </ul>
+   */
+  private void validateTimings() {
+    long hbMs = heartbeatInterval.toMillis();
+    long leaseMs = leaseRenewInterval.toMillis();
+    long httpMs = httpTimeout.toMillis();
+    if (hbMs < 1_000L) {
+      throw new IllegalStateException(
+          "BatchPlatformClient config invalid: heartbeatInterval="
+              + heartbeatInterval
+              + " must be >= 1s (current "
+              + hbMs
+              + "ms; suggest >= 5s for prod)");
+    }
+    if (leaseMs < 5_000L) {
+      throw new IllegalStateException(
+          "BatchPlatformClient config invalid: leaseRenewInterval="
+              + leaseRenewInterval
+              + " must be >= 5s (current "
+              + leaseMs
+              + "ms; suggest 30s..60s for prod)");
+    }
+    long leaseUpperMs = hbMs * 3L;
+    if (leaseMs > leaseUpperMs) {
+      throw new IllegalStateException(
+          "BatchPlatformClient config invalid: leaseRenewInterval="
+              + leaseRenewInterval
+              + " must be <= heartbeatInterval × 3 ("
+              + leaseUpperMs
+              + "ms) — 否则 in-flight task 可能被 orch 误判租约过期回收;"
+              + "suggest leaseRenewInterval ≈ 2 × heartbeatInterval");
+    }
+    long httpUpperMs = hbMs / 2L;
+    if (httpMs > httpUpperMs) {
+      throw new IllegalStateException(
+          "BatchPlatformClient config invalid: httpTimeout="
+              + httpTimeout
+              + " must be <= heartbeatInterval / 2 ("
+              + httpUpperMs
+              + "ms) — 否则心跳超时会堆积阻塞 scheduler;"
+              + "suggest 调大 heartbeatInterval 或调小 httpTimeout");
     }
   }
 }
