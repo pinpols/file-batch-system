@@ -60,6 +60,22 @@
             <artifactId>batch-worker-atomic</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- R3-6 first POC: SDK + testkit dispatch builder, 用于 SdkAgainstStubOrchestratorE2eIT
+             起真 SDK + 真 testcontainers Kafka,验证 SDK↔BE wire 协议端到端。本 IT 不起 orchestrator
+             Spring context(成本 5 min 不符 < 60s 预算),走 HTTP stub 录制 register/claim/report;
+             真 orchestrator Spring boot 启动版本留作 follow-up。 -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-sdk</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-sdk-testkit</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
             <artifactId>batch-common</artifactId>
