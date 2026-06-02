@@ -1,0 +1,17 @@
+{
+  "_doc": "SqlAtomicHandler running a SELECT — verifies result row count + scalar output shape.",
+  "input": {
+    "task_type": "atomic.sql",
+    "parameters": {
+      "sql": "SELECT 1 AS one",
+      "datasource": "memory"
+    }
+  },
+  "expected_output": {
+    "success": true,
+    "message": "ok",
+    "output": {
+      "rowCount": 1
+    }
+  }
+}
