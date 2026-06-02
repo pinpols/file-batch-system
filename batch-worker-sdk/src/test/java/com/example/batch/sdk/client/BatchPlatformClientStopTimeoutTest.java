@@ -144,6 +144,42 @@ class BatchPlatformClientStopTimeoutTest {
     verify(http).deactivate(anyString(), any());
   }
 
+  /**
+   * Round-3 #1:long timeout 优雅路径 — 慢 task 在 200ms 内完成,2s 超时应在 ~200ms 内返回,且 dispatcher.stop 不打
+   * "drain timeout" WARN(in-flight 都 drain 干净了)。
+   */
+  @Test
+  void dispatcherStopReturnsEarlyWhenInFlightDrainsBeforeTimeout() throws Exception {
+    attachWarnCapture();
+    SdkTaskHandler dummy =
+        new SdkTaskHandler() {
+          @Override
+          public String taskType() {
+            return "noop";
+          }
+
+          @Override
+          public SdkTaskResult execute(SdkTaskContext ctx) {
+            return SdkTaskResult.ok("noop");
+          }
+        };
+    TaskDispatcher dispatcher =
+        new TaskDispatcher(cfg(), Map.of("noop", dummy), mock(PlatformHttpClient.class));
+    CountDownLatch started = new CountDownLatch(1);
+    AtomicBoolean interrupted = new AtomicBoolean(false);
+    submitSlowTask(dispatcher, started, interrupted, 200);
+    assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+
+    long t0 = System.nanoTime();
+    dispatcher.stop(Duration.ofSeconds(2));
+    long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+
+    // task 200ms 跑完即 drain 完毕,不应等满 2s
+    assertThat(elapsedMs).as("stop should return shortly after task finishes").isLessThan(1_500L);
+    assertThat(interrupted).as("task should finish naturally, not interrupted").isFalse();
+    assertThat(warnMessages()).noneSatisfy(m -> assertThat(m).contains("drain timeout"));
+  }
+
   /** null timeout 视为 0ms — 立刻 forceful 关,验证不 NPE。 */
   @Test
   void dispatcherStopHandlesNullTimeoutAsZero() {
