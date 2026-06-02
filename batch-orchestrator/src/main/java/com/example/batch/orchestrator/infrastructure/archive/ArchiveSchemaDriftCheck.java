@@ -71,7 +71,9 @@ public class ArchiveSchemaDriftCheck {
           // V159 (SDK Phase 3 M3.1) — custom_task_type_registry 归档表;租户自定义 taskType 注册。
           "custom_task_type_registry",
           // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
-          "pipeline_progress");
+          "pipeline_progress",
+          // V165 (Round-1 TOP-8 / R3-5) — atomic_task_config 归档表;租户保存的 atomic 节点配置。
+          "atomic_task_config");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
