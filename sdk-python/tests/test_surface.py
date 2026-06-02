@@ -159,9 +159,10 @@ def test_task_type_descriptor_fields() -> None:
     assert desc.task_type == "my_import"
     assert desc.required_env == ["DB_PASSWORD"]
     assert desc.input_schema == {"type": "object"}
-    # Wire-alias path: payload using camel-case ``schema`` key works too.
+    # Wire-alias path: payload using camel-case ``inputSchema`` key works too
+    # (对齐 Java ``SdkTaskTypeDescriptor.inputSchema`` 与 wire-protocol)。
     desc_aliased = SdkTaskTypeDescriptor.model_validate(
-        {"task_type": "x", "schema": {"type": "object"}}
+        {"task_type": "x", "inputSchema": {"type": "object"}}
     )
     assert desc_aliased.input_schema == {"type": "object"}
     # Field type-hints exist (mypy-strict surrogate).

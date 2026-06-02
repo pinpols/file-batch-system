@@ -1,22 +1,20 @@
 """Tests for ``batch_worker_sdk.scheduler._lease.LeaseRenewalScheduler`` (Lane T P3).
 
-6 cases per Lane T brief T4:
+5 cases per Lane T brief T4(Lane A 删原 #6 getattr fallback 用例:
+``mark_cancel_requested`` 已是 ``DispatcherLike`` 协议必选方法,缺失=类型错误,
+无需运行时探测):
 
 1. Empty in-flight set → tick is a no-op (no HTTP calls).
 2. ``cancelRequested=True`` → ``mark_cancel_requested`` invoked with reason.
 3. 404 lease-revoked → ``mark_cancel_requested`` with ``"lease-revoked"``.
 4. One task failing does not affect other tasks in the same tick.
 5. ``start()`` + ``stop()`` lifecycle is clean.
-6. Missing ``mark_cancel_requested`` on dispatcher (Lane U not yet merged)
-   degrades to a WARN log rather than crashing.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any
-
-import pytest
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import PersistentClientError, TransientError
@@ -39,19 +37,6 @@ class _Dispatcher:
 
     def mark_cancel_requested(self, task_id: int, reason: str) -> None:
         self.cancel_calls.append((task_id, reason))
-
-
-class _DispatcherWithoutCancel:
-    """For test #6 — simulates Lane S P2 without the Lane U extension."""
-
-    def in_flight_count(self) -> int:
-        return 1
-
-    def in_flight_task_ids(self) -> set[int]:
-        return {77}
-
-    def apply_platform_directive(self, directive: Any) -> None:
-        return None
 
 
 class _Http:
@@ -130,19 +115,3 @@ async def test_start_and_stop_run_cleanly() -> None:
     assert sched.running
     await sched.stop()
     assert not sched.running
-
-
-async def test_missing_mark_cancel_on_dispatcher_logs_warn(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    dispatcher = _DispatcherWithoutCancel()
-    http = _Http()
-    http.responses[77] = {"cancelRequested": True}
-    sched = LeaseRenewalScheduler(_cfg(), http, dispatcher)  # type: ignore[arg-type]
-
-    await sched.tick()  # must not raise
-
-    assert any(
-        "mark_cancel_requested" in r.message and "not yet wired" in r.message
-        for r in caplog.records
-    )

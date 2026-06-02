@@ -27,11 +27,12 @@ class SdkTaskTypeDescriptor(BaseModel):
     display_name: str | None = None
     """Console 展示名(可选)。"""
 
-    input_schema: dict[str, Any] | None = Field(default=None, alias="schema")
+    input_schema: dict[str, Any] | None = Field(default=None, alias="inputSchema")
     """``parameters`` 的 JSON Schema —— 驱动表单渲染 + 校验。
 
-    Wire alias ``schema``(对齐 Java ``inputSchema``)。Python 属性名为
-    ``input_schema``,避免遮蔽 pydantic ``BaseModel.schema`` 类方法。
+    Wire alias ``inputSchema``(对齐 Java ``inputSchema`` camelCase 字段名)。
+    Python 属性名为 ``input_schema``,避免遮蔽 pydantic ``BaseModel.schema``
+    类方法。
     """
 
     parameters: dict[str, Any] | None = None
