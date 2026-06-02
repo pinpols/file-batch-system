@@ -1,5 +1,7 @@
 package com.example.batch.worker.atomic.sql;
 
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.security.SensitiveDataValidator;
 import com.example.batch.common.spi.task.BatchTaskExecutor;
 import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
@@ -100,6 +102,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskResult execute(TaskContext ctx) {
     try {
+      SensitiveDataValidator.rejectIfContainsSensitiveKeys(
+          ctx.parameters(), "atomic.sql.parameters");
       SqlInvocation inv = parseInvocation(ctx);
       if (ctx.isDryRun()) {
         return buildDryRunResult(ctx, inv);
@@ -107,6 +111,15 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       return runStatements(ctx, inv);
     } catch (SqlValidationException ex) {
       return TaskResult.fail(ex.getMessage());
+    } catch (BizException ex) {
+      log.warn(
+          "sql executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
+          ctx.tenantId(),
+          ctx.jobCode(),
+          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
+              ? "?"
+              : ex.getMessageArgs()[1]);
+      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "sql executor unexpected error: tenantId={}, jobCode={}",

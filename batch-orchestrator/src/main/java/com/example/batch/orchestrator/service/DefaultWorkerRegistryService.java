@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.service;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.security.SensitiveDataValidator;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
@@ -120,6 +121,11 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       if (descriptor == null || descriptor.code() == null || descriptor.code().isBlank()) {
         continue;
       }
+      // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
+      // 拒了就让整次 register 抛 BizException(400),阻止凭据落入 custom_task_type_registry JSONB。
+      String ctxLabel = "sdk.taskType.descriptor[" + descriptor.code() + "]";
+      SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.defaults(), ctxLabel);
+      SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.inputSchema(), ctxLabel);
       customTaskTypeRegistryMapper.upsertDeclared(
           CustomTaskTypeUpsertParam.builder()
               .tenantId(request.tenantId())

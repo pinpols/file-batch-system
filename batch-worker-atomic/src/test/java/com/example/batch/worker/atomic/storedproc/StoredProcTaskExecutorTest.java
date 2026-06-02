@@ -65,6 +65,15 @@ class StoredProcTaskExecutorTest {
     }
 
     @Test
+    void rejectsSensitiveCredentialInParameters_LaneC() {
+      TaskResult r =
+          executor.execute(
+              ctxWithParams(Map.of("procedureName", "batch.foo", "client_secret", "leak")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("SENSITIVE_DATA_IN_PARAMETERS");
+    }
+
+    @Test
     void allowsBySchemaWhenSchemaAllowlisted() throws Exception {
       // schema 级放行:allowedSchemas 含 batch → batch.* 任意过程都过 validation,无需逐个列举
       props.setAllowedSchemas(Set.of("batch"));
