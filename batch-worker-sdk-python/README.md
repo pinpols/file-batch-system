@@ -3,20 +3,20 @@
 **file-batch-system** worker 协议的 Python SDK —— Java 版
 [`batch-worker-sdk/`](../batch-worker-sdk/) 的 async-only 对等实现。
 
-> **Phase 0 —— 仅脚手架。** 当前包除一个版本号字符串外不暴露任何东西。
-> 没有 HTTP client,没有 Kafka consumer,没有 handler runtime。
-> **请勿在生产使用。** 分阶段交付计划见下方 Roadmap。
+> **状态(2026-06-03)**: Phase 0-5 全部交付。Public API 稳定(`BatchPlatformClient` / `@batch_task` / `FakeBatchPlatform`),12 个跨 SDK 契约 fixture 全过(Lane P drift guard);PyPI 待 1.0 发布。可用于内测与 staging 跑通,生产使用前请确认契约 fixture 对自家场景已覆盖。
 
 ## 状态
 
 | 维度 | 状态 |
 | --- | --- |
-| 包结构 | 完成 (Phase 0) |
-| 工具链 (ruff, mypy, pytest) | 完成 (Phase 0) |
-| CI (`.github/workflows/sdk-python.yml`) | 完成 (Phase 0) |
-| 契约 fixture runner | Stub(全部 xfail)—— Phase 0 |
-| 真正的 `WorkerClient` / `HandlerContext` | 待办 —— Phase 1 |
-| PyPI 发布 | 待办 —— Phase 5 |
+| 包结构 + 8 子包(`client / dispatcher / handler / internal / retry / scheduler / task / testkit`) | 完成 |
+| 工具链 (ruff, mypy, pytest) | 完成 |
+| CI (`.github/workflows/sdk-python.yml`) | 完成 |
+| 契约 fixture runner(12 个 JSON) | 完成,与 Java SDK 跑同一份 fixture |
+| `BatchPlatformClient` + `TaskDispatcher` + `KafkaTaskConsumer` + heartbeat/lease scheduler | 完成 |
+| `@batch_task` 装饰器 + `collect_registered_handlers()` | 完成 |
+| `testkit.FakeBatchPlatform` in-process 平台 fake | 完成 |
+| PyPI 发布 | 待办(1.0 release 后) |
 
 ## 设计决策
 
@@ -34,14 +34,55 @@
 ## 安装(preview)
 
 ```bash
-# Phase 5 发布到 PyPI 之后:
+# 待 1.0 发布到 PyPI 后:
 pip install batch-worker-sdk
 
-# 在此之前,从源码安装:
-git clone https://github.com/pinpols/file-batch-system.git
-cd file-batch-system/sdk-python
-pip install -e .[dev]
+# 在此之前,从源码 editable 安装(repo root 跑):
+pip install -e batch-worker-sdk-python
+
+# testkit 仅供测试,生产 worker 不要装 testkit extra:
+pip install -e "batch-worker-sdk-python[testkit]"
 ```
+
+## 快速接入(5 分钟)
+
+```python
+import asyncio
+from batch_worker_sdk import (
+    BatchPlatformClient,
+    BatchPlatformClientConfig,
+    SdkTaskContext,
+    SdkTaskResult,
+    batch_task,
+    collect_registered_handlers,
+)
+
+
+@batch_task("tenant-xyz-import")
+async def import_handler(ctx: SdkTaskContext) -> SdkTaskResult:
+    rows = await do_import(ctx.parameters)
+    return SdkTaskResult.success_with({"rows": rows})
+
+
+async def main() -> None:
+    cfg = BatchPlatformClientConfig.from_env()   # 读 BATCH_SDK_* 前缀
+    client = BatchPlatformClient(cfg)
+    for handler in collect_registered_handlers():
+        client.register_handler(handler)
+    await client.start()
+    try:
+        await asyncio.Event().wait()             # 主线程驻留,Kafka 派单驱动 handler
+    finally:
+        await client.stop(timeout=30)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+**env 前缀**: `BATCH_SDK_BASE_URL` / `BATCH_SDK_TENANT_ID` / `BATCH_SDK_WORKER_CODE` / `BATCH_SDK_API_KEY` / `BATCH_SDK_KAFKA_BOOTSTRAP` / `BATCH_SDK_KAFKA_TOPIC_PATTERN` / `BATCH_SDK_KAFKA_GROUP_ID` —— 跟 Java sample 的 `BATCH_*` 前缀**不一样**,见 [`docs/sdk/troubleshooting.md`](../docs/sdk/troubleshooting.md) §1。
+
+完整可跑示范: [`examples/sample-tenant-worker-python/`](../examples/sample-tenant-worker-python/)。
 
 ## Roadmap
 

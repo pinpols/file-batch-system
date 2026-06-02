@@ -1,12 +1,19 @@
 # Third-Party Software Licenses
 
 **Product**: `batch-platform`  
-**Version**: `${revision}` (默认 `1.0.0`，CI-friendly)  
-**Generated**: `2026-04-26`  
-**Source**: curated from the current `pom.xml` / module POM files; verified against `mvn -P compliance` 输出（266 个 transitive 依赖见 `sbom.json`）
+**Version**: `${revision}` (默认 `1.1.0`,CI-friendly)  
+**Generated**: `2026-06-03`  
+**Source**: curated from the current `pom.xml` / module POM files + `batch-worker-sdk-python/pyproject.toml`;Maven 部分以 `mvn -P compliance` 输出为底(266+ transitive 依赖见 `sbom.json`)。
 
 This document is a human-readable snapshot of the third-party components referenced by the repository at the time of generation.
 Internal modules under `com.example.batch:*` are excluded.
+
+**变更摘要(2026-06-03 vs 2026-04-26)**:
+- 新增模块 `batch-worker-sdk` / `batch-worker-sdk-spring-boot-starter` / `batch-worker-sdk-testkit`(详见 `Used By` 列)
+- 新增 Python SDK 依赖区块(详见 §Python SDK Runtime Dependencies)
+- Project Lombok 升 1.18.42 → 1.18.46(JDK 25 适配)
+- MyBatis Spring Boot Starter 4.0.0 → 4.0.1
+- 其余直接依赖版本不变
 
 For a machine-generated report, run:
 
@@ -45,7 +52,7 @@ These are the main runtime-facing third-party components currently used by the p
 | Spring Security | managed by Spring Boot 4.0.6 | Apache-2.0 | console-api | Console 鉴权 |
 | Spring Security OAuth2 JOSE | managed by Spring Boot 4.0.6 | Apache-2.0 | console-api | JWT Token 签发/验签 |
 | Spring AI Starter Model OpenAI | 2.0.0-M3 | Apache-2.0 | console-api | Console AI feature |
-| MyBatis Spring Boot Starter | 4.0.0 | Apache-2.0 | orchestrator, workers, trigger, console-api | Runtime persistence layer |
+| MyBatis Spring Boot Starter | 4.0.1 | Apache-2.0 | orchestrator, workers, trigger, console-api | Runtime persistence layer |
 | Flyway Core | managed by Spring Boot 4.0.6 | Apache-2.0 | all | Platform migrations |
 | Flyway PostgreSQL support | managed by Spring Boot 4.0.6 | Apache-2.0 | all | PostgreSQL dialect |
 | Hibernate Validator | managed by Spring Boot 4.0.6 | Apache-2.0 | orchestrator | Bean Validation 实现 |
@@ -67,7 +74,7 @@ These are the main runtime-facing third-party components currently used by the p
 | Jakarta EE APIs | managed by Spring Boot 4.0.6 | EPL-2.0 | all | API surface |
 | Logback Classic | managed by Spring Boot 4.0.6 | EPL-1.0 + LGPL-2.1 | all (transitive) | Logging backend |
 | Netty DNS Resolver macOS | managed by Spring Boot 4.0.6 | Apache-2.0 | orchestrator, console-api | macOS profile 条件激活 |
-| Project Lombok | 1.18.42 | MIT | all (provided) | Annotation processor |
+| Project Lombok | 1.18.46 | MIT | all (provided) | Annotation processor |
 | JSqlParser | 4.5 | Apache-2.0 | export | SQL parsing / schema whitelist |
 | ShedLock | 6.3.0 | Apache-2.0 | common | Distributed lock |
 | Spring Boot Configuration Processor | managed by Spring Boot 4.0.6 | Apache-2.0 | all (annotation processor) | 编译期生成 `spring-configuration-metadata.json`，IDE 提示 / dict 自动化 |
@@ -91,6 +98,35 @@ These packages are used in test or build tooling and are not shipped as producti
 | AssertJ | managed by Spring Boot 4.0.6 | Apache-2.0 | test | all |
 | Mockito | managed by Spring Boot 4.0.6 | MIT | test | all |
 | Kotlin Standard Library | transitive via OkHttp 4.x | Apache-2.0 | transitive | — |
+
+## SDK 模块覆盖(对外发布物)
+
+`batch-worker-sdk` / `batch-worker-sdk-spring-boot-starter` / `batch-worker-sdk-testkit` 是租户自托管 worker 的对外发布 jar。core SDK **必须 framework-free**,starter / testkit 才能引 Spring。
+
+| 模块 | 直接依赖 | 备注 |
+|---|---|---|
+| `batch-worker-sdk`(core) | jackson-databind / jackson-datatype-jsr310 / kafka-clients / slf4j-api / lombok(provided) | 不引 Spring;target jar < 2 MB |
+| `batch-worker-sdk-spring-boot-starter` | core SDK + spring-boot-autoconfigure + spring-boot-starter | 仅 Spring Boot 4.x;`@ConfigurationProperties` 自动绑定 |
+| `batch-worker-sdk-testkit` | core SDK + aiohttp 等价 Java fake server | 测试 scope,不进生产 image |
+
+## Python SDK Runtime Dependencies
+
+`batch-worker-sdk-python/pyproject.toml`(独立工具链,不进 Maven reactor;PyPI 名 `batch-worker-sdk`,import 名 `batch_worker_sdk`):
+
+| Component | Version | License | Scope | Used By | Notes |
+|---|---|---|---|---|---|
+| httpx | >= 0.27 | BSD-3-Clause | runtime | `internal/_http.py` | async HTTP client(register / claim / report / heartbeat / renew-lease) |
+| pydantic | >= 2.7 | MIT | runtime | `task/`, `client/`, `dispatcher/` | 不可变值对象 + config validation |
+| aiokafka | >= 0.11 | Apache-2.0 | runtime | `internal/_kafka.py` | async Kafka consumer(派单消费 + capacity-aware pause) |
+| aiohttp | >= 3.10 | Apache-2.0 | optional(testkit) | `testkit.FakeBatchPlatform` | in-process 平台 fake;生产 worker **不要** 装 `[testkit]` extra |
+| asyncpg | >= 0.29 | Apache-2.0 | optional(sql) | `handler/atomic/_sql.py` / `_stored_proc.py` | 只有用 SQL / stored-proc atomic handler 才装 `[sql]` extra |
+| pytest | >= 8 | MIT | dev | tests | 测试 runner |
+| pytest-asyncio | >= 0.23 | Apache-2.0 | dev | tests | async fixtures |
+| pytest-httpx | >= 0.30 | MIT | dev | tests | httpx 请求拦截 mock |
+| ruff | >= 0.6 | MIT | dev | lint / format | 替代 black + flake8 + isort |
+| mypy | >= 1.10 | MIT | dev | type check | strict mode |
+
+Python SDK 自身按 **Apache-2.0** 发布(与主仓一致);上述传递依赖中除 httpx (BSD-3) 外全部为 Apache-2.0 / MIT。GPL / LGPL / copyleft 依赖**零**(license-risk-assessment.md §Python 已审核)。
 
 ## Notes
 

@@ -114,14 +114,21 @@ Notes
 
 1. The list above covers the major direct and transitive dependencies that
    ship with their own NOTICE / attribution requirements. The exhaustive list
-   (266 transitive components as of 2026-04-26) lives in
+   (curated snapshot as of 2026-06-03; last machine-regenerated 2026-04-26
+   with 266 transitive components) lives in
    docs/compliance/THIRD-PARTY-LICENSES.md.
 
-2. To regenerate the machine-readable inventory:
+2. The Python SDK (batch-worker-sdk-python/) ships independently via PyPI
+   (planned) and carries its own runtime dependencies — httpx (BSD-3),
+   pydantic (MIT), aiokafka (Apache-2.0); plus optional aiohttp / asyncpg
+   for testkit / SQL atom handlers. See "Python SDK Runtime Dependencies"
+   in docs/compliance/THIRD-PARTY-LICENSES.md.
+
+3. To regenerate the machine-readable inventory for the Java side:
 
       mvn -P compliance license:aggregate-add-third-party
       mvn -P compliance cyclonedx:makeAggregateBom
 
-3. The repository also includes generated deployment, testing, and Excel
+4. The repository also includes generated deployment, testing, and Excel
    template artifacts. Consult the relevant `docs/` subdirectories for
    usage and origin details.
