@@ -24,14 +24,18 @@ classifiers = [
     "Framework :: AsyncIO",
     "Typing :: Typed",
 ]
-# Runtime deps are intentionally empty in Phase 0. P1+ adds:
-#   httpx, aiokafka, pydantic>=2, tenacity, opentelemetry-api
-dependencies = []
+# Phase 1 runtime deps: HTTP client + config validation.
+# P2 adds aiokafka. P3+ may add opentelemetry-api.
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
+    "pytest-httpx>=0.30",
     "ruff>=0.6",
     "mypy>=1.10",
 ]
