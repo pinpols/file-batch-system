@@ -1,26 +1,25 @@
-"""batch-worker-sdk testkit — async fake platform + fixtures.
+"""batch-worker-sdk testkit —— 异步 fake 平台 + fixtures。
 
-Mirrors the Java :mod:`batch-worker-sdk-testkit` module:
+对标 Java :mod:`batch-worker-sdk-testkit` 模块:
 
 ================================================  =====================================
 Java                                              Python
 ================================================  =====================================
-``FakeBatchPlatform`` (embedded Kafka + HTTP)     :class:`FakeBatchPlatform` (aiohttp + asyncio.Queue)
+``FakeBatchPlatform``(内嵌 Kafka + HTTP)         :class:`FakeBatchPlatform`(aiohttp + asyncio.Queue)
 ``@BatchWorkerTest`` JUnit5 extension             :func:`fake_platform` pytest fixture
-``RecordedReport``                                ``dict`` (see :meth:`FakeBatchPlatform.get_reports`)
-``TaskDispatchMessageBuilder``                    :func:`make_test_context` + plain dict
+``RecordedReport``                                ``dict``(见 :meth:`FakeBatchPlatform.get_reports`)
+``TaskDispatchMessageBuilder``                    :func:`make_test_context` + 普通 dict
 ================================================  =====================================
 
-Python testkit deliberately stays Kafka-free: real ``aiokafka`` would
-drag a broker into every unit test. Instead :meth:`dispatch_task`
-pushes onto an ``asyncio.Queue`` that Lane S's Kafka consumer can be
-swapped onto in P5.x follow-up. For pure HTTP-layer behaviour
-(register / claim / report / heartbeat directive / renew cancel)
-the queue is irrelevant — the fake's HTTP endpoints already cover it.
+Python testkit 刻意不引入 Kafka:真实 ``aiokafka`` 会把 broker 拖进每个单测。
+:meth:`dispatch_task` 改为推到 ``asyncio.Queue``,后续 Lane S(Kafka 消费者)
+落地后可平替成真实消费循环。对于纯 HTTP 层行为
+(register / claim / report / heartbeat directive / renew cancel),
+队列无关紧要 —— fake 的 HTTP 端点已经覆盖。
 
-This subpackage requires the optional ``testkit`` extra
-(``pip install batch-worker-sdk[testkit]``) so that ``aiohttp`` doesn't
-pollute the runtime dependencies of production tenant workers.
+本子包要求安装可选 ``testkit`` extra
+(``pip install batch-worker-sdk[testkit]``),避免 ``aiohttp``
+污染生产租户 worker 的运行时依赖。
 """
 
 from __future__ import annotations

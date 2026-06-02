@@ -1,4 +1,4 @@
-"""``python -m sample_tenant_worker`` entry point."""
+"""``python -m sample_tenant_worker`` 入口。"""
 
 from __future__ import annotations
 

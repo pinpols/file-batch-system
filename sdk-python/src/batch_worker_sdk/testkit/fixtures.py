@@ -1,12 +1,12 @@
-"""Reusable test fixtures and helpers.
+"""可复用测试 fixtures 与辅助函数。
 
-- :func:`make_test_context` — quick ``SdkTaskContext`` builder with
-  sane defaults (mirrors Java ``TaskDispatchMessageBuilder``).
-- :func:`make_test_config` — quick ``BatchPlatformClientConfig`` builder.
-- :class:`RecordingHandler` — :class:`SdkTaskHandler` impl that records
-  every invocation; lets tenant tests assert "execute called with X".
-- :func:`fake_platform` — pytest fixture that starts/stops a
-  :class:`FakeBatchPlatform` automatically.
+- :func:`make_test_context` —— 带合理默认值的 ``SdkTaskContext``
+  快速构造器(对标 Java ``TaskDispatchMessageBuilder``)。
+- :func:`make_test_config` —— ``BatchPlatformClientConfig`` 快速构造器。
+- :class:`RecordingHandler` —— 记录每次调用的 :class:`SdkTaskHandler`
+  实现,让租户测试可以断言 "execute 被以 X 调用"。
+- :func:`fake_platform` —— 自动启停 :class:`FakeBatchPlatform` 的
+  pytest fixture。
 """
 
 from __future__ import annotations
@@ -30,12 +30,11 @@ def make_test_context(
     parameters: dict[str, Any] | None = None,
     **overrides: Any,
 ) -> SdkTaskContext:
-    """Build a valid :class:`SdkTaskContext` for unit tests.
+    """构造一个合法的 :class:`SdkTaskContext` 用于单测。
 
-    Defaults match the smallest realistic dispatch — handlers that
-    only read a subset of fields can ignore the rest. ``**overrides``
-    lets callers pin any other field (``biz_date``, ``attempt_no``,
-    ``runtime_attributes``, etc.).
+    默认值匹配最小可用的派发 —— 只读取字段子集的 handler 可以
+    忽略其余字段。``**overrides`` 允许调用方指定任意其它字段
+    (``biz_date`` / ``attempt_no`` / ``runtime_attributes`` 等)。
     """
     kwargs: dict[str, Any] = {
         "task_id": task_id,
@@ -54,11 +53,10 @@ def make_test_config(
     worker_code: str = "test-worker",
     **overrides: Any,
 ) -> BatchPlatformClientConfig:
-    """Build a valid :class:`BatchPlatformClientConfig` for unit tests.
+    """构造一个合法的 :class:`BatchPlatformClientConfig` 用于单测。
 
-    Timing knobs default to the minimum legal values
-    (heartbeat=5s, lease=5s, http=1s) so config validation passes
-    without callers needing to learn the rules.
+    时间相关参数默认取最小合法值(heartbeat=5s / lease=5s / http=1s),
+    让 config 校验直接通过,调用方不用先去学规则。
     """
     kwargs: dict[str, Any] = {
         "base_url": base_url,
@@ -74,13 +72,13 @@ def make_test_config(
 
 
 class RecordingHandler:
-    """Records every ``execute`` invocation — for tenant test asserts.
+    """记录每次 ``execute`` 调用 —— 供租户测试断言。
 
-    Implements the structural :class:`SdkTaskHandler` protocol; tests
-    pass an instance in via decorator-collect or direct
-    ``client.register_handler`` (Lane T).
+    实现结构化的 :class:`SdkTaskHandler` 协议;测试可通过
+    decorator-collect 或直接 ``client.register_handler``(Lane T)
+    传入实例。
 
-    Example::
+    例如::
 
         rec = RecordingHandler(task_type="my-job")
         await rec.execute(make_test_context(task_id=42))
@@ -114,13 +112,12 @@ class RecordingHandler:
 
 
 async def fake_platform() -> AsyncIterator[FakeBatchPlatform]:
-    """Async-generator helper — yields a started :class:`FakeBatchPlatform`.
+    """异步生成器辅助 —— yield 一个已启动的 :class:`FakeBatchPlatform`。
 
-    Wrap in ``pytest.fixture`` (or ``pytest_asyncio.fixture``) at the
-    test module level — keeping the wrapping out of the SDK package
-    means importing :mod:`batch_worker_sdk.testkit` doesn't pull in
-    pytest as a runtime dep. Tenants who don't use pytest can call
-    :class:`FakeBatchPlatform` directly via ``async with``.
+    在测试模块层包成 ``pytest.fixture``(或 ``pytest_asyncio.fixture``)。
+    把这一层包装放在 SDK 包外,意味着 import
+    :mod:`batch_worker_sdk.testkit` 不会把 pytest 拖成运行时依赖。
+    不用 pytest 的租户可以直接 ``async with`` :class:`FakeBatchPlatform`。
     """
     platform = FakeBatchPlatform()
     await platform.start()
