@@ -48,7 +48,8 @@ pip install -e .[dev]
 
 | Phase | Scope | Est. effort |
 | --- | --- | --- |
-| **P0** (this PR) | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | 1d |
+| **P0** | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | 1d |
+| **P0.5** (this PR) | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | 0.5d |
 | **P1** | `WorkerClient` (httpx async), `HandlerContext`, `WorkerConfig`, register/heartbeat | 3-4d |
 | **P2** | Kafka consumer (aiokafka), task dispatch loop, graceful shutdown | 3-4d |
 | **P3** | Scheduler (APScheduler or custom), retry / backoff (tenacity), DLQ | 2-3d |
@@ -71,6 +72,22 @@ payload shapes. APIs are idiomatic to each language:
 | Handler signature | `void handle(HandlerContext ctx)` | `async def handle(ctx: HandlerContext) -> None` |
 | Spring Boot integration | [`batch-worker-sdk-spring-boot-starter`](../batch-worker-sdk-spring-boot-starter/) | (none; use FastAPI / vanilla async) |
 | Testkit | [`batch-worker-sdk-testkit`](../batch-worker-sdk-testkit/) | TBD (Phase 4) |
+
+### Public API surface ↔ Java SDK (P0.5)
+
+The 7 types below are 1:1 with their Java counterparts. Names follow
+PEP 8 (snake_case methods, snake_case fields); semantics mirror the
+Java side. P0.5 ships stubs only — implementation lands in P1-P5.
+
+| Java | Python | Java path |
+| --- | --- | --- |
+| `SdkTaskHandler` (interface) | `SdkTaskHandler` (Protocol) | `batch-worker-sdk/.../task/SdkTaskHandler.java` |
+| `SdkTaskContext` (record) | `SdkTaskContext` (pydantic BaseModel) | `batch-worker-sdk/.../task/SdkTaskContext.java` |
+| `SdkTaskResult` (record) | `SdkTaskResult` (pydantic BaseModel) | `batch-worker-sdk/.../task/SdkTaskResult.java` |
+| `WorkerRuntimeState` (enum) | `WorkerRuntimeState` (str Enum) | `batch-worker-sdk/.../dispatcher/WorkerRuntimeState.java` |
+| `ProgressReporter` (class) | `ProgressReporter` (class) | `batch-worker-sdk/.../task/ProgressReporter.java` |
+| `CancellationSignal` (class) | `CancellationSignal` (class) | `batch-worker-sdk/.../task/CancellationSignal.java` |
+| `SdkTaskTypeDescriptor` (record) | `SdkTaskTypeDescriptor` (pydantic BaseModel) | `batch-worker-sdk/.../task/SdkTaskTypeDescriptor.java` |
 
 Source-of-truth docs (both SDKs read from these):
 

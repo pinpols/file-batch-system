@@ -58,6 +58,13 @@
 - **断言**:`then.sdkExpectedAction` 是人类可读描述,需要 runner 端把行为翻译为可观察事件(状态变量、调度器是否启停、HTTP 重试次数)
 - **CI**:本 lane 暂不强制平台 CI 跑这套(各语言 runner 维护成本平台不承担);租户上线评审用 / BYO SDK 自家 CI 用
 
+## Fixture 写法纪律（Lane P drift guard）
+
+- 每个 `*.json` **必须**通过 [`fixture-schema.json`](./fixture-schema.json)（JSON Schema draft 2020-12）校验
+- 本地验证：`bash docs/api/sdk-contract-fixtures/validate.sh`（需 `pip install jsonschema`）
+- CI：`.github/workflows/sdk-contract-parity.yml` 的 `validate-fixtures` job 强制执行，任一 schema violation 阻断 PR
+- 新 fixture 加入时，同步对齐 `orchestrator-internal.openapi.yaml`（path + method）与 `wire-protocol.md`（语义），三轨不一致 = Java `JsonFixtureContractTest` 直接失败
+
 ## 协议演进
 
 平台改 wire schema 时:
