@@ -623,6 +623,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOpsSummaryResponse'
+  /api/console/ops/atomic-runtime-status:
+    get:
+      tags: [Ops]
+      summary: Atomic worker runtime defense status (Round-3 #8)
+      description: |
+        Operator-facing dashboard for ADR-029 atomic worker's 4 executors
+        (shell/sql/http/storedProc): exposes enabled flag + safety-gate
+        snapshot (allowlist sizes, SQL dialect, effective enforce-allowlist
+        + its source: explicit/prod-default/dev-default). Console reverse-
+        proxies the atomic worker's `/actuator/atomicruntime` Actuator
+        endpoint. Returns `available=false` when reverse channel is disabled
+        or atomic worker is unreachable (UI shows degraded banner).
+      operationId: getAtomicRuntimeStatus
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Atomic runtime status snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/ops/kafka-lag:
     get:
       tags: [Ops]
