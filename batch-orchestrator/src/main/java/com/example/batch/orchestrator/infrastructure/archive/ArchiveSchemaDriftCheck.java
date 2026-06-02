@@ -69,7 +69,9 @@ public class ArchiveSchemaDriftCheck {
           // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
           "dead_letter_task",
           // V159 (SDK Phase 3 M3.1) — custom_task_type_registry 归档表;租户自定义 taskType 注册。
-          "custom_task_type_registry");
+          "custom_task_type_registry",
+          // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
+          "pipeline_progress");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
