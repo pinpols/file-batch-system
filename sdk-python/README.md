@@ -48,13 +48,13 @@ pip install -e .[dev]
 
 | Phase | Scope | Est. effort |
 | --- | --- | --- |
-| **P0** | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | done |
-| **P0.5** | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | done (Lane R) |
-| **P1** | `PlatformHttpClient` (httpx async) + retry/backoff + `BatchPlatformClientConfig` | done (Lane Q) |
-| **P2** | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause | done (Lane S) |
-| **P3** (this PR) | `BatchPlatformClient` + `HeartbeatScheduler` + `LeaseRenewalScheduler` + heartbeat-directive parsing | done (Lane T) |
-| **P4** | Lifecycle: budgeted `stop(timeout)`, cancellation signal wiring, progress reporter, deactivate | Lane U |
-| **P5** | Testkit (FakeBatchPlatform / EmbeddedKafka / `@batch_task`), examples, PyPI publish | Lane V |
+| **P0** ✅ | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | done |
+| **P0.5** ✅ | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | done (Lane R) |
+| **P1** ✅ | `PlatformHttpClient` (httpx async) + retry/backoff + `BatchPlatformClientConfig` | done (Lane Q) |
+| **P2** ✅ | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause | done (Lane S) |
+| **P3** ✅ | `BatchPlatformClient` + `HeartbeatScheduler` + `LeaseRenewalScheduler` + heartbeat-directive parsing | done (Lane T) |
+| **P4** ✅ (this PR) | `CancellationSignal` (asyncio.Event) + `ProgressReporter` (sensitive-key guard) + `stop_with_timeout` phased shutdown | done (Lane U) |
+| **P5** | Testkit (FakeBatchPlatform / `@batch_task` decorator), examples, PyPI publish | Lane V |
 
 Contract fixtures from Lane N drive the green-bar for P1–P3. Every
 fixture that flips from `xfail` to `pass` is forward progress.
@@ -132,6 +132,30 @@ Source-of-truth docs (both SDKs read from these):
 - [`docs/api/sdk-contract-fixtures/`](../docs/api/sdk-contract-fixtures/) —
   Lane N's JSON fixtures, the canonical conformance suite for **every**
   SDK implementation.
+
+### Cancellation + Progress (Lane U / P4)
+
+Long-running handlers cooperate with the platform's cancel signal and
+publish progress checkpoints through the per-task `SdkTaskContext`:
+
+```python
+from batch_worker_sdk import SdkTaskContext
+
+async def execute(ctx: SdkTaskContext) -> None:
+    for row in stream_rows():
+        if ctx.cancel_signal and ctx.cancel_signal.is_cancellation_requested:
+            return                                    # exit early, lease-scheduler asked us to stop
+        await process(row)
+        if ctx.progress_reporter and row.idx % 1000 == 0:
+            ctx.progress_reporter.report(
+                {"processed": row.idx, "total": row.total, "checkpoint": row.cursor}
+            )
+```
+
+Sensitive keys (`password` / `secret` / `token` / `credential` /
+`apikey` / `privatekey` / `accesskey`) raise `ValueError` — credentials
+must travel via `required_env`, never via progress payloads (Java SDK
+Lane C parity).
 
 ## Development
 

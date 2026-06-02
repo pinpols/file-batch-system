@@ -19,7 +19,9 @@ response (e.g. "pause Kafka assignment", "drain and deactivate then
 exit"). Those stay ``xfail`` and are claimed by:
 
 - P2 (Kafka consumer)  : 11-kafka-partition-pause-on-capacity
-- P4 (FSM stop/drain)  : 12-stop-with-timeout
+- P4 (FSM stop/drain)  : 12-stop-with-timeout — HTTP /deactivate
+  shape asserted here; the multi-phase drain semantics are verified by
+  Lane U's ``tests/test_lifecycle.py`` against ``stop_with_timeout``.
 
 The directive enactment side of 03-06 (e.g. "transition FSM to
 PAUSED") also lands in P3-P4; here we only verify the HTTP request/

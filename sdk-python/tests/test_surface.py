@@ -138,13 +138,12 @@ def test_cancellation_signal_default_and_mark() -> None:
     assert sig.is_cancellation_requested is True
 
 
-def test_progress_reporter_p0_5_not_implemented() -> None:
-    """P0.5 explicitly raises; P4 will implement."""
+def test_progress_reporter_report_then_latest() -> None:
+    """Lane U / P4: report stores a copy; latest returns an independent copy."""
     reporter = ProgressReporter()
-    with pytest.raises(NotImplementedError):
-        reporter.report({"processed": 1})
-    with pytest.raises(NotImplementedError):
-        reporter.latest()
+    assert reporter.latest() is None
+    reporter.report({"processed": 1})
+    assert reporter.latest() == {"processed": 1}
 
 
 def test_task_type_descriptor_fields() -> None:
