@@ -182,6 +182,26 @@
     -->
     <profiles>
         <!--
+          R3-2 分级:pr-gate 跑 smoke+critical(~12-15min,15min wall-clock 内反馈),
+          全量(含 regression)走 nightly staging-gate(4 shard ~10min)。
+          激活:`mvn -pl batch-e2e-tests verify -Pe2e-smoke`
+          标签策略详见 docs/runbook/e2e-tier-strategy.md。
+        -->
+        <profile>
+            <id>e2e-smoke</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration combine.children="merge">
+                            <groups>smoke | critical</groups>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!--
           CI 并发跑 e2e:forkCount=2 并发 2 个 JVM(各 1 套 testcontainers,内存 ~8GB)。
           GitHub Actions linux-runner 7-14GB 可承受,本地 macOS Docker 7.75GB 内存通常不够,
           且 docker-compose dev 服务还可能占用 1.5GB,所以**仅 CI 开**:
