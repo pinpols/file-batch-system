@@ -196,7 +196,34 @@ orchestrator `WorkerHeartbeatTimeoutScheduler`(每 30s 扫一次):心跳停更
 → OFFLINE(`batch-orchestrator/.../infrastructure/scheduler/WorkerHeartbeatTimeoutScheduler.java:42`)。
 OFFLINE worker 的在跑 task 由 lease 过期机制回收(ADR-035 §「Scheduler 节奏」)。
 
-### 6.3 K8s 部署建议
+### 6.3 时序校验 fail-fast / WARN 降级(R3-4)
+
+SDK 启动期对 4 条时序规则做 cross-field 校验,违反默认 `IllegalStateException` 让进程挂掉:
+
+| # | 规则 | 默认值 | 违反含义 |
+|---|---|---|---|
+| 1 | `heartbeatInterval >= 1s` | 30s | 防止极端配置刷爆 orch |
+| 2 | `leaseRenewInterval >= 5s` | 60s | 同上 |
+| 3 | `leaseRenewInterval <= heartbeatInterval × 3` | 60s ≤ 90s | lease 续约比心跳慢 → in-flight task 被 orch 误判租约过期回收 |
+| 4 | `httpTimeout <= heartbeatInterval / 2` | 10s ≤ 15s | 心跳超时排队后 backlog 拖死 scheduler |
+
+**降级开关**(Round-2 P0 #4):配置稍偏时,默认 fail-fast 会触发 K8s 重启循环对运维不友好。可通过
+`BATCH_SDK_STRICT_TIMING=false`(或 builder `.strictTimingValidation(false)`)把 4 规则违反从
+throw 降级为 `log.warn(...)`,client 仍可 build。**临时口子**,适用于运维降级窗口,不建议长期开启。
+
+```bash
+# 紧急降级:接受配置偏差,WARN 不挂进程
+export BATCH_SDK_STRICT_TIMING=false
+
+# 默认(生产):严格 fail-fast
+unset BATCH_SDK_STRICT_TIMING
+# 或显式 export BATCH_SDK_STRICT_TIMING=true
+```
+
+只有显式 `false / 0 / no / off`(大小写不敏感)才降级;其它取值(含非法值)仍走 strict,
+体现"默认 strict、降级需显式声明"的安全偏好。
+
+### 6.4 K8s 部署建议
 
 - `terminationGracePeriodSeconds` ≥ `client.stop()` 的 timeout + 30s buffer(默认 30s → 至少配 60s;
   长 task 调大)。
