@@ -2,6 +2,14 @@
 
 租户自托管 Worker 最小示范,集成 `batch-worker-sdk`。业务方按此模板复制到自己 repo,把 handler 换成业务实现即可。
 
+> **同一自托管能力的 4 种接入,按租户技术栈选**:
+> - **`sample-tenant-worker`(本目录)** — 纯 Java + 手写 `main` wiring
+> - [`../sample-tenant-worker-spring`](../sample-tenant-worker-spring/) — Java + Spring Boot starter(自动装配)
+> - [`../sample-tenant-worker-python`](../sample-tenant-worker-python/) — Python 3.12+ + asyncio
+> - [`../batch-worker-sdk-template`](../batch-worker-sdk-template/) — Java 生产 fork 起点(Dockerfile + CI)
+>
+> 其它语言(Go / Rust / Node)走 [BYO SDK guide](../../docs/sdk/byo-sdk-guide.md) 自研。
+
 ## 跑
 
 ```bash

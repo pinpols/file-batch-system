@@ -3,8 +3,14 @@
 ADR-035 租户自托管 worker 的 **Spring Boot 接入示范**,经
 [`batch-worker-sdk-spring-boot-starter`](../../batch-worker-sdk-spring-boot-starter/) 自动装配。
 
-> 与 [`../sample-tenant-worker`](../sample-tenant-worker/)(纯 Java,手写 `main` wiring)是**同一能力的两种接入**,
-> 按你的技术栈二选一。core SDK 本身始终 Spring-free;本示范多依赖一个可选 starter。
+> **同一自托管能力的 4 种接入,按租户技术栈选**:
+> - [`../sample-tenant-worker`](../sample-tenant-worker/) — 纯 Java + 手写 `main` wiring
+> - **`sample-tenant-worker-spring`(本目录)** — Java + Spring Boot starter(自动装配)
+> - [`../sample-tenant-worker-python`](../sample-tenant-worker-python/) — Python 3.12+ + asyncio
+> - [`../batch-worker-sdk-template`](../batch-worker-sdk-template/) — Java 生产 fork 起点(Dockerfile + CI)
+>
+> core SDK 本身始终 framework-free(Java SDK Spring-free / Python SDK 无 web framework 依赖);本示范多依赖一个可选 starter。
+> 下方"两种接入对比"指 Java 域内的 plain vs Spring,Python 版本另见上链。
 
 ## 跑起来
 
