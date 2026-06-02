@@ -1,20 +1,19 @@
-"""Exception hierarchy for batch-worker-sdk (Python).
+"""batch-worker-sdk(Python)的异常体系。
 
-Wire-protocol §B classifies HTTP failures into four buckets that the SDK
-must distinguish. We model that classification as concrete exception
-subclasses so callers can ``except AuthError:`` / ``except TransientError:``
-instead of inspecting status codes by hand.
+wire-protocol §B 将 HTTP 失败划分为四种类型,SDK 必须区分。这里以具体异
+常子类建模该分类,调用方可以 ``except AuthError:`` / ``except TransientError:``
+而不是手工判断 status code。
 
-Java equivalent: ``com.example.batch.sdk.internal.PlatformHttpException``
-plus its ``isAuthError() / isConflict() / isServerError()`` helpers — we
-collapse those predicates into the class hierarchy.
+Java 对应:``com.example.batch.sdk.internal.PlatformHttpException`` 及其
+``isAuthError() / isConflict() / isServerError()`` 谓词 —— Python 端把这
+些谓词折叠成类层次。
 
-All errors carry the same diagnostic surface:
+所有异常都暴露同一组诊断字段:
 
-- ``status_code``  : HTTP status (``None`` for transport-layer errors)
-- ``code``         : BE BizException i18n key (``AUTH_INVALID`` etc.)
-- ``message``      : human-readable detail
-- ``request_id``   : ``traceId`` from BE error body when present
+- ``status_code``  : HTTP 状态码(传输层错误时为 ``None``)
+- ``code``         : 后端 BizException 的 i18n key(如 ``AUTH_INVALID``)
+- ``message``      : 人类可读的描述
+- ``request_id``   : 后端 error body 中的 ``traceId``(若存在)
 """
 
 from __future__ import annotations
@@ -23,11 +22,11 @@ from typing import Any
 
 
 class PlatformError(Exception):
-    """Base for every protocol-level error this SDK raises.
+    """SDK 抛出的所有协议层错误的基类。
 
-    Generic ``except PlatformError:`` catches every classified failure
-    while still letting truly unexpected ``Exception`` (programmer
-    errors, ``KeyboardInterrupt`` etc.) propagate untouched.
+    通用的 ``except PlatformError:`` 能捕获所有已分类失败,同时不影响真
+    正意料之外的 ``Exception``(编程错误、``KeyboardInterrupt`` 等)继续
+    向上传播。
     """
 
     def __init__(
@@ -53,28 +52,26 @@ class PlatformError(Exception):
 
 
 class AuthError(PlatformError):
-    """401 / 403 — credentials invalid / tenant scope violation.
+    """401 / 403 —— 凭据无效或租户作用域越界。
 
-    Per wire-protocol §B these MUST fail-fast: no retry, mark dispatcher
-    fatal. The retry helper raises this directly on the first hit.
+    按 wire-protocol §B 必须 fail-fast:不重试,并把 dispatcher 设为 fatal。
+    重试辅助在首次命中时直接抛出此异常。
     """
 
 
 class ConflictError(PlatformError):
-    """409 — idempotent-already-applied (task already claimed etc.).
+    """409 —— 幂等结果已应用(如任务已被 claim 等)。
 
-    Per §B treated as success: caller logs INFO and proceeds. We still
-    surface this as an exception so callers can branch on it; the retry
-    helper does NOT raise it — it converts 409 into a normal return.
-    Reserved for cases where caller explicitly wants the response body.
+    按 §B 视为成功:调用方仅 INFO 记录后继续。我们仍以异常形式提供,便于
+    调用方在确实需要响应体时主动 branch;重试辅助 **不会** 抛出此异常 ——
+    它把 409 转成正常返回。本类型保留给调用方显式获取响应体的场景。
     """
 
 
 class PersistentClientError(PlatformError):
-    """4xx (other than 401/403/404/409) accumulated past the fail-fast
-    threshold (default 5).
+    """4xx(401/403/404/409 除外)累计超过 fail-fast 阈值(默认 5)。
 
-    Indicates SDK ↔ platform contract drift; retry will not help.
+    通常意味着 SDK ↔ 平台契约漂移,重试也无济于事。
     """
 
     def __init__(
@@ -91,11 +88,11 @@ class PersistentClientError(PlatformError):
 
 
 class TransientError(PlatformError):
-    """5xx / transport-layer error after exponential-backoff budget is
-    exhausted (default ``max_attempts=3``: 200ms / 400ms / 800ms).
+    """5xx / 传输层错误,且指数退避预算已耗尽
+    (默认 ``max_attempts=3``:200ms / 400ms / 800ms)。
 
-    Caller should log + drop; next periodic tick (heartbeat / lease) or
-    next user action retries naturally.
+    调用方应仅 log 并丢弃;下次心跳 / 租约 tick 或下次用户操作会自然
+    重试。
     """
 
     def __init__(
@@ -114,11 +111,11 @@ class TransientError(PlatformError):
 
 
 def parse_error_body(body: Any) -> tuple[str | None, str | None, str | None]:
-    """Best-effort extraction of ``(code, message, trace_id)`` from a BE
-    error envelope. BE BizException renders as
-    ``{"code": "...", "message": "...", "traceId": "..."}``; older paths
-    use ``trace_id``. Returns ``(None, None, None)`` if body is not a
-    dict.
+    """从后端 error 信封里 best-effort 提取 ``(code, message, trace_id)``。
+
+    后端 BizException 渲染为 ``{"code": "...", "message": "...",
+    "traceId": "..."}``;较老的路径用 ``trace_id``。body 不是 dict 时返回
+    ``(None, None, None)``。
     """
     if not isinstance(body, dict):
         return None, None, None

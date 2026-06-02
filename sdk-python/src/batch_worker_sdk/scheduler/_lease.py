@@ -1,15 +1,15 @@
-"""Async lease-renewal scheduler.
+"""异步租约续约调度器。
 
-Python port of Java ``com.example.batch.sdk.scheduler.LeaseRenewalScheduler``.
-Runs as a long-lived ``asyncio.Task`` launched by
-:class:`~batch_worker_sdk.client.client.BatchPlatformClient.start`.
+对应 Java ``com.example.batch.sdk.scheduler.LeaseRenewalScheduler``,作为
+长生命周期的 ``asyncio.Task`` 由
+:class:`~batch_worker_sdk.client.client.BatchPlatformClient.start` 启动。
 
-Per-task semantics:
+单任务语义:
 
-- ``cancelRequested=True`` in response → flip dispatcher-side cancel
-  signal (``mark_cancel_requested``).
-- 404 / 410 → lease already revoked; treat same as cancel.
-- Other failures → WARN, retry next tick.
+- 响应中 ``cancelRequested=True`` → 触发 dispatcher 侧的取消信号
+  (``mark_cancel_requested``)。
+- 404 / 410 → 租约已被撤销;同样按取消处理。
+- 其他失败 → WARN,等下次 tick 重试。
 """
 
 from __future__ import annotations
@@ -28,14 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class LeaseRenewalScheduler:
-    """Periodic lease-renewal for every in-flight task.
+    """按 in-flight 任务批量续约。
 
-    Java equivalent: ``LeaseRenewalScheduler``.
+    Java 对应类:``LeaseRenewalScheduler``。
 
     Args:
-        config: Validated SDK config (provides ``lease_renew_interval``).
-        http: Live :class:`PlatformHttpClient`.
-        dispatcher: :class:`DispatcherLike`.
+        config: 已校验的 SDK 配置(提供 ``lease_renew_interval``)。
+        http: 已建立连接的 :class:`PlatformHttpClient`。
+        dispatcher: 满足 :class:`DispatcherLike` 协议的 dispatcher。
     """
 
     def __init__(
@@ -56,7 +56,7 @@ class LeaseRenewalScheduler:
         return self._task is not None and not self._task.done()
 
     async def start(self) -> None:
-        """Launch the lease-renewal loop. Idempotent."""
+        """启动租约续约循环,幂等。"""
         if self.running:
             logger.debug("LeaseRenewalScheduler already running, ignoring start()")
             return
@@ -65,7 +65,7 @@ class LeaseRenewalScheduler:
         logger.info("LeaseRenewalScheduler started: interval=%.3fs", self._interval_s)
 
     async def stop(self) -> None:
-        """Signal stop + await loop exit. Safe to call multiple times."""
+        """请求停止并等待循环退出,可重复调用。"""
         if self._task is None:
             return
         self._stop_event.set()
@@ -80,13 +80,12 @@ class LeaseRenewalScheduler:
         logger.info("LeaseRenewalScheduler stopped")
 
     async def tick(self) -> None:
-        """Renew every in-flight lease once. Per-task failures isolated."""
+        """对每个 in-flight 租约续约一次,单任务失败相互隔离。"""
         ids = self._dispatcher.in_flight_task_ids()
         if not ids:
             return
-        # Iterate over a sorted copy so test assertions are deterministic
-        # and we never mutate while iterating (dispatcher pops as tasks
-        # complete in the background).
+        # 排序后的副本上迭代:既能让测试断言确定,又能避免在 dispatcher
+        # 后台完成任务时边迭代边改 dict。
         for task_id in sorted(ids):
             await self._renew_one(task_id)
 
@@ -98,8 +97,8 @@ class LeaseRenewalScheduler:
         try:
             resp = await self._http.renew(task_id, body)
         except PlatformError as ex:
-            # ``_http.renew`` surfaces 404/410 as ConflictError/Persistent;
-            # treat statusCode if available, otherwise WARN-only.
+            # ``_http.renew`` 把 404/410 转成 ConflictError/Persistent;
+            # 取 statusCode(若有)判断,否则仅 WARN。
             status = getattr(ex, "status_code", None)
             if status in (404, 410):
                 logger.warning(
@@ -120,17 +119,16 @@ class LeaseRenewalScheduler:
             self._safe_mark_cancel(task_id, "platform-cancel")
 
     def _safe_mark_cancel(self, task_id: int, reason: str) -> None:
-        """Dispatcher may not have ``mark_cancel_requested`` yet (Lane U).
+        """转发取消信号到 dispatcher;当前 dispatcher 还未提供该方法时降级 WARN。
 
-        We use ``getattr`` so this lane is forward-compatible with the
-        Lane U / Lane S extension. If the method is missing we WARN once
-        per call so it stays visible during the staggered merge window.
+        使用 ``getattr`` 探测保持向前兼容:dispatcher 后续会补
+        ``mark_cancel_requested``,在此之前缺失即 WARN 提示,避免静默。
         """
         mark = getattr(self._dispatcher, "mark_cancel_requested", None)
         if mark is None:
             logger.warning(
                 "dispatcher missing mark_cancel_requested(taskId=%s, reason=%s) — "
-                "Lane S/U extension not yet wired",
+                "cancel signal not yet wired",
                 task_id,
                 reason,
             )

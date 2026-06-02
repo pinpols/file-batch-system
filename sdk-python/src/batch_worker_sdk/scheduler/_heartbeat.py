@@ -1,25 +1,21 @@
-"""Async heartbeat scheduler.
+"""异步心跳调度器。
 
-Python port of Java ``com.example.batch.sdk.scheduler.HeartbeatScheduler``.
-Runs as a long-lived ``asyncio.Task`` launched by
-:class:`~batch_worker_sdk.client.client.BatchPlatformClient.start`.
+对应 Java ``com.example.batch.sdk.scheduler.HeartbeatScheduler``,作为长生
+命周期的 ``asyncio.Task`` 由
+:class:`~batch_worker_sdk.client.client.BatchPlatformClient.start` 启动。
 
-Design parity with Java (key invariants):
+与 Java 端保持的关键不变量:
 
-- **HTTP failures never kill the loop.** Java wraps the entire tick in
-  ``try { ... } catch (Throwable) { log.warn }``. We do the same: any
-  exception is caught and logged at WARN; the orchestrator's
-  missed-heartbeat threshold handles the worker-side gap.
-- **HeartbeatScheduler honours ``nextHeartbeatHint``** (Java Lane I,
-  PR #251). The orch can push the next-tick interval up or down; we
-  clamp it to ``[1s, baseline * 10]`` so a misconfigured orch can't
-  storm us at 100ms or starve heartbeats at 1h.
+- **HTTP 失败永不杀死循环。** Java 端用 ``try { ... } catch (Throwable) {
+  log.warn }`` 包整个 tick;Python 端同样吸收任何异常并 WARN,空窗期由
+  orch 端的"missed-heartbeat 阈值"处理。
+- **调度器响应 ``nextHeartbeatHint``**(PR #251)。orch 可上调或下调下一
+  tick 间隔;本地把 hint 钳制到 ``[1s, baseline * 10]``,避免配置错误的
+  orch 让 worker 100ms 风暴或 1h 饥饿。
 
-Decoupling note: schedulers depend on a tiny :class:`DispatcherLike`
-protocol rather than the concrete ``TaskDispatcher`` (Lane S P2). This
-keeps mypy strict happy in the worktree window where Lane S has not yet
-landed, and lets test code substitute a tiny fake without bringing in
-``aiokafka`` etc.
+解耦说明:调度器只依赖一个轻量级的 :class:`DispatcherLike` Protocol,而非
+具体 ``TaskDispatcher`` 实现。这样既能让 mypy strict 在两边分别迭代时通过,
+也方便测试代码注入小型假实现而无需引入 ``aiokafka`` 等重型依赖。
 """
 
 from __future__ import annotations
@@ -38,19 +34,18 @@ from batch_worker_sdk.scheduler._directive import ParsedDirective, parse_directi
 logger = logging.getLogger(__name__)
 
 
-# ─── Java HeartbeatScheduler constants ─────────────────────────────────
-# Mirror MIN_HINT_MS=1000 and MAX_HINT_MULTIPLIER=10.
+# ─── 与 Java HeartbeatScheduler 一致的常量 ────────────────────────────
+# 对应 MIN_HINT_MS=1000 和 MAX_HINT_MULTIPLIER=10。
 _MIN_HINT_S: float = 1.0
 _MAX_HINT_MULTIPLIER: int = 10
 
 
 @runtime_checkable
 class DispatcherLike(Protocol):
-    """Subset of ``TaskDispatcher`` the schedulers need.
+    """调度器实际需要的 ``TaskDispatcher`` 方法子集。
 
-    Lane S (P2) ``TaskDispatcher`` implements this naturally; the
-    explicit ``Protocol`` here keeps the schedulers loosely coupled and
-    independently testable.
+    ``TaskDispatcher`` 天然实现此 Protocol;这里显式声明是为了让调度器
+    与具体 dispatcher 解耦,便于独立单元测试。
     """
 
     def in_flight_count(self) -> int: ...
@@ -60,22 +55,22 @@ class DispatcherLike(Protocol):
 
 
 def _utc_now_iso() -> str:
-    """RFC 3339 timestamp matching Java ``Instant.now().toString()``."""
+    """RFC 3339 时间戳,与 Java ``Instant.now().toString()`` 字符串一致。"""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 class HeartbeatScheduler:
-    """Periodic heartbeat poster with orch-driven re-pacing.
+    """周期性心跳,允许 orch 端动态调节节流。
 
-    Java equivalent: ``HeartbeatScheduler`` (fixed-delay schedule, hint
-    re-pace via ``applyHeartbeatHint``).
+    Java 对应类:``HeartbeatScheduler``(固定延时调度 + ``applyHeartbeatHint``
+    动态节流)。
 
     Args:
-        config: Validated SDK config (provides ``heartbeat_interval``).
-        http: Live :class:`PlatformHttpClient`.
-        dispatcher: Anything matching :class:`DispatcherLike` — the
-            scheduler reads ``in_flight_count`` for the heartbeat body
-            and forwards parsed directives to ``apply_platform_directive``.
+        config: 已校验的 SDK 配置(提供 ``heartbeat_interval``)。
+        http: 已建立连接的 :class:`PlatformHttpClient`。
+        dispatcher: 满足 :class:`DispatcherLike` 的对象 —— 心跳 body 需要
+            ``in_flight_count``,解析出的 directive 会回灌至
+            ``apply_platform_directive``。
     """
 
     def __init__(
@@ -92,23 +87,23 @@ class HeartbeatScheduler:
         self._task: asyncio.Task[None] | None = None
         self._stop_event: asyncio.Event = asyncio.Event()
 
-    # ─── observable state (tests + diagnostics) ────────────────────────
+    # ─── 可观察状态(测试 + 诊断) ────────────────────────────────────
 
     @property
     def current_interval_s(self) -> float:
-        """Current effective interval in seconds (post-hint clamp)."""
+        """当前生效的心跳间隔(经 hint 钳制后的秒数)。"""
         return self._next_interval_s
 
     @property
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    # ─── lifecycle ─────────────────────────────────────────────────────
+    # ─── 生命周期 ────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Launch the heartbeat loop as a background task.
+        """以后台任务形式启动心跳循环。
 
-        Idempotent: a second ``start()`` is a no-op (logged at DEBUG).
+        幂等:重复调用 ``start()`` 直接返回(DEBUG 记录)。
         """
         if self.running:
             logger.debug("HeartbeatScheduler already running, ignoring start()")
@@ -118,7 +113,7 @@ class HeartbeatScheduler:
         logger.info("HeartbeatScheduler started: interval=%.3fs", self._baseline_s)
 
     async def stop(self) -> None:
-        """Signal stop + await loop exit. Safe to call multiple times."""
+        """请求停止并等待循环退出,可重复调用。"""
         if self._task is None:
             return
         self._stop_event.set()
@@ -132,15 +127,15 @@ class HeartbeatScheduler:
         self._task = None
         logger.info("HeartbeatScheduler stopped")
 
-    # ─── single tick (exposed for unit tests) ──────────────────────────
+    # ─── 单次 tick(暴露给单测使用) ─────────────────────────────────
 
     async def tick(self) -> ParsedDirective | None:
-        """Run exactly one heartbeat round + apply the response directive.
+        """执行一次心跳并应用响应中的 directive。
 
-        Returns the parsed directive (for tests / observability), or
-        ``None`` if the heartbeat HTTP call failed.
+        返回解析后的 directive(测试 / 可观测性场景使用);心跳 HTTP 失败
+        时返回 ``None``。
 
-        Failures are absorbed: caller is the loop, which must not die.
+        异常被吸收:调用方是循环本体,不能让它挂掉。
         """
         body: dict[str, Any] = {
             "tenantId": self._config.tenant_id,
@@ -152,8 +147,8 @@ class HeartbeatScheduler:
         try:
             resp = await self._http.heartbeat(self._config.worker_code, body)
         except PlatformError as ex:
-            # Wire-protocol §B: orch missed-heartbeat threshold tolerates a
-            # few of these; we just log and let the loop sleep & retry.
+            # wire-protocol §B:orch 端 missed-heartbeat 阈值能容忍少量丢失,
+            # 这里仅 WARN,让循环睡完间隔后再试。
             logger.warning("heartbeat failed: %s", ex)
             return None
         except Exception as ex:
@@ -166,19 +161,18 @@ class HeartbeatScheduler:
         except Exception as ex:
             logger.warning("apply_platform_directive failed: %s", ex)
 
-        # Lane I (ADR-035 §11): hint-driven re-pacing.
+        # ADR-035 §11:hint 驱动的动态节流。
         if directive.next_heartbeat_hint is not None:
             self._apply_hint(directive.next_heartbeat_hint.total_seconds())
         return directive
 
-    # ─── internals ─────────────────────────────────────────────────────
+    # ─── 内部实现 ────────────────────────────────────────────────────
 
     async def _run_loop(self) -> None:
-        """Fixed-delay scheduler — each iteration sleeps the *current* interval.
+        """固定延时调度 —— 每轮按 **当前** 间隔睡眠。
 
-        Mirrors Java's ``scheduleWithFixedDelay``: the next tick is paced
-        relative to **completion** of the previous, not start, so a slow
-        heartbeat can never queue up and stampede the platform.
+        对齐 Java 的 ``scheduleWithFixedDelay``:下一 tick 时刻以上一 tick
+        **完成** 为锚,而非开始,因此缓慢的心跳不会堆积或对平台造成 stampede。
         """
         try:
             while not self._stop_event.is_set():
@@ -187,7 +181,7 @@ class HeartbeatScheduler:
                         self._stop_event.wait(),
                         timeout=self._next_interval_s,
                     )
-                    # Event set → exit loop
+                    # event 已置位 → 退出循环
                     return
                 except TimeoutError:
                     pass
@@ -196,11 +190,11 @@ class HeartbeatScheduler:
             raise
 
     def _apply_hint(self, hint_s: float) -> None:
-        """Clamp + apply a heartbeat-interval hint from orch.
+        """对 orch 下发的心跳间隔提示做钳制并应用。
 
-        - ``< 1s`` → 1s (anti-flood)
-        - ``> 10 * baseline`` → 10 * baseline (anti-starve)
-        - equal to current → no-op
+        - ``< 1s`` → 1s(防止风暴)
+        - ``> 10 * baseline`` → 10 * baseline(防止饥饿)
+        - 与当前值相同 → 不动
         """
         max_s = self._baseline_s * _MAX_HINT_MULTIPLIER
         clamped = max(_MIN_HINT_S, min(max_s, hint_s))

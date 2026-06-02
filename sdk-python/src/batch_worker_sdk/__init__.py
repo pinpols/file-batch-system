@@ -1,6 +1,6 @@
-"""batch-worker-sdk: Python SDK for the file-batch-system worker protocol.
+"""batch-worker-sdk:file-batch-system worker 协议的 Python SDK。
 
-Package layout strictly mirrors the Java SDK (``com.example.batch.sdk.*``):
+包结构严格对齐 Java SDK(``com.example.batch.sdk.*``):
 
 ==========================================================  ===================================
 Java                                                        Python
@@ -14,16 +14,16 @@ Java                                                        Python
 ``com.example.batch.sdk.task``                              :mod:`batch_worker_sdk.task`
 ==========================================================  ===================================
 
-Public surface (only canonical paths — no compat shims):
+对外公开的入口(只保留 canonical 路径,不提供兼容 shim):
 
-- :class:`BatchPlatformClient`, :class:`BatchPlatformClientConfig`
-- :class:`SdkTaskHandler`, ``@batch_task``, :func:`collect_registered_handlers`
-- :class:`SdkTaskContext`, :class:`SdkTaskResult`, :class:`SdkTaskTypeDescriptor`
-- :class:`WorkerRuntimeState`, :class:`ProgressReporter`, :class:`CancellationSignal`
-- Exception hierarchy (:class:`PlatformError` + four typed subclasses)
+- :class:`BatchPlatformClient`、:class:`BatchPlatformClientConfig`
+- :class:`SdkTaskHandler`、``@batch_task``、:func:`collect_registered_handlers`
+- :class:`SdkTaskContext`、:class:`SdkTaskResult`、:class:`SdkTaskTypeDescriptor`
+- :class:`WorkerRuntimeState`、:class:`ProgressReporter`、:class:`CancellationSignal`
+- 异常体系(:class:`PlatformError` + 四个类型化子类)
 
-Intentionally **not** exported: the :mod:`internal`, :mod:`retry`, and
-:mod:`scheduler` modules — package-internal plumbing.
+刻意 **不** 对外导出 :mod:`internal`、:mod:`retry`、:mod:`scheduler` —— 这些
+都是包内私有实现。
 """
 
 from __future__ import annotations

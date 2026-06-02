@@ -1,7 +1,7 @@
-"""Dispatcher subpackage — mirror of Java ``com.example.batch.sdk.dispatcher``.
+"""dispatcher 子包 —— 对齐 Java ``com.example.batch.sdk.dispatcher``。
 
-Hosts :class:`TaskDispatcher` (per-tenant in-flight registry + handler
-routing) and the :func:`run_worker` runner entrypoint.
+承载 :class:`TaskDispatcher`(按租户维护 in-flight 注册表 + handler 路由)
+以及 :func:`run_worker` 入口。
 """
 
 from __future__ import annotations

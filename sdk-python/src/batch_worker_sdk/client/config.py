@@ -1,11 +1,10 @@
-"""BatchPlatformClientConfig — Python (pydantic v2) port.
+"""BatchPlatformClientConfig —— Python (pydantic v2) 移植版本。
 
-Mirrors ``com.example.batch.sdk.client.BatchPlatformClientConfig`` field
-set + startup validation. Java SDK uses Lombok ``@Value`` + ``@Builder``;
-we use ``pydantic.BaseModel`` with ``model_config = ConfigDict(frozen=True)``
-to keep the same "immutable value object" semantics.
+字段集合 + 启动期校验完全对齐 Java ``com.example.batch.sdk.client.BatchPlatformClientConfig``。
+Java 端用 Lombok ``@Value`` + ``@Builder``;Python 这边用 ``pydantic.BaseModel``
+加 ``model_config = ConfigDict(frozen=True)`` 保留"不可变值对象"语义。
 
-Java equivalence table (P1 subset; Kafka SASL fields land in P2):
+Java 与 Python 字段对照:
 
 ==============================  ==============================
 Java field                      Python field
@@ -24,10 +23,9 @@ claimRetryBaseDelay             claim_retry_base_delay
 clientErrorFailFastThreshold    client_error_fail_fast_threshold
 ==============================  ==============================
 
-Startup timing validation (``_validate_timings``) ports Java Lane I
-PR #251 ``validateTimings()`` byte-for-byte: same four rules, same
-suggested-value hints in the error messages so operators can grep both
-codebases with the same string.
+启动期 timing 校验(``_validate_timings``)逐字移植 Java PR #251 的
+``validateTimings()``:同样四条规则,异常文案也保留同一行文,便于跨两侧
+代码库用同一关键字 grep 排查。
 """
 
 from __future__ import annotations
@@ -43,13 +41,13 @@ from batch_worker_sdk._version import __version__
 
 
 class BatchPlatformClientConfig(BaseModel):
-    """SDK connection config — async equivalent of the Java value object.
+    """SDK 连接配置 —— Java 端值对象的异步等价物。
 
-    Construct via ``BatchPlatformClientConfig(base_url=..., tenant_id=...,
-    worker_code=...)`` or ``BatchPlatformClientConfig.from_env()``.
+    构造方式:``BatchPlatformClientConfig(base_url=..., tenant_id=...,
+    worker_code=...)`` 或 ``BatchPlatformClientConfig.from_env()``。
 
-    Validation runs automatically (pydantic ``model_validator(mode="after")``)
-    so any timing rule violation raises ``ValueError`` at construction.
+    校验由 pydantic ``model_validator(mode="after")`` 自动执行,timing 规则
+    违例会在构造时直接抛 ``ValueError``。
     """
 
     model_config = ConfigDict(
@@ -58,12 +56,12 @@ class BatchPlatformClientConfig(BaseModel):
         extra="forbid",
     )
 
-    # ─── required ──────────────────────────────────────────────────────
+    # ─── 必填项 ────────────────────────────────────────────────────────
     base_url: str
     tenant_id: str = Field(min_length=1)
     worker_code: str = Field(min_length=1)
 
-    # ─── optional / defaulted (aligned with Java) ──────────────────────
+    # ─── 可选 / 有默认值(与 Java 对齐) ─────────────────────────────
     api_key: str | None = None
     build_id: str | None = None
     sdk_version: str = __version__
@@ -74,28 +72,26 @@ class BatchPlatformClientConfig(BaseModel):
 
     max_concurrent_tasks: int = Field(default=4, ge=1, le=64)
 
-    # ─── retry knobs (wire-protocol §C) ────────────────────────────────
+    # ─── 重试相关旋钮(wire-protocol §C) ─────────────────────────────
     retry_max_attempts: int = Field(default=3, ge=1, le=10)
     retry_base_delay: timedelta = timedelta(milliseconds=200)
     client_error_fail_fast_threshold: int = Field(default=5, ge=0, le=100)
 
-    # ─── Kafka dispatch consumer (P2 / Lane S) ─────────────────────────
-    # Mirrors Java ``BatchPlatformClientConfig`` Kafka fields. All
-    # optional at the config layer; ``KafkaTaskConsumer.start()`` raises
-    # at runtime if the mandatory ones (bootstrap / group / pattern) are
-    # missing — keeps the P1 HTTP-only test paths working without
-    # forcing every fixture to populate Kafka knobs.
+    # ─── Kafka 派发消费者 ─────────────────────────────────────────────
+    # 对齐 Java ``BatchPlatformClientConfig`` 的 Kafka 字段。配置层全部可选;
+    # ``KafkaTaskConsumer.start()`` 在缺失 bootstrap / group / pattern 时
+    # 才抛错。这样 HTTP-only 的测试路径无需填 Kafka 旋钮也能跑通。
     kafka_bootstrap: str | None = None
     kafka_group_id: str | None = None
     kafka_topic_pattern: str | None = None
     kafka_poll_interval: timedelta = timedelta(milliseconds=500)
-    # Per-tenant SASL/SCRAM (ACL path). All three blank → PLAINTEXT
-    # (local dev); any non-blank → all forwarded to aiokafka.
+    # 按租户的 SASL/SCRAM(ACL 路径)。三项全空 → PLAINTEXT(本地开发);
+    # 任一非空 → 整体转发给 aiokafka。
     kafka_security_protocol: str | None = None
     kafka_sasl_mechanism: str | None = None
     kafka_sasl_jaas_config: str | None = None
 
-    # ─── validation ────────────────────────────────────────────────────
+    # ─── 校验 ────────────────────────────────────────────────────────
 
     @model_validator(mode="after")
     def _validate(self) -> BatchPlatformClientConfig:
@@ -107,10 +103,9 @@ class BatchPlatformClientConfig(BaseModel):
         return self
 
     def _validate_timings(self) -> None:
-        """Port of Java ``validateTimings()`` (Lane I PR #251).
+        """移植自 Java ``validateTimings()``(PR #251)。
 
-        Four rules, same error-message shape so operators can grep across
-        both stacks:
+        四条规则,异常文案与 Java 端保持一致,便于跨两套代码库 grep 排查:
 
         - ``heartbeat_interval >= 1s``
         - ``lease_renew_interval >= 5s``
@@ -150,7 +145,7 @@ class BatchPlatformClientConfig(BaseModel):
                 f"suggest 调大 heartbeat_interval 或调小 http_timeout"
             )
 
-    # ─── env-driven factory ────────────────────────────────────────────
+    # ─── 基于环境变量的工厂 ────────────────────────────────────────────
 
     @classmethod
     def from_env(
@@ -158,15 +153,15 @@ class BatchPlatformClientConfig(BaseModel):
         prefix: str = "BATCH_SDK_",
         getter: Callable[[str], str | None] = os.environ.get,
     ) -> BatchPlatformClientConfig:
-        """Construct from environment variables.
+        """从环境变量构造配置。
 
-        Required: ``<prefix>BASE_URL / TENANT_ID / WORKER_CODE``.
-        Optional: ``API_KEY / BUILD_ID / HTTP_TIMEOUT_SECONDS /
+        必填:``<prefix>BASE_URL / TENANT_ID / WORKER_CODE``。
+        可选:``API_KEY / BUILD_ID / HTTP_TIMEOUT_SECONDS /
         HEARTBEAT_INTERVAL_SECONDS / LEASE_RENEW_INTERVAL_SECONDS /
         MAX_CONCURRENT_TASKS / RETRY_MAX_ATTEMPTS / RETRY_BASE_DELAY_MS /
-        CLIENT_ERROR_FAIL_FAST_THRESHOLD``.
+        CLIENT_ERROR_FAIL_FAST_THRESHOLD``。
 
-        Kafka-related env vars are reserved for P2 (Kafka consumer lane).
+        Kafka 相关的环境变量目前未在此工厂注入,需直接通过构造函数传值。
         """
         missing: list[str] = []
 
@@ -225,5 +220,5 @@ class BatchPlatformClientConfig(BaseModel):
 
 
 def _ms(td: timedelta) -> int:
-    """``timedelta`` → integer milliseconds (matches Java ``Duration.toMillis()``)."""
+    """``timedelta`` → 整数毫秒(对齐 Java ``Duration.toMillis()``)。"""
     return int(td.total_seconds() * 1000)

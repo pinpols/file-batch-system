@@ -1,15 +1,12 @@
-"""Async HTTP client for the orchestrator ``/internal/*`` protocol.
+"""orchestrator ``/internal/*`` 协议的异步 HTTP 客户端。
 
-Python equivalent of
-``com.example.batch.sdk.internal.PlatformHttpClient`` — same endpoint
-set, same headers, same idempotency semantics, but built on
-``httpx.AsyncClient`` because Python BYO SDK is async-only (see
-``sdk-python/README.md`` Roadmap).
+对应 Java ``com.example.batch.sdk.internal.PlatformHttpClient`` —— 端点集合 /
+请求头 / 幂等语义完全一致;底层使用 ``httpx.AsyncClient``,因为 Python 端
+SDK 仅支持 async(详见 ``sdk-python/README.md`` Roadmap)。
 
-Endpoints implemented in P1 (mirrors openapi
-``docs/api/orchestrator-internal.openapi.yaml`` — every ``stable``
-path is wired up; ``beta`` / ``internal-only`` paths are wired too
-for completeness since they are pure HTTP wrappers):
+已实现的端点(对齐 openapi ``docs/api/orchestrator-internal.openapi.yaml``,
+所有 ``stable`` 路径均已接入;``beta`` / ``internal-only`` 路径也一并接入,
+因为它们就是纯 HTTP 包装):
 
 - POST /internal/workers/register                         (register)
 - POST /internal/workers/{code}/heartbeat                 (heartbeat)
@@ -20,9 +17,8 @@ for completeness since they are pure HTTP wrappers):
 - POST /internal/tasks/{id}/report                        (report)
 - POST /internal/tasks/{id}/renew                         (renew)
 
-Write operations (``claim`` / ``report``) accept an
-``idempotency_key`` argument and propagate it via the
-``Idempotency-Key`` header — same as the Java client.
+写操作(``claim`` / ``report``)接受 ``idempotency_key`` 参数并通过
+``Idempotency-Key`` 请求头透传 —— 行为与 Java client 一致。
 """
 
 from __future__ import annotations
@@ -37,19 +33,17 @@ from batch_worker_sdk.retry._retry import ClientErrorCounter, with_retry
 
 
 class PlatformHttpClient:
-    """Thin async wrapper over the platform ``/internal/*`` HTTP API.
+    """对平台 ``/internal/*`` HTTP API 的薄异步封装。
 
-    Owns one ``httpx.AsyncClient`` for the lifetime of the worker
-    process. Call :meth:`close` (or use ``async with``) on shutdown to
-    drain the connection pool — otherwise pytest will warn about
-    leaked sockets.
+    在 worker 进程生命周期内持有一个 ``httpx.AsyncClient``;关停时调用
+    :meth:`close`(或使用 ``async with``)以释放连接池,否则 pytest 会因
+    socket 泄漏报警。
 
     Args:
-        config: Validated SDK config (see :class:`BatchPlatformClientConfig`).
-        client: Optional preconfigured ``httpx.AsyncClient`` — primarily
-            for tests with ``pytest_httpx`` or ``respx``. Production
-            callers should leave this ``None`` so we build a client
-            with the timeout from ``config``.
+        config: 已校验的 SDK 配置(见 :class:`BatchPlatformClientConfig`)。
+        client: 可选的预构造 ``httpx.AsyncClient``,主要供使用
+            ``pytest_httpx`` / ``respx`` 的测试场景。生产代码请保持
+            ``None``,本类会依据 ``config`` 的 timeout 自行构造。
     """
 
     def __init__(
@@ -76,10 +70,10 @@ class PlatformHttpClient:
             )
             self._owns_client = True
 
-    # ─── lifecycle ─────────────────────────────────────────────────────
+    # ─── 生命周期 ────────────────────────────────────────────────────
 
     async def close(self) -> None:
-        """Close the underlying ``httpx.AsyncClient`` if we own it."""
+        """关闭由本对象创建的 ``httpx.AsyncClient``;注入的 client 不动。"""
         if self._owns_client:
             await self._client.aclose()
 
@@ -96,29 +90,29 @@ class PlatformHttpClient:
 
     @property
     def client_error_counter(self) -> ClientErrorCounter:
-        """Expose the cumulative 4xx counter for diagnostics / tests."""
+        """暴露累计 4xx 计数器,供诊断 / 测试使用。"""
         return self._counter
 
     # ─── workers/* ─────────────────────────────────────────────────────
 
     async def register(self, body: dict[str, Any]) -> dict[str, Any]:
-        """POST /internal/workers/register — body schema = WorkerHeartbeatDto."""
+        """POST /internal/workers/register —— body 形状对齐 WorkerHeartbeatDto。"""
         return await self._post_json("/internal/workers/register", body)
 
     async def heartbeat(self, worker_code: str, body: dict[str, Any]) -> dict[str, Any]:
-        """POST /internal/workers/{code}/heartbeat — returns platform directive."""
+        """POST /internal/workers/{code}/heartbeat —— 返回平台 directive。"""
         return await self._post_json(f"/internal/workers/{worker_code}/heartbeat", body)
 
     async def deactivate(self, worker_code: str, body: dict[str, Any]) -> None:
-        """POST /internal/workers/{code}/deactivate — graceful offline."""
+        """POST /internal/workers/{code}/deactivate —— 优雅下线。"""
         await self._post_json(f"/internal/workers/{worker_code}/deactivate", body)
 
     async def get_status(self, worker_code: str) -> dict[str, Any]:
-        """GET /internal/workers/{code}/status — single-worker dashboard data."""
+        """GET /internal/workers/{code}/status —— 单 worker 仪表盘数据。"""
         return await self._get_json(f"/internal/workers/{worker_code}/status")
 
     async def drain(self, worker_code: str, body: dict[str, Any]) -> dict[str, Any]:
-        """POST /internal/workers/{code}/drain — ops-initiated drain."""
+        """POST /internal/workers/{code}/drain —— 运维侧主动触发 drain。"""
         return await self._post_json(f"/internal/workers/{worker_code}/drain", body)
 
     # ─── tasks/* ───────────────────────────────────────────────────────
@@ -129,11 +123,11 @@ class PlatformHttpClient:
         idempotency_key: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
-        """POST /internal/tasks/{id}/claim — returns EffectiveTaskConfig.
+        """POST /internal/tasks/{id}/claim —— 返回 EffectiveTaskConfig。
 
-        409 surfaces as a normal return (response body included) so
-        callers can detect the idempotent-already-claimed path per
-        wire-protocol §B without an ``except ConflictError``.
+        409 以正常返回值形式暴露(包含响应体),调用方无需 ``except
+        ConflictError``,即可按 wire-protocol §B 分支处理"幂等已 claim"
+        情况。
         """
         return await self._post_json(
             f"/internal/tasks/{task_id}/claim",
@@ -147,7 +141,7 @@ class PlatformHttpClient:
         idempotency_key: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
-        """POST /internal/tasks/{id}/report — body = TaskExecutionReportDto."""
+        """POST /internal/tasks/{id}/report —— body 对应 TaskExecutionReportDto。"""
         return await self._post_json(
             f"/internal/tasks/{task_id}/report",
             body,
@@ -155,10 +149,10 @@ class PlatformHttpClient:
         )
 
     async def renew(self, task_id: int, body: dict[str, Any]) -> dict[str, Any]:
-        """POST /internal/tasks/{id}/renew — body = TaskClaimRequest fields."""
+        """POST /internal/tasks/{id}/renew —— body 对应 TaskClaimRequest 字段。"""
         return await self._post_json(f"/internal/tasks/{task_id}/renew", body)
 
-    # ─── internals ─────────────────────────────────────────────────────
+    # ─── 内部实现 ────────────────────────────────────────────────────
 
     def _headers(self, idempotency_key: str | None) -> dict[str, str]:
         h: dict[str, str] = {
@@ -206,7 +200,7 @@ class PlatformHttpClient:
 
 
 def _decode_body(resp: httpx.Response) -> dict[str, Any]:
-    """Parse JSON body; tolerate empty 2xx bodies (deactivate returns 200 no-body)."""
+    """解析 JSON body;空 2xx body 容忍(如 deactivate 返回 200 空体)。"""
     if not resp.content:
         return {}
     try:
@@ -215,7 +209,6 @@ def _decode_body(resp: httpx.Response) -> dict[str, Any]:
         return {}
     if isinstance(decoded, dict):
         return decoded
-    # Some endpoints (lease/renew-batch in P2) return arrays; wrap so
-    # caller signature stays homogeneous. P1 endpoints all return
-    # objects, so this branch is defensive only.
+    # 部分端点(如批量续约)返回数组,这里包成 dict 以让调用方的签名保持
+    # 同质;当前的所有端点都返回 object,本分支属于防御性兜底。
     return {"_array": decoded}

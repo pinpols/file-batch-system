@@ -1,7 +1,7 @@
-"""Client subpackage — mirror of Java ``com.example.batch.sdk.client``.
+"""client 子包 —— 对齐 Java ``com.example.batch.sdk.client``。
 
-Houses :class:`BatchPlatformClient` and its validated configuration model
-:class:`BatchPlatformClientConfig`.
+包含 :class:`BatchPlatformClient` 入口类及其配置模型
+:class:`BatchPlatformClientConfig`。
 """
 
 from __future__ import annotations
