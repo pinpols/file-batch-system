@@ -54,6 +54,7 @@ import org.springframework.test.context.jdbc.Sql;
 @ActiveProfiles({"test", "e2e"})
 @Sql(scripts = {E2eTestSql.BIZ_SCHEMA, E2eTestSql.IMPORT_TEMPLATE_SEED})
 @Tag("e2e")
+@Tag("critical")
 class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
 
   // 与 ImportPipelineE2eIT 等已通过的 IT 对齐;E2E 的 worker/seed 体系默认覆盖此租户

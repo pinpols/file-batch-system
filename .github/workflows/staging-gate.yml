@@ -1,0 +1,127 @@
+name: staging-gate
+
+# R3-2 e2e 分级 — 全量 E2E(含 regression)的 staging 闸门。
+#
+# 触发:
+#   - schedule: 每天 18:00 UTC(北京 02:00)nightly 跑全量(含 smoke/critical/regression
+#     无 tag 过滤)。
+#   - workflow_dispatch: 手动 release 前过一遍。
+#
+# 与 pr-gate 关系:
+#   - pr-gate.yml `e2e-smoke` job 只跑 @Tag("smoke") + @Tag("critical")(12 个 E2eIT,
+#     ~15min wall-clock),反馈周期 Round-1 TOP-7 闭环目标。
+#   - 本 workflow 跑全量 26 个 E2eIT,4 shard 并发,~10min wall-clock,串行预算 ~2.5h。
+#
+# 与 full-ci-gate 关系:
+#   - full-ci-gate(main push)已并行跑全量 e2e-shard,本 workflow 是 staging branch
+#     / nightly schedule 的额外兜底,**不替代** full-ci-gate。
+#
+# 标签策略详见 docs/runbook/e2e-tier-strategy.md。
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每天 18:00 UTC(北京 02:00),低峰时段跑全量。
+    - cron: '0 18 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ===========================================================================
+  # e2e-shard:全量 E2E 4 shard 并发,无 tag 过滤(smoke + critical + regression
+  # 全跑)。分组沿用 full-ci-gate 的 LPT 均衡分配(docs/runbook/e2e-it-optimization-2026-05-22.md)。
+  # ===========================================================================
+  e2e-shard-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - id: 1
+            label: "338s ←最长 shard"
+            tests: >-
+              WorkerProcessRestartRecoveryE2eIT,
+              ExportFailurePipelineE2eIT,
+              WorkerDrainE2eIT,
+              ProcessPipelineE2eIT,
+              OutboxForwarderRetryE2eIT
+          - id: 2
+            label: "292s + trigger async"
+            tests: >-
+              ImportFailureE2eIT,
+              FullChainTenantPropagationE2eIT,
+              ImportFailurePipelineE2eIT,
+              ExportPipelineE2eIT,
+              TriggerAsyncLaunchFullChainE2eIT,
+              AtomicTaskPipelineE2eIT
+          - id: 3
+            label: "334s + atomic mixed"
+            tests: >-
+              DeadLetterApprovalReplayE2eIT,
+              DispatchFailurePipelineE2eIT,
+              MultiTenantConcurrentE2eIT,
+              ProcessFailurePipelineE2eIT,
+              OutboxForwarderE2eIT,
+              SensorWaitFixtureE2eIT,
+              AtomicMixedScenarioE2eIT
+          - id: 4
+            label: "334s + atomic seed/load"
+            tests: >-
+              ExportStorageFailureE2eIT,
+              DispatchPipelineE2eIT,
+              ExportContentVerificationE2eIT,
+              ImportPipelineE2eIT,
+              DedupJobLaunchE2eIT,
+              OutboxPollMarginsYamlE2eIT,
+              AtomicSeedStrictVerifyE2eIT,
+              AtomicTaskLoadE2eIT
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Install upstream modules to ~/.m2 (skip tests)
+        shell: bash
+        run: |
+          mvn install -DskipTests -pl '!batch-e2e-tests' -B
+
+      - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
+        shell: bash
+        # **不加** -Pe2e-smoke,本 workflow 故意跑全量(含 regression tag)。
+        # `-Dtest=` 指定 IT class 列表;-Dsurefire.failIfNoSpecifiedTests=false 防止
+        # 某 shard 上没匹配类时空跑也成功而误报。
+        run: |
+          TESTS="${{ matrix.shard.tests }}"
+          TESTS=$(echo "$TESTS" | tr -d ' \n')
+          mvn test -pl batch-e2e-tests \
+            -Dtest="$TESTS" \
+            -Dsurefire.failIfNoSpecifiedTests=false -B
+
+      - name: Upload E2E shard ${{ matrix.shard.id }} reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: staging-gate-e2e-shard-${{ matrix.shard.id }}-reports
+          path: |
+            batch-e2e-tests/target/surefire-reports/**
+          retention-days: 14

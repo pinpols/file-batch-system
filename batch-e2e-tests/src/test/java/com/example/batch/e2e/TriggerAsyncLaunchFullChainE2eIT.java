@@ -51,6 +51,7 @@ import org.springframework.test.context.ActiveProfiles;
     properties = {"batch.outbox.poll-interval-millis=500"})
 @ActiveProfiles({"test", "e2e"})
 @Tag("e2e")
+@Tag("critical")
 // E2eOrchestratorApplication ComponentScan 不覆盖 com.example.batch.common.i18n 包,
 // 显式 @Import BizMessageResolver 让 KafkaOutboxPublisher 等 i18n 依赖可以解出来
 @Import(BizMessageResolver.class)
