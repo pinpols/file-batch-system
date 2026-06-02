@@ -6,8 +6,12 @@ import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.worker.core.config.WorkerCheckpointProperties;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
+import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
+import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.worker.imports.domain.CustomerImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -62,6 +66,9 @@ public class LoadStep implements ImportStageStep {
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ImportWorkerConfiguration workerConfiguration;
   private final ObjectMapper objectMapper;
+  // ADR-038 P2:续跑位点(默认禁用,开关 batch.worker.checkpoint.enabled=true 才生效)
+  private final WorkerCheckpointProperties checkpointProperties;
+  private final ProcessingPositionStore positionStore;
 
   @Override
   public ImportStage stage() {
@@ -103,25 +110,47 @@ public class LoadStep implements ImportStageStep {
           importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
       int chunkSize = resolveChunkSize(context);
-      long loadedCount = 0L;
+
+      // ADR-038 P2:续跑位点。开关关闭或 pipeline_instance_id 缺失时退化为今天的行为(从 0 跑、不写位点)。
+      CheckpointHandle ckpt = openCheckpoint(context);
+      if (ckpt != null && ckpt.completed()) {
+        // 该实例的 LOAD 已整体完成,幂等跳过(防止重派后重复 loadChunk)。
+        deleteQuietly(validatedRecordsPath);
+        deleteQuietly(
+            resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
+        return markLoaded(context, ckpt.startLineNo());
+      }
+      long skipLines = ckpt == null ? 0L : ckpt.startLineNo();
+      long currentLineNo = skipLines;
+      long loadedCount = ckpt == null ? 0L : ckpt.startLineNo();
       try (BufferedReader reader =
           Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
+        // 续跑:把上次已处理到的行号 skip 掉(空行也算行,保持与首跑一致的行号语义)
+        for (long i = 0; i < skipLines && reader.readLine() != null; i++) {
+          // skip
+        }
         List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
         String line;
         while ((line = reader.readLine()) != null) {
+          currentLineNo++;
           if (!Texts.hasText(line)) {
             continue;
           }
           chunk.add(objectMapper.readValue(line, MAP_TYPE));
           if (chunk.size() >= chunkSize) {
-            loadedCount += flushChunk(plugin, loadCtx, chunk);
+            int written = flushChunk(plugin, loadCtx, chunk);
+            loadedCount += written;
+            advanceCheckpoint(ckpt, currentLineNo, written);
             chunk.clear();
           }
         }
         if (!chunk.isEmpty()) {
-          loadedCount += flushChunk(plugin, loadCtx, chunk);
+          int written = flushChunk(plugin, loadCtx, chunk);
+          loadedCount += written;
+          advanceCheckpoint(ckpt, currentLineNo, written);
         }
       }
+      completeCheckpoint(ckpt);
       commit(context, importPayload, loadedCount);
       deleteQuietly(validatedRecordsPath);
       deleteQuietly(
@@ -147,12 +176,72 @@ public class LoadStep implements ImportStageStep {
     }
   }
 
-  private long flushChunk(
+  private int flushChunk(
       ImportLoadPlugin plugin, ImportLoadContext loadCtx, List<Map<String, Object>> chunk)
       throws Exception {
     plugin.loadChunk(loadCtx, chunk);
     return chunk.size();
   }
+
+  // ADR-038 P2 续跑位点辅助 ─────────────────────────────────────────────────────
+
+  /**
+   * 启动续跑入口:开关关闭 / pipelineInstanceId 缺失 → 返回 null,走"无位点"原路径(从 0 跑、不写位点)。 开关开 + 有 instance id →
+   * 加载已存位点(可能 empty / completed / 中途位点)。
+   */
+  private CheckpointHandle openCheckpoint(ImportJobContext context) {
+    if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
+      return null;
+    }
+    Long pipelineInstanceId =
+        runtimeRepository.toLong(
+            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    if (pipelineInstanceId == null || pipelineInstanceId <= 0L) {
+      return null;
+    }
+    String tenantId = context.getTenantId();
+    ProcessingPosition pos = positionStore.load(tenantId, pipelineInstanceId, ProcessingStage.LOAD);
+    long startLineNo = parseLineNo(pos.positionMarker());
+    return new CheckpointHandle(tenantId, pipelineInstanceId, startLineNo, pos.completed());
+  }
+
+  /** chunk 落库后推进位点;handle=null 时为关闭态,no-op。 */
+  private void advanceCheckpoint(CheckpointHandle handle, long lineNoSeen, int chunkSize) {
+    if (handle == null) {
+      return;
+    }
+    positionStore.advance(
+        handle.tenantId(),
+        handle.pipelineInstanceId(),
+        ProcessingStage.LOAD,
+        Long.toString(lineNoSeen),
+        chunkSize);
+  }
+
+  /** 阶段整体完成时调用;handle=null no-op。 */
+  private void completeCheckpoint(CheckpointHandle handle) {
+    if (handle == null) {
+      return;
+    }
+    positionStore.markCompleted(
+        handle.tenantId(), handle.pipelineInstanceId(), ProcessingStage.LOAD);
+  }
+
+  private static long parseLineNo(String marker) {
+    if (marker == null || marker.isBlank()) {
+      return 0L;
+    }
+    try {
+      return Math.max(0L, Long.parseLong(marker.trim()));
+    } catch (NumberFormatException ex) {
+      // 位点损坏(理论上不应发生)— 退化为 0,从头跑(plugin 幂等兜底)
+      return 0L;
+    }
+  }
+
+  /** LOAD 阶段的续跑句柄;null = 续跑关闭走原路径。 */
+  private record CheckpointHandle(
+      String tenantId, long pipelineInstanceId, long startLineNo, boolean completed) {}
 
   /**
    * Legacy 路径:从 context 的 customerPayloads 列表加载,无暂存文件。新写入方一律走 streaming 路径
