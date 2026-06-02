@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
@@ -261,6 +263,23 @@ class DefaultWorkerRegistryServiceTest {
         new WorkerTaskTypeDescriptorDto(" ", "x", "v1", null, null, null);
 
     service.register(dtoWithTaskTypes(List.of(blank)));
+
+    verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
+  }
+
+  @Test
+  @DisplayName(
+      "register: descriptor.defaults 含 secret → Lane C SensitiveDataValidator 抛 BizException,不落库")
+  void registerRejectsDescriptorWithCredential_LaneC() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    WorkerTaskTypeDescriptorDto leaky =
+        new WorkerTaskTypeDescriptorDto(
+            "tenant_ta_leak", "leak", "v1", Map.of("apiKey", "leaked-AKIA-token"), null, null);
+
+    assertThatThrownBy(() -> service.register(dtoWithTaskTypes(List.of(leaky))))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.security.sensitive_in_payload");
 
     verify(customTaskTypeRegistryMapper, never()).upsertDeclared(any());
   }

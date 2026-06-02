@@ -1,5 +1,7 @@
 package com.example.batch.worker.atomic.http;
 
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.security.SensitiveDataValidator;
 import com.example.batch.common.spi.task.BatchTaskExecutor;
 import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
@@ -100,6 +102,18 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskResult execute(TaskContext ctx) {
     try {
+      // Lane C:扫 parameters,但排除 HTTP executor 协议显式的 `auth` 子树(其内
+      // username/password/token 是 protocol 一部分)。其他位置出现的 password / token / secret 仍拒。
+      // 后续 Lane C-FE follow-up 应在 console 表单层警示用户「auth.password 也强烈建议改用 env reference」。
+      Map<String, Object> paramsForScan = ctx.parameters();
+      if (paramsForScan != null && paramsForScan.containsKey(PARAM_AUTH)) {
+        Map<String, Object> filtered = new LinkedHashMap<>(paramsForScan);
+        filtered.remove(PARAM_AUTH);
+        SensitiveDataValidator.rejectIfContainsSensitiveKeys(filtered, "atomic.http.parameters");
+      } else {
+        SensitiveDataValidator.rejectIfContainsSensitiveKeys(
+            paramsForScan, "atomic.http.parameters");
+      }
       Invocation inv = parseInvocation(ctx);
       if (ctx.isDryRun()) {
         // ADR-026 §dry-run:不发出 HTTP 请求,只回传将要发的 method + url + header keys + body 长度。
@@ -126,6 +140,15 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       return runWithRetry(ctx, inv);
     } catch (HttpValidationException ex) {
       return TaskResult.fail(ex.getMessage());
+    } catch (BizException ex) {
+      log.warn(
+          "http executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
+          ctx.tenantId(),
+          ctx.jobCode(),
+          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
+              ? "?"
+              : ex.getMessageArgs()[1]);
+      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "http executor unexpected error: tenantId={}, jobCode={}",
