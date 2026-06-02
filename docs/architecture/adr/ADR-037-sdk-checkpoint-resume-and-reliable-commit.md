@@ -2,7 +2,7 @@
 
 - **Status**: Accepted(2026-06-01)— 全量 P1~P5,折入 roadmap Phase 5 支柱 A 之后(接口冻结再上 parallel-stream)
 - **Date**: 2026-06-01
-- **Related**: ADR-035 租户自托管 Worker SDK / ADR-036 SDK 五大业务模板 / ADR-020 batch-day-replay / ADR-038(平台侧同类能力,仍 🅿️ 挂起)
+- **Related**: ADR-035 租户自托管 Worker SDK / ADR-036 SDK 五大业务模板 / ADR-020 batch-day-replay / ADR-038(平台侧同类能力,2026-06-02 翻案 Accepted)
 - **Refines**: ADR-035 §SDK API 表面;ADR-036(本 ADR 给模板补"可分片 / 可续跑"能力)
 - **Plan**: 见本 ADR §实施分阶段;P1~P3 跟在支柱 A 接口冻结后,P4 parallel-stream 接口稳定后上
 
@@ -14,7 +14,7 @@
 
 **实施决定**:全量 P1~P5。P1(SdkCheckpoint 协议)+ P2(`ctx.commit` 同事务)+ P3(取消落进 commit 安全点)跟在 Phase 5 支柱 A 接口冻结后启动;P4(`SdkAbstractParallelStreamHandler` 分片模板)待支柱 A typed handler 接口稳定再上;P5 文档 + 测试收口。
 
-**注意**:平台侧 ADR-038 维持 🅿️ 挂起 —— 平台 Import/Export 已有 STORE 边界临时文件 + 生产强制幂等兜底,且其任务画像未被推翻;本翻案仅针对 SDK / 租户侧。
+**注意**:平台侧 ADR-038 已于 **2026-06-02 翻案 Accepted** —— 平台 Import / Export 同样踩到百万行级真实任务且出现崩溃重派记录,初评的"已有 STORE 边界 + 强制幂等兜底"被"重入安全 ≠ 重跑廉价"+"业务库重压成本被低估"反驳。SDK 侧(本 ADR)与平台侧(ADR-038)的同形态能力按各自分阶段独立推进,协议不强制共享但理念一致。
 
 ## 范围边界
 

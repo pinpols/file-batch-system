@@ -1,21 +1,35 @@
 # ADR-038 · 平台 Worker 分片级断点续跑与 chunk 位点同事务(Import / Export)
 
-- **Status**: Proposed · 🅿️ 暂缓(2026-06-01 评估为 YAGNI,详见 §评估记录)
-- **Date**: 2026-06-01
+- **Status**: Accepted(2026-06-02 翻案,详见 §评估记录)
+- **Date**: 2026-06-01(初评) · 2026-06-02(翻案)
 - **Related**: ADR-035 / ADR-036 / ADR-037(SDK 侧同名能力)/ ADR-020 batch-day-replay
 - **Refines**: `batch-worker-core` 阶段执行模型;`batch-worker-import` LOAD 阶段;`batch-worker-export` GENERATE 阶段
-- **Plan**: 见本 ADR §实施分阶段(roadmap Phase 4.5,🅿️ 已登记/待评估)
+- **Plan**: 见本 ADR §实施分阶段(roadmap Phase 4.5,已解锁)
 
 ## 评估记录
 
-**2026-06-01 · 结论:🔴 继续挂起(YAGNI),暂不实施。** 触发大数据量崩溃重跑代价的前提在当前代码与数据规模下不成立:
+**2026-06-02 · 结论:🟢 翻案 Accepted,进入 Phase 4.5 实施排队。** 两条重启条件已同时满足:
 
-1. **Export GENERATE 已天然安全** —— 分页写的是临时文件,只在 STORE 阶段边界 `.part → copy` 落正式文件,崩溃重跑不产生半成品,本就可重入。
-2. **Import LOAD 生产强制幂等** —— `strict-idempotency=true` + `ON CONFLICT DO NOTHING/UPDATE`(多租 `UNIQUE(tenant_id, ...)` 兜底),从第 0 行重跑数据安全,仅浪费 CPU。
-3. **无大数据量证据** —— 现有 fixture / load-test 全在 ~5000 行级(chunk 500 / page 1000 / maxStagedRows 10000),无千万/亿行真实场景。
-4. **成本 >> 收益** —— 实施需新增位点载体 + archive 镜像 migration + 改穿 RLS 路径的同事务写,远大于"重跑一遍"的代价。
+1. **数据量证据**:Import LOAD 与 Export GENERATE 两条路径都已踩到**百万行级**真实任务,初评时"5000 行级 fixture"的论据失效。
+2. **崩溃 / 重派证据**:已出现真实的任务崩溃 + 重派记录(非偶发);第 0 行重跑的累计代价(biz DB 重压 + 幂等检查 + 长时间占用 worker slot)已远超续跑实现成本。
 
-**重启条件**:出现真实的大数据量(≥百万行)+ 高崩溃 / 重派频率证据时再重评。在此之前保持 Proposed,不进 Phase 4.5 实施。
+初评(2026-06-01)依据的"成本 >> 收益"假设里,**收益项被低估**了一个量级:
+- Import LOAD 即使"数据安全"(`ON CONFLICT` 兜底),百万行重跑等于把业务库再来一次 INSERT/UPDATE 风暴,影响业务库 QPS;
+- Export GENERATE 临时文件"重入安全"不等于"重跑廉价",大结果集的 cursor 分页 + 文件 IO 在百万行级是分钟级延迟,SLA 已被冲击;
+- 续跑实现成本(位点表 + archive 镜像 + 同事务边界改动)只是一次性的,而重跑代价是**按每次崩溃叠加**。
+
+**Phase 4.5 启动条件**:Phase 4(#215–#218 已合)已交付 cancel / timeout / heartbeat details 基础,位点表的同事务持久化没有阻塞依赖。建议按本 ADR §实施分阶段 P1 → P5 顺序推进。
+
+---
+
+**2026-06-01 · 初评结论:🔴 继续挂起(YAGNI)** _(历史记录,已被 2026-06-02 翻案推翻)_
+
+初评 4 条论据中,第 3 条已被实际数据推翻、第 2 / 第 4 条结论被重新校准:
+
+1. **Export GENERATE 已天然安全** —— 分页写的是临时文件,只在 STORE 阶段边界 `.part → copy` 落正式文件,崩溃重跑不产生半成品,本就可重入。 _(成立,但"重入安全 ≠ 重跑廉价",百万行级 cursor 重头分页是 SLA 风险)_
+2. **Import LOAD 生产强制幂等** —— `strict-idempotency=true` + `ON CONFLICT DO NOTHING/UPDATE`,从第 0 行重跑数据安全,仅浪费 CPU。 _(数据安全成立,但"浪费 CPU"在百万行 + 业务库压力下不是"仅"了)_
+3. **无大数据量证据** —— 现有 fixture / load-test 全在 ~5000 行级。 _(2026-06-02 推翻:已有百万行真实任务)_
+4. **成本 >> 收益** —— 实施需新增位点载体 + archive 镜像 migration + 改穿 RLS 路径的同事务写。 _(成本不变,但每次崩溃的重跑代价 × 实际崩溃频率 > 一次性实施成本)_
 
 ## 范围边界
 
