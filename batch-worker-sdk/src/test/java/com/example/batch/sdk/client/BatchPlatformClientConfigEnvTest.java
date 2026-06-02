@@ -38,6 +38,9 @@ class BatchPlatformClientConfigEnvTest {
     Map<String, String> env = minimalEnv();
     env.put("BATCH_SDK_MAX_CONCURRENT_TASKS", "8");
     env.put("BATCH_SDK_HEARTBEAT_INTERVAL_SECONDS", "15");
+    // Lane I:覆盖默认 60s 让 lease <= heartbeat × 3(45s) 通过校验
+    env.put("BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS", "30");
+    env.put("BATCH_SDK_HTTP_TIMEOUT_SECONDS", "5");
     env.put("BATCH_SDK_API_KEY", "secret");
     env.put("BATCH_SDK_BUILD_ID", "abc123");
 
@@ -45,6 +48,7 @@ class BatchPlatformClientConfigEnvTest {
 
     assertThat(config.getMaxConcurrentTasks()).isEqualTo(8);
     assertThat(config.getHeartbeatInterval()).isEqualTo(Duration.ofSeconds(15));
+    assertThat(config.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(30));
     assertThat(config.getApiKey()).isEqualTo("secret");
     assertThat(config.getBuildId()).isEqualTo("abc123");
   }
