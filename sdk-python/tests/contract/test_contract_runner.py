@@ -15,10 +15,12 @@ classification (success / AuthError / idempotent-success-on-409 / retry
 
 Lane Q does **not** drive Kafka-channel fixtures or fixtures that
 require the FSM / scheduler to enact a side effect beyond the HTTP
-response (e.g. "pause Kafka assignment", "drain and deactivate then
-exit"). Those stay ``xfail`` and are claimed by:
+response (e.g. "drain and deactivate then exit"). Those stay
+``xfail`` and are claimed by:
 
-- P2 (Kafka consumer)  : 11-kafka-partition-pause-on-capacity
+- ~~P2 (Kafka consumer)  : 11-kafka-partition-pause-on-capacity~~
+  → **landed in Lane S** (P2), verified via the
+  ``apply_backpressure`` branch below.
 - P4 (FSM stop/drain)  : 12-stop-with-timeout
 
 The directive enactment side of 03-06 (e.g. "transition FSM to
@@ -29,10 +31,12 @@ to copy-paste off.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from pytest_httpx import HTTPXMock
@@ -42,6 +46,8 @@ from batch_worker_sdk import (
     BatchPlatformClientConfig,
 )
 from batch_worker_sdk._http import PlatformHttpClient
+from batch_worker_sdk._kafka import KafkaTaskConsumer
+from batch_worker_sdk.dispatcher import TaskDispatcher
 from batch_worker_sdk.exceptions import TransientError
 
 # <repo>/sdk-python/tests/contract/test_contract_runner.py -> <repo>
@@ -67,10 +73,14 @@ _P1_HTTP_FIXTURES: set[str] = {
     "12-stop-with-timeout",
 }
 
-# P2+ — Kafka / FSM driven; cannot be verified at the HTTP layer.
-_DEFERRED_FIXTURES: set[str] = {
+# Lane S (P2) — Kafka channel: dispatcher + KafkaTaskConsumer assert
+# the backpressure side effect directly (no HTTP wire).
+_P2_KAFKA_FIXTURES: set[str] = {
     "11-kafka-partition-pause-on-capacity",
 }
+
+# Anything else still pending (FSM stop/drain semantics).
+_DEFERRED_FIXTURES: set[str] = set()
 
 
 def _discover_fixtures() -> list[Path]:
@@ -171,9 +181,13 @@ async def test_contract_fixture(
     given = payload.get("given") or {}
     when = payload.get("when") or {}
 
+    if fixture_id in _P2_KAFKA_FIXTURES:
+        await _assert_kafka_fixture(given, when, fixture_id)
+        return
+
     if when.get("channel") != "http":
-        # Kafka-channel fixtures are xfailed above; this assertion
-        # catches any future non-http channel before it silently fails.
+        # Any future non-http channel without a P2 owner should fail
+        # loud rather than silently pass.
         pytest.fail(f"non-http channel fixture: {fixture_id} channel={when.get('channel')!r}")
 
     cfg = _cfg_from_fixture(given.get("config") or {})
@@ -240,22 +254,103 @@ async def _assert_fixture(
             assert result.get(k) == v, f"field {k} mismatch in {fixture_id}"
 
 
+async def _assert_kafka_fixture(
+    given: dict[str, Any],
+    when: dict[str, Any],
+    fixture_id: str,
+) -> None:
+    """Lane S (P2): drive ``KafkaTaskConsumer.apply_backpressure()`` and
+    assert pause/resume semantics from fixture 11.
+
+    The fixture's ``given.state`` describes the dispatcher's in-flight
+    count + assigned partitions; ``then.sdkExpectedAction`` says to
+    pause when saturated, resume when in-flight drops below max. We
+    use a ``MagicMock`` AIOKafkaConsumer to avoid touching a real
+    broker.
+    """
+    cfg_block = dict(given.get("config") or {})
+    state = given.get("state") or {}
+    max_in_flight = int(cfg_block.get("maxConcurrentTasks", 4))
+
+    cfg = BatchPlatformClientConfig(
+        base_url="http://orch:8081",
+        tenant_id=str(cfg_block.get("tenantId", "acme")),
+        worker_code=str(cfg_block.get("workerCode", "w-1")),
+        max_concurrent_tasks=max_in_flight,
+        kafka_bootstrap="kafka:9092",
+        kafka_group_id="g-1",
+        kafka_topic_pattern=f"batch.task.dispatch.{cfg_block.get('tenantId', 'acme')}.*",
+    )
+    http = PlatformHttpClient(cfg)
+    try:
+        dispatcher = TaskDispatcher(cfg, http)
+
+        # Stuff fake in-flight tasks to hit the saturation threshold.
+        async def _idle() -> None:
+            await asyncio.sleep(3600)
+
+        for i in range(int(state.get("inFlight", max_in_flight))):
+            tid = 90000 + i
+            dispatcher._in_flight[tid] = asyncio.create_task(_idle())
+        try:
+            mock_consumer = MagicMock()
+            mock_assignment = {
+                # aiokafka exposes assignment as a set of TopicPartition;
+                # MagicMock truthy + non-empty is what we exercise.
+                f"part-{p}": True
+                for p in state.get("assignedPartitions") or ["t-0"]
+            }
+            mock_consumer.assignment.return_value = mock_assignment
+
+            consumer = KafkaTaskConsumer(cfg, dispatcher, consumer=mock_consumer)
+            # Saturated → pause.
+            consumer.apply_backpressure()
+            assert mock_consumer.pause.call_count == 1, (
+                f"{fixture_id}: expected pause(*assignment) once at saturation"
+            )
+            assert mock_consumer.resume.call_count == 0
+            assert consumer.paused is True
+
+            # Drop one in-flight → expect resume.
+            done_tid = next(iter(dispatcher._in_flight))
+            dispatcher._in_flight[done_tid].cancel()
+            dispatcher._in_flight.pop(done_tid)
+
+            consumer.apply_backpressure()
+            assert mock_consumer.resume.call_count == 1, (
+                f"{fixture_id}: expected resume(*assignment) when in-flight drops"
+            )
+            assert consumer.paused is False
+        finally:
+            for t in list(dispatcher._in_flight.values()):
+                t.cancel()
+    finally:
+        await http.close()
+
+
 def test_fixture_discovery_reports_count(capsys: pytest.CaptureFixture[str]) -> None:
     """Diagnostic test — prints the fixture inventory and phase split."""
     count = len(_FIXTURES)
     p1 = sorted(f for f in _FIXTURE_IDS if f in _P1_HTTP_FIXTURES)
     deferred = sorted(f for f in _FIXTURE_IDS if f in _DEFERRED_FIXTURES)
+    p2 = sorted(f for f in _FIXTURE_IDS if f in _P2_KAFKA_FIXTURES)
     other = sorted(
-        f for f in _FIXTURE_IDS if f not in _P1_HTTP_FIXTURES and f not in _DEFERRED_FIXTURES
+        f
+        for f in _FIXTURE_IDS
+        if f not in _P1_HTTP_FIXTURES
+        and f not in _DEFERRED_FIXTURES
+        and f not in _P2_KAFKA_FIXTURES
     )
     if count == 0:
         print(f"[contract] 0 fixtures discovered at {_FIXTURES_DIR}")
     else:
         print(
             f"[contract] {count} fixtures discovered; "
-            f"P1-implemented={len(p1)}, deferred={len(deferred)}, other={len(other)}"
+            f"P1-implemented={len(p1)}, P2-implemented={len(p2)}, "
+            f"deferred={len(deferred)}, other={len(other)}"
         )
         print(f"[contract] P1: {p1}")
+        print(f"[contract] P2: {p2}")
         print(f"[contract] deferred: {deferred}")
         if other:
             print(f"[contract] other: {other}")

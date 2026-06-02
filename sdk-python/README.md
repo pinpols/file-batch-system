@@ -51,10 +51,10 @@ pip install -e .[dev]
 | **P0** ✅ | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | done |
 | **P0.5** ✅ | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | done (Lane R) |
 | **P1** ✅ | `PlatformHttpClient` (httpx async) + retry/backoff + `BatchPlatformClientConfig` | done (Lane Q) |
-| **P2** ✅ | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause | done (Lane S) |
+| **P2** ✅ | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause, tenant self-check, provisional `run_worker` entrypoint | done (Lane S) |
 | **P3** ✅ | `BatchPlatformClient` + `HeartbeatScheduler` + `LeaseRenewalScheduler` + heartbeat-directive parsing | done (Lane T) |
 | **P4** ✅ | Lifecycle: budgeted `stop(timeout)`, cancellation signal wiring, progress reporter, deactivate | done (Lane U) |
-| **P5** ✅ (this PR) | Testkit (`FakeBatchPlatform`) + `@batch_task` decorator + `examples/sample-tenant-worker-python/` | done (Lane V) |
+| **P5** ✅ | Testkit (`FakeBatchPlatform`) + `@batch_task` decorator + `examples/sample-tenant-worker-python/` | done (Lane V) |
 
 Contract fixtures from Lane N drive the green-bar for P1–P3. Every
 fixture that flips from `xfail` to `pass` is forward progress.
@@ -122,6 +122,26 @@ Java side. P0.5 ships stubs only — implementation lands in P1-P5.
 | `ProgressReporter` (class) | `ProgressReporter` (class) | `batch-worker-sdk/.../task/ProgressReporter.java` |
 | `CancellationSignal` (class) | `CancellationSignal` (class) | `batch-worker-sdk/.../task/CancellationSignal.java` |
 | `SdkTaskTypeDescriptor` (record) | `SdkTaskTypeDescriptor` (pydantic BaseModel) | `batch-worker-sdk/.../task/SdkTaskTypeDescriptor.java` |
+
+### 与 Java SDK 行为对照 (P2)
+
+Lane S (P2) 把 dispatcher + Kafka consumer 接上,对齐 Java SDK 下列 5 个语义点(行为照搬,代码风格 asyncio-native):
+
+| # | 行为 | Java 路径 | Python 路径 |
+| --- | --- | --- | --- |
+| 1 | **租户自检 drop**:Kafka 消息 `tenantId != config.tenant_id` → ERROR log + drop,不 ack,不抛 | `TaskDispatcher.onMessage` line 197 (Lane J) | `dispatcher.TaskDispatcher.on_message` |
+| 2 | **capacity-aware partition pause**:`inFlight >= maxConcurrentTasks` 或平台 PAUSED/DRAINING → `consumer.pause(*assignment)`;掉下来 `resume`。`_paused` 缓存避免重复 RPC | `KafkaTaskConsumer.applyBackpressure` | `_kafka.KafkaTaskConsumer.apply_backpressure` |
+| 3 | **schemaVersion 守护**:未知 major (e.g. `v3`) → WARN + drop,避免老 SDK 误解未来消息 | `TaskDispatchMessage.isSchemaSupported` | `dispatcher._SUPPORTED_SCHEMA_PREFIXES` 列表 |
+| 4 | **fatal poisoning**:CLAIM 401/403 → `_fatal=True`,后续 `on_message` 全部静默 drop,等 K8s liveness probe 回收 | `TaskDispatcher.fatal` AtomicBoolean | `TaskDispatcher._fatal` + `is_fatal` property |
+| 5 | **4-state directive 应用**:heartbeat 返回 `runtimeState` ∈ `{NORMAL, DEGRADED, PAUSED, DRAINING}` → `apply_platform_directive()` 更新 `_runtime_state`;`accepts_new_tasks()` 决定是否拒新 | `TaskDispatcher.platformState` + `WorkerRuntimeState.acceptsNewTasks` | `TaskDispatcher.apply_platform_directive` + `WorkerRuntimeState.accepts_new_tasks` |
+
+**Provisional API** (P3 替换):`runner.run_worker(config, handlers)` 临时把 HTTP / Dispatcher / Kafka 三件套串起来跑,等 P3 `BatchPlatformClient` 落地后改成 thin shim。源文件顶部用 `# Provisional API — Will be superseded by BatchPlatformClient in P3` 标注。
+
+**P2 简化 vs Java**(明列出来,P3 接续清单):
+
+- 没有 CLAIM 5xx 重试 loop —— Python `_http.PlatformHttpClient` 在 wire-protocol §C 层做过 retry,我们这里只 surface `TransientError` 让 Kafka lease timeout 重投。
+- 没有 `ThrottledLogger`(Java Lane J #2)—— PAUSED-state drop 日志降到 DEBUG 避免刷屏,不引外部依赖。
+- 没有 MDC —— 结构化字段以 `logging.LogRecord.extra` 形式传给用户的 formatter。
 
 Source-of-truth docs (both SDKs read from these):
 
