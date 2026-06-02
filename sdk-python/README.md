@@ -48,16 +48,50 @@ pip install -e .[dev]
 
 | Phase | Scope | Est. effort |
 | --- | --- | --- |
-| **P0** | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | 1d |
-| **P0.5** (this PR) | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | 0.5d |
-| **P1** | `WorkerClient` (httpx async), `HandlerContext`, `WorkerConfig`, register/heartbeat | 3-4d |
-| **P2** | Kafka consumer (aiokafka), task dispatch loop, graceful shutdown | 3-4d |
-| **P3** | Scheduler (APScheduler or custom), retry / backoff (tenacity), DLQ | 2-3d |
-| **P4** | OpenTelemetry tracing + metrics, structured logging, fingerprint endpoint | 2d |
-| **P5** | PyPI release pipeline, version bump automation, quickstart docs | 1-2d |
+| **P0** | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | done |
+| **P0.5** | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | done (Lane R) |
+| **P1** | `PlatformHttpClient` (httpx async) + retry/backoff + `BatchPlatformClientConfig` | done (Lane Q) |
+| **P2** | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause | done (Lane S) |
+| **P3** (this PR) | `BatchPlatformClient` + `HeartbeatScheduler` + `LeaseRenewalScheduler` + heartbeat-directive parsing | done (Lane T) |
+| **P4** | Lifecycle: budgeted `stop(timeout)`, cancellation signal wiring, progress reporter, deactivate | Lane U |
+| **P5** | Testkit (FakeBatchPlatform / EmbeddedKafka / `@batch_task`), examples, PyPI publish | Lane V |
 
 Contract fixtures from Lane N drive the green-bar for P1–P3. Every
 fixture that flips from `xfail` to `pass` is forward progress.
+
+## Usage (P3)
+
+```python
+import asyncio
+from datetime import timedelta
+
+from batch_worker_sdk import BatchPlatformClient, BatchPlatformClientConfig
+
+class MyImportHandler:
+    def task_type(self) -> str:
+        return "tenant_xyz_import"
+
+    async def execute(self, ctx):  # SdkTaskContext
+        return ...  # SdkTaskResult
+
+async def main() -> None:
+    config = BatchPlatformClientConfig(
+        base_url="https://batch.example.com",
+        tenant_id="tenant-xyz",
+        worker_code="xyz-import-worker-1",
+        heartbeat_interval=timedelta(seconds=30),
+        lease_renew_interval=timedelta(seconds=60),
+    )
+    client = BatchPlatformClient(config)
+    client.register_handler(MyImportHandler())
+    await client.start()  # register → heartbeat + lease schedulers → kafka
+    try:
+        await asyncio.Event().wait()  # block until SIGTERM
+    finally:
+        await client.stop(timeout=30)
+
+asyncio.run(main())
+```
 
 ## Equivalence with the Java SDK
 
