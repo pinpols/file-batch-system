@@ -27,7 +27,7 @@ from typing import IO, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from batch_worker_sdk.handler.builtin._delimited import DelimitedFormat, parse_line
-from batch_worker_sdk.handler.builtin._row_result import SdkRowResult
+from batch_worker_sdk.handler._base import SdkRowResult
 from batch_worker_sdk.handler.handler import SdkTaskHandler  # noqa: F401 — protocol parity
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
@@ -137,7 +137,7 @@ class FileImportHandler:
             )
         return SdkTaskResult.success_with(
             output=counts.to_output(),
-            message=f"imported {counts.success} rows",
+            message=f"imported {counts.success()} rows",
         )
 
     # -- tenant-overridable hooks (mirror Java SdkAbstractImportHandler) ----------

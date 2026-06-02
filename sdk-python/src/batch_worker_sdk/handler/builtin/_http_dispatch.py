@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from batch_worker_sdk.handler.builtin._row_result import SdkRowResult
+from batch_worker_sdk.handler._base import SdkRowResult
 from batch_worker_sdk.handler.handler import SdkTaskHandler  # noqa: F401 — protocol parity
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
@@ -173,10 +173,10 @@ class HttpDispatchHandler:
 
             await asyncio.gather(*(_one(t) for t in targets), return_exceptions=False)
 
-            if self._config.fail_fast and counts.failed > 0:
+            if self._config.fail_fast and counts.failed() > 0:
                 return SdkTaskResult.fail(
                     "DISPATCH_FAILED",
-                    f"dispatched {counts.success} ok, {counts.failed} failed (fail-fast)",
+                    f"dispatched {counts.success()} ok, {counts.failed()} failed (fail-fast)",
                 )
         finally:
             if self._owns_client:
@@ -184,7 +184,7 @@ class HttpDispatchHandler:
 
         return SdkTaskResult.success_with(
             output=counts.to_output(),
-            message=f"dispatched {counts.success} ok, {counts.failed} failed",
+            message=f"dispatched {counts.success()} ok, {counts.failed()} failed",
         )
 
     # -- tenant-overridable hooks (mirror Java SdkAbstractDispatchHandler) --------
