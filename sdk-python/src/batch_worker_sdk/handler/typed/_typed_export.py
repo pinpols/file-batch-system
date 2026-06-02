@@ -32,9 +32,9 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
     return None
 
 
-class SdkAbstractTypedExportHandler[
-    ParamsT: BaseModel, OutputT: BaseModel, RowT
-](SdkAbstractTaskHandler):
+class SdkAbstractTypedExportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT](
+    SdkAbstractTaskHandler
+):
     """Typed Export handler — tenant DB -> external file."""
 
     _params_model: type[BaseModel] | None = None
@@ -66,9 +66,7 @@ class SdkAbstractTypedExportHandler[
         """Finalize the sink. ``None`` -> fall through to summarize/counter."""
         return None
 
-    def summarize(
-        self, params: ParamsT, counts: SdkRowResult
-    ) -> OutputT | None:
+    def summarize(self, params: ParamsT, counts: SdkRowResult) -> OutputT | None:
         return None
 
     # ---- template --------------------------------------------------------
@@ -105,9 +103,7 @@ class SdkAbstractTypedExportHandler[
             return explicit
         return self._result(params, counts, f"exported {counts.success} rows")
 
-    def _result(
-        self, params: ParamsT, counts: SdkRowResult, default_message: str
-    ) -> SdkTaskResult:
+    def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)
         if output is None:
             return SdkTaskResult.success_with(output=counts.to_output(), message=default_message)

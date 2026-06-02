@@ -35,9 +35,9 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
     return None
 
 
-class SdkAbstractTypedImportHandler[
-    ParamsT: BaseModel, OutputT: BaseModel, RowT
-](SdkAbstractTaskHandler):
+class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT](
+    SdkAbstractTaskHandler
+):
     """Typed Import handler — tenant -> tenant DB; row-streaming + batched flush."""
 
     _params_model: type[BaseModel] | None = None
@@ -62,18 +62,14 @@ class SdkAbstractTypedImportHandler[
         ...
 
     @abstractmethod
-    def load_batch(
-        self, params: ParamsT, ctx: SdkTaskContext, batch: list[RowT]
-    ) -> None:
+    def load_batch(self, params: ParamsT, ctx: SdkTaskContext, batch: list[RowT]) -> None:
         """Write a batch to the tenant target table."""
         ...
 
     def batch_size(self) -> int:
         return self.DEFAULT_BATCH_SIZE
 
-    def summarize(
-        self, params: ParamsT, counts: SdkRowResult
-    ) -> OutputT | None:
+    def summarize(self, params: ParamsT, counts: SdkRowResult) -> OutputT | None:
         return None
 
     # ---- template --------------------------------------------------------
@@ -123,9 +119,7 @@ class SdkAbstractTypedImportHandler[
         counts.add_success(len(buf))
         buf.clear()
 
-    def _result(
-        self, params: ParamsT, counts: SdkRowResult, default_message: str
-    ) -> SdkTaskResult:
+    def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)
         if output is None:
             return SdkTaskResult.success_with(output=counts.to_output(), message=default_message)

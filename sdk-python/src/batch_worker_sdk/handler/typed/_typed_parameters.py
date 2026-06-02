@@ -57,9 +57,7 @@ class SdkTypedParameters:
                 f"{'.'.join(str(p) for p in err['loc']) or '<root>'}: {err['msg']}"
                 for err in e.errors()
             )
-            raise ValueError(
-                f"parameters do not match {model_type.__name__}: {errs}"
-            ) from e
+            raise ValueError(f"parameters do not match {model_type.__name__}: {errs}") from e
 
     @staticmethod
     def serialize(model: BaseModel | None) -> dict[str, Any]:

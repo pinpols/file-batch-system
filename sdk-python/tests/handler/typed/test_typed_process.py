@@ -14,9 +14,7 @@ class _Req(BaseModel):
     only_even: bool = True
 
 
-class _MyProcess(
-    SdkAbstractTypedProcessHandler[_Req, dict, dict, BaseModel]
-):
+class _MyProcess(SdkAbstractTypedProcessHandler[_Req, dict, dict, BaseModel]):
     def __init__(self) -> None:
         self.upserts: list[list[dict]] = []
 

@@ -98,13 +98,9 @@ class SdkTypedTaskHandler[InputT: BaseModel, OutputT: BaseModel]:
             )
         result = await self._do_typed_execute(ctx, params)  # type: ignore[arg-type]
         output_map = SdkTypedParameters.serialize(result)
-        return SdkTaskResult.success_with(
-            output=output_map, message=self._success_message(result)
-        )
+        return SdkTaskResult.success_with(output=output_map, message=self._success_message(result))
 
-    async def _do_typed_execute(
-        self, ctx: SdkTaskContext, params: InputT
-    ) -> OutputT | None:
+    async def _do_typed_execute(self, ctx: SdkTaskContext, params: InputT) -> OutputT | None:
         """Tenant override — strongly-typed business logic."""
         raise NotImplementedError
 

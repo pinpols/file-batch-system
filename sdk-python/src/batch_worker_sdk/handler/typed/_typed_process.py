@@ -32,9 +32,9 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
     return None
 
 
-class SdkAbstractTypedProcessHandler[
-    ParamsT: BaseModel, InRowT, OutRowT, OutputT: BaseModel
-](SdkAbstractTaskHandler):
+class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, OutputT: BaseModel](
+    SdkAbstractTaskHandler
+):
     """Typed Process handler — tenant -> tenant (transform & write back)."""
 
     _params_model: type[BaseModel] | None = None
@@ -53,23 +53,17 @@ class SdkAbstractTypedProcessHandler[
     ) -> Iterable[InRowT] | Iterator[InRowT] | AsyncIterator[InRowT]: ...
 
     @abstractmethod
-    def transform(
-        self, params: ParamsT, ctx: SdkTaskContext, row: InRowT
-    ) -> OutRowT | None:
+    def transform(self, params: ParamsT, ctx: SdkTaskContext, row: InRowT) -> OutRowT | None:
         """Return ``None`` to skip the row (counts as ``skipped``)."""
         ...
 
     @abstractmethod
-    def upsert(
-        self, params: ParamsT, ctx: SdkTaskContext, batch: list[OutRowT]
-    ) -> None: ...
+    def upsert(self, params: ParamsT, ctx: SdkTaskContext, batch: list[OutRowT]) -> None: ...
 
     def batch_size(self) -> int:
         return self.DEFAULT_BATCH_SIZE
 
-    def summarize(
-        self, params: ParamsT, counts: SdkRowResult
-    ) -> OutputT | None:
+    def summarize(self, params: ParamsT, counts: SdkRowResult) -> OutputT | None:
         return None
 
     # ---- template --------------------------------------------------------
@@ -122,9 +116,7 @@ class SdkAbstractTypedProcessHandler[
         _drain()
         return self._result(params, counts, f"processed {counts.success} rows")
 
-    def _result(
-        self, params: ParamsT, counts: SdkRowResult, default_message: str
-    ) -> SdkTaskResult:
+    def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)
         if output is None:
             return SdkTaskResult.success_with(output=counts.to_output(), message=default_message)

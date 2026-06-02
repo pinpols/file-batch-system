@@ -32,9 +32,9 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
     return None
 
 
-class SdkAbstractTypedDispatchHandler[
-    ParamsT: BaseModel, OutputT: BaseModel, TargetT
-](SdkAbstractTaskHandler):
+class SdkAbstractTypedDispatchHandler[ParamsT: BaseModel, OutputT: BaseModel, TargetT](
+    SdkAbstractTaskHandler
+):
     """Typed Dispatch handler — tenant -> external push (DB -> HTTP/SFTP)."""
 
     _params_model: type[BaseModel] | None = None
@@ -47,14 +47,10 @@ class SdkAbstractTypedDispatchHandler[
     # ---- tenant hooks ----------------------------------------------------
 
     @abstractmethod
-    def select_payload(
-        self, params: ParamsT, ctx: SdkTaskContext
-    ) -> list[TargetT]: ...
+    def select_payload(self, params: ParamsT, ctx: SdkTaskContext) -> list[TargetT]: ...
 
     @abstractmethod
-    def build_request(
-        self, params: ParamsT, ctx: SdkTaskContext, item: TargetT
-    ) -> Any: ...
+    def build_request(self, params: ParamsT, ctx: SdkTaskContext, item: TargetT) -> Any: ...
 
     @abstractmethod
     def push(self, params: ParamsT, ctx: SdkTaskContext, request: Any) -> Any: ...
@@ -68,9 +64,7 @@ class SdkAbstractTypedDispatchHandler[
     ) -> None:
         return None
 
-    def summarize(
-        self, params: ParamsT, counts: SdkRowResult
-    ) -> OutputT | None:
+    def summarize(self, params: ParamsT, counts: SdkRowResult) -> OutputT | None:
         return None
 
     # ---- template --------------------------------------------------------
@@ -101,13 +95,9 @@ class SdkAbstractTypedDispatchHandler[
             except Exception as item_ex:
                 counts.inc_failed()
                 _log.warning("typed dispatch item failed: %s", item_ex)
-        return self._result(
-            params, counts, f"dispatched {counts.success}/{counts.total}"
-        )
+        return self._result(params, counts, f"dispatched {counts.success}/{counts.total}")
 
-    def _result(
-        self, params: ParamsT, counts: SdkRowResult, default_message: str
-    ) -> SdkTaskResult:
+    def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)
         if output is None:
             return SdkTaskResult.success_with(output=counts.to_output(), message=default_message)

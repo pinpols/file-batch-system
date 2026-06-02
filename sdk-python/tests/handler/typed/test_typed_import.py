@@ -18,9 +18,7 @@ class _Result(BaseModel):
     imported: int
 
 
-class _MyImport(
-    SdkAbstractTypedImportHandler[_ImportReq, _Result, dict]
-):
+class _MyImport(SdkAbstractTypedImportHandler[_ImportReq, _Result, dict]):
     DEFAULT_BATCH_SIZE = 2
 
     def __init__(self) -> None:
