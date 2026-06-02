@@ -1,0 +1,21 @@
+{
+  "_doc": "HttpDispatchHandler with 2 targets — verifies fan-out aggregation.",
+  "input": {
+    "task_type": "builtin.http_dispatch",
+    "parameters": {
+      "targets": [
+        {"url": "https://example.test/a", "method": "POST"},
+        {"url": "https://example.test/b", "method": "POST"}
+      ],
+      "payload": {"event": "ping"}
+    }
+  },
+  "expected_output": {
+    "success": true,
+    "message": "ok",
+    "output": {
+      "success": 2,
+      "total": 2
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "_doc": "FileImportHandler reading a 3-row CSV — verifies success / skipped / failed counts default.",
+  "input": {
+    "task_type": "builtin.file_import",
+    "parameters": {
+      "source_uri": "memory://csv/3rows",
+      "batch_size": 100
+    }
+  },
+  "expected_output": {
+    "success": true,
+    "message": "ok",
+    "output": {
+      "success": 3,
+      "total": 3
+    }
+  }
+}
