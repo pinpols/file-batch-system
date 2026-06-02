@@ -21,15 +21,15 @@ import org.springframework.stereotype.Component;
  * IllegalStateException} fail-fast。SqlTaskExecutor 作 canary 已足够 —— 4 个 dual-use executor 同模块,引入是
  * 模块级二选一,不会出现 "只引部分 class" 的情况。
  *
- * <p><b>启用</b>:本 bean 通过 {@link Component} + {@link ConditionalOnProperty} 注册,默认开;只需被 pipeline
- * worker 的 component-scan 覆盖(4 个 pipeline worker 已 {@code scanBasePackages = "com.example.batch"})。
- * 单测可通过 {@code batch.worker.atomic.isolation-check.enabled=false} 关闭。
+ * <p><b>启用</b>:本 bean 通过 {@link Component} + {@link ConditionalOnProperty} 注册,**默认关**;4 个 pipeline
+ * worker(import / export / process / dispatch)的 {@code application.yml} 显式置 {@code
+ * batch.worker.atomic.isolation-check.enabled=true} 启用。
  *
- * <p><b>为何放在 batch-common</b>:atomic worker 自身依赖 batch-common,把检查放 atomic 模块会让 atomic worker
- * 启动时拦自己; 放 batch-common 让 4 个 pipeline worker 自动复用,且 atomic worker 的 component-scan 也会扫到 —— 但探针类
- * SqlTaskExecutor 本身就在 atomic 模块内,atomic worker 启动时**必定**命中并 fail-fast。因此本组件在 atomic worker 上必须关:
- * {@code batch-worker-atomic} 的 {@code application.yml} 已置 {@code
- * batch.worker.atomic.isolation-check.enabled=false}(见同 PR 配置)。
+ * <p><b>为何默认关 + 各 pipeline worker 显式 opt-in</b>:batch-common 的 {@link Component} 会被所有 scan 到 {@code
+ * com.example.batch} 的上下文加载(含 atomic worker 自身、console-api 测试上下文、orchestrator、trigger 等)。若
+ * 默认开,只要这些上下文的 classpath 上有 atomic class(如 Lane H schema 契约测的 test-scope 依赖),就会误命中并 fail-fast,与 本
+ * guard 初衷(拦"误把 atomic 编译进 4 个 pipeline worker")不符。改为 opt-in 后只在真正受影响的 4 个 pipeline worker 处生效,
+ * 语义干净。
  */
 @Slf4j
 @Component
@@ -37,7 +37,7 @@ import org.springframework.stereotype.Component;
     prefix = "batch.worker.atomic.isolation-check",
     name = "enabled",
     havingValue = "true",
-    matchIfMissing = true)
+    matchIfMissing = false)
 public class PipelineWorkerAtomicClasspathCheck {
 
   /** atomic SPI canary 类全限定名 —— 命中即视为整组 dual-use executor 都在 classpath。 */
