@@ -1,17 +1,15 @@
-"""Shell atomic handler — async port of Java ``ShellAtomicHandler``.
+"""Shell atomic handler —— Java ``ShellAtomicHandler`` 的异步移植。
 
-Security design (matches Java SDK / ADR-029 dual-use RCE isolation):
+安全设计(对齐 Java SDK / ADR-029 dual-use RCE 隔离):
 
-* **No shell interpreter** — uses ``asyncio.create_subprocess_exec``
-  (which underlies ``execve``); the ``;`` ``|`` ``&&`` in ``args`` are
-  literal program arguments, never shell-interpreted.
-* **Command allow-list** — when non-empty, ``command`` must be an exact
-  match (absolute path).
-* **Timeout kills** — over the budget, ``Process.kill()`` is called.
-* **Workdir isolation** — fresh tempdir per invocation, cleaned up
-  after when ``cleanup_workdir`` is true.
-* **Output truncation** — stdout / stderr each capped at
-  ``max_output_bytes``.
+* **不用 shell 解释器** —— 用 ``asyncio.create_subprocess_exec``
+  (底层是 ``execve``);``args`` 中的 ``;`` ``|`` ``&&`` 都是字面量
+  程序参数,不会被 shell 解释。
+* **命令白名单** —— 非空时,``command`` 必须精确匹配(绝对路径)。
+* **超时即杀** —— 超过预算后调用 ``Process.kill()``。
+* **工作目录隔离** —— 每次调用一个新建临时目录,``cleanup_workdir``
+  为 true 时事后清理。
+* **输出截断** —— stdout / stderr 各自上限 ``max_output_bytes``。
 """
 
 from __future__ import annotations
@@ -33,17 +31,16 @@ _LOG = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ShellAtomicConfig:
-    """Config for :class:`ShellAtomicHandler` (mirrors Java ``ShellAtomicConfig``).
+    """:class:`ShellAtomicHandler` 的配置(对齐 Java ``ShellAtomicConfig``)。
 
     Attributes:
-        task_type: Registered task-type code.
-        allowed_commands: Command allow-list (exact absolute path match).
-            Empty = dev-only full allow. **Production MUST set this** —
-            otherwise any executable is exposed to the dispatcher (RCE).
-        timeout_seconds: Subprocess timeout. On timeout the process is
-            killed and the call fails.
-        max_output_bytes: Per-stream cap for stdout/stderr.
-        cleanup_workdir: Recursively delete the temp workdir on exit.
+        task_type: 注册的任务类型码。
+        allowed_commands: 命令白名单(绝对路径精确匹配)。
+            空集 = 仅开发环境全放行。**生产必须显式配置** ——
+            否则任何可执行文件都暴露给 dispatcher(RCE)。
+        timeout_seconds: 子进程超时。超时即杀进程并失败。
+        max_output_bytes: stdout/stderr 每条流的上限。
+        cleanup_workdir: 退出时递归删除临时 workdir。
     """
 
     task_type: str
@@ -63,21 +60,21 @@ class ShellAtomicConfig:
 
     @classmethod
     def defaults(cls, task_type: str) -> ShellAtomicConfig:
-        """Defaults: empty allow-list (dev), 60 s timeout, 64 KiB cap, cleanup on."""
+        """默认值:空白名单(开发用)、60s 超时、64 KiB 上限、开启清理。"""
         return cls(task_type=task_type)
 
 
 class ShellAtomicHandler(SdkAbstractAtomicHandler):
-    """Out-of-the-box subprocess atomic handler.
+    """开箱即用的子进程 atomic handler。
 
-    Parameters (from ``ctx.parameters``):
+    参数(来自 ``ctx.parameters``):
 
-    * ``command`` (str, required) — absolute program path
-    * ``args`` (list[str], optional)
+    * ``command`` (str,必填)—— 绝对程序路径
+    * ``args`` (list[str],可选)
 
-    Output dict: ``exitCode`` / ``stdout`` / ``stderr`` /
-    ``stdoutTruncated`` / ``stderrTruncated``. A non-zero exit code is
-    **not** a handler failure (Java parity).
+    输出 dict:``exitCode`` / ``stdout`` / ``stderr`` /
+    ``stdoutTruncated`` / ``stderrTruncated``。非零 exit code **不**
+    视为 handler 失败(与 Java 对齐)。
     """
 
     def __init__(self, config: ShellAtomicConfig) -> None:

@@ -1,10 +1,8 @@
-"""Atomic shape — single-call handler template (ADR-036).
+"""Atomic 形态 —— 单次调用 handler 模板(ADR-036)。
 
-Python equivalent of Java ``SdkAbstractAtomicHandler``: single atomic
-invocation (shell / single SQL / HTTP / pure compute). Subclasses only
-implement :meth:`_do_invoke`; exceptions are caught by the parent
-template and converted to :meth:`SdkTaskResult.fail`, so tenant code
-doesn't assemble a result object by hand.
+对齐 Java ``SdkAbstractAtomicHandler``:单次原子调用(shell / 单条 SQL /
+HTTP / 纯计算)。子类只实现 :meth:`_do_invoke`;异常由父模板捕获并转成
+:meth:`SdkTaskResult.fail`,租户代码不必自己拼装结果对象。
 """
 
 from __future__ import annotations
@@ -21,24 +19,23 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 
 class SdkAbstractAtomicHandler[R](SdkAbstractTaskHandler):
-    """Single-shot atomic-call handler.
+    """单次原子调用 handler。
 
-    Mirror of Java ``SdkAbstractAtomicHandler<R>``. The template wraps
-    :meth:`_do_invoke` once and packs the return value through
-    :meth:`as_output` into :meth:`SdkTaskResult.success_with`. Any
-    exception is converted to a failure result with code
-    ``HANDLER_ERROR``.
+    对齐 Java ``SdkAbstractAtomicHandler<R>``。模板一次性包裹
+    :meth:`_do_invoke`,把返回值经 :meth:`as_output` 装进
+    :meth:`SdkTaskResult.success_with`。任意异常转为错误码
+    ``HANDLER_ERROR`` 的失败结果。
     """
 
     @abstractmethod
     async def _do_invoke(self, ctx: SdkTaskContext) -> R:
-        """Tenant-implemented single atomic call."""
+        """租户实现的单次原子调用。"""
 
     def as_output(self, result: R | None) -> dict[str, Any]:
-        """Map the invocation return value into the ``output`` dict.
+        """把调用返回值映射到 ``output`` dict。
 
-        Default: ``{"result": result}`` when non-None, else ``{}`` —
-        identical to Java ``asOutput``.
+        默认:非 None 返回 ``{"result": result}``,否则 ``{}`` ——
+        与 Java ``asOutput`` 一致。
         """
         if result is None:
             return {}

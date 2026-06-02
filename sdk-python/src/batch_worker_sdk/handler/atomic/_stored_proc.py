@@ -1,18 +1,18 @@
-"""Stored-procedure atomic handler — async port of Java ``StoredProcAtomicHandler``.
+"""存储过程 atomic handler —— Java ``StoredProcAtomicHandler`` 的异步移植。
 
-Implements the same four security gates as the Java SDK:
+实现与 Java SDK 一致的 4 道安全闸门:
 
-1. **forbid_os_capable_role** — reject ``superuser`` /
+1. **forbid_os_capable_role** —— 拒绝 ``superuser`` /
    ``pg_execute_server_program`` / ``pg_read_server_files`` /
-   ``pg_write_server_files`` (dual-use RCE isolation).
-2. **allowed_schemas** — schema must be in the allow-list when set.
-3. **allow_security_definer** — when false, reject procedures with
-   ``pg_proc.prosecdef = true`` (privilege-escalation risk).
-4. **verify_execute_privilege** (opt-in) — current_user must have
-   EXECUTE on the procedure.
+   ``pg_write_server_files``(dual-use RCE 隔离)。
+2. **allowed_schemas** —— 设置后 schema 必须在白名单内。
+3. **allow_security_definer** —— 为 false 时拒绝
+   ``pg_proc.prosecdef = true`` 的过程(权限提升风险)。
+4. **verify_execute_privilege**(opt-in)—— current_user 必须拥有
+   对该过程的 EXECUTE 权限。
 
-Uses :mod:`asyncpg`-style connections; supplied by the caller via a
-factory (same pattern as :class:`SqlAtomicHandler`).
+使用 :mod:`asyncpg` 风格连接;由调用方通过工厂传入(与
+:class:`SqlAtomicHandler` 同样模式)。
 """
 
 from __future__ import annotations
@@ -33,18 +33,18 @@ _PROC_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$
 
 @dataclass(frozen=True)
 class StoredProcAtomicConfig:
-    """Config for :class:`StoredProcAtomicHandler` (mirrors Java
-    ``StoredProcAtomicConfig``).
+    """:class:`StoredProcAtomicHandler` 的配置(对齐 Java
+    ``StoredProcAtomicConfig``)。
 
     Attributes:
-        task_type: Registered task-type code.
-        allowed_schemas: Schema allow-list. Empty = dev-only full allow.
-        allow_security_definer: Allow ``SECURITY DEFINER`` procedures.
-        forbid_os_capable_role: Run the PG role probe.
-        verify_execute_privilege: Opt-in EXECUTE-privilege check.
-        statement_timeout_seconds: CALL query timeout.
-        max_out_bytes_per_param: Per-OUT-param string byte cap.
-        default_auto_commit: Transaction mode.
+        task_type: 注册的任务类型码。
+        allowed_schemas: schema 白名单。空集 = 仅开发环境全放行。
+        allow_security_definer: 是否允许 ``SECURITY DEFINER`` 过程。
+        forbid_os_capable_role: 是否跑 PG 角色探测。
+        verify_execute_privilege: 是否开启 EXECUTE 权限校验。
+        statement_timeout_seconds: CALL 查询超时。
+        max_out_bytes_per_param: 单个 OUT 参数字符串字节上限。
+        default_auto_commit: 事务模式。
     """
 
     task_type: str
@@ -80,17 +80,17 @@ _OS_CAPABLE_ROLE_PROBE = (
 
 
 class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
-    """Out-of-the-box PG stored-procedure atomic handler.
+    """开箱即用的 PG 存储过程 atomic handler。
 
-    Parameters (from ``ctx.parameters``):
+    参数(来自 ``ctx.parameters``):
 
-    * ``procedureName`` (str, required) — schema-qualified or bare
-      identifier, validated against ``^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$``.
-    * ``inParams`` (list, optional) — IN args, positional.
-    * ``outParams`` (list[str], optional) — OUT type names (reserved
-      for future use; included for parity with Java).
+    * ``procedureName`` (str,必填)—— 带 schema 或裸标识符,正则校验
+      ``^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$``。
+    * ``inParams`` (list,可选)—— IN 参数,位置序。
+    * ``outParams`` (list[str],可选)—— OUT 类型名(保留字段,
+      为与 Java 对齐而保留)。
 
-    Output: ``{"outValues": {"p1": ..., ...}, "procedureName": name}``.
+    输出:``{"outValues": {"p1": ..., ...}, "procedureName": name}``。
     """
 
     def __init__(
@@ -114,7 +114,7 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
         in_params = _parse_in_params(params.get("inParams"))
         out_types = _parse_out_types(params.get("outParams"))
 
-        # Gate 2 — allow-list check before opening a connection.
+        # 闸门 2 —— 打开连接之前先做白名单检查。
         self._require_allowed_schema(proc_name)
 
         conn = await self._connection_factory()
@@ -139,10 +139,9 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
         in_params: list[Any],
         out_types: list[str],
     ) -> dict[str, Any]:
-        # PG procedures: ``CALL schema.proc($1, $2, ...)``. OUT params
-        # on PG are columns of the returned row (asyncpg ``fetch``
-        # surfaces them); IN-only procedures still go through ``fetch``
-        # so we get OUT values when present.
+        # PG 过程:``CALL schema.proc($1, $2, ...)``。PG 的 OUT 参数
+        # 体现为返回行的列(asyncpg ``fetch`` 会返回它们);纯 IN 过程
+        # 也走 ``fetch``,这样有 OUT 值时也能拿到。
         placeholders = ", ".join(f"${i + 1}" for i in range(len(in_params)))
         call_sql = f"CALL {proc_name}({placeholders})"
 
@@ -163,11 +162,10 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
             except (TypeError, ValueError):
                 row_map = {}
             for i, (_key, value) in enumerate(row_map.items()):
-                # Java exposes OUT params as ``p1``, ``p2``... — keep
-                # that name in the public output for cross-language
-                # parity, but include the real column name as a hint.
+                # Java 将 OUT 参数暴露成 ``p1``、``p2``... —— 对外输出
+                # 保持同名以保证跨语言一致,真实列名仅作为提示信息。
                 out_values[f"p{i + 1}"] = self._truncate_out(value)
-        _ = out_types  # currently advisory only; kept for Java-parity API
+        _ = out_types  # 当前仅声明性保留,目的是与 Java API 对齐
         _LOG.info(
             "stored proc %s called (in=%d, out=%d)",
             proc_name,
@@ -176,7 +174,7 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
         )
         return {"outValues": out_values, "procedureName": proc_name}
 
-    # ── gates ─────────────────────────────────────────────────────────────
+    # ── 闸门 ──────────────────────────────────────────────────────────────
 
     def _require_allowed_schema(self, proc_name: str) -> None:
         if not self._config.allowed_schemas:
@@ -222,7 +220,7 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
         if ok is False:
             raise PermissionError(f"current_user lacks EXECUTE privilege on procedure: {proc_name}")
 
-    # ── helpers ───────────────────────────────────────────────────────────
+    # ── 辅助 ──────────────────────────────────────────────────────────────
 
     def _truncate_out(self, value: Any) -> Any:
         if not isinstance(value, str):
@@ -235,7 +233,7 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
         return f"{head}...[truncated {len(encoded)} bytes]"
 
 
-# ── parsing helpers ───────────────────────────────────────────────────────
+# ── 解析辅助 ──────────────────────────────────────────────────────────────
 
 
 def _parse_procedure_name(params: dict[str, Any]) -> str:
