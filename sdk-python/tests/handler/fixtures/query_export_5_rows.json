@@ -1,0 +1,18 @@
+{
+  "_doc": "QueryExportHandler streaming 5 rows out — verifies row counter aggregation.",
+  "input": {
+    "task_type": "builtin.query_export",
+    "parameters": {
+      "query": "SELECT id FROM mem_table",
+      "sink_uri": "memory://out/dump.csv"
+    }
+  },
+  "expected_output": {
+    "success": true,
+    "message": "ok",
+    "output": {
+      "success": 5,
+      "total": 5
+    }
+  }
+}
