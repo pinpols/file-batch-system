@@ -183,6 +183,15 @@
             <artifactId>archunit-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Lane H: 反射 batch-worker-atomic ExecutorProperties + *TaskExecutor PARAM_* 常量,
+             与 ConsoleAtomicTaskTypeSchemaService.CATALOG 做集合对账,防 schema 漂移。
+             仅 test scope,不进运行时(console-api 主代码不依赖 worker-atomic,见 ADR-029)。 -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-atomic</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- SPIKE: Resilience4j SB4 兼容验证。结论见 docs/spike/resilience4j-sb4-compat.md -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
