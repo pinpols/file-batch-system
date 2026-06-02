@@ -41,7 +41,7 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-from batch_worker_sdk._sensitive_keys import find_sensitive_keys
+from batch_worker_sdk.internal._sensitive_keys import find_sensitive_keys
 
 
 class ProgressReporter:

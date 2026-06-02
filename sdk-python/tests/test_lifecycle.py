@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from batch_worker_sdk._lifecycle import stop_with_timeout
+from batch_worker_sdk.internal._lifecycle import stop_with_timeout
 
 
 class _FakeConsumer:
@@ -122,7 +122,7 @@ async def test_drain_timeout_logs_warn_with_task_ids(
     schedulers = [_FakeScheduler()]
     client = _FakeClient(consumer, dispatcher, schedulers)
 
-    caplog.set_level(logging.WARNING, logger="batch_worker_sdk._lifecycle")
+    caplog.set_level(logging.WARNING, logger="batch_worker_sdk.internal._lifecycle")
     # Small budget so the test runs fast.
     await stop_with_timeout(client, timeout=0.3)  # type: ignore[arg-type]
 
@@ -146,7 +146,7 @@ async def test_scheduler_failure_does_not_block_deactivate(
     schedulers = [_FakeScheduler(fail=True), _FakeScheduler()]
     client = _FakeClient(consumer, dispatcher, schedulers)
 
-    caplog.set_level(logging.WARNING, logger="batch_worker_sdk._lifecycle")
+    caplog.set_level(logging.WARNING, logger="batch_worker_sdk.internal._lifecycle")
     await stop_with_timeout(client, timeout=1.0)  # type: ignore[arg-type]
 
     assert client.deactivate_called is True
@@ -160,7 +160,7 @@ async def test_deactivate_failure_is_swallowed(caplog: pytest.LogCaptureFixture)
     schedulers = [_FakeScheduler()]
     client = _FakeClient(consumer, dispatcher, schedulers, deactivate_fail=True)
 
-    caplog.set_level(logging.WARNING, logger="batch_worker_sdk._lifecycle")
+    caplog.set_level(logging.WARNING, logger="batch_worker_sdk.internal._lifecycle")
     # Must NOT raise — fixture 12 sdkMustNot: "block stop() if
     # /deactivate HTTP fails (log + continue exit)".
     await stop_with_timeout(client, timeout=0.5)  # type: ignore[arg-type]

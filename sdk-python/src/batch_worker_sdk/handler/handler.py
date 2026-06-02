@@ -14,9 +14,9 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from batch_worker_sdk.context import SdkTaskContext
-from batch_worker_sdk.descriptor import SdkTaskTypeDescriptor
-from batch_worker_sdk.result import SdkTaskResult
+from batch_worker_sdk.task.context import SdkTaskContext
+from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
+from batch_worker_sdk.task.result import SdkTaskResult
 
 
 @runtime_checkable

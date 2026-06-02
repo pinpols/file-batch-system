@@ -12,7 +12,7 @@ from batch_worker_sdk import (
     batch_task,
     collect_registered_handlers,
 )
-from batch_worker_sdk.decorator import _clear_registered_handlers
+from batch_worker_sdk.handler._decorator import _clear_registered_handlers
 from batch_worker_sdk.testkit import make_test_context
 
 

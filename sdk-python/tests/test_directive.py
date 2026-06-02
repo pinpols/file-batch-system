@@ -1,4 +1,4 @@
-"""Tests for ``batch_worker_sdk._directive.parse_directive``.
+"""Tests for ``batch_worker_sdk.scheduler._directive.parse_directive``.
 
 5 cases per Lane T brief T4:
 
@@ -15,8 +15,8 @@ from datetime import timedelta
 
 import pytest
 
-from batch_worker_sdk._directive import ParsedDirective, parse_directive
-from batch_worker_sdk.state import WorkerRuntimeState
+from batch_worker_sdk.scheduler._directive import ParsedDirective, parse_directive
+from batch_worker_sdk.task.state import WorkerRuntimeState
 
 
 def test_parse_full_directive_populates_every_field() -> None:
