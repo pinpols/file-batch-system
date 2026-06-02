@@ -2491,6 +2491,70 @@ paths:
                             properties:
                               field: { type: string }
                               meaning: { type: string }
+  /api/console/ops/atomic-task-configs:
+    get:
+      tags: [Workers]
+      summary: List saved atomic task configs by tenant + taskType (R3-5 / Round-1 TOP-8)
+      operationId: listAtomicTaskConfigs
+      parameters:
+        - name: taskType
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Saved atomic task configs, created_at desc
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+    post:
+      tags: [Workers]
+      summary: Create a saved atomic task config (schema-validated, sensitive keys rejected)
+      operationId: createAtomicTaskConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tenantId: { type: string }
+                taskType: { type: string }
+                name: { type: string }
+                parameters:
+                  type: object
+                  additionalProperties: true
+              required: [taskType, name, parameters]
+      responses:
+        '200':
+          description: Persisted atomic task config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    additionalProperties: true
+        '400':
+          description: Validation failure (unknown taskType / unknown key / missing required / sensitive credential key)
   /api/console/tasks/{taskId}/heartbeat-details:
     get:
       tags: [Workers]
