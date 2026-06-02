@@ -1,16 +1,14 @@
-"""Async in-process platform fake — mirrors Java ``FakeBatchPlatform``.
+"""进程内异步 fake 平台 —— 对标 Java ``FakeBatchPlatform``。
 
-Stubs all 8 orchestrator ``/internal/*`` endpoints with an
-``aiohttp`` server bound to ``127.0.0.1:0`` (random free port).
-Tenant tests configure a real :class:`BatchPlatformClientConfig`
-pointing at :attr:`base_url`; the SDK code under test then drives the
-fake the same way it would drive production.
+用 ``aiohttp`` 服务绑定 ``127.0.0.1:0``(随机空闲端口)桩掉
+orchestrator 的全部 8 个 ``/internal/*`` 端点。租户测试构造真实的
+:class:`BatchPlatformClientConfig` 指向 :attr:`base_url`,被测 SDK
+代码就能像驱动生产环境一样驱动这个 fake。
 
-The fake also keeps a Kafka-shaped queue (``asyncio.Queue[dict]``) so
-that once Lane S (Kafka consumer) lands, the same harness can drive
-end-to-end dispatch without changing test code. Until then,
-:meth:`dispatch_task` is a queue-only side effect (handler tests pull
-from it explicitly).
+fake 同时维护一个 Kafka 形状的队列(``asyncio.Queue[dict]``),
+已支持 Kafka 消费(Lane S 落地),同一夹具可端到端驱动 dispatch
+而不用改测试代码。:meth:`dispatch_task` 当前是仅入队的副作用,
+handler 测试显式从中拉取。
 """
 
 from __future__ import annotations
@@ -25,31 +23,31 @@ from aiohttp import web
 
 
 class FakeBatchPlatform:
-    """In-process fake of the orchestrator + dispatch channel.
+    """orchestrator + dispatch channel 的进程内 fake。
 
-    Usage::
+    用法::
 
         async with FakeBatchPlatform() as fp:
             await fp.start()
             cfg = BatchPlatformClientConfig(base_url=fp.base_url, ...)
-            # ... drive SDK against fp ...
+            # ... 用 fp 驱动被测 SDK ...
             assert fp.get_reports()[0]["taskId"] == 42
 
-    Behaviour summary:
+    行为概述:
 
-    - All POST ``/internal/*`` endpoints respond 200 with a stubbed
-      JSON body. ``register`` / ``claim`` / ``report`` payloads are
-      recorded into ``self._registrations`` / ``self._claims`` /
-      ``self._reports`` (lists of dict).
-    - ``heartbeat`` responds with whatever :meth:`set_heartbeat_directive`
-      configured (defaults to ``{}``).
-    - ``renew`` responds with ``{"cancelRequested": True}`` for taskIds
-      passed to :meth:`set_cancel_for_task`, ``{}`` otherwise.
+    - 所有 POST ``/internal/*`` 端点都回 200 + 桩 JSON。
+      ``register`` / ``claim`` / ``report`` 的请求体记录到
+      ``self._registrations`` / ``self._claims`` / ``self._reports``
+      (dict 列表)。
+    - ``heartbeat`` 返回 :meth:`set_heartbeat_directive` 配置的内容
+      (默认 ``{}``)。
+    - ``renew`` 对通过 :meth:`set_cancel_for_task` 注册过的 taskId
+      返回 ``{"cancelRequested": True}``,其余返回 ``{}``。
 
-    Not implemented (kept for Lane S/T follow-up):
+    暂未实现(留给 Lane S/T 后续):
 
-    - Real Kafka — :meth:`dispatch_task` only pushes onto the queue.
-    - 5xx / 4xx error injection — add when first contract fixture needs it.
+    - 真实 Kafka —— :meth:`dispatch_task` 仅入队。
+    - 5xx / 4xx 错误注入 —— 第一个合约 fixture 需要时再加。
     """
 
     def __init__(self) -> None:
@@ -70,10 +68,10 @@ class FakeBatchPlatform:
         self._cancel_task_ids: set[int] = set()
         self._dispatch_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
-    # ─── lifecycle ─────────────────────────────────────────────────────
+    # ─── 生命周期 ──────────────────────────────────────────────────────
 
     async def start(self) -> str:
-        """Bind the HTTP server. Returns the assigned ``base_url``."""
+        """绑定 HTTP 服务,返回分配到的 ``base_url``。"""
         if self._site is not None:
             raise RuntimeError("FakeBatchPlatform already started")
         app = web.Application()
@@ -90,8 +88,8 @@ class FakeBatchPlatform:
         await self._runner.setup()
         self._site = web.TCPSite(self._runner, "127.0.0.1", 0)
         await self._site.start()
-        # aiohttp doesn't expose port directly; dig into the underlying socket.
-        # ``_server`` is private but stable across aiohttp 3.x.
+        # aiohttp 不直接暴露端口,要扒底层 socket。
+        # ``_server`` 是私有属性,但在 aiohttp 3.x 中稳定。
         server = self._site._server
         assert server is not None, "site has no underlying server"
         sockets = getattr(server, "sockets", None)
@@ -101,7 +99,7 @@ class FakeBatchPlatform:
         return self._base_url
 
     async def stop(self) -> None:
-        """Shut down the HTTP server. Idempotent."""
+        """关闭 HTTP 服务,幂等。"""
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
@@ -121,36 +119,36 @@ class FakeBatchPlatform:
     ) -> None:
         await self.stop()
 
-    # ─── public test-driver surface ────────────────────────────────────
+    # ─── 对外测试驱动接口 ──────────────────────────────────────────────
 
     @property
     def base_url(self) -> str:
-        """Bound ``http://127.0.0.1:<port>`` — only valid after :meth:`start`."""
+        """绑定的 ``http://127.0.0.1:<port>`` —— 仅 :meth:`start` 之后可用。"""
         if self._base_url is None:
             raise RuntimeError("FakeBatchPlatform not started")
         return self._base_url
 
     def dispatch_task(self, task: dict[str, Any]) -> None:
-        """Push a task dispatch message onto the in-memory queue.
+        """把一条任务派发消息推入内存队列。
 
-        Tests assert on :meth:`pending_dispatches` until Lane S wires a
-        real Kafka consumer. ``task`` is a free-form dict matching the
-        wire-protocol ``TaskDispatchMessage`` shape.
+        Lane S 接上真实 Kafka 消费者之前,测试通过
+        :meth:`pending_dispatches` 断言。``task`` 是自由形状的 dict,
+        匹配 wire-protocol 的 ``TaskDispatchMessage``。
         """
-        # ``put_nowait`` is sync-safe — Queue is unbounded by default.
+        # ``put_nowait`` 是同步安全的 —— Queue 默认无界。
         self._dispatch_queue.put_nowait(task)
 
     async def take_dispatch(self, timeout_s: float = 1.0) -> dict[str, Any]:
-        """Pop the next dispatch message; raises ``TimeoutError`` if none.
+        """弹出下一条派发消息;无消息时抛 ``TimeoutError``。
 
-        ``timeout_s`` parameter named with the unit suffix to dodge ASYNC109
-        (``timeout`` is a sentinel name in async lints).
+        ``timeout_s`` 带单位后缀以规避 ASYNC109
+        (``timeout`` 在 async lint 中是哨兵名)。
         """
         async with asyncio.timeout(timeout_s):
             return await self._dispatch_queue.get()
 
     def pending_dispatches(self) -> int:
-        """Number of un-consumed dispatch messages still queued."""
+        """队列中尚未被消费的派发消息数。"""
         return self._dispatch_queue.qsize()
 
     def get_registrations(self) -> list[dict[str, Any]]:
@@ -175,16 +173,15 @@ class FakeBatchPlatform:
         return list(self._drains)
 
     def set_heartbeat_directive(self, directive: dict[str, Any]) -> None:
-        """Control what the fake returns on the next heartbeat POST.
+        """控制下一次 heartbeat POST fake 返回的内容。
 
-        Cleared per-call would surprise tests; we keep latest-wins so a
-        single ``set_heartbeat_directive`` survives across multiple
-        heartbeats until overridden.
+        按调用清零会让测试意外失败;采用 latest-wins 策略 —— 一次
+        ``set_heartbeat_directive`` 在覆盖前会跨多次 heartbeat 持续生效。
         """
         self._heartbeat_directive = dict(directive)
 
     def set_cancel_for_task(self, task_id: int) -> None:
-        """Make ``/internal/tasks/{task_id}/renew`` respond ``cancelRequested=True``."""
+        """让 ``/internal/tasks/{task_id}/renew`` 回 ``cancelRequested=True``。"""
         self._cancel_task_ids.add(int(task_id))
 
     def clear_cancel_for_task(self, task_id: int) -> None:
@@ -242,7 +239,7 @@ class FakeBatchPlatform:
 
 
 async def _read_json(request: web.Request) -> dict[str, Any]:
-    """Best-effort JSON decode. Empty body → ``{}``; malformed → ``{}``."""
+    """尽力 JSON 解码:空 body → ``{}``;格式错误 → ``{}``。"""
     raw = await request.read()
     if not raw:
         return {}
