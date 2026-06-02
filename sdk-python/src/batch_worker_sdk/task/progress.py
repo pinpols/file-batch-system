@@ -1,39 +1,31 @@
-"""Per-task progress / checkpoint slot (P4 implementation).
+"""单任务进度 / checkpoint 槽位(P4 实现)。
 
-Mirrors Java ``com.example.batch.sdk.task.ProgressReporter`` —
-latest-value-wins semantics: a handler updating progress in a tight
-loop overwrites the previous snapshot; the lease-renewal tick samples
-:meth:`latest` and forwards it as the ``details`` field on the renew
-request body.
+对齐 Java ``com.example.batch.sdk.task.ProgressReporter`` —— "最新值胜出"
+语义:handler 在紧循环里更新进度会覆盖前一份快照;租约续期 tick 采样
+:meth:`latest`,作为 renew 请求体的 ``details`` 字段上送。
 
-Concurrency model
------------------
-The handler coroutine writes via :meth:`report`; the lease-renewal task
-(running as a separate ``asyncio.Task`` driven by
-``LeaseRenewalScheduler``) reads via :meth:`latest`. Even though both
-run on the **same** event loop in normal use, the Python SDK promises
-async-only at the public-API boundary and the Java equivalent uses
-``volatile``; we use a :class:`threading.Lock` (cheap, ~50ns) to keep
-the snapshot pointer atomic even if a future executor offloads
-heartbeats to a thread.
+并发模型
+--------
+Handler 协程通过 :meth:`report` 写入;租约续期任务
+(由 ``LeaseRenewalScheduler`` 驱动的独立 ``asyncio.Task``)通过
+:meth:`latest` 读取。即使常规情况下两者跑在**同一**事件循环里,Python SDK
+公开 API 边界承诺 async-only,而 Java 等价物用 ``volatile``;这里用
+:class:`threading.Lock`(开销低,约 ~50ns)保证快照指针原子性,
+未来即便有 executor 把心跳卸到线程也无碍。
 
-Defensive copying
------------------
-:meth:`report` makes a **shallow copy** of the input dict so the caller
-can mutate the source without surprising the lease-renewal task.
-:meth:`latest` returns a **shallow copy** so the consumer can't mutate
-the stored snapshot. Nested mutable values (lists, dicts) are not
-deep-copied: this matches Java's ``Map.copyOf`` which also doesn't
-deep-copy values. Callers who need to mutate nested structures should
-build a fresh dict each ``report`` call (the recommended pattern).
+防御性拷贝
+----------
+:meth:`report` 对入参 dict 做**浅拷贝**,调用方可随意改原对象不影响续期任务。
+:meth:`latest` 返回**浅拷贝**,消费方不能改存储里的快照。嵌套可变值
+(list、dict)不深拷贝:这与 Java ``Map.copyOf`` 一致(后者也不深拷贝)。
+需要改嵌套结构的调用方应每次 ``report`` 都构造新 dict(推荐写法)。
 
-Sensitive-data guard
---------------------
-``details`` is persisted to ``job_task`` and visible to operators
-(see Java ``ProgressReporter`` Javadoc). Before storing we screen the
-keys against :mod:`batch_worker_sdk._sensitive_keys` and ``raise
-ValueError`` on any match — same intent as Java Lane C's
-``SensitiveDataValidator``.
+敏感数据守护
+------------
+``details`` 会持久化到 ``job_task`` 并对运维可见(见 Java
+``ProgressReporter`` Javadoc)。存储前根据 :mod:`batch_worker_sdk._sensitive_keys`
+筛 key,命中即 ``raise ValueError`` —— 与 Java Lane C
+``SensitiveDataValidator`` 用意一致。
 """
 
 from __future__ import annotations
@@ -45,7 +37,7 @@ from batch_worker_sdk.internal._sensitive_keys import find_sensitive_keys
 
 
 class ProgressReporter:
-    """Async-safe single-slot progress holder."""
+    """异步安全的单槽位进度持有者。"""
 
     __slots__ = ("_lock", "_snapshot")
 
@@ -54,24 +46,19 @@ class ProgressReporter:
         self._snapshot: dict[str, Any] | None = None
 
     def report(self, details: dict[str, Any]) -> None:
-        """Write the latest progress snapshot.
+        """写入最新进度快照。
 
-        :param details: progress fields (e.g. ``{"processed": 1200,
-            "total": 50000, "checkpoint": "row=1200"}``). Must be a
-            non-``None`` dict. Sensitive keys (password / secret /
-            token / credential / apikey / ...) raise
-            :class:`ValueError`.
-        :raises ValueError: ``details`` is ``None``, not a dict, or
-            contains a key that looks like a credential.
+        :param details: 进度字段(例如 ``{"processed": 1200,
+            "total": 50000, "checkpoint": "row=1200"}``)。必须是非 ``None``
+            的 dict。敏感 key(password / secret / token / credential /
+            apikey / ...)会抛 :class:`ValueError`。
+        :raises ValueError: ``details`` 为 ``None``、非 dict,或包含像凭据的 key。
 
-        The stored copy is independent of the caller's dict: callers
-        may mutate ``details`` after the call without affecting the
-        snapshot, and successive :meth:`latest` consumers cannot
-        mutate the slot through their returned copy.
+        存储副本与调用方 dict 解耦:调用后改 ``details`` 不影响快照,
+        :meth:`latest` 后续消费方也无法通过返回值改动槽位。
         """
-        # Defensive runtime check — Python type hints are advisory; a
-        # caller may still pass None or a non-dict despite the
-        # ``dict[str, Any]`` annotation.
+        # 防御性运行时检查 —— Python 类型注解只是建议;调用方可能仍传
+        # None 或非 dict,即便注解是 ``dict[str, Any]``。
         if not isinstance(details, dict):
             raise ValueError(
                 "ProgressReporter.report: details must be a non-None dict, "
@@ -80,24 +67,22 @@ class ProgressReporter:
 
         sensitive = find_sensitive_keys(details.keys())
         if sensitive:
-            # Match Java SensitiveDataValidator: refuse, don't log the
-            # values (which would defeat the point).
+            # 对齐 Java SensitiveDataValidator:拒绝,不记录值(否则失去意义)。
             raise ValueError(
                 "ProgressReporter.report: details contains sensitive key(s) "
                 f"{sensitive!r}; credentials must not be persisted in progress payloads"
             )
 
-        snapshot = dict(details)  # shallow copy, defensive against caller mutation
+        snapshot = dict(details)  # 浅拷贝,防御调用方后续修改
         with self._lock:
             self._snapshot = snapshot
 
     def latest(self) -> dict[str, Any] | None:
-        """Return the most recent snapshot, or ``None`` if never reported.
+        """返回最近一次快照;从未 report 过则返回 ``None``。
 
-        The returned dict is a **shallow copy** — mutating it does not
-        affect the stored snapshot. Returns ``None`` (not an empty
-        dict) when :meth:`report` has never been called, mirroring the
-        Java SDK's nullable contract.
+        返回的 dict 是**浅拷贝** —— 修改它不影响存储里的快照。从未调用
+        :meth:`report` 时返回 ``None``(而非空 dict),对齐 Java SDK 的可空
+        契约。
         """
         with self._lock:
             current = self._snapshot

@@ -1,11 +1,10 @@
-"""Typed Import template — Java parity:
-``SdkAbstractTypedImportHandler<I, O, R>``.
+"""Typed Import 模板 —— 对齐 Java
+``SdkAbstractTypedImportHandler<I, O, R>``。
 
-Template order: ``open_source -> read_rows (stream) -> load_batch
-(batched flush) -> summarize``. Strongly-typed input ``ParamsT``
-(pydantic) replaces Java's reflective Jackson resolution; strongly-typed
-business result ``OutputT`` serializes back into ``SdkTaskResult.output``
-(``None`` -> row-counter map fallback, matching Java).
+模板顺序:``open_source -> read_rows(流式) -> load_batch(批量 flush)
+-> summarize``。强类型输入 ``ParamsT``(pydantic)取代 Java 的 Jackson 反射
+解析;强类型业务结果 ``OutputT`` 序列化回 ``SdkTaskResult.output``
+(``None`` -> 行计数器 map 兜底,对齐 Java)。
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ def _resolve_params_model(cls: type, generic_base: type) -> type[BaseModel] | No
 class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT](
     SdkAbstractTaskHandler
 ):
-    """Typed Import handler — tenant -> tenant DB; row-streaming + batched flush."""
+    """Typed Import handler —— 租户 -> 租户 DB;行级流式 + 批量 flush。"""
 
     _params_model: type[BaseModel] | None = None
     DEFAULT_BATCH_SIZE = 1000
@@ -48,22 +47,22 @@ class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
         if cls._params_model is None:
             cls._params_model = _resolve_params_model(cls, SdkAbstractTypedImportHandler)
 
-    # ---- tenant hooks ----------------------------------------------------
+    # ---- 租户钩子 --------------------------------------------------------
 
     def open_source(self, params: ParamsT, ctx: SdkTaskContext) -> None:
-        """Open data source (default no-op)."""
+        """打开数据源(默认 no-op)。"""
         return None
 
     @abstractmethod
     def read_rows(
         self, params: ParamsT, ctx: SdkTaskContext
     ) -> Iterable[RowT] | Iterator[RowT] | AsyncIterator[RowT]:
-        """Return an iterable / async iterator of rows."""
+        """返回行的 iterable / async iterator。"""
         ...
 
     @abstractmethod
     def load_batch(self, params: ParamsT, ctx: SdkTaskContext, batch: list[RowT]) -> None:
-        """Write a batch to the tenant target table."""
+        """把一批数据写入租户目标表。"""
         ...
 
     def batch_size(self) -> int:
@@ -72,7 +71,7 @@ class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
     def summarize(self, params: ParamsT, counts: SdkRowResult) -> OutputT | None:
         return None
 
-    # ---- template --------------------------------------------------------
+    # ---- 模板 ------------------------------------------------------------
 
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
         model = self._params_model

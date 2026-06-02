@@ -1,16 +1,13 @@
-"""Task execution context (P0.5 stub).
+"""任务执行上下文(对齐 Java SdkTaskContext)。
 
-Mirrors Java ``com.example.batch.sdk.task.SdkTaskContext`` — the value
-record handed to :meth:`SdkTaskHandler.execute`. The Python shape is a
-flattened, Pythonic projection of the Java 9-arg constructor: the
-scheduling-context sub-record is inlined as top-level fields
+对齐 Java ``com.example.batch.sdk.task.SdkTaskContext`` —— 即传给
+:meth:`SdkTaskHandler.execute` 的值对象 record。Python 形态是 Java 9 参构造的
+扁平化、更 Pythonic 的投影:调度上下文子 record 内联为顶层字段
 (``biz_date`` / ``attempt_no`` / ``trigger_code`` / ``workflow_run_id``
-/ ``is_holiday``) so handlers read scheduling facts directly without
-walking a nested object.
+/ ``is_holiday``),handler 直接读取调度事实,无需穿越嵌套对象。
 
-Field naming follows PEP 8 (``tenant_id`` not ``tenantId``). The wire
-adapter that materializes this from the dispatch payload (P1+) handles
-the camel-case → snake_case mapping.
+字段命名遵循 PEP 8(``tenant_id`` 而非 ``tenantId``)。从派发负载物化此
+对象的 wire 适配器(P1+)负责 camelCase ↔ snake_case 映射。
 """
 
 from __future__ import annotations
@@ -24,90 +21,83 @@ from batch_worker_sdk.task.progress import ProgressReporter
 
 
 class SdkTaskContext(BaseModel):
-    """Immutable execution context for a single task instance.
+    """单个任务实例的不可变执行上下文。
 
-    Aligns with Java ``SdkTaskContext`` (7-arg legacy + scheduling
-    extension). ``runtime_attributes`` is the open-ended escape hatch
-    the platform uses to inject traceId, pipeline-instance id, dry-run
-    flag, and similar.
+    对齐 Java ``SdkTaskContext``(7 参 legacy + 调度扩展)。
+    ``runtime_attributes`` 是平台开放注入的逃生口,用于注入 traceId、
+    pipeline-instance id、dry-run flag 之类的字段。
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     tenant_id: str
-    """Owning tenant id (required, aligns with ``tenantId``)."""
+    """归属租户 id(必填,对齐 ``tenantId``)。"""
 
     task_id: int
-    """Orchestrator-side task primary key (aligns with ``taskId``)."""
+    """Orchestrator 侧任务主键(对齐 ``taskId``)。"""
 
     worker_code: str
-    """Identifier of this worker (aligns with ``workerId``)."""
+    """当前 worker 的标识(对齐 ``workerId``)。"""
 
     task_type: str
-    """Task-type code routing this dispatch to the right handler."""
+    """task-type 编码,用于把此次派发路由到对应 handler。"""
 
     parameters: dict[str, Any] = Field(default_factory=dict)
-    """User-defined task parameters from ``job_definition.parameters``."""
+    """来自 ``job_definition.parameters`` 的用户自定义任务参数。"""
 
     biz_date: str | None = None
-    """Business date (ISO ``YYYY-MM-DD``); ``None`` when no scheduling ctx."""
+    """业务日期(ISO ``YYYY-MM-DD``);无调度上下文时为 ``None``。"""
 
     prev_biz_date: str | None = None
-    """Previous business date (ISO ``YYYY-MM-DD``); ``None`` outside scheduling."""
+    """前一个业务日期(ISO ``YYYY-MM-DD``);调度外为 ``None``。"""
 
     next_biz_date: str | None = None
-    """Next business date (ISO ``YYYY-MM-DD``); ``None`` outside scheduling."""
+    """下一个业务日期(ISO ``YYYY-MM-DD``);调度外为 ``None``。"""
 
     is_holiday: bool | None = None
-    """Holiday/weekend flag for ``biz_date``; ``None`` outside scheduling."""
+    """``biz_date`` 是否为节假日 / 周末;调度外为 ``None``。"""
 
     attempt_no: int = 1
-    """Execution attempt counter (1-based; increments on retry/reclaim)."""
+    """执行尝试次数(从 1 起计;重试 / 重夺时递增)。"""
 
     trigger_code: str | None = None
-    """Source trigger code (currently always ``None`` — column not yet wired)."""
+    """来源 trigger 编码(目前恒为 ``None`` —— 字段尚未接通)。"""
 
     workflow_run_id: int | None = None
-    """Owning workflow run id; ``None`` for non-workflow direct dispatches."""
+    """归属的 workflow run id;非 workflow 直接派发时为 ``None``。"""
 
     runtime_attributes: dict[str, Any] = Field(default_factory=dict)
-    """Open-ended platform-injected attributes (traceId / dryRun / etc.)."""
+    """平台开放注入的运行时属性(traceId / dryRun 等)。"""
 
-    # P4-injected runtime collaborators. Not part of the wire payload —
-    # the dispatcher attaches them when materializing the context for a
-    # specific task instance. Frozen=True still applies (the references
-    # cannot be reassigned after construction), but the referenced
-    # objects are mutable (CancellationSignal flips its internal event,
-    # ProgressReporter writes its snapshot under a lock). ``exclude=True``
-    # keeps them out of any ``model_dump()`` output the dispatcher might
-    # log.
+    # P4 注入的运行时协作对象。不属于 wire 负载 —— 派发器在为具体任务实例
+    # 物化上下文时绑定。frozen=True 仍生效(构造后不能重新赋值引用),但
+    # 被引用对象本身是可变的(CancellationSignal 会翻转其内部 event,
+    # ProgressReporter 在锁保护下写快照)。``exclude=True`` 让它们不出现在
+    # 派发器可能打印的任何 ``model_dump()`` 输出里。
     cancel_signal: CancellationSignal | None = Field(default=None, exclude=True, repr=False)
-    """Cooperative cancellation signal for this task execution (P4).
+    """本次任务执行的协作式取消信号(P4)。
 
-    Long-running handlers should poll
-    ``ctx.cancel_signal.is_cancellation_requested`` (or ``await
-    ctx.cancel_signal.wait_cancelled()``) and return early when set,
-    instead of waiting for the lease to expire. ``None`` only in
-    P0.5-era callers that haven't been upgraded yet.
+    长跑 handler 应轮询
+    ``ctx.cancel_signal.is_cancellation_requested``(或 ``await
+    ctx.cancel_signal.wait_cancelled()``),在置位时尽早返回,不要等租约
+    自然过期。仅在尚未升级的 P0.5 时期调用方处为 ``None``。
     """
 
     progress_reporter: ProgressReporter | None = Field(default=None, exclude=True, repr=False)
-    """Latest-value-wins progress slot for this task execution (P4).
+    """本次任务执行的"最新值胜出"进度槽位(P4)。
 
-    Handlers call ``ctx.progress_reporter.report({...})`` in their long
-    loop; the lease-renewal scheduler samples ``latest()`` on each
-    tick and includes the snapshot in the renew request body so the
-    platform's job-task detail view stays fresh. ``None`` only in
-    P0.5-era callers that haven't been upgraded yet.
+    Handler 在长循环里调用 ``ctx.progress_reporter.report({...})``;
+    租约续期调度器每次 tick 采样 ``latest()`` 并塞进 renew 请求体的
+    ``details`` 字段,使平台的 job-task 详情页保持新鲜。仅在尚未升级的
+    P0.5 时期调用方处为 ``None``。
     """
 
     def is_dry_run(self) -> bool:
-        """Whether the dispatch is a dry-run probe (ADR-026).
+        """本次派发是否为 dry-run 探测(ADR-026)。
 
-        Reads ``runtime_attributes['dryRun']`` first (platform-injected
-        path), then falls back to ``parameters['dryRun']`` for handlers
-        that opt in via user parameters. Aligns with Java Lane B
-        ``TaskContext.isDryRun()``.
+        优先读 ``runtime_attributes['dryRun']``(平台注入路径),再回落到
+        ``parameters['dryRun']``(handler 通过用户参数主动启用)。对齐 Java
+        Lane B ``TaskContext.isDryRun()``。
         """
         for source in (self.runtime_attributes, self.parameters):
             value = source.get("dryRun")

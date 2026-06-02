@@ -1,9 +1,8 @@
-"""Custom task-type descriptor (P0.5 stub).
+"""自定义 taskType 描述符(对齐 Java SdkTaskTypeDescriptor)。
 
-Mirrors Java ``com.example.batch.sdk.task.SdkTaskTypeDescriptor``.
-Returned from :meth:`SdkTaskHandler.descriptor` and sent on the
-worker-register request body so the console can render parameter forms
-and the orchestrator can merge defaults at dispatch time.
+对齐 Java ``com.example.batch.sdk.task.SdkTaskTypeDescriptor``。由
+:meth:`SdkTaskHandler.descriptor` 返回,并在 worker-register 请求体中
+上送,以便 console 渲染参数表单、orchestrator 在派发时合并默认值。
 """
 
 from __future__ import annotations
@@ -14,34 +13,32 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SdkTaskTypeDescriptor(BaseModel):
-    """Declarative metadata for a custom task type.
+    """自定义 task type 的声明式元数据。
 
-    Field-for-field mirror of the Java record so the wire payload is
-    identical when Python workers register against the same orchestrator
-    that Java workers do.
+    与 Java record 逐字段对齐,Python worker 与 Java worker 向同一 orchestrator
+    注册时 wire 负载完全一致。
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
     task_type: str
-    """Authoritative task-type code (matches ``SdkTaskHandler.task_type``)."""
+    """权威 task-type 编码(与 ``SdkTaskHandler.task_type`` 保持一致)。"""
 
     display_name: str | None = None
-    """Console display name (optional)."""
+    """Console 展示名(可选)。"""
 
     input_schema: dict[str, Any] | None = Field(default=None, alias="schema")
-    """JSON Schema for ``parameters`` — drives form rendering + validation.
+    """``parameters`` 的 JSON Schema —— 驱动表单渲染 + 校验。
 
-    Wire alias ``schema`` (matches Java ``inputSchema``). The Python
-    attribute is named ``input_schema`` to avoid shadowing pydantic's
-    ``BaseModel.schema`` classmethod.
+    Wire alias ``schema``(对齐 Java ``inputSchema``)。Python 属性名为
+    ``input_schema``,避免遮蔽 pydantic ``BaseModel.schema`` 类方法。
     """
 
     parameters: dict[str, Any] | None = None
-    """Default parameter values (merged under user-supplied node parameters)."""
+    """默认参数值(合并到用户在节点上提供的参数之下)。"""
 
     outputs: dict[str, Any] | None = None
-    """Declared output shape (informational; future contract enforcement)."""
+    """声明的输出形态(目前仅信息性;未来用于合约强校验)。"""
 
     required_env: list[str] | None = None
-    """Environment variables the handler needs at runtime (e.g. DB creds)."""
+    """Handler 运行时需要的环境变量(例如 DB 凭据)。"""
