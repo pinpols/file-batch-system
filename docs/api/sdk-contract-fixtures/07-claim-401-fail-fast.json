@@ -1,0 +1,28 @@
+{
+  "scenario": "claim-401-fail-fast",
+  "description": "apiKey 失效 / 被运维清掉 → 401。BYO SDK 必须 fail-fast,不重试(对照 wire-protocol §B)",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "apiKey": "expired" }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/claim",
+    "body": {
+      "tenantId": "acme",
+      "workerId": "w-1",
+      "partitionInvocationId": "inv-1"
+    },
+    "responseStatus": 401,
+    "responseBody": {
+      "code": "AUTH_INVALID",
+      "message": "apiKey not recognized",
+      "traceId": "trace-abc"
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "mark dispatcher as fatal; subsequent onMessage() must reject without claim; log ERROR with traceId; wait for container restart (K8s liveness will recycle); do NOT retry, do NOT exponential-backoff",
+    "sdkMustNot": ["retry 401 (auth errors cannot recover by retry)", "swallow the error and continue accepting tasks"]
+  },
+  "references": ["wire-protocol.md §B", "wire-protocol.md §C", "PlatformHttpException.isAuthError()"]
+}

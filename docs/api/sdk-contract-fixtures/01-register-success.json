@@ -1,0 +1,43 @@
+{
+  "scenario": "register-success",
+  "description": "首次启动注册成功 → 平台落 worker_registry,SDK 进 ONLINE 并启 Heartbeat / Lease 调度器",
+  "given": {
+    "config": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "apiKey": "<env:BATCH_API_KEY>",
+      "baseUrl": "http://orchestrator-internal:8081",
+      "kafkaBootstrap": "kafka:9092",
+      "kafkaTopicPattern": "batch.task.dispatch.acme.*"
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/register",
+    "body": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "workerGroup": "sdk-self-hosted",
+      "status": "RUNNING",
+      "heartbeatAt": "2026-06-02T10:00:00Z",
+      "currentLoad": 0,
+      "capabilityTags": ["echo", "sleep"],
+      "buildId": "git-abc123",
+      "sdkVersion": "1.1.0"
+    },
+    "responseStatus": 200,
+    "responseBody": {
+      "id": 42,
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "status": "ONLINE",
+      "lastHeartbeatAt": "2026-06-02T10:00:00Z"
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "transition FSM to NORMAL; start HeartbeatScheduler (30s interval); start LeaseRenewalScheduler (60s interval); start Kafka consumer subscribe to topic pattern",
+    "sdkMustNot": ["block on register response > httpTimeout", "include apiKey in request body (走 Authorization header)"]
+  },
+  "references": ["wire-protocol.md §4", "openapi: /internal/workers/register"]
+}
