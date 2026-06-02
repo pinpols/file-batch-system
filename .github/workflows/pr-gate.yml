@@ -1,10 +1,19 @@
 name: pr-gate
 
-# 完全对齐 full-ci-gate 结构:4-5 job 立刻并发(零 needs 链),不做 affected scope
-# 探测(本就只在 partial 时省时间,常见 PR 改 batch-common 总是 full 兜底)。
-# wall-clock 由最慢 job 决定(通常 unit-it-b ~6-7min)。
+# C 方案(2026-06-02):PR 只跑 unit + 文档全跳 + Merge Queue 入口。
+# 历史背景:Round-1 TOP-7 把 e2e 分级到 smoke(本 workflow)+ regression(staging-gate)。
+# C 方案进一步把 IT 也从 PR-gate 移除,IT/E2E 全部交给 full-ci-gate(main push 后兜底)+
+# staging-gate(nightly)。PR-gate 只保留 static-checks + unit + security 三类快速反馈。
+# 风险:main 偶尔会被 full-ci-gate 拦,该 PR 作者负责立即 revert + 修复。
+# 详见 docs/runbook/ci-speedup-2026-06-02.md。
 #
-# affected 极小化代替方案:paths-ignore 直接在 workflow 触发层拦"纯文档/yml"改动。
+# Job 名(unit-it-a / unit-it-b1 / unit-it-b2)不动,因为 ruleset required check 配置在
+# 这 3 个名字上;改名会导致 ruleset 失配。命令从 `mvn verify`(failsafe IT)改成
+# `mvn test`(只跑 surefire unit)。
+#
+# affected 极小化:paths-ignore 在触发层拦"纯文档/yml/配置"改动;细粒度 docs-only PR
+# 由 `changes` job 的 dorny/paths-filter 二次判定后跳过 3 个 unit job
+# (skipped == SUCCESS,ruleset required check 不挂)。
 
 on:
   workflow_dispatch:
@@ -39,6 +48,13 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+  # GitHub Merge Queue 入口(C 方案 #4):必须 list 在这里,merge queue 才会调用
+  # pr-gate 作为 required check;ruleset required check 同时支持 PR 和 merge_group。
+  # 启用 Merge Queue 后,合并通过 queue 串行化,可消除 main 被 broken 风险。
+  # 启用指引见 docs/runbook/ci-speedup-2026-06-02.md。
+  merge_group:
+    types:
+      - checks_requested
 
 permissions:
   contents: read
@@ -48,6 +64,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ===========================================================================
+  # Job 0: changes — dorny/paths-filter 判定 docs-only PR(C 方案 #2)
+  # 文档/示例-only PR 跳过 3 个 unit job(GitHub 把 skipped 算 SUCCESS,ruleset
+  # required check 不挂),只保留 static-checks + security 兜底。
+  # ===========================================================================
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      # 任一 code 路径命中 => docs-only=false;全无命中 => docs-only=true。
+      # merge_group / push 事件无 PR diff,paths-filter 直接判 true(执行 unit)。
+      docs-only: ${{ steps.filter.outputs.code == 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Detect code changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # PR base 判 diff;非 PR 事件(merge_group / push)无 base,filter 视为 changed=true
+          # (即 code=true / docs-only=false),保证安全 — 兜底跑 unit。
+          filters: |
+            code:
+              - 'batch-*/**'
+              - 'sdk-python/**'
+              - 'db/migration/**'
+              - 'scripts/**'
+              - 'pom.xml'
+              - '**/pom.xml'
+              - '.github/workflows/**'
+              - '.github/actions/**'
+
   # ===========================================================================
   # Job 1: static-checks — yml/dict/openapi/PMD/Spotless 等静态校验
   # 不依赖任何下游,与所有 maven job 并发起跑
@@ -94,17 +148,21 @@ jobs:
         run: mvn -DskipTests test-compile pmd:check spotless:check -fae -B
 
   # ===========================================================================
-  # 3 个 maven shard 按"压力均匀"分配,不按业务领域分:
-  # 实测 orchestrator + console-api IT 最重,把它们配轻模块拉平 wall-clock。
+  # 3 个 maven unit shard 按"压力均匀"分配,不按业务领域分。
+  # C 方案(2026-06-02):只跑 surefire unit(`mvn test -DskipITs`),IT 已搬到
+  # full-ci-gate(main push 兜底)+ staging-gate(nightly)。
+  # job 名 unit-it-a / unit-it-b1 / unit-it-b2 保留(ruleset required check 锁定)。
   #
-  # Job 2: it-shard-1 — orchestrator(重)+ worker-core(轻),预估 ~4min
+  # Job 2: unit-shard-1 — orchestrator + worker-core
   # ===========================================================================
   unit-it-a:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changes
+    # docs-only PR skip(skipped == SUCCESS,ruleset 不挂);非 PR 事件 docs-only=false 必跑
+    if: |
+      needs.changes.outputs.docs-only != 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -114,20 +172,13 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
-      - name: Cleanup orphan testcontainers (pre-IT)
+      - name: Run unit tests (orchestrator + worker-core)
         shell: bash
+        # -am 编译上游;-DskipITs=true 跳 failsafe IT;跳 PMD/Spotless(在 static-checks job)
+        # IT 由 full-ci-gate(main push 后)+ staging-gate(nightly)兜底
         run: |
-          docker ps --filter "label=org.testcontainers=true" \
-            --format '{{.ID}} {{.Labels}}' | \
-            awk '$0 !~ /reuse-hash/ {print $1}' | \
-            xargs -r docker rm -f >/dev/null 2>&1 || true
-
-      - name: Run unit + IT (orchestrator + worker-core)
-        shell: bash
-        # -am 编译上游;跳 PMD/Spotless(在 static-checks job)
-        run: |
-          mvn verify -pl batch-orchestrator,batch-worker-core -am \
-            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+          mvn test -pl batch-orchestrator,batch-worker-core -am \
+            -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
       - name: Upload Surefire Reports
@@ -137,19 +188,18 @@ jobs:
           name: pr-gate-unit-it-a-reports
           path: |
             **/target/surefire-reports/**
-            **/target/failsafe-reports/**
           retention-days: 14
 
   # ===========================================================================
-  # Job 3: it-shard-2 — common + trigger + worker-process + worker-dispatch
-  # 4 个轻模块凑 ~5min
+  # Job 3: unit-shard-2 — common + trigger + worker-process + worker-dispatch
   # ===========================================================================
   unit-it-b1:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changes
+    if: |
+      needs.changes.outputs.docs-only != 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -159,20 +209,11 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
-      - name: Cleanup orphan testcontainers (pre-IT)
+      - name: Run unit tests (common + trigger + worker-process + worker-dispatch)
         shell: bash
         run: |
-          docker ps --filter "label=org.testcontainers=true" \
-            --format '{{.ID}} {{.Labels}}' | \
-            awk '$0 !~ /reuse-hash/ {print $1}' | \
-            xargs -r docker rm -f >/dev/null 2>&1 || true
-
-      - name: Run unit + IT (common + trigger + worker-process + worker-dispatch)
-        shell: bash
-        run: |
-          mvn verify -pl batch-common,batch-trigger,batch-worker-process,batch-worker-dispatch -am \
-            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
-            -Dit.test='!*E2eIT' \
+          mvn test -pl batch-common,batch-trigger,batch-worker-process,batch-worker-dispatch -am \
+            -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
       - name: Upload Surefire Reports
@@ -182,18 +223,18 @@ jobs:
           name: pr-gate-unit-it-b1-reports
           path: |
             **/target/surefire-reports/**
-            **/target/failsafe-reports/**
           retention-days: 14
 
   # ===========================================================================
-  # Job 4: it-shard-3 — worker-import + worker-export + console-api(中等 ~5min)
+  # Job 4: unit-shard-3 — worker-import + worker-export + worker-atomic + console-api
   # ===========================================================================
   unit-it-b2:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: changes
+    if: |
+      needs.changes.outputs.docs-only != 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -203,20 +244,11 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
-      - name: Cleanup orphan testcontainers (pre-IT)
+      - name: Run unit tests (worker-import + worker-export + worker-atomic + console-api)
         shell: bash
         run: |
-          docker ps --filter "label=org.testcontainers=true" \
-            --format '{{.ID}} {{.Labels}}' | \
-            awk '$0 !~ /reuse-hash/ {print $1}' | \
-            xargs -r docker rm -f >/dev/null 2>&1 || true
-
-      - name: Run unit + IT (worker-import + worker-export + worker-atomic + console-api)
-        shell: bash
-        run: |
-          mvn verify -pl batch-worker-import,batch-worker-export,batch-worker-atomic,batch-console-api -am \
-            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
-            -Dit.test='!*E2eIT' \
+          mvn test -pl batch-worker-import,batch-worker-export,batch-worker-atomic,batch-console-api -am \
+            -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
       - name: Upload Surefire Reports
@@ -226,66 +258,17 @@ jobs:
           name: pr-gate-unit-it-b2-reports
           path: |
             **/target/surefire-reports/**
-            **/target/failsafe-reports/**
           retention-days: 14
 
   # ===========================================================================
-  # Job: e2e-smoke — R3-2 分级:pr-gate 只跑 smoke + critical 标签(主链 4 个 +
-  # 关键场景 8 个 = 12 个 E2eIT,单 shard ~12-15min)。其余 ~14 个 regression
-  # E2eIT 全量留给 nightly staging-gate(.github/workflows/staging-gate.yml,
-  # 4 shard 并发,full-ci-gate 兜底)。
-  # 反馈周期:Round-1 TOP-7 闭环,从 9h full e2e → 15min smoke+critical。
-  # 详细标签策略:docs/runbook/e2e-tier-strategy.md
+  # NOTE: e2e-smoke 已从 pr-gate 移除(C 方案 #1)。
+  # E2E(smoke + regression)全部交给 staging-gate.yml(nightly,4 shard 并发)
+  # 和 full-ci-gate.yml(main push 后兜底)。
+  # 如需 PR 阶段重新引入 smoke,从 git history 恢复 e2e-smoke job。
   # ===========================================================================
-  e2e-smoke:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Setup build environment
-        uses: ./.github/actions/setup-build-env
-
-      - name: Cleanup orphan testcontainers (pre-IT)
-        shell: bash
-        run: |
-          docker ps --filter "label=org.testcontainers=true" \
-            --format '{{.ID}} {{.Labels}}' | \
-            awk '$0 !~ /reuse-hash/ {print $1}' | \
-            xargs -r docker rm -f >/dev/null 2>&1 || true
-
-      - name: Install upstream modules to ~/.m2 (skip tests)
-        shell: bash
-        # 与 full-ci-gate e2e-shard 一致:e2e-tests 跑 surefire 需要 sibling
-        # module jar/test-jar 已安装在本地仓库。
-        run: |
-          mvn install -DskipTests -pl '!batch-e2e-tests' -B
-
-      - name: Run E2E smoke + critical (pr-gate tier)
-        shell: bash
-        # -Pe2e-smoke 激活 surefire groups=smoke|critical(JUnit5 tag 表达式)。
-        # 选择规则见 docs/runbook/e2e-tier-strategy.md。
-        run: |
-          mvn test -pl batch-e2e-tests -Pe2e-smoke \
-            -Dsurefire.failIfNoSpecifiedTests=false -B
-
-      - name: Upload E2E smoke reports
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-gate-e2e-smoke-reports
-          path: |
-            batch-e2e-tests/target/surefire-reports/**
-          retention-days: 14
 
   # ===========================================================================
-  # Job 4: security — secret scan(并发)
+  # Job 5: security — secret scan(并发)
   # ===========================================================================
   security:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
