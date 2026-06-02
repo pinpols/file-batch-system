@@ -115,6 +115,28 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             paramsForScan, "atomic.http.parameters");
       }
       Invocation inv = parseInvocation(ctx);
+      if (ctx.isDryRun()) {
+        // ADR-026 §dry-run:不发出 HTTP 请求,只回传将要发的 method + url + header keys + body 长度。
+        // 不回传 header value(可能含 auth bearer / cookie),不回传 body 文本(可能含敏感载荷)。
+        Map<String, Object> planned = new LinkedHashMap<>();
+        planned.put("dryRun", true);
+        planned.put("plannedAction", "http");
+        planned.put("method", inv.method);
+        planned.put("url", inv.uri.toString());
+        planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
+        planned.put(
+            "bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);
+        planned.put("timeoutSeconds", inv.timeout.toSeconds());
+        planned.put("expectStatus", inv.expectedStatus);
+        log.info(
+            "http executor dry-run skipped real request: tenantId={}, jobCode={}, method={},"
+                + " url={}",
+            ctx.tenantId(),
+            ctx.jobCode(),
+            inv.method,
+            inv.uri);
+        return TaskResult.ok("dry-run: " + inv.method + " " + inv.uri + " (not sent)", planned);
+      }
       return runWithRetry(ctx, inv);
     } catch (HttpValidationException ex) {
       return TaskResult.fail(ex.getMessage());

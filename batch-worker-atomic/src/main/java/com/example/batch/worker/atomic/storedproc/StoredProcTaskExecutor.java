@@ -111,6 +111,27 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(
           ctx.parameters(), "atomic.storedproc.parameters");
       Invocation inv = parseInvocation(ctx);
+      if (ctx.isDryRun()) {
+        // ADR-026 §dry-run:不开 CallableStatement,不触 DB,只回传将要 CALL 的过程 + 输入参数个数 + dataSource bean。
+        // 不暴露 inParams value(可能含业务敏感数据)。
+        String requestedDsBean = stringParam(ctx.parameters(), PARAM_DS_BEAN, null);
+        String dsBean = resolveDataSourceBean(requestedDsBean);
+        Map<String, Object> planned = new LinkedHashMap<>();
+        planned.put("dryRun", true);
+        planned.put("plannedAction", "storedProc");
+        planned.put("procedureName", inv.procName);
+        planned.put("inParamCount", inv.inParams.size());
+        planned.put("outParamTypes", inv.outTypes);
+        planned.put("dataSourceBean", dsBean == null ? "<default>" : dsBean);
+        planned.put("autoCommit", inv.autoCommit);
+        planned.put("statementTimeoutSeconds", inv.timeoutSec);
+        log.info(
+            "stored proc executor dry-run skipped real CALL: tenantId={}, jobCode={}, proc={}",
+            ctx.tenantId(),
+            ctx.jobCode(),
+            inv.procName);
+        return TaskResult.ok("dry-run: CALL " + inv.procName + " (not invoked)", planned);
+      }
       return runCall(ctx, inv);
     } catch (StoredProcValidationException ex) {
       return TaskResult.fail(ex.getMessage());

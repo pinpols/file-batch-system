@@ -119,6 +119,23 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(
           ctx.parameters(), "atomic.shell.parameters");
       ShellInvocation inv = parseInvocation(ctx);
+      if (ctx.isDryRun()) {
+        // ADR-026 §dry-run:演练不 fork 进程、不建 workdir、不透传 env 值,仅返回会执行的 command / args / env keys。
+        Map<String, Object> planned = new LinkedHashMap<>();
+        planned.put("dryRun", true);
+        planned.put("plannedAction", "shell");
+        planned.put("command", inv.command);
+        planned.put("args", inv.args);
+        planned.put("timeoutSeconds", inv.timeout.toSeconds());
+        // env 只暴露 key(白名单过滤过),value 不出库以防泄密
+        planned.put("envKeys", List.copyOf(inv.env.keySet()));
+        log.info(
+            "shell executor dry-run skipped real fork: tenantId={}, jobCode={}, command={}",
+            ctx.tenantId(),
+            ctx.jobCode(),
+            inv.command);
+        return TaskResult.ok("dry-run: command parsed (not forked): " + inv.command, planned);
+      }
       Path workdir = createIsolatedWorkdir(ctx);
       try {
         return runProcess(ctx, inv, workdir);
