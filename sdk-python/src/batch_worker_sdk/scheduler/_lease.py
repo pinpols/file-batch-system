@@ -119,22 +119,14 @@ class LeaseRenewalScheduler:
             self._safe_mark_cancel(task_id, "platform-cancel")
 
     def _safe_mark_cancel(self, task_id: int, reason: str) -> None:
-        """转发取消信号到 dispatcher;当前 dispatcher 还未提供该方法时降级 WARN。
+        """转发取消信号到 dispatcher。
 
-        使用 ``getattr`` 探测保持向前兼容:dispatcher 后续会补
-        ``mark_cancel_requested``,在此之前缺失即 WARN 提示,避免静默。
+        ``DispatcherLike`` 协议自 Lane A 起强制实现 ``mark_cancel_requested``;
+        旧的 ``getattr`` fallback 已删除。仍保留单点 try/except,避免 dispatcher
+        内部异常打断同一 tick 的其他 task。
         """
-        mark = getattr(self._dispatcher, "mark_cancel_requested", None)
-        if mark is None:
-            logger.warning(
-                "dispatcher missing mark_cancel_requested(taskId=%s, reason=%s) — "
-                "cancel signal not yet wired",
-                task_id,
-                reason,
-            )
-            return
         try:
-            mark(task_id, reason)
+            self._dispatcher.mark_cancel_requested(task_id, reason)
         except Exception as ex:
             logger.warning("mark_cancel_requested raised for taskId=%s: %s", task_id, ex)
 
