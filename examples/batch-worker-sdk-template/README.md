@@ -1,9 +1,14 @@
 # batch-worker-sdk-template
 
-> ADR-035 Round-3 #10 — 租户自托管 worker 的**开箱即用 template**。
+> ADR-035 Round-3 #10 — 租户自托管 worker(Java)的**开箱即用 template**。
 >
 > **本目录是 template repo 的雏形**(主仓 examples/ 孵化),后续会拆成独立 repo
 > `github.com/example-batch/batch-worker-sdk-template` 供租户直接 fork。
+
+> **本 template 仅 Java**。Python 团队请用
+> [`../sample-tenant-worker-python`](../sample-tenant-worker-python/)
+> 起步,其 README 含 5 分钟 quickstart + testkit 用法。后续会出 Python 版 template(含
+> Dockerfile + GitHub Actions),tracked at ADR-035 Round-4 backlog。
 
 跟 `examples/sample-tenant-worker-spring` 的区别:
 
