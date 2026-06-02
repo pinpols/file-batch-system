@@ -73,7 +73,14 @@ class LoadStepTest {
             new FileProcessing(true, 1000, 1000, 2),
             Boolean.FALSE);
     objectMapper = new ObjectMapper();
-    loadStep = new LoadStep(registry, runtimeRepository, workerConfig, objectMapper);
+    loadStep =
+        new LoadStep(
+            registry,
+            runtimeRepository,
+            workerConfig,
+            objectMapper,
+            new com.example.batch.worker.core.config.WorkerCheckpointProperties(),
+            null);
   }
 
   @AfterEach
@@ -237,7 +244,14 @@ class LoadStepTest {
     when(custom.id()).thenReturn("custom_plugin");
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
     registry = new ImportLoadPluginRegistry(List.of(plugin, custom));
-    loadStep = new LoadStep(registry, runtimeRepository, workerConfig, objectMapper);
+    loadStep =
+        new LoadStep(
+            registry,
+            runtimeRepository,
+            workerConfig,
+            objectMapper,
+            new com.example.batch.worker.core.config.WorkerCheckpointProperties(),
+            null);
 
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);
