@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/file-batch-system/sdk-contract-fixtures/fixture-schema.json",
+  "title": "SDK Contract Fixture",
+  "description": "Schema for language-agnostic SDK contract fixtures consumed by Java JsonFixtureContractTest and Python contract runner. Lane P (drift guard).",
+  "type": "object",
+  "required": ["scenario", "description", "given", "when", "then"],
+  "additionalProperties": false,
+  "properties": {
+    "scenario": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 3,
+      "maxLength": 80,
+      "description": "kebab-case unique scenario id"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "given": {
+      "type": "object",
+      "required": ["config"],
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "type": "object",
+          "description": "SDK boot config (tenantId / workerCode / ...). Schema intentionally open."
+        },
+        "state": {
+          "type": "object",
+          "description": "Optional simulated SDK state (in-flight tasks, FSM state, etc)."
+        }
+      }
+    },
+    "when": {
+      "type": "object",
+      "required": ["channel", "method"],
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["http", "kafka"]
+        },
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "RECEIVE"]
+        },
+        "path": {
+          "type": "string",
+          "description": "HTTP path (for channel=http); kebab/slash form, must start with /internal/."
+        },
+        "topic": {
+          "type": "string",
+          "description": "Kafka topic / pattern (optional, for channel=kafka)."
+        },
+        "body": {
+          "description": "Outgoing request body or incoming kafka payload."
+        },
+        "responseStatus": {
+          "type": ["integer", "null"],
+          "minimum": 100,
+          "maximum": 599
+        },
+        "responseBody": {
+          "description": "Platform response payload (null for kafka receive)."
+        },
+        "responseHeaders": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "channel": { "const": "http" } }, "required": ["channel"] },
+          "then": { "required": ["path", "responseStatus"] }
+        }
+      ]
+    },
+    "then": {
+      "type": "object",
+      "required": ["sdkExpectedAction"],
+      "additionalProperties": false,
+      "properties": {
+        "sdkExpectedAction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of behavior the SDK MUST exhibit."
+        },
+        "sdkMustNot": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
