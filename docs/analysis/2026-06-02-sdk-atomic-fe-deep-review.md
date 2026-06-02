@@ -223,6 +223,53 @@
 
 ---
 
+## 8. 交付追踪(2026-06-02 当日并发 5 lane 落地)
+
+5 个独立 worktree 并发跑(各自 general-purpose agent),全部 PR 已合 main。Lane 间冲突(B/C 同改 atomic executor)由 GitHub 自动 rebase 干净合并,无需人工解。
+
+| Lane | TOP # | PR | 状态 | 落地点 / 关键文件 | 测试 |
+|---|---|---|---|---|---|
+| **A** SDK Kafka pause + stop(timeout) | #1 | [#239](https://github.com/pinpols/file-batch-system/pull/239) | ✅ MERGED | `batch-worker-sdk/.../client/BatchPlatformClient.java:163-209`(`stop(Duration)` + 预算分摊 kafka 20% / dispatcher 75%)+ `dispatcher/TaskDispatcher.java:490-519`(超时 WARN 列 `inFlightTaskIds()`)| 286 单测全绿,新增 8(`*StopTimeoutTest` + `*CapacityPauseTest`)|
+| **B** Atomic dry-run + prod fail-closed | #2 | [#241](https://github.com/pinpols/file-batch-system/pull/241) | ✅ MERGED | `batch-common/.../spi/task/TaskContext.java` 加默认 `isDryRun()` + 4 个 `*TaskExecutor` 短路 + `runtime/AtomicExecutorProductionGuard.java` 启动期 fail-fast(`prod` / `prod-*` profile 强制白名单)| atomic 155/155、common 325/1-skip,新 15 用例 |
+| **C** SensitiveDataValidator(BE) | #3 | [#242](https://github.com/pinpols/file-batch-system/pull/242) | ✅ MERGED | `batch-common/.../security/SensitiveDataValidator.java`(116 行)+ i18n 2 文件 + atomic 4 executor 入口接入 + `DefaultWorkerRegistryService.java:119-122` register 路径拒入 + 21 用例 | 全绿,5 测试文件;HTTP `auth` 子树豁免(协议字段),需 FE follow-up 警示 |
+| **D** Worker fingerprint 端点 | #5 BE 部分 | [#240](https://github.com/pinpols/file-batch-system/pull/240) | ✅ MERGED | `ConsoleWorkerFingerprintController.java` + `WorkerFingerprintMapper.{java,xml}` + 2 Response record + OpenAPI `/api/console/workers/fingerprints[/summary]` 双端点 + protocol.md changelog | 794/794 全量绿;5 控制器测;`check-console-openapi-paths.py` 327 routes OK |
+| **E1** docs/sdk/ 集中化 | #6 | [#238](https://github.com/pinpols/file-batch-system/pull/238) | ✅ MERGED | `docs/sdk/quickstart.md`(92 行)+ `docs/sdk/troubleshooting.md`(88 行)| — |
+| **E2** wire-protocol 协议文档 | #6 续 | [#243](https://github.com/pinpols/file-batch-system/pull/243) | ⏳ OPEN(auto-merge armed) | `docs/sdk/wire-protocol.md`(161 行,双通道分工 + 12 故障矩阵 + 6 项时序约束)| — |
+| **doc** 本报告本身 | — | [#237](https://github.com/pinpols/file-batch-system/pull/237) | ✅ MERGED | `docs/analysis/2026-06-02-sdk-atomic-fe-deep-review.md`(本文)| — |
+
+### 8.1 关键超出预期发现(交付中浮现)
+
+1. **Lane A1 早已实现**:`KafkaTaskConsumer.applyBackpressure()` 在历史 SDK Phase 1-3 P0 hardening 时就完整覆盖了 capacity-aware pause/resume(含 `paused` flag、rebalance re-pause、平台 directive 联动)。本批 Lane A 只补缺的聚焦测试,主体逻辑不动。**审查报告 §1.2 「P0 hardening 缺失」结论需修正为「未覆盖 Kafka SASL fail-fast」**。
+2. **Lane B `TaskContext.isDryRun()` 之前不存在**:agent 顺手在 `batch-common` 加默认方法,SPI 兼容改动,现有 record 构造点零改。原审查报告假设 ctx 已有该方法,实际本批才补齐。
+3. **Lane C atomic executor 入口注入未冲突 Lane B**:GitHub 自动 rebase 把 Lane B 的 dry-run 短路 + Lane C 的 validator 调用合并干净,两段都进了 `execute()` 顶部。
+4. **Lane C 凭据关键字 `token` 过宽**:可能误报 `csrf_token` / `idempotency_token` 等协议字段;HTTP executor 已显式豁免 `auth.password / auth.token` 子树(否则全部 bearer 任务挂)。需 ADR follow-up 把 HTTP auth 改成 `auth.envRef: "MY_TOKEN"` 风格 secret reference,彻底干掉 payload 明文凭据。
+5. **Lane D worker_registry 实际字段差异**:`heartbeat_at`(非 `last_heartbeat_at`)、`process_id`(非 `pid`)、status 枚举 `ONLINE/OFFLINE/DRAINING/DECOMMISSIONED`(无 `ACTIVE`)— 实现以 schema 为准。
+6. **多 agent 并发 worktree 切换**:agents 在同一仓的不同 worktree 干活时,主 worktree 的 HEAD 被频繁切到各 lane 分支,工作树会混入其他 lane 未提交改动。各 agent 按 file 名 stage + 全 refspec push 避免了串污;PR diff 全部清洁。
+
+### 8.2 未在本批做的(留 follow-up)
+
+| 改进 | 原因 |
+|---|---|
+| **TOP #4** executor↔console schema CI 漂移守护 | 本批未排入 5 lane(避免单批超额) |
+| **TOP #5** FE 看板 | BE 端点(Lane D)已就位;FE 页面单独 follow-up |
+| **TOP #7** e2e 分级 + Playwright 分片 | FE 仓独立 lane,本批 BE-only |
+| **TOP #8** B.2 atomic 节点可保存配置 | 需先做 schema 设计(workflow_node 接 or 新表) |
+| **TOP #9** SDK↔BE 集成测 + K8s 验收 | 跨多模块 + 需要 docker compose,工作量大单独排 |
+| **TOP #10** FE customTaskTypes 类型双源消化 | 依赖 BE OpenAPI 完善 customTaskTypes response schema 后做 |
+| **Lane C FE 部分** SensitiveFieldAlert 通用组件 | FE 仓独立 follow-up |
+| **Lane C 凭据 validator 落 atomic executor 入口** | Lane B 与 Lane C 已合并,无需再做 — GitHub auto-rebase 已合两段 |
+
+### 8.3 评分回望
+
+| 板块 | 原评分(2026-06-02 上午)| 本批后(2026-06-02 下午)|
+|---|---|---|
+| SDK 自托管 | 4.0/5 | **4.3/5**(+ stop timeout + Kafka pause 测试 + 文档三连击) |
+| Atomic Worker | 3.8/5 | **4.2/5**(+ dry-run 感知 + prod fail-closed 启动断言 + 凭据 register 路径拦截) |
+| 前端 batch-console | 3.8/5 | **3.8/5**(本批 BE-only,FE 仓未动)|
+| **三角综合** | 3.9/5 | **4.1/5**(向 4.5 目标推进约 60%) |
+
+---
+
 ## 附:本报告调研方法
 
 并行三个 Explore agent,分别针对 SDK 自托管 / Atomic Worker / 前端做独立深度审查(各 2500-3000 字、各自带 7-8 维度评分 + file:line 引用 + TOP 5 改进项),由主进程合成并去重 TOP 15 → TOP 10。
