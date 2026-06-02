@@ -1,0 +1,33 @@
+{
+  "scenario": "heartbeat-directive-normal",
+  "description": "平稳态心跳:platformStatus=NORMAL,shouldDrain=false → SDK 维持 NORMAL FSM,继续认领",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state":  { "fsm": "NORMAL", "inFlight": 2 }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/w-1/heartbeat",
+    "body": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "status": "RUNNING",
+      "heartbeatAt": "2026-06-02T10:00:30Z",
+      "currentLoad": 2
+    },
+    "responseStatus": 200,
+    "responseBody": {
+      "platformStatus": "NORMAL",
+      "shouldDrain": false,
+      "pausedTaskTypes": [],
+      "desiredMaxConcurrent": null,
+      "nextHeartbeatHint": null
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "no-op; remain NORMAL; next heartbeat at default 30s",
+    "sdkMustNot": ["change maxConcurrent when desiredMaxConcurrent is null", "log WARN on null directives"]
+  },
+  "references": ["wire-protocol.md §2.1"]
+}

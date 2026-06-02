@@ -1,0 +1,32 @@
+{
+  "scenario": "heartbeat-directive-paused",
+  "description": "平台 PAUSED(临时熔断)→ SDK 停收新 task,但不下线,等下次 heartbeat 撤销",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state":  { "fsm": "NORMAL", "inFlight": 1 }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/w-1/heartbeat",
+    "body": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "status": "RUNNING",
+      "heartbeatAt": "2026-06-02T10:00:30Z",
+      "currentLoad": 1
+    },
+    "responseStatus": 200,
+    "responseBody": {
+      "platformStatus": "PAUSED",
+      "shouldDrain": false,
+      "pausedTaskTypes": ["http", "shell"],
+      "desiredMaxConcurrent": null
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "transition FSM to PAUSED; pause Kafka assignment; in-flight tasks continue; if a Kafka message with taskType in pausedTaskTypes already received, drop without commit (will redeliver after platform unpauses); on next heartbeat if platformStatus back to NORMAL → resume Kafka assignment",
+    "sdkMustNot": ["call deactivate (PAUSED != DRAINING)", "commit offset for dropped messages"]
+  },
+  "references": ["wire-protocol.md §2.1"]
+}

@@ -1,0 +1,28 @@
+{
+  "scenario": "kafka-partition-pause-on-capacity",
+  "description": "in-flight 达 maxConcurrent → 必须 Kafka assignment.pause(partitions),防消息堆积内存爆;in-flight 释放后 resume(capacity-aware backpressure)",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "maxConcurrentTasks": 4 },
+    "state":  { "inFlight": 4, "assignedPartitions": ["batch.task.dispatch.acme.echo-0", "batch.task.dispatch.acme.echo-1"] }
+  },
+  "when": {
+    "channel": "kafka",
+    "method": "RECEIVE",
+    "body": {
+      "schemaVersion": "v2",
+      "tenantId": "acme",
+      "taskId": 12346,
+      "jobCode": "daily-report",
+      "workerType": "echo",
+      "idempotencyKey": "key-12346",
+      "dispatchAt": "2026-06-02T10:01:00Z"
+    },
+    "responseStatus": null,
+    "responseBody": null
+  },
+  "then": {
+    "sdkExpectedAction": "before processing more: call kafkaConsumer.pause(assignedPartitions); message stays uncommitted; when one in-flight completes (inFlight drops to 3) → call kafkaConsumer.resume(assignedPartitions); Kafka redelivers the queued message",
+    "sdkMustNot": ["accept the message and exceed maxConcurrent", "commit offset without processing (data loss)", "block Kafka poll thread (must return quickly or pause)"]
+  },
+  "references": ["wire-protocol.md §1", "KafkaTaskConsumer.applyBackpressure() (Java SDK reference)"]
+}
