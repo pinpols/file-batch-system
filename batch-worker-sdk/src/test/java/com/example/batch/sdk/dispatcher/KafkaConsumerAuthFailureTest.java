@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
+import com.example.batch.sdk.client.BatchSdkClientException;
 import com.example.batch.sdk.internal.PlatformHttpClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
@@ -59,11 +60,13 @@ class KafkaConsumerAuthFailureTest {
     KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
 
-    // act + assert:run() 直接抛出 RuntimeException(SASL auth fail-fast)
+    // act + assert:run() 抛 BatchSdkClientException(stage=KAFKA_AUTH),SASL fail-fast
     assertThatThrownBy(kafka::run)
-        .isInstanceOf(RuntimeException.class)
+        .isInstanceOf(BatchSdkClientException.class)
         .hasMessageContaining("SASL auth failed")
-        .hasCauseInstanceOf(SaslAuthenticationException.class);
+        .hasCauseInstanceOf(SaslAuthenticationException.class)
+        .extracting(t -> ((BatchSdkClientException) t).stage())
+        .isEqualTo(BatchSdkClientException.Stage.KAFKA_AUTH);
 
     assertThat(kafka.isFatalAuthFailure()).isTrue();
     assertThat(kafka.isRunning()).isFalse();

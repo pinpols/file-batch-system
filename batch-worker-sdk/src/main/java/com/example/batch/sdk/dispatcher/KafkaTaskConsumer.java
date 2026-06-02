@@ -1,6 +1,7 @@
 package com.example.batch.sdk.dispatcher;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
+import com.example.batch.sdk.client.BatchSdkClientException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.Collection;
@@ -166,8 +167,10 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           "Kafka SASL authentication failed; entering fatal state. "
               + "Check BATCH_KAFKA_* credentials. Pod will exit for K8s to restart.",
           authEx);
-      throw new RuntimeException(
-          "Kafka SASL auth failed — pod should restart with correct creds", authEx);
+      throw new BatchSdkClientException(
+          BatchSdkClientException.Stage.KAFKA_AUTH,
+          "Kafka SASL auth failed — pod should restart with correct creds",
+          authEx);
     } catch (WakeupException wakeup) {
       // 正常 stop 触发
     } catch (Throwable t) {
