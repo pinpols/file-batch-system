@@ -60,6 +60,22 @@
             <artifactId>batch-worker-atomic</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- R3-6 first POC: SDK + testkit dispatch builder, 用于 SdkAgainstStubOrchestratorE2eIT
+             起真 SDK + 真 testcontainers Kafka,验证 SDK↔BE wire 协议端到端。本 IT 不起 orchestrator
+             Spring context(成本 5 min 不符 < 60s 预算),走 HTTP stub 录制 register/claim/report;
+             真 orchestrator Spring boot 启动版本留作 follow-up。 -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-sdk</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-worker-sdk-testkit</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
             <artifactId>batch-common</artifactId>
@@ -181,6 +197,26 @@
       本模块为 Surefire 设置 api.version=1.44（见上方插件配置）。
     -->
     <profiles>
+        <!--
+          R3-2 分级:pr-gate 跑 smoke+critical(~12-15min,15min wall-clock 内反馈),
+          全量(含 regression)走 nightly staging-gate(4 shard ~10min)。
+          激活:`mvn -pl batch-e2e-tests verify -Pe2e-smoke`
+          标签策略详见 docs/runbook/e2e-tier-strategy.md。
+        -->
+        <profile>
+            <id>e2e-smoke</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration combine.children="merge">
+                            <groups>smoke | critical</groups>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!--
           CI 并发跑 e2e:forkCount=2 并发 2 个 JVM(各 1 套 testcontainers,内存 ~8GB)。
           GitHub Actions linux-runner 7-14GB 可承受,本地 macOS Docker 7.75GB 内存通常不够,

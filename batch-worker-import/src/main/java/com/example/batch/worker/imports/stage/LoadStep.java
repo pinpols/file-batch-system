@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.exception.WorkerConfigException;
+import com.example.batch.common.plugin.IdempotencyCapability;
 import com.example.batch.common.plugin.ImportLoadContext;
 import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
@@ -108,6 +109,9 @@ public class LoadStep implements ImportStageStep {
               : context.getFileId();
       ImportLoadPlugin plugin =
           importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
+      // ADR-038 R3-3:续跑开关开时,plugin 必须自报幂等能力(NONE/UNKNOWN 拒跑)。跨库无 1PC,
+      // 崩溃窗口重做最后一个 chunk 的数据安全完全靠 plugin 幂等兜底。
+      requireIdempotentPluginIfCheckpointEnabled(plugin);
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
       int chunkSize = resolveChunkSize(context);
 
@@ -181,6 +185,33 @@ public class LoadStep implements ImportStageStep {
       throws Exception {
     plugin.loadChunk(loadCtx, chunk);
     return chunk.size();
+  }
+
+  /**
+   * ADR-038 R3-3:续跑开关开时,前置校验 plugin 的幂等能力。{@link IdempotencyCapability#NONE} / {@link
+   * IdempotencyCapability#UNKNOWN} 直接 throw {@link WorkerConfigException} 拒跑 —— 跨库无 1PC,崩溃窗口重做
+   * chunk 会双写。开关关时不校验(plugin 不会被重做)。
+   *
+   * <p>详见 {@code docs/runbook/platform-worker-checkpoint-howto.md} §前置校验。
+   */
+  private void requireIdempotentPluginIfCheckpointEnabled(ImportLoadPlugin plugin) {
+    if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
+      return;
+    }
+    IdempotencyCapability cap = plugin.idempotencyCapability();
+    if (cap == IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT
+        || cap == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC) {
+      return;
+    }
+    throw new WorkerConfigException(
+        "ADR-038 续跑开关开 (batch.worker.checkpoint.enabled=true) 但 plugin "
+            + plugin.id()
+            + " 未声明幂等能力 (idempotencyCapability="
+            + cap
+            + ")。跨库无 1PC,崩溃窗口重做 chunk 会双写。"
+            + "请让 plugin override idempotencyCapability() 返回 IDEMPOTENT_BY_UNIQUE_CONSTRAINT/"
+            + "IDEMPOTENT_BY_PLUGIN_LOGIC,或关闭续跑开关。"
+            + "详见 docs/runbook/platform-worker-checkpoint-howto.md §前置校验。");
   }
 
   // ADR-038 P2 续跑位点辅助 ─────────────────────────────────────────────────────
