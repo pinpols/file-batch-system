@@ -104,7 +104,9 @@ public final class ConsoleMenuRegistry {
                   // 让 TENANT_ADMIN 可见;真正影响平台的"运维操作"在 /ops/diagnostic(保 ADMIN)。
                   new MenuItem("队列 & 窗口", "/governance/queues", "Tools", ROLE_OPERATOR),
                   new MenuItem("Worker 管理", "/workers/management", "Cpu", ROLE_OPERATOR),
-                  new MenuItem("Trigger 管理", "/system/triggers", "Timer", ROLE_OPERATOR))),
+                  new MenuItem("Trigger 管理", "/system/triggers", "Timer", ROLE_OPERATOR),
+                  // SDK 自定义 taskType(只读,租户管理员排查 worker register 上报情况)
+                  new MenuItem("自定义 taskType", "/ops/custom-task-types", "Cpu", ROLE_OPERATOR))),
           new MenuGroup(
               "system",
               "系统",
@@ -117,7 +119,10 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("AI 助手", "/system/ai-chat", "Document", ROLE_ADMIN),
                   new MenuItem("API Key", "/system/api-keys", "Key", ROLE_ADMIN),
                   new MenuItem("系统参数", "/system/parameters", "Setting", ROLE_ADMIN),
-                  new MenuItem("通知与投递", "/system/notifications", "Bell", ROLE_OPERATOR))));
+                  new MenuItem("通知与投递", "/system/notifications", "Bell", ROLE_OPERATOR),
+                  // Atomic 节点配置中心(平台内置 sql / shell / stored_proc / http 四类)
+                  new MenuItem(
+                      "Atomic 节点配置中心", "/system/atomic-task-types", "Box", ROLE_OPERATOR))));
 
   /** 根据用户 authorities 过滤可见菜单。 */
   public static List<MenuGroup> filterByAuthorities(Set<String> authorities) {
