@@ -87,12 +87,7 @@ class SdkRowResult:
 
     def total(self) -> int:
         """Processed-rows total: success + skipped + failed + reject."""
-        return (
-            self.success_count
-            + self.skipped_count
-            + self.failed_count
-            + self.reject_count
-        )
+        return self.success_count + self.skipped_count + self.failed_count + self.reject_count
 
     def to_output(self) -> dict[str, Any]:
         """Render the non-zero counters into an ``output``-shaped dict.
@@ -162,10 +157,7 @@ class SdkAbstractTaskHandler(ABC):
             await self._validate(ctx)
             await self._before(ctx)
             started = True
-            if (
-                ctx.cancel_signal is not None
-                and ctx.cancel_signal.is_cancellation_requested
-            ):
+            if ctx.cancel_signal is not None and ctx.cancel_signal.is_cancellation_requested:
                 return SdkTaskResult.fail(
                     CANCELLED_CODE,
                     f"task cancelled before execution (taskId={ctx.task_id})",

@@ -106,7 +106,7 @@ class SdkAbstractTypedImportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
                     self._flush(params, ctx, buf, counts)
         if buf:
             self._flush(params, ctx, buf, counts)
-        return self._result(params, counts, f"imported {counts.success} rows")
+        return self._result(params, counts, f"imported {counts.success()} rows")
 
     def _flush(
         self,

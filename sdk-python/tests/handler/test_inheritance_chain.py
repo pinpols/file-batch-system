@@ -84,8 +84,7 @@ def test_typed_base_inherits_untyped_base_or_typed_protocol(
         issubclass(typed_cls, typed_proto) if isinstance(typed_proto, type) else False
     )
     assert inherits_untyped or satisfies_typed_proto, (
-        f"{typed[1]} satisfies neither {untyped[1]} subclass nor "
-        f"SdkTypedTaskHandler Protocol"
+        f"{typed[1]} satisfies neither {untyped[1]} subclass nor SdkTypedTaskHandler Protocol"
     )
 
 

@@ -41,7 +41,7 @@ class _MyExport(SdkAbstractTypedExportHandler[_Req, _Out, dict]):
         self.formatted.append(row)
 
     def summarize(self, params, counts):  # type: ignore[override]
-        return _Out(rows=counts.success)
+        return _Out(rows=counts.success())
 
 
 @pytest.mark.asyncio
@@ -60,7 +60,7 @@ async def test_typed_export_write_out_wins_over_summarize() -> None:
     class _ExplicitResult(_MyExport):
         def write_out(self, params, ctx, counts):  # type: ignore[override]
             return SdkTaskResult.success_with(
-                output={"custom": True, "n": counts.success}, message="custom finalize"
+                output={"custom": True, "n": counts.success()}, message="custom finalize"
             )
 
     r = await _ExplicitResult().execute(make_ctx({"table": "t"}))

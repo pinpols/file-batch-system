@@ -114,7 +114,7 @@ class SdkAbstractTypedProcessHandler[ParamsT: BaseModel, InRowT, OutRowT, Output
                 if len(buf) >= size:
                     _drain()
         _drain()
-        return self._result(params, counts, f"processed {counts.success} rows")
+        return self._result(params, counts, f"processed {counts.success()} rows")
 
     def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)

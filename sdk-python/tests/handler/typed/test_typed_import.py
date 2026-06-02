@@ -42,7 +42,7 @@ class _MyImport(SdkAbstractTypedImportHandler[_ImportReq, _Result, dict]):
         return 2
 
     def summarize(self, params, counts):  # type: ignore[override]
-        return _Result(imported=counts.success)
+        return _Result(imported=counts.success())
 
 
 @pytest.mark.asyncio

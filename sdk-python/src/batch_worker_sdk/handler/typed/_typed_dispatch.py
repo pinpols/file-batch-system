@@ -95,7 +95,7 @@ class SdkAbstractTypedDispatchHandler[ParamsT: BaseModel, OutputT: BaseModel, Ta
             except Exception as item_ex:
                 counts.inc_failed()
                 _log.warning("typed dispatch item failed: %s", item_ex)
-        return self._result(params, counts, f"dispatched {counts.success}/{counts.total}")
+        return self._result(params, counts, f"dispatched {counts.success()}/{counts.total()}")
 
     def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)

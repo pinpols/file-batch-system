@@ -101,7 +101,7 @@ class SdkAbstractTypedExportHandler[ParamsT: BaseModel, OutputT: BaseModel, RowT
         explicit = self.write_out(params, ctx, counts)
         if explicit is not None:
             return explicit
-        return self._result(params, counts, f"exported {counts.success} rows")
+        return self._result(params, counts, f"exported {counts.success()} rows")
 
     def _result(self, params: ParamsT, counts: SdkRowResult, default_message: str) -> SdkTaskResult:
         output = self.summarize(params, counts)
