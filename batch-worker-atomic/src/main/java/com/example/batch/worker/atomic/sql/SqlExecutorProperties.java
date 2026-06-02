@@ -47,6 +47,10 @@ public class SqlExecutorProperties {
   /**
    * 是否拒绝以"有 OS 能力的 DB 角色"执行(默认 <b>true</b>,fail-closed)。
    *
+   * <p><b>PostgreSQL only</b>:本闸通过查 {@code pg_roles} / {@code pg_has_role()} 实现,仅 PostgreSQL 方言生效。
+   * 在 MySQL / Oracle / SQL Server / H2 等其他方言上执行时,{@link SqlTaskExecutor} 会打一条 WARN 后跳过(避免「查询失败抛异常 →
+   * 误以为安全闸生效」的假阴性),仍允许 SQL 执行;请在该方言上自行配置最小权限 DB 用户作为真正的边界。
+   *
    * <p>执行前查 {@code current_user}:superuser 或 {@code pg_execute_server_program} / {@code
    * pg_read_server_files} / {@code pg_write_server_files} 成员即拒。这些是 {@code COPY ... PROGRAM} / 服务端文件
    * / 不可信 PL 的前置;无之则 SQL 物理上碰不到 OS。这是堵 OS 的<b>硬保证</b>(黑名单可被混淆绕过,角色闸不会)。 生产应以最小权限非 superuser

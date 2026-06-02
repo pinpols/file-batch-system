@@ -49,6 +49,10 @@ batch:
       capability-tags: ${BATCH_WORKER_ATOMIC_CAPABILITY_TAGS:}
       # 注册哪些 SPI taskType(空=全注册)
       enabled-types: ${BATCH_WORKER_ATOMIC_ENABLED_TYPES:}
+      # ADR-029 classpath 隔离守护本是给 4 个 pipeline worker fail-fast 拦 atomic SPI 类用,atomic worker 自身
+      # 包含这些类故必须关;关闭后改由 AtomicIsolationStartupCheck(同模块,反向 — 提醒部署最小权限)兜底。
+      isolation-check:
+        enabled: false
     # dual-use 执行器:sql/stored-proc/http 默认开(三道闸约束:schema/user 白名单 + 资源限制 + OS 拒绝,见 ADR-029);
     # shell 默认关(沙盒方案未定前不开放,见 ADR-035 §8)。
     executors:

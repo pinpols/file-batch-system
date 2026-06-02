@@ -8,6 +8,7 @@ import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
 import com.example.batch.worker.atomic.runtime.AtomicConnectionManager;
+import com.example.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -110,7 +111,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       }
       return runStatements(ctx, inv);
     } catch (SqlValidationException ex) {
-      return TaskResult.fail(ex.getMessage());
+      // SqlValidationException 同时承担「输入非法」和「OS-capable role 闸拒绝」语义,后者走 SECURITY_REJECTED
+      boolean security = ex.getMessage() != null && ex.getMessage().contains("OS-capable");
+      return AtomicErrorCode.fail(
+          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID,
+          ex.getMessage());
     } catch (BizException ex) {
       log.warn(
           "sql executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
@@ -119,14 +124,18 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
               ? "?"
               : ex.getMessageArgs()[1]);
-      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "sql executor unexpected error: tenantId={}, jobCode={}",
           ctx.tenantId(),
           ctx.jobCode(),
           ex);
-      return TaskResult.fail(ex);
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.EXECUTION_FAILED,
+          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
+          ex);
     }
   }
 
@@ -324,8 +333,33 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   /**
    * 代码层堵 OS 的硬保证:拒绝以 OS 能力角色执行 —— superuser 或 {@code pg_execute_server_program} / {@code
    * pg_read_server_files} / {@code pg_write_server_files} 成员(COPY PROGRAM / 服务端文件 / 不可信 PL 的前置)。
+   *
+   * <p><b>方言支持</b>:本检查仅对 PostgreSQL 有效(查 {@code pg_roles} / {@code pg_has_role()})。其他方言上若仍开 {@code
+   * forbidOsCapableRole=true},为避免「跑非 PG SQL 查询失败抛异常 → 误以为安全闸生效」的假阴性,本方法会:
+   *
+   * <ul>
+   *   <li>判 {@link java.sql.DatabaseMetaData#getDatabaseProductName()},非 PostgreSQL → 打一条 WARN(留
+   *       audit trail 提醒 ops 此闸在该方言下未启用),直接返回放行
+   *   <li>PostgreSQL → 走原 {@code pg_roles} 校验
+   * </ul>
+   *
+   * 见 {@link SqlExecutorProperties#isForbidOsCapableRole()} javadoc 标注「PostgreSQL only」。
    */
-  private void requireNonOsCapableRole(Connection conn) {
+  void requireNonOsCapableRole(Connection conn) {
+    String productName;
+    try {
+      productName = conn.getMetaData().getDatabaseProductName();
+    } catch (SQLException ex) {
+      throw new SqlValidationException(
+          "OS-capable role check failed reading DatabaseMetaData: " + ex.getMessage());
+    }
+    if (productName == null || !productName.toLowerCase(Locale.ROOT).contains("postgres")) {
+      log.warn(
+          "forbidOsCapableRole=true not supported on '{}', skipping (PostgreSQL-only safeguard)."
+              + " Configure dialect-native least-privilege role instead.",
+          productName);
+      return;
+    }
     String sql =
         "select rolsuper"
             + " or pg_has_role(current_user, 'pg_execute_server_program', 'USAGE')"
@@ -399,7 +433,15 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
             return null;
           });
     } catch (SQLException ex) {
-      return TaskResult.fail("sql failed: " + ex.getMessage(), ex);
+      // PG statement_timeout → SQLState "57014" (query_canceled);其它驱动语义不同,这里做最常见识别
+      boolean isTimeout =
+          "57014".equals(ex.getSQLState())
+              || (ex.getMessage() != null
+                  && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
+      return AtomicErrorCode.fail(
+          isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
+          "sql failed: " + ex.getMessage(),
+          ex);
     }
 
     Map<String, Object> output = new HashMap<>();
