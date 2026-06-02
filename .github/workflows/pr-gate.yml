@@ -230,6 +230,61 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
+  # Job: e2e-smoke — R3-2 分级:pr-gate 只跑 smoke + critical 标签(主链 4 个 +
+  # 关键场景 8 个 = 12 个 E2eIT,单 shard ~12-15min)。其余 ~14 个 regression
+  # E2eIT 全量留给 nightly staging-gate(.github/workflows/staging-gate.yml,
+  # 4 shard 并发,full-ci-gate 兜底)。
+  # 反馈周期:Round-1 TOP-7 闭环,从 9h full e2e → 15min smoke+critical。
+  # 详细标签策略:docs/runbook/e2e-tier-strategy.md
+  # ===========================================================================
+  e2e-smoke:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Install upstream modules to ~/.m2 (skip tests)
+        shell: bash
+        # 与 full-ci-gate e2e-shard 一致:e2e-tests 跑 surefire 需要 sibling
+        # module jar/test-jar 已安装在本地仓库。
+        run: |
+          mvn install -DskipTests -pl '!batch-e2e-tests' -B
+
+      - name: Run E2E smoke + critical (pr-gate tier)
+        shell: bash
+        # -Pe2e-smoke 激活 surefire groups=smoke|critical(JUnit5 tag 表达式)。
+        # 选择规则见 docs/runbook/e2e-tier-strategy.md。
+        run: |
+          mvn test -pl batch-e2e-tests -Pe2e-smoke \
+            -Dsurefire.failIfNoSpecifiedTests=false -B
+
+      - name: Upload E2E smoke reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-gate-e2e-smoke-reports
+          path: |
+            batch-e2e-tests/target/surefire-reports/**
+          retention-days: 14
+
+  # ===========================================================================
   # Job 4: security — secret scan(并发)
   # ===========================================================================
   security:

@@ -48,15 +48,50 @@ pip install -e .[dev]
 
 | Phase | Scope | Est. effort |
 | --- | --- | --- |
-| **P0** (this PR) | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | 1d |
-| **P1** | `WorkerClient` (httpx async), `HandlerContext`, `WorkerConfig`, register/heartbeat | 3-4d |
-| **P2** | Kafka consumer (aiokafka), task dispatch loop, graceful shutdown | 3-4d |
-| **P3** | Scheduler (APScheduler or custom), retry / backoff (tenacity), DLQ | 2-3d |
-| **P4** | OpenTelemetry tracing + metrics, structured logging, fingerprint endpoint | 2d |
-| **P5** | PyPI release pipeline, version bump automation, quickstart docs | 1-2d |
+| **P0** | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | done |
+| **P0.5** | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | done (Lane R) |
+| **P1** | `PlatformHttpClient` (httpx async) + retry/backoff + `BatchPlatformClientConfig` | done (Lane Q) |
+| **P2** | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause | done (Lane S) |
+| **P3** (this PR) | `BatchPlatformClient` + `HeartbeatScheduler` + `LeaseRenewalScheduler` + heartbeat-directive parsing | done (Lane T) |
+| **P4** | Lifecycle: budgeted `stop(timeout)`, cancellation signal wiring, progress reporter, deactivate | Lane U |
+| **P5** | Testkit (FakeBatchPlatform / EmbeddedKafka / `@batch_task`), examples, PyPI publish | Lane V |
 
 Contract fixtures from Lane N drive the green-bar for P1–P3. Every
 fixture that flips from `xfail` to `pass` is forward progress.
+
+## Usage (P3)
+
+```python
+import asyncio
+from datetime import timedelta
+
+from batch_worker_sdk import BatchPlatformClient, BatchPlatformClientConfig
+
+class MyImportHandler:
+    def task_type(self) -> str:
+        return "tenant_xyz_import"
+
+    async def execute(self, ctx):  # SdkTaskContext
+        return ...  # SdkTaskResult
+
+async def main() -> None:
+    config = BatchPlatformClientConfig(
+        base_url="https://batch.example.com",
+        tenant_id="tenant-xyz",
+        worker_code="xyz-import-worker-1",
+        heartbeat_interval=timedelta(seconds=30),
+        lease_renew_interval=timedelta(seconds=60),
+    )
+    client = BatchPlatformClient(config)
+    client.register_handler(MyImportHandler())
+    await client.start()  # register → heartbeat + lease schedulers → kafka
+    try:
+        await asyncio.Event().wait()  # block until SIGTERM
+    finally:
+        await client.stop(timeout=30)
+
+asyncio.run(main())
+```
 
 ## Equivalence with the Java SDK
 
@@ -71,6 +106,22 @@ payload shapes. APIs are idiomatic to each language:
 | Handler signature | `void handle(HandlerContext ctx)` | `async def handle(ctx: HandlerContext) -> None` |
 | Spring Boot integration | [`batch-worker-sdk-spring-boot-starter`](../batch-worker-sdk-spring-boot-starter/) | (none; use FastAPI / vanilla async) |
 | Testkit | [`batch-worker-sdk-testkit`](../batch-worker-sdk-testkit/) | TBD (Phase 4) |
+
+### Public API surface ↔ Java SDK (P0.5)
+
+The 7 types below are 1:1 with their Java counterparts. Names follow
+PEP 8 (snake_case methods, snake_case fields); semantics mirror the
+Java side. P0.5 ships stubs only — implementation lands in P1-P5.
+
+| Java | Python | Java path |
+| --- | --- | --- |
+| `SdkTaskHandler` (interface) | `SdkTaskHandler` (Protocol) | `batch-worker-sdk/.../task/SdkTaskHandler.java` |
+| `SdkTaskContext` (record) | `SdkTaskContext` (pydantic BaseModel) | `batch-worker-sdk/.../task/SdkTaskContext.java` |
+| `SdkTaskResult` (record) | `SdkTaskResult` (pydantic BaseModel) | `batch-worker-sdk/.../task/SdkTaskResult.java` |
+| `WorkerRuntimeState` (enum) | `WorkerRuntimeState` (str Enum) | `batch-worker-sdk/.../dispatcher/WorkerRuntimeState.java` |
+| `ProgressReporter` (class) | `ProgressReporter` (class) | `batch-worker-sdk/.../task/ProgressReporter.java` |
+| `CancellationSignal` (class) | `CancellationSignal` (class) | `batch-worker-sdk/.../task/CancellationSignal.java` |
+| `SdkTaskTypeDescriptor` (record) | `SdkTaskTypeDescriptor` (pydantic BaseModel) | `batch-worker-sdk/.../task/SdkTaskTypeDescriptor.java` |
 
 Source-of-truth docs (both SDKs read from these):
 

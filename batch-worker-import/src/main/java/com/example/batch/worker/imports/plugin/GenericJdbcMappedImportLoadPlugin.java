@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.plugin;
 
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
+import com.example.batch.common.plugin.IdempotencyCapability;
 import com.example.batch.common.plugin.ImportLoadContext;
 import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
@@ -54,6 +55,15 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   @Override
   public String id() {
     return WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
+  }
+
+  /**
+   * ADR-038 R3-3:本 plugin 通过模板 INSERT/UPSERT(典型业务表带 {@code UNIQUE(tenant_id, ...)} 约束 + {@code ON
+   * CONFLICT DO NOTHING/UPDATE}),续跑重做 chunk 时 DB 层兜底重复写。
+   */
+  @Override
+  public IdempotencyCapability idempotencyCapability() {
+    return IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT;
   }
 
   @Override

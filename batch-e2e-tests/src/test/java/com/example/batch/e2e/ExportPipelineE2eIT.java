@@ -50,6 +50,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
+@Tag("smoke")
 class ExportPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
