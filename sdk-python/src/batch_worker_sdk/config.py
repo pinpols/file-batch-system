@@ -79,6 +79,22 @@ class BatchPlatformClientConfig(BaseModel):
     retry_base_delay: timedelta = timedelta(milliseconds=200)
     client_error_fail_fast_threshold: int = Field(default=5, ge=0, le=100)
 
+    # ─── Kafka dispatch consumer (P2 / Lane S) ─────────────────────────
+    # Mirrors Java ``BatchPlatformClientConfig`` Kafka fields. All
+    # optional at the config layer; ``KafkaTaskConsumer.start()`` raises
+    # at runtime if the mandatory ones (bootstrap / group / pattern) are
+    # missing — keeps the P1 HTTP-only test paths working without
+    # forcing every fixture to populate Kafka knobs.
+    kafka_bootstrap: str | None = None
+    kafka_group_id: str | None = None
+    kafka_topic_pattern: str | None = None
+    kafka_poll_interval: timedelta = timedelta(milliseconds=500)
+    # Per-tenant SASL/SCRAM (ACL path). All three blank → PLAINTEXT
+    # (local dev); any non-blank → all forwarded to aiokafka.
+    kafka_security_protocol: str | None = None
+    kafka_sasl_mechanism: str | None = None
+    kafka_sasl_jaas_config: str | None = None
+
     # ─── validation ────────────────────────────────────────────────────
 
     @model_validator(mode="after")
