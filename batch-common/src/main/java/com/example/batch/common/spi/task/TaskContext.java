@@ -38,4 +38,23 @@ public record TaskContext(
     parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
     runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
   }
+
+  /**
+   * ADR-026 dry-run 演练标记。orchestrator 在 task 派发链路把 {@code dryRun=true} 透传到 {@link
+   * #runtimeAttributes} 顶层(主路径);兼容旧调用方塞 {@link #parameters} 顶层。任意一方为 true 即视为 dry-run。
+   *
+   * <p>语义:dry-run = 演练,executor 必须不发出任何真副作用(不发 SQL / 不 fork 进程 / 不发 HTTP / 不调存过), 直接返回成功并通过 {@code
+   * TaskResult.output["plannedAction"]} 把"会执行什么"反馈给运维。
+   */
+  public boolean isDryRun() {
+    return readDryRunFlag(runtimeAttributes) || readDryRunFlag(parameters);
+  }
+
+  private static boolean readDryRunFlag(Map<String, Object> source) {
+    Object value = source.get("dryRun");
+    if (value instanceof Boolean b) {
+      return b;
+    }
+    return value != null && "true".equalsIgnoreCase(String.valueOf(value));
+  }
 }
