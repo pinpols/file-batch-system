@@ -111,9 +111,7 @@ class SqlAtomicHandler(SdkAbstractAtomicHandler):
     For DML-only — ``{"statementCount": k, "affectedRows": a}``.
     """
 
-    def __init__(
-        self, config: SqlAtomicConfig, connection_factory: SqlConnectionFactory
-    ) -> None:
+    def __init__(self, config: SqlAtomicConfig, connection_factory: SqlConnectionFactory) -> None:
         if config is None:
             raise ValueError("config must not be None")
         if connection_factory is None:
@@ -148,9 +146,7 @@ class SqlAtomicHandler(SdkAbstractAtomicHandler):
             except Exception as exc:
                 _LOG.warning("connection close failed: %s", exc)
 
-    async def _run_statements(
-        self, conn: SqlConnection, statements: list[str]
-    ) -> dict[str, Any]:
+    async def _run_statements(self, conn: SqlConnection, statements: list[str]) -> dict[str, Any]:
         last_result_set: dict[str, Any] | None = None
         total_affected = 0
 

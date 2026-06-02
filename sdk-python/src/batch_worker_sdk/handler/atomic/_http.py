@@ -168,9 +168,7 @@ class HttpAtomicHandler(SdkAbstractAtomicHandler):
                     )
         for pattern in self._config.blocked_host_patterns:
             if pattern in host or _matches_regex(host, pattern):
-                raise PermissionError(
-                    f"SSRF blocked: host matches blocked pattern {pattern}"
-                )
+                raise PermissionError(f"SSRF blocked: host matches blocked pattern {pattern}")
 
 
 _IpAddr = ipaddress.IPv4Address | ipaddress.IPv6Address

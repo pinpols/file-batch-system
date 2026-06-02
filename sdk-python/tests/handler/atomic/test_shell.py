@@ -15,9 +15,7 @@ pytestmark = pytest.mark.asyncio
 async def test_shell_happy_path_captures_stdout() -> None:
     config = ShellAtomicConfig(task_type="shell")
     handler = ShellAtomicHandler(config)
-    ctx = make_test_context(
-        parameters={"command": sys.executable, "args": ["-c", "print('hi')"]}
-    )
+    ctx = make_test_context(parameters={"command": sys.executable, "args": ["-c", "print('hi')"]})
 
     result = await handler._do_invoke(ctx)
 
@@ -56,9 +54,7 @@ async def test_shell_non_zero_exit_is_success_not_failure() -> None:
 
 
 async def test_shell_allow_list_rejects_unknown_command() -> None:
-    config = ShellAtomicConfig(
-        task_type="shell", allowed_commands=frozenset({"/usr/bin/true"})
-    )
+    config = ShellAtomicConfig(task_type="shell", allowed_commands=frozenset({"/usr/bin/true"}))
     handler = ShellAtomicHandler(config)
     ctx = make_test_context(parameters={"command": "/bin/echo", "args": ["x"]})
 

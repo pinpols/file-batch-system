@@ -197,9 +197,7 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
                 "pg_write_server_files)"
             )
 
-    async def _require_not_security_definer(
-        self, conn: SqlConnection, proc_name: str
-    ) -> None:
+    async def _require_not_security_definer(self, conn: SqlConnection, proc_name: str) -> None:
         schema = _schema_of(proc_name)
         name = _name_of(proc_name)
         if schema is None:
@@ -218,15 +216,11 @@ class StoredProcAtomicHandler(SdkAbstractAtomicHandler):
                 f"refusing SECURITY DEFINER procedure (privilege escalation risk): {proc_name}"
             )
 
-    async def _require_execute_privilege(
-        self, conn: SqlConnection, proc_name: str
-    ) -> None:
+    async def _require_execute_privilege(self, conn: SqlConnection, proc_name: str) -> None:
         sql = "select has_function_privilege(current_user, $1, 'EXECUTE')"
         ok = await conn.fetchval(sql, proc_name)
         if ok is False:
-            raise PermissionError(
-                f"current_user lacks EXECUTE privilege on procedure: {proc_name}"
-            )
+            raise PermissionError(f"current_user lacks EXECUTE privilege on procedure: {proc_name}")
 
     # ── helpers ───────────────────────────────────────────────────────────
 

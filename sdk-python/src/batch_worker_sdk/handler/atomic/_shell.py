@@ -101,9 +101,7 @@ class ShellAtomicHandler(SdkAbstractAtomicHandler):
             if self._config.cleanup_workdir:
                 shutil.rmtree(workdir, ignore_errors=True)
 
-    async def _run_process(
-        self, command: str, args: list[str], workdir: Path
-    ) -> dict[str, Any]:
+    async def _run_process(self, command: str, args: list[str], workdir: Path) -> dict[str, Any]:
         try:
             process = await asyncio.create_subprocess_exec(
                 command,

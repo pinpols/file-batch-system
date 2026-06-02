@@ -75,9 +75,7 @@ async def test_stored_proc_happy_path() -> None:
     conn = FakeConn(call_rows=[{"result_code": 0, "msg": "ok"}])
     config = StoredProcAtomicConfig(task_type="proc", forbid_os_capable_role=False)
     handler = StoredProcAtomicHandler(config, _factory(conn))
-    ctx = make_test_context(
-        parameters={"procedureName": "batch.refresh", "inParams": [1, "foo"]}
-    )
+    ctx = make_test_context(parameters={"procedureName": "batch.refresh", "inParams": [1, "foo"]})
 
     result = await handler._do_invoke(ctx)
 

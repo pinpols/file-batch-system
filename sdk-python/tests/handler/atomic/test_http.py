@@ -38,9 +38,7 @@ async def test_http_truncates_oversized_body() -> None:
     async def respond(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"x" * 100)
 
-    config = HttpAtomicConfig(
-        task_type="http", block_private_ips=False, max_response_bytes=10
-    )
+    config = HttpAtomicConfig(task_type="http", block_private_ips=False, max_response_bytes=10)
     handler = HttpAtomicHandler(config, client=_client_with(httpx.MockTransport(respond)))
     ctx = make_test_context(parameters={"url": "https://api.example.com/big"})
 
@@ -59,9 +57,7 @@ async def test_http_rejects_method_outside_allowlist() -> None:
     handler = HttpAtomicHandler(
         config, client=_client_with(httpx.MockTransport(lambda r: httpx.Response(200)))
     )
-    ctx = make_test_context(
-        parameters={"url": "https://api.example.com", "method": "DELETE"}
-    )
+    ctx = make_test_context(parameters={"url": "https://api.example.com", "method": "DELETE"})
 
     with pytest.raises(ValueError, match="HTTP method not allowed: DELETE"):
         await handler._do_invoke(ctx)

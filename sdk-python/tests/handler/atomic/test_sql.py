@@ -95,7 +95,9 @@ async def test_sql_dml_returns_affected_rows_and_commits() -> None:
     config = SqlAtomicConfig(task_type="sql", forbid_os_capable_role=False)
     handler = SqlAtomicHandler(config, _factory(conn))
     ctx = make_test_context(
-        parameters={"sql": "UPDATE users SET name='x' WHERE id=1; UPDATE users SET name='y' WHERE id=2;"}
+        parameters={
+            "sql": "UPDATE users SET name='x' WHERE id=1; UPDATE users SET name='y' WHERE id=2;"
+        }
     )
 
     result = await handler._do_invoke(ctx)
@@ -106,9 +108,7 @@ async def test_sql_dml_returns_affected_rows_and_commits() -> None:
 
 async def test_sql_truncates_oversized_result_set() -> None:
     conn = FakeConn(fetch_rows=[{"id": i} for i in range(50)])
-    config = SqlAtomicConfig(
-        task_type="sql", forbid_os_capable_role=False, max_result_rows=10
-    )
+    config = SqlAtomicConfig(task_type="sql", forbid_os_capable_role=False, max_result_rows=10)
     handler = SqlAtomicHandler(config, _factory(conn))
     ctx = make_test_context(parameters={"sql": "SELECT id FROM users"})
 
