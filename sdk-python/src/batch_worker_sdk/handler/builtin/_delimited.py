@@ -1,12 +1,11 @@
-"""Shared delimited (CSV-like) codec for builtin file handlers.
+"""内置文件 handler 共享的定界符(CSV 类)编解码。
 
-Mirrors Java ``com.example.batch.sdk.handler.builtin.support.DelimitedFormat``
-and ``DelimitedCodec`` — RFC4180-style single-physical-line records.
+对齐 Java ``com.example.batch.sdk.handler.builtin.support.DelimitedFormat``
+与 ``DelimitedCodec`` —— RFC4180 风格的单物理行一记录。
 
-Kept package-private (``_delimited``) under :mod:`handler.builtin` because
-the Java counterpart lives in ``builtin/support/`` and isn't part of the
-public SDK surface; tenants compose via :class:`FileImportConfig` /
-:class:`QueryExportConfig`, not by importing the codec directly.
+保持包内私有(``_delimited``)放在 :mod:`handler.builtin` 下,因为 Java 对应
+物在 ``builtin/support/`` 也不属于 SDK 公共 API;租户通过 :class:`FileImportConfig`
+/ :class:`QueryExportConfig` 组合使用,不应直接 import 这个 codec。
 """
 
 from __future__ import annotations
@@ -17,36 +16,35 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class DelimitedFormat(BaseModel):
-    """Delimited file format shared by FileImport / QueryExport.
+    """FileImport / QueryExport 共享的定界文件格式。
 
-    Mirrors Java ``DelimitedFormat`` record. Defaults match RFC4180 CSV
-    (comma + double-quote + header on).
+    对齐 Java ``DelimitedFormat`` record。默认值对齐 RFC4180 CSV
+    (逗号 + 双引号 + 含 header)。
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     delimiter: str = Field(default=",", min_length=1, max_length=1)
-    """Field separator (single char). Default ``,``."""
+    """字段分隔符(单字符)。默认 ``,``。"""
 
     quote: str = Field(default='"', min_length=1, max_length=1)
-    """Quote character (single char). Default ``"``."""
+    """引号字符(单字符)。默认 ``"``。"""
 
     header: bool = True
-    """Import: skip first row; Export: emit column-name header row. Default ``True``."""
+    """Import:跳过首行;Export:输出列名 header 行。默认 ``True``。"""
 
     @classmethod
     def defaults(cls) -> DelimitedFormat:
-        """Default RFC4180 CSV format."""
+        """默认 RFC4180 CSV 格式。"""
         return cls()
 
 
 def parse_line(line: str, delimiter: str, quote: str) -> list[str]:
-    """Parse one physical line into a list of fields.
+    """解析单个物理行为字段列表。
 
-    Mirrors Java ``DelimitedCodec.parse``. A field wrapped in ``quote`` may
-    contain literal delimiters; ``quote+quote`` inside a quoted field
-    means a single literal quote. Does not support newlines inside quoted
-    fields (one physical line == one record).
+    对齐 Java ``DelimitedCodec.parse``。被 ``quote`` 包裹的字段内部可以含字面
+    定界符;引号字段内的 ``quote+quote`` 表示一个字面引号。不支持引号字段内
+    的换行(一物理行 == 一记录)。
     """
     out: list[str] = []
     field_chars: list[str] = []
@@ -81,11 +79,10 @@ def parse_line(line: str, delimiter: str, quote: str) -> list[str]:
 
 
 def encode_line(fields: Sequence[str | None], delimiter: str, quote: str) -> str:
-    """Encode field list to one physical line (quoting + escaping as needed).
+    """将字段列表编码为一个物理行(按需加引号 / 转义)。
 
-    Mirrors Java ``DelimitedCodec.encode``. ``None`` fields encode as empty
-    string. Fields containing the delimiter, quote, or newlines are wrapped
-    in ``quote`` with internal quotes doubled.
+    对齐 Java ``DelimitedCodec.encode``。``None`` 字段编码为空串。包含定界符、
+    引号或换行的字段会被 ``quote`` 包裹,内部引号双写转义。
     """
     parts: list[str] = []
     for i, raw in enumerate(fields):

@@ -1,19 +1,15 @@
-"""Builtin file-import handler (ADR-036 Import shape).
+"""内置文件导入 handler(ADR-036 Import 形态)。
 
-Mirrors Java ``com.example.batch.sdk.handler.builtin.FileImportHandler`` /
-``FileImportConfig``. The Java implementation is JDBC-targeted (file →
-table); the Python flavour stays sink-agnostic — it parses the source
-file into row dicts and delegates the actual load to a tenant-overridable
-:meth:`FileImportHandler._load_batch` hook. Tenants subclass and plug
-their own destination (asyncpg, SQLAlchemy, HTTP API, etc.); the builtin
-handles the I/O + format + batch boundary loop.
+对齐 Java ``com.example.batch.sdk.handler.builtin.FileImportHandler`` /
+``FileImportConfig``。Java 实现面向 JDBC(file → table);Python 版保持 sink
+无关 —— 把源文件解析成行 dict,实际 load 委托给租户可覆盖的
+:meth:`FileImportHandler._load_batch` 钩子。租户继承后插自己的目的端
+(asyncpg / SQLAlchemy / HTTP API 等);内置只负责 I/O + 格式 + 批量边界循环。
 
-Java's ``FileImportHandler`` extends ``SdkAbstractTaskHandler`` directly;
-the Python form extends the structural :class:`SdkTaskHandler` protocol
-for parity. When the in-flight ``SdkAbstractImportHandler`` ABC lane
-lands, this class will rebase onto it (the public hook names —
-``_open_source`` / ``_read_rows`` / ``_load_batch`` / ``_close_source`` —
-already match that ABC's contract).
+Java 的 ``FileImportHandler`` 直接继承 ``SdkAbstractTaskHandler``;Python 版
+为了对齐继承结构性 :class:`SdkTaskHandler` 协议。等 ``SdkAbstractImportHandler``
+ABC 那条线落地后,本类会切到 ABC 上(钩子方法名 —— ``_open_source`` /
+``_read_rows`` / ``_load_batch`` / ``_close_source`` —— 已经匹配 ABC 契约)。
 """
 
 from __future__ import annotations
@@ -34,70 +30,67 @@ from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
 from batch_worker_sdk.task.result import SdkTaskResult
 
 FileFormat = Literal["csv", "json", "jsonl"]
-"""Supported input formats. Java covers ``csv`` only; Python adds ``json`` / ``jsonl``."""
+"""支持的输入格式。Java 仅覆盖 ``csv``;Python 额外支持 ``json`` / ``jsonl``。"""
 
 
 class FileImportConfig(BaseModel):
-    """Open-and-parse settings for :class:`FileImportHandler`.
+    """:class:`FileImportHandler` 的打开 + 解析配置。
 
-    Mirrors Java ``FileImportConfig`` record. The ``columns`` list (Java
-    required for INSERT codegen) is optional here because the Python load
-    sink is tenant-defined; when present and ``format == 'csv'`` the
-    parser asserts each row has exactly that many fields (matches Java
-    line-validation behaviour).
+    对齐 Java ``FileImportConfig`` record。``columns`` 列表(Java 用于 INSERT
+    代码生成的必填项)在 Python 里可选,因为 load sink 由租户自定义;当 columns
+    非空且 ``format == 'csv'`` 时,解析器会校验每行的字段数严格等于该长度
+    (对齐 Java 的逐行校验行为)。
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     task_type: str
-    """Globally-unique task-type code registered with the platform."""
+    """注册到平台、全局唯一的 task type code。"""
 
     file_path_param: str = "filePath"
-    """Key in ``ctx.parameters`` from which to read the input file path."""
+    """从 ``ctx.parameters`` 取输入文件路径所用的 key。"""
 
     format: FileFormat = "csv"
-    """Source file format: ``csv`` / ``json`` / ``jsonl``."""
+    """源文件格式:``csv`` / ``json`` / ``jsonl``。"""
 
     delimited: DelimitedFormat = Field(default_factory=DelimitedFormat.defaults)
-    """CSV-only: delimiter / quote / header config (ignored for json/jsonl)."""
+    """仅 CSV:分隔符 / 引号 / header 配置(json / jsonl 忽略)。"""
 
     columns: list[str] = Field(default_factory=list)
-    """Optional CSV column names (in file order). Empty = no per-row column count check."""
+    """可选的 CSV 列名列表(按文件顺序)。为空 = 不做逐行列数校验。"""
 
     encoding: str = "utf-8"
-    """Text encoding for the source file. Default UTF-8."""
+    """源文件文本编码。默认 UTF-8。"""
 
     batch_size: int = Field(default=500, gt=0)
-    """How many parsed rows to accumulate before calling ``_load_batch``."""
+    """累积多少解析行后调用一次 ``_load_batch``。"""
 
     @classmethod
     def defaults(cls, task_type: str) -> FileImportConfig:
-        """Mirror of Java ``FileImportConfig.defaults`` — comma-CSV, batch=500."""
+        """对齐 Java ``FileImportConfig.defaults`` —— 逗号 CSV、batch=500。"""
         return cls(task_type=task_type)
 
 
 class FileImportHandler:
-    """File → tenant-sink import template.
+    """File → 租户 sink 的导入模板。
 
-    Tenant subclasses override :meth:`_load_batch` (and optionally
-    :meth:`_open_source` / :meth:`_close_source`) to plug their own
-    destination. The builtin handles file open, format parsing, batch
-    accumulation, cancellation polling, and row counting.
+    租户子类覆盖 :meth:`_load_batch`(可选覆盖 :meth:`_open_source` /
+    :meth:`_close_source`)插入自己的目的端。内置负责打开文件、格式解析、批次
+    累积、取消轮询和行计数。
 
-    Async-native: file I/O is dispatched via :func:`asyncio.to_thread` to
-    avoid blocking the event loop on large files.
+    原生异步:文件 I/O 通过 :func:`asyncio.to_thread` 派发,避免大文件阻塞
+    event loop。
     """
 
     def __init__(self, config: FileImportConfig) -> None:
         self._config = config
-        # Per-task file handle. The handler is single-task-at-a-time within
-        # a single asyncio task; the dispatcher allocates a fresh instance
-        # (or treats the instance as reentrant-safe across tasks). We
-        # park the handle on the instance only between ``_open_source``
-        # and ``_close_source`` — same shape as Java's local-var approach.
+        # 单任务文件句柄。Handler 在单个 asyncio task 内一次只处理一个任务;
+        # 派发器要么为每个任务分配新实例,要么把实例视为跨任务可重入。我们
+        # 只在 ``_open_source`` 与 ``_close_source`` 之间把句柄挂在实例上 ——
+        # 与 Java 用局部变量的形状一致。
         self._fh: IO[str] | None = None
 
-    # -- SdkTaskHandler protocol --------------------------------------------------
+    # -- SdkTaskHandler 协议 ------------------------------------------------------
 
     def task_type(self) -> str:
         return self._config.task_type
@@ -140,15 +133,15 @@ class FileImportHandler:
             message=f"imported {counts.success()} rows",
         )
 
-    # -- tenant-overridable hooks (mirror Java SdkAbstractImportHandler) ----------
+    # -- 租户可覆盖钩子(对齐 Java SdkAbstractImportHandler) --------------------
 
     async def _open_source(self, ctx: SdkTaskContext) -> None:
-        """Open the source file. Default: resolves path from ``ctx.parameters`` and opens read-text."""
+        """打开源文件。默认:从 ``ctx.parameters`` 解析路径,以读文本模式打开。"""
         path = self._resolve_path(ctx)
         self._fh = await asyncio.to_thread(self._open_text_file, path, self._config.encoding)
 
     async def _read_rows(self, ctx: SdkTaskContext) -> AsyncIterator[dict[str, Any]]:
-        """Yield parsed row dicts. Default: dispatches on ``config.format``."""
+        """逐行 yield 解析后的行 dict。默认:按 ``config.format`` 分派。"""
         if self._fh is None:
             raise RuntimeError("_open_source must be called before _read_rows")
         fmt = self._config.format
@@ -161,28 +154,28 @@ class FileImportHandler:
         elif fmt == "json":
             async for row in self._read_json():
                 yield row
-        else:  # pragma: no cover — pydantic Literal already rejects
+        else:  # pragma: no cover — pydantic Literal 已经拦截
             raise ValueError(f"unsupported format: {fmt}")
 
     async def _load_batch(self, ctx: SdkTaskContext, batch: list[dict[str, Any]]) -> None:
-        """**Abstract for tenants.** Load one batch of parsed rows into the destination.
+        """**租户必须覆盖的抽象方法。** 将一批解析后的行 load 到目的端。
 
-        Default raises :class:`NotImplementedError` — the whole point of
-        this builtin is the file → tenant-sink shape, where the sink is
-        the tenant's domain (asyncpg / SQLAlchemy / message bus / HTTP).
+        默认抛 :class:`NotImplementedError` —— 该内置的核心就是 file → 租户
+        sink 的形态,而 sink 是租户领域内的事(asyncpg / SQLAlchemy / 消息总线
+        / HTTP)。
         """
         raise NotImplementedError(
             "FileImportHandler subclasses must override _load_batch to define the import sink"
         )
 
     async def _close_source(self, ctx: SdkTaskContext) -> None:
-        """Close the source file. Default closes the handle opened by :meth:`_open_source`."""
+        """关闭源文件。默认关闭 :meth:`_open_source` 打开的句柄。"""
         if self._fh is not None:
             fh = self._fh
             self._fh = None
             await asyncio.to_thread(fh.close)
 
-    # -- internals ----------------------------------------------------------------
+    # -- 内部方法 ----------------------------------------------------------------
 
     def _resolve_path(self, ctx: SdkTaskContext) -> Path:
         raw = ctx.parameters.get(self._config.file_path_param)
