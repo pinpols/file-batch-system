@@ -94,7 +94,7 @@ jobs:
           filters: |
             code:
               - 'batch-*/**'
-              - 'sdk-python/**'
+              - 'batch-worker-sdk-python/**'
               - 'db/migration/**'
               - 'scripts/**'
               - 'pom.xml'

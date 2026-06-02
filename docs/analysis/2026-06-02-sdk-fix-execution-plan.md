@@ -10,7 +10,7 @@
 
 | 文件 | 改它的 TOP # | 冲突? |
 |---|---|---|
-| `sdk-python/src/batch_worker_sdk/dispatcher/dispatcher.py` | #2 + #3 | ⚠️ 同文件 → 必须打包 |
+| `batch-worker-sdk-python/src/batch_worker_sdk/dispatcher/dispatcher.py` | #2 + #3 | ⚠️ 同文件 → 必须打包 |
 | `batch-worker-sdk/src/main/java/.../KafkaTaskConsumer.java` | #4-Java + #5 | ⚠️ 同文件 → 必须打包 |
 | 其余 | 各自独立 | ✅ 无冲突 |
 
@@ -22,10 +22,10 @@
 
 | Lane | 含 TOP # | 内容 | 改的文件 | 估时 |
 |---|---|---|---|---|
-| **🐍 A** Python 协议级 P0 三连 | #1 + #2 + #3 | descriptor alias 修 + schemaVersion 支持 v1 + `mark_cancel_requested` 实装 + cancel signal 真翻 | `sdk-python/src/batch_worker_sdk/task/descriptor.py` + `dispatcher/dispatcher.py` + `scheduler/_lease.py` + `task/cancellation.py`(若需)| 4h |
+| **🐍 A** Python 协议级 P0 三连 | #1 + #2 + #3 | descriptor alias 修 + schemaVersion 支持 v1 + `mark_cancel_requested` 实装 + cancel signal 真翻 | `batch-worker-sdk-python/src/batch_worker_sdk/task/descriptor.py` + `dispatcher/dispatcher.py` + `scheduler/_lease.py` + `task/cancellation.py`(若需)| 4h |
 | **🐍 B** Python 治理 | #8 + #9 | parity test 改 strict + 新建 `constants.py` 导出 + `@batch_task` test isolation fixture | `constants.py`(新)+ `tests/test_shared_constants_parity.py` + `handler/_decorator.py` + `conftest.py` | 3h |
-| **🐍 C** Python Kafka SASL fail-fast | #4-Py | `consumer.start()` 包 `asyncio.wait_for(timeout=10)` + raise `PlatformError` | `sdk-python/src/batch_worker_sdk/internal/_kafka.py` + 单测 | 2h |
-| **🐍 D** Python heartbeat clamp | #7-Py | `nextHeartbeatHint` 加 1s ≤ x ≤ 10×interval clamp | `sdk-python/src/batch_worker_sdk/scheduler/_heartbeat.py` + 单测 | 1h |
+| **🐍 C** Python Kafka SASL fail-fast | #4-Py | `consumer.start()` 包 `asyncio.wait_for(timeout=10)` + raise `PlatformError` | `batch-worker-sdk-python/src/batch_worker_sdk/internal/_kafka.py` + 单测 | 2h |
+| **🐍 D** Python heartbeat clamp | #7-Py | `nextHeartbeatHint` 加 1s ≤ x ≤ 10×interval clamp | `batch-worker-sdk-python/src/batch_worker_sdk/scheduler/_heartbeat.py` + 单测 | 1h |
 | **☕ E** Java Kafka hardening | #4-Java + #5 | `AuthException` 分流 fail-fast + `close()` 加 thread join + `stop()` 预算重分(预留 kafka join 时间)| `batch-worker-sdk/src/main/java/.../{KafkaTaskConsumer,BatchPlatformClient}.java` + IT | 1d |
 | **☕ F** Java scheduler 小事三件 | #6 + #7-Java + #10 | `LeaseRenewal` 改 `fixedDelay` + `Heartbeat` clamp + `claimWithRetry` 加 jitter | `batch-worker-sdk/src/main/java/.../{LeaseRenewalScheduler,HeartbeatScheduler,TaskDispatcher}.java` + 各自单测 | 0.5d |
 
@@ -37,23 +37,23 @@
 
 | 文件 | A | B | C | D | E | F |
 |---|---|---|---|---|---|---|
-| `sdk-python/.../task/descriptor.py` | ✅ | | | | | |
-| `sdk-python/.../task/cancellation.py` | ✅ | | | | | |
-| `sdk-python/.../dispatcher/dispatcher.py` | ✅ | | | | | |
-| `sdk-python/.../scheduler/_lease.py` | ✅ | | | | | |
-| `sdk-python/.../handler/_decorator.py` | | ✅ | | | | |
-| `sdk-python/.../constants.py`(新) | | ✅ | | | | |
-| `sdk-python/.../internal/_kafka.py` | | | ✅ | | | |
-| `sdk-python/.../scheduler/_heartbeat.py` | | | | ✅ | | |
-| `sdk-python/tests/test_shared_constants_parity.py` | | ✅ | | | | |
-| `sdk-python/tests/conftest.py` | | ✅ | | | | |
+| `batch-worker-sdk-python/.../task/descriptor.py` | ✅ | | | | | |
+| `batch-worker-sdk-python/.../task/cancellation.py` | ✅ | | | | | |
+| `batch-worker-sdk-python/.../dispatcher/dispatcher.py` | ✅ | | | | | |
+| `batch-worker-sdk-python/.../scheduler/_lease.py` | ✅ | | | | | |
+| `batch-worker-sdk-python/.../handler/_decorator.py` | | ✅ | | | | |
+| `batch-worker-sdk-python/.../constants.py`(新) | | ✅ | | | | |
+| `batch-worker-sdk-python/.../internal/_kafka.py` | | | ✅ | | | |
+| `batch-worker-sdk-python/.../scheduler/_heartbeat.py` | | | | ✅ | | |
+| `batch-worker-sdk-python/tests/test_shared_constants_parity.py` | | ✅ | | | | |
+| `batch-worker-sdk-python/tests/conftest.py` | | ✅ | | | | |
 | `batch-worker-sdk/.../KafkaTaskConsumer.java` | | | | | ✅ | |
 | `batch-worker-sdk/.../BatchPlatformClient.java` | | | | | ✅ | |
 | `batch-worker-sdk/.../LeaseRenewalScheduler.java` | | | | | | ✅ |
 | `batch-worker-sdk/.../HeartbeatScheduler.java` | | | | | | ✅ |
 | `batch-worker-sdk/.../TaskDispatcher.java` | | | | | | ✅ |
 
-**潜在冲突点**:`sdk-python/src/batch_worker_sdk/__init__.py` — A 可能加 cancel 内部方法导出,B 可能加 `constants` 模块导出。**brief 强制**:都用 append 模式,不删别人的行,GitHub auto-rebase 大概率干净合。
+**潜在冲突点**:`batch-worker-sdk-python/src/batch_worker_sdk/__init__.py` — A 可能加 cancel 内部方法导出,B 可能加 `constants` 模块导出。**brief 强制**:都用 append 模式,不删别人的行,GitHub auto-rebase 大概率干净合。
 
 ---
 
@@ -74,7 +74,7 @@
 ### Lane B(Python 治理)
 
 **任务**:
-1. **#8**:新建 `sdk-python/src/batch_worker_sdk/constants.py` 暴露:
+1. **#8**:新建 `batch-worker-sdk-python/src/batch_worker_sdk/constants.py` 暴露:
    ```python
    SCHEMA_VERSIONS_SUPPORTED: Final[tuple[str, ...]] = ("v1", "v2")
    SENSITIVE_KEYWORDS: Final[frozenset[str]] = frozenset({...})  # 从 internal/_sensitive_keys.py 抽
@@ -172,7 +172,7 @@ T+0     T+1h   T+2h   T+3h   T+4h   T+5h   T+6h
 | Lane E 改 `stop(timeout)` 预算分摊,可能影响 Python `_lifecycle.py` 兼容 | 中 | 跨 SDK 行为变 | brief 强调只动 Java 侧,Python 不动;wire-protocol §5 文档同步更新 |
 | Lane B 新建 `constants.py`,可能与 Lane A 撞 `__init__.py` 导出 | 中 | rebase 冲突 | 都用 append 模式,GitHub auto-rebase 干净合;若不干净,我手解 |
 | 6 个 agent 并发 worktree,GitHub auto-rebase 排队 | 中 | 慢 1-2 cycle | 接受;P0 优先合(A 排第一) |
-| 别的 session 同时还在跑 r3-* PR | 高 | 队列堵 | 我的 lane 全在 sdk-python/* + batch-worker-sdk/* 范围,跟 r3-* 不重叠 |
+| 别的 session 同时还在跑 r3-* PR | 高 | 队列堵 | 我的 lane 全在 batch-worker-sdk-python/* + batch-worker-sdk/* 范围,跟 r3-* 不重叠 |
 | 多 agent worktree 互相踩 | 高 | 写错文件 | 历史教训:每 agent brief 明确 worktree 隔离 + 提醒 cwd |
 
 ---
