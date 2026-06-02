@@ -1,4 +1,4 @@
-"""Tests for :class:`HttpDispatchHandler` — fan-out / partial fail / all fail / SSRF."""
+""":class:`HttpDispatchHandler` 的测试 —— fan-out / 部分失败 / 全失败 / SSRF。"""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _make_handler(
     config: HttpDispatchConfig,
     responder: httpx.MockTransport,
 ) -> HttpDispatchHandler:
-    """Build a handler wired to an in-memory MockTransport so tests are fully offline."""
+    """构造一个接到内存 MockTransport 的 handler,让测试完全离线运行。"""
     client = httpx.AsyncClient(transport=responder, timeout=config.timeout_seconds)
     return HttpDispatchHandler(config, client=client)
 
@@ -78,7 +78,7 @@ async def test_dispatch_partial_failure_counts_both() -> None:
     ]
     result = await handler.execute(_ctx(targets))
 
-    assert result.success is True  # not fail-fast → still a success result
+    assert result.success is True  # 没开 fail-fast → 仍算 success
     assert result.output["success"] == 2
     assert result.output["failed"] == 1
 
@@ -92,7 +92,7 @@ async def test_dispatch_all_fail_with_fail_fast_returns_failure() -> None:
         task_type="dispatch_http",
         block_private_ips=False,
         fail_fast=True,
-        concurrency=1,  # serialize so the abort short-circuits before all 3 fire
+        concurrency=1,  # 串行执行,让 abort 短路在 3 个全发之前
     )
     handler = _make_handler(cfg, httpx.MockTransport(_handle))
 
@@ -126,7 +126,7 @@ async def test_ssrf_loopback_blocked_by_default() -> None:
     def _handle(req: httpx.Request) -> httpx.Response:
         return httpx.Response(200)
 
-    cfg = HttpDispatchConfig(task_type="dispatch_http")  # block_private_ips=True default
+    cfg = HttpDispatchConfig(task_type="dispatch_http")  # block_private_ips 默认 True
     handler = _make_handler(cfg, httpx.MockTransport(_handle))
 
     targets = [{"url": "http://127.0.0.1:8080/x"}]

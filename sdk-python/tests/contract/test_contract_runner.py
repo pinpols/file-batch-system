@@ -1,32 +1,27 @@
-"""Contract-fixture runner.
+"""contract fixture 运行器。
 
-Discovers every JSON fixture published by Lane N under
-``docs/api/sdk-contract-fixtures/`` and exercises the SDK against it.
+发现 ``docs/api/sdk-contract-fixtures/`` 下发布的所有 JSON fixture,
+并用 SDK 跑一遍。
 
-Phase split
------------
-Lane Q (this PR, P1) implements the pure HTTP-layer behaviours:
-register / heartbeat / claim / report / renew end-to-end through
-``PlatformHttpClient`` against a mocked platform. Each fixture's
-``when.responseStatus`` + ``responseBody`` is loaded into ``pytest_httpx``,
-the corresponding SDK method is invoked, and we assert the documented
-classification (success / AuthError / idempotent-success-on-409 / retry
-+ TransientError on 5xx).
+阶段分工
+--------
+P1 实现纯 HTTP 层行为:register / heartbeat / claim / report / renew
+端到端走 ``PlatformHttpClient`` 打到 mock 平台。每个 fixture 的
+``when.responseStatus`` + ``responseBody`` 被加载进 ``pytest_httpx``,
+对应的 SDK 方法被调用,断言文档化的分类(成功 / AuthError /
+409 幂等成功 / 5xx 重试 + TransientError)。
 
-Lane Q does **not** drive Kafka-channel fixtures or fixtures that
-require the FSM / scheduler to enact a side effect beyond the HTTP
-response (e.g. "drain and deactivate then exit"). Those stay
-``xfail`` and are claimed by:
+P1 **不** 驱动 Kafka 通道的 fixture,也不驱动那些需要 FSM / scheduler
+做额外副作用(例如"drain 并 deactivate 后退出")的 fixture。
+这些会保持 ``xfail``,由下列阶段认领:
 
-- ~~P2 (Kafka consumer)  : 11-kafka-partition-pause-on-capacity~~
-  → **landed in Lane S** (P2), verified via the
-  ``apply_backpressure`` branch below.
-- P4 (FSM stop/drain)  : 12-stop-with-timeout
+- ~~P2(Kafka consumer):11-kafka-partition-pause-on-capacity~~
+  → **已落 P2**,通过下面的 ``apply_backpressure`` 分支验证。
+- P4(FSM stop/drain):12-stop-with-timeout
 
-The directive enactment side of 03-06 (e.g. "transition FSM to
-PAUSED") also lands in P3-P4; here we only verify the HTTP request/
-response shape, which is what most BYO SDK implementers actually need
-to copy-paste off.
+03-06 的 directive 生效那侧(例如 "FSM 切到 PAUSED")在 P3-P4 落地;
+这里只验证 HTTP 请求/响应形状 —— 这是大部分 BYO SDK 实现者需要直接
+照抄的部分。
 """
 
 from __future__ import annotations
@@ -55,7 +50,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _FIXTURES_DIR = _REPO_ROOT / "docs" / "api" / "sdk-contract-fixtures"
 
 # ---------------------------------------------------------------------------
-# Phase ownership map — keep in sync with module docstring.
+# 阶段归属表 —— 与模块 docstring 保持同步。
 # ---------------------------------------------------------------------------
 _P1_HTTP_FIXTURES: set[str] = {
     "01-register-success",
@@ -68,25 +63,25 @@ _P1_HTTP_FIXTURES: set[str] = {
     "08-claim-409-idempotent-success",
     "09-report-5xx-retry-backoff",
     "10-renew-cancel-requested",
-    # 12-stop-with-timeout: only the /deactivate HTTP request is
-    # verifiable here; the FSM drain timeline lands in P4.
+    # 12-stop-with-timeout:这里只能验证 /deactivate 这次 HTTP 请求;
+    # FSM 排干时序由 P4 落地。
     "12-stop-with-timeout",
 }
 
-# Lane S (P2) — Kafka channel: dispatcher + KafkaTaskConsumer assert
-# the backpressure side effect directly (no HTTP wire).
+# P2 —— Kafka 通道:dispatcher + KafkaTaskConsumer 直接断言 backpressure
+# 副作用(无 HTTP wire)。
 _P2_KAFKA_FIXTURES: set[str] = {
     "11-kafka-partition-pause-on-capacity",
 }
 
-# Anything else still pending (FSM stop/drain semantics).
+# 其它仍 pending 的(FSM stop/drain 语义)。
 _DEFERRED_FIXTURES: set[str] = set()
 
 
 def _discover_fixtures() -> list[Path]:
-    """Return every contract fixture, skipping Lane P's drift-guard
-    metadata files (``fixture-schema.json`` etc.) which live in the same
-    directory but are JSON Schemas — not fixture envelopes."""
+    """返回所有 contract fixture,跳过同目录下的 drift-guard metadata
+    文件(``fixture-schema.json`` 等)—— 它们是 JSON Schema,不是
+    fixture 信封。"""
     if not _FIXTURES_DIR.is_dir():
         return []
     skip = {"fixture-schema"}
@@ -98,10 +93,10 @@ _FIXTURE_IDS = [p.stem for p in _FIXTURES]
 
 
 def _load_payloads() -> dict[str, dict[str, Any]]:
-    """Pre-load every fixture once at import time.
+    """import 时一次性加载所有 fixture。
 
-    Avoids ASYNC240 (no sync I/O inside the async test body) and keeps
-    test bodies focused on assertions.
+    避免 ASYNC240(async 测试体里不要做同步 I/O),也让测试体保持
+    专注于断言。
     """
     return {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in _FIXTURES}
 
@@ -110,11 +105,10 @@ _PAYLOADS = _load_payloads()
 
 
 def _cfg_from_fixture(fixture_cfg: dict[str, Any]) -> BatchPlatformClientConfig:
-    """Build a valid SDK config from the fixture's ``given.config`` block.
+    """从 fixture 的 ``given.config`` 块构造合法的 SDK config。
 
-    Fixtures intentionally omit fields irrelevant to the scenario, so we
-    fill in safe defaults. Retry delay is forced to 1ms to keep 5xx-retry
-    fixtures fast.
+    fixture 故意省略与场景无关的字段,这里补上安全默认值。
+    重试延迟固定为 1ms,让 5xx-retry fixture 跑得快。
     """
     kwargs: dict[str, Any] = {
         "base_url": fixture_cfg.get("baseUrl") or "http://orch:8081",
@@ -129,7 +123,7 @@ def _cfg_from_fixture(fixture_cfg: dict[str, Any]) -> BatchPlatformClientConfig:
 
 
 async def _invoke(client: PlatformHttpClient, when: dict[str, Any]) -> dict[str, Any] | None:
-    """Dispatch the fixture's HTTP call to the matching SDK method."""
+    """把 fixture 的 HTTP 调用派发给匹配的 SDK 方法。"""
     path: str = when["path"]
     body: dict[str, Any] = when.get("body") or {}
 
@@ -161,10 +155,10 @@ async def test_contract_fixture(
     httpx_mock: HTTPXMock,
     request: pytest.FixtureRequest,
 ) -> None:
-    """Run one contract fixture through the SDK and verify HTTP behaviour.
+    """跑一个 contract fixture 走完 SDK,验证 HTTP 行为。
 
-    Deferred fixtures (Kafka / FSM-stop) are skipped with ``xfail`` per
-    the phase map at the top of this file.
+    Deferred 的 fixture(Kafka / FSM-stop)按本文件顶部的阶段分工表
+    被 ``xfail`` 跳过。
     """
     fixture_id = fixture_path.stem
     if fixture_id in _DEFERRED_FIXTURES:
@@ -186,16 +180,16 @@ async def test_contract_fixture(
         return
 
     if when.get("channel") != "http":
-        # Any future non-http channel without a P2 owner should fail
-        # loud rather than silently pass.
+        # 将来出现没有 P2 主的非 http 通道 fixture 时,直接显式失败,
+        # 别静默通过。
         pytest.fail(f"non-http channel fixture: {fixture_id} channel={when.get('channel')!r}")
 
     cfg = _cfg_from_fixture(given.get("config") or {})
     status = when["responseStatus"]
     body = when.get("responseBody")
 
-    # 5xx-retry fixture needs the same 5xx returned `retry_max_attempts`
-    # times (the SDK will retry that many).
+    # 5xx-retry fixture 需要同一个 5xx 返回 `retry_max_attempts` 次
+    # (SDK 会重试这么多次)。
     response_count = cfg.retry_max_attempts if status and status >= 500 else 1
     for _ in range(response_count):
         kwargs: dict[str, Any] = {
@@ -241,7 +235,7 @@ async def _assert_fixture(
     result = await _invoke(client, when)
 
     if status == 409:
-        # idempotent success: response body is returned, no error raised
+        # 幂等成功:返回响应体,不抛错
         assert isinstance(result, dict)
         if body and "code" in body:
             assert result.get("code") == body["code"]
@@ -249,7 +243,7 @@ async def _assert_fixture(
 
     if 200 <= status < 300:
         if body is None or result is None:
-            return  # deactivate / empty body
+            return  # deactivate / 空 body
         for k, v in body.items():
             assert result.get(k) == v, f"field {k} mismatch in {fixture_id}"
 
@@ -259,14 +253,13 @@ async def _assert_kafka_fixture(
     when: dict[str, Any],
     fixture_id: str,
 ) -> None:
-    """Lane S (P2): drive ``KafkaTaskConsumer.apply_backpressure()`` and
-    assert pause/resume semantics from fixture 11.
+    """P2:驱动 ``KafkaTaskConsumer.apply_backpressure()``,断言
+    fixture 11 的 pause/resume 语义。
 
-    The fixture's ``given.state`` describes the dispatcher's in-flight
-    count + assigned partitions; ``then.sdkExpectedAction`` says to
-    pause when saturated, resume when in-flight drops below max. We
-    use a ``MagicMock`` AIOKafkaConsumer to avoid touching a real
-    broker.
+    fixture 的 ``given.state`` 描述了 dispatcher 的 in-flight 数量
+    与已分配分区;``then.sdkExpectedAction`` 要求饱和时 pause、in-flight
+    降到 max 以下时 resume。这里用 ``MagicMock`` AIOKafkaConsumer
+    避免动真 broker。
     """
     cfg_block = dict(given.get("config") or {})
     state = given.get("state") or {}
@@ -285,7 +278,7 @@ async def _assert_kafka_fixture(
     try:
         dispatcher = TaskDispatcher(cfg, http)
 
-        # Stuff fake in-flight tasks to hit the saturation threshold.
+        # 塞一批假 in-flight 任务把饱和阈值打满。
         async def _idle() -> None:
             await asyncio.sleep(3600)
 
@@ -295,15 +288,15 @@ async def _assert_kafka_fixture(
         try:
             mock_consumer = MagicMock()
             mock_assignment = {
-                # aiokafka exposes assignment as a set of TopicPartition;
-                # MagicMock truthy + non-empty is what we exercise.
+                # aiokafka 用 set of TopicPartition 暴露 assignment;
+                # 这里只需要 truthy + 非空。
                 f"part-{p}": True
                 for p in state.get("assignedPartitions") or ["t-0"]
             }
             mock_consumer.assignment.return_value = mock_assignment
 
             consumer = KafkaTaskConsumer(cfg, dispatcher, consumer=mock_consumer)
-            # Saturated → pause.
+            # 饱和 → pause。
             consumer.apply_backpressure()
             assert mock_consumer.pause.call_count == 1, (
                 f"{fixture_id}: expected pause(*assignment) once at saturation"
@@ -311,7 +304,7 @@ async def _assert_kafka_fixture(
             assert mock_consumer.resume.call_count == 0
             assert consumer.paused is True
 
-            # Drop one in-flight → expect resume.
+            # 掉一个 in-flight → 期望 resume。
             done_tid = next(iter(dispatcher._in_flight))
             dispatcher._in_flight[done_tid].cancel()
             dispatcher._in_flight.pop(done_tid)
@@ -329,7 +322,7 @@ async def _assert_kafka_fixture(
 
 
 def test_fixture_discovery_reports_count(capsys: pytest.CaptureFixture[str]) -> None:
-    """Diagnostic test — prints the fixture inventory and phase split."""
+    """诊断测试 —— 打印 fixture 清单和阶段拆分。"""
     count = len(_FIXTURES)
     p1 = sorted(f for f in _FIXTURE_IDS if f in _P1_HTTP_FIXTURES)
     deferred = sorted(f for f in _FIXTURE_IDS if f in _DEFERRED_FIXTURES)

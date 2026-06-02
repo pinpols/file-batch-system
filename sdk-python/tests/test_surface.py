@@ -1,11 +1,10 @@
-"""P0.5 surface tests: the public API exists and has the expected shape.
+"""P0.5 表面测试:公开 API 存在且形状符合预期。
 
-These tests intentionally do *not* exercise behavior (there isn't any
-yet — bodies are ``...`` / ``NotImplementedError`` / stubs). They lock
-in the *names*, *signatures*, and *value semantics* so Java engineers
-diffing against the Java SDK see an exact mirror, and so downstream
-lanes (P1-P5) can't accidentally rename a public symbol without a
-visible test break.
+这些测试有意 *不* 触发行为(目前也没有行为可触发 —— 函数体都是
+``...`` / ``NotImplementedError`` / 桩)。它们锁住 *名字*、*签名* 与
+*值语义*,这样 Java 工程师对照 Java SDK diff 时能看到完全一致的镜像,
+下游 lane(P1-P5)也无法在不引发可见测试失败的情况下重命名任何
+公开符号。
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from batch_worker_sdk import (
 
 
 def test_public_symbols_exported() -> None:
-    """All 7 surface types are re-exported from the package root."""
+    """7 个表面类型全部从包根 re-export。"""
     expected = {
         "CancellationSignal",
         "ProgressReporter",
@@ -44,7 +43,7 @@ def test_public_symbols_exported() -> None:
 
 
 def test_worker_runtime_state_has_four_values() -> None:
-    """4 states aligned with Java ``WorkerRuntimeState``."""
+    """4 个状态与 Java ``WorkerRuntimeState`` 对齐。"""
     assert {s.value for s in WorkerRuntimeState} == {
         "NORMAL",
         "DEGRADED",
@@ -58,19 +57,19 @@ def test_worker_runtime_state_has_four_values() -> None:
 
 
 def test_sdk_task_handler_protocol_signature() -> None:
-    """Protocol declares the 4 methods with the right names + arity."""
+    """Protocol 声明了名字与参数数都正确的 4 个方法。"""
     members = dict(inspect.getmembers(SdkTaskHandler, predicate=inspect.isfunction))
     for method in ("task_type", "execute", "descriptor", "cancel"):
         assert method in members, f"SdkTaskHandler missing {method}"
-    # execute must be a coroutine function
+    # execute 必须是协程函数
     assert inspect.iscoroutinefunction(members["execute"])
-    # Param names match the design.
+    # 参数名与设计一致。
     exec_sig = inspect.signature(members["execute"])
     assert list(exec_sig.parameters) == ["self", "ctx"]
 
 
 def test_sdk_task_context_defaults_and_immutability() -> None:
-    """Construction with required fields + immutability + default attempt_no."""
+    """构造时带必填字段、不可变,attempt_no 有默认值。"""
     ctx = SdkTaskContext(
         tenant_id="t1",
         task_id=42,
@@ -82,13 +81,13 @@ def test_sdk_task_context_defaults_and_immutability() -> None:
     assert ctx.attempt_no == 1
     assert ctx.parameters == {}
     assert ctx.runtime_attributes == {}
-    # Frozen model: mutation should raise.
+    # frozen 模型:赋值应抛异常。
     with pytest.raises((TypeError, ValueError)):
         ctx.tenant_id = "t2"  # type: ignore[misc]
 
 
 def test_sdk_task_context_is_dry_run() -> None:
-    """``is_dry_run`` reads runtime_attributes first, then parameters."""
+    """``is_dry_run`` 优先读 runtime_attributes,其次读 parameters。"""
     base = {
         "tenant_id": "t",
         "task_id": 1,
@@ -98,19 +97,19 @@ def test_sdk_task_context_is_dry_run() -> None:
     assert SdkTaskContext(**base).is_dry_run() is False
     assert SdkTaskContext(**base, runtime_attributes={"dryRun": True}).is_dry_run() is True
     assert SdkTaskContext(**base, parameters={"dryRun": True}).is_dry_run() is True
-    # runtime_attributes wins over parameters when both present.
+    # 两者同时存在时 runtime_attributes 胜过 parameters。
     ctx = SdkTaskContext(
         **base,
         runtime_attributes={"dryRun": False},
         parameters={"dryRun": True},
     )
     assert ctx.is_dry_run() is False
-    # String "true" honored (platform may inject as string).
+    # 字符串 "true" 也认(平台可能以字符串形式注入)。
     assert SdkTaskContext(**base, runtime_attributes={"dryRun": "true"}).is_dry_run() is True
 
 
 def test_sdk_task_result_factories() -> None:
-    """``success_with`` / ``fail`` produce the expected field shapes."""
+    """``success_with`` / ``fail`` 产出期望的字段形状。"""
     ok = SdkTaskResult.success_with(output={"rows": 10}, message="done")
     assert ok.success is True
     assert ok.output == {"rows": 10}
@@ -131,7 +130,7 @@ def test_sdk_task_result_factories() -> None:
 
 
 def test_cancellation_signal_default_and_mark() -> None:
-    """``mark_cancelled`` flips the bit; default state is False."""
+    """``mark_cancelled`` 翻转标志;默认状态为 False。"""
     sig = CancellationSignal()
     assert sig.is_cancellation_requested is False
     sig.mark_cancelled()
@@ -139,7 +138,7 @@ def test_cancellation_signal_default_and_mark() -> None:
 
 
 def test_progress_reporter_report_then_latest() -> None:
-    """Lane U / P4: report stores a copy; latest returns an independent copy."""
+    """P4:report 存入副本;latest 返回独立副本。"""
     reporter = ProgressReporter()
     assert reporter.latest() is None
     reporter.report({"processed": 1})
@@ -147,7 +146,7 @@ def test_progress_reporter_report_then_latest() -> None:
 
 
 def test_task_type_descriptor_fields() -> None:
-    """Descriptor model accepts all 6 spec fields and is frozen."""
+    """Descriptor 模型接受 spec 全部 6 个字段,且为 frozen。"""
     desc = SdkTaskTypeDescriptor(
         task_type="my_import",
         display_name="My Import",
@@ -159,12 +158,12 @@ def test_task_type_descriptor_fields() -> None:
     assert desc.task_type == "my_import"
     assert desc.required_env == ["DB_PASSWORD"]
     assert desc.input_schema == {"type": "object"}
-    # Wire-alias path: payload using camel-case ``schema`` key works too.
+    # wire alias 路径:payload 用 camelCase 的 ``schema`` 键也能 work。
     desc_aliased = SdkTaskTypeDescriptor.model_validate(
         {"task_type": "x", "schema": {"type": "object"}}
     )
     assert desc_aliased.input_schema == {"type": "object"}
-    # Field type-hints exist (mypy-strict surrogate).
+    # 字段 type hint 存在(mypy-strict 替代品)。
     hints = get_type_hints(SdkTaskTypeDescriptor)
     assert "task_type" in hints
     assert "required_env" in hints

@@ -1,12 +1,12 @@
-"""Tests for ``batch_worker_sdk.client.BatchPlatformClient`` (Lane T P3).
+"""``batch_worker_sdk.client.BatchPlatformClient`` 的测试(P3)。
 
-5 cases per Lane T brief T4:
+5 个用例:
 
-1. ``register_handler`` rejects duplicate task types.
-2. ``start()`` with no handlers raises ``RuntimeError``.
-3. ``start()`` order: register HTTP → schedulers up → kafka up.
-4. Double-``start()`` raises ``RuntimeError``.
-5. ``stop()`` (phase-3 fallback) runs the right shutdown sequence.
+1. ``register_handler`` 拒绝重复 task type。
+2. 没有任何 handler 时 ``start()`` 抛 ``RuntimeError``。
+3. ``start()`` 顺序:register HTTP → schedulers 起来 → kafka 起来。
+4. 二次 ``start()`` 抛 ``RuntimeError``。
+5. ``stop()``(phase-3 fallback)按正确顺序关闭。
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 
 class _StubHandler:
-    """Minimal handler with configurable task_type."""
+    """最小 handler,task_type 可配置。"""
 
     def __init__(self, type_: str) -> None:
         self._type = type_
@@ -42,7 +42,7 @@ class _StubHandler:
 
 
 class _RecordingDispatcher:
-    """DispatcherLike with shutdown hook used by stop()."""
+    """DispatcherLike,带 stop() 用到的 shutdown 钩子。"""
 
     def __init__(self) -> None:
         self.shutdown_calls: list[float] = []
@@ -59,7 +59,7 @@ class _RecordingDispatcher:
     def mark_cancel_requested(self, task_id: int, reason: str) -> None:
         return None
 
-    async def shutdown(self, timeout: float) -> None:  # noqa: ASYNC109 — mirror Lane S API
+    async def shutdown(self, timeout: float) -> None:  # noqa: ASYNC109 — 镜像 dispatcher API
         self.shutdown_calls.append(timeout)
 
 
@@ -87,7 +87,7 @@ def _cfg() -> BatchPlatformClientConfig:
 
 
 def _http_mock() -> AsyncMock:
-    """Build an ``AsyncMock`` matching the :class:`PlatformHttpClient` shape."""
+    """构造一个形状与 :class:`PlatformHttpClient` 一致的 ``AsyncMock``。"""
     http = AsyncMock()
     http.register = AsyncMock(return_value={})
     http.heartbeat = AsyncMock(return_value={})
@@ -118,7 +118,7 @@ async def test_start_sequences_register_then_schedulers_then_kafka() -> None:
     kafka = _RecordingKafka()
     events: list[str] = []
 
-    # Wrap register so we can record when it's called relative to kafka.start
+    # 包一层 register 以便记录其相对 kafka.start 的时序
     original_register = http.register
 
     async def register_recorder(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -143,12 +143,12 @@ async def test_start_sequences_register_then_schedulers_then_kafka() -> None:
     await client.start()
     try:
         assert client.started is True
-        # register first, kafka.start last
+        # register 在前,kafka.start 在最后
         assert events[0] == "register"
         assert events[-1] == "kafka.start"
         assert client.dispatcher is dispatcher
     finally:
-        # Cleanly tear down the heartbeat / lease background tasks.
+        # 干净地把 heartbeat / lease 后台任务停掉。
         await client.stop(timeout=1.0)
 
 
@@ -188,5 +188,5 @@ async def test_stop_phase3_fallback_runs_full_sequence() -> None:
     assert client.started is False
     assert kafka.stopped is True
     assert len(dispatcher.shutdown_calls) == 1
-    # deactivate must have been attempted
+    # 必须尝试过 deactivate
     http.deactivate.assert_awaited_once()

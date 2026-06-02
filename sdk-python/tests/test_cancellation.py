@@ -1,4 +1,4 @@
-"""Tests for :class:`CancellationSignal` (Lane U / P4)."""
+""":class:`CancellationSignal` 的测试(P4)。"""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_mark_cancelled_is_idempotent() -> None:
 async def test_wait_cancelled_returns_immediately_when_already_set() -> None:
     sig = CancellationSignal()
     sig.mark_cancelled()
-    # Should not block: wrap in a tight timeout to fail loudly if it does.
+    # 不应阻塞:套一个紧 timeout,以便阻塞时显式失败。
     await asyncio.wait_for(sig.wait_cancelled(), timeout=0.5)
 
 
@@ -56,7 +56,7 @@ async def test_wait_cancelled_supports_multiple_waiters() -> None:
         return True
 
     tasks = [asyncio.create_task(waiter()) for _ in range(5)]
-    await asyncio.sleep(0.01)  # let waiters block
+    await asyncio.sleep(0.01)  # 让 waiter 先阻塞
     sig.mark_cancelled()
     results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=1.0)
     assert results == [True] * 5

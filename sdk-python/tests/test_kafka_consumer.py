@@ -1,9 +1,8 @@
-"""Unit tests for KafkaTaskConsumer — Lane S (P2).
+"""KafkaTaskConsumer 单元测试(P2)。
 
-Uses ``MagicMock`` for the underlying ``AIOKafkaConsumer`` so we
-don't need a real broker. Fixture-level pause/resume is exercised
-end-to-end via the contract runner; here we cover unit branches
-(missing config, subscribe path, rebalance listener cache reset).
+底层 ``AIOKafkaConsumer`` 用 ``MagicMock`` 替代,这样不需要真的 broker。
+fixture 级 pause/resume 在 contract runner 中做端到端;这里只覆盖单元
+分支(缺配置、subscribe 路径、rebalance listener 重置缓存)。
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ async def _make_consumer() -> tuple[KafkaTaskConsumer, TaskDispatcher, MagicMock
 
 
 async def test_build_consumer_requires_kafka_fields() -> None:
-    """Missing kafka_* config → ValueError on _build_consumer."""
+    """缺 kafka_* 配置 → _build_consumer 抛 ValueError。"""
     cfg = BatchPlatformClientConfig(
         base_url="http://orch:8081", tenant_id="acme", worker_code="w-1"
     )
@@ -58,7 +57,7 @@ async def test_build_consumer_requires_kafka_fields() -> None:
 
 
 async def test_apply_backpressure_pauses_at_saturation() -> None:
-    """in_flight >= max → pause(*assignment) exactly once, cached."""
+    """in_flight >= max → 只 pause(*assignment) 一次,带缓存。"""
     consumer, dispatcher, mock = await _make_consumer()
     try:
 
@@ -70,7 +69,7 @@ async def test_apply_backpressure_pauses_at_saturation() -> None:
         try:
             consumer.apply_backpressure()
             assert mock.pause.call_count == 1
-            # Second tick must not re-issue pause (caching).
+            # 第二次 tick 不能重发 pause(缓存)。
             consumer.apply_backpressure()
             assert mock.pause.call_count == 1
             assert consumer.paused is True
@@ -92,7 +91,7 @@ async def test_apply_backpressure_resumes_when_capacity_returns() -> None:
             dispatcher._in_flight[tid] = asyncio.create_task(_idle())
         try:
             consumer.apply_backpressure()  # pause
-            # Drain one slot.
+            # 排干一个槽。
             t = next(iter(dispatcher._in_flight))
             dispatcher._in_flight[t].cancel()
             dispatcher._in_flight.pop(t)
@@ -107,7 +106,7 @@ async def test_apply_backpressure_resumes_when_capacity_returns() -> None:
 
 
 async def test_apply_backpressure_pauses_on_platform_paused() -> None:
-    """Even with capacity, PAUSED/DRAINING directive should pause."""
+    """即使还有容量,PAUSED/DRAINING directive 也应 pause。"""
     consumer, dispatcher, mock = await _make_consumer()
     try:
         dispatcher.apply_platform_directive({"runtimeState": "PAUSED"})
@@ -119,7 +118,7 @@ async def test_apply_backpressure_pauses_on_platform_paused() -> None:
 
 
 async def test_apply_backpressure_skips_when_no_assignment() -> None:
-    """Empty assignment → no pause/resume RPC (avoid spurious calls)."""
+    """空 assignment → 不发 pause/resume RPC(避免无效调用)。"""
     consumer, _dispatcher, mock = await _make_consumer()
     try:
         mock.assignment.return_value = set()
@@ -131,7 +130,7 @@ async def test_apply_backpressure_skips_when_no_assignment() -> None:
 
 
 async def test_rebalance_listener_resets_paused_cache() -> None:
-    """on_partitions_assigned → _paused flipped to False."""
+    """on_partitions_assigned → _paused 翻成 False。"""
     consumer, _dispatcher, _mock = await _make_consumer()
     try:
         consumer._paused = True
@@ -143,7 +142,7 @@ async def test_rebalance_listener_resets_paused_cache() -> None:
 
 
 async def test_handle_record_dispatches_to_on_message() -> None:
-    """Valid JSON → dispatcher.on_message receives parsed dict."""
+    """合法 JSON → dispatcher.on_message 收到解析后的 dict。"""
     consumer, dispatcher, _mock = await _make_consumer()
     try:
         received: list[dict[str, object]] = []
@@ -168,7 +167,7 @@ async def test_handle_record_dispatches_to_on_message() -> None:
 async def test_handle_record_skips_invalid_json(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Malformed JSON → ERROR log, no dispatch."""
+    """坏 JSON → ERROR 日志,不分发。"""
     consumer, dispatcher, _mock = await _make_consumer()
     try:
         called = []

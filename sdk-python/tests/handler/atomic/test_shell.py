@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`batch_worker_sdk.handler.atomic._shell`."""
+""":mod:`batch_worker_sdk.handler.atomic._shell` 的单元测试。"""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ async def test_shell_non_zero_exit_is_success_not_failure() -> None:
         parameters={"command": sys.executable, "args": ["-c", "import sys; sys.exit(7)"]}
     )
 
-    # ``_do_invoke`` returns normally; non-zero exit is data, not a thrown error.
+    # ``_do_invoke`` 正常返回;非零 exit 是数据,不算抛错。
     result = await handler._do_invoke(ctx)
     assert result["exitCode"] == 7
 

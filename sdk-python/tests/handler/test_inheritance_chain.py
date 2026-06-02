@@ -1,12 +1,12 @@
-"""Cross-package inheritance chain contract.
+"""跨包继承链契约。
 
-* 3 builtin handlers must subclass the matching `SdkAbstract*Handler`.
-* 4 typed abstract bases must subclass both their untyped sibling and
-  the `SdkTypedTaskHandler` Protocol.
+* 3 个 builtin handler 必须继承对应的 `SdkAbstract*Handler`。
+* 4 个 typed 抽象基类必须既继承 untyped 兄弟,又满足
+  `SdkTypedTaskHandler` Protocol。
 
-These assertions guard the ADR-036 base-class hierarchy: if a builtin
-handler stops inheriting `SdkAbstractImportHandler` (e.g. someone
-copy-pastes the template), the contract breaks and Java/Python diverge.
+这些断言守护 ADR-036 基类层级:如果某个 builtin handler 不再继承
+`SdkAbstractImportHandler`(例如有人复制了模板),契约就破了,
+Java/Python 会漂移。
 """
 
 from __future__ import annotations
@@ -67,9 +67,8 @@ def test_builtin_handler_inherits_abstract_base(
 def test_typed_base_inherits_untyped_base_or_typed_protocol(
     typed: tuple[str, str], untyped: tuple[str, str]
 ) -> None:
-    """Java contract: typed bases extend untyped bases. Python contract:
-    EITHER extends the untyped base OR satisfies SdkTypedTaskHandler
-    structurally (Protocol-based equivalence)."""
+    """Java 契约:typed 基类继承 untyped 基类。Python 契约:要么继承
+    untyped 基类,要么结构化地满足 SdkTypedTaskHandler(Protocol 等价)。"""
     typed_mod = require_module(typed[0])
     typed_cls = get_attr(typed_mod, typed[1])
 
@@ -89,17 +88,17 @@ def test_typed_base_inherits_untyped_base_or_typed_protocol(
 
 
 def test_sdk_row_result_is_exposed_from_handler_package() -> None:
-    """Java SdkRowResult is the row counter the 4 long-task templates use.
-    Python must expose an equivalent type with success/skipped/failed/reject."""
+    """Java SdkRowResult 是 4 个 long-task 模板共用的行计数器。
+    Python 必须暴露等价类型,带 success/skipped/failed/reject。"""
     mod = require_module("batch_worker_sdk.handler.row_result")
     cls = get_attr(mod, "SdkRowResult")
     instance = cls()
-    # API surface check: 4 counters + total.
+    # API 表面检查:4 个 counter + total。
     for attr in ("success", "skipped", "failed", "reject", "total"):
         assert hasattr(instance, attr), f"SdkRowResult missing {attr!r}"
 
 
 def test_sdk_typed_parameters_is_exposed() -> None:
-    """SdkTypedParameters base class for typed handler input parsing."""
+    """typed handler 输入解析所用的 SdkTypedParameters 基类。"""
     mod = require_module("batch_worker_sdk.handler.typed.typed_parameters")
     get_attr(mod, "SdkTypedParameters")

@@ -1,9 +1,8 @@
-"""Unit tests for the wire-protocol §C retry / backoff state machine.
+"""wire-protocol §C retry / backoff 状态机的单元测试。
 
-Each test calls ``with_retry`` against a scripted ``request_factory``
-that yields a sequence of ``httpx.Response`` objects (or raises
-``httpx.TransportError``). We inject a fake ``sleep`` so the suite
-runs in milliseconds and we can assert the back-off schedule.
+每个用例针对一个脚本化的 ``request_factory`` 调用 ``with_retry``,
+该 factory 按顺序产出 ``httpx.Response``(或抛 ``httpx.TransportError``)。
+我们注入假的 ``sleep``,既让套件毫秒级跑完,也能断言退避节奏。
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ def _resp(status: int, body: dict | None = None) -> httpx.Response:
 
 
 class _Sleeps:
-    """Capture awaited sleep durations without actually sleeping."""
+    """记录 await 过的 sleep 时长,实际不真睡。"""
 
     def __init__(self) -> None:
         self.calls: list[float] = []
@@ -34,8 +33,8 @@ class _Sleeps:
 
 
 def _factory(responses):
-    """Return a request_factory yielding ``responses`` in order. Items
-    may be ``httpx.Response`` or exception instances (will be raised)."""
+    """返回一个 request_factory,按序产出 ``responses``。每项可以是
+    ``httpx.Response`` 或异常实例(异常会被抛出)。"""
     it = iter(responses)
 
     async def factory() -> httpx.Response:
@@ -73,7 +72,7 @@ async def test_401_raises_auth_error_immediately():
     assert ei.value.status_code == 401
     assert ei.value.code == "AUTH_INVALID"
     assert ei.value.request_id == "t-1"
-    assert sleeps.calls == []  # zero retries
+    assert sleeps.calls == []  # 零重试
 
 
 async def test_403_also_auth_error():
@@ -152,7 +151,7 @@ async def test_5xx_retries_with_exponential_backoff_then_exhausts():
         )
     assert ei.value.status_code == 503
     assert ei.value.attempts == 3
-    # 3 attempts → 2 sleeps (after attempts 1 and 2) of 200ms and 400ms
+    # 3 次尝试 → 2 次 sleep(分别在第 1、2 次尝试之后),200ms 和 400ms
     assert len(sleeps.calls) == 2
     assert sleeps.calls[0] == pytest.approx(0.2)
     assert sleeps.calls[1] == pytest.approx(0.4)
@@ -213,4 +212,4 @@ async def test_404_does_not_poison_counter():
             jitter=False,
         )
     assert ei.value.status_code == 404
-    assert counter.count == 0  # 404 specifically does not increment
+    assert counter.count == 0  # 404 特例不递增

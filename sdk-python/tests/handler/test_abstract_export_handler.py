@@ -1,4 +1,4 @@
-"""Unit tests for SdkAbstractExportHandler shape."""
+"""SdkAbstractExportHandler 形状的单元测试。"""
 
 from __future__ import annotations
 

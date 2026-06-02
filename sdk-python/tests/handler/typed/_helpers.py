@@ -1,4 +1,4 @@
-"""Shared test fixtures for typed handler tests."""
+"""typed handler 测试的共享 fixture。"""
 
 from __future__ import annotations
 

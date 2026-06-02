@@ -1,14 +1,12 @@
-"""Abstract-handler hook-order contract.
+"""抽象 handler 的 hook 顺序契约。
 
-For each of the 6 `SdkAbstract*Handler` bases (atomic / import / export /
-process / dispatch + the shared `SdkAbstractTaskHandler`), instantiate a
-minimal subclass that records hook invocation order, run `execute`, then
-assert the order matches what Java's `SdkAbstractTaskHandler` template
-prescribes (ADR-036).
+对 6 个 `SdkAbstract*Handler` 基类(atomic / import / export / process /
+dispatch + 共享的 `SdkAbstractTaskHandler`)各自实例化一个最小子类,
+让其记录 hook 调用顺序,跑 `execute`,然后断言顺序与 Java 侧
+`SdkAbstractTaskHandler` 模板的约定一致(ADR-036)。
 
-Hook names mirror the task spec's Python naming convention (with an
-underscore prefix to mark protected hooks), which is the Python-side
-projection of Java's lowerCamelCase hook names.
+hook 名沿用任务规范里的 Python 命名约定(带下划线前缀以示 protected),
+是 Java 侧 lowerCamelCase hook 名的 Python 侧投影。
 """
 
 from __future__ import annotations
@@ -22,7 +20,7 @@ from tests.handler.conftest import get_attr, make_ctx, require_module
 
 
 def _run(handler: Any, ctx: SdkTaskContext) -> SdkTaskResult:
-    """Call execute() — handle both sync (Java-style) and async."""
+    """调 execute() —— 同步(Java 风格)/异步都兼容。"""
     result: Any = handler.execute(ctx)
     if asyncio.iscoroutine(result):
         result = asyncio.get_event_loop().run_until_complete(result)
@@ -74,7 +72,7 @@ def test_import_abstract_hook_order() -> None:
             calls.append("_close_source")
 
     result = _run(_Import(), make_ctx())
-    # Required order: open → read → load(>=1) → close.
+    # 必需顺序:open → read → load(>=1) → close。
     assert calls[0] == "_open_source"
     assert calls[1] == "_read_rows"
     assert any(c.startswith("_load_batch") for c in calls[2:-1])
@@ -110,7 +108,7 @@ def test_export_abstract_hook_order() -> None:
     result = _run(_Export(), make_ctx())
     assert calls[0] == "_open_destination"
     assert "_query_rows" in calls
-    # _write_row called once per row.
+    # _write_row 每行调一次。
     assert calls.count("_write_row") == len(rows_seen) == 2
     assert calls[-1] == "_close_destination"
     assert isinstance(result, SdkTaskResult)
@@ -141,7 +139,7 @@ def test_process_abstract_hook_order() -> None:
     assert calls[0] == "_open_input"
     assert calls.count("_transform") == 2
     assert "_write_output" in calls
-    # _write_output must come after every _transform.
+    # _write_output 必须晚于所有 _transform。
     assert calls.index("_write_output") > max(i for i, c in enumerate(calls) if c == "_transform")
     assert isinstance(result, SdkTaskResult)
 
@@ -166,7 +164,7 @@ def test_dispatch_abstract_hook_order() -> None:
 
     result = _run(_Dispatch(), make_ctx())
     assert calls[0] == "_resolve_targets"
-    # 3 fan-out calls, each unique.
+    # 3 次 fan-out,每次互不重复。
     assert sorted(calls[1:]) == [
         "_dispatch_to_target(target-a)",
         "_dispatch_to_target(target-b)",
@@ -176,8 +174,8 @@ def test_dispatch_abstract_hook_order() -> None:
 
 
 def test_base_template_catches_exception_and_returns_failure() -> None:
-    """SdkAbstractTaskHandler.execute() must catch hook exceptions and
-    convert them to SdkTaskResult.fail (Java ADR-036 contract)."""
+    """SdkAbstractTaskHandler.execute() 必须捕获 hook 异常并转成
+    SdkTaskResult.fail(Java ADR-036 契约)。"""
     mod = require_module("batch_worker_sdk.handler.abstract_atomic")
     base = get_attr(mod, "SdkAbstractAtomicHandler")
 
@@ -191,14 +189,14 @@ def test_base_template_catches_exception_and_returns_failure() -> None:
     result = _run(_Boom(), make_ctx())
     assert isinstance(result, SdkTaskResult)
     assert result.success is False
-    # Message or output should reference the underlying error somehow.
+    # message 或 output 应该体现底层错误。
     assert "kaboom" in (result.message or "") or "RuntimeError" in (
         result.output.get("errorClass", "") or ""
     )
 
 
 def test_typed_dispatch_handler_protocol_attached() -> None:
-    """4 typed bases must also satisfy SdkTypedTaskHandler Protocol."""
+    """4 个 typed 基类也必须满足 SdkTypedTaskHandler Protocol。"""
     typed_mod = require_module("batch_worker_sdk.handler.typed.typed_task_handler")
     typed_protocol = get_attr(typed_mod, "SdkTypedTaskHandler")
 
@@ -211,8 +209,8 @@ def test_typed_dispatch_handler_protocol_attached() -> None:
     for dotted, cls_name in typed_bases:
         mod = require_module(dotted)
         cls = get_attr(mod, cls_name)
-        # Walk the MRO; the typed protocol should be present either as a
-        # base or via the @runtime_checkable structural check.
+        # 走一遍 MRO:typed protocol 要么作为基类,要么通过
+        # @runtime_checkable 结构化检查存在。
         is_subclass_or_structural = (
             issubclass(cls, typed_protocol) if isinstance(typed_protocol, type) else True
         )
