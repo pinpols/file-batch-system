@@ -15,10 +15,10 @@ from collections.abc import AsyncIterator
 from datetime import timedelta
 from typing import Any
 
-from batch_worker_sdk.config import BatchPlatformClientConfig
-from batch_worker_sdk.context import SdkTaskContext
-from batch_worker_sdk.descriptor import SdkTaskTypeDescriptor
-from batch_worker_sdk.result import SdkTaskResult
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.task.context import SdkTaskContext
+from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
+from batch_worker_sdk.task.result import SdkTaskResult
 from batch_worker_sdk.testkit.fake_platform import FakeBatchPlatform
 
 

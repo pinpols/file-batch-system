@@ -34,14 +34,11 @@ import logging
 from datetime import timedelta
 from typing import Any, Protocol
 
-from batch_worker_sdk._http import PlatformHttpClient
-from batch_worker_sdk._scheduler import (
-    DispatcherLike,
-    HeartbeatScheduler,
-    LeaseRenewalScheduler,
-)
-from batch_worker_sdk.config import BatchPlatformClientConfig
-from batch_worker_sdk.handler import SdkTaskHandler
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.internal._http import PlatformHttpClient
+from batch_worker_sdk.scheduler._heartbeat import DispatcherLike, HeartbeatScheduler
+from batch_worker_sdk.scheduler._lease import LeaseRenewalScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +204,7 @@ class BatchPlatformClient:
         import importlib  # noqa: PLC0415 — Lane U merge probe
 
         try:
-            lifecycle = importlib.import_module("batch_worker_sdk._lifecycle")
+            lifecycle = importlib.import_module("batch_worker_sdk.internal._lifecycle")
         except ImportError:
             await self._stop_minimal_phase3(timeout_s)
         else:
@@ -265,7 +262,7 @@ class BatchPlatformClient:
 
     def _build_register_body(self) -> dict[str, Any]:
         """Build the worker-register body matching Java ``WorkerHeartbeatDto`` shape."""
-        from batch_worker_sdk._scheduler import _utc_now_iso  # noqa: PLC0415 — break import cycle
+        from batch_worker_sdk.scheduler._heartbeat import _utc_now_iso  # noqa: PLC0415
 
         body: dict[str, Any] = {
             "tenantId": self._config.tenant_id,
@@ -309,7 +306,7 @@ class BatchPlatformClient:
         import importlib  # noqa: PLC0415 — Lane S merge probe
 
         try:
-            mod = importlib.import_module("batch_worker_sdk.dispatcher")
+            mod = importlib.import_module("batch_worker_sdk.dispatcher.dispatcher")
         except ImportError as ex:
             raise RuntimeError(
                 "TaskDispatcher not yet available — Lane S (P2) has not landed; "

@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from batch_worker_sdk import BatchPlatformClient, BatchPlatformClientConfig
-from batch_worker_sdk.descriptor import SdkTaskTypeDescriptor
-from batch_worker_sdk.result import SdkTaskResult
+from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
+from batch_worker_sdk.task.result import SdkTaskResult
 
 
 class _StubHandler:

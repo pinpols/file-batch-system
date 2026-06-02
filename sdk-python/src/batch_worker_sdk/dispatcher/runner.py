@@ -14,11 +14,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from batch_worker_sdk._http import PlatformHttpClient
-from batch_worker_sdk._kafka import KafkaTaskConsumer
-from batch_worker_sdk.config import BatchPlatformClientConfig
-from batch_worker_sdk.dispatcher import TaskDispatcher
-from batch_worker_sdk.handler import SdkTaskHandler
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher
+from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.internal._http import PlatformHttpClient
+from batch_worker_sdk.internal._kafka import KafkaTaskConsumer
 
 logger = logging.getLogger(__name__)
 

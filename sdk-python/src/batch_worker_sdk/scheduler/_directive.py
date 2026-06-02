@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
-from batch_worker_sdk.state import WorkerRuntimeState
+from batch_worker_sdk.task.state import WorkerRuntimeState
 
 logger = logging.getLogger(__name__)
 

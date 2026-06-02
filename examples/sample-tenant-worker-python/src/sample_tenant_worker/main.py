@@ -58,7 +58,7 @@ async def main() -> None:
     )
 
     try:
-        from batch_worker_sdk.client import BatchPlatformClient  # type: ignore[attr-defined]
+        from batch_worker_sdk.client.client import BatchPlatformClient  # type: ignore[attr-defined]
     except ImportError:
         logger.warning(
             "BatchPlatformClient (Lane T) not yet available — exiting after registration smoke."

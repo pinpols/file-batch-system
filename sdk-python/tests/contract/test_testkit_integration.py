@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from batch_worker_sdk._http import PlatformHttpClient
+from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.testkit import FakeBatchPlatform, make_test_config
 
 # <repo>/sdk-python/tests/contract/<file> -> <repo>

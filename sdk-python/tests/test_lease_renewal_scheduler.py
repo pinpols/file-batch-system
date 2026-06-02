@@ -1,4 +1,4 @@
-"""Tests for ``batch_worker_sdk._scheduler.LeaseRenewalScheduler`` (Lane T P3).
+"""Tests for ``batch_worker_sdk.scheduler._lease.LeaseRenewalScheduler`` (Lane T P3).
 
 6 cases per Lane T brief T4:
 
@@ -18,9 +18,9 @@ from typing import Any
 
 import pytest
 
-from batch_worker_sdk._scheduler import LeaseRenewalScheduler
-from batch_worker_sdk.config import BatchPlatformClientConfig
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import PersistentClientError, TransientError
+from batch_worker_sdk.scheduler._lease import LeaseRenewalScheduler
 
 
 class _Dispatcher:

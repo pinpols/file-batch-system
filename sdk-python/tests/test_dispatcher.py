@@ -9,7 +9,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
-from batch_worker_sdk._http import PlatformHttpClient
+from batch_worker_sdk.internal._http import PlatformHttpClient
 
 
 def _cfg(tenant: str = "acme") -> BatchPlatformClientConfig:
@@ -44,7 +44,7 @@ async def test_tenant_mismatch_drops_message(
     """Lane J §J1: foreign tenant → ERROR log + drop, no HTTP call."""
     dispatcher, http = await _make()
     try:
-        caplog.set_level("ERROR", logger="batch_worker_sdk.dispatcher")
+        caplog.set_level("ERROR", logger="batch_worker_sdk.dispatcher.dispatcher")
         await dispatcher.on_message(_msg(task_id=42, tenant="other-tenant"))
         assert dispatcher.in_flight_count() == 0
         assert any("tenant_mismatch_drop" in r.message for r in caplog.records)
@@ -138,7 +138,7 @@ async def test_unsupported_schema_version_drops(
     """schemaVersion=v3 → rejected (forward-compat safety)."""
     dispatcher, http = await _make()
     try:
-        caplog.set_level("WARNING", logger="batch_worker_sdk.dispatcher")
+        caplog.set_level("WARNING", logger="batch_worker_sdk.dispatcher.dispatcher")
         msg = _msg(task_id=5)
         msg["schemaVersion"] = "v3"
         await dispatcher.on_message(msg)
