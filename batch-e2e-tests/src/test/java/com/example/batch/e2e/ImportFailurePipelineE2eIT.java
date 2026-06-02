@@ -47,6 +47,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
+@Tag("critical")
 class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

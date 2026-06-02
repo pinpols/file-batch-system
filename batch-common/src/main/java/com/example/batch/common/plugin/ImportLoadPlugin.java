@@ -11,4 +11,9 @@ public interface ImportLoadPlugin {
 
   /** 持久化一批行数据，行结构对应 PARSE/VALIDATE 阶段产出的 NDJSON 行（通常为 camelCase 键），返回实际写入行数。 */
   int loadChunk(ImportLoadContext context, List<Map<String, Object>> records) throws Exception;
+
+  /** 续跑场景下 chunk 重复处理的数据安全契约。enabled 续跑前由 LoadStep 校验。 */
+  default IdempotencyCapability idempotencyCapability() {
+    return IdempotencyCapability.UNKNOWN;
+  }
 }

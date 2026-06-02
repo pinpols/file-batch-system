@@ -2,9 +2,8 @@ package com.example.batch.worker.imports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,20 +34,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * ADR-038 P2 续跑位点行为单测 — 补 {@link LoadStepTest} 之外的开关开 / 开关关 / 续跑 / 已完成跳过 等关键分支。
+ * ADR-038 R3-3 前置校验单测 — 续跑开关开时 plugin 必须自报幂等能力,否则 LoadStep 转 {@code IMPORT_LOAD_CONFIG_INVALID}
+ * 失败拒跑。
  *
- * <p>共享原测的 fixture 风格(@TempDir / 不 transactional / mock plugin)。
+ * <p>4 个 case:enabled + IDEMPOTENT pass / enabled + NONE throw / enabled + UNKNOWN throw / disabled
+ * 任何 cap 都 pass。
  */
 @ExtendWith(MockitoExtension.class)
-class LoadStepCheckpointTest {
+class LoadStepCheckpointPrecheckTest {
 
   private static final String TENANT = "tenant-A";
-  private static final long PIPELINE_INSTANCE_ID = 7001L;
+  private static final long PIPELINE_INSTANCE_ID = 8002L;
 
   @Mock private PlatformFileRuntimeRepository runtimeRepository;
   @Mock private ImportLoadPlugin plugin;
@@ -66,11 +66,6 @@ class LoadStepCheckpointTest {
   @BeforeEach
   void setUp() {
     when(plugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
-    // ADR-038 R3-3:续跑开关开时 LoadStep 会校验 plugin 幂等能力;mock 默认返回 null,需显式 stub。
-    // disabled 路径不会触发(不调 idempotencyCapability),用 lenient 避免 UnnecessaryStubbing。
-    org.mockito.Mockito.lenient()
-        .when(plugin.idempotencyCapability())
-        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
     registry = new ImportLoadPluginRegistry(List.of(plugin));
     workerConfig =
         new ImportWorkerConfiguration(
@@ -103,129 +98,83 @@ class LoadStepCheckpointTest {
   }
 
   @Test
-  @DisplayName("开关关时:既不读位点也不写位点(行为与未引入本特性一致)")
-  void checkpointDisabled_skipsPositionStore() throws Exception {
-    checkpointProps.setEnabled(false);
-    Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
-    ImportJobContext ctx = streamingContext(validated);
-    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
+  @DisplayName("enabled=true + IDEMPOTENT_BY_UNIQUE_CONSTRAINT:正常跑")
+  void enabled_idempotentPlugin_passes() throws Exception {
+    checkpointProps.setEnabled(true);
+    when(plugin.idempotencyCapability())
+        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
     when(plugin.loadChunk(any(), any())).thenReturn(1);
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    verify(positionStore, never()).load(any(), anyLong(), any());
-    verify(positionStore, never()).advance(any(), anyLong(), any(), any(), anyLong());
-    verify(positionStore, never()).markCompleted(any(), anyLong(), any());
-  }
-
-  @Test
-  @DisplayName("开关开 + completed=true:幂等跳过 loadChunk,直接 markLoaded")
-  void checkpointCompleted_skipsLoadChunk() throws Exception {
-    checkpointProps.setEnabled(true);
-    Path validated = writeNdjson(List.of(row("C1"), row("C2")));
-    ImportJobContext ctx = streamingContext(validated);
-    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
-    when(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD))
-        .thenReturn(ProcessingPosition.completed(2L));
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    verify(plugin, never()).loadChunk(any(), any());
-    verify(positionStore, never()).advance(any(), anyLong(), any(), any(), anyLong());
-    verify(positionStore, never()).markCompleted(any(), anyLong(), any()); // 已 completed 不重复标记
-  }
-
-  @Test
-  @DisplayName("开关开 + 首次跑:每 chunk 后 advance,结束后 markCompleted")
-  void checkpointEnabled_firstRun_advancesPerChunk() throws Exception {
-    checkpointProps.setEnabled(true);
-    // chunk_size=2 通过 template 传;3 行 → 2 chunks(2 + 1)
-    Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
-    ImportJobContext ctx = streamingContext(validated);
-    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
-    ctx.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("chunk_size", 2));
     when(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD))
         .thenReturn(ProcessingPosition.empty());
-    when(plugin.loadChunk(any(), any())).thenReturn(2).thenReturn(1);
     when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    verify(plugin, times(2)).loadChunk(any(), any());
-
-    ArgumentCaptor<String> markerCaptor = ArgumentCaptor.forClass(String.class);
-    ArgumentCaptor<Long> incCaptor = ArgumentCaptor.forClass(Long.class);
-    verify(positionStore, times(2))
-        .advance(
-            eq(TENANT),
-            eq(PIPELINE_INSTANCE_ID),
-            eq(ProcessingStage.LOAD),
-            markerCaptor.capture(),
-            incCaptor.capture());
-    assertThat(markerCaptor.getAllValues()).containsExactly("2", "3");
-    assertThat(incCaptor.getAllValues()).containsExactly(2L, 1L);
-
-    verify(positionStore).markCompleted(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD);
-  }
-
-  @Test
-  @DisplayName("开关开 + 续跑(位点=2):skip 前 2 行,从第 3 行起 advance")
-  void checkpointEnabled_resume_skipsAhead() throws Exception {
-    checkpointProps.setEnabled(true);
-    Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3"), row("C4")));
-    ImportJobContext ctx = streamingContext(validated);
-    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
-    ctx.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("chunk_size", 5));
-    when(positionStore.load(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD))
-        .thenReturn(new ProcessingPosition("2", 2L, false));
-    when(plugin.loadChunk(any(), any())).thenReturn(2);
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    // 只跑剩下 2 行(C3 / C4),只一次 loadChunk
-    verify(plugin, times(1)).loadChunk(any(), any());
-    ArgumentCaptor<String> markerCaptor = ArgumentCaptor.forClass(String.class);
-    verify(positionStore)
-        .advance(
-            eq(TENANT),
-            eq(PIPELINE_INSTANCE_ID),
-            eq(ProcessingStage.LOAD),
-            markerCaptor.capture(),
-            eq(2L));
-    assertThat(markerCaptor.getValue()).isEqualTo("4"); // skip 2 + 2 lines read = line 4
-    verify(positionStore).markCompleted(TENANT, PIPELINE_INSTANCE_ID, ProcessingStage.LOAD);
-  }
-
-  @Test
-  @DisplayName("开关开 + pipelineInstanceId 缺失:退化为开关关行为(不读/写位点)")
-  void checkpointEnabled_butMissingPipelineInstanceId_degradesToDisabled() throws Exception {
-    checkpointProps.setEnabled(true);
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated);
-    // 不放 PIPELINE_INSTANCE_ID
-    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
-    when(plugin.loadChunk(any(), any())).thenReturn(1);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
 
     ImportStageResult result = loadStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    verify(positionStore, never()).load(any(), anyLong(), any());
-    verify(positionStore, never()).advance(any(), anyLong(), any(), any(), anyLong());
-    verify(positionStore, never()).markCompleted(any(), anyLong(), any());
+    verify(plugin).loadChunk(any(), any());
   }
 
-  // ─── helpers (与 LoadStepTest 同款) ─────────────────────────────────────────
+  @Test
+  @DisplayName("enabled=true + NONE:拒跑,返回 IMPORT_LOAD_CONFIG_INVALID,不调 plugin.loadChunk")
+  void enabled_nonePlugin_rejects() throws Exception {
+    checkpointProps.setEnabled(true);
+    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.NONE);
+    lenient().when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
 
-  private static long anyLong() {
-    return org.mockito.ArgumentMatchers.anyLong();
+    Path validated = writeNdjson(List.of(row("C1")));
+    ImportJobContext ctx = streamingContext(validated);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONFIG_INVALID");
+    verify(plugin, never()).loadChunk(any(), any());
+    verify(positionStore, never()).load(any(), org.mockito.ArgumentMatchers.anyLong(), any());
   }
+
+  @Test
+  @DisplayName("enabled=true + UNKNOWN(默认未 override):拒跑")
+  void enabled_unknownPlugin_rejects() throws Exception {
+    checkpointProps.setEnabled(true);
+    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+    lenient().when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
+
+    Path validated = writeNdjson(List.of(row("C1")));
+    ImportJobContext ctx = streamingContext(validated);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONFIG_INVALID");
+    verify(plugin, never()).loadChunk(any(), any());
+  }
+
+  @Test
+  @DisplayName("enabled=false:不校验,UNKNOWN/NONE plugin 也能跑(不进续跑路径)")
+  void disabled_anyCapability_passes() throws Exception {
+    checkpointProps.setEnabled(false);
+    // 即使 plugin 报 NONE,关闭开关时也跑;default UNKNOWN 同理(不 stub)
+    when(plugin.loadChunk(any(), any())).thenReturn(1);
+    when(runtimeRepository.toLong(any())).thenAnswer(inv -> toLong(inv.getArgument(0)));
+
+    Path validated = writeNdjson(List.of(row("C1")));
+    ImportJobContext ctx = streamingContext(validated);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    verify(plugin).loadChunk(any(), any());
+    // 不进位点路径:positionStore 不被调
+    verify(positionStore, never()).load(any(), org.mockito.ArgumentMatchers.anyLong(), any());
+  }
+
+  // ─── helpers ───────────────────────────────────────────────────────────────
 
   private static Long toLong(Object v) {
     if (v == null) return null;
