@@ -3,6 +3,7 @@ package com.example.batch.worker.exports.stage;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.logging.ThrottledLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.utils.PostgresqlJsonbTexts;
@@ -21,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,13 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class GenerateStep implements ExportStageStep {
+
+  // 同一 (tenant, jobCode, batchNo, errorClass) 的重复失败在 60s 内只 WARN 一次。
+  // 触发场景:trigger misfire 把同一 job 反复补点 + 配置错(如 biz 表缺失)导致每次都死在同一处,
+  // 单条 catch:Exception 的诊断价值在第一次后递减,后续合并成"自上次后又失败 N 次"。
+  private static final Duration FAILURE_LOG_COOLDOWN = Duration.ofSeconds(60);
+
+  private final ThrottledLogger failureLogThrottle = new ThrottledLogger(FAILURE_LOG_COOLDOWN);
 
   private final ExportDataPluginRegistry exportDataPluginRegistry;
   private final ExportFormatStrategyRegistry formatStrategyRegistry;
@@ -124,7 +133,7 @@ public class GenerateStep implements ExportStageStep {
       context.getAttributes().put("fileSizeBytes", Files.size(generatedFile));
       return ExportStageResult.success(stage());
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(GenerateStep.class, "catch:Exception", ex);
+      logFailureThrottled(context, exportPayload, ex);
 
       deleteQuietly(generatedFile);
       boolean configError = ex instanceof WorkerConfigException;
@@ -238,6 +247,30 @@ public class GenerateStep implements ExportStageStep {
         };
     return Files.createTempFile(
         BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()), suffix);
+  }
+
+  private void logFailureThrottled(ExportJobContext context, ExportPayload payload, Exception ex) {
+    String tenantId = context == null ? "?" : String.valueOf(context.getTenantId());
+    String jobCode = context == null ? "?" : String.valueOf(context.getJobCode());
+    String batchNo = payload == null ? "?" : String.valueOf(payload.batchNo());
+    String errorClass = ex.getClass().getSimpleName();
+    String key = tenantId + '|' + jobCode + '|' + batchNo + '|' + errorClass;
+    ThrottledLogger.Decision decision = failureLogThrottle.evaluate(key);
+    if (decision.shouldLog()) {
+      String msg = ex.getMessage();
+      log.warn(
+          "export GENERATE failed: tenantId={}, jobCode={}, batchNo={}, errorClass={},"
+              + " suppressedSincePrevious={}, message={}",
+          tenantId,
+          jobCode,
+          batchNo,
+          errorClass,
+          decision.suppressedSincePrevious(),
+          msg);
+    } else {
+      // 抑制窗口内:留一条 DEBUG 兜底,便于 verbose 排查
+      SwallowedExceptionLogger.info(GenerateStep.class, "catch:Exception (throttled)", ex);
+    }
   }
 
   private void deleteQuietly(Path path) {
