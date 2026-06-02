@@ -101,6 +101,9 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   public TaskResult execute(TaskContext ctx) {
     try {
       SqlInvocation inv = parseInvocation(ctx);
+      if (ctx.isDryRun()) {
+        return buildDryRunResult(ctx, inv);
+      }
       return runStatements(ctx, inv);
     } catch (SqlValidationException ex) {
       return TaskResult.fail(ex.getMessage());
@@ -112,6 +115,30 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           ex);
       return TaskResult.fail(ex);
     }
+  }
+
+  /**
+   * ADR-026 §dry-run:演练模式不发 SQL / 不开事务 / 不写库,返回解析后的"会执行什么"。 仅暴露 SQL 文本 + dataSource bean 名(Spring
+   * 标识,非凭据)+ 事务/超时参数;不进任何 row-level data。
+   */
+  private TaskResult buildDryRunResult(TaskContext ctx, SqlInvocation inv) {
+    String dsBean = resolveDataSourceBeanName(ctx.parameters());
+    Map<String, Object> planned = new LinkedHashMap<>();
+    planned.put("dryRun", true);
+    planned.put("plannedAction", "sql");
+    planned.put("statementCount", inv.statements.size());
+    planned.put("statements", inv.statements);
+    planned.put("dataSourceBean", dsBean == null ? "<default>" : dsBean);
+    planned.put("autoCommit", inv.autoCommit);
+    planned.put("readOnly", inv.allSelect);
+    planned.put("statementTimeoutSeconds", inv.timeoutSec);
+    log.info(
+        "sql executor dry-run skipped real execution: tenantId={}, jobCode={}, statements={}",
+        ctx.tenantId(),
+        ctx.jobCode(),
+        inv.statements.size());
+    return TaskResult.ok(
+        "dry-run: parsed " + inv.statements.size() + " statement(s), not executed", planned);
   }
 
   // ─── parsing + validation ────────────────────────────────────────────────────
