@@ -1,14 +1,12 @@
-"""Builtin query-export handler (ADR-036 Export shape).
+"""内置查询导出 handler(ADR-036 Export 形态)。
 
-Mirrors Java ``com.example.batch.sdk.handler.builtin.QueryExportHandler`` /
-``QueryExportConfig`` — fixed query → delimited / json file stream. The
-Python flavour delegates the *query execution* to a tenant hook
-(:meth:`QueryExportHandler._query_rows`) so the handler stays
-DB-driver-agnostic (asyncpg / psycopg / SQLAlchemy / arbitrary fetcher).
+对齐 Java ``com.example.batch.sdk.handler.builtin.QueryExportHandler`` /
+``QueryExportConfig`` —— 固定查询 → 定界 / json 文件流。Python 版把 *查询
+执行* 委托给租户钩子(:meth:`QueryExportHandler._query_rows`),让 handler
+保持 DB 驱动无关(asyncpg / psycopg / SQLAlchemy / 任意自定义 fetcher)。
 
-Streaming: rows are yielded one-at-a-time and written serially; chunk
-flushing is amortized via :func:`asyncio.to_thread` so the asyncio loop
-stays responsive on large exports.
+流式:逐行 yield 串行写出;chunk flush 通过 :func:`asyncio.to_thread` 摊销,
+保证大导出时 asyncio loop 保持响应。
 """
 
 from __future__ import annotations
@@ -29,42 +27,41 @@ from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
 from batch_worker_sdk.task.result import SdkTaskResult
 
 ExportFormat = Literal["csv", "jsonl"]
-"""Supported sink formats."""
+"""支持的 sink 文件格式。"""
 
 
 class QueryExportConfig(BaseModel):
-    """Settings for :class:`QueryExportHandler`.
+    """:class:`QueryExportHandler` 的配置。
 
-    Mirrors Java ``QueryExportConfig`` record. ``sql`` is fixed in config
-    (never assembled from task parameters) to keep the SQL-injection
-    surface zero — Java enforces the same.
+    对齐 Java ``QueryExportConfig`` record。``sql`` 在配置中固定(从不从任务
+    参数拼装)以把 SQL 注入面收敛到零 —— Java 同样规则。
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     task_type: str
-    """Globally-unique task-type code registered with the platform."""
+    """注册到平台、全局唯一的 task type code。"""
 
     sql: str
-    """Fixed query string (never assembled from task parameters)."""
+    """固定查询串(从不从任务参数拼装)。"""
 
     output_path_param: str = "outputPath"
-    """Key in ``ctx.parameters`` from which to read the output file path."""
+    """从 ``ctx.parameters`` 取输出文件路径所用的 key。"""
 
     format: ExportFormat = "csv"
-    """Sink file format."""
+    """Sink 文件格式。"""
 
     delimited: DelimitedFormat = Field(default_factory=DelimitedFormat.defaults)
-    """CSV-only: delimiter / quote / header config."""
+    """仅 CSV:分隔符 / 引号 / header 配置。"""
 
     chunk_size: int = Field(default=1000, gt=0)
-    """Server-side cursor fetch size hint (mirrors Java ``fetchSize``)."""
+    """服务端游标 fetch size 提示(对齐 Java ``fetchSize``)。"""
 
     connection_ref: str | None = None
-    """Opaque connection identifier (e.g. asyncpg DSN alias). Hook-defined semantics."""
+    """不透明的连接标识(例如 asyncpg DSN alias)。语义由钩子决定。"""
 
     encoding: str = "utf-8"
-    """Text encoding for the output file."""
+    """输出文件文本编码。"""
 
     @classmethod
     def defaults(cls, task_type: str, sql: str) -> QueryExportConfig:
@@ -72,12 +69,11 @@ class QueryExportConfig(BaseModel):
 
 
 class QueryExportHandler:
-    """Query → delimited / jsonl file export template.
+    """Query → 定界 / jsonl 文件导出模板。
 
-    Tenant subclasses override :meth:`_query_rows` to plug their async DB
-    cursor (asyncpg ``conn.cursor(sql).fetch(N)`` / SQLAlchemy
-    ``async_engine.stream`` / etc.); the builtin owns file open, row
-    serialization, header writes, counting, and cancellation polling.
+    租户子类覆盖 :meth:`_query_rows` 插自己的异步 DB 游标(asyncpg
+    ``conn.cursor(sql).fetch(N)`` / SQLAlchemy ``async_engine.stream`` 等);
+    内置负责文件打开、行序列化、header 写入、计数和取消轮询。
     """
 
     def __init__(self, config: QueryExportConfig) -> None:
@@ -86,7 +82,7 @@ class QueryExportHandler:
         self._headers_written = False
         self._column_order: list[str] | None = None
 
-    # -- SdkTaskHandler protocol --------------------------------------------------
+    # -- SdkTaskHandler 协议 ------------------------------------------------------
 
     def task_type(self) -> str:
         return self._config.task_type
@@ -133,46 +129,45 @@ class QueryExportHandler:
             message=f"exported {counts.success()} rows",
         )
 
-    # -- tenant-overridable hooks (mirror Java SdkAbstractExportHandler) ----------
+    # -- 租户可覆盖钩子(对齐 Java SdkAbstractExportHandler) --------------------
 
     async def _open_destination(self, ctx: SdkTaskContext, path: Path) -> None:
-        """Open the output file. Default opens text-mode write with the configured encoding."""
+        """打开输出文件。默认以配置编码的文本写模式打开。"""
         self._fh = await asyncio.to_thread(self._open_text_file_write, path, self._config.encoding)
         self._headers_written = False
         self._column_order = None
 
     async def _query_rows(self, ctx: SdkTaskContext) -> AsyncIterator[dict[str, Any]]:
-        """**Abstract for tenants.** Yield row dicts one at a time.
+        """**租户必须覆盖的抽象方法。** 逐行 yield 行 dict。
 
-        Default raises :class:`NotImplementedError`. Tenants connect their
-        async DB driver here; the builtin's whole point is the
-        query → file boundary, so the *query* half is tenant-owned.
+        默认抛 :class:`NotImplementedError`。租户在此接异步 DB 驱动;该内置
+        的核心就是 query → 文件的边界,所以 *query* 那一半交给租户。
         """
         raise NotImplementedError(
             "QueryExportHandler subclasses must override _query_rows to plug their async DB driver"
         )
-        # Unreachable but keeps the function an async generator:
+        # 不可达但保持本函数为 async generator:
         yield  # type: ignore[unreachable]
 
     async def _write_row(self, ctx: SdkTaskContext, row: dict[str, Any]) -> None:
-        """Serialize one row to the open sink. Default dispatches on format."""
+        """将一行序列化到已打开的 sink。默认按 format 分派。"""
         if self._fh is None:
             raise RuntimeError("_open_destination must be called before _write_row")
         if self._config.format == "csv":
             await self._write_csv_row(row)
         elif self._config.format == "jsonl":
             await self._write_jsonl_row(row)
-        else:  # pragma: no cover — pydantic Literal already rejects
+        else:  # pragma: no cover — pydantic Literal 已经拦截
             raise ValueError(f"unsupported export format: {self._config.format}")
 
     async def _close_destination(self, ctx: SdkTaskContext) -> None:
-        """Flush and close the output file."""
+        """Flush 并关闭输出文件。"""
         if self._fh is not None:
             fh = self._fh
             self._fh = None
             await asyncio.to_thread(self._flush_and_close, fh)
 
-    # -- internals ----------------------------------------------------------------
+    # -- 内部方法 ----------------------------------------------------------------
 
     def _resolve_output_path(self, ctx: SdkTaskContext) -> Path:
         raw = ctx.parameters.get(self._config.output_path_param)
