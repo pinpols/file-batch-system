@@ -1,0 +1,66 @@
+# SDK shared constants (Lane P drift guard, ADR-035)
+#
+# Cross-language source-of-truth for constants that MUST stay in lockstep across
+# Java SDK (batch-worker-sdk) and Python SDK (sdk-python) and any future BYO SDK.
+#
+# Authority order:
+#   1. Java enum / static final list (the values below are EXTRACTED from Java sources)
+#   2. This YAML (mirror of #1, kept honest by SharedConstantsParityTest)
+#   3. Python / other-language ports (consume this YAML, do NOT re-author values)
+#
+# How to evolve:
+#   - Add value in Java first (enum / list)
+#   - Update this YAML
+#   - SharedConstantsParityTest passes => mirror is correct
+#   - Python (and other) SDKs pick up via Lane Q parity test (follow-up; today a stub)
+#
+# Sources (file paths relative to repo root):
+#   schema_versions_supported  : batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/TaskDispatchMessage.java (SUPPORTED_MAJOR_VERSIONS)
+#   worker_runtime_states      : batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/WorkerRuntimeState.java
+#   sensitive_keywords         : batch-common/src/main/java/com/example/batch/common/security/SensitiveDataValidator.java (SENSITIVE_KEYWORDS)
+#   task_statuses              : batch-common/src/main/java/com/example/batch/common/enums/TaskStatus.java
+#   atomic_error_codes         : NOT YET A FORMAL ENUM in main code (per spec, listed as intent placeholder
+#                                for ADR-029 atomic workers; populate when AtomicErrorCode.java lands).
+#
+# version pinning: bump whenever any list changes, so Lane Q / BYO SDKs can detect.
+version: 1
+
+schema_versions_supported:
+  - v1
+  - v2
+
+worker_runtime_states:
+  - NORMAL
+  - DEGRADED
+  - PAUSED
+  - DRAINING
+
+sensitive_keywords:
+  - password
+  - passwd
+  - secret
+  - apikey
+  - api_key
+  - token
+  - credential
+  - accesskey
+  - access_key
+  - privatekey
+  - private_key
+  - clientsecret
+  - client_secret
+
+task_statuses:
+  - CREATED
+  - READY
+  - RUNNING
+  - SUCCESS
+  - FAILED
+  - CANCELLED
+  - TERMINATED
+
+# Intent placeholder — AtomicErrorCode is not yet a formal Java enum (ADR-029 atomic
+# workers raise BizException with i18n keys directly). When the enum lands, populate
+# this list and add to SharedConstantsParityTest. Until then this key is informational
+# and NOT enforced by the parity test (see test's `optional_keys`).
+atomic_error_codes: []
