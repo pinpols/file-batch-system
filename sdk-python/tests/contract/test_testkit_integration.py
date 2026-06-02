@@ -1,13 +1,11 @@
-"""Testkit-driven contract integration (P5 PoC).
+"""Testkit 驱动的 contract 集成测试(P5 PoC)。
 
-The sister file :mod:`test_contract_runner` exercises fixtures against
-``pytest_httpx`` mocks — fast but synthetic. This file proves the
-same fixtures pass against a **real** in-process platform fake
-(:class:`FakeBatchPlatform`) using :class:`PlatformHttpClient` for
-true end-to-end HTTP. Lane V scope ships 2 fixtures as PoC
-(``01-register-success`` + ``03-heartbeat-directive-normal``); the
-remaining 9 land in P5 follow-up alongside Lane T (real client +
-scheduler).
+兄弟文件 :mod:`test_contract_runner` 用 ``pytest_httpx`` mock 跑 fixture
+—— 快但合成。本文件证明同样的 fixture 也能在 **真实** 的进程内平台
+fake(:class:`FakeBatchPlatform`)上通过 :class:`PlatformHttpClient`
+做真端到端 HTTP。当前 PoC 范围只发 2 个 fixture(``01-register-success``
++ ``03-heartbeat-directive-normal``);剩余 9 个会在 P5 后续随真实
+client + scheduler 一起落地。
 """
 
 from __future__ import annotations
@@ -43,7 +41,7 @@ async def fp():
 
 @pytest.mark.contract
 async def test_register_success_against_fake(fp: FakeBatchPlatform) -> None:
-    """Drives ``01-register-success`` end-to-end through PlatformHttpClient."""
+    """通过 PlatformHttpClient 端到端跑完 ``01-register-success``。"""
     fixture = _load("01-register-success")
     body = fixture["when"]["body"]
     cfg = make_test_config(
@@ -66,10 +64,10 @@ async def test_register_success_against_fake(fp: FakeBatchPlatform) -> None:
 async def test_heartbeat_directive_normal_against_fake(
     fp: FakeBatchPlatform,
 ) -> None:
-    """Drives ``03-heartbeat-directive-normal`` end-to-end."""
+    """端到端跑完 ``03-heartbeat-directive-normal``。"""
     fixture = _load("03-heartbeat-directive-normal")
     body = fixture["when"]["body"]
-    # Fake echoes whatever directive we set — use the documented payload.
+    # Fake 会原样回放我们设置的 directive —— 用文档化的 payload。
     directive = fixture["when"]["responseBody"]
     fp.set_heartbeat_directive(directive)
 
@@ -82,7 +80,7 @@ async def test_heartbeat_directive_normal_against_fake(
     async with PlatformHttpClient(cfg) as client:
         result = await client.heartbeat("w-1", body)
 
-    # Spot-check at least one documented directive field.
+    # 至少抽查一个文档化的 directive 字段。
     for key, value in directive.items():
         assert result.get(key) == value, f"mismatch on {key!r}"
     assert len(fp.get_heartbeats()) == 1

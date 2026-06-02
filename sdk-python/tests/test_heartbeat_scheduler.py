@@ -1,15 +1,15 @@
-"""Tests for ``batch_worker_sdk.scheduler._heartbeat.HeartbeatScheduler`` (Lane T P3).
+"""``batch_worker_sdk.scheduler._heartbeat.HeartbeatScheduler`` 的测试(P3)。
 
-8 cases per Lane T brief T4:
+8 个用例:
 
-1. Normal tick → POST /heartbeat with correct body + forward parsed directive.
-2. ``nextHeartbeatHint`` re-paces ``current_interval_s``.
-3. Hint below floor (< 1s) is clamped up to 1s.
-4. Hint above ceiling (> 10x baseline) is clamped down to 10x baseline.
-5. HTTP exception is swallowed — loop survives.
-6. ``apply_platform_directive`` raises → still survives.
-7. ``stop()`` exits cleanly after ``start()``.
-8. Double-``start()`` is idempotent.
+1. 正常 tick → POST /heartbeat 带正确 body,并把解析后的 directive 转发。
+2. ``nextHeartbeatHint`` 会重新调速 ``current_interval_s``。
+3. 低于下限(< 1s)的 hint 会被夹到 1s。
+4. 高于上限(> 10x baseline)的 hint 会被夹到 10x baseline。
+5. HTTP 异常被吞 —— loop 存活。
+6. ``apply_platform_directive`` 抛错 → 仍然存活。
+7. ``start()`` 之后 ``stop()`` 干净退出。
+8. 二次 ``start()`` 幂等。
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from batch_worker_sdk.scheduler._heartbeat import HeartbeatScheduler
 
 
 class _FakeDispatcher:
-    """Minimal :class:`DispatcherLike` stand-in for unit tests."""
+    """单测用的最小 :class:`DispatcherLike` 替身。"""
 
     def __init__(self, in_flight: int = 0) -> None:
         self._in_flight = in_flight
@@ -51,7 +51,7 @@ class _FakeDispatcher:
 
 
 class _FakeHttp:
-    """Records heartbeat calls; configurable response + failure."""
+    """记录 heartbeat 调用;响应和失败均可配置。"""
 
     def __init__(self, response: dict[str, Any] | None = None) -> None:
         self.response = response or {}
@@ -149,21 +149,21 @@ async def test_apply_directive_exception_does_not_kill_tick(
     http = _FakeHttp({"runtimeState": "PAUSED"})
     sched = HeartbeatScheduler(cfg, http, dispatcher)  # type: ignore[arg-type]
 
-    result = await sched.tick()  # must not raise
+    result = await sched.tick()  # 不能抛
 
     assert result is not None
     assert any("apply_platform_directive failed" in r.message for r in caplog.records)
 
 
 async def test_start_and_stop_run_cleanly() -> None:
-    cfg = _cfg()  # baseline 2s, lease 5s — config-valid
+    cfg = _cfg()  # baseline 2s, lease 5s —— 配置合法
     http = _FakeHttp({"runtimeState": "NORMAL"})
     sched = HeartbeatScheduler(cfg, http, _FakeDispatcher())  # type: ignore[arg-type]
 
     await sched.start()
     assert sched.running
-    # Let the loop sleep settle; we don't wait for an actual tick to
-    # keep the test fast — start() + stop() lifecycle is what's verified.
+    # 让 loop 的 sleep 安顿一下;为了快不等实际 tick,
+    # 只验证 start() + stop() 生命周期。
     await asyncio.sleep(0)
     await sched.stop()
     assert not sched.running
@@ -174,6 +174,6 @@ async def test_double_start_is_idempotent(caplog: pytest.LogCaptureFixture) -> N
     sched = HeartbeatScheduler(cfg, _FakeHttp(), _FakeDispatcher())  # type: ignore[arg-type]
     await sched.start()
     first_task = sched._task
-    await sched.start()  # second call must not crash or replace the task
+    await sched.start()  # 二次调用不能崩,也不能替换 task
     assert sched._task is first_task
     await sched.stop()

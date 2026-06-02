@@ -1,4 +1,4 @@
-"""Unit tests for SdkAbstractDispatchHandler shape."""
+"""SdkAbstractDispatchHandler 形状的单元测试。"""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ async def test_dispatch_all_success() -> None:
 async def test_dispatch_per_item_failure_does_not_abort() -> None:
     h = _RecordingDispatch(targets=["a", "b", "c"], fail_for={"b"})
     r = await h.execute(make_test_context())
-    assert r.success is True  # batch-level success even with item failures
+    assert r.success is True  # 即使有单项失败,批级别仍算成功
     assert h.pushed == ["a", "c"]
     assert r.output["success"] == 2
     assert r.output["failed"] == 1

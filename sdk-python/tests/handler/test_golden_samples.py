@@ -1,19 +1,16 @@
-"""Java ↔ Python behavior golden samples.
+"""Java ↔ Python 行为黄金样本。
 
-Each fixture file under `tests/handler/fixtures/*.json` carries:
+`tests/handler/fixtures/*.json` 下的每个 fixture 文件包含:
 
-* `input.task_type` — routes to a concrete handler;
-* `input.parameters` — fed into SdkTaskContext.parameters;
-* `expected_output` — the wire-shape SdkTaskResult Java produces for the
-  same input.
+* `input.task_type` —— 路由到具体 handler;
+* `input.parameters` —— 喂给 SdkTaskContext.parameters;
+* `expected_output` —— Java 对同一输入产出的 SdkTaskResult 线协议形状。
 
-The Python handler is invoked with the same parameters and the output is
-compared structurally. Output values that depend on environment
-(timings, file paths, etc.) are skipped via subset-matching instead of
-exact equality.
+用相同参数调用 Python 侧 handler,并对输出做结构化比对。依赖运行环境
+的输出值(时长、文件路径等)通过子集匹配而不是严格相等来跳过。
 
-These golden samples are intentionally minimal — they fail fast when a
-Python handler diverges from Java on the canonical happy paths.
+这些黄金样本有意保持最小化 —— 任何 Python handler 偏离 Java 在
+canonical happy path 上的行为时,它们会立刻失败。
 """
 
 from __future__ import annotations
@@ -30,7 +27,7 @@ from tests.handler.conftest import get_attr, make_ctx, try_import
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
-# task_type → (module dotted path, class name)
+# task_type → (模块 dotted path, 类名)
 TASK_TYPE_TO_HANDLER = {
     "atomic.echo": ("batch_worker_sdk.handler.atomic.shell", "ShellAtomicHandler"),
     "atomic.sql": ("batch_worker_sdk.handler.atomic.sql", "SqlAtomicHandler"),
@@ -66,11 +63,10 @@ def _run_handler(handler: Any, ctx: Any) -> SdkTaskResult:
 
 
 def _subset_match(actual: dict[str, Any], expected: dict[str, Any]) -> None:
-    """Assert every key in `expected` is present in `actual` with matching value.
+    """断言 `expected` 的每个 key 都在 `actual` 中,且值匹配。
 
-    Extra keys in `actual` are tolerated — Python handlers may emit
-    richer output than the Java baseline as long as the canonical wire
-    fields match.
+    `actual` 里多出来的 key 允许 —— Python handler 可以输出比 Java
+    baseline 更丰富的字段,只要 canonical 线字段一致即可。
     """
     for key, want in expected.items():
         assert key in actual, f"missing key {key!r} in actual {actual!r}"
@@ -116,7 +112,7 @@ def test_golden_sample_matches_java_baseline(name: str, fixture: dict[str, Any])
 
 
 def test_all_fixtures_have_expected_output_shape() -> None:
-    """Static check: every fixture file declares the 3 required wire fields."""
+    """静态检查:每个 fixture 文件必须声明 3 个必需的线字段。"""
     fixtures = _load_fixtures()
     assert len(fixtures) >= 5, "task spec requires >= 5 golden fixtures"
     for name, fx in fixtures:

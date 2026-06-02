@@ -1,12 +1,12 @@
-"""Tests for ``batch_worker_sdk.scheduler._directive.parse_directive``.
+"""``batch_worker_sdk.scheduler._directive.parse_directive`` 的测试。
 
-5 cases per Lane T brief T4:
+5 个用例:
 
-1. Full directive — all five fields populated round-trip into typed dataclass.
-2. Missing fields — defaults (``NORMAL`` / ``False`` / ``None`` / ``[]`` / ``None``).
-3. ``nextHeartbeatHint`` accepts ISO 8601 ``PT<n>S`` (Java ``Duration``).
-4. Unknown ``runtimeState`` enum value → defaults to ``NORMAL`` (no raise).
-5. ``directive``-nested envelope vs. flat envelope — both parse identically.
+1. 完整 directive —— 5 个字段全填,round-trip 进类型化 dataclass。
+2. 缺字段时取默认值(``NORMAL`` / ``False`` / ``None`` / ``[]`` / ``None``)。
+3. ``nextHeartbeatHint`` 接受 ISO 8601 ``PT<n>S``(对应 Java ``Duration``)。
+4. 未知 ``runtimeState`` 枚举值 → 回落 ``NORMAL``(不抛异常)。
+5. ``directive`` 嵌套封包 vs 扁平封包 —— 二者解析结果一致。
 """
 
 from __future__ import annotations
@@ -69,5 +69,5 @@ def test_nested_directive_envelope_matches_flat() -> None:
 
     assert nested.platform_status is WorkerRuntimeState.PAUSED
     assert flat.platform_status is WorkerRuntimeState.PAUSED
-    # ``raw`` should reflect the inner payload, not the wrapping envelope
+    # ``raw`` 应该是内层 payload,而不是外层封包
     assert nested.raw == {"runtimeState": "PAUSED"}

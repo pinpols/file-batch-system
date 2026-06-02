@@ -1,4 +1,4 @@
-"""Unit tests for SdkAbstractImportHandler shape."""
+"""SdkAbstractImportHandler 形状的单元测试。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from batch_worker_sdk.testkit import make_test_context
 
 
 class _RecordingImport(SdkAbstractImportHandler[int]):
-    """Records hook order; emits ``rows`` ints."""
+    """记录 hook 顺序;发出 ``rows`` 个 int。"""
 
     def __init__(self, rows: list[int], batch_size_: int = 1000) -> None:
         self.rows = rows
@@ -44,11 +44,11 @@ async def test_import_template_order_and_counts() -> None:
     h = _RecordingImport(rows=[1, 2, 3, 4, 5], batch_size_=2)
     r = await h.execute(make_test_context())
     assert r.success is True
-    # 5 rows, batch=2 -> flushes of size 2, 2, 1.
+    # 5 行,batch=2 -> 分别刷 2、2、1。
     assert h.batches == [[1, 2], [3, 4], [5]]
     assert r.output["success"] == 5
     assert r.output["total"] == 5
-    # open precedes first load; close runs in finally.
+    # open 在首次 load 之前;close 在 finally 里跑。
     assert h.calls[0] == "open"
     assert h.calls[-1] == "close"
 
@@ -59,7 +59,7 @@ async def test_import_empty_source_no_load_calls() -> None:
     assert r.success is True
     assert h.batches == []
     assert r.output == {"success": 0, "total": 0}
-    # Source must still be opened and closed.
+    # source 仍然必须 open/close。
     assert "open" in h.calls
     assert "close" in h.calls
 

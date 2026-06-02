@@ -1,13 +1,13 @@
-"""HTTP-layer behaviour tests for :class:`PlatformHttpClient`.
+""":class:`PlatformHttpClient` 的 HTTP 层行为测试。
 
-Uses ``pytest_httpx`` to mock the platform; tests focus on:
+用 ``pytest_httpx`` 模拟平台;关注点:
 
-- request shape (path / headers / body) for each of the 8 endpoints
-- retry/backoff integration on 5xx
-- idempotency-key propagation for claim / report
-- 409 surfaced as normal return (not raised)
-- 401 raises ``AuthError`` without retry
-- ``close()`` lifecycle
+- 8 个 endpoint 的请求形状(path / headers / body)
+- 5xx 上的重试 / 退避
+- claim / report 的 idempotency-key 透传
+- 409 作为正常返回(不抛)
+- 401 不重试地抛 ``AuthError``
+- ``close()`` 生命周期
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ async def test_deactivate_tolerates_empty_response(
         status_code=200,
         content=b"",
     )
-    # deactivate returns None — must not raise on empty body
+    # deactivate 返回 None —— 空 body 不能抛
     await client.deactivate("w-1", {"status": "OFFLINE"})
 
 
@@ -104,7 +104,7 @@ async def test_claim_409_returns_body_not_raises(client: PlatformHttpClient, htt
         json={"code": "ALREADY_CLAIMED", "message": "claimed by w-2"},
     )
     out = await client.claim(12345, "k", {"workerId": "w-1"})
-    # 409 surfaces as normal return per wire-protocol §B
+    # 按 wire-protocol §B,409 作为正常返回
     assert out["code"] == "ALREADY_CLAIMED"
 
 
@@ -120,7 +120,7 @@ async def test_claim_401_raises_auth_error_no_retry(
     with pytest.raises(AuthError) as ei:
         await client.claim(12345, "k", {"workerId": "w-1"})
     assert ei.value.request_id == "t-1"
-    # exactly one request was made — no retry
+    # 只发了一次请求 —— 没有重试
     assert len(httpx_mock.get_requests()) == 1
 
 
@@ -180,7 +180,7 @@ async def test_get_status_uses_get(client: PlatformHttpClient, httpx_mock: HTTPX
 async def test_close_idempotent(httpx_mock: HTTPXMock):
     c = PlatformHttpClient(_cfg())
     await c.close()
-    # second close should not raise (httpx already closed)
+    # 第二次 close 不应抛(httpx 已关闭)
     await c.close()
 
 

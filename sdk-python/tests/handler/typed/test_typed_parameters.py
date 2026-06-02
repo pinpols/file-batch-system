@@ -1,4 +1,4 @@
-"""Tests for ``SdkTypedParameters`` — pydantic deserialization helper."""
+"""``SdkTypedParameters`` —— pydantic 反序列化辅助类的测试。"""
 
 from __future__ import annotations
 

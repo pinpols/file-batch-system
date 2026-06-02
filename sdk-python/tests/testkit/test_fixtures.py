@@ -1,4 +1,4 @@
-"""Unit tests for testkit fixtures helpers."""
+"""testkit fixture helper 的单元测试。"""
 
 from __future__ import annotations
 
