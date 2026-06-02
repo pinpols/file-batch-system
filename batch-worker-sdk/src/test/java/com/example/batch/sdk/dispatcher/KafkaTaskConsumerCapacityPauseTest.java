@@ -108,6 +108,44 @@ class KafkaTaskConsumerCapacityPauseTest {
     assertThat(mockConsumer.paused()).isEmpty();
   }
 
+  /**
+   * Round-3 #1 hysteresis:max=10 时 resume 阈值 = max/2 = 5; in-flight 从 10 跌到 6(>=5)不该 resume, 跌到
+   * 4(<5)才 resume。防 max-1 / max 抖动反复颠簸 Kafka client。
+   */
+  @Test
+  void keepsPausedUntilInFlightDropsBelowHalfMaxHysteresis() {
+    BatchPlatformClientConfig bigConfig =
+        BatchPlatformClientConfig.builder()
+            .baseUrl("http://localhost:0")
+            .tenantId("tx")
+            .workerCode("w-1")
+            .kafkaBootstrap("kafka:9092")
+            .kafkaTopicPattern("batch.task.dispatch.tx.*")
+            .kafkaGroupId("g")
+            .maxConcurrentTasks(10)
+            .build();
+    when(dispatcher.inFlightCount()).thenReturn(10, 6, 5, 4);
+    when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
+    when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
+    MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+    mockConsumer.assign(List.of(tp));
+    KafkaTaskConsumer consumer =
+        new KafkaTaskConsumer(bigConfig, dispatcher, mockConsumer, new ObjectMapper());
+
+    // tick 1: inFlight=10 -> pause
+    consumer.applyBackpressure();
+    assertThat(mockConsumer.paused()).containsExactly(tp);
+    // tick 2: inFlight=6, still >= max/2=5 -> 保持 paused
+    consumer.applyBackpressure();
+    assertThat(mockConsumer.paused()).containsExactly(tp);
+    // tick 3: inFlight=5, 不 < 5 -> 仍保持 paused
+    consumer.applyBackpressure();
+    assertThat(mockConsumer.paused()).containsExactly(tp);
+    // tick 4: inFlight=4 < 5 -> resume
+    consumer.applyBackpressure();
+    assertThat(mockConsumer.paused()).isEmpty();
+  }
+
   @Test
   void capacityPauseSkippedWhenNoPartitionsAssigned() {
     when(dispatcher.inFlightCount()).thenReturn(10);
