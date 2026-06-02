@@ -1,5 +1,5 @@
-"""Tests for ``BatchPlatformClientConfig`` — required fields, env factory,
-and the four cross-field timing rules ported from Java Lane I."""
+"""``BatchPlatformClientConfig`` 的测试 —— 必填字段、env 工厂,以及
+从 Java 那边对齐过来的 4 条跨字段时序规则。"""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def test_lease_below_5s_rejected():
 
 
 def test_lease_exceeding_3x_heartbeat_rejected():
-    # hb=10s, lease=31s -> lease > 3*hb=30s
+    # hb=10s,lease=31s -> lease > 3*hb=30s
     with pytest.raises(ValueError, match=r"heartbeat_interval \* 3"):
         BatchPlatformClientConfig(
             **_MIN_KWARGS,
@@ -68,7 +68,7 @@ def test_lease_exceeding_3x_heartbeat_rejected():
 
 
 def test_http_timeout_exceeding_half_heartbeat_rejected():
-    # hb=10s → http must be <= 5s
+    # hb=10s → http 必须 <= 5s
     with pytest.raises(ValueError, match="heartbeat_interval / 2"):
         BatchPlatformClientConfig(
             **_MIN_KWARGS,

@@ -1,4 +1,4 @@
-"""Tests for ``SdkAbstractTypedImportHandler``."""
+"""``SdkAbstractTypedImportHandler`` 的测试。"""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ async def test_typed_import_template_flow() -> None:
     h = _MyImport()
     r = await h.execute(make_ctx({"source": "/tmp/x.csv"}))
     assert h.opened is True
-    # 5 rows, batch_size 2 -> 2+2+1
+    # 5 行,batch_size 2 -> 2+2+1
     assert [len(b) for b in h.batches] == [2, 2, 1]
     assert r.success is True
     assert r.output == {"imported": 5}

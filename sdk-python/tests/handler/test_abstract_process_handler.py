@@ -1,4 +1,4 @@
-"""Unit tests for SdkAbstractProcessHandler shape."""
+"""SdkAbstractProcessHandler 形状的单元测试。"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class _RecordingProcess(SdkAbstractProcessHandler[int, str]):
 
     async def _transform(self, ctx: SdkTaskContext, input_row: int) -> str | None:
         if input_row % 2 == 0:
-            return None  # skip even
+            return None  # 偶数跳过
         return f"odd:{input_row}"
 
     async def _write_output(self, ctx: SdkTaskContext, output_row: str) -> None:

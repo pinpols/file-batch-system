@@ -1,4 +1,4 @@
-"""Tests for :class:`ProgressReporter` (Lane U / P4)."""
+""":class:`ProgressReporter` 的测试(P4)。"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def test_latest_returns_independent_copy() -> None:
     pr.report({"processed": 100})
     snap1 = pr.latest()
     assert snap1 is not None
-    snap1["processed"] = 999  # mutate the returned copy
+    snap1["processed"] = 999  # 修改返回的副本
     snap2 = pr.latest()
     assert snap2 == {"processed": 100}, "stored snapshot must not be affected"
 
@@ -39,7 +39,7 @@ def test_report_copies_input_dict() -> None:
     pr = ProgressReporter()
     src = {"processed": 100}
     pr.report(src)
-    src["processed"] = 999  # mutate source after report
+    src["processed"] = 999  # report 之后改源对象
     assert pr.latest() == {"processed": 100}
 
 
@@ -71,7 +71,7 @@ def test_report_rejects_sensitive_keys(bad_key: str) -> None:
     pr = ProgressReporter()
     with pytest.raises(ValueError, match="sensitive"):
         pr.report({bad_key: "hunter2", "processed": 100})
-    # State unchanged after rejected call.
+    # 拒绝后状态保持不变。
     assert pr.latest() is None
 
 
@@ -91,14 +91,14 @@ async def test_concurrent_report_is_thread_safe() -> None:
     await asyncio.gather(*(writer(k) for k in range(8)))
     final = pr.latest()
     assert final is not None
-    # No assertion on exact final value — just that we didn't crash and
-    # the slot holds *some* valid snapshot.
+    # 不对终值做精确断言 —— 只要没崩、槽里有 *某个* 合法 snapshot
+    # 就行。
     assert "processed" in final
 
 
 def test_sensitive_keywords_normalization_helpers() -> None:
-    """Direct coverage for the helper module used by ProgressReporter."""
-    assert SENSITIVE_KEYWORDS  # non-empty
+    """直接覆盖 ProgressReporter 用到的 helper 模块。"""
+    assert SENSITIVE_KEYWORDS  # 非空
     assert is_sensitive_key("password") is True
     assert is_sensitive_key("PASSWORD") is True
     assert is_sensitive_key("processed") is False

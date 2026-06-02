@@ -1,4 +1,4 @@
-"""Tests for ``SdkAbstractTypedDispatchHandler``."""
+"""``SdkAbstractTypedDispatchHandler`` 的测试。"""
 
 from __future__ import annotations
 
@@ -51,12 +51,12 @@ async def test_typed_dispatch_all_success() -> None:
 async def test_typed_dispatch_partial_failure_continues_batch() -> None:
     h = _MyDispatch(fail_indices={1, 3})
     r = await h.execute(make_ctx({"endpoint": "http://x"}))
-    # Per-item failures don't abort — counter records 2 success + 2 failed.
+    # 单项失败不中止批 —— 计数器记 2 success + 2 failed。
     assert r.success is True
     assert r.output["success"] == 2
     assert r.output["failed"] == 2
     assert r.output["total"] == 4
-    assert len(h.responses_seen) == 2  # only successes hit on_response
+    assert len(h.responses_seen) == 2  # 只有成功项进 on_response
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
-"""Unit tests for :mod:`batch_worker_sdk.handler.atomic._sql`.
+""":mod:`batch_worker_sdk.handler.atomic._sql` 的单元测试。
 
-Uses a hand-rolled fake :class:`SqlConnection` instead of asyncpg so
-the tests run without a Postgres dependency / wheel install.
+用手写的假 :class:`SqlConnection` 代替 asyncpg,让测试不依赖
+Postgres / wheel 安装。
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class FakeTransaction:
 
 
 class FakeConn:
-    """asyncpg-compatible fake; programmed via attributes."""
+    """asyncpg 兼容的 fake,通过属性来"编程"行为。"""
 
     def __init__(
         self,
@@ -58,7 +58,7 @@ class FakeConn:
         return self.execute_tag
 
     async def fetchval(self, query: str, *args: Any) -> Any:
-        # Used by OS-capable role probe.
+        # OS-capable 角色探测会用到。
         return self.os_capable
 
     def transaction(self) -> FakeTransaction:
@@ -132,7 +132,7 @@ async def test_sql_rejects_too_many_statements() -> None:
 
 async def test_sql_forbids_os_capable_role() -> None:
     conn = FakeConn(os_capable=True)
-    config = SqlAtomicConfig(task_type="sql")  # forbid_os_capable_role=True
+    config = SqlAtomicConfig(task_type="sql")  # forbid_os_capable_role 默认 True
     handler = SqlAtomicHandler(config, _factory(conn))
     ctx = make_test_context(parameters={"sql": "SELECT 1"})
 
@@ -152,9 +152,8 @@ async def test_sql_propagates_exception_through_handler_execute() -> None:
 
 
 async def test_split_statements_honours_quotes_and_comments() -> None:
-    # ``;`` inside single-quoted literal must not split; ``;`` inside
-    # a ``-- line comment`` must not split (the comment stays attached
-    # to the following statement, same as the Java implementation).
+    # 单引号字面量内的 ``;`` 不能切;``-- 行注释`` 里的 ``;`` 也不能切
+    # (注释保留在后一条语句前面,与 Java 实现一致)。
     sql = "SELECT ';' AS x;\nUPDATE t SET v=1;"
     stmts = split_statements(sql)
     assert len(stmts) == 2

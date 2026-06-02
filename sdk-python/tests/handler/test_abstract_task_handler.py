@@ -1,4 +1,4 @@
-"""Unit tests for SdkAbstractTaskHandler template-method behavior."""
+"""SdkAbstractTaskHandler 模板方法行为的单元测试。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from batch_worker_sdk.testkit import make_test_context
 
 
 class _MinimalHandler(SdkAbstractTaskHandler):
-    """Records hook calls; succeeds in _do_execute."""
+    """记录 hook 调用顺序;_do_execute 直接返回成功。"""
 
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -99,7 +99,7 @@ async def test_null_result_converted_to_fail() -> None:
 
 
 async def test_cleanup_skipped_when_before_not_reached() -> None:
-    """If _validate raises (before _before runs), _cleanup must not be called."""
+    """_validate 抛出(在 _before 之前)时,_cleanup 不应被调用。"""
     h = _ValidateFailHandler()
     result = await h.execute(make_test_context())
     assert result.success is False
@@ -116,7 +116,7 @@ async def test_cancel_signal_short_circuits_before_do_execute() -> None:
 
 
 def test_base_satisfies_protocol() -> None:
-    """Structural Protocol check — base instances pass isinstance()."""
+    """结构化 Protocol 校验 —— 基类实例能通过 isinstance()。"""
     assert isinstance(_MinimalHandler(), SdkTaskHandler)
 
 

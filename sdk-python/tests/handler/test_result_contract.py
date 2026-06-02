@@ -1,12 +1,11 @@
-"""SdkTaskResult JSON-wire serialization contract.
+"""SdkTaskResult JSON 线协议序列化契约。
 
-`SdkTaskResult` is a `pydantic` BaseModel. Its JSON shape must round-trip
-through `model_dump_json` / `json.loads` and (when the structure is
-ASCII-clean) through `json.dumps(model_dump())`. This guards the Java
-↔ Python REPORT wire compatibility.
+`SdkTaskResult` 是一个 `pydantic` BaseModel。其 JSON 形状必须能
+通过 `model_dump_json` / `json.loads` round-trip,并且(在 ASCII
+干净的情况下)能通过 `json.dumps(model_dump())` 走通。这守护
+Java ↔ Python REPORT 线兼容。
 
-Three states are covered: success, failure, and exception-driven
-failure.
+覆盖三种状态:成功、失败、异常驱动的失败。
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 
 def _round_trip(result: SdkTaskResult) -> dict[str, Any]:
-    """model_dump_json → loads → assert all three keys present."""
+    """model_dump_json → loads → 断言三个 key 都在。"""
     raw = result.model_dump_json()
     parsed: dict[str, Any] = json.loads(raw)
     assert parsed.keys() >= {"success", "output", "message"}
@@ -51,8 +50,8 @@ def test_failure_result_with_exception_carries_class_name() -> None:
 
 
 def test_plain_dict_dump_is_json_serializable() -> None:
-    """The model_dump() path (used by callers that pre-wrap an envelope)
-    must produce a dict that json.dumps accepts."""
+    """model_dump() 路径(调用方预包外层信封时用)必须产出一个
+    json.dumps 接受的 dict。"""
     result = SdkTaskResult.success_with(output={"count": 0}, message="done")
     blob = json.dumps(result.model_dump())
     assert json.loads(blob) == {
@@ -63,7 +62,7 @@ def test_plain_dict_dump_is_json_serializable() -> None:
 
 
 def test_empty_output_defaults_to_empty_dict() -> None:
-    """Java SdkTaskResult.ok with no output → empty Map; Python mirror."""
+    """Java SdkTaskResult.ok 不带 output 时 → 空 Map;Python 镜像。"""
     result = SdkTaskResult.success_with()
     parsed = _round_trip(result)
     assert parsed["output"] == {}
@@ -71,14 +70,14 @@ def test_empty_output_defaults_to_empty_dict() -> None:
 
 
 def test_three_state_coverage_matrix() -> None:
-    """Sanity matrix: success, failure-by-fail, failure-by-exception all
-    produce wire-distinguishable JSON."""
+    """sanity 矩阵:成功、fail 失败、异常驱动失败三种状态产出可线区分
+    的 JSON。"""
     s = SdkTaskResult.success_with(output={"a": 1})
     f = SdkTaskResult.fail("CODE_X", "msg")
     e = SdkTaskResult.fail("CODE_Y", "boom", cause=RuntimeError("rt"))
     blobs = [r.model_dump_json() for r in (s, f, e)]
     assert len(set(blobs)) == 3
-    # All decode back to a dict shape.
+    # 都能解码回 dict 形状。
     for blob in blobs:
         decoded = json.loads(blob)
         assert isinstance(decoded, dict)
