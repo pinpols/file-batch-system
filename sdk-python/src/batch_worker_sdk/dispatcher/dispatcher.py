@@ -74,6 +74,7 @@ class TaskDispatcher:
         self._http = http
         self._handlers: dict[str, SdkTaskHandler] = dict(handlers or {})
         self._in_flight: dict[int, asyncio.Task[None]] = {}
+        self._cancel_requested: dict[int, str] = {}
         self._draining: bool = False
         self._fatal: bool = False
         self._runtime_state: WorkerRuntimeState = WorkerRuntimeState.NORMAL
@@ -128,6 +129,25 @@ class TaskDispatcher:
             self._runtime_state = WorkerRuntimeState(raw)
         except ValueError:
             logger.warning("ignoring unknown runtimeState=%r in platform directive", raw)
+
+    # ─── 取消信号 ────────────────────────────────────────────────────
+
+    def mark_cancel_requested(self, task_id: int, reason: str) -> None:
+        """记录一次取消请求(由 LeaseRenewalScheduler 在收到 platform cancel-requested
+        信号时调用)。
+
+        当前实现把 ``(task_id, reason)`` 暂存到 ``_cancel_requested`` map;handler
+        可通过 ``ctx.is_cancelled()`` / ``CancellationSignal`` 自行轮询。后续可
+        升级为协作式 ``asyncio.CancelledError`` 注入。
+        """
+        if task_id in self._cancel_requested:
+            return
+        self._cancel_requested[task_id] = reason
+        logger.info("task %s marked cancel-requested: reason=%s", task_id, reason)
+
+    def is_cancel_requested(self, task_id: int) -> bool:
+        """Handler 内轮询用:平台有没有要求取消这条 task。"""
+        return task_id in self._cancel_requested
 
     # ─── 消息入口 ────────────────────────────────────────────────────
 
