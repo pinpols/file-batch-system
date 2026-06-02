@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "batch-worker-sdk"
+name = "batch-worker-sdk-python"
 dynamic = ["version"]
 description = "Python SDK for the file-batch-system worker protocol (async-only)."
 readme = "README.md"

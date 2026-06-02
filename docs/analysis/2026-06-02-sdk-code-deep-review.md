@@ -4,7 +4,7 @@
 **方法**:3 个并行 Explore agent 钻 Java SDK 家族 / Python SDK / 跨 SDK 一致性,合成 + 交叉验证
 **范围**:
 - Java:`batch-worker-sdk/`(core)+ `batch-worker-sdk-spring-boot-starter/` + `batch-worker-sdk-testkit/`
-- Python:`sdk-python/`(Phase 0-5 + 包结构 refactor 后,8 子包)
+- Python:`batch-worker-sdk-python/`(Phase 0-5 + 包结构 refactor 后,8 子包)
 - 跨 SDK:`docs/api/sdk-contract-fixtures/` + `docs/api/sdk-shared-constants.yaml` + `.github/workflows/sdk-contract-parity.yml`
 
 ---
@@ -38,9 +38,9 @@
 
 | Bug | 位置 | 现象 | 修复 |
 |---|---|---|---|
-| **🔴 `SdkTaskTypeDescriptor.input_schema` alias 错** | `sdk-python/src/batch_worker_sdk/task/descriptor.py:32` `Field(alias="schema")` | wire JSON 实际是 `inputSchema`(camelCase),Python 收 / 发都对不上 | alias 改 `"inputSchema"` |
-| **🔴 `schemaVersion` 只支持 v2** | `sdk-python/src/batch_worker_sdk/dispatcher/dispatcher.py:50-53` `_SUPPORTED_SCHEMA_PREFIXES = ("v2",)` | 老平台 v1 消息被静默 drop;Java 端是 `Set.of("v1", "v2")` | 改 `("v1", "v2")` |
-| **🔴 `mark_cancel_requested` 根本不存在** | `sdk-python/src/batch_worker_sdk/scheduler/_lease.py:118` 调它;`dispatcher/dispatcher.py` 无此方法 | `getattr` fallback 写 WARN log,**取消信号永远不翻**,handler 跑到 lease timeout | `TaskDispatcher` 加 `mark_cancel_requested(taskId, reason)` 方法,内部翻 `cancel_signal._event.set()` |
+| **🔴 `SdkTaskTypeDescriptor.input_schema` alias 错** | `batch-worker-sdk-python/src/batch_worker_sdk/task/descriptor.py:32` `Field(alias="schema")` | wire JSON 实际是 `inputSchema`(camelCase),Python 收 / 发都对不上 | alias 改 `"inputSchema"` |
+| **🔴 `schemaVersion` 只支持 v2** | `batch-worker-sdk-python/src/batch_worker_sdk/dispatcher/dispatcher.py:50-53` `_SUPPORTED_SCHEMA_PREFIXES = ("v2",)` | 老平台 v1 消息被静默 drop;Java 端是 `Set.of("v1", "v2")` | 改 `("v1", "v2")` |
+| **🔴 `mark_cancel_requested` 根本不存在** | `batch-worker-sdk-python/src/batch_worker_sdk/scheduler/_lease.py:118` 调它;`dispatcher/dispatcher.py` 无此方法 | `getattr` fallback 写 WARN log,**取消信号永远不翻**,handler 跑到 lease timeout | `TaskDispatcher` 加 `mark_cancel_requested(taskId, reason)` 方法,内部翻 `cancel_signal._event.set()` |
 
 **这三个一日不修,Python SDK 一日不能上生产**。
 
@@ -60,9 +60,9 @@
 
 | 缺陷 | 位置 | 影响 |
 |---|---|---|
-| **🟠 `in_flight` dict 多线程不安全** | `sdk-python/src/batch_worker_sdk/dispatcher/dispatcher.py:79,193,196` 普通 dict | 单 event loop 时 GIL 保护勉强 OK;**未来 executor offload 立崩** |
-| **🟠 `@batch_task` global registry 无测试隔离** | `sdk-python/src/batch_worker_sdk/handler/_decorator.py:36` module-level `_REGISTERED_HANDLERS` | 同模块两次 import 触发 "duplicate task_type" 异常;参数化测试踩 |
-| **🔴 parity test 全 xfail** | `sdk-python/tests/test_shared_constants_parity.py:65-72` | Java parity 有牙齿,Python 端纸老虎 — drift guard **整个不对称**,Lane P 在 Python 侧失效 |
+| **🟠 `in_flight` dict 多线程不安全** | `batch-worker-sdk-python/src/batch_worker_sdk/dispatcher/dispatcher.py:79,193,196` 普通 dict | 单 event loop 时 GIL 保护勉强 OK;**未来 executor offload 立崩** |
+| **🟠 `@batch_task` global registry 无测试隔离** | `batch-worker-sdk-python/src/batch_worker_sdk/handler/_decorator.py:36` module-level `_REGISTERED_HANDLERS` | 同模块两次 import 触发 "duplicate task_type" 异常;参数化测试踩 |
+| **🔴 parity test 全 xfail** | `batch-worker-sdk-python/tests/test_shared_constants_parity.py:65-72` | Java parity 有牙齿,Python 端纸老虎 — drift guard **整个不对称**,Lane P 在 Python 侧失效 |
 
 ---
 
@@ -150,12 +150,12 @@
 
 并行三 Explore agent:
 1. **Java SDK 家族审查** — 钻 `batch-worker-sdk/` + starter + testkit 全 60+ Java 类
-2. **Python SDK 审查** — 钻 `sdk-python/` 8 子包 + 50+ 测试文件
+2. **Python SDK 审查** — 钻 `batch-worker-sdk-python/` 8 子包 + 50+ 测试文件
 3. **跨 SDK 一致性** — 比对公共 API surface / 协议字段 / 关键行为 / drift guard 有效性
 
 每 agent 提交 2500-3500 字详细 file:line 引用报告;主进程合成 + 去重 + 跨报告交叉验证,得出 TOP 10 + 治理项。
 
 **调研所触文件主要范围**:
 - Java:`batch-worker-sdk/src/{main,test}/java/com/example/batch/sdk/{client,dispatcher,scheduler,internal,wire,...}/`
-- Python:`sdk-python/src/batch_worker_sdk/{client,dispatcher,handler,internal,retry,scheduler,task,testkit}/` + `sdk-python/tests/`
+- Python:`batch-worker-sdk-python/src/batch_worker_sdk/{client,dispatcher,handler,internal,retry,scheduler,task,testkit}/` + `batch-worker-sdk-python/tests/`
 - 跨域:`docs/api/sdk-contract-fixtures/*.json` + `docs/api/sdk-shared-constants.yaml` + `docs/sdk/wire-protocol.md` + `.github/workflows/sdk-contract-parity.yml`
