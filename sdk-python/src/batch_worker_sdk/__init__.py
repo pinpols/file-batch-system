@@ -39,7 +39,13 @@ from batch_worker_sdk.exceptions import (
     PlatformError,
     TransientError,
 )
+from batch_worker_sdk.handler._atomic import SdkAbstractAtomicHandler
+from batch_worker_sdk.handler._base import SdkAbstractTaskHandler, SdkRowResult
 from batch_worker_sdk.handler._decorator import batch_task, collect_registered_handlers
+from batch_worker_sdk.handler._dispatch import SdkAbstractDispatchHandler
+from batch_worker_sdk.handler._export import SdkAbstractExportHandler
+from batch_worker_sdk.handler._import import SdkAbstractImportHandler
+from batch_worker_sdk.handler._process import SdkAbstractProcessHandler
 from batch_worker_sdk.handler.handler import SdkTaskHandler
 from batch_worker_sdk.task.cancellation import CancellationSignal
 from batch_worker_sdk.task.context import SdkTaskContext
@@ -57,6 +63,13 @@ __all__: list[str] = [
     "PersistentClientError",
     "PlatformError",
     "ProgressReporter",
+    "SdkAbstractAtomicHandler",
+    "SdkAbstractDispatchHandler",
+    "SdkAbstractExportHandler",
+    "SdkAbstractImportHandler",
+    "SdkAbstractProcessHandler",
+    "SdkAbstractTaskHandler",
+    "SdkRowResult",
     "SdkTaskContext",
     "SdkTaskHandler",
     "SdkTaskResult",
