@@ -9,6 +9,7 @@ import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskTypeDescriptor;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -161,22 +162,38 @@ public class BatchPlatformClient {
    * </ol>
    */
   public synchronized void stop() {
+    stop(Duration.ofSeconds(30));
+  }
+
+  /**
+   * P0 hardening — 带预算的优雅停。K8s {@code terminationGracePeriodSeconds} 到期前必须返回,否则 SIGKILL 让 in-flight
+   * 任务状态错乱。预算分摊:Kafka thread join 用总预算的 ~20%,dispatcher drain 用剩余的 ~75%(主要消耗),scheduler 关闭和
+   * deactivate 共享其余(scheduler 自带 5s cap)。各阶段用 {@link System#nanoTime()} 算剩余时间,超时立刻 forceful 关下一阶段;
+   * dispatcher 超时未结束会打 WARN 列出未完成 task id(见 {@link TaskDispatcher#stop(Duration)})。
+   */
+  public synchronized void stop(Duration timeout) {
     if (!started) {
       return;
     }
-    log.info("BatchPlatformClient stopping");
+    long totalMs = Math.max(0L, timeout == null ? 0L : timeout.toMillis());
+    long startNanos = System.nanoTime();
+    log.info("BatchPlatformClient stopping (timeoutMs={})", totalMs);
+    long kafkaJoinMs = Math.max(50L, totalMs / 5); // 20%
     if (kafkaConsumer != null) {
       kafkaConsumer.close();
     }
     if (kafkaConsumerThread != null) {
       try {
-        kafkaConsumerThread.join(10_000);
+        kafkaConsumerThread.join(kafkaJoinMs);
       } catch (InterruptedException ie) {
         Thread.currentThread().interrupt();
       }
     }
     if (dispatcher != null) {
-      dispatcher.stop();
+      long remainingMs = remainingMs(startNanos, totalMs);
+      // 剩余的 75% 给 dispatcher drain(留 25% 给 scheduler + deactivate)
+      long dispatcherMs = Math.max(0L, remainingMs * 3 / 4);
+      dispatcher.stop(Duration.ofMillis(dispatcherMs));
     }
     if (heartbeatScheduler != null) {
       heartbeatScheduler.close();
@@ -195,6 +212,11 @@ public class BatchPlatformClient {
       log.warn("deactivate call failed (ignored): {}", ex.getMessage());
     }
     started = false;
+  }
+
+  private static long remainingMs(long startNanos, long totalMs) {
+    long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+    return Math.max(0L, totalMs - elapsedMs);
   }
 
   private static void putIfPresent(Map<String, Object> body, String key, String value) {
