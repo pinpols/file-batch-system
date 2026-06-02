@@ -29,11 +29,23 @@ from aiokafka import (  # type: ignore[import-untyped]
 )
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.exceptions import PlatformError
 
 if TYPE_CHECKING:
     from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher
 
 logger = logging.getLogger(__name__)
+
+# consumer.start() 的最大等待时间(秒)。aiokafka 在 SASL 凭据错误 / broker
+# 不可达时会无限 retry,没有内置 timeout —— pod 会 hang 直到被 K8s
+# livenessProbe 杀(默认 30s+ 才生效,业务感知前是 2 分钟空窗)。这里
+# 10s 的选择:足够正常网络 + SASL handshake(实测 <2s),但远短于 K8s
+# 探针窗口,使 fail-fast 在探针感知前发生,让 BatchPlatformClient.start()
+# 把 PlatformError 透出给调用方 / 容器启动脚本,触发显式的"凭据错"信
+# 号而不是 OOM 风格的探针重启循环。
+# TODO(ADR-035): 后续可暴露为 BatchPlatformClientConfig 字段,允许租户
+# 按部署环境调优;当前 hardcode 保守值,优先填上 fail-fast 缺口。
+KAFKA_START_TIMEOUT_S: float = 10.0
 
 
 def _notblank(s: str | None) -> bool:
@@ -103,7 +115,24 @@ class KafkaTaskConsumer:
             return
         if self._consumer is None:
             self._consumer = self._build_consumer()
-        await self._consumer.start()
+        try:
+            await asyncio.wait_for(
+                self._consumer.start(),
+                timeout=KAFKA_START_TIMEOUT_S,
+            )
+        except TimeoutError as e:
+            # aiokafka 在 SASL 凭据错 / broker 不可达时会无限 retry —— 这里
+            # 转 PlatformError 让上层 BatchPlatformClient.start() fail-fast,
+            # 比让 K8s livenessProbe 兜底快得多。
+            raise PlatformError(
+                (
+                    f"Kafka consumer.start() exceeded {KAFKA_START_TIMEOUT_S}s "
+                    "timeout — likely SASL credential failure or broker "
+                    "unreachable. Check BATCH_SDK_KAFKA_* env vars and broker "
+                    "connectivity."
+                ),
+                code="kafka_start_timeout",
+            ) from e
         self._subscribe()
         self._running = True
         self._poll_task = asyncio.create_task(self._poll_loop(), name="kafka-poll-loop")
