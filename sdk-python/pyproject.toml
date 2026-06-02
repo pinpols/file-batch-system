@@ -24,7 +24,8 @@ classifiers = [
     "Framework :: AsyncIO",
     "Typing :: Typed",
 ]
-# Phase 1 runtime deps: HTTP client + config validation.
+# Runtime deps. P0.5 adds pydantic for the public API surface (immutable
+# value models). P1 adds httpx for the HTTP client + config validation.
 # P2 adds aiokafka. P3+ may add opentelemetry-api.
 dependencies = [
     "httpx>=0.27",
