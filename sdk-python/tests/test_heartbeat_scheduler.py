@@ -1,4 +1,4 @@
-"""Tests for ``batch_worker_sdk._scheduler.HeartbeatScheduler`` (Lane T P3).
+"""Tests for ``batch_worker_sdk.scheduler._heartbeat.HeartbeatScheduler`` (Lane T P3).
 
 8 cases per Lane T brief T4:
 
@@ -20,10 +20,10 @@ from typing import Any
 
 import pytest
 
-from batch_worker_sdk._directive import ParsedDirective
-from batch_worker_sdk._scheduler import HeartbeatScheduler
-from batch_worker_sdk.config import BatchPlatformClientConfig
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import TransientError
+from batch_worker_sdk.scheduler._directive import ParsedDirective
+from batch_worker_sdk.scheduler._heartbeat import HeartbeatScheduler
 
 
 class _FakeDispatcher:

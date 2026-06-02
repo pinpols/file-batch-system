@@ -30,10 +30,10 @@ from aiokafka import (  # type: ignore[import-untyped]
     TopicPartition,
 )
 
-from batch_worker_sdk.config import BatchPlatformClientConfig
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
 
 if TYPE_CHECKING:
-    from batch_worker_sdk.dispatcher import TaskDispatcher
+    from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher
 
 logger = logging.getLogger(__name__)
 

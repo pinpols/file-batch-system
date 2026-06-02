@@ -45,10 +45,10 @@ from batch_worker_sdk import (
     AuthError,
     BatchPlatformClientConfig,
 )
-from batch_worker_sdk._http import PlatformHttpClient
-from batch_worker_sdk._kafka import KafkaTaskConsumer
-from batch_worker_sdk.dispatcher import TaskDispatcher
+from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher
 from batch_worker_sdk.exceptions import TransientError
+from batch_worker_sdk.internal._http import PlatformHttpClient
+from batch_worker_sdk.internal._kafka import KafkaTaskConsumer
 
 # <repo>/sdk-python/tests/contract/test_contract_runner.py -> <repo>
 _REPO_ROOT = Path(__file__).resolve().parents[3]

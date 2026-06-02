@@ -1,41 +1,37 @@
 """batch-worker-sdk: Python SDK for the file-batch-system worker protocol.
 
-Phase 1 status: HTTP client + retry/backoff + config validation (Lane Q).
-P0.5 (Lane R) added the public **API surface** mirroring the Java SDK's
-contracts. P3 (Lane T, this PR) added :class:`BatchPlatformClient`,
-the heartbeat / lease schedulers, and heartbeat-directive parsing.
-Kafka consumer (P2, Lane S), FSM + cancel (P4, Lane U), and testkit
-(P5, Lane V) land in subsequent lanes. See ``README.md`` Roadmap.
+Package layout strictly mirrors the Java SDK (``com.example.batch.sdk.*``):
 
-Public surface:
+==========================================================  ===================================
+Java                                                        Python
+==========================================================  ===================================
+``com.example.batch.sdk.client``                            :mod:`batch_worker_sdk.client`
+``com.example.batch.sdk.dispatcher``                        :mod:`batch_worker_sdk.dispatcher`
+``com.example.batch.sdk.handler``                           :mod:`batch_worker_sdk.handler`
+``com.example.batch.sdk.internal``                          :mod:`batch_worker_sdk.internal`
+``com.example.batch.sdk.retry``                             :mod:`batch_worker_sdk.retry`
+``com.example.batch.sdk.scheduler``                         :mod:`batch_worker_sdk.scheduler`
+``com.example.batch.sdk.task``                              :mod:`batch_worker_sdk.task`
+==========================================================  ===================================
 
-- :class:`BatchPlatformClientConfig` — async equivalent of Java
-  ``BatchPlatformClientConfig``. Construct directly or via
-  ``BatchPlatformClientConfig.from_env()``.
-- Exception hierarchy (:class:`PlatformError` and four typed subclasses)
-  matching wire-protocol §B classification.
-- API surface stubs mirroring Java SDK contracts: :class:`SdkTaskHandler`,
-  :class:`SdkTaskContext`, :class:`SdkTaskResult`, :class:`WorkerRuntimeState`,
-  :class:`ProgressReporter`, :class:`CancellationSignal`,
-  :class:`SdkTaskTypeDescriptor`. Implementations land in P1-P5.
+Public surface (only canonical paths — no compat shims):
 
-Intentionally **not** exported:
+- :class:`BatchPlatformClient`, :class:`BatchPlatformClientConfig`
+- :class:`SdkTaskHandler`, ``@batch_task``, :func:`collect_registered_handlers`
+- :class:`SdkTaskContext`, :class:`SdkTaskResult`, :class:`SdkTaskTypeDescriptor`
+- :class:`WorkerRuntimeState`, :class:`ProgressReporter`, :class:`CancellationSignal`
+- Exception hierarchy (:class:`PlatformError` + four typed subclasses)
 
-- ``_http`` / ``_retry``: leading underscore = package-internal. Once
-  the higher-level ``BatchPlatformClient`` lands (P3) callers should
-  not need to touch raw HTTP plumbing.
+Intentionally **not** exported: the :mod:`internal`, :mod:`retry`, and
+:mod:`scheduler` modules — package-internal plumbing.
 """
 
 from __future__ import annotations
 
 from batch_worker_sdk._version import __version__
-from batch_worker_sdk.cancellation import CancellationSignal
-from batch_worker_sdk.client import BatchPlatformClient
-from batch_worker_sdk.config import BatchPlatformClientConfig
-from batch_worker_sdk.context import SdkTaskContext
-from batch_worker_sdk.decorator import batch_task, collect_registered_handlers
-from batch_worker_sdk.descriptor import SdkTaskTypeDescriptor
-from batch_worker_sdk.dispatcher import TaskDispatcher
+from batch_worker_sdk.client.client import BatchPlatformClient
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher
 from batch_worker_sdk.exceptions import (
     AuthError,
     ConflictError,
@@ -43,10 +39,14 @@ from batch_worker_sdk.exceptions import (
     PlatformError,
     TransientError,
 )
-from batch_worker_sdk.handler import SdkTaskHandler
-from batch_worker_sdk.progress import ProgressReporter
-from batch_worker_sdk.result import SdkTaskResult
-from batch_worker_sdk.state import WorkerRuntimeState
+from batch_worker_sdk.handler._decorator import batch_task, collect_registered_handlers
+from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.task.cancellation import CancellationSignal
+from batch_worker_sdk.task.context import SdkTaskContext
+from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
+from batch_worker_sdk.task.progress import ProgressReporter
+from batch_worker_sdk.task.result import SdkTaskResult
+from batch_worker_sdk.task.state import WorkerRuntimeState
 
 __all__: list[str] = [
     "AuthError",

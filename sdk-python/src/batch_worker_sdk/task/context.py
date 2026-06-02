@@ -19,8 +19,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from batch_worker_sdk.cancellation import CancellationSignal
-from batch_worker_sdk.progress import ProgressReporter
+from batch_worker_sdk.task.cancellation import CancellationSignal
+from batch_worker_sdk.task.progress import ProgressReporter
 
 
 class SdkTaskContext(BaseModel):

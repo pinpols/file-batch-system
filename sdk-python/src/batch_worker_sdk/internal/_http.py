@@ -32,8 +32,8 @@ from typing import Any
 
 import httpx
 
-from batch_worker_sdk._retry import ClientErrorCounter, with_retry
-from batch_worker_sdk.config import BatchPlatformClientConfig
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.retry._retry import ClientErrorCounter, with_retry
 
 
 class PlatformHttpClient:

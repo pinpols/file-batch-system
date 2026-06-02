@@ -40,11 +40,11 @@ import asyncio
 import logging
 from typing import Any
 
-from batch_worker_sdk._http import PlatformHttpClient
-from batch_worker_sdk.config import BatchPlatformClientConfig
+from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import AuthError, PlatformError
-from batch_worker_sdk.handler import SdkTaskHandler
-from batch_worker_sdk.state import WorkerRuntimeState
+from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.internal._http import PlatformHttpClient
+from batch_worker_sdk.task.state import WorkerRuntimeState
 
 logger = logging.getLogger(__name__)
 

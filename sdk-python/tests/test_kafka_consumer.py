@@ -14,8 +14,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
-from batch_worker_sdk._http import PlatformHttpClient
-from batch_worker_sdk._kafka import KafkaTaskConsumer, _PauseAwareRebalanceListener
+from batch_worker_sdk.internal._http import PlatformHttpClient
+from batch_worker_sdk.internal._kafka import KafkaTaskConsumer, _PauseAwareRebalanceListener
 
 
 def _cfg(**overrides: object) -> BatchPlatformClientConfig:
@@ -184,7 +184,7 @@ async def test_handle_record_skips_invalid_json(
         tp = MagicMock()
         tp.topic = "batch.task.dispatch.acme.echo"
 
-        caplog.set_level("ERROR", logger="batch_worker_sdk._kafka")
+        caplog.set_level("ERROR", logger="batch_worker_sdk.internal._kafka")
         await consumer._handle_record(tp, rec)
         assert called == []
         assert any("failed to parse" in r.message for r in caplog.records)

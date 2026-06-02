@@ -16,8 +16,8 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from batch_worker_sdk import AuthError, BatchPlatformClientConfig
-from batch_worker_sdk._http import PlatformHttpClient
 from batch_worker_sdk.exceptions import PersistentClientError, TransientError
+from batch_worker_sdk.internal._http import PlatformHttpClient
 
 _BASE = "http://orch:8081"
 

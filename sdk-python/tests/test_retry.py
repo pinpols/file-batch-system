@@ -11,12 +11,12 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from batch_worker_sdk._retry import ClientErrorCounter, with_retry
 from batch_worker_sdk.exceptions import (
     AuthError,
     PersistentClientError,
     TransientError,
 )
+from batch_worker_sdk.retry._retry import ClientErrorCounter, with_retry
 
 
 def _resp(status: int, body: dict | None = None) -> httpx.Response:

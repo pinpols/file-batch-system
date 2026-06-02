@@ -26,10 +26,10 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from batch_worker_sdk.context import SdkTaskContext
-from batch_worker_sdk.descriptor import SdkTaskTypeDescriptor
-from batch_worker_sdk.handler import SdkTaskHandler
-from batch_worker_sdk.result import SdkTaskResult
+from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.task.context import SdkTaskContext
+from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
+from batch_worker_sdk.task.result import SdkTaskResult
 
 HandlerFn = Callable[[SdkTaskContext], Awaitable[SdkTaskResult]]
 

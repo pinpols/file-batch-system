@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from batch_worker_sdk import ProgressReporter
-from batch_worker_sdk._sensitive_keys import (
+from batch_worker_sdk.internal._sensitive_keys import (
     SENSITIVE_KEYWORDS,
     find_sensitive_keys,
     is_sensitive_key,
