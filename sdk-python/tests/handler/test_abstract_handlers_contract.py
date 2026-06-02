@@ -142,9 +142,7 @@ def test_process_abstract_hook_order() -> None:
     assert calls.count("_transform") == 2
     assert "_write_output" in calls
     # _write_output must come after every _transform.
-    assert calls.index("_write_output") > max(
-        i for i, c in enumerate(calls) if c == "_transform"
-    )
+    assert calls.index("_write_output") > max(i for i, c in enumerate(calls) if c == "_transform")
     assert isinstance(result, SdkTaskResult)
 
 
@@ -216,9 +214,7 @@ def test_typed_dispatch_handler_protocol_attached() -> None:
         # Walk the MRO; the typed protocol should be present either as a
         # base or via the @runtime_checkable structural check.
         is_subclass_or_structural = (
-            issubclass(cls, typed_protocol)
-            if isinstance(typed_protocol, type)
-            else True
+            issubclass(cls, typed_protocol) if isinstance(typed_protocol, type) else True
         )
         assert is_subclass_or_structural, (
             f"{cls_name} does not subclass / satisfy {typed_protocol!r}"

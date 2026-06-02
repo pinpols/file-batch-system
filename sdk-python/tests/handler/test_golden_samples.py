@@ -107,9 +107,7 @@ def test_golden_sample_matches_java_baseline(name: str, fixture: dict[str, Any])
     try:
         result = _run_handler(handler, ctx)
     except Exception as exc:
-        pytest.skip(
-            f"fixture {name!r}: handler raised (likely missing infra dep): {exc!r}"
-        )
+        pytest.skip(f"fixture {name!r}: handler raised (likely missing infra dep): {exc!r}")
 
     assert isinstance(result, SdkTaskResult)
     expected = fixture["expected_output"]

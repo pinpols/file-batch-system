@@ -41,9 +41,7 @@ class SdkAbstractProcessHandler[InputRow, OutputRow](SdkAbstractTaskHandler):
         """Return an async iterator over input rows."""
 
     @abstractmethod
-    async def _transform(
-        self, ctx: SdkTaskContext, input_row: InputRow
-    ) -> OutputRow | None:
+    async def _transform(self, ctx: SdkTaskContext, input_row: InputRow) -> OutputRow | None:
         """Convert one input row to an output row.
 
         Returning ``None`` marks the row as ``skipped`` (no write).
