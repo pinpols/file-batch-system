@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.core.mapper.PipelineProgressMapper">
+
+    <!--
+       PipelineProgressEntity 是 record(Java 16+),MyBatis 通过 canonical constructor 装配,
+       resultMap 把 snake_case 列名映射到 record 参数名。
+    -->
+    <resultMap id="pipelineProgressResult" type="com.example.batch.worker.core.domain.PipelineProgressEntity">
+        <constructor>
+            <idArg column="id"                   javaType="java.lang.Long"/>
+            <arg   column="tenant_id"            javaType="java.lang.String"/>
+            <arg   column="pipeline_instance_id" javaType="java.lang.Long"/>
+            <arg   column="stage"                javaType="java.lang.String"/>
+            <arg   column="position_marker"      javaType="java.lang.String"/>
+            <arg   column="processed_count"      javaType="long"/>
+            <arg   column="completed"            javaType="boolean"/>
+            <arg   column="completed_at"         javaType="java.time.OffsetDateTime"/>
+            <arg   column="created_at"           javaType="java.time.OffsetDateTime"/>
+            <arg   column="updated_at"           javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findByInstanceAndStage" resultMap="pipelineProgressResult">
+        select id, tenant_id, pipeline_instance_id, stage,
+               position_marker, processed_count, completed,
+               completed_at, created_at, updated_at
+        from batch.pipeline_progress
+        where tenant_id = #{tenantId}
+          and pipeline_instance_id = #{pipelineInstanceId}
+          and stage = #{stage}
+    </select>
+
+    <!--
+       advance: 续跑位点 UPSERT。
+       - 首次 INSERT 起点:processed_count = increment,position_marker = 入参。
+       - 之后 UPDATE:processed_count += increment;position_marker 覆盖;
+         updated_at = now;completed=true 时不再回写位点(EXCLUDED 不覆盖)。
+
+       注意:必须与本批业务写同事务调用。本 mapper 不开新事务,由 LoadStep / GenerateStep
+       的 @Transactional 边界统一管。
+    -->
+    <insert id="advance">
+        insert into batch.pipeline_progress
+            (tenant_id, pipeline_instance_id, stage,
+             position_marker, processed_count, completed,
+             created_at, updated_at)
+        values
+            (#{tenantId}, #{pipelineInstanceId}, #{stage},
+             #{positionMarker}, #{processedCountIncrement}, false,
+             current_timestamp, current_timestamp)
+        on conflict (tenant_id, pipeline_instance_id, stage) do update
+            set position_marker = case
+                                    when batch.pipeline_progress.completed
+                                        then batch.pipeline_progress.position_marker
+                                    else EXCLUDED.position_marker
+                                  end,
+                processed_count = case
+                                    when batch.pipeline_progress.completed
+                                        then batch.pipeline_progress.processed_count
+                                    else batch.pipeline_progress.processed_count + #{processedCountIncrement}
+                                  end,
+                updated_at = current_timestamp
+    </insert>
+
+    <!-- markCompleted: 把已存在的 progress 标完成;无行时 INSERT 一行 completed=true (空 stage 走完场景)。 -->
+    <insert id="markCompleted">
+        insert into batch.pipeline_progress
+            (tenant_id, pipeline_instance_id, stage,
+             position_marker, processed_count, completed, completed_at,
+             created_at, updated_at)
+        values
+            (#{tenantId}, #{pipelineInstanceId}, #{stage},
+             null, 0, true, current_timestamp,
+             current_timestamp, current_timestamp)
+        on conflict (tenant_id, pipeline_instance_id, stage) do update
+            set completed = true,
+                completed_at = coalesce(batch.pipeline_progress.completed_at, current_timestamp),
+                updated_at = current_timestamp
+    </insert>
+
+</mapper>
