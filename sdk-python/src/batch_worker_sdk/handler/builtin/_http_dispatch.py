@@ -1,15 +1,13 @@
-"""Builtin HTTP-dispatch handler (ADR-036 Dispatch shape).
+"""内置 HTTP 分发 handler(ADR-036 Dispatch 形态)。
 
-Mirrors Java ``com.example.batch.sdk.handler.builtin.HttpDispatchHandler`` /
-``HttpDispatchConfig``. Java's flavour is JDBC → HTTP per-row; the Python
-flavour delegates the *target selection* to a tenant hook
-(:meth:`HttpDispatchHandler._resolve_targets`) so the same builtin
-serves DB-driven, config-inline, or upstream-API target lists.
+对齐 Java ``com.example.batch.sdk.handler.builtin.HttpDispatchHandler`` /
+``HttpDispatchConfig``。Java 版是 JDBC → 逐行 HTTP;Python 版把 *目标选择*
+委托给租户钩子(:meth:`HttpDispatchHandler._resolve_targets`),让同一个内置
+能同时服务 DB 驱动、配置内联、上游 API 三种 target 来源。
 
-Concurrency: fan-out per target via :func:`asyncio.gather` with an
-:class:`asyncio.Semaphore`-bounded concurrency window. SSRF guard mirrors
-Java (loopback / private-IP block) but is best-effort — DNS resolution
-happens via :func:`asyncio.get_event_loop().getaddrinfo` once per target.
+并发:每个 target 经 :func:`asyncio.gather` 扇出,用 :class:`asyncio.Semaphore`
+限制并发窗口。SSRF 防护对齐 Java(loopback / 私网 IP 拦截),但只做尽力而为
+—— DNS 解析通过 :func:`asyncio.get_event_loop().getaddrinfo` 每 target 一次。
 """
 
 from __future__ import annotations
@@ -30,60 +28,59 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 
 class HttpDispatchTarget(BaseModel):
-    """One fan-out target: URL + optional per-target payload override."""
+    """一个扇出目标:URL + 可选的 per-target payload 覆盖。"""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     url: str
-    """Full URL to POST/PUT/etc. to (resolved against ``config.base_url`` is caller's job)."""
+    """要 POST / PUT 等的完整 URL(相对 ``config.base_url`` 解析由调用方负责)。"""
 
     method: str = "POST"
-    """HTTP method (``POST`` / ``PUT`` / ``PATCH`` / etc.)."""
+    """HTTP method(``POST`` / ``PUT`` / ``PATCH`` 等)。"""
 
     payload: dict[str, Any] = Field(default_factory=dict)
-    """Per-target JSON body (merged with config-level ``payload_template``)."""
+    """Per-target JSON body(与配置级 ``payload_template`` 合并)。"""
 
     headers: dict[str, str] = Field(default_factory=dict)
-    """Per-target HTTP headers (overlay over config-level ``headers``)."""
+    """Per-target HTTP headers(覆盖配置级 ``headers``)。"""
 
 
 class HttpDispatchConfig(BaseModel):
-    """Settings for :class:`HttpDispatchHandler`.
+    """:class:`HttpDispatchHandler` 的配置。
 
-    Mirrors Java ``HttpDispatchConfig`` record. Java's record is JDBC-+
-    single-endpoint focused; the Python config is fan-out friendly
-    (concurrency, headers, payload template, per-target overrides via the
-    :meth:`HttpDispatchHandler._resolve_targets` hook).
+    对齐 Java ``HttpDispatchConfig`` record。Java record 偏 JDBC + 单端点;
+    Python 配置更适合扇出(并发数、headers、payload 模板、通过
+    :meth:`HttpDispatchHandler._resolve_targets` 钩子做 per-target 覆盖)。
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     task_type: str
-    """Globally-unique task-type code registered with the platform."""
+    """注册到平台、全局唯一的 task type code。"""
 
     base_url: str | None = None
-    """Optional base URL prepended to target ``url`` if relative."""
+    """可选 base URL,目标 ``url`` 是相对路径时拼接。"""
 
     method: str = "POST"
-    """Default HTTP method for fan-out requests."""
+    """扇出请求的默认 HTTP method。"""
 
     headers: dict[str, str] = Field(default_factory=dict)
-    """Default HTTP headers applied to every fan-out request."""
+    """每个扇出请求都会带上的默认 HTTP headers。"""
 
     payload_template: dict[str, Any] = Field(default_factory=dict)
-    """Default JSON body merged under each target's per-target payload."""
+    """默认 JSON body,与每个 target 的 payload 合并(target 优先)。"""
 
     concurrency: int = Field(default=8, gt=0)
-    """Max in-flight fan-out requests (semaphore cap)."""
+    """同时在飞扇出请求数上限(semaphore cap)。"""
 
     timeout_seconds: float = Field(default=30.0, gt=0)
-    """Per-request total timeout (mirrors Java ``timeoutSeconds``)."""
+    """单请求总超时(对齐 Java ``timeoutSeconds``)。"""
 
     fail_fast: bool = False
-    """If ``True`` → first non-2xx aborts the whole batch (Java parity)."""
+    """``True`` → 首个非 2xx 中止整批(对齐 Java)。"""
 
     block_private_ips: bool = True
-    """SSRF guard: refuse loopback / private / link-local target hosts."""
+    """SSRF 防护:拒绝 loopback / 私网 / link-local 目标主机。"""
 
     @classmethod
     def defaults(cls, task_type: str) -> HttpDispatchConfig:
@@ -91,15 +88,14 @@ class HttpDispatchConfig(BaseModel):
 
 
 class HttpDispatchHandler:
-    """Fan-out per-target HTTP push template (DB / inline / API → external HTTP).
+    """Per-target HTTP 扇出推送模板(DB / 内联 / API → 外部 HTTP)。
 
-    Tenant subclasses override :meth:`_resolve_targets` to produce the
-    list of :class:`HttpDispatchTarget` for a given task; the builtin
-    handles the concurrency-bounded async fan-out, retries are *not* in
-    scope (let the SDK retry layer or upstream retry policy own that).
+    租户子类覆盖 :meth:`_resolve_targets` 产出当次任务的
+    :class:`HttpDispatchTarget` 列表;内置负责并发受限的异步扇出。重试 *不在*
+    本 handler 范围内(交给 SDK 重试层或上游重试策略)。
 
-    Java parity: 2xx counts as success, non-2xx / exceptions count as
-    failed. ``fail_fast=True`` aborts on first failure mirroring Java.
+    对齐 Java:2xx 视为成功,非 2xx / 异常视为失败。``fail_fast=True`` 在首次
+    失败时中止,对齐 Java 行为。
     """
 
     def __init__(
@@ -111,7 +107,7 @@ class HttpDispatchHandler:
         self._client = client
         self._owns_client = client is None
 
-    # -- SdkTaskHandler protocol --------------------------------------------------
+    # -- SdkTaskHandler 协议 ------------------------------------------------------
 
     def task_type(self) -> str:
         return self._config.task_type
@@ -187,14 +183,13 @@ class HttpDispatchHandler:
             message=f"dispatched {counts.success()} ok, {counts.failed()} failed",
         )
 
-    # -- tenant-overridable hooks (mirror Java SdkAbstractDispatchHandler) --------
+    # -- 租户可覆盖钩子(对齐 Java SdkAbstractDispatchHandler) ------------------
 
     async def _resolve_targets(self, ctx: SdkTaskContext) -> list[HttpDispatchTarget]:
-        """**Abstract for tenants.** Produce the per-task fan-out target list.
+        """**租户必须覆盖的抽象方法。** 产出当次任务的扇出目标列表。
 
-        Default reads ``ctx.parameters['targets']`` (a list of dicts) when
-        present so simple inline configs work without subclassing; raises
-        if absent.
+        默认会在 ``ctx.parameters['targets']`` 存在(dict 列表)时读取,方便
+        简单的内联配置免子类化使用;不存在时抛异常。
         """
         raw = ctx.parameters.get("targets")
         if not isinstance(raw, list):
@@ -210,7 +205,7 @@ class HttpDispatchHandler:
         client: httpx.AsyncClient,
         target: HttpDispatchTarget,
     ) -> bool:
-        """Send one HTTP request; default treats 2xx as success."""
+        """发送一次 HTTP 请求;默认把 2xx 视为成功。"""
         url = self._resolve_url(target.url)
         method = (target.method or self._config.method).upper()
         headers = {**self._config.headers, **target.headers}
@@ -224,7 +219,7 @@ class HttpDispatchHandler:
         )
         return 200 <= resp.status_code < 300
 
-    # -- internals ----------------------------------------------------------------
+    # -- 内部方法 ----------------------------------------------------------------
 
     def _resolve_url(self, url: str) -> str:
         if self._config.base_url and not url.startswith(("http://", "https://")):
@@ -234,12 +229,10 @@ class HttpDispatchHandler:
     def _check_ssrf(self, url: str) -> None:
         if not self._config.block_private_ips:
             return
-        # Quick string-host extraction — httpx doesn't expose a public
-        # URL parser, ``urllib.parse`` is sufficient. We only block when
-        # the host is a literal IP that falls in private space; DNS-based
-        # blocking would require an async resolve and isn't worth the
-        # latency for the SSRF backstop (Java's ``InetAddress.getByName``
-        # equivalent path).
+        # 快速字符串 host 抽取 —— httpx 没暴露公共 URL parser,``urllib.parse``
+        # 足够。我们只在 host 是字面 IP 且落在私网空间时拦截;基于 DNS 的拦截
+        # 需要异步解析,对于 SSRF 兜底场景而言延迟不划算(对齐 Java 中
+        # ``InetAddress.getByName`` 的等价路径)。
         host = urlparse(self._resolve_url(url)).hostname
         if not host:
             raise ValueError(f"invalid endpoint, no host: {url}")

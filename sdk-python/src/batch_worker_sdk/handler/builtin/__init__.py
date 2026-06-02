@@ -1,7 +1,7 @@
-"""Builtin handler templates — mirror of Java ``handler/builtin/``.
+"""内置 handler 模板 —— 对齐 Java ``handler/builtin/``。
 
-Three ADR-036 shapes, each split into a config record + handler template
-the tenant can subclass to plug its destination / source / target list:
+ADR-036 三种形态,每种拆成配置 record + handler 模板,租户继承后可插入
+自己的目的端 / 源 / 目标列表:
 
 ==================================  ==========================================
 Java                                Python
@@ -11,14 +11,10 @@ Java                                Python
 ``QueryExportHandler`` / Config      :class:`QueryExportHandler` / :class:`QueryExportConfig`
 ==================================  ==========================================
 
-The Java SDK's ``SdkAbstractImportHandler`` / ``SdkAbstractDispatchHandler``
-/ ``SdkAbstractExportHandler`` ABC bases have a Python counterpart lane
-still in flight; until that lands, these builtins satisfy the structural
-:class:`~batch_worker_sdk.handler.SdkTaskHandler` protocol directly. Hook
-method names (``_open_source`` / ``_read_rows`` / ``_load_batch`` /
-``_resolve_targets`` / ``_dispatch_to_target`` / ``_query_rows`` /
-``_write_row``) already match the ABC contract, so the rebase will be
-inheritance-only — no rename.
+对齐 Java handler/builtin/(FileImport / HttpDispatch / QueryExport),钩子方法
+名(``_open_source`` / ``_read_rows`` / ``_load_batch`` / ``_resolve_targets``
+/ ``_dispatch_to_target`` / ``_query_rows`` / ``_write_row``)与 Java ABC 契约
+完全一致。
 """
 
 from __future__ import annotations
