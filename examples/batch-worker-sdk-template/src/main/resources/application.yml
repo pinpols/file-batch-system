@@ -1,0 +1,34 @@
+# batch-worker-sdk-template 配置 — Round-3 #10 开箱即用骨架。
+#
+# 凭据走环境变量(R3-11 envRef 风格预备):本文件不写明文 api-key / SASL 密码,
+# 全部用 ${ENV:default} 占位。.env.example 是变量清单,租户自己填 .env 然后 ./run.sh 注入。
+batch:
+  worker-sdk:
+    enabled: true
+    base-url: ${BATCH_BASE_URL:http://localhost:8081}
+    api-key: ${BATCH_API_KEY:}                # ★ 必填(prod);本地联调允许空
+    tenant-id: ${BATCH_TENANT_ID:tenant-demo}
+    worker-code: ${BATCH_WORKER_CODE:tenant-demo-worker-1}
+    kafka-bootstrap: ${BATCH_KAFKA:localhost:9092}
+    kafka-topic-pattern: ${BATCH_TOPIC_PATTERN:batch.task.dispatch.tenant-demo.*}
+    kafka-group-id: ${BATCH_KAFKA_GROUP:tenant-demo-workers}
+    build-id: ${BATCH_BUILD_ID:dev}           # CI 注入 git 短 SHA / 镜像 tag;勿放敏感信息
+    max-concurrent-tasks: ${BATCH_MAX_CONCURRENT:4}
+    heartbeat-interval: 30s
+    lease-renew-interval: 60s
+    # P3 Kafka SASL/SCRAM(prod 必填,本地 PLAINTEXT 留空)
+    kafka-security-protocol: ${BATCH_KAFKA_PROTOCOL:}
+    kafka-sasl-mechanism: ${BATCH_KAFKA_SASL_MECHANISM:}
+    kafka-sasl-jaas-config: ${BATCH_KAFKA_SASL_JAAS:}
+
+# worker 是后台进程,非 web
+spring:
+  main:
+    web-application-type: none
+  application:
+    name: batch-worker-sdk-template
+
+logging:
+  level:
+    com.example.batch.sdk: INFO
+    com.example.template: INFO
