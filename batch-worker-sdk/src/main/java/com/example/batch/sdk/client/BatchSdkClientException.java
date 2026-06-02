@@ -19,7 +19,9 @@ public class BatchSdkClientException extends RuntimeException {
     /** 配置校验失败(builder / config 不合法)。 */
     CONFIG,
     /** Shutdown 阶段失败(drain 超时 / 资源关闭异常)。 */
-    SHUTDOWN
+    SHUTDOWN,
+    /** Lane E #4-Java:Kafka SASL 认证失败 — 凭据已坏,不可恢复,需 Pod 重启 + 运维介入。 */
+    KAFKA_AUTH
   }
 
   private final Stage stage;
