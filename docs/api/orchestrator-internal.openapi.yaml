@@ -1,9 +1,11 @@
 openapi: 3.1.0
 info:
-  title: Batch Orchestrator Internal API (SDK protocol)
-  version: 0.1.0
-  x-last-updated: "2026-05-31"
+  title: Orchestrator Internal API (SDK ↔ Orch protocol)
+  version: 1.1.0-SNAPSHOT
+  x-last-updated: "2026-06-02"
   x-changelog:
+    - date: "2026-06-02"
+      summary: "[Lane N] 补全 worker drain/force-offline/takeover/warmup/claimed-tasks 与 tasks/cancel 端点;每端点加 401/404/409/5xx error responses;顶层 paths 加 x-protocol-stability 标注(stable / beta / internal-only),作为 BYO SDK 实现门禁;version 跟根 pom revision。"
     - date: "2026-05-31"
       summary: "[Phase 0] 初版立 yaml(plan §2 决策 #2)。覆盖 /internal/workers/* 和 /internal/tasks/* 给 SDK / 准客户消费;不含管理面 console-api 路径(见 console-api.openapi.yaml)。"
   description: >
@@ -26,7 +28,13 @@ tags:
     description: 任务认领 / 上报 / 续租(`TaskController`)
 
 paths:
+  # ─── x-protocol-stability 含义 ────────────────────────────────────────────────
+  # stable        : BYO SDK 必须实现;字段语义冻结,只能加 nullable optional 字段
+  # beta          : BYO SDK 可选实现;字段集仍可能演进(走 sdk-dual-rollout 双轨)
+  # internal-only : 平台运维 / Java SDK 内部用,不要求 BYO SDK 实现
+  # ─────────────────────────────────────────────────────────────────────────────
   /internal/workers/register:
+    x-protocol-stability: stable
     post:
       tags: [workers]
       summary: Worker 注册(idempotent on workerCode)
@@ -44,8 +52,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkerRegistryEntity'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/workers/{workerCode}/heartbeat:
+    x-protocol-stability: stable
     post:
       tags: [workers]
       summary: Worker 周期心跳(默认 30s 一次)
@@ -68,8 +80,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkerHeartbeatResponse'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/workers/{workerCode}/deactivate:
+    x-protocol-stability: stable
     post:
       tags: [workers]
       summary: Worker 主动下线(优雅停)
@@ -87,8 +103,12 @@ paths:
               $ref: '#/components/schemas/WorkerHeartbeatDto'
       responses:
         '200': {description: 下线成功}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/workers/{workerCode}/status:
+    x-protocol-stability: internal-only
     post:
       tags: [workers]
       summary: 更新 worker status(平台运维用)
@@ -111,8 +131,153 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkerRegistryEntity'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/workers/{workerCode}/drain:
+    x-protocol-stability: internal-only
+    post:
+      tags: [workers]
+      summary: 平台运维触发 worker 优雅排空(WorkerDrainGovernanceService)
+      operationId: drainWorker
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerDrainRequest'
+      responses:
+        '200':
+          description: 已置 DRAINING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerRegistryEntity'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/workers/{workerCode}/force-offline:
+    x-protocol-stability: internal-only
+    post:
+      tags: [workers]
+      summary: 平台运维强制下线(不等 drain)
+      operationId: forceOfflineWorker
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerTenantRequest'
+      responses:
+        '200':
+          description: 已置 OFFLINE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerRegistryEntity'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/workers/{workerCode}/takeover:
+    x-protocol-stability: internal-only
+    post:
+      tags: [workers]
+      summary: 平台运维接管 worker(把 OFFLINE 拉回认领)
+      operationId: takeoverWorker
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerTenantRequest'
+      responses:
+        '200':
+          description: 接管成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerRegistryEntity'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/workers/{workerCode}/warmup:
+    x-protocol-stability: internal-only
+    post:
+      tags: [workers]
+      summary: 平台运维热身(DRAINING → RUNNING 撤销)
+      operationId: warmupWorker
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerTenantRequest'
+      responses:
+        '200':
+          description: 已回滚至 RUNNING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerRegistryEntity'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/workers/{workerCode}/claimed-tasks:
+    x-protocol-stability: internal-only
+    get:
+      tags: [workers]
+      summary: 查询 worker 当前持有的 claim(运维查活,非 SDK 接入路径)
+      operationId: listClaimedTasks
+      parameters:
+        - in: path
+          name: workerCode
+          required: true
+          schema: {type: string}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: claim 列表(JobTaskEntity 字段集)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/tasks/{taskId}/claim:
+    x-protocol-stability: stable
     post:
       tags: [tasks]
       summary: 认领任务(返回 EffectiveTaskConfig)
@@ -139,9 +304,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EffectiveTaskConfig'
-        '409': {description: 任务已被其他 worker 认领}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: 任务已被其他 worker 认领(BYO SDK 必须当幂等成功处理,不报告失败)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/tasks/{taskId}/report:
+    x-protocol-stability: stable
     post:
       tags: [tasks]
       summary: 上报任务执行结果
@@ -163,11 +338,22 @@ paths:
               $ref: '#/components/schemas/TaskExecutionReportDto'
       responses:
         '200': {description: 上报成功}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: lease 已失效 / task 被回收;BYO SDK 应放弃报告,log warn 即可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/tasks/{taskId}/renew:
+    x-protocol-stability: stable
     post:
       tags: [tasks]
-      summary: 续租 lease(防 lease 超时被回收)
+      summary: lease 续约 + 进度上报 + cancel 感知(ORCH-P4-1)
       operationId: renewTaskLease
       parameters:
         - in: path
@@ -179,11 +365,48 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TaskClaimRequest'
+              $ref: '#/components/schemas/TaskHeartbeatRequest'
       responses:
-        '200': {description: 续租成功}
+        '200':
+          description: 续租成功;cancelRequested=true 时 BYO SDK 应通过 CancellationSignal 中止 handler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskHeartbeatResponse'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: lease 已被回收(orch 视为僵尸 claim);BYO SDK 应停 handler 并放弃 report
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/tasks/{taskId}/cancel:
+    x-protocol-stability: internal-only
+    post:
+      tags: [tasks]
+      summary: 运维 / 平台请求取消 RUNNING task(ORCH-P4-1)
+      description: >
+        被 console-api 或 timeout scheduler 调;BYO SDK 不主动调本端点,而是通过 renew 响应里的
+        cancelRequested 标志感知。本端点幂等。
+      operationId: cancelTask
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: {type: integer, format: int64}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCancelRequest'
+      responses:
+        '200': {description: 已置 cancel_requested=true(或重复调,语义幂等)}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/tasks/leases/renew-batch:
+    x-protocol-stability: stable
     post:
       tags: [tasks]
       summary: 批量续租(ADR-016)
@@ -201,8 +424,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskLeaseRenewBatchResponse'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
 
 components:
+  responses:
+    Unauthorized:
+      description: 凭据无效 / 缺失;BYO SDK 必须 fail-fast,不重试(对照 wire-protocol §B/§C)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Forbidden:
+      description: tenantId 越权 / workerCode 不属本租户;BYO SDK 必须 fail-fast
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    NotFound:
+      description: workerCode / taskId 不存在(可能被运维清掉或 lease 失效)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    ServerError:
+      description: 平台侧 5xx;BYO SDK 应指数退避(200ms 基,默认 3 次)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+
   schemas:
     WorkerHeartbeatDto:
       type: object
@@ -377,6 +628,57 @@ components:
         taskId: {type: integer, format: int64}
         success: {type: boolean}
         message: {type: string, nullable: true}
+
+    ErrorBody:
+      type: object
+      description: 平台统一错误回包(对应 CommonResponse 失败态;BYO SDK 用 code + message 分类)
+      properties:
+        code: {type: string, nullable: true, description: "业务错误码(可选)"}
+        message: {type: string, nullable: true}
+        traceId: {type: string, nullable: true}
+
+    TaskHeartbeatRequest:
+      type: object
+      description: renew 请求体(ORCH-P4-1);旧版仅 tenantId/workerId/partitionInvocationId,新增可选 details(进度 / checkpoint 快照,严禁放敏感凭据)
+      properties:
+        tenantId: {type: string}
+        workerId: {type: string}
+        partitionInvocationId: {type: string, nullable: true}
+        details:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: "任意 JSON 对象(平台落 job_task 字段,console 任务详情读取)。严禁含 DB 密码 / OAuth secret"
+      required: [tenantId, workerId]
+
+    TaskHeartbeatResponse:
+      type: object
+      description: renew 响应体;BYO SDK 必须解析 cancelRequested(true 时通过 CancellationSignal 等价机制中止 handler)
+      properties:
+        cancelRequested:
+          type: boolean
+          description: "平台已请求取消本 task;BYO SDK 必须在 handler 长循环中检测并主动停"
+      required: [cancelRequested]
+
+    TaskCancelRequest:
+      type: object
+      properties:
+        tenantId: {type: string}
+        reason: {type: string, nullable: true, description: "审计 / 日志用"}
+      required: [tenantId]
+
+    WorkerDrainRequest:
+      type: object
+      properties:
+        tenantId: {type: string}
+        timeoutSeconds: {type: integer, nullable: true, description: "drain 超时上限(秒);null=平台默认"}
+      required: [tenantId]
+
+    WorkerTenantRequest:
+      type: object
+      properties:
+        tenantId: {type: string}
+      required: [tenantId]
 
     TaskDispatchMessage:
       type: object

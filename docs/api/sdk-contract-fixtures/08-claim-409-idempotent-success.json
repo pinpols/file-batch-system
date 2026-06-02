@@ -1,0 +1,28 @@
+{
+  "scenario": "claim-409-idempotent-success",
+  "description": "Kafka at-least-once 投递同消息给两个 worker / 自己被重放 → 409。BYO SDK 必须当成功处理(log INFO,不报告失败,不影响后续认领)",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/claim",
+    "body": {
+      "tenantId": "acme",
+      "workerId": "w-1",
+      "partitionInvocationId": "inv-1"
+    },
+    "responseStatus": 409,
+    "responseBody": {
+      "code": "ALREADY_CLAIMED",
+      "message": "task 12345 already claimed by w-2",
+      "traceId": "trace-def"
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "treat as idempotent success; log INFO 'task already claimed by peer'; commit Kafka offset; do NOT call /report (would corrupt 'success=false' counter); continue normal operation",
+    "sdkMustNot": ["call /report with success=false", "retry the claim", "treat as fatal error"]
+  },
+  "references": ["wire-protocol.md §B", "PlatformHttpException.isConflict()"]
+}

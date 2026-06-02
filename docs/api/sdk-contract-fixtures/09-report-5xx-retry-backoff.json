@@ -1,0 +1,32 @@
+{
+  "scenario": "report-5xx-retry-backoff",
+  "description": "report 时平台 5xx(短暂故障)→ BYO SDK 必须指数退避(200ms / 400ms / 800ms,默认 retryMaxAttempts=3)。三次全失败后 log + drop,下次 lease renew 时 orch 兜底回收",
+  "given": {
+    "config": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "retryBaseDelayMs": 200,
+      "retryMaxAttempts": 3
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/report",
+    "body": {
+      "taskId": 12345,
+      "tenantId": "acme",
+      "workerId": "w-1",
+      "success": true,
+      "outputs": { "rows": 100 },
+      "message": "done"
+    },
+    "responseStatus": 503,
+    "responseBody": { "code": "PLATFORM_UNAVAILABLE", "message": "DB pool exhausted" }
+  },
+  "then": {
+    "sdkExpectedAction": "attempt 1 → fail → sleep 200ms; attempt 2 → fail → sleep 400ms; attempt 3 → fail → log ERROR + drop; do not block worker thread on subsequent tasks; lease renew loop will detect (orch回收) and clean up locally",
+    "sdkMustNot": ["retry indefinitely", "use fixed delay (not respecting exponential)", "block heartbeat scheduler during retry sleep"]
+  },
+  "references": ["wire-protocol.md §C", "PlatformHttpException.isServerError()"]
+}

@@ -1,0 +1,38 @@
+{
+  "scenario": "register-conflict-idempotent",
+  "description": "同 (tenantId, workerCode) 已存在 → 平台 idempotent 复用记录,SDK 同样进 ONLINE。重启场景常见(K8s pod recreate 但 workerCode 不变)",
+  "given": {
+    "config": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "apiKey": "<env:BATCH_API_KEY>"
+    },
+    "state": {
+      "note": "平台 worker_registry 已有 (acme, w-1) 记录,status=OFFLINE(上次崩溃)"
+    }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/register",
+    "body": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "status": "RUNNING",
+      "heartbeatAt": "2026-06-02T10:00:00Z"
+    },
+    "responseStatus": 200,
+    "responseBody": {
+      "id": 42,
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "status": "ONLINE",
+      "lastHeartbeatAt": "2026-06-02T10:00:00Z"
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "treat as success (200 = success regardless of conflict semantics); transition FSM to NORMAL; do not retry",
+    "sdkMustNot": ["treat 200 with existing record as error", "send different workerCode on retry (workerCode must be stable across restarts for idempotency)"]
+  },
+  "references": ["wire-protocol.md §1", "openapi: /internal/workers/register"]
+}

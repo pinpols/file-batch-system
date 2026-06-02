@@ -1,0 +1,28 @@
+{
+  "scenario": "renew-cancel-requested",
+  "description": "运维 / 平台触发 cancel(POST /internal/tasks/{id}/cancel)→ SDK 下次 renew 收到 cancelRequested=true → 通过 CancellationSignal 等价机制中止 handler。最大延迟 = leaseRenewInterval(默认 60s,无更快反向 push)",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "leaseRenewInterval": "PT60S" },
+    "state":  { "inFlight": [{ "taskId": 12345 }] }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/tasks/12345/renew",
+    "body": {
+      "tenantId": "acme",
+      "workerId": "w-1",
+      "partitionInvocationId": "inv-1",
+      "details": { "progress": 0.4 }
+    },
+    "responseStatus": 200,
+    "responseBody": {
+      "cancelRequested": true
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "set CancellationSignal for taskId=12345 (handler must poll signal in long loops); handler returns SdkTaskResult.cancelled() (or equivalent KILLED/CANCELLED errorCode); SDK reports with errorCode='CANCELLED', success=false, failureClass='TERMINAL_USER'",
+    "sdkMustNot": ["force-kill handler thread (give handler chance to clean up)", "report success=true after cancel (data integrity)", "ignore cancelRequested (would waste compute until lease expires)"]
+  },
+  "references": ["wire-protocol.md §2.2", "wire-protocol.md §B errorCode CANCELLED"]
+}
