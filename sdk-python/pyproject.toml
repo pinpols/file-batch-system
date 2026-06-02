@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "batch-worker-sdk"
+dynamic = ["version"]
+description = "Python SDK for the file-batch-system worker protocol (async-only)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "file-batch-system maintainers" },
+]
+keywords = ["batch", "worker", "sdk", "async", "kafka"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Framework :: AsyncIO",
+    "Typing :: Typed",
+]
+# Runtime deps are intentionally empty in Phase 0. P1+ adds:
+#   httpx, aiokafka, pydantic>=2, tenacity, opentelemetry-api
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[project.urls]
+Homepage = "https://github.com/pinpols/file-batch-system"
+Repository = "https://github.com/pinpols/file-batch-system"
+Issues = "https://github.com/pinpols/file-batch-system/issues"
+"Java SDK (equivalent)" = "https://github.com/pinpols/file-batch-system/tree/main/batch-worker-sdk"
+"Wire Protocol" = "https://github.com/pinpols/file-batch-system/blob/main/docs/sdk/wire-protocol.md"
+
+[tool.hatch.version]
+# Read __version__ string out of _version.py via regex (hatch's default
+# source). Single source of truth lives in the .py file so `import
+# batch_worker_sdk; batch_worker_sdk.__version__` and the wheel metadata
+# stay synchronized automatically.
+source = "regex"
+path = "src/batch_worker_sdk/_version.py"
+pattern = "^__version__:\\s*str\\s*=\\s*['\"](?P<version>[^'\"]+)['\"]"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/batch_worker_sdk"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/batch_worker_sdk",
+    "tests",
+    "scripts",
+    "README.md",
+    "pyproject.toml",
+    "ruff.toml",
+    "mypy.ini",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "contract: contract-fixture-driven tests (docs/api/sdk-contract-fixtures/)",
+]
