@@ -43,6 +43,9 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("审批中心", "/approvals", "Stamp", ROLE_OPERATOR),
                   new MenuItem("导出中心", "/reports", "Download", ROLE_VIEWER),
                   new MenuItem("自助服务", "/self-service", "Tickets", ROLE_OPERATOR),
+                  // Round-3 #8(Round-2 §4 P0 #8):atomic worker 4 个 executor 安全门控运行时对账,
+                  // 对应 ConsoleAtomicRuntimeStatusController 反向拉 /actuator/atomicruntime。
+                  new MenuItem("Atomic 运行时", "/ops/atomic-runtime", "Cpu", ROLE_OPERATOR),
                   new MenuItem("运维诊断", "/ops/diagnostic", "Tools", ROLE_ADMIN))),
           new MenuGroup(
               "config",
