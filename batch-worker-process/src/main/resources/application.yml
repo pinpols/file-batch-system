@@ -19,6 +19,11 @@ spring:
 
 batch:
   worker:
+    # ADR-029 classpath 隔离守护:本 worker 不应携带 batch-worker-atomic 模块的 dual-use executor 类。
+    # 若 pom.xml 误引 batch-worker-atomic 依赖,启动期 fail-fast(默认关 + 本处显式 opt-in)。
+    atomic:
+      isolation-check:
+        enabled: true
     type: PROCESS
     max-concurrent-tasks: ${BATCH_WORKER_PROCESS_MAX_CONCURRENT_TASKS:4}
     kafka:
@@ -47,3 +52,4 @@ batch:
         maximum-pool-size: ${BATCH_WORKER_PROCESS_BUSINESS_DB_MAX_POOL_SIZE:20}
         minimum-idle: ${BATCH_WORKER_PROCESS_BUSINESS_DB_MIN_IDLE:5}
         leak-detection-threshold: ${BATCH_WORKER_PROCESS_BUSINESS_DB_LEAK_DETECTION_THRESHOLD_MS:60000}
+
