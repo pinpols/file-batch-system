@@ -21,8 +21,8 @@ from typing import IO, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from batch_worker_sdk.handler.builtin._delimited import DelimitedFormat, encode_line
 from batch_worker_sdk.handler._base import SdkRowResult
+from batch_worker_sdk.handler.builtin._delimited import DelimitedFormat, encode_line
 from batch_worker_sdk.handler.handler import SdkTaskHandler  # noqa: F401 — protocol parity
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
