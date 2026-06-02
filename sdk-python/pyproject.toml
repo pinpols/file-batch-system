@@ -47,6 +47,13 @@ dev = [
 testkit = [
     "aiohttp>=3.10",
 ]
+# SQL / stored-proc atomic handlers (handler/atomic/_sql.py,
+# handler/atomic/_stored_proc.py) talk to PostgreSQL via asyncpg.
+# Kept optional so tenants that only use HTTP / Shell atoms don't pay
+# for the asyncpg binary wheel + libpq.
+sql = [
+    "asyncpg>=0.29",
+]
 
 [project.urls]
 Homepage = "https://github.com/pinpols/file-batch-system"
