@@ -19,9 +19,7 @@ class _CollectingImportHandler(FileImportHandler):
         super().__init__(config)
         self.batches: list[list[dict[str, Any]]] = []
 
-    async def _load_batch(
-        self, ctx: SdkTaskContext, batch: list[dict[str, Any]]
-    ) -> None:
+    async def _load_batch(self, ctx: SdkTaskContext, batch: list[dict[str, Any]]) -> None:
         # Defensive copy so caller-side mutation doesn't pollute assertions.
         self.batches.append([dict(r) for r in batch])
 
@@ -82,10 +80,7 @@ async def test_csv_import_chunks_by_batch_size(tmp_path: Path) -> None:
 async def test_jsonl_import(tmp_path: Path) -> None:
     src = tmp_path / "in.jsonl"
     src.write_text(
-        json.dumps({"id": 1, "name": "Alice"})
-        + "\n"
-        + json.dumps({"id": 2, "name": "Bob"})
-        + "\n",
+        json.dumps({"id": 1, "name": "Alice"}) + "\n" + json.dumps({"id": 2, "name": "Bob"}) + "\n",
         encoding="utf-8",
     )
     cfg = FileImportConfig(task_type="import_jsonl", format="jsonl", batch_size=10)

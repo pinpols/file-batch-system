@@ -248,6 +248,4 @@ class HttpDispatchHandler:
         except ValueError:
             return
         if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_unspecified:
-            raise PermissionError(
-                f"SSRF blocked: private/loopback IP for host {host}"
-            )
+            raise PermissionError(f"SSRF blocked: private/loopback IP for host {host}")

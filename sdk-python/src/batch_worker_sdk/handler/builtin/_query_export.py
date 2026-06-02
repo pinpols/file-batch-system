@@ -111,7 +111,10 @@ class QueryExportHandler:
             await self._open_destination(ctx, path)
             try:
                 async for row in self._query_rows(ctx):
-                    if ctx.cancel_signal is not None and ctx.cancel_signal.is_cancellation_requested:
+                    if (
+                        ctx.cancel_signal is not None
+                        and ctx.cancel_signal.is_cancellation_requested
+                    ):
                         return SdkTaskResult.fail("CANCELLED", "cancelled by platform")
                     await self._write_row(ctx, row)
                     counts.inc_success()
@@ -134,9 +137,7 @@ class QueryExportHandler:
 
     async def _open_destination(self, ctx: SdkTaskContext, path: Path) -> None:
         """Open the output file. Default opens text-mode write with the configured encoding."""
-        self._fh = await asyncio.to_thread(
-            self._open_text_file_write, path, self._config.encoding
-        )
+        self._fh = await asyncio.to_thread(self._open_text_file_write, path, self._config.encoding)
         self._headers_written = False
         self._column_order = None
 

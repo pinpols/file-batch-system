@@ -115,10 +115,11 @@ class FileImportHandler:
             try:
                 batch: list[dict[str, Any]] = []
                 async for row in self._read_rows(ctx):
-                    if ctx.cancel_signal is not None and ctx.cancel_signal.is_cancellation_requested:
-                        return SdkTaskResult.fail(
-                            "CANCELLED", "cancelled by platform"
-                        )
+                    if (
+                        ctx.cancel_signal is not None
+                        and ctx.cancel_signal.is_cancellation_requested
+                    ):
+                        return SdkTaskResult.fail("CANCELLED", "cancelled by platform")
                     batch.append(row)
                     counts.inc_success()
                     if len(batch) >= self._config.batch_size:
@@ -144,9 +145,7 @@ class FileImportHandler:
     async def _open_source(self, ctx: SdkTaskContext) -> None:
         """Open the source file. Default: resolves path from ``ctx.parameters`` and opens read-text."""
         path = self._resolve_path(ctx)
-        self._fh = await asyncio.to_thread(
-            self._open_text_file, path, self._config.encoding
-        )
+        self._fh = await asyncio.to_thread(self._open_text_file, path, self._config.encoding)
 
     async def _read_rows(self, ctx: SdkTaskContext) -> AsyncIterator[dict[str, Any]]:
         """Yield parsed row dicts. Default: dispatches on ``config.format``."""
@@ -220,14 +219,13 @@ class FileImportHandler:
                 first_line_header_names = parse_line(stripped, fmt.delimiter, fmt.quote)
                 continue
             fields = parse_line(stripped, fmt.delimiter, fmt.quote)
-            row_cols = cols or first_line_header_names or [
-                f"col{i}" for i in range(len(fields))
-            ]
+            row_cols = cols or first_line_header_names or [f"col{i}" for i in range(len(fields))]
             if cols and len(fields) != len(cols):
-                raise ValueError(
-                    f"line {line_no}: expected {len(cols)} fields, got {len(fields)}"
-                )
-            yield {row_cols[i] if i < len(row_cols) else f"col{i}": fields[i] for i in range(len(fields))}
+                raise ValueError(f"line {line_no}: expected {len(cols)} fields, got {len(fields)}")
+            yield {
+                row_cols[i] if i < len(row_cols) else f"col{i}": fields[i]
+                for i in range(len(fields))
+            }
 
     async def _read_jsonl(self) -> AsyncIterator[dict[str, Any]]:
         assert self._fh is not None
@@ -255,7 +253,5 @@ class FileImportHandler:
             )
         for i, obj in enumerate(data):
             if not isinstance(obj, dict):
-                raise ValueError(
-                    f"json row {i}: expected object, got {type(obj).__name__}"
-                )
+                raise ValueError(f"json row {i}: expected object, got {type(obj).__name__}")
             yield obj

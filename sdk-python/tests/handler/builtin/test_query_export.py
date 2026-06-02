@@ -92,9 +92,7 @@ async def test_export_query_exception_returns_fail(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_export_jsonl_format(tmp_path: Path) -> None:
     out = tmp_path / "rows.jsonl"
-    cfg = QueryExportConfig(
-        task_type="export_jsonl", sql="SELECT 1", format="jsonl"
-    )
+    cfg = QueryExportConfig(task_type="export_jsonl", sql="SELECT 1", format="jsonl")
     handler = _FakeQueryHandler(cfg, [{"a": 1}, {"a": 2, "b": "x"}])
 
     result = await handler.execute(_ctx(str(out)))

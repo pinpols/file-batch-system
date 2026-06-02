@@ -92,9 +92,7 @@ def encode_line(fields: Sequence[str | None], delimiter: str, quote: str) -> str
         if i > 0:
             parts.append(delimiter)
         f = "" if raw is None else raw
-        need_quote = (
-            delimiter in f or quote in f or "\n" in f or "\r" in f
-        )
+        need_quote = delimiter in f or quote in f or "\n" in f or "\r" in f
         if need_quote:
             escaped = f.replace(quote, quote + quote)
             parts.append(quote + escaped + quote)
