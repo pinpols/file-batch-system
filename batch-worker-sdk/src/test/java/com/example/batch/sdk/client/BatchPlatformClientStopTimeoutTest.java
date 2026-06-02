@@ -137,7 +137,7 @@ class BatchPlatformClientStopTimeoutTest {
 
     // 所有 mock 在毫秒级返回,client.stop 不应卡在任何阶段
     assertThat(elapsedMs).isLessThan(1_000L);
-    verify(kafka).close();
+    verify(kafka).close(any(Duration.class));
     verify(dispatcher).stop(any(Duration.class));
     verify(hb).close();
     verify(lease).close();

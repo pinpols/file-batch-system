@@ -1,7 +1,9 @@
 package com.example.batch.sdk.dispatcher;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
+import com.example.batch.sdk.client.BatchSdkClientException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,6 +20,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
@@ -51,6 +55,20 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
    * 重启进程。
    */
   private final AtomicBoolean crashed = new AtomicBoolean(false);
+
+  /**
+   * Lane E #4-Java:Kafka SASL 认证失败(凭据错误)时置 true。 与 {@link #crashed} 区分:crashed=任意非预期
+   * Throwable;fatalAuthFailure=确定不可恢复的认证错, 无限重试也修不好,必须 fail-fast 让 K8s 拉起重启;{@link
+   * com.example.batch.sdk.client.BatchPlatformClient#stop(java.time.Duration)} 据此跳过
+   * deactivate(凭据已坏,HTTP 也会 401)。
+   */
+  private final AtomicBoolean fatalAuthFailure = new AtomicBoolean(false);
+
+  /**
+   * Lane E #5:消费线程引用 —— {@link #close(Duration)} 用来 join 等其退出,确保 offset commit / {@code
+   * consumer.close()} 完成,避免 SIGKILL 时 in-flight offset 丢失。 由 {@link #run()} 进入时记录。
+   */
+  private volatile Thread kafkaThread;
 
   /** P0 hardening:in-flight 达上限时 pause 当前 partition;掉下来再 resume。Zeebe maxJobsActive 模式。 */
   private volatile boolean paused = false;
@@ -113,6 +131,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   /** 启动 poll loop。阻塞当前线程,通常在专用线程跑。 */
   @Override
   public void run() {
+    this.kafkaThread = Thread.currentThread();
     consumer.subscribe(
         Pattern.compile(config.getKafkaTopicPattern()), new PauseAwareRebalanceListener());
     log.info(
@@ -137,7 +156,22 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           log.warn("kafka commitSync failed (will retry next poll): {}", ex.getMessage());
         }
       }
-    } catch (org.apache.kafka.common.errors.WakeupException wakeup) {
+    } catch (AuthenticationException authEx) {
+      // Lane E #4-Java:Kafka SASL 凭据错 —— 不可恢复,fail-fast。
+      // 无限重试只会让 Pod hang 到 K8s liveness 杀;主动置 fatalAuthFailure + running=false,
+      // BatchPlatformClient.stop() 据此跳过 deactivate(凭据已错,HTTP 也会 401),
+      // 抛 RuntimeException 让 Pod 以非 0 码退出,K8s 用正确凭据重启拉起。
+      fatalAuthFailure.set(true);
+      running.set(false);
+      log.error(
+          "Kafka SASL authentication failed; entering fatal state. "
+              + "Check BATCH_KAFKA_* credentials. Pod will exit for K8s to restart.",
+          authEx);
+      throw new BatchSdkClientException(
+          BatchSdkClientException.Stage.KAFKA_AUTH,
+          "Kafka SASL auth failed — pod should restart with correct creds",
+          authEx);
+    } catch (WakeupException wakeup) {
       // 正常 stop 触发
     } catch (Throwable t) {
       // P1-4 #1.7:非预期退出 — 置 crashed + running=false,让 BatchPlatformClient.isHealthy() 报 false,
@@ -255,12 +289,44 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     dispatcher.onMessage(msg);
   }
 
-  /** 让 poll loop 退出。WakeupException 在 run() 被捕获 → close consumer。 */
+  /** 让 poll loop 退出。WakeupException 在 run() 被捕获 → close consumer。默认 5s join 超时。 */
   @Override
   public void close() {
-    if (running.compareAndSet(true, false)) {
-      log.info("KafkaTaskConsumer wakeup requested");
+    close(Duration.ofSeconds(5));
+  }
+
+  /**
+   * Lane E #5:wakeup poll loop + join 等其退出,保证 offset commit / {@code consumer.close()} 在 K8s
+   * SIGKILL 前完成。 join 超时仅打 WARN(不抛),消费线程后续会自然清理;BatchPlatformClient 的总预算控制最坏耗时。
+   *
+   * <p>幂等:多次调用只第一次触发 wakeup。
+   */
+  public void close(Duration joinTimeout) {
+    if (!running.compareAndSet(true, false)) {
+      return;
+    }
+    log.info("KafkaTaskConsumer wakeup requested");
+    try {
       consumer.wakeup();
+    } catch (Exception ex) {
+      log.warn("kafka consumer.wakeup() failed: {}", ex.getMessage());
+    }
+    Thread t = this.kafkaThread;
+    if (t != null && t != Thread.currentThread()) {
+      long timeoutMs = Math.max(100L, joinTimeout == null ? 5_000L : joinTimeout.toMillis());
+      try {
+        t.join(timeoutMs);
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+        log.warn("Kafka close interrupted while waiting for poll thread", ie);
+        return;
+      }
+      if (t.isAlive()) {
+        log.warn(
+            "Kafka poll thread did not exit within {}ms after wakeup; "
+                + "offsets may be uncommitted. K8s SIGKILL may cause task replay.",
+            timeoutMs);
+      }
     }
   }
 
@@ -275,6 +341,15 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
    */
   public boolean hasCrashed() {
     return crashed.get();
+  }
+
+  /**
+   * Lane E #4-Java:poll loop 是否因 Kafka SASL 认证失败退出。{@link
+   * com.example.batch.sdk.client.BatchPlatformClient#stop(java.time.Duration)} 据此跳过
+   * deactivate(凭据已坏,HTTP 也会 401,空喊无意义)。
+   */
+  public boolean isFatalAuthFailure() {
+    return fatalAuthFailure.get();
   }
 
   /**

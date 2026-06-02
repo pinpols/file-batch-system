@@ -67,7 +67,7 @@ class BatchPlatformClientStopOrderTest {
     client.stop();
 
     InOrder order = Mockito.inOrder(kafka, dispatcher, hb, lease, http);
-    order.verify(kafka).close();
+    order.verify(kafka).close(any(Duration.class));
     order.verify(dispatcher).stop(any(Duration.class));
     order.verify(hb).close();
     order.verify(lease).close();
