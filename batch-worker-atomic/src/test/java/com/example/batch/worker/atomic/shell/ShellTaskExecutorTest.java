@@ -168,7 +168,9 @@ class ShellTaskExecutorTest {
     void nonZeroExitMarksFailure() {
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/usr/bin/false")));
       assertThat(r.success()).isFalse();
-      assertThat(r.output()).isEmpty(); // failure path 不 populate output(直接 fail message)
+      // K3:失败路径只填 error_code(无其它 output),保持 message 携带 exit/stderr 摘要
+      assertThat(r.output()).containsOnlyKeys("error_code");
+      assertThat(r.output()).containsEntry("error_code", "EXECUTION_FAILED");
       assertThat(r.message()).startsWith("exit=1");
     }
 

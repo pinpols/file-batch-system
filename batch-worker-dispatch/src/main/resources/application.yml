@@ -40,6 +40,11 @@ mybatis:
 
 batch:
   worker:
+    # ADR-029 classpath 隔离守护:本 worker 不应携带 batch-worker-atomic 模块的 dual-use executor 类。
+    # 若 pom.xml 误引 batch-worker-atomic 依赖,启动期 fail-fast(默认关 + 本处显式 opt-in)。
+    atomic:
+      isolation-check:
+        enabled: true
     # Worker 类型（IMPORT/EXPORT/DISPATCH）
     type: DISPATCH
     # 实例内并发上限（背压）：dispatch 通常较轻，默认略大
@@ -86,3 +91,4 @@ batch:
         interval-millis: ${BATCH_DISPATCH_RECEIPT_POLL_MS:60000}
         # 单次轮询批大小
         batch-size: ${BATCH_DISPATCH_RECEIPT_POLL_BATCH:50}
+

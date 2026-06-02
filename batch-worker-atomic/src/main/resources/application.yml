@@ -49,6 +49,8 @@ batch:
       capability-tags: ${BATCH_WORKER_ATOMIC_CAPABILITY_TAGS:}
       # 注册哪些 SPI taskType(空=全注册)
       enabled-types: ${BATCH_WORKER_ATOMIC_ENABLED_TYPES:}
+      # ADR-029 classpath 隔离守护现已 opt-in 默认关,4 个 pipeline worker 的 application.yml 显式 true 开启。
+      # 本 atomic worker 不配即 false,正确语义(不应拦自己)。
     # dual-use 执行器:sql/stored-proc/http 默认开(三道闸约束:schema/user 白名单 + 资源限制 + OS 拒绝,见 ADR-029);
     # shell 默认关(沙盒方案未定前不开放,见 ADR-035 §8)。
     executors:

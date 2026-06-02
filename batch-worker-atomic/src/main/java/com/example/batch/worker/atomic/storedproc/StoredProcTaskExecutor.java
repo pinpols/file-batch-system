@@ -8,6 +8,7 @@ import com.example.batch.common.spi.task.TaskCapability;
 import com.example.batch.common.spi.task.TaskContext;
 import com.example.batch.common.spi.task.TaskResult;
 import com.example.batch.worker.atomic.runtime.AtomicConnectionManager;
+import com.example.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -134,7 +135,17 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       }
       return runCall(ctx, inv);
     } catch (StoredProcValidationException ex) {
-      return TaskResult.fail(ex.getMessage());
+      // schema/SECURITY DEFINER/角色等安全闸 vs 入参非法
+      String msg = ex.getMessage();
+      boolean security =
+          msg != null
+              && (msg.contains("not allowed")
+                  || msg.contains("OS-capable")
+                  || msg.contains("SECURITY DEFINER")
+                  || msg.contains("EXECUTE privilege")
+                  || msg.contains("schema not allowed"));
+      return AtomicErrorCode.fail(
+          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID, msg);
     } catch (BizException ex) {
       log.warn(
           "stored proc executor rejected by SensitiveDataValidator: tenantId={}, jobCode={},"
@@ -144,14 +155,18 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
           ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
               ? "?"
               : ex.getMessageArgs()[1]);
-      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "stored proc executor unexpected error: tenantId={}, jobCode={}",
           ctx.tenantId(),
           ctx.jobCode(),
           ex);
-      return TaskResult.fail(ex);
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.EXECUTION_FAILED,
+          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
+          ex);
     }
   }
 
@@ -355,7 +370,14 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
             return execCallableStatement(conn, call, inv, start);
           });
     } catch (SQLException ex) {
-      return TaskResult.fail("stored proc call failed: " + ex.getMessage(), ex);
+      boolean isTimeout =
+          "57014".equals(ex.getSQLState())
+              || (ex.getMessage() != null
+                  && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
+      return AtomicErrorCode.fail(
+          isTimeout ? AtomicErrorCode.TIMEOUT : AtomicErrorCode.EXECUTION_FAILED,
+          "stored proc call failed: " + ex.getMessage(),
+          ex);
     }
   }
 
