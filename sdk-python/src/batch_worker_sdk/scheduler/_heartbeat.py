@@ -24,7 +24,7 @@ import asyncio
 import contextlib
 import logging
 from datetime import UTC, datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Final, Protocol, runtime_checkable
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import PlatformError
@@ -35,9 +35,11 @@ logger = logging.getLogger(__name__)
 
 
 # ─── 与 Java HeartbeatScheduler 一致的常量 ────────────────────────────
-# 对应 MIN_HINT_MS=1000 和 MAX_HINT_MULTIPLIER=10。
-_MIN_HINT_S: float = 1.0
-_MAX_HINT_MULTIPLIER: int = 10
+# 对应 Java MIN_HINT_MS=1000 和 MAX_HINT_MULTIPLIER=10。public 名字供单测
+# 直接 import,锁定 [MIN, baseline * MAX] 钳制契约,防止常量被误改后心跳
+# 风暴(< 1s)或心跳饥饿(> baseline * 10)回归。
+MIN_HEARTBEAT_INTERVAL_S: Final[float] = 1.0
+MAX_HEARTBEAT_HINT_MULTIPLIER: Final[int] = 10
 
 
 @runtime_checkable
@@ -196,8 +198,8 @@ class HeartbeatScheduler:
         - ``> 10 * baseline`` → 10 * baseline(防止饥饿)
         - 与当前值相同 → 不动
         """
-        max_s = self._baseline_s * _MAX_HINT_MULTIPLIER
-        clamped = max(_MIN_HINT_S, min(max_s, hint_s))
+        max_s = self._baseline_s * MAX_HEARTBEAT_HINT_MULTIPLIER
+        clamped = max(MIN_HEARTBEAT_INTERVAL_S, min(max_s, hint_s))
         if clamped == self._next_interval_s:
             return
         logger.info(
