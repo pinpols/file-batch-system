@@ -1,17 +1,20 @@
-"""drift-guard 桩:Python ↔ shared-constants yaml 一致性。
+"""Python ↔ ``docs/api/sdk-shared-constants.yaml`` strict parity test.
 
-Java 侧 ``SharedConstantsParityTest`` 是 source-of-truth,断言
-yaml 与 Java enum / static-final 列表一致。本文件是 **Python 镜像桩**
-—— 等 Python SDK 真正落地常量(enum / Final list)后会去掉 xfail,
-并把常量与同一份 yaml 做对比。
+Lane P (Java) side asserts Java enums == yaml; this Python side asserts
+``batch_worker_sdk.constants`` == yaml. Together they pin all 3 vertices
+(Java, yaml, Python) of the cross-language constant triangle.
 
-在 Python 常量到位之前,所有对比都是 xfail(strict),这样真常量
-某天意外与 yaml 对齐时,测试会大声失败,逼 SDK 作者去掉 xfail。
+Authority order matches the yaml header: Java is the source-of-truth,
+yaml is a generated mirror, Python is a consumer — any drift fails this
+test loudly and forces a re-mirror.
 
-发现规则与 ``tests/contract/test_contract_runner.py`` 一致:
-- 从本文件向上走到 repo root。
-- yaml 缺失时静默跳过(0 个 parametrize 用例)—— Java 侧已经发布,
-  正常不应缺,这里只是防御。
+This test deliberately uses a homegrown minimal yaml parser (top-level
+``key:`` + ``- value`` lines only) to avoid pulling PyYAML into runtime
+or test deps; the yaml shape is intentionally tiny.
+
+``atomic_error_codes`` is intentionally skipped while the Java side is
+still an empty placeholder (per yaml header comment); add when Lane K
+populates ``AtomicErrorCode.java`` and reflects the values into yaml.
 """
 
 from __future__ import annotations
@@ -21,23 +24,26 @@ from pathlib import Path
 
 import pytest
 
+from batch_worker_sdk import constants
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _YAML_PATH = _REPO_ROOT / "docs" / "api" / "sdk-shared-constants.yaml"
 
-# Java parity 测试覆盖的 key(Java 增长时必须同步)。
-_COVERED_KEYS: list[str] = [
-    "schema_versions_supported",
-    "worker_runtime_states",
-    "sensitive_keywords",
-    "task_statuses",
+# (yaml key, python module attribute) pairs covered by this parity test.
+# Keep in sync with Java SharedConstantsParityTest's covered keys.
+_COVERED: list[tuple[str, str]] = [
+    ("schema_versions_supported", "SCHEMA_VERSIONS_SUPPORTED"),
+    ("worker_runtime_states", "WORKER_RUNTIME_STATES"),
+    ("sensitive_keywords", "SENSITIVE_KEYWORDS"),
+    ("task_statuses", "TASK_STATUSES"),
 ]
 
 
 def _load_yaml() -> dict[str, list[str]]:
-    """最小化 yaml loader。Phase 0 决定不引入 PyYAML 作为测试依赖
-    (pyproject 决议保持 deps 为空)。当前 yaml 形状很小(顶层 key
-    → list-of-strings),自研一个解析器足够;后续如果需要更丰富的
-    解析能力可以再切到 PyYAML。
+    """Minimal yaml loader for top-level ``key:`` + ``- value`` shape.
+
+    Avoid PyYAML as a test dep — the file is intentionally trivial. If
+    a future field needs richer parsing, swap in PyYAML at that point.
     """
     if not _YAML_PATH.is_file():
         return {}
@@ -54,40 +60,29 @@ def _load_yaml() -> dict[str, list[str]]:
         elif line.lstrip().startswith("- ") and current_key is not None:
             out[current_key].append(line.lstrip()[2:].strip())
         elif not line.startswith(" ") and ":" in line and not line.endswith(":"):
-            # `version: 1` 这种顶层 scalar —— parity 不关心。
+            # `version: 1` style top-level scalar — ignored for parity.
             current_key = None
     return out
 
 
-@pytest.mark.parametrize("key", _COVERED_KEYS)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Lane Q Phase 1 stub: Python SDK has no exported constants yet. "
-        "When Lane Q adds e.g. WorkerRuntimeState enum / SENSITIVE_KEYWORDS "
-        "Final list, replace the body with set-equality assertion and drop xfail."
-    ),
-)
-def test_python_constants_match_yaml(key: str) -> None:
-    yaml = _load_yaml()
-    assert key in yaml, f"{key} missing from sdk-shared-constants.yaml"
-
-    # 占位:Python 侧还没有可 import 的常量模块。
-    # 后续会替换成形如:
-    #   from batch_worker_sdk.constants import WORKER_RUNTIME_STATES
-    #   assert set(WORKER_RUNTIME_STATES) == set(yaml[key])
-    python_side: set[str] = set()
-    yaml_side = set(yaml[key])
-
+@pytest.mark.parametrize(("yaml_key", "python_attr"), _COVERED)
+def test_python_constants_match_yaml(yaml_key: str, python_attr: str) -> None:
+    yaml_data = _load_yaml()
+    assert yaml_key in yaml_data, (
+        f"{yaml_key!r} missing from {_YAML_PATH}; "
+        "Java side must populate yaml before Python parity can pass."
+    )
+    yaml_side = set(yaml_data[yaml_key])
+    python_side = set(getattr(constants, python_attr))
     assert python_side == yaml_side, (
-        f"Python constants drift from yaml for '{key}'. "
-        f"Python={python_side}, yaml={yaml_side}. "
-        f"Sync via Lane Q parity test."
+        f"Parity drift for {yaml_key!r}: "
+        f"python({python_attr})={sorted(python_side)} "
+        f"yaml={sorted(yaml_side)}"
     )
 
 
 def test_yaml_file_is_present() -> None:
-    """sanity 检查:Java 侧必须提供 sdk-shared-constants.yaml。非 xfail。"""
+    """Sanity: Lane P must ship sdk-shared-constants.yaml."""
     assert _YAML_PATH.is_file(), (
         f"Expected Lane P shared-constants yaml at {_YAML_PATH}. "
         "Lane P did not merge or the path moved — check docs/api/."
@@ -95,12 +90,12 @@ def test_yaml_file_is_present() -> None:
 
 
 def test_yaml_covered_keys_present() -> None:
-    """sanity 检查:Java parity 断言的所有 key 都必须在 yaml 里。"""
-    yaml = _load_yaml()
-    missing = [k for k in _COVERED_KEYS if k not in yaml]
+    """Sanity: every key this test asserts must exist in yaml."""
+    yaml_data = _load_yaml()
+    missing = [k for k, _ in _COVERED if k not in yaml_data]
     assert not missing, (
         f"sdk-shared-constants.yaml missing keys {missing}. "
-        "Java SharedConstantsParityTest will fail; fix yaml first."
+        "Java SharedConstantsParityTest will also fail; fix yaml first."
     )
 
 
