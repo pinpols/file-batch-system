@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ADR-035 Round-3 #10 — batch-worker-sdk-template:开箱即用 template repo 骨架。
+
+  对照 ../sample-tenant-worker-spring(纯示范):
+  - 本目录定位 "template":租户 fork / copy 后改两行配置就能跑;含 Dockerfile + run.sh + .env.example + CI。
+  - 真正独立 repo(github.com/example-batch/batch-worker-sdk-template)推后,先在主仓 examples/ 孵化雏形。
+
+  跑:
+    cp .env.example .env && vi .env       # 填 BATCH_BASE_URL 等
+    ./run.sh                              # 一键 docker build + run
+  或:
+    mvn spring-boot:run -f pom.xml
+
+  本示例独立于主 reactor(自带 spring-boot-starter-parent),且不挂进根 pom。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.6</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.example.template</groupId>
+  <artifactId>batch-worker-sdk-template</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Batch Worker SDK Template (Round-3 #10 开箱即用骨架)</name>
+  <description>租户 fork 起点:SDK + Spring starter + Dockerfile + CI 一站齐。</description>
+
+  <properties>
+    <java.version>25</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <batch-sdk.version>1.1.0-SNAPSHOT</batch-sdk.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.example.batch</groupId>
+      <artifactId>batch-worker-sdk-spring-boot-starter</artifactId>
+      <version>${batch-sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>batch-worker-sdk-template</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>
