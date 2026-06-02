@@ -1,13 +1,11 @@
-"""Tenant-implemented task handler contract (P0.5 stub).
+"""租户实现的任务处理协议(对齐 Java SdkTaskHandler)。
 
-Mirrors Java ``com.example.batch.sdk.task.SdkTaskHandler``. The Python
-form is an :class:`~typing.Protocol` rather than an :class:`abc.ABC`:
-runtime-checkable structural typing fits async handlers better and
-removes the inheritance ceremony Java needs but Python doesn't.
+对齐 Java ``com.example.batch.sdk.task.SdkTaskHandler``。Python 形式采用
+:class:`~typing.Protocol` 而非 :class:`abc.ABC`:运行时可校验的结构化类型
+更契合异步 handler,也省掉了 Java 必须、Python 不需要的继承样板。
 
-Phase 1+ adds an abstract base class with retry/idempotency hooks; P0.5
-just nails down the public shape so downstream lanes can import the
-type without a circular dep.
+Phase 1+ 会再加一个带重试/幂等钩子的抽象基类;当前先把公开形态钉住,
+让下游 lane 不出现循环依赖即可引用此类型。
 """
 
 from __future__ import annotations
@@ -21,12 +19,12 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 @runtime_checkable
 class SdkTaskHandler(Protocol):
-    """Implement this on each task type your worker runs.
+    """租户为每种任务类型实现的协议。
 
-    A single Python worker process can register many handlers; the SDK
-    dispatch loop routes by :meth:`task_type`.
+    一个 Python worker 进程可注册多个 handler;SDK 分派循环按
+    :meth:`task_type` 路由。
 
-    Typical usage (Phase 1+ once :class:`WorkerClient` exists)::
+    典型用法(Phase 1+ 待 :class:`WorkerClient` 落地后)::
 
         class MyImportHandler:
             def task_type(self) -> str:
@@ -41,28 +39,25 @@ class SdkTaskHandler(Protocol):
     """
 
     def task_type(self) -> str:
-        """Globally unique task-type code (matches ``job_definition.job_type``)."""
+        """全局唯一的任务类型码(对应 ``job_definition.job_type``)。"""
         ...
 
     async def execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
-        """Run the task. ``ctx`` is framework-supplied; return the result."""
+        """执行任务。``ctx`` 由框架注入,返回结果对象。"""
         ...
 
     def descriptor(self) -> SdkTaskTypeDescriptor | None:
-        """Optional — declare a custom task-type descriptor (defaults to ``None``).
+        """可选 —— 声明自定义任务类型描述符,默认 ``None``。
 
-        Returning a descriptor causes it to be sent on worker-register;
-        the platform upserts it into ``custom_task_type_registry`` and
-        the console renders forms from the embedded JSON Schema.
+        返回非 None 时会在 worker 注册阶段一并上报;平台据此 upsert
+        ``custom_task_type_registry``,控制台再依据内嵌 JSON Schema 渲染表单。
         """
         return None
 
     def cancel(self, ctx: SdkTaskContext) -> None:
-        """Optional — cooperative cancel hook (default no-op).
+        """可选 —— 协作式取消钩子,默认空实现。
 
-        Called by the SDK when the platform signals cancellation. Most
-        handlers ignore this and rely on
-        :attr:`SdkTaskContext.is_dry_run`-style polling instead; override
-        only if you need synchronous cleanup.
+        平台下发取消信号时由 SDK 调用。多数 handler 不实现此方法,改用
+        :attr:`SdkTaskContext.is_dry_run` 风格的轮询;只有需要同步清理时才需重写。
         """
         return None

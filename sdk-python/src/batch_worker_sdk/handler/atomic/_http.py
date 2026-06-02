@@ -1,13 +1,12 @@
-"""HTTP atomic handler — async port of Java ``HttpAtomicHandler``.
+"""HTTP atomic handler —— Java ``HttpAtomicHandler`` 的异步移植。
 
-Single HTTP call on top of :mod:`httpx` (already a SDK dep, used by
-:mod:`batch_worker_sdk.internal._http` for the platform client). SSRF
-defence (block private / loopback / link-local / site-local + host
-deny-list) runs **before** the request is dispatched, mirroring the
-Java JDK ``HttpClient`` implementation.
+基于 :mod:`httpx`(已是 SDK 依赖,平台 client 在
+:mod:`batch_worker_sdk.internal._http` 已经用了)发起单次 HTTP 调用。
+SSRF 防护(拦截 private / loopback / link-local / site-local + 主机黑名单)
+在请求**发出前**执行,与 Java JDK ``HttpClient`` 实现一致。
 
-Aligns with Java ``handler/atomic/HttpAtomicHandler.java`` —
-parameters / output / config shape are 1:1.
+与 Java ``handler/atomic/HttpAtomicHandler.java`` 对齐 ——
+参数 / 输出 / config 形态 1:1。
 """
 
 from __future__ import annotations
@@ -32,15 +31,15 @@ _DEFAULT_METHODS: frozenset[str] = frozenset({"GET", "POST", "PUT", "DELETE", "P
 
 @dataclass(frozen=True)
 class HttpAtomicConfig:
-    """Config for :class:`HttpAtomicHandler` (mirrors Java ``HttpAtomicConfig``).
+    """:class:`HttpAtomicHandler` 的配置(对齐 Java ``HttpAtomicConfig``)。
 
     Attributes:
-        task_type: Registered task-type code.
-        block_private_ips: Reject private/loopback/link-local/site-local IPs (SSRF).
-        blocked_host_patterns: Extra host deny-list (substring or regex).
-        allowed_methods: Allowed HTTP methods (upper-case).
-        timeout_seconds: Per-request connect + read timeout.
-        max_response_bytes: Response body byte cap; excess is truncated.
+        task_type: 注册的任务类型码。
+        block_private_ips: 拒绝 private/loopback/link-local/site-local IP(SSRF)。
+        blocked_host_patterns: 额外的主机黑名单(子串或正则)。
+        allowed_methods: 允许的 HTTP method(大写)。
+        timeout_seconds: 单次请求的 connect + read 超时。
+        max_response_bytes: 响应体字节上限,超出部分截断。
     """
 
     task_type: str
@@ -57,31 +56,31 @@ class HttpAtomicConfig:
             raise ValueError("timeout_seconds must be > 0")
         if self.max_response_bytes <= 0:
             raise ValueError("max_response_bytes must be > 0")
-        # Normalize: frozenset of upper-case methods; empty → defaults.
+        # 归一化:大写 method 的 frozenset;空集回退默认。
         methods = frozenset(m.upper() for m in self.allowed_methods) or _DEFAULT_METHODS
         object.__setattr__(self, "allowed_methods", methods)
         object.__setattr__(self, "blocked_host_patterns", frozenset(self.blocked_host_patterns))
 
     @classmethod
     def defaults(cls, task_type: str) -> HttpAtomicConfig:
-        """Defaults: block private IPs, all standard methods, 30s, 1 MiB."""
+        """默认值:拦截 private IP、放行所有标准 method、30s 超时、1 MiB 上限。"""
         return cls(task_type=task_type)
 
 
 class HttpAtomicHandler(SdkAbstractAtomicHandler):
-    """Out-of-the-box HTTP atomic handler.
+    """开箱即用的 HTTP atomic handler。
 
-    Parameters (from ``ctx.parameters``):
+    参数(来自 ``ctx.parameters``):
 
-    * ``url`` (str, required)
-    * ``method`` (str, default ``"GET"``)
-    * ``headers`` (dict[str, str], optional)
-    * ``body`` (str, optional)
+    * ``url`` (str,必填)
+    * ``method`` (str,默认 ``"GET"``)
+    * ``headers`` (dict[str, str],可选)
+    * ``body`` (str,可选)
 
-    Output dict:
-    ``{"statusCode": int, "responseBody": str, "responseTruncated": bool}``.
-    Non-2xx is **not** an error — the status code is returned for the
-    caller to interpret (matches Java behaviour).
+    输出 dict:
+    ``{"statusCode": int, "responseBody": str, "responseTruncated": bool}``。
+    非 2xx **不**视为错误 —— 状态码原样返回交由调用方判定
+    (与 Java 行为一致)。
     """
 
     def __init__(
@@ -93,8 +92,8 @@ class HttpAtomicHandler(SdkAbstractAtomicHandler):
         if config is None:
             raise ValueError("config must not be None")
         self._config = config
-        # Allow test injection; otherwise build per-request via a context
-        # manager so each invocation is isolated and timeouts can vary.
+        # 允许测试注入;否则每次请求用 context manager 自建,
+        # 单次调用之间相互隔离,超时也可独立调整。
         self._client = client
 
     def task_type(self) -> str:
@@ -151,7 +150,7 @@ class HttpAtomicHandler(SdkAbstractAtomicHandler):
             if owns_client:
                 await client.aclose()
 
-    # ── SSRF defence ───────────────────────────────────────────────────────
+    # ── SSRF 防护 ──────────────────────────────────────────────────────────
 
     def _check_ssrf(self, host: str) -> None:
         if self._config.block_private_ips:
@@ -175,7 +174,7 @@ _IpAddr = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 
 def _resolve_addresses(host: str) -> list[_IpAddr]:
-    """Resolve ``host`` to all addrs; if literal IP, use as-is."""
+    """把 ``host`` 解析成所有地址;若本身就是字面量 IP,直接用。"""
     try:
         return [ipaddress.ip_address(host)]
     except ValueError:

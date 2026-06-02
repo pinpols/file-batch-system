@@ -1,13 +1,13 @@
-"""Import shape — external -> tenant template (ADR-036).
+"""Import 形态 —— 外部 -> 租户 模板(ADR-036)。
 
-Python equivalent of Java ``SdkAbstractImportHandler``: file/stream ->
-tenant DB. Template order::
+对齐 Java ``SdkAbstractImportHandler``:文件/流 -> 租户库。
+模板执行序::
 
-    _open_source -> _read_rows (async iterator) -> batch buffer ->
+    _open_source -> _read_rows (异步迭代器) -> 批量缓冲 ->
     _load_batch -> (finally) _close_source
 
-Subclasses fill 3 required hooks (``_read_rows`` / ``_load_batch``); the
-others have safe defaults. Per-shape ``_do_execute`` is :func:`final`.
+子类必须实现 3 个钩子(``_read_rows`` / ``_load_batch``);其余有安全默认值。
+每个形态的 ``_do_execute`` 是 :func:`final`。
 """
 
 from __future__ import annotations
@@ -27,38 +27,37 @@ from batch_worker_sdk.task.result import SdkTaskResult
 
 
 class SdkAbstractImportHandler[R](SdkAbstractTaskHandler):
-    """File/stream -> tenant-DB import shape.
+    """文件 / 流 -> 租户库的导入形态。
 
-    Mirror of Java ``SdkAbstractImportHandler<R>``. Java exposes a
-    ``Stream<R>`` for ``readRows``; the Python form uses an
-    :class:`typing.AsyncIterator` (async generator) because the SDK's
-    I/O surface is async-only.
+    对齐 Java ``SdkAbstractImportHandler<R>``。Java 用 ``Stream<R>`` 暴露
+    ``readRows``;Python 改用 :class:`typing.AsyncIterator`(异步生成器),
+    因为 SDK 的 I/O 表面仅异步。
     """
 
     DEFAULT_BATCH_SIZE: int = 1000
 
     async def _open_source(self, ctx: SdkTaskContext) -> None:
-        """Open the data source (connect SFTP / download file / open stream). Default no-op."""
+        """打开数据源(连 SFTP / 下载文件 / 打开流)。默认空实现。"""
         return None
 
     @abstractmethod
     def _read_rows(self, ctx: SdkTaskContext) -> AsyncIterator[R]:
-        """Return an async iterator of parsed rows (one per record).
+        """返回已解析行的异步迭代器(每条记录一行)。
 
-        Aligns with Java ``Stream<R> readRows(...)``. Implementations
-        typically write this as an ``async def`` generator.
+        对齐 Java ``Stream<R> readRows(...)``。实现一般写成
+        ``async def`` 生成器。
         """
 
     @abstractmethod
     async def _load_batch(self, ctx: SdkTaskContext, batch: list[R]) -> None:
-        """Bulk-write a batch into the tenant's destination table."""
+        """批量写入租户目标表。"""
 
     async def _close_source(self, ctx: SdkTaskContext) -> None:
-        """Release the source (close stream / drop temp file). Default no-op."""
+        """释放数据源(关流 / 删临时文件)。默认空实现。"""
         return None
 
     def batch_size(self) -> int:
-        """Batch size; override to change. Default 1000, mirrors Java."""
+        """批大小;重写可调整。默认 1000,与 Java 一致。"""
         return self.DEFAULT_BATCH_SIZE
 
     @final
@@ -88,8 +87,8 @@ class SdkAbstractImportHandler[R](SdkAbstractTaskHandler):
             )
         finally:
             if opened:
-                # Cleanup failures are silenced so the main result isn't
-                # replaced; the parent template's _cleanup hook logs.
+                # 清理失败静默,避免覆盖主结果;
+                # 父模板的 _cleanup 钩子会记录日志。
                 with contextlib.suppress(Exception):
                     await self._close_source(ctx)
 

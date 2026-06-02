@@ -1,13 +1,11 @@
-"""SQL atomic handler — async port of Java ``SqlAtomicHandler``.
+"""SQL atomic handler —— Java ``SqlAtomicHandler`` 的异步移植。
 
-The Java version uses JDK ``java.sql.*``; the Python version uses
-:mod:`asyncpg` (PostgreSQL only — matches the platform's data store).
-``asyncpg`` is an **optional** dependency (extra ``[sql]``) — only
-tenants that actually run SQL atoms need to install it.
+Java 版基于 JDK ``java.sql.*``;Python 版基于 :mod:`asyncpg`
+(仅 PostgreSQL —— 与平台数据存储一致)。``asyncpg`` 是**可选**依赖
+(extra ``[sql]``)—— 只有真正跑 SQL atom 的租户才需要安装。
 
-To avoid a hard module-level import on a tenant who isn't using SQL,
-the connection is supplied by the caller as a Protocol-shaped object:
-this also makes the handler trivial to unit-test without a real DB.
+为避免不用 SQL 的租户在模块级被硬 import,连接由调用方按 Protocol
+形状传入:这同时让 handler 不依赖真实库即可单测。
 """
 
 from __future__ import annotations
@@ -25,22 +23,20 @@ _LOG = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SqlAtomicConfig:
-    """Config for :class:`SqlAtomicHandler` (mirrors Java ``SqlAtomicConfig``).
+    """:class:`SqlAtomicHandler` 的配置(对齐 Java ``SqlAtomicConfig``)。
 
     Attributes:
-        task_type: Registered task-type code.
-        statement_timeout_seconds: Per-statement query timeout.
-        max_result_rows: Cap on rows returned per SELECT; excess marks
-            ``truncated=True``.
-        max_statements_per_job: Reject scripts with more ``;``-separated
-            statements than this (matches platform ``SqlExecutorProperties``).
-        default_auto_commit: ``False`` = explicit transaction (commit if
-            all succeed, rollback on any error). ``True`` = each
-            statement auto-commits.
-        forbid_os_capable_role: Run the PG role probe before executing;
-            reject if current_user has ``superuser`` /
-            ``pg_execute_server_program`` / ``pg_read_server_files`` /
-            ``pg_write_server_files``.
+        task_type: 注册的任务类型码。
+        statement_timeout_seconds: 单条语句查询超时。
+        max_result_rows: 每个 SELECT 返回行上限,超出标记
+            ``truncated=True``。
+        max_statements_per_job: ``;`` 分隔语句数上限,超出直接拒绝
+            (对齐平台 ``SqlExecutorProperties``)。
+        default_auto_commit: ``False`` = 显式事务(全成功 commit、任一
+            失败 rollback);``True`` = 每条语句自动 commit。
+        forbid_os_capable_role: 执行前跑 PG 角色探测,current_user 若拥有
+            ``superuser`` / ``pg_execute_server_program`` /
+            ``pg_read_server_files`` / ``pg_write_server_files`` 则拒绝。
     """
 
     task_type: str
@@ -67,10 +63,10 @@ class SqlAtomicConfig:
 
 @runtime_checkable
 class SqlConnection(Protocol):
-    """Protocol for an asyncpg-style PG connection.
+    """asyncpg 风格 PG 连接的 Protocol。
 
-    Mirrors the subset of :class:`asyncpg.Connection` we use; lets unit
-    tests supply a hand-rolled fake without importing asyncpg.
+    只对齐我们用到的 :class:`asyncpg.Connection` 子集;让单测无需引入
+    asyncpg 即可手写假对象。
     """
 
     async def fetch(self, query: str, *args: Any) -> list[Any]: ...
@@ -82,7 +78,7 @@ class SqlConnection(Protocol):
 
 @runtime_checkable
 class SqlConnectionFactory(Protocol):
-    """Async callable that hands out a fresh :class:`SqlConnection`."""
+    """每次产出一个新 :class:`SqlConnection` 的异步可调用对象。"""
 
     async def __call__(self) -> SqlConnection: ...
 
@@ -97,18 +93,18 @@ _OS_CAPABLE_ROLE_PROBE = (
 
 
 class SqlAtomicHandler(SdkAbstractAtomicHandler):
-    """Out-of-the-box SQL atomic handler (PG-only, asyncpg-backed).
+    """开箱即用的 SQL atomic handler(仅 PG,基于 asyncpg)。
 
-    Parameters (from ``ctx.parameters``):
+    参数(来自 ``ctx.parameters``):
 
-    * ``sql`` (str, required) — may contain ``;``-separated statements.
+    * ``sql`` (str,必填)—— 可以是多条 ``;`` 分隔语句。
 
-    Output:
-    For SELECT (last result set) — ``{"resultSet": [...], "rowCount":
+    输出:
+    SELECT(取最后一个结果集)—— ``{"resultSet": [...], "rowCount":
     n, "truncated": bool, "statementCount": k, "totalAffectedRows":
-    a}``.
+    a}``。
 
-    For DML-only — ``{"statementCount": k, "affectedRows": a}``.
+    纯 DML —— ``{"statementCount": k, "affectedRows": a}``。
     """
 
     def __init__(self, config: SqlAtomicConfig, connection_factory: SqlConnectionFactory) -> None:
@@ -186,14 +182,14 @@ class SqlAtomicHandler(SdkAbstractAtomicHandler):
             raise PermissionError("refusing SQL on OS-capable DB role")
 
 
-# ── statement splitting ───────────────────────────────────────────────────
+# ── 语句切分 ──────────────────────────────────────────────────────────────
 
 
 def split_statements(sql: str) -> list[str]:  # noqa: PLR0912 — 1:1 mirror of Java state machine
-    """Split a multi-statement SQL string on ``;`` honouring quotes / comments.
+    """按 ``;`` 切多语句 SQL,正确处理引号 / 注释。
 
-    Behaviour mirrors Java ``SqlAtomicHandler.splitStatements`` —
-    simple, does **not** handle PG dollar-quoting (Java doesn't either).
+    行为对齐 Java ``SqlAtomicHandler.splitStatements`` —— 简单实现,
+    **不**处理 PG dollar-quoting(Java 也不处理)。
     """
     out: list[str] = []
     buf: list[str] = []
@@ -253,7 +249,7 @@ _AFFECTED_RE = re.compile(r"(INSERT 0|UPDATE|DELETE|MERGE|COPY|MOVE)\s+(\d+)$", 
 
 
 def _parse_affected(command_tag: str) -> int:
-    """Parse asyncpg's command tag (e.g. ``"UPDATE 3"``) for row count."""
+    """从 asyncpg 的 command tag(如 ``"UPDATE 3"``)解析行数。"""
     if not command_tag:
         return 0
     m = _AFFECTED_RE.search(command_tag.strip())

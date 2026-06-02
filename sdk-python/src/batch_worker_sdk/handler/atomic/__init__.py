@@ -1,13 +1,11 @@
-"""Atomic handler templates (ADR-036 atomic shapes).
+"""Atomic handler 模板集合(ADR-036 atomic 形态)。
 
-Aligns 1:1 with Java ``handler/atomic/`` —
+与 Java ``handler/atomic/`` 1:1 对齐 ——
 ``HttpAtomicHandler`` / ``ShellAtomicHandler`` / ``SqlAtomicHandler`` /
-``StoredProcAtomicHandler`` plus their matching ``*Config`` value
-objects.
+``StoredProcAtomicHandler`` 及与之配套的 ``*Config`` 值对象。
 
-Tenants opt in by importing the handler + config they need; the
-``[sql]`` extra installs :mod:`asyncpg` for the SQL / StoredProc
-handlers (HTTP / Shell have no extra deps).
+租户按需 import 需要的 handler + config;``[sql]`` extra 会装上
+:mod:`asyncpg`,供 SQL / StoredProc handler 使用(HTTP / Shell 无额外依赖)。
 """
 
 from __future__ import annotations
