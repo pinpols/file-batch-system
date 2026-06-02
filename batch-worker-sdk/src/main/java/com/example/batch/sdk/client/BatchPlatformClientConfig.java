@@ -9,6 +9,7 @@ import lombok.Builder;
 import lombok.Builder.Default;
 import lombok.NonNull;
 import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * SDK 连接配置 — 业务方 build 出 {@link BatchPlatformClient} 时填。
@@ -27,6 +28,7 @@ import lombok.Value;
  */
 @Value
 @Builder(toBuilder = true)
+@Slf4j
 public class BatchPlatformClientConfig {
 
   @NonNull String baseUrl;
@@ -91,6 +93,21 @@ public class BatchPlatformClientConfig {
    */
   String kafkaSaslJaasConfig;
 
+  // ─── R3-4 时序校验严格度开关(Round-2 P0 #4)─────────────────────────────────
+  /**
+   * R3-4:启动期时序 4 规则(hb>=1s / lease>=5s / lease<=hb*3 / http<=hb/2)的严格度开关。
+   *
+   * <ul>
+   *   <li>{@code true}(默认,保持原行为)— 任一违反 → 抛 {@link IllegalStateException} fail-fast,进程挂掉 让 K8s /
+   *       systemd 拉起 + 运维介入。生产环境推荐
+   *   <li>{@code false} — 违反时 {@code log.warn(...)} 但不抛,client 仍可 build。 适用于运维降级窗口
+   *       (例如已知配置稍偏但短期内可接受、避免 K8s 重启循环);<b>临时口子,不建议长期开启</b>
+   * </ul>
+   *
+   * <p>env 覆盖:{@code BATCH_SDK_STRICT_TIMING=false} 可一键降级(默认 true)。
+   */
+  @Default boolean strictTimingValidation = true;
+
   /**
    * 从环境变量构造配置(默认前缀 {@code BATCH_SDK_})—— 租户无需在 {@code main()} 里手写一堆 {@code System.getenv}。
    *
@@ -153,10 +170,25 @@ public class BatchPlatformClientConfig {
     if (leaseRenew != null && !leaseRenew.isBlank()) {
       builder.leaseRenewInterval(Duration.ofSeconds(Long.parseLong(leaseRenew.trim())));
     }
+    // R3-4(Round-2 P0 #4):时序校验严格度开关,env 默认 true(保持 fail-fast)。
+    // 仅当显式设为 false / 0 / no / off 时降级为 WARN-only。
+    String strictTiming = env.apply(prefix + "STRICT_TIMING");
+    if (strictTiming != null && !strictTiming.isBlank()) {
+      builder.strictTimingValidation(parseBoolean(strictTiming.trim()));
+    }
 
     BatchPlatformClientConfig config = builder.build();
     config.validate();
     return config;
+  }
+
+  /**
+   * R3-4:解析 {@code BATCH_SDK_STRICT_TIMING} 等布尔 env。 显式 {@code false / 0 / no / off}(忽略大小写)→ {@code
+   * false};其它(含 {@code true / 1 / yes / on / 任意非法值})→ {@code true}, 体现"默认 strict、降级需显式声明" 的安全偏好。
+   */
+  static boolean parseBoolean(String raw) {
+    String v = raw.toLowerCase();
+    return !("false".equals(v) || "0".equals(v) || "no".equals(v) || "off".equals(v));
   }
 
   private static String required(
@@ -201,7 +233,7 @@ public class BatchPlatformClientConfig {
     long leaseMs = leaseRenewInterval.toMillis();
     long httpMs = httpTimeout.toMillis();
     if (hbMs < 1_000L) {
-      throw new IllegalStateException(
+      reportTimingViolation(
           "BatchPlatformClient config invalid: heartbeatInterval="
               + heartbeatInterval
               + " must be >= 1s (current "
@@ -209,7 +241,7 @@ public class BatchPlatformClientConfig {
               + "ms; suggest >= 5s for prod)");
     }
     if (leaseMs < 5_000L) {
-      throw new IllegalStateException(
+      reportTimingViolation(
           "BatchPlatformClient config invalid: leaseRenewInterval="
               + leaseRenewInterval
               + " must be >= 5s (current "
@@ -218,7 +250,7 @@ public class BatchPlatformClientConfig {
     }
     long leaseUpperMs = hbMs * 3L;
     if (leaseMs > leaseUpperMs) {
-      throw new IllegalStateException(
+      reportTimingViolation(
           "BatchPlatformClient config invalid: leaseRenewInterval="
               + leaseRenewInterval
               + " must be <= heartbeatInterval × 3 ("
@@ -228,7 +260,7 @@ public class BatchPlatformClientConfig {
     }
     long httpUpperMs = hbMs / 2L;
     if (httpMs > httpUpperMs) {
-      throw new IllegalStateException(
+      reportTimingViolation(
           "BatchPlatformClient config invalid: httpTimeout="
               + httpTimeout
               + " must be <= heartbeatInterval / 2 ("
@@ -236,5 +268,24 @@ public class BatchPlatformClientConfig {
               + "ms) — 否则心跳超时会堆积阻塞 scheduler;"
               + "suggest 调大 heartbeatInterval 或调小 httpTimeout");
     }
+  }
+
+  /**
+   * R3-4(Round-2 P0 #4):按 {@link #strictTimingValidation} 决定抛异常 fail-fast 还是 WARN 降级。
+   *
+   * <ul>
+   *   <li>{@code strictTimingValidation=true}(默认) → 抛 {@link IllegalStateException},进程挂掉
+   *   <li>{@code strictTimingValidation=false} → {@code log.warn(...)},client 仍可 build, 供运维降级窗口避免
+   *       K8s 重启循环
+   * </ul>
+   */
+  private void reportTimingViolation(String message) {
+    if (strictTimingValidation) {
+      throw new IllegalStateException(message);
+    }
+    log.warn(
+        "[R3-4 WARN-mode] strictTimingValidation=false, 跳过 fail-fast — {} "
+            + "(临时口子;尽快修正 config,strictTimingValidation 不建议长期 false)",
+        message);
   }
 }
