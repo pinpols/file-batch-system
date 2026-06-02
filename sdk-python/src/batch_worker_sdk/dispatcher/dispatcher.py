@@ -1,37 +1,35 @@
-"""TaskDispatcher — Python (asyncio) port of the Java SDK dispatcher.
+"""TaskDispatcher —— Java SDK dispatcher 在 asyncio 上的 Python 移植。
 
-Mirrors ``com.example.batch.sdk.dispatcher.TaskDispatcher`` semantics on
-an asyncio runtime: instead of a fixed-size ``ExecutorService`` we
-launch a fresh ``asyncio.Task`` per incoming dispatch, gated by the
-``KafkaTaskConsumer`` capacity-aware partition pause (so concurrency
-is bounded externally rather than via a worker pool).
+行为对齐 ``com.example.batch.sdk.dispatcher.TaskDispatcher``,但运行模型有差异:
+不再使用固定容量的 ``ExecutorService``,而是每条入站派发消息开一个 fresh
+``asyncio.Task``,由 ``KafkaTaskConsumer`` 的容量感知分区暂停来从外部限流
+(并发上限走 Kafka pause 而非内部 worker pool)。
 
-P2 scope (this lane):
+主要职责:
 
-- ``on_message()`` — fatal/draining/PAUSED gating, **tenant self-check
-  drop** (Java Lane J §J1 line 197), schemaVersion gate, CLAIM via
-  ``PlatformHttpClient.claim``, async handler invocation, REPORT.
-- ``in_flight_count()`` / ``in_flight_task_ids()`` — exposed to
-  ``KafkaTaskConsumer`` for capacity pause and to the upcoming P3
-  ``LeaseRenewalScheduler`` for batch-renew payload assembly.
-- ``shutdown(timeout)`` — flips ``_draining`` and awaits in-flight
-  tasks up to ``timeout`` seconds. ``stop(timeout)`` full lifecycle
-  (with deactivate + final report) lands in P4.
-- ``apply_platform_directive(directive)`` — minimal stub that only
-  sets ``_runtime_state``. Heartbeat-driven state transition + drain
-  semantics land in P3.
+- ``on_message()`` —— fatal/draining/PAUSED 三态门控 + **租户自检丢弃**(对应
+  Java ``J1`` 行 197 的 fail-safe)+ schemaVersion 校验 +
+  ``PlatformHttpClient.claim`` 发起 CLAIM + 异步执行 handler + REPORT。
+- ``in_flight_count()`` / ``in_flight_task_ids()`` —— 暴露给
+  ``KafkaTaskConsumer`` 做容量暂停,以及给 ``LeaseRenewalScheduler`` 组装
+  批量续约 payload。
+- ``shutdown(timeout)`` —— 翻转 ``_draining`` 并等待 in-flight 任务至多
+  ``timeout`` 秒;完整的 ``stop(timeout)``(含 deactivate + 最终 REPORT)由
+  ``_lifecycle.stop_with_timeout`` 承担。
+- ``apply_platform_directive(directive)`` —— 当前只读取 ``runtimeState``
+  字段并更新本地 FSM,完整的 drain deadline / 并发调整 / 配置热更属于后续
+  扩展点。
 
-Intentional simplifications vs Java (called out so P3 has a clear
-backlog):
+与 Java 端的刻意简化(供后续扩展参考):
 
-- No CLAIM 5xx retry loop here — ``PlatformHttpClient`` already does
-  retry per wire-protocol §C; we surface ``TransientError`` and skip
-  the task (Kafka redelivery via lease timeout + idempotency-key).
-- No ``ThrottledLogger`` (Java Lane J #2). Python ``logging`` already
-  rate-limits at the handler level if needed; PAUSED-state drops are
-  logged at ``DEBUG`` to avoid flood without adding deps.
-- No MDC. Structured logging fields are passed via ``extra=`` so
-  ``logging.Formatter`` users can pick them up.
+- 这里没有 CLAIM 5xx 的重试循环 —— ``PlatformHttpClient`` 已经按 wire-protocol
+  §C 做了重试;本类只把 ``TransientError`` 抛出去并跳过该任务,等 Kafka
+  通过租约超时 + 幂等键重投递。
+- 没有 ``ThrottledLogger``(Java J #2)。Python ``logging`` 本身可在 handler
+  级别做限速;PAUSED 状态下的丢弃日志直接打 ``DEBUG`` 即可避免刷屏,无需
+  引新依赖。
+- 没有 MDC。结构化日志字段通过 ``extra=`` 透传,使用方可以在
+  ``logging.Formatter`` 里取出。
 """
 
 from __future__ import annotations
@@ -48,23 +46,22 @@ from batch_worker_sdk.task.state import WorkerRuntimeState
 
 logger = logging.getLogger(__name__)
 
-# Schema versions the Python SDK understands. Mirrors Java
-# ``TaskDispatchMessage.isSchemaSupported()`` — accept "v2" major.
+# Python SDK 能识别的 schema 主版本前缀。对齐 Java
+# ``TaskDispatchMessage.isSchemaSupported()`` —— 接受 "v2" 大版本。
 _SUPPORTED_SCHEMA_PREFIXES = ("v2",)
 
 
 class TaskDispatcher:
-    """Dispatch one Kafka task message → CLAIM → execute → REPORT.
+    """处理一条 Kafka 任务消息 → CLAIM → 执行 → REPORT。
 
     Args:
-        config: Validated SDK config.
-        http: HTTP client owning the ``/internal/*`` connection pool.
-        handlers: Map of ``workerType → SdkTaskHandler``. Empty map is
-            allowed (every message will be REPORTed as failure with
-            "no handler registered"); useful for smoke tests.
+        config: 已经过校验的 SDK 配置。
+        http: 拥有 ``/internal/*`` 连接池的 HTTP client。
+        handlers: ``workerType → SdkTaskHandler`` 路由表。允许空 map(每条
+            消息都会因"无对应 handler"而 REPORT failure),便于做 smoke test。
 
-    Thread-safety: single asyncio loop only. ``on_message`` must be
-    awaited from the same loop as ``shutdown``.
+    线程安全:仅限单 asyncio loop。``on_message`` 必须与 ``shutdown`` 来自
+    同一个 event loop。
     """
 
     def __init__(
@@ -81,48 +78,48 @@ class TaskDispatcher:
         self._fatal: bool = False
         self._runtime_state: WorkerRuntimeState = WorkerRuntimeState.NORMAL
 
-    # ─── public observable state ───────────────────────────────────────
+    # ─── 对外可观察状态 ───────────────────────────────────────────────
 
     def in_flight_count(self) -> int:
-        """Current in-flight task count (Java ``inFlightCount()``)."""
+        """当前 in-flight 任务数(对齐 Java ``inFlightCount()``)。"""
         return len(self._in_flight)
 
     def in_flight_task_ids(self) -> set[int]:
-        """Snapshot of in-flight task IDs (for P3 batch-renew payload)."""
+        """快照 in-flight 任务 ID 集合(供批量续约 payload 使用)。"""
         return set(self._in_flight.keys())
 
     @property
     def runtime_state(self) -> WorkerRuntimeState:
-        """Current platform-directed runtime state."""
+        """当前由平台下发的运行态。"""
         return self._runtime_state
 
     @property
     def is_fatal(self) -> bool:
-        """``True`` after an unrecoverable ``AuthError`` — process is poisoned."""
+        """``True`` 表示已遇到不可恢复的 ``AuthError``,进程已被毒化。"""
         return self._fatal
 
     @property
     def is_draining(self) -> bool:
-        """``True`` between ``shutdown()`` start and process exit."""
+        """``True`` 表示已进入 ``shutdown()`` 直到进程退出之间的窗口。"""
         return self._draining
 
     def accepts_new_tasks(self) -> bool:
-        """Whether the dispatcher should accept a fresh message.
+        """dispatcher 当前是否应接受新消息。
 
-        Mirrors Java ``platformAcceptsNewTasks() && !draining && !fatal``.
-        ``KafkaTaskConsumer.apply_backpressure()`` reads this to decide
-        whether to ``consumer.pause(...)``.
+        对齐 Java ``platformAcceptsNewTasks() && !draining && !fatal``。
+        ``KafkaTaskConsumer.apply_backpressure()`` 读取此结果决定是否
+        ``consumer.pause(...)``。
         """
         return not self._draining and not self._fatal and self._runtime_state.accepts_new_tasks()
 
-    # ─── platform directive enactment (P3 will flesh out) ──────────────
+    # ─── 平台 directive 应用 ──────────────────────────────────────────
 
     def apply_platform_directive(self, directive: dict[str, Any]) -> None:
-        """Apply a heartbeat-returned directive (P2 stub).
+        """应用一次心跳响应中携带的 directive。
 
-        Currently only reads ``runtimeState`` (one of the 4 ``WorkerRuntimeState``
-        values) and stashes it. P3 will add drain deadline tracking,
-        concurrency adjustment hints, and config refresh.
+        目前实现仅读取 ``runtimeState``(四个 ``WorkerRuntimeState`` 之一)
+        并落到本地状态。后续可扩展 drain deadline 追踪、并发调整提示、配置
+        热更等。
         """
         raw = directive.get("runtimeState")
         if raw is None:
@@ -132,13 +129,13 @@ class TaskDispatcher:
         except ValueError:
             logger.warning("ignoring unknown runtimeState=%r in platform directive", raw)
 
-    # ─── message ingress ───────────────────────────────────────────────
+    # ─── 消息入口 ────────────────────────────────────────────────────
 
     async def on_message(self, msg: dict[str, Any]) -> None:  # noqa: PLR0911
-        """Handle one decoded ``TaskDispatchMessage`` envelope.
+        """处理一条解码后的 ``TaskDispatchMessage`` 信封。
 
-        Returns quickly: dispatches the actual task to a background
-        ``asyncio.Task`` so the Kafka poll loop is never blocked.
+        必须尽快返回:实际任务执行被丢到后台 ``asyncio.Task``,确保 Kafka
+        poll 循环永不阻塞。
         """
         if self._fatal:
             logger.debug("dispatcher fatal, dropping taskId=%s", msg.get("taskId"))
@@ -154,8 +151,8 @@ class TaskDispatcher:
             )
             return
 
-        # Schema version gate — reject unknown major versions so an old
-        # Python SDK doesn't silently mis-interpret a future ``v3`` envelope.
+        # schemaVersion 校验:拒绝未知大版本,避免老的 Python SDK 静默
+        # 误解未来 ``v3`` 信封。
         schema = msg.get("schemaVersion") or ""
         if not any(schema.startswith(p) for p in _SUPPORTED_SCHEMA_PREFIXES):
             logger.warning(
@@ -165,10 +162,10 @@ class TaskDispatcher:
             )
             return
 
-        # Lane J §J1 tenant self-check fail-safe — Kafka topic pattern +
-        # consumer group + ACL should already isolate, but if any of
-        # that drifts, ERROR + drop here and rely on lease timeout to
-        # redeliver to the right tenant.
+        # 租户自检 fail-safe(对齐 Java §J1):Kafka topic pattern + consumer
+        # group + ACL 已经做了租户隔离,但任何一处漂移都可能导致跨租户
+        # 消息进入本 worker;此处 ERROR + 丢弃并依赖租约超时重投递到正确
+        # 租户。
         msg_tenant = msg.get("tenantId")
         if msg_tenant != self._config.tenant_id:
             logger.error(
@@ -197,15 +194,14 @@ class TaskDispatcher:
 
         task.add_done_callback(_cleanup)
 
-    # ─── per-task pipeline ─────────────────────────────────────────────
+    # ─── 单任务流水线 ────────────────────────────────────────────────
 
     async def _process(self, task_id: int, msg: dict[str, Any]) -> None:
-        """CLAIM → execute → REPORT for a single task.
+        """单个任务的 CLAIM → 执行 → REPORT 流水线。
 
-        Errors are absorbed: AuthError sets fatal and stops further
-        ingest; other PlatformError leaves the task to be redelivered
-        via lease timeout. P3 will add a structured "REPORT failure"
-        path for handler exceptions; today we just log.
+        异常被吸收:``AuthError`` 设 fatal 并停止后续摄入;其他
+        ``PlatformError`` 让任务自然等待租约超时重投递。后续可补一条
+        结构化的"REPORT failure"路径处理 handler 抛错;当前实现只记日志。
         """
         idempotency_key = msg.get("idempotencyKey") or f"claim-{task_id}"
         claim_body: dict[str, Any] = {
@@ -220,9 +216,8 @@ class TaskDispatcher:
         try:
             await self._http.claim(task_id, idempotency_key, claim_body)
         except AuthError:
-            # Wire-protocol §B: 401/403 = persistent, set fatal so
-            # KafkaTaskConsumer stops feeding messages; K8s liveness
-            # probe will recycle the pod.
+            # wire-protocol §B:401/403 视为持久错误,设 fatal 让
+            # KafkaTaskConsumer 停止灌入消息;K8s liveness probe 会回收 pod。
             self._fatal = True
             logger.error("CLAIM 401/403 for taskId=%s — dispatcher entering fatal state", task_id)
             return
@@ -244,10 +239,9 @@ class TaskDispatcher:
             await self._report_failure(task_id, msg, f"no handler for workerType={worker_type!r}")
             return
 
-        # P2 keeps the handler-invocation skeleton minimal: P3 will
-        # build SdkTaskContext + run handler.execute + collect
-        # SdkTaskResult. For this lane we just REPORT a synthetic
-        # success so the wire path is exercised end-to-end.
+        # 当前仅保留 handler 调用骨架:完整的 SdkTaskContext 构造 +
+        # handler.execute 调用 + SdkTaskResult 汇报留待后续完善。这里
+        # 先 REPORT 一个合成成功,把端到端链路跑通。
         await self._report_success(task_id, msg)
 
     async def _report_success(self, task_id: int, msg: dict[str, Any]) -> None:
@@ -273,15 +267,15 @@ class TaskDispatcher:
         except PlatformError as ex:
             logger.warning("REPORT failure failed for taskId=%s: %s", task_id, ex)
 
-    # ─── lifecycle ─────────────────────────────────────────────────────
+    # ─── 生命周期 ────────────────────────────────────────────────────
 
-    async def shutdown(self, timeout: float) -> None:  # noqa: ASYNC109 — mirrors Java signature
-        """Drain in-flight tasks; bounded by ``timeout`` seconds.
+    async def shutdown(self, timeout: float) -> None:  # noqa: ASYNC109 — 与 Java 签名对齐
+        """drain in-flight 任务,总耗时不超过 ``timeout`` 秒。
 
-        Sets ``_draining`` first so no new ``on_message`` accepts.
-        Outstanding tasks are awaited via ``asyncio.wait``. P4 will
-        layer ``stop(timeout)`` over this with deactivate + final-state
-        REPORT for stragglers.
+        先翻 ``_draining`` 阻止后续 ``on_message`` 接单,再通过
+        ``asyncio.wait`` 等待已 in-flight 的任务完成。完整的
+        ``stop(timeout)``(含 deactivate + 残余任务的最终态 REPORT)由
+        ``_lifecycle.stop_with_timeout`` 处理。
         """
         self._draining = True
         if not self._in_flight:

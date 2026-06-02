@@ -1,8 +1,7 @@
-"""Version metadata for batch-worker-sdk.
+"""batch-worker-sdk 的版本号元数据。
 
-Single source of truth for the package version. ``pyproject.toml`` reads
-this value via ``[tool.hatch.version]`` so we never drift between the
-package metadata and the runtime ``__version__``.
+包版本的单一权威源。``pyproject.toml`` 通过 ``[tool.hatch.version]`` 读取
+此值,确保包元数据与运行时 ``__version__`` 永不漂移。
 """
 
 from __future__ import annotations

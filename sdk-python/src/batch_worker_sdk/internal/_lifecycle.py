@@ -1,43 +1,36 @@
-"""Phased shutdown for :class:`BatchPlatformClient` (P4).
+""":class:`BatchPlatformClient` 的分阶段停机实现。
 
-Mirrors Java SDK Lane A ``BatchPlatformClient.stop(Duration timeout)``
-(see ``batch-worker-sdk/.../client/BatchPlatformClient.java`` #239) —
-a budget-split shutdown that gives each phase a slice of the total
-timeout, logs WARN with the in-flight task ids when drain overruns,
-and never lets one phase failure block the next.
+对齐 Java SDK ``BatchPlatformClient.stop(Duration timeout)`` —— 把总超时
+预算按阶段切片,每阶段都从 *剩余* 预算计算自己的 deadline,某一阶段超时
+仅 WARN 不向上抛,确保后续阶段(尤其是 ``/deactivate``)仍能执行。
 
-Phase budget (matches Java Lane A and Lane S contract fixture
-``12-stop-with-timeout``):
+阶段预算占比(与 Java 端 contract fixture ``12-stop-with-timeout`` 保持
+一致):
 
 ================ ===== ==================================================
-Phase             Pct   Action
+阶段              比例   动作
 ================ ===== ==================================================
-draining flag     0%    Flip ``dispatcher.draining = True`` synchronously
+draining flag     0%    同步翻 ``dispatcher.draining = True``
 Kafka consumer   20%    ``await client.consumer.stop()``
-in-flight drain  60%    Poll ``dispatcher.in_flight_count()`` until zero
-scheduler stop   20%    Stop heartbeat / lease-renew schedulers
+in-flight drain  60%    轮询 ``dispatcher.in_flight_count()`` 直到归零
+scheduler stop   20%    停止心跳 / 租约续约调度器
 ================ ===== ==================================================
 
-Each phase computes its deadline from the *remaining* total budget so
-an early-finishing phase yields its slack to the next one rather than
-inflating total wall-clock.
+每个阶段的 deadline 都根据 *剩余* 总预算重新计算,所以提前完成的阶段会
+把空余时间让给下一个阶段,而不是无谓延长总 wall-clock。
 
-The function does NOT import :class:`BatchPlatformClient` (lives in
-Lane T's ``client.py``) — type hints use a string forward reference to
-avoid the circular import. Duck-typed accessors expected on the
-``client`` argument:
+本函数 **不** 直接 import :class:`BatchPlatformClient`(在 client.py 里),
+以字符串前向引用 + duck-typing 规避循环 import。期望的 ``client`` 属性:
 
-- ``client.consumer`` — Kafka consumer with ``async stop()``,
-  ``async start_draining()`` optional
-- ``client.dispatcher`` — has ``in_flight_count() -> int``,
-  ``in_flight_task_ids() -> list[int]``, ``start_draining()`` and
-  optionally ``async stop()``
-- ``client.schedulers`` — iterable of objects each with ``async stop()``
-  (heartbeat scheduler, lease-renewal scheduler)
-- ``client.deactivate()`` — optional; the HTTP /deactivate call.
-  Lane T's BatchPlatformClient owns this; we call it best-effort and
-  swallow errors (orchestrator heartbeat-timeout reclaims after 120s
-  anyway, per fixture 12).
+- ``client.consumer`` —— Kafka 消费者,需 ``async stop()``,可选
+  ``async start_draining()``。
+- ``client.dispatcher`` —— 暴露 ``in_flight_count() -> int``、
+  ``in_flight_task_ids() -> list[int]``、``start_draining()``,可选
+  ``async stop()``。
+- ``client.schedulers`` —— 含 ``async stop()`` 的可迭代对象(心跳调度器、
+  租约续约调度器)。
+- ``client.deactivate()`` —— 可选;HTTP /deactivate 调用。 best-effort 调用
+  并吞掉异常(即便失败,orch 端 120s 心跳超时也会自动回收 worker)。
 """
 
 from __future__ import annotations
@@ -49,29 +42,27 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Phase budget fractions (must sum to <= 1.0; 0% slack is acceptable).
+# 阶段预算占比(累加 <= 1.0;留 0% 余量是可接受的)。
 _KAFKA_FRACTION = 0.20
 _DRAIN_FRACTION = 0.60
 _SCHEDULER_FRACTION = 0.20
 
-# Poll interval for the in-flight drain loop. 100ms matches the Java
-# Lane A spin loop; small enough to react quickly, large enough to not
-# spam logs.
+# in-flight drain 阶段的轮询间隔。100ms 与 Java 端 spin 循环对齐:既能
+# 快速响应,又不会刷日志。
 _DRAIN_POLL_INTERVAL = 0.1
 
 
 def _remaining(deadline: float) -> float:
-    """Return seconds until ``deadline``, never negative."""
+    """返回距 ``deadline`` 还剩的秒数,不会为负。"""
     loop = asyncio.get_event_loop()
     return max(0.0, deadline - loop.time())
 
 
 async def _phase_stop_kafka(client: Any, budget: float) -> None:
-    """Phase 2: stop the Kafka consumer within ``budget`` seconds.
+    """阶段 2:在 ``budget`` 秒内停止 Kafka 消费者。
 
-    Looks up the Kafka consumer under the attribute names used by Lane T's
-    ``BatchPlatformClient`` (``_kafka``) and Lane S's provisional
-    ``run_worker`` (``consumer``). First non-None wins.
+    依次按 ``_kafka``(:class:`BatchPlatformClient` 内部字段)/ ``consumer``
+    (临时 ``run_worker`` 入口)两种命名查找,首个非 None 命中。
     """
     consumer = getattr(client, "_kafka", None) or getattr(client, "consumer", None)
     if consumer is None:
@@ -91,12 +82,11 @@ async def _phase_stop_kafka(client: Any, budget: float) -> None:
 
 
 async def _phase_drain_in_flight(client: Any, deadline: float) -> None:
-    """Phase 3: drain in-flight tasks until zero or deadline.
+    """阶段 3:把 in-flight 任务排干,直到归零或到达 deadline。
 
-    Prefers ``dispatcher.shutdown(timeout)`` when available (the dispatcher's
-    own drain implementation, mirroring Java ``TaskDispatcher.shutdown``).
-    Falls back to polling ``in_flight_count()`` for dispatchers that don't
-    expose a shutdown method.
+    优先调用 ``dispatcher.shutdown(timeout)``(对齐 Java
+    ``TaskDispatcher.shutdown``);若 dispatcher 未暴露 ``shutdown``,降级
+    为轮询 ``in_flight_count()``。
     """
     dispatcher = getattr(client, "dispatcher", None)
     if dispatcher is None:
@@ -133,7 +123,7 @@ async def _phase_drain_in_flight(client: Any, deadline: float) -> None:
         if n <= 0:
             return
         if _remaining(deadline) <= 0:
-            # Timed out — log the leftover ids so operators can correlate.
+            # 超时:把残留任务 ID 打到 WARN,便于运维侧关联排查。
             ids_fn = getattr(dispatcher, "in_flight_task_ids", None)
             try:
                 ids = list(ids_fn()) if ids_fn is not None else []
@@ -149,18 +139,17 @@ async def _phase_drain_in_flight(client: Any, deadline: float) -> None:
                 ids,
             )
             return
-        # Sleep the smaller of the poll interval or remaining budget so
-        # we don't oversleep past the deadline.
+        # 取 poll 间隔与剩余预算的较小值,避免越过 deadline。
         await asyncio.sleep(min(_DRAIN_POLL_INTERVAL, _remaining(deadline)))
 
 
 async def _phase_stop_schedulers(client: Any, budget: float) -> None:
-    """Phase 4: stop heartbeat / lease-renewal schedulers within budget.
+    """阶段 4:在 ``budget`` 秒内停止心跳 / 租约续约调度器。
 
-    Looks up schedulers under several attribute conventions:
-    - ``client.schedulers``: iterable (Lane S provisional run_worker)
-    - ``client._heartbeat`` + ``client._lease``: individual fields
-      (Lane T BatchPlatformClient)
+    依次按多种命名约定查找调度器:
+    - ``client.schedulers``:可迭代对象(临时 ``run_worker`` 入口)
+    - ``client._heartbeat`` + ``client._lease``:单字段
+      (:class:`BatchPlatformClient`)
     """
     schedulers_iter = getattr(client, "schedulers", None)
     schedulers: list[Any] = list(schedulers_iter) if schedulers_iter else []
@@ -170,7 +159,7 @@ async def _phase_stop_schedulers(client: Any, budget: float) -> None:
             schedulers.append(s)
     if not schedulers:
         return
-    # Run scheduler stops concurrently — they're independent.
+    # 调度器之间相互独立,并发 stop 即可。
     per_call = max(budget, 0.001)
     coros = []
     targets = []
@@ -193,17 +182,17 @@ async def _phase_stop_schedulers(client: Any, budget: float) -> None:
 
 
 async def _phase_deactivate(client: Any) -> None:
-    """Best-effort POST /deactivate. Never blocks shutdown on failure.
+    """best-effort POST /deactivate;失败不阻塞 stop。
 
-    Matches fixture 12 ``sdkMustNot``: "block stop() if /deactivate
-    HTTP fails (log + continue exit)".
+    与 fixture 12 ``sdkMustNot``"/deactivate HTTP 失败禁止阻塞 stop()
+    (log + 继续退出)"对齐。
 
-    Looks up the deactivate hook under several conventions:
-    - ``client.deactivate`` — user-supplied method
-    - ``client._http.deactivate`` / ``client.http.deactivate`` — Lane T's
-      BatchPlatformClient stores the HTTP client as ``_http`` and exposes
-      it via a ``http`` property. Calls with ``(worker_code, body)`` if it
-      accepts args, else no-arg.
+    按以下命名约定查找 deactivate 入口:
+    - ``client.deactivate`` —— 用户自定义方法
+    - ``client._http.deactivate`` / ``client.http.deactivate`` ——
+      :class:`BatchPlatformClient` 的内部 HTTP client(``_http`` 字段 +
+      ``http`` 只读属性)。若可接受参数,以 ``(worker_code, body)`` 调用;
+      否则无参调用。
     """
     deactivate = getattr(client, "deactivate", None)
     if deactivate is None:
@@ -225,29 +214,25 @@ async def _phase_deactivate(client: Any) -> None:
         logger.warning("stop_with_timeout: /deactivate call failed (ignored): %s", exc)
 
 
-# ASYNC109: yes, we accept a ``timeout`` parameter on an async function —
-# this is exactly the multi-phase budget-split contract documented above.
-# ``asyncio.timeout`` cancels the whole coroutine, which would defeat the
-# graceful-shutdown semantics (we MUST run /deactivate even after drain
-# overruns). Suppress the lint at the function call-site.
+# ASYNC109 说明:本函数确实接受 ``timeout`` 参数,这正是上面所述的"多
+# 阶段预算切片"合约。``asyncio.timeout`` 会取消整段 coroutine,这反而会破
+# 坏优雅停机语义(即便 drain 超时,/deactivate 也必须尝试一次)。在调用点
+# 抑制该 lint。
 async def stop_with_timeout(
     client: Any,
     timeout: float,  # noqa: ASYNC109
 ) -> None:
-    """Shut down ``client`` in phases, respecting a total ``timeout`` budget.
+    """在 ``timeout`` 总预算内分阶段停机 ``client``。
 
-    See module docstring for the phase split. Phases that overrun
-    log WARN but never raise — the function always returns within
-    ~``timeout`` seconds (plus a small jitter for the final
-    /deactivate, which has no per-phase deadline because the contract
-    fixture mandates an attempt even after timeout exhaustion).
+    阶段切分见模块顶部 docstring。任何阶段超时都仅 WARN 不抛错 —— 函数
+    总是会在 ``timeout`` 秒(加上最终 /deactivate 的少量抖动,因为合约要
+    求即使预算耗尽也必须 attempt 一次 /deactivate)内返回。
 
-    :param client: a ``BatchPlatformClient`` instance (Lane T).
-        Duck-typed; see module docstring for the expected attribute
-        contract. Typed as :class:`Any` rather than imported to break
-        a Lane-T circular dependency.
-    :param timeout: total wall-clock budget in seconds. Must be
-        positive; values < 0.01 are clamped to 0.01s for sanity.
+    :param client: :class:`BatchPlatformClient` 实例。这里 duck-typing,
+        预期属性见模块 docstring;形参类型为 :class:`Any` 而非具体类,
+        以打破对 client 模块的循环依赖。
+    :param timeout: 总 wall-clock 预算(秒)。必须为正;小于 0.01 的值
+        会被钳制为 0.01s。
     """
     if timeout <= 0:
         raise ValueError(f"stop_with_timeout: timeout must be positive, got {timeout!r}")
@@ -259,7 +244,7 @@ async def stop_with_timeout(
 
     logger.info("stop_with_timeout: starting phased shutdown (timeout=%.3fs)", timeout)
 
-    # Phase 1: flip draining flag — synchronous, zero budget.
+    # 阶段 1:翻 draining 标志 —— 同步操作,零预算。
     dispatcher = getattr(client, "dispatcher", None)
     if dispatcher is not None:
         start_draining = getattr(dispatcher, "start_draining", None)
@@ -271,26 +256,26 @@ async def stop_with_timeout(
             except Exception as exc:
                 logger.warning("stop_with_timeout: start_draining() failed: %s", exc)
         else:
-            # Fall back to a known attribute name if no method exists.
+            # 找不到方法时回退到已知的字段名直接置位。
             with contextlib.suppress(Exception):
                 dispatcher._draining = True
 
-    # Phase 2: Kafka consumer.
+    # 阶段 2:Kafka 消费者。
     kafka_budget = _remaining(overall_deadline) * _KAFKA_FRACTION
     await _phase_stop_kafka(client, kafka_budget)
 
-    # Phase 3: dispatcher drain. Deadline = now + (remaining * 60%).
+    # 阶段 3:dispatcher drain。deadline = now + (剩余 * 60%)。
     remaining = _remaining(overall_deadline)
     drain_deadline = loop.time() + remaining * _DRAIN_FRACTION / (
         _DRAIN_FRACTION + _SCHEDULER_FRACTION
     )
     await _phase_drain_in_flight(client, drain_deadline)
 
-    # Phase 4: schedulers.
+    # 阶段 4:调度器。
     sched_budget = _remaining(overall_deadline)
     await _phase_stop_schedulers(client, sched_budget)
 
-    # Phase 5 (out-of-budget): /deactivate — best effort.
+    # 阶段 5(预算外):/deactivate —— best-effort。
     await _phase_deactivate(client)
 
     elapsed = loop.time() - start

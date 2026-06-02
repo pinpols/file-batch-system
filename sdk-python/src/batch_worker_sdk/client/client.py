@@ -1,30 +1,26 @@
-"""High-level SDK entrypoint mirroring Java ``BatchPlatformClient``.
+"""SDK 高阶入口,对齐 Java ``BatchPlatformClient``。
 
-Single user-facing class that wires the pieces together:
+唯一面向用户的客户端类,负责把各部件粘合到一起:
 
-1. :class:`PlatformHttpClient` (Lane Q)
-2. :class:`TaskDispatcher` (Lane S P2 — imported lazily so this lane
-   compiles + tests against an injected fake until Lane S merges).
-3. :class:`KafkaTaskConsumer` (Lane S P2 — same lazy-import treatment).
-4. :class:`HeartbeatScheduler` + :class:`LeaseRenewalScheduler` (this
-   lane — P3).
+1. :class:`PlatformHttpClient` —— HTTP 协议层。
+2. :class:`TaskDispatcher` —— Kafka 消息 → CLAIM → 执行 → REPORT 流水线。
+3. :class:`KafkaTaskConsumer` —— 派发消息的 Kafka 消费者。
+4. :class:`HeartbeatScheduler` + :class:`LeaseRenewalScheduler` —— 心跳 +
+   租约续约两个常驻调度任务。
 
-Lifecycle:
+生命周期:
 
-- :meth:`register_handler` (pre-start, mirrors Java
-  ``Builder.register``).
-- :meth:`start` runs ``validate_timings`` → register HTTP →
-  schedulers → kafka consumer. **Scheduler-before-Kafka** is critical:
-  if a task arrives before the first heartbeat the orch may not know
-  about us yet (Java equivalent: same order, see
-  ``BatchPlatformClient.start`` in the Java SDK).
-- :meth:`stop` — the **real** stop implementation lands in Lane U
-  (``_lifecycle.stop_with_timeout``). We probe for it; when absent the
-  ``_stop_minimal_phase3`` fallback kicks in so the Phase 3 PR's tests
-  still pass.
+- :meth:`register_handler` 在 start 之前注册 handler(对齐 Java
+  ``Builder.register``)。
+- :meth:`start` 顺序为 ``validate_timings`` → 向 orch 注册 → 启动调度器 →
+  启动 Kafka 消费者。**调度器必须先于 Kafka 启动**:若第一条任务在第一次
+  心跳之前到达,orch 可能还不知道我们存在(Java 端 ``BatchPlatformClient.start``
+  采用同样顺序)。
+- :meth:`stop` 走 :func:`_lifecycle.stop_with_timeout` 的分阶段预算化停机
+  流程。
 
-Tests inject ``dispatcher`` / ``kafka_consumer`` to stay decoupled from
-the Lane S / Lane U merge order.
+测试侧通过 ``dispatcher`` / ``kafka_consumer`` 注入假实现,避免对真实
+Kafka / dispatcher 产生耦合。
 """
 
 from __future__ import annotations
@@ -36,6 +32,7 @@ from typing import Any, Protocol
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.handler.handler import SdkTaskHandler
+from batch_worker_sdk.internal import _lifecycle
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._heartbeat import DispatcherLike, HeartbeatScheduler
 from batch_worker_sdk.scheduler._lease import LeaseRenewalScheduler
@@ -44,21 +41,21 @@ logger = logging.getLogger(__name__)
 
 
 class _KafkaConsumerLike(Protocol):
-    """Subset of ``KafkaTaskConsumer`` the client touches."""
+    """``KafkaTaskConsumer`` 中 client 实际触及的子集。"""
 
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
 
 
-# Factory aliases — keep types in one place + ease the Lane S merge:
+# 工厂别名 —— 集中放在这里,方便统一调整类型
 DispatcherFactory = Any  # callable: (config, http, handlers) -> DispatcherLike
 KafkaFactory = Any  # callable: (config, dispatcher) -> _KafkaConsumerLike
 
 
 class BatchPlatformClient:
-    """SDK entrypoint mirroring Java ``com.example.batch.sdk.client.BatchPlatformClient``.
+    """SDK 入口,对齐 Java ``com.example.batch.sdk.client.BatchPlatformClient``。
 
-    Typical usage::
+    典型用法::
 
         client = BatchPlatformClient(config)
         client.register_handler(MyImportHandler())
@@ -69,17 +66,14 @@ class BatchPlatformClient:
             await client.stop(timeout=30)
 
     Args:
-        config: Pre-validated :class:`BatchPlatformClientConfig`. Timing
-            sanity is re-checked on :meth:`start` so a swapped config
-            also fails fast.
-        http: Inject a preconstructed :class:`PlatformHttpClient` (tests).
-            Production callers leave ``None``.
-        dispatcher_factory / kafka_factory: Injection points for the
-            Lane S ``TaskDispatcher`` / ``KafkaTaskConsumer``. When
-            ``None`` the constructors are imported lazily from
-            ``batch_worker_sdk.dispatcher`` / ``batch_worker_sdk._kafka``
-            inside :meth:`start` — that import only happens once Lane S
-            has merged, so this module never blocks on it at import time.
+        config: 已通过校验的 :class:`BatchPlatformClientConfig`。:meth:`start`
+            会再跑一遍 timing 校验,以便绕过 pydantic 构造的配置也能 fail-fast。
+        http: 测试场景下可注入预构造的 :class:`PlatformHttpClient`;生产代码
+            保持 ``None`` 由本类自行创建。
+        dispatcher_factory / kafka_factory: 用于注入 dispatcher /
+            ``KafkaTaskConsumer`` 的工厂。为 ``None`` 时 :meth:`start` 内部
+            会按需 lazy import 默认实现,避免在 import 阶段强制依赖
+            ``aiokafka`` 等可选依赖。
     """
 
     def __init__(
@@ -105,14 +99,13 @@ class BatchPlatformClient:
         self._started: bool = False
         self._start_lock: asyncio.Lock = asyncio.Lock()
 
-    # ─── pre-start configuration ───────────────────────────────────────
+    # ─── start 之前的配置 ──────────────────────────────────────────────
 
     def register_handler(self, handler: SdkTaskHandler) -> None:
-        """Register an :class:`SdkTaskHandler` (Java ``Builder.register``).
+        """注册一个 :class:`SdkTaskHandler`(对齐 Java ``Builder.register``)。
 
-        Must be called before :meth:`start`. Raises on duplicate
-        ``task_type`` so a misconfigured worker fails noisily instead
-        of silently dropping dispatches to the loser.
+        必须在 :meth:`start` 之前调用。``task_type`` 重复时直接抛错,让配置
+        失误的 worker 早爆错,而不是悄悄丢弃后注册的 handler。
         """
         if self._started:
             raise RuntimeError("cannot register handlers after start()")
@@ -123,7 +116,7 @@ class BatchPlatformClient:
             raise ValueError(f"duplicate handler for task_type={task_type!r}")
         self._handlers[task_type] = handler
 
-    # ─── observable state ──────────────────────────────────────────────
+    # ─── 可观察状态 ───────────────────────────────────────────────────
 
     @property
     def started(self) -> bool:
@@ -131,33 +124,33 @@ class BatchPlatformClient:
 
     @property
     def dispatcher(self) -> DispatcherLike | None:
-        """Underlying dispatcher (post-start). Exposed for tests + ops."""
+        """已启动后的底层 dispatcher,暴露给测试和运维。"""
         return self._dispatcher
 
     @property
     def http(self) -> PlatformHttpClient:
-        """Underlying HTTP client. Exposed for tests + advanced users."""
+        """底层 HTTP client,暴露给测试和高级用户。"""
         return self._http
 
-    # ─── lifecycle ─────────────────────────────────────────────────────
+    # ─── 生命周期 ────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Full start sequence.
+        """完整的启动序列。
 
-        Order:
+        顺序:
 
-        1. ``config._validate_timings()`` — re-run in case a caller built
-           the config bypassing pydantic (mostly belt-and-braces).
-        2. ``http.register`` — fail-fast if orch / api-key / network is broken.
-        3. Build dispatcher + schedulers.
-        4. Start heartbeat + lease schedulers (so the first kafka message
-           never lands before orch knows we're alive).
-        5. Start Kafka consumer.
+        1. ``config._validate_timings()`` —— 再跑一次以防调用方绕过 pydantic
+           构造 config(带保险作用)。
+        2. ``http.register`` —— orch / api-key / 网络异常立即 fail-fast。
+        3. 构建 dispatcher 与调度器。
+        4. 启动心跳 + 租约续约,确保第一条 Kafka 消息到达前 orch 已知晓本
+           worker 存活。
+        5. 启动 Kafka 消费者。
 
         Raises:
-            RuntimeError: double-start or no handlers registered.
-            ValueError: timings invalid.
-            PlatformError: register failed.
+            RuntimeError: 重复 start 或未注册任何 handler。
+            ValueError: timing 校验失败。
+            PlatformError: register 调用失败。
         """
         async with self._start_lock:
             if self._started:
@@ -173,7 +166,7 @@ class BatchPlatformClient:
             self._heartbeat = HeartbeatScheduler(self._config, self._http, self._dispatcher)
             self._lease = LeaseRenewalScheduler(self._config, self._http, self._dispatcher)
 
-            # Scheduler first, kafka second — see class docstring.
+            # 调度器先,Kafka 后 —— 详见本类的 docstring。
             await self._heartbeat.start()
             await self._lease.start()
 
@@ -190,78 +183,25 @@ class BatchPlatformClient:
             )
 
     async def stop(self, timeout: timedelta | float = 30.0) -> None:  # noqa: ASYNC109 — total-budget semantic, not per-await
-        """Graceful stop.
+        """优雅停机。
 
-        The real budgeted-stop implementation lives in Lane U
-        (``_lifecycle.stop_with_timeout``). We try to import it; if it's
-        not yet merged we fall through to :meth:`_stop_minimal_phase3`
-        which still honours the timeout but doesn't yet split the budget
-        across kafka-join / drain / scheduler / deactivate phases.
+        实际停机逻辑由 :func:`_lifecycle.stop_with_timeout` 提供:把 timeout
+        预算切成 Kafka stop / in-flight drain / scheduler stop / deactivate
+        几个阶段,任何阶段超时只 WARN 不抛,保证整体 wall-clock 不会超过预算
+        过多。
         """
         if not self._started:
             return
         timeout_s = timeout.total_seconds() if isinstance(timeout, timedelta) else float(timeout)
-        import importlib  # noqa: PLC0415 — Lane U merge probe
-
-        try:
-            lifecycle = importlib.import_module("batch_worker_sdk.internal._lifecycle")
-        except ImportError:
-            await self._stop_minimal_phase3(timeout_s)
-        else:
-            await lifecycle.stop_with_timeout(self, timeout_s)
-        self._started = False
-
-    async def _stop_minimal_phase3(self, timeout_s: float) -> None:
-        """Phase 3 fallback shutdown.
-
-        TODO(Lane U): replace with ``_lifecycle.stop_with_timeout`` once
-        Lane U merges. Order matches Java ``BatchPlatformClient.stop``:
-
-        1. Stop Kafka consumer (stop accepting dispatches).
-        2. ``dispatcher.shutdown(remaining)`` — drain in-flight tasks.
-        3. Stop heartbeat + lease schedulers.
-        4. ``deactivate`` — best-effort goodbye to orch.
-        """
-        logger.info("BatchPlatformClient stopping (phase-3-fallback, timeout=%.1fs)", timeout_s)
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + max(0.0, timeout_s)
-
-        if self._kafka is not None:
-            await self._kafka.stop()
-
-        if self._dispatcher is not None:
-            remaining = max(0.0, deadline - loop.time())
-            shutdown = getattr(self._dispatcher, "shutdown", None)
-            if shutdown is not None:
-                try:
-                    await shutdown(remaining)
-                except Exception as ex:
-                    logger.warning("dispatcher.shutdown raised: %s", ex)
-
-        if self._heartbeat is not None:
-            await self._heartbeat.stop()
-        if self._lease is not None:
-            await self._lease.stop()
-
-        try:
-            await self._http.deactivate(
-                self._config.worker_code,
-                {
-                    "tenantId": self._config.tenant_id,
-                    "workerCode": self._config.worker_code,
-                    "status": "OFFLINE",
-                },
-            )
-        except Exception as ex:
-            logger.warning("deactivate call failed (ignored): %s", ex)
-
+        await _lifecycle.stop_with_timeout(self, timeout_s)
         if self._owns_http:
             await self._http.close()
+        self._started = False
 
-    # ─── internals ─────────────────────────────────────────────────────
+    # ─── 内部辅助 ────────────────────────────────────────────────────
 
     def _build_register_body(self) -> dict[str, Any]:
-        """Build the worker-register body matching Java ``WorkerHeartbeatDto`` shape."""
+        """构造 worker-register 请求体,字段形状对齐 Java ``WorkerHeartbeatDto``。"""
         from batch_worker_sdk.scheduler._heartbeat import _utc_now_iso  # noqa: PLC0415
 
         body: dict[str, Any] = {
@@ -280,7 +220,7 @@ class BatchPlatformClient:
         for handler in self._handlers.values():
             desc = handler.descriptor()
             if desc is not None:
-                # Pydantic model → dict; pydantic v2 prefers model_dump
+                # Pydantic 模型 → dict;pydantic v2 优先用 model_dump
                 if hasattr(desc, "model_dump"):
                     descriptors.append(desc.model_dump(exclude_none=True))
                 else:
@@ -290,40 +230,23 @@ class BatchPlatformClient:
         return body
 
     def _build_dispatcher(self) -> DispatcherLike:
-        """Build the dispatcher; defer to the Lane S import once it's merged.
-
-        Tests inject ``dispatcher_factory`` to avoid both the import probe
-        and the Lane S concrete class.
-        """
+        """构造 dispatcher;测试可通过 ``dispatcher_factory`` 注入,避免依赖默认实现。"""
         if self._dispatcher_factory is not None:
             built: DispatcherLike = self._dispatcher_factory(
                 self._config, self._http, dict(self._handlers)
             )
             return built
-        # Lazy import — Lane S supplies ``dispatcher.TaskDispatcher``. We
-        # use ``importlib`` so mypy strict + ruff don't complain about a
-        # missing module while Lane S is still in-flight.
-        import importlib  # noqa: PLC0415 — Lane S merge probe
+        # 默认走 ``batch_worker_sdk.dispatcher.dispatcher.TaskDispatcher``。
+        from batch_worker_sdk.dispatcher.dispatcher import TaskDispatcher  # noqa: PLC0415
 
-        try:
-            mod = importlib.import_module("batch_worker_sdk.dispatcher.dispatcher")
-        except ImportError as ex:
-            raise RuntimeError(
-                "TaskDispatcher not yet available — Lane S (P2) has not landed; "
-                "inject a dispatcher_factory in tests until then"
-            ) from ex
-        cls = mod.TaskDispatcher
-        built = cls(self._config, self._http, dict(self._handlers))
-        return built
+        return TaskDispatcher(self._config, self._http, dict(self._handlers))
 
     def _build_kafka(self, dispatcher: DispatcherLike) -> _KafkaConsumerLike | None:
-        """Build the Kafka consumer if a factory was supplied.
+        """构造 Kafka 消费者,仅在显式提供 ``kafka_factory`` 时启用。
 
-        We deliberately do **not** auto-import ``batch_worker_sdk._kafka``
-        here — kafka config knobs live in Lane S's config additions and
-        we don't want this lane to depend on those fields. Production
-        callers reach the kafka path by passing ``kafka_factory=...`` or
-        by Lane S replacing this method.
+        此处刻意 **不** 自动 import ``batch_worker_sdk.internal._kafka`` —— Kafka
+        config 字段是可选的,只有需要消费 Kafka 派发的部署才必填。未注入工
+        厂时仅运行 HTTP heartbeat + 租约续约的 scheduler-only 模式。
         """
         if self._kafka_factory is None:
             logger.info(

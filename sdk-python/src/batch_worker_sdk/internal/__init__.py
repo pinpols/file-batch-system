@@ -1,7 +1,7 @@
-"""Internal plumbing — mirror of Java ``com.example.batch.sdk.internal``.
+"""internal 子包 —— 对齐 Java ``com.example.batch.sdk.internal``。
 
-Package-private modules (HTTP client, Kafka consumer, lifecycle helpers,
-sensitive-keys redaction). Not part of the public API.
+包内私有模块(HTTP client、Kafka 消费者、生命周期辅助、敏感字段脱敏)。
+不属于公开 API。
 """
 
 from __future__ import annotations
