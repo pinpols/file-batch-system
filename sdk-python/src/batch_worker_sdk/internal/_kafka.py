@@ -1,19 +1,17 @@
-"""Kafka task dispatch consumer — asyncio port of the Java consumer.
+"""Kafka 任务派发消费者 —— Java 端消费者的 asyncio 移植版本。
 
-Python equivalent of
-``com.example.batch.sdk.dispatcher.KafkaTaskConsumer`` (see Java file
-for the long-form design notes). Differences vs Java, by design:
+对应 Java ``com.example.batch.sdk.dispatcher.KafkaTaskConsumer``(详细设
+计说明见 Java 源码)。刻意的差异:
 
-- ``aiokafka.AIOKafkaConsumer`` (not ``KafkaConsumer``) — single
-  asyncio task drives the poll loop, no background thread.
-- ``getmany(timeout_ms=...)`` instead of ``poll(Duration)`` so we can
-  control batch size + explicitly commit per batch.
-- Capacity-aware partition pause uses ``consumer.pause(*tps)`` /
-  ``consumer.resume(*tps)``; rebalance handler resets ``_paused``
-  cache so a partition that left/rejoined the assignment doesn't end
-  up stuck in a stale paused state.
-- ``enable_auto_commit=False`` + ``commit()`` after dispatcher accepts
-  each batch (mirrors Java ``commitSync()`` semantics).
+- 使用 ``aiokafka.AIOKafkaConsumer``(而非阻塞式 ``KafkaConsumer``)——
+  单条 asyncio task 驱动 poll 循环,无后台线程。
+- ``getmany(timeout_ms=...)`` 替代 ``poll(Duration)``,以便控制批量大小
+  并按 batch 显式 commit。
+- 容量感知的分区暂停走 ``consumer.pause(*tps)`` / ``consumer.resume(*tps)``;
+  rebalance 回调里清空 ``_paused`` 缓存,避免一个被踢出又分回来的分区
+  停在过期的 paused 状态。
+- ``enable_auto_commit=False`` + 每批 dispatcher 处理完后调 ``commit()``
+  (对齐 Java ``commitSync()`` 语义)。
 """
 
 from __future__ import annotations
@@ -43,12 +41,12 @@ def _notblank(s: str | None) -> bool:
 
 
 class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
-    """Rebalance hook — clear paused cache on assignment change.
+    """rebalance 钩子 —— 分区分配变化时清空 paused 缓存。
 
-    aiokafka's ``pause(...)`` is per-TopicPartition and survives across
-    polls but **not** across rebalances. So we reset ``_paused`` to
-    ``False`` whenever a rebalance reshuffles us; the next
-    ``apply_backpressure`` tick will re-pause if still saturated.
+    aiokafka 的 ``pause(...)`` 是按 TopicPartition 维度的,在 poll 之间会
+    保留但在 **rebalance** 时失效。因此 rebalance 后我们把 ``_paused``
+    重置为 ``False``;若仍处饱和状态,下一次 ``apply_backpressure`` 会
+    重新 pause。
     """
 
     def __init__(self, parent: KafkaTaskConsumer) -> None:
@@ -59,30 +57,27 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
 
     async def on_partitions_assigned(self, assigned: set[TopicPartition]) -> None:
         logger.info("kafka rebalance: partitions assigned=%s", sorted(map(str, assigned)))
-        # Pause state is per-partition in aiokafka; reset cache so the
-        # next backpressure tick re-evaluates against the new assignment.
+        # aiokafka 的 pause 状态是按 partition 维度的;清空缓存,让下一次
+        # backpressure tick 在新分配上重新评估。
         self._parent._paused = False
 
 
 class KafkaTaskConsumer:
-    """Long-running async consumer driving ``TaskDispatcher.on_message``.
+    """常驻 async 消费者,把 Kafka 消息喂给 ``TaskDispatcher.on_message``。
 
     Args:
-        config: Validated SDK config. ``kafka_bootstrap``,
-            ``kafka_group_id`` and ``kafka_topic_pattern`` are
-            mandatory for ``start()``; ``start()`` raises if any are
-            missing.
-        dispatcher: The dispatcher to feed. ``in_flight_count()`` +
-            ``accepts_new_tasks()`` drive partition pause/resume.
-        consumer: Optional preconstructed ``AIOKafkaConsumer`` for
-            tests. When ``None``, ``start()`` builds one from config.
+        config: 已校验的 SDK 配置。``kafka_bootstrap``、``kafka_group_id``、
+            ``kafka_topic_pattern`` 是 ``start()`` 的必填项,缺一即抛错。
+        dispatcher: 待喂入的 dispatcher。``in_flight_count()`` +
+            ``accepts_new_tasks()`` 共同驱动分区 pause/resume。
+        consumer: 可选的预构造 ``AIOKafkaConsumer``,主要供测试场景;
+            ``None`` 时由 ``start()`` 按配置构造。
 
-    Lifecycle:
+    生命周期:
 
-    - ``await start()`` builds + subscribes the consumer and launches
-      the poll loop as a background task. Returns immediately.
-    - ``await stop()`` requests loop exit, awaits the poll task, and
-      closes the consumer. Idempotent.
+    - ``await start()`` 构造并 subscribe consumer,启动后台 poll 循环
+      并立即返回。
+    - ``await stop()`` 请求循环退出、等待 poll task、关闭 consumer,幂等。
     """
 
     def __init__(
@@ -100,10 +95,10 @@ class KafkaTaskConsumer:
         self._paused: bool = False
         self._poll_task: asyncio.Task[None] | None = None
 
-    # ─── public lifecycle ──────────────────────────────────────────────
+    # ─── 公共生命周期 ────────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Build (if needed), subscribe, and start polling."""
+        """按需构造 consumer、subscribe topic、启动 poll 循环。"""
         if self._running:
             return
         if self._consumer is None:
@@ -120,7 +115,7 @@ class KafkaTaskConsumer:
         )
 
     async def stop(self) -> None:
-        """Request loop exit + close consumer. Idempotent."""
+        """请求 poll 循环退出并关闭 consumer,幂等。"""
         if not self._running:
             return
         self._running = False
@@ -140,7 +135,7 @@ class KafkaTaskConsumer:
                 logger.warning("kafka consumer close error: %s", ex)
         logger.info("KafkaTaskConsumer stopped")
 
-    # ─── internals: build & subscribe ──────────────────────────────────
+    # ─── 内部:构造 + subscribe ──────────────────────────────────────
 
     def _build_consumer(self) -> AIOKafkaConsumer:
         if not _notblank(self._config.kafka_bootstrap):
@@ -161,11 +156,10 @@ class KafkaTaskConsumer:
         if _notblank(self._config.kafka_sasl_mechanism):
             kwargs["sasl_mechanism"] = self._config.kafka_sasl_mechanism
         if _notblank(self._config.kafka_sasl_jaas_config):
-            # aiokafka splits jaas into plain user/password rather than
-            # a single jaas string. P3 will parse "username=...
-            # password=..." out of the Java-style jaas_config to bridge;
-            # for now we just forward it via the catch-all kwarg so
-            # operators can override per-tenant in tests.
+            # aiokafka 不接受单一 jaas 字符串,而是分别接 plain user/password。
+            # 后续会解析 Java 风格的 ``username=... password=...`` 自动转
+            # 换;当前先把原值塞进 ``sasl_plain_password``,运维侧可在测试
+            # 中按需覆盖。
             kwargs["sasl_plain_username"] = ""
             kwargs["sasl_plain_password"] = self._config.kafka_sasl_jaas_config
         return AIOKafkaConsumer(**kwargs)
@@ -173,16 +167,16 @@ class KafkaTaskConsumer:
     def _subscribe(self) -> None:
         assert self._consumer is not None
         pattern = self._config.kafka_topic_pattern
-        assert pattern is not None  # validated in _build_consumer
+        assert pattern is not None  # _build_consumer 已校验
         self._consumer.subscribe(
             pattern=pattern,
             listener=_PauseAwareRebalanceListener(self),
         )
 
-    # ─── internals: poll loop ──────────────────────────────────────────
+    # ─── 内部:poll 循环 ─────────────────────────────────────────────
 
     async def _poll_loop(self) -> None:
-        """Single-task poll loop. Exits on ``self._running == False``."""
+        """单任务的 poll 循环;``self._running == False`` 时退出。"""
         assert self._consumer is not None
         poll_ms = int(self._config.kafka_poll_interval.total_seconds() * 1000)
         try:
@@ -206,7 +200,7 @@ class KafkaTaskConsumer:
             self._running = False
 
     async def _handle_record(self, tp: TopicPartition, rec: Any) -> None:
-        """Decode one ``ConsumerRecord`` and feed the dispatcher."""
+        """解码单条 ``ConsumerRecord`` 并喂给 dispatcher。"""
         value = rec.value
         if not value:
             logger.warning(
@@ -235,22 +229,19 @@ class KafkaTaskConsumer:
             return
         await self._dispatcher.on_message(msg)
 
-    # ─── capacity-aware partition pause ────────────────────────────────
+    # ─── 容量感知的分区暂停 ───────────────────────────────────────────
 
     def apply_backpressure(self) -> None:
-        """Pause/resume assignment based on dispatcher capacity.
+        """根据 dispatcher 容量决定 pause/resume 分配。
 
-        Mirrors Java ``KafkaTaskConsumer.applyBackpressure()``: when
-        in-flight reaches ``max_concurrent_tasks`` or the platform
-        directive moved us to PAUSED/DRAINING, we ``pause(*assignment)``
-        so the broker stops fetching for these partitions; once
-        capacity returns we ``resume(*assignment)``. Offsets are never
-        committed for the unprocessed message — Kafka will redeliver
-        on resume.
+        对齐 Java ``KafkaTaskConsumer.applyBackpressure()``:当 in-flight
+        达到 ``max_concurrent_tasks`` 或平台 directive 把状态切到
+        PAUSED/DRAINING 时,``pause(*assignment)`` 让 broker 停止为这些分
+        区拉取数据;容量恢复后 ``resume(*assignment)``。未处理消息的
+        offset 永不提交,Kafka 会在 resume 后重投递。
 
-        The ``_paused`` field caches the last call so we don't issue a
-        pause/resume RPC every poll. Rebalances reset it via the
-        listener.
+        ``_paused`` 字段缓存上次决策,避免每次 poll 都发 pause/resume RPC;
+        rebalance 时由 listener 清空缓存。
         """
         assert self._consumer is not None
         max_in_flight = self._config.max_concurrent_tasks
@@ -278,11 +269,11 @@ class KafkaTaskConsumer:
                 self._dispatcher.runtime_state,
             )
 
-    # ─── test/observability hooks ──────────────────────────────────────
+    # ─── 测试 / 可观测性钩子 ──────────────────────────────────────────
 
     @property
     def paused(self) -> bool:
-        """Last cached pause decision (for tests + diagnostics)."""
+        """最近一次缓存的 pause 决策(供测试 + 诊断使用)。"""
         return self._paused
 
     @property

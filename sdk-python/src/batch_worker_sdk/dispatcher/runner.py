@@ -1,12 +1,11 @@
-"""Provisional run-loop wiring HTTP + Dispatcher + Kafka consumer together.
+"""把 HTTP + Dispatcher + Kafka 消费者粘合到一起的临时 run-loop。
 
-# Provisional API — Will be superseded by BatchPlatformClient in P3.
+# 临时入口 —— 将由 BatchPlatformClient 取代
 
-This module exists so P2 testkit consumers (and the contract runner)
-have something concrete to spin up. Once P3 lands ``BatchPlatformClient``
-(register / heartbeat / lease-renewal scheduler + lifecycle), callers
-should migrate to it; ``run_worker`` will then become a thin shim
-calling ``BatchPlatformClient.run_forever()``.
+本模块的存在是为了让 testkit 使用者和契约测试 runner 有一个可启动的对象。
+推荐迁移到 :class:`BatchPlatformClient`(自带 register / 心跳 / 租约续约调度
++ 完整生命周期);本入口将退化为薄 shim,转调
+``BatchPlatformClient.run_forever()``。
 """
 
 from __future__ import annotations
@@ -29,26 +28,25 @@ async def run_worker(
     *,
     shutdown_timeout: float = 30.0,
 ) -> None:
-    """Run the SDK until cancelled / KeyboardInterrupt.
+    """运行 SDK 直到被取消 / 收到 KeyboardInterrupt。
 
-    Provisional P2 entrypoint composing the three building blocks:
-    ``PlatformHttpClient`` (HTTP) + ``TaskDispatcher`` (CLAIM→REPORT) +
-    ``KafkaTaskConsumer`` (dispatch ingest). No register / heartbeat
-    loop yet — that lands in P3.
+    临时入口,把三个基础部件组合起来:``PlatformHttpClient``(HTTP)+
+    ``TaskDispatcher``(CLAIM→REPORT)+ ``KafkaTaskConsumer``(派发摄入)。
+    不含 register / 心跳循环 —— 那部分在 :class:`BatchPlatformClient` 内。
 
     Args:
-        config: Validated config including ``kafka_*`` fields.
-        handlers: Map of ``workerType → SdkTaskHandler``. May be empty
-            for smoke tests; missing handlers cause REPORT failure.
-        shutdown_timeout: Seconds to wait for in-flight drain on
-            ``CancelledError`` before forcing close.
+        config: 已校验的配置,需包含 ``kafka_*`` 字段。
+        handlers: ``workerType → SdkTaskHandler`` 路由表;smoke test 可传空,
+            缺 handler 的消息会按 REPORT failure 处理。
+        shutdown_timeout: ``CancelledError`` 时等待 in-flight drain 的秒数,
+            超时则强制关闭。
     """
     http = PlatformHttpClient(config)
     dispatcher = TaskDispatcher(config, http, handlers=handlers)
     consumer = KafkaTaskConsumer(config, dispatcher)
     try:
         await consumer.start()
-        # Block forever; outer task cancellation triggers shutdown.
+        # 永远阻塞,外层任务取消时触发关停。
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
