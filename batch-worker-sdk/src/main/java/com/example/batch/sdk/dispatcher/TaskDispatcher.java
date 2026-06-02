@@ -15,6 +15,7 @@ import com.example.batch.sdk.task.SdkTaskContext;
 import com.example.batch.sdk.task.SdkTaskHandler;
 import com.example.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -486,14 +487,30 @@ public class TaskDispatcher {
     }
   }
 
-  /** 优雅停 — 不接新任务(draining flag),等 in-flight 完成(timeout 30s),强制关。 */
+  /** 优雅停 — 默认 30s 超时,内部转 {@link #stop(Duration)}。 */
   public void stop() {
+    stop(Duration.ofSeconds(30));
+  }
+
+  /**
+   * 优雅停 — 不接新任务(draining flag),等 in-flight 完成(超时由调用方给定),强制关。
+   *
+   * <p>P0 hardening(配合 {@link com.example.batch.sdk.client.BatchPlatformClient#stop(Duration)}):
+   * 超时未结束时打 WARN 并列出未完成的 in-flight task id,便于运维排查 K8s SIGKILL 前哪些任务被打断。
+   */
+  public void stop(Duration timeout) {
     draining.set(true); // P0 hardening:立刻拒新消息(Kafka 已 polled 出还没 dispatch 的会走 onMessage skip)
-    log.info("TaskDispatcher draining + stopping, in-flight={}", inFlight.size());
+    long millis = Math.max(0L, timeout == null ? 0L : timeout.toMillis());
+    log.info(
+        "TaskDispatcher draining + stopping, in-flight={}, timeoutMs={}", inFlight.size(), millis);
     executor.shutdown();
     try {
-      if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
-        log.warn("TaskDispatcher drain timeout 30s, forcing shutdown");
+      if (!executor.awaitTermination(millis, TimeUnit.MILLISECONDS)) {
+        log.warn(
+            "TaskDispatcher drain timeout {}ms exceeded, forcing shutdown;"
+                + " unfinished inFlightTaskIds={}",
+            millis,
+            inFlightTaskIds());
         executor.shutdownNow();
       }
     } catch (InterruptedException ie) {

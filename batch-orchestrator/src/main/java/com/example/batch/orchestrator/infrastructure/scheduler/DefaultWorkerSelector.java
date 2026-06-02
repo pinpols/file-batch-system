@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.logging.ThrottledLogger;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.JsonUtils;
@@ -15,6 +16,7 @@ import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +48,12 @@ public class DefaultWorkerSelector implements WorkerSelector {
 
   // A-3.2 a: 指标名对齐 batch.scheduler.* 前缀，和现有 scheduler 指标共面板
   private static final String METRIC_NO_MATCH = "batch.scheduler.worker_selection.no_match";
+
+  // 同一 (tenant, group, reason) 的 no-match 在 30s 内只 WARN 一次,避免单个长期失配把日志冲掉。
+  // 指标侧仍按调用次数累加,Grafana 看趋势不受影响。
+  private static final Duration NO_MATCH_LOG_COOLDOWN = Duration.ofSeconds(30);
+
+  private final ThrottledLogger noMatchLogThrottle = new ThrottledLogger(NO_MATCH_LOG_COOLDOWN);
 
   private final WorkerRegistryMapper workerRegistryMapper;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
@@ -110,15 +118,21 @@ public class DefaultWorkerSelector implements WorkerSelector {
       // 保留阻塞语义以确保任务不会跑到错误环境（安全优先，见 v3 A-3.2）。
       String reason =
           candidates.isEmpty() ? "no_online_workers_in_group" : "no_worker_matches_resource_tag";
-      log.warn(
-          "worker selection returned no match: tenantId={}, workerGroup={}, resourceTag={},"
-              + " candidates={}, reason={} — task will block in WAITING until operator"
-              + " intervenes",
-          request.getTenantId(),
-          workerGroup,
-          queue == null ? null : queue.resourceTag(),
-          candidates.size(),
-          reason);
+      String resourceTag = queue == null ? null : queue.resourceTag();
+      String throttleKey = request.getTenantId() + '|' + workerGroup + '|' + reason;
+      ThrottledLogger.Decision decision = noMatchLogThrottle.evaluate(throttleKey);
+      if (decision.shouldLog()) {
+        log.warn(
+            "worker selection returned no match: tenantId={}, workerGroup={}, resourceTag={},"
+                + " candidates={}, reason={}, suppressedSincePrevious={} — task will block in"
+                + " WAITING until operator intervenes",
+            request.getTenantId(),
+            workerGroup,
+            resourceTag,
+            candidates.size(),
+            reason,
+            decision.suppressedSincePrevious());
+      }
       incrementNoMatchCounter(request, queue, reason);
       route.setAvailable(false);
       return route;
