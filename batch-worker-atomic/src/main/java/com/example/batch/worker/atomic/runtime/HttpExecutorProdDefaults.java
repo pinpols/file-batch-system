@@ -45,18 +45,28 @@ public class HttpExecutorProdDefaults {
       log.debug("http executor properties not present, prod default skip");
       return;
     }
+    boolean original = props.isEnforceAllowlist();
     if (environment.containsProperty(PROP_ENFORCE_ALLOWLIST)) {
-      log.debug(
-          "http enforceAllowlist explicitly configured ({}), prod default override skipped",
-          props.isEnforceAllowlist());
+      // Round-3 #8 (Round-2 §4 P0 #8):显式启动日志,运维一眼能看到 enforce-allowlist 当前 effective 值是显式还是默认。
+      log.info(
+          "ADR-029 prod hardening: http enforce-allowlist explicitly configured (effective={}),"
+              + " auto-default skipped",
+          original);
       return;
     }
-    if (!props.isEnforceAllowlist()) {
+    if (!original) {
       props.setEnforceAllowlist(true);
+      // Round-3 #8:把"隐式翻 true"升级为 INFO,避免灰度切错 profile 时白名单失效但无任何启动期可见信号。
       log.info(
-          "prod profile: http enforceAllowlist defaulted to true "
-              + "(no explicit {} in environment) — empty allowedHostPatterns now means deny-all",
+          "ADR-029 prod hardening: enforce-allowlist auto-enabled (was={}) — no explicit {} in"
+              + " environment, empty allowedHostPatterns now means deny-all",
+          original,
           PROP_ENFORCE_ALLOWLIST);
+    } else {
+      log.info(
+          "ADR-029 prod hardening: enforce-allowlist already true (effective={}),"
+              + " auto-default no-op",
+          original);
     }
   }
 }
