@@ -12,6 +12,7 @@ import com.example.batch.sdk.scheduler.HeartbeatScheduler;
 import com.example.batch.sdk.scheduler.LeaseRenewalScheduler;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -67,7 +68,7 @@ class BatchPlatformClientStopOrderTest {
 
     InOrder order = Mockito.inOrder(kafka, dispatcher, hb, lease, http);
     order.verify(kafka).close();
-    order.verify(dispatcher).stop();
+    order.verify(dispatcher).stop(any(Duration.class));
     order.verify(hb).close();
     order.verify(lease).close();
     order.verify(http).deactivate(anyString(), any());
