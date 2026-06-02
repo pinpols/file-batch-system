@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -411,7 +412,8 @@ public class TaskDispatcher {
                 maxRetries);
             return false;
           }
-          long delayMs = baseDelayMs << attempt; // 200 / 400 / 800 ms ...
+          long delayMs =
+              backoffWithJitter(baseDelayMs, attempt); // 200 / 400 / 800 ms ... + 0-10% jitter
           log.info(
               "CLAIM 5xx (HTTP {}) for taskId={} attempt={} retry in {}ms",
               httpEx.statusCode(),
@@ -444,7 +446,7 @@ public class TaskDispatcher {
               ioEx.getMessage());
           return false;
         }
-        long delayMs = baseDelayMs << attempt;
+        long delayMs = backoffWithJitter(baseDelayMs, attempt);
         log.info(
             "CLAIM transport error for taskId={} attempt={} retry in {}ms: {}",
             msg.taskId(),
@@ -479,6 +481,23 @@ public class TaskDispatcher {
   /** P7-2:一次成功的 CLAIM / REPORT 归零连续 4xx 计数。 */
   private void resetClientErrorStreak() {
     consecutiveClientErrors.set(0);
+  }
+
+  /**
+   * 指数退避 + 0-10% jitter:base * 2^attempt + rand[0, exp/10)。
+   *
+   * <p>±10% jitter 防 N 个 worker 同步雪崩 retry(N 个 worker 同时收 5xx 后,纯指数退避会让它们 同步在 200/400/800ms
+   * 后再次撞墙)。见 wire-protocol §C / TOP #10。
+   *
+   * <p>包内可见:单测断言 jitter 边界。
+   */
+  static long backoffWithJitter(long baseDelayMs, int attempt) {
+    if (baseDelayMs <= 0L) return 0L;
+    long safeAttempt = Math.min(attempt, 30); // 防 shift overflow
+    long exponentialMs = baseDelayMs << safeAttempt;
+    long jitterCeilExclusive = Math.max(1L, exponentialMs / 10L);
+    long jitterMs = ThreadLocalRandom.current().nextLong(0L, jitterCeilExclusive);
+    return exponentialMs + jitterMs;
   }
 
   /** 可被 interrupt 打断的 sleep;true=正常 sleep 完,false=被打断(应放弃重试)。 */
