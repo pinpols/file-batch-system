@@ -1,7 +1,7 @@
 # sample-tenant-worker-python — ADR-035 自托管 worker(Python)示范
 
 Python 版自托管 worker 最小示范,集成
-[`batch-worker-sdk`(Python)](../../sdk-python/),用 `@batch_task` 装饰器注册 handler。
+[`batch-worker-sdk`(Python)](../../batch-worker-sdk-python/),用 `@batch_task` 装饰器注册 handler。
 **Python 3.12+,async-only**。
 
 > **同一自托管能力的 4 种接入,按租户技术栈选**:
@@ -101,7 +101,7 @@ async def main():
 asyncio.run(main())
 ```
 
-完整 testkit 用法见 [`sdk-python/tests/testkit/`](../../sdk-python/tests/testkit/)。
+完整 testkit 用法见 [`batch-worker-sdk-python/tests/testkit/`](../../batch-worker-sdk-python/tests/testkit/)。
 
 ## Java sample 等价对照(快速 mental map)
 
@@ -131,4 +131,4 @@ asyncio.run(main())
 - [`docs/sdk/wire-protocol.md`](../../docs/sdk/wire-protocol.md) — 通讯协议(任何语言 SDK 必须实装)
 - [`docs/sdk/onboarding-journey.md`](../../docs/sdk/onboarding-journey.md) — 从 0 到第一个 task 完整 checklist
 - [`docs/sdk/troubleshooting.md`](../../docs/sdk/troubleshooting.md) — 排障
-- [`sdk-python/README.md`](../../sdk-python/README.md) — Python SDK 全 Roadmap + Public API
+- [`batch-worker-sdk-python/README.md`](../../batch-worker-sdk-python/README.md) — Python SDK 全 Roadmap + Public API

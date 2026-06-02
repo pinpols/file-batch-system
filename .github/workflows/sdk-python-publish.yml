@@ -1,0 +1,60 @@
+name: sdk-python-publish
+
+on:
+  push:
+    tags:
+      - 'sdk-python-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: '上传到 TestPyPI 而非 PyPI(workflow_dispatch 专用)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install hatch
+        run: pip install --upgrade pip hatch
+
+      - name: Build wheel + sdist
+        working-directory: batch-worker-sdk-python
+        run: hatch build --clean
+
+      - name: Verify artifacts present
+        working-directory: batch-worker-sdk-python
+        run: |
+          ls -la dist/
+          test -n "$(ls dist/*.whl 2>/dev/null)" || { echo "missing wheel"; exit 1; }
+          test -n "$(ls dist/*.tar.gz 2>/dev/null)" || { echo "missing sdist"; exit 1; }
+
+      - name: Publish to TestPyPI (dry-run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry-run == true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: batch-worker-sdk-python/dist/
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+      - name: Publish to PyPI (tag push)
+        if: startsWith(github.ref, 'refs/tags/sdk-python-v') && !(github.event_name == 'workflow_dispatch' && inputs.dry-run == true)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: batch-worker-sdk-python/dist/
+          skip-existing: true
