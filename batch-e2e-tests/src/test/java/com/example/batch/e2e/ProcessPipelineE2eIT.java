@@ -58,6 +58,7 @@ import org.springframework.test.context.jdbc.Sql;
 @Sql(scripts = {E2eTestSql.BIZ_SCHEMA})
 @Import(ProcessPipelineE2eIT.ProcessE2eTestConfiguration.class)
 @Tag("e2e")
+@Tag("smoke")
 class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
