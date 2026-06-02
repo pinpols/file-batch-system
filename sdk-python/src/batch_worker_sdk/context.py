@@ -19,6 +19,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from batch_worker_sdk.cancellation import CancellationSignal
+from batch_worker_sdk.progress import ProgressReporter
+
 
 class SdkTaskContext(BaseModel):
     """Immutable execution context for a single task instance.
@@ -29,7 +32,7 @@ class SdkTaskContext(BaseModel):
     flag, and similar.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     tenant_id: str
     """Owning tenant id (required, aligns with ``tenantId``)."""
@@ -69,6 +72,34 @@ class SdkTaskContext(BaseModel):
 
     runtime_attributes: dict[str, Any] = Field(default_factory=dict)
     """Open-ended platform-injected attributes (traceId / dryRun / etc.)."""
+
+    # P4-injected runtime collaborators. Not part of the wire payload —
+    # the dispatcher attaches them when materializing the context for a
+    # specific task instance. Frozen=True still applies (the references
+    # cannot be reassigned after construction), but the referenced
+    # objects are mutable (CancellationSignal flips its internal event,
+    # ProgressReporter writes its snapshot under a lock). ``exclude=True``
+    # keeps them out of any ``model_dump()`` output the dispatcher might
+    # log.
+    cancel_signal: CancellationSignal | None = Field(default=None, exclude=True, repr=False)
+    """Cooperative cancellation signal for this task execution (P4).
+
+    Long-running handlers should poll
+    ``ctx.cancel_signal.is_cancellation_requested`` (or ``await
+    ctx.cancel_signal.wait_cancelled()``) and return early when set,
+    instead of waiting for the lease to expire. ``None`` only in
+    P0.5-era callers that haven't been upgraded yet.
+    """
+
+    progress_reporter: ProgressReporter | None = Field(default=None, exclude=True, repr=False)
+    """Latest-value-wins progress slot for this task execution (P4).
+
+    Handlers call ``ctx.progress_reporter.report({...})`` in their long
+    loop; the lease-renewal scheduler samples ``latest()`` on each
+    tick and includes the snapshot in the renew request body so the
+    platform's job-task detail view stays fresh. ``None`` only in
+    P0.5-era callers that haven't been upgraded yet.
+    """
 
     def is_dry_run(self) -> bool:
         """Whether the dispatch is a dry-run probe (ADR-026).
