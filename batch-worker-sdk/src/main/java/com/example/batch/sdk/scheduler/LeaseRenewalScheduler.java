@@ -29,22 +29,37 @@ public class LeaseRenewalScheduler implements AutoCloseable {
 
   public LeaseRenewalScheduler(
       BatchPlatformClientConfig config, PlatformHttpClient httpClient, TaskDispatcher dispatcher) {
+    this(config, httpClient, dispatcher, defaultScheduler());
+  }
+
+  // 包内可见 — 单测注入 mock ScheduledExecutorService 验证 fixed-delay vs fixed-rate
+  LeaseRenewalScheduler(
+      BatchPlatformClientConfig config,
+      PlatformHttpClient httpClient,
+      TaskDispatcher dispatcher,
+      ScheduledExecutorService scheduler) {
     this.config = config;
     this.httpClient = httpClient;
     this.dispatcher = dispatcher;
-    this.scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "batch-sdk-lease-renewal");
-              t.setDaemon(true);
-              return t;
-            });
+    this.scheduler = scheduler;
+  }
+
+  private static ScheduledExecutorService defaultScheduler() {
+    return Executors.newSingleThreadScheduledExecutor(
+        r -> {
+          Thread t = new Thread(r, "batch-sdk-lease-renewal");
+          t.setDaemon(true);
+          return t;
+        });
   }
 
   public void start() {
     long intervalMs = config.getLeaseRenewInterval().toMillis();
-    scheduler.scheduleAtFixedRate(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
-    log.info("LeaseRenewalScheduler started: interval={}ms", intervalMs);
+    // fixed-delay:与 HeartbeatScheduler 一致,避免 tick 卡顿后(HTTP 5xx 重试 ~3s)追赶式积压
+    // 把下一轮立即追发出去导致内存爆 / orchestrator 雪崩。
+    // 见 docs/analysis/2026-06-02-sdk-code-deep-review.md §3 / TOP #6
+    scheduler.scheduleWithFixedDelay(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+    log.info("LeaseRenewalScheduler started: interval={}ms (fixed-delay)", intervalMs);
   }
 
   void tick() {
