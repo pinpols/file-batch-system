@@ -52,6 +52,19 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter</artifactId>
     </dependency>
+
+    <!-- 集成测试:testkit 起内嵌 Kafka + HTTP stub,@SpringBootTest 端到端跑通 starter 自动装配 -->
+    <dependency>
+      <groupId>com.example.batch</groupId>
+      <artifactId>batch-worker-sdk-testkit</artifactId>
+      <version>${batch-sdk.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -59,6 +72,19 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <!-- *IT.java 走 failsafe(项目约定:与 unit 测分开,可单独 mvn verify 启动) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
