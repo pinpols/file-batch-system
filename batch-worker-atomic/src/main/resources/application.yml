@@ -62,3 +62,11 @@ batch:
         enabled: ${BATCH_WORKER_ATOMIC_SQL_ENABLED:true}
       http:
         enabled: ${BATCH_WORKER_ATOMIC_HTTP_ENABLED:true}
+
+# Round-3 #8(Round-2 §4 P0 #8):暴露 atomicruntime 自定义 Actuator 端点,Console 反向 HTTP 拉取做仪表盘。
+# 端点纯只读 + 无敏感字段(只含开关 / 白名单大小 / dialect),沿用 management-port 隔离即可。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,loggers,atomicruntime

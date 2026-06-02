@@ -119,3 +119,7 @@ batch:
     orchestrator:
       # Orchestrator 服务地址（Console 调用 Orchestrator API）
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
+    # Round-3 #8(Round-2 §4 P0 #8):Console 反向拉 atomic worker /actuator/atomicruntime 做仪表盘。
+    atomic-worker:
+      enabled: ${BATCH_CONSOLE_ATOMIC_WORKER_ENABLED:true}
+      base-url: ${BATCH_WORKER_ATOMIC_BASE_URL:http://localhost:18087}
