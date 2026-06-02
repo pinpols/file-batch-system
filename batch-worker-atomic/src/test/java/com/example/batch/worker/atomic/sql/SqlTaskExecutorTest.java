@@ -79,6 +79,14 @@ class SqlTaskExecutorTest {
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("statementTimeoutSeconds must be positive");
     }
+
+    @Test
+    void rejectsSensitiveCredentialInParameters_LaneC() {
+      TaskResult r =
+          executor.execute(ctxWithParams(Map.of("sql", "SELECT 1", "db_password", "leak")));
+      assertThat(r.success()).isFalse();
+      assertThat(r.message()).contains("SENSITIVE_DATA_IN_PARAMETERS");
+    }
   }
 
   // ─── SQL split ──────────────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 package com.example.batch.worker.atomic.storedproc;
 
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.security.SensitiveDataValidator;
 import com.example.batch.common.spi.task.BatchTaskExecutor;
 import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
@@ -106,10 +108,22 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskResult execute(TaskContext ctx) {
     try {
+      SensitiveDataValidator.rejectIfContainsSensitiveKeys(
+          ctx.parameters(), "atomic.storedproc.parameters");
       Invocation inv = parseInvocation(ctx);
       return runCall(ctx, inv);
     } catch (StoredProcValidationException ex) {
       return TaskResult.fail(ex.getMessage());
+    } catch (BizException ex) {
+      log.warn(
+          "stored proc executor rejected by SensitiveDataValidator: tenantId={}, jobCode={},"
+              + " key={}",
+          ctx.tenantId(),
+          ctx.jobCode(),
+          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
+              ? "?"
+              : ex.getMessageArgs()[1]);
+      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "stored proc executor unexpected error: tenantId={}, jobCode={}",

@@ -1,5 +1,7 @@
 package com.example.batch.worker.atomic.shell;
 
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.security.SensitiveDataValidator;
 import com.example.batch.common.spi.task.BatchTaskExecutor;
 import com.example.batch.common.spi.task.ResourceKind;
 import com.example.batch.common.spi.task.TaskCapability;
@@ -113,6 +115,9 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskResult execute(TaskContext ctx) {
     try {
+      // Lane C:credential 静态拒入闸门(SENSITIVE_DATA_IN_PARAMETERS)
+      SensitiveDataValidator.rejectIfContainsSensitiveKeys(
+          ctx.parameters(), "atomic.shell.parameters");
       ShellInvocation inv = parseInvocation(ctx);
       Path workdir = createIsolatedWorkdir(ctx);
       try {
@@ -124,6 +129,16 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       }
     } catch (ShellValidationException ex) {
       return TaskResult.fail(ex.getMessage());
+    } catch (BizException ex) {
+      // Lane C 凭据拒入:任务直接 FAILED,error message 含 SENSITIVE_DATA_IN_PARAMETERS 标识
+      log.warn(
+          "shell executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
+          ctx.tenantId(),
+          ctx.jobCode(),
+          ex.getMessageArgs() == null || ex.getMessageArgs().length < 2
+              ? "?"
+              : ex.getMessageArgs()[1]);
+      return TaskResult.fail("SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
           "shell executor unexpected error: tenantId={}, jobCode={}",
