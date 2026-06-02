@@ -48,13 +48,13 @@ pip install -e .[dev]
 
 | Phase | Scope | Est. effort |
 | --- | --- | --- |
-| **P0** | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | done |
-| **P0.5** | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | done (Lane R) |
-| **P1** | `PlatformHttpClient` (httpx async) + retry/backoff + `BatchPlatformClientConfig` | done (Lane Q) |
-| **P2** | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause | done (Lane S) |
-| **P3** (this PR) | `BatchPlatformClient` + `HeartbeatScheduler` + `LeaseRenewalScheduler` + heartbeat-directive parsing | done (Lane T) |
-| **P4** | Lifecycle: budgeted `stop(timeout)`, cancellation signal wiring, progress reporter, deactivate | Lane U |
-| **P5** | Testkit (FakeBatchPlatform / EmbeddedKafka / `@batch_task`), examples, PyPI publish | Lane V |
+| **P0** ✅ | Scaffolding: pyproject, ruff, mypy, pytest, CI, contract stub | done |
+| **P0.5** ✅ | Public API surface stubs (handler / context / result / state / progress / cancellation / descriptor) mirroring Java SDK | done (Lane R) |
+| **P1** ✅ | `PlatformHttpClient` (httpx async) + retry/backoff + `BatchPlatformClientConfig` | done (Lane Q) |
+| **P2** ✅ | Kafka consumer (aiokafka), `TaskDispatcher` (CLAIM/EXECUTE/REPORT), capacity-aware pause | done (Lane S) |
+| **P3** ✅ | `BatchPlatformClient` + `HeartbeatScheduler` + `LeaseRenewalScheduler` + heartbeat-directive parsing | done (Lane T) |
+| **P4** ✅ | Lifecycle: budgeted `stop(timeout)`, cancellation signal wiring, progress reporter, deactivate | done (Lane U) |
+| **P5** ✅ (this PR) | Testkit (`FakeBatchPlatform`) + `@batch_task` decorator + `examples/sample-tenant-worker-python/` | done (Lane V) |
 
 Contract fixtures from Lane N drive the green-bar for P1–P3. Every
 fixture that flips from `xfail` to `pass` is forward progress.
@@ -150,6 +150,57 @@ pytest -v
 # Contract runner (Phase 0: lists fixtures, xfails them all)
 bash scripts/run-contract.sh
 ```
+
+## `@batch_task` decorator (P5)
+
+Declarative handler registration in the spirit of FastAPI / Spring
+starter. One `async def` + one decorator + one call to
+`collect_registered_handlers()` at startup:
+
+```python
+from batch_worker_sdk import batch_task, SdkTaskContext, SdkTaskResult, collect_registered_handlers
+
+@batch_task("my-job")
+async def my_handler(ctx: SdkTaskContext) -> SdkTaskResult:
+    return SdkTaskResult.success_with({"hello": "world"})
+
+# At startup:
+for handler in collect_registered_handlers():
+    client.register_handler(handler)  # Lane T (P3)
+```
+
+Sync functions and empty `task_type` are rejected at decorator time
+(fail-fast). Optional `descriptor=` lets you declare a
+`SdkTaskTypeDescriptor` for the console form renderer; the decorator
+verifies it matches `task_type` so the wire-protocol can never desync.
+
+## testkit (P5)
+
+`batch_worker_sdk.testkit` ships an in-process platform fake so
+tenant tests don't need Kafka/orchestrator:
+
+```python
+from batch_worker_sdk.testkit import FakeBatchPlatform, make_test_config
+
+async with FakeBatchPlatform() as fp:
+    cfg = make_test_config(base_url=fp.base_url)
+    # ...drive your handler / client...
+    assert fp.get_reports()[0]["success"] is True
+```
+
+Mirrors Java [`batch-worker-sdk-testkit`](../batch-worker-sdk-testkit/)
+(`FakeBatchPlatform` + `@BatchWorkerTest`). Helpers shipped: 
+`FakeBatchPlatform`, `make_test_context`, `make_test_config`,
+`RecordingHandler`. Install via `pip install batch-worker-sdk[testkit]`
+(`aiohttp` is testkit-only; production tenant workers don't pay for it).
+
+## Examples (P5)
+
+[`examples/sample-tenant-worker-python/`](../examples/sample-tenant-worker-python/)
+is the Python counterpart to the Java `sample-tenant-worker/`. Two
+demo handlers (`sample-echo`, `sample-sleep`) registered via
+`@batch_task`. Forward-compatible with Lane T — runs in
+"registration smoke" mode until `BatchPlatformClient` lands.
 
 ## Contributing
 
