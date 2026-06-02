@@ -9,7 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -22,10 +25,22 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HeartbeatScheduler implements AutoCloseable {
 
+  /** Lane I:hint 兜底下限 — orch 配错(如 0 / 100ms)会把心跳刷爆,强制至少 1s。 */
+  static final long MIN_HINT_MS = 1_000L;
+
+  /** Lane I:hint 兜底上限倍率 — hint 不得超过 baseline 的 10 倍,避免 orch 配错把心跳拖死。 */
+  static final long MAX_HINT_MULTIPLIER = 10L;
+
   private final BatchPlatformClientConfig config;
   private final PlatformHttpClient httpClient;
   private final TaskDispatcher dispatcher;
   private final ScheduledExecutorService scheduler;
+
+  /** Lane I:当前 schedule 的 future,收到 hint 时先 cancel 再重排。 */
+  private final AtomicReference<ScheduledFuture<?>> currentFuture = new AtomicReference<>();
+
+  /** Lane I:当前生效心跳间隔(ms),供单测/可观测查询;首次 start 时初始化为 config baseline。 */
+  private final AtomicLong currentIntervalMs = new AtomicLong();
 
   public HeartbeatScheduler(
       BatchPlatformClientConfig config, PlatformHttpClient httpClient, TaskDispatcher dispatcher) {
@@ -55,13 +70,17 @@ public class HeartbeatScheduler implements AutoCloseable {
 
   public void start() {
     long intervalMs = config.getHeartbeatInterval().toMillis();
+    currentIntervalMs.set(intervalMs);
     // fixed-delay 而非 fixed-rate:平台短暂卡顿后,SDK 不应追赶式连发心跳把 orchestrator 雪崩,
     // 而是每次 tick 完成后再等一个完整 interval。见 #SDK-P1-3。
-    scheduler.scheduleWithFixedDelay(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+    ScheduledFuture<?> f =
+        scheduler.scheduleWithFixedDelay(this::tick, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+    currentFuture.set(f);
     log.info("HeartbeatScheduler started: interval={}ms (fixed-delay)", intervalMs);
   }
 
   void tick() {
+    HeartbeatDirective directive = null;
     try {
       Map<String, Object> body = new HashMap<>();
       body.put("tenantId", config.getTenantId());
@@ -72,16 +91,59 @@ public class HeartbeatScheduler implements AutoCloseable {
       // capabilityTags 留空(可选);workerGroup/hostName/hostIp/processId 平台从 register 拿
       Map<String, Object> resp = httpClient.heartbeat(config.getWorkerCode(), body);
       // Phase 2 §2.4:回包是 platform directive,据此驱动 dispatcher 4 态状态机
-      dispatcher.applyPlatformDirective(HeartbeatDirective.fromResponse(resp));
+      directive = HeartbeatDirective.fromResponse(resp);
+      dispatcher.applyPlatformDirective(directive);
     } catch (Throwable t) {
       // 不能让心跳异常杀掉 scheduler — fixed-rate 一旦抛会停
       log.warn("heartbeat failed: {}", t.getMessage());
     }
+    // Lane I (ADR-035 §11):若 orch 下发 nextHeartbeatHint,据此动态重排下次心跳间隔。
+    // 兜底:hint < 1s → 1s;hint > 10 × baseline → 10 × baseline(防 orch 配错)。
+    // null = 不下发,保持当前间隔(向后兼容老平台 / 老回包)。
+    if (directive != null && directive.nextHeartbeatHint() != null) {
+      applyHeartbeatHint(directive.nextHeartbeatHint().longValue() * 1_000L);
+    }
+  }
+
+  /** Lane I:据 hint 重排心跳调度;hint 单位 ms,内含兜底。包内可见以便单测。 */
+  void applyHeartbeatHint(long hintMs) {
+    long baselineMs = config.getHeartbeatInterval().toMillis();
+    long maxMs = baselineMs * MAX_HINT_MULTIPLIER;
+    long clamped = Math.max(MIN_HINT_MS, Math.min(maxMs, hintMs));
+    long prev = currentIntervalMs.get();
+    if (clamped == prev) {
+      return; // 间隔无变化,无需重排
+    }
+    if (!currentIntervalMs.compareAndSet(prev, clamped)) {
+      return; // 并发竞争,后者赢就行
+    }
+    ScheduledFuture<?> old = currentFuture.get();
+    if (old != null) {
+      old.cancel(false);
+    }
+    ScheduledFuture<?> next =
+        scheduler.scheduleWithFixedDelay(this::tick, clamped, clamped, TimeUnit.MILLISECONDS);
+    currentFuture.set(next);
+    log.info(
+        "HeartbeatScheduler re-scheduled by orch hint: {}ms -> {}ms (raw hint={}ms, baseline={}ms)",
+        prev,
+        clamped,
+        hintMs,
+        baselineMs);
+  }
+
+  /** 当前生效心跳间隔(ms),包内可见供单测断言。 */
+  long currentIntervalMs() {
+    return currentIntervalMs.get();
   }
 
   @Override
   public void close() {
     log.info("HeartbeatScheduler stopping");
+    ScheduledFuture<?> f = currentFuture.getAndSet(null);
+    if (f != null) {
+      f.cancel(false);
+    }
     scheduler.shutdown();
     try {
       if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
