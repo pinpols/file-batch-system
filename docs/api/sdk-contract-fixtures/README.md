@@ -1,0 +1,67 @@
+# SDK Contract Fixtures(language-agnostic)
+
+> **用途**:为 BYO(Bring Your Own)SDK 提供**与语言无关**的协议行为对账用例。
+> 任何语言实现(Go / Python / Node / .NET / Rust …)都可写一个 contract runner,按 fixture JSON 的
+> `given` 起 SDK、`when` 触发 HTTP / Kafka 调用、断言 `then.sdkExpectedAction` 描述的行为。
+>
+> **权威源**:本目录与 [`docs/sdk/wire-protocol.md`](../../sdk/wire-protocol.md) §B/§C 错误码 + 重试规则、
+> [`docs/api/orchestrator-internal.openapi.yaml`](../orchestrator-internal.openapi.yaml) schema 三轨对齐。
+
+## Fixture 结构
+
+```json
+{
+  "scenario": "<scenario-name-kebab>",
+  "description": "...",
+  "given": {
+    "config": { /* SDK 启动配置(tenantId / workerCode / apiKey / ...) */ },
+    "state":  { /* 可选:模拟当前 SDK 状态(in-flight tasks / FSM state) */ }
+  },
+  "when": {
+    "channel": "http" | "kafka",
+    "method":  "POST" | "GET" | "RECEIVE",
+    "path":    "/internal/...",
+    "body":    { /* SDK 发出 / 收到的 payload */ },
+    "responseStatus": 200,
+    "responseBody":   { /* 平台回包 */ },
+    "responseHeaders": { /* 可选 */ }
+  },
+  "then": {
+    "sdkExpectedAction": "human-readable 必须发生的 SDK 行为(状态切换 / 调度器启停 / 重试 / fail-fast)",
+    "sdkMustNot":        ["列出明确禁止的行为(如 重试 401 / 修改 errorCode 字段名)"]
+  },
+  "references": [ "wire-protocol.md §B", "openapi: /internal/.../register" ]
+}
+```
+
+## 用例清单(本目录)
+
+| 文件 | 覆盖 |
+|---|---|
+| `01-register-success.json` | register 200 → 状态切 ONLINE, 启动 Heartbeat / Lease scheduler |
+| `02-register-conflict-idempotent.json` | register 200 with existing workerCode → 平台 idempotent,SDK 同样进 ONLINE |
+| `03-heartbeat-directive-normal.json` | heartbeat 200, platformStatus=NORMAL → 维持当前 FSM |
+| `04-heartbeat-directive-draining.json` | heartbeat 200, shouldDrain=true → 进 DRAINING, Kafka pause |
+| `05-heartbeat-directive-paused.json` | heartbeat 200, platformStatus=PAUSED → Kafka assignment.pause(),不收新 task |
+| `06-heartbeat-next-interval-hint.json` | heartbeat 200, nextHeartbeatHint=PT15S → 调度器下次 15s 后跑 |
+| `07-claim-401-fail-fast.json` | claim 401 → fail-fast, dispatcher.fatal, **不重试** |
+| `08-claim-409-idempotent-success.json` | claim 409 → 视为成功, log INFO, 不报告失败 |
+| `09-report-5xx-retry-backoff.json` | report 503 三次 → 指数退避 200/400/800ms, 仍失败则 log + drop |
+| `10-renew-cancel-requested.json` | renew 200, cancelRequested=true → 触发 CancellationSignal, handler 中止 |
+| `11-kafka-partition-pause-on-capacity.json` | in-flight 满 → Kafka assignment.pause(partitions), 处理完 resume |
+| `12-stop-with-timeout.json` | stop(30s) → draining=true, Kafka wakeup, drain in-flight, deactivate, 不超 30s |
+
+## 实现这套 runner 的建议
+
+- **HTTP 侧**:用 mock server(Go 用 `httptest`、Python 用 `responses`、Node 用 `nock`)按 fixture `when.responseStatus` 回包
+- **Kafka 侧**:用 in-memory / embedded broker 或 mock consumer
+- **断言**:`then.sdkExpectedAction` 是人类可读描述,需要 runner 端把行为翻译为可观察事件(状态变量、调度器是否启停、HTTP 重试次数)
+- **CI**:本 lane 暂不强制平台 CI 跑这套(各语言 runner 维护成本平台不承担);租户上线评审用 / BYO SDK 自家 CI 用
+
+## 协议演进
+
+平台改 wire schema 时:
+1. 改 `WorkerController` / `TaskController` Java 代码
+2. 改 [`orchestrator-internal.openapi.yaml`](../orchestrator-internal.openapi.yaml)
+3. 改 [`wire-protocol.md`](../../sdk/wire-protocol.md) Changelog
+4. **改本目录对应 fixture**(或加新 fixture),BYO SDK 团队订阅本目录变更

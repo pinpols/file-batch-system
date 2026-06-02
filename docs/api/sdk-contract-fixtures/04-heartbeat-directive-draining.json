@@ -1,0 +1,33 @@
+{
+  "scenario": "heartbeat-directive-draining",
+  "description": "平台触发 drain(运维要灰度下线)→ SDK 切 DRAINING:停 Kafka 投递,在手任务跑完后 deactivate",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1" },
+    "state":  { "fsm": "NORMAL", "inFlight": 3 }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/w-1/heartbeat",
+    "body": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "status": "RUNNING",
+      "heartbeatAt": "2026-06-02T10:00:30Z",
+      "currentLoad": 3
+    },
+    "responseStatus": 200,
+    "responseBody": {
+      "platformStatus": "DRAINING",
+      "shouldDrain": true,
+      "pausedTaskTypes": [],
+      "desiredMaxConcurrent": null,
+      "nextHeartbeatHint": null
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "transition FSM to DRAINING; call kafkaConsumer.pause(assignment); continue running in-flight tasks; when inFlight == 0 → POST /deactivate and exit",
+    "sdkMustNot": ["accept new Kafka messages in DRAINING", "kill in-flight tasks abruptly"]
+  },
+  "references": ["wire-protocol.md §2.1", "wire-protocol.md §4"]
+}

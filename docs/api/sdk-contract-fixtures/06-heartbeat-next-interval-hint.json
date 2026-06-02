@@ -1,0 +1,30 @@
+{
+  "scenario": "heartbeat-next-interval-hint",
+  "description": "平台动态调心跳频率(高负载时降频减压)→ SDK 必须消费 nextHeartbeatHint(Java SDK 当前短板 #3,BYO SDK 推荐起点就做)",
+  "given": {
+    "config": { "tenantId": "acme", "workerCode": "w-1", "heartbeatInterval": "PT30S" }
+  },
+  "when": {
+    "channel": "http",
+    "method": "POST",
+    "path": "/internal/workers/w-1/heartbeat",
+    "body": {
+      "tenantId": "acme",
+      "workerCode": "w-1",
+      "status": "RUNNING",
+      "heartbeatAt": "2026-06-02T10:00:30Z"
+    },
+    "responseStatus": 200,
+    "responseBody": {
+      "platformStatus": "NORMAL",
+      "shouldDrain": false,
+      "pausedTaskTypes": [],
+      "nextHeartbeatHint": 15
+    }
+  },
+  "then": {
+    "sdkExpectedAction": "update local heartbeat interval to 15s for next tick; restore to default 30s when nextHeartbeatHint becomes null",
+    "sdkMustNot": ["ignore the hint (Java SDK currently does — known short-fall)", "let interval drift below 1s (sanity clamp)"]
+  },
+  "references": ["wire-protocol.md §6 short-fall #3"]
+}

@@ -1,5 +1,10 @@
 # SDK ↔ Orchestrator 通讯协议 / 故障感知
 
+> **协议契约权威源(双轨)**:本文与 [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml) 是 wire 层协议的两份权威源 ——
+> 本文给**读者视图**(故障感知矩阵 + 时序约束 + 错误码语义 + 重试退避规则),yaml 给**机器视图**(端点 / schema / response code)。
+> Java SDK 和未来 BYO(Bring-Your-Own)SDK(Go / Python / Node / .NET)必须基于这两份生成 / 校验实现。BYO 接入指南见
+> [`docs/sdk/byo-sdk-guide.md`](byo-sdk-guide.md);language-agnostic 契约 fixtures 见 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/)。
+
 > 配套 [`docs/sdk/quickstart.md`](quickstart.md) 与 [`docs/sdk/troubleshooting.md`](troubleshooting.md)。本文是「运行期视图」:把 ADR-035 的协议节、配置节、生命周期节合成一张全景图,让租户接入或调参时不需翻多处。
 
 ## 1. 双通道分工
@@ -148,6 +153,95 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 | heartbeat / lease 超时阈值无 cross-field 校验 | 运维配错只能事后排查 | `troubleshooting.md` 写了排查路径,代码层无校验 |
 | worker fingerprint console 看板 | BE 端点已补(PR #240 Lane D);FE 看板未做 | 等 FE follow-up |
 | 凭据走 parameters / descriptor 泄露 | `SensitiveDataValidator`(PR #242 Lane C)拦截 register 路径 | atomic executor 入口注入待 Lane C/B PR 合后回头补 |
+
+## A. 协议版本与 schemaVersion(BYO SDK 兼容矩阵)
+
+派单消息 `TaskDispatchMessage.schemaVersion`(Phase 0 起携带)是协议演进的主版本锚。SDK 侧 [TaskDispatchMessage.java](../../batch-worker-sdk/src/main/java/com/example/batch/sdk/dispatcher/TaskDispatchMessage.java):
+
+```java
+public static final Set<String> SUPPORTED_MAJOR_VERSIONS = Set.of("v1", "v2");
+// 缺字段时 fallback 主版本(老 orchestrator 没填 schemaVersion 时按 v1 解析)
+```
+
+**BYO SDK 必须等价实现**:
+
+| schemaVersion 取值 | BYO SDK 行为 |
+|---|---|
+| 缺字段 / null | 当 `v1` 解析(老 orchestrator 兼容) |
+| `v1`、`v2`、`v2-rc`(任何已知 major) | 正常处理 |
+| `v3+` / 未知 major | **直接 reject 消息**(log error, 不 commit Kafka offset),避免按错版本反序列化字段错乱 |
+
+**Jackson 反序列化策略**:所有 DTO 必须 `@JsonIgnoreProperties(ignoreUnknown = true)` 等价行为 ——
+平台 forward 加新字段时旧 BYO SDK 不能崩。Phase 0 引入新字段只能是 nullable optional,绝不删除老字段。
+重命名 / 删除走 [`docs/runbook/sdk-dual-rollout.md`](../runbook/sdk-dual-rollout.md) 双轨纪律(平台先双写,SDK 全量升级后再删旧字段)。
+
+## B. 错误码语义(BYO SDK 必须等价分类)
+
+### HTTP `/internal/*` 端点状态码(对照 [PlatformHttpException.java](../../batch-worker-sdk/src/main/java/com/example/batch/sdk/internal/PlatformHttpException.java))
+
+| HTTP code | 语义 | BYO SDK 必须实现的行为 |
+|---|---|---|
+| `200` | 成功 | 正常解包 |
+| `401` / `403` | 凭据失效 / tenant 越权 | **fail-fast**:`TaskDispatcher` 置 fatal,后续 onMessage 拒收,等容器重启;**不重试** |
+| `404` | workerCode / taskId 不存在 | log warn,放弃当前请求;后续心跳如继续 404 视为被运维清掉,fail-fast |
+| `409` | 任务已被他 worker 认领 / lease 已回收 | **当幂等成功处理**:log INFO,**不报告失败**,不影响后续认领 |
+| 其他 4xx | 客户端构造错(参数缺失 / schema 错) | log error,放弃;**累计 5 次(默认 `clientErrorFailFastThreshold=5`)后 fail-fast** —— 防活锁 |
+| `5xx` | 平台侧问题 | **指数退避重试**(详见 §C) |
+| 传输层错(socket / DNS / timeout) | 网络问题 | 走与 5xx 等价的指数退避 |
+
+### task 执行结果错误码(report body `errorCode` 字段)
+
+Java SDK 端 `SdkTaskResult.fail(throwable)` 默认填 `throwable.getClass().getSimpleName()`(如 `IllegalStateException`),但 atomic executors / 业务 handler 可填业务码。**BYO SDK 必须等价支持**以下规范分类(对应 atomic Lane K + ADR-012 FailureClass):
+
+| 推荐 errorCode | 语义 | failureClass(可选,ADR-012) |
+|---|---|---|
+| `SUCCESS` | 成功(对应 `success=true`,errorCode 通常空) | — |
+| `TIMEOUT` | 执行超 task 配置 timeout | TRANSIENT |
+| `KILLED` / `CANCELLED` | cancelRequested 触发的主动停 | TERMINAL_USER |
+| `SECURITY_REJECTED` | SensitiveDataValidator 拦截 / 凭据放在 parameters | TERMINAL_CONFIG |
+| `EXECUTION_FAILED` | 业务逻辑抛(默认兜底分类) | BUSINESS |
+| `CONFIG_INVALID` | EffectiveTaskConfig 校验失败 / 缺必填 | TERMINAL_CONFIG |
+| `RESOURCE_EXHAUSTED` | 内存 / 磁盘 / 连接池耗尽 | TRANSIENT |
+
+> **字段名红线**:report body 必须用 `errorCode`(不是 `errorClass`)、`outputs`(不是 `output`)、`resultSummary`(不是 `errorMessage`)。
+> 平台端 `TaskExecutionReportDto` 只读这三个名字,错名 = 字段被静默丢弃。
+
+## C. 重试与退避(BYO SDK 必须等价实现)
+
+Java SDK 端默认值(`BatchPlatformClientConfig`):
+
+| 配置项 | 默认值 | 适用错误 |
+|---|---|---|
+| `retryBaseDelayMs` | 200ms | 5xx / 传输层错 |
+| `retryMaxAttempts` | 3 | 5xx / 传输层错的最大尝试次数(含首发) |
+| `retryBackoffStrategy` | 指数(2^n × base) | attempt 1 = 200ms,attempt 2 = 400ms,attempt 3 = 800ms |
+| `clientErrorFailFastThreshold` | 5 | 累计 4xx(401/403 除外,那俩立即 fail-fast)达 5 次后置 fatal |
+| `authFailFastImmediate` | true | 401/403 一次就 fail-fast,**不走指数退避** |
+
+**BYO SDK 必须实现的等价规则**:
+
+```
+on http-call(endpoint, body):
+  for attempt in 1..retryMaxAttempts:
+    status = invoke(endpoint, body)
+    match status:
+      200..299      → return success
+      401, 403      → MUST fail-fast, mark dispatcher fatal, stop polling
+      404           → return not-found (caller decides)
+      409           → return idempotent-success (log INFO)
+      other 4xx     → increment clientErrorCounter; if >= 5: fail-fast; else: return failure
+      5xx, transport-err →
+        if attempt < retryMaxAttempts:
+          sleep( base * 2^(attempt-1) )  # 200, 400, 800 ms
+          continue
+        else:
+          return failure (caller log + drop; next tick retries)
+```
+
+**心跳 / lease renew 特殊豁免**:这俩是周期性 tick,单次失败可以等下一 tick 自然重试,**不必内部指数退避**(防 tick 之间累积阻塞)。
+但 **register / claim / report** 是单次性、丢了就丢任务的关键调用,**必须**走完整 retryMaxAttempts。
+
+**Kafka SASL/SCRAM 凭据错**:当前 Java SDK 仍 retry 风暴(见 §6 短板),Lane A 待补 fail-fast;**BYO SDK 推荐直接 fail-fast**(认证失败不可能靠重试恢复)。
 
 ## 7. 引用
 
