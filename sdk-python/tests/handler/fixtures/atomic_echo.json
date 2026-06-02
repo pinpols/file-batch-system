@@ -1,0 +1,17 @@
+{
+  "_doc": "Java AtomicHandler with a no-op shell that echoes a literal — minimal happy path.",
+  "input": {
+    "task_type": "atomic.echo",
+    "parameters": {
+      "command": "echo",
+      "args": ["hello"]
+    }
+  },
+  "expected_output": {
+    "success": true,
+    "message": "ok",
+    "output": {
+      "stdout": "hello"
+    }
+  }
+}
