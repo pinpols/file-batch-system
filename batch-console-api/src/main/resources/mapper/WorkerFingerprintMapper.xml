@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.ops.mapper.WorkerFingerprintMapper">
+
+    <resultMap id="WorkerFingerprintResultMap"
+               type="com.example.batch.console.domain.ops.entity.WorkerFingerprintRow">
+        <id     column="id"             property="id"/>
+        <result column="tenant_id"      property="tenantId"/>
+        <result column="worker_code"    property="workerCode"/>
+        <result column="build_id"       property="buildId"/>
+        <result column="process_id"     property="processId"/>
+        <result column="sdk_version"    property="sdkVersion"/>
+        <result column="status"         property="status"/>
+        <result column="heartbeat_at"   property="heartbeatAt"/>
+    </resultMap>
+
+    <resultMap id="WorkerFingerprintSummaryResultMap"
+               type="com.example.batch.console.domain.ops.entity.WorkerFingerprintSummaryRow">
+        <result column="build_id"    property="buildId"/>
+        <result column="sdk_version" property="sdkVersion"/>
+        <result column="count"       property="count"/>
+    </resultMap>
+
+    <!-- 列指纹:ONLINE + DRAINING,heartbeat_at 倒序,上限 200。
+         V3 worker_registry status 枚举 = ONLINE/OFFLINE/DRAINING/DECOMMISSIONED;心跳列名为 heartbeat_at。 -->
+    <select id="selectFingerprintsByTenant" resultMap="WorkerFingerprintResultMap">
+        select id, tenant_id, worker_code, build_id, process_id, sdk_version,
+               status, heartbeat_at
+        from batch.worker_registry
+        where tenant_id = #{tenantId}
+          and status in ('ONLINE', 'DRAINING')
+        order by heartbeat_at desc nulls last, id desc
+        limit 200
+    </select>
+
+    <!-- 聚合:仅 ONLINE,空值统一为 "(unknown)" 字面量。 -->
+    <select id="selectFingerprintSummaryByTenant"
+            resultMap="WorkerFingerprintSummaryResultMap">
+        select coalesce(build_id, '(unknown)')    as build_id,
+               coalesce(sdk_version, '(unknown)') as sdk_version,
+               count(*)                            as count
+        from batch.worker_registry
+        where tenant_id = #{tenantId}
+          and status = 'ONLINE'
+        group by coalesce(build_id, '(unknown)'), coalesce(sdk_version, '(unknown)')
+        order by count desc, build_id asc, sdk_version asc
+    </select>
+</mapper>

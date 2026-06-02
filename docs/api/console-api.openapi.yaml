@@ -2402,6 +2402,56 @@ paths:
                     additionalProperties: true
         '404':
           description: Task type not found for tenant
+  /api/console/workers/fingerprints:
+    get:
+      tags: [Workers]
+      summary: List worker run-fingerprints (ONLINE+DRAINING) for a tenant (SDK Phase 5 / SDK-P5-3, console Lane D)
+      operationId: listWorkerFingerprints
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of worker fingerprints, heartbeat_at desc, max 200 rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkerFingerprintResponse'
+  /api/console/workers/fingerprints/summary:
+    get:
+      tags: [Workers]
+      summary: Aggregate ONLINE worker count by (buildId, sdkVersion) for grayscale rollout viz
+      operationId: summarizeWorkerFingerprints
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: (buildId, sdkVersion) groups, count desc; NULL coalesced to "(unknown)"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkerFingerprintSummaryResponse'
   /api/console/atomic-task-types/schema:
     get:
       tags: [Workers]
@@ -8471,6 +8521,51 @@ components:
       schema:
         type: string
   schemas:
+    WorkerFingerprintResponse:
+      type: object
+      description: |
+        Single worker run-fingerprint (SDK Phase 5 / SDK-P5-3, console Lane D).
+        buildId / sdkVersion are nullable when worker did not report (e.g. legacy non-SDK file pipeline workers).
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        workerCode:
+          type: string
+        buildId:
+          type: string
+          nullable: true
+          description: Application build identifier reported by SDK register.
+        processId:
+          type: string
+          nullable: true
+        sdkVersion:
+          type: string
+          nullable: true
+          description: batch-worker-sdk library version detected from jar manifest.
+        status:
+          type: string
+          enum: [ONLINE, OFFLINE, DRAINING, DECOMMISSIONED]
+        heartbeatAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, workerCode, status]
+    WorkerFingerprintSummaryResponse:
+      type: object
+      description: |
+        (buildId, sdkVersion) aggregated count of ONLINE workers for grayscale rollout visualization.
+        NULL build_id / sdk_version are coalesced to literal "(unknown)" in SQL.
+      properties:
+        buildId:
+          type: string
+        sdkVersion:
+          type: string
+        count:
+          type: integer
+          format: int64
+      required: [buildId, sdkVersion, count]
     CommonMeta:
       type: object
       properties:
