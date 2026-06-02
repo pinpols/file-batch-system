@@ -167,9 +167,21 @@ public class BatchPlatformClient {
 
   /**
    * P0 hardening — 带预算的优雅停。K8s {@code terminationGracePeriodSeconds} 到期前必须返回,否则 SIGKILL 让 in-flight
-   * 任务状态错乱。预算分摊:Kafka thread join 用总预算的 ~20%,dispatcher drain 用剩余的 ~75%(主要消耗),scheduler 关闭和
-   * deactivate 共享其余(scheduler 自带 5s cap)。各阶段用 {@link System#nanoTime()} 算剩余时间,超时立刻 forceful 关下一阶段;
-   * dispatcher 超时未结束会打 WARN 列出未完成 task id(见 {@link TaskDispatcher#stop(Duration)})。
+   * 任务状态错乱。
+   *
+   * <p>Lane E #5 预算重分配(原 kafka 20% / dispatcher 75% / scheduler+deactivate 5% 精细化):
+   *
+   * <ul>
+   *   <li>Kafka close+join: 15%(显式让 poll thread join 完成 offset commit)
+   *   <li>Dispatcher drain: 70%(in-flight handler 主消耗)
+   *   <li>Scheduler stop: 10%(lease + heartbeat 两个,各自 5s cap)
+   *   <li>Deactivate + 收尾: 剩余 ~5%
+   * </ul>
+   *
+   * 各阶段用 {@link System#nanoTime()} 算剩余时间,超时立刻 forceful 关下一阶段; dispatcher 超时未结束会打 WARN 列出未完成 task
+   * id(见 {@link TaskDispatcher#stop(Duration)})。
+   *
+   * <p>Lane E #4-Java:若 Kafka 因 SASL 凭据错 fatal-failed,跳过 deactivate(凭据已坏,HTTP 也会 401)。
    */
   public synchronized void stop(Duration timeout) {
     if (!started) {
@@ -178,21 +190,24 @@ public class BatchPlatformClient {
     long totalMs = Math.max(0L, timeout == null ? 0L : timeout.toMillis());
     long startNanos = System.nanoTime();
     log.info("BatchPlatformClient stopping (timeoutMs={})", totalMs);
-    long kafkaJoinMs = Math.max(50L, totalMs / 5); // 20%
+    // Lane E #5:Kafka close+join 预算 15%(原 20%);KafkaTaskConsumer.close(Duration) 内部已 join thread。
+    long kafkaJoinMs = Math.max(50L, totalMs * 15 / 100);
     if (kafkaConsumer != null) {
-      kafkaConsumer.close();
+      kafkaConsumer.close(Duration.ofMillis(kafkaJoinMs));
     }
-    if (kafkaConsumerThread != null) {
+    // 兜底再 join 一次(KafkaTaskConsumer.close 已经 join,这里只覆盖极端竞态)
+    if (kafkaConsumerThread != null && kafkaConsumerThread.isAlive()) {
+      long remainingMs = remainingMs(startNanos, totalMs);
       try {
-        kafkaConsumerThread.join(kafkaJoinMs);
+        kafkaConsumerThread.join(Math.max(50L, Math.min(remainingMs, kafkaJoinMs)));
       } catch (InterruptedException ie) {
         Thread.currentThread().interrupt();
       }
     }
     if (dispatcher != null) {
       long remainingMs = remainingMs(startNanos, totalMs);
-      // 剩余的 75% 给 dispatcher drain(留 25% 给 scheduler + deactivate)
-      long dispatcherMs = Math.max(0L, remainingMs * 3 / 4);
+      // Lane E #5:dispatcher drain 用剩余预算 - 15%(scheduler+deactivate 保留),目标 ~70% 总预算
+      long dispatcherMs = Math.max(0L, remainingMs - totalMs * 15 / 100);
       dispatcher.stop(Duration.ofMillis(dispatcherMs));
     }
     if (heartbeatScheduler != null) {
@@ -201,15 +216,23 @@ public class BatchPlatformClient {
     if (leaseRenewalScheduler != null) {
       leaseRenewalScheduler.close();
     }
-    try {
-      Map<String, Object> body = new HashMap<>();
-      body.put("tenantId", config.getTenantId());
-      body.put("workerCode", config.getWorkerCode());
-      body.put("status", "OFFLINE");
-      body.put("heartbeatAt", Instant.now().toString());
-      httpClient.deactivate(config.getWorkerCode(), body);
-    } catch (Exception ex) {
-      log.warn("deactivate call failed (ignored): {}", ex.getMessage());
+    // Lane E #4-Java:凭据 fatal 时,deactivate 也会 401 — 跳过,只 log。
+    boolean skipDeactivate = kafkaConsumer != null && kafkaConsumer.isFatalAuthFailure();
+    if (skipDeactivate) {
+      log.warn(
+          "skipping deactivate: Kafka SASL auth failed earlier, "
+              + "platform HTTP will also fail with 401");
+    } else {
+      try {
+        Map<String, Object> body = new HashMap<>();
+        body.put("tenantId", config.getTenantId());
+        body.put("workerCode", config.getWorkerCode());
+        body.put("status", "OFFLINE");
+        body.put("heartbeatAt", Instant.now().toString());
+        httpClient.deactivate(config.getWorkerCode(), body);
+      } catch (Exception ex) {
+        log.warn("deactivate call failed (ignored): {}", ex.getMessage());
+      }
     }
     started = false;
   }
