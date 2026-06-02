@@ -1,13 +1,12 @@
-"""Sample Python tenant worker entry point.
+"""Python 租户 worker 示例入口。
 
-Demonstrates ADR-035 tenant-self-hosted worker integration:
+演示 ADR-035 租户自托管 worker 集成方式:
 
-1. Use ``@batch_task`` to declare handlers.
-2. Build ``BatchPlatformClientConfig`` from env.
-3. ``collect_registered_handlers()`` pulls every decorated handler.
-4. (P3 / Lane T) ``BatchPlatformClient`` will host the run loop —
-   this entry point is forward-compatible: it imports lazily and
-   degrades gracefully if Lane T hasn't merged yet.
+1. 用 ``@batch_task`` 声明 handler。
+2. 从环境变量构造 ``BatchPlatformClientConfig``。
+3. ``collect_registered_handlers()`` 收集全部被装饰过的 handler。
+4. (P3 / Lane T)``BatchPlatformClient`` 将托管运行循环 ——
+   本入口前向兼容:懒 import,Lane T 未合并时优雅降级。
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ logger = logging.getLogger("sample_tenant_worker")
 
 @batch_task("sample-echo")
 async def echo(ctx: SdkTaskContext) -> SdkTaskResult:
-    """Echo the input parameters back as the result output."""
+    """把入参原样回显作为结果输出。"""
     return SdkTaskResult.success_with(
         {"echo": dict(ctx.parameters)},
         f"echoed taskId={ctx.task_id}",
@@ -37,20 +36,22 @@ async def echo(ctx: SdkTaskContext) -> SdkTaskResult:
 
 @batch_task("sample-sleep")
 async def sleep(ctx: SdkTaskContext) -> SdkTaskResult:
-    """Sleep ``parameters.millis`` ms then return."""
+    """睡眠 ``parameters.millis`` 毫秒后返回。"""
     millis = int(ctx.parameters.get("millis", 100))
     await asyncio.sleep(millis / 1000.0)
     return SdkTaskResult.success_with({"slept": millis})
 
 
 async def main() -> None:
-    """Wire handlers into the platform client and run until shutdown.
+    """把 handler 接入平台 client 并运行到关停。
 
-    Lane T owns ``BatchPlatformClient``. Until it lands the entry point
-    exits early after logging the registered handlers — the example is
-    still useful as a Smoke-test of the decorator + config wiring.
+    ``BatchPlatformClient`` 由 Lane T 负责;落地之前入口在打印
+    已注册 handler 后立即退出 —— 仍可用于 decorator + config
+    wiring 的 smoke 测试。
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
     cfg = BatchPlatformClientConfig.from_env()
     handlers = collect_registered_handlers()
     logger.info(
@@ -70,6 +71,6 @@ async def main() -> None:
         client.register_handler(h)
     await client.start()
     try:
-        await asyncio.Event().wait()  # block until SIGINT
+        await asyncio.Event().wait()  # 阻塞直到 SIGINT
     finally:
         await client.stop(timeout=30)
