@@ -156,19 +156,27 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   }
 
   /**
-   * P0 hardening(borrowed from Zeebe maxJobsActive):in-flight 已满则 pause assigned partitions, 队列降下来再
-   * resume。注意 pause/resume 是按 partition 维度,**不停 poll loop**(否则 consumer heartbeat 也会停 → consumer
-   * group rebalance 把当前 worker 踢)。
+   * P0 hardening(borrowed from Zeebe maxJobsActive):in-flight 已满则 pause assigned partitions,
+   * 队列降到一半以下再 resume。注意 pause/resume 是按 partition 维度,**不停 poll loop**(否则 consumer heartbeat 也会停 →
+   * consumer group rebalance 把当前 worker 踢)。
+   *
+   * <p>Round-3 #1(ADR-035 §11.1 / Round-2 P0 #1 闭环):resume 阈值带 hysteresis —— pause 在 {@code
+   * inFlight >= max},resume 只有当 {@code inFlight < max * 0.5}(整数除法即 {@code max / 2}) 时才触发。 上下边界拉开,避免
+   * in-flight 在 max-1 / max 间快速抖动时 pause/resume 反复颠簸 Kafka client(每次 resume 都触发一次新
+   * fetch,频繁切换会浪费带宽且让 records-lag-max 失真)。Zeebe maxJobsActive 默认 activation threshold 也是这个模式。
    *
    * <p>Phase 2 §2.4:平台 PAUSED / DRAINING(见 {@link TaskDispatcher#platformAcceptsNewTasks()})也触发同样的
-   * partition pause —— 用 pause 而非 consume-and-drop,offset 不前进,平台恢复 NORMAL 后从原位继续消费,不丢任务。
+   * partition pause —— 用 pause 而非 consume-and-drop,offset 不前进,平台恢复 NORMAL 后从原位继续消费,不丢任务。 平台层 resume
+   * 不受 hysteresis 影响:只要平台再次 accept,立即 resume(不存在抖动来源)。
    */
   void applyBackpressure() {
     int max = config.getMaxConcurrentTasks();
     int inFlight = dispatcher.inFlightCount();
     boolean platformPaused = !dispatcher.platformAcceptsNewTasks();
-    boolean shouldPause = inFlight >= max || platformPaused;
-    if (shouldPause) {
+    // 容量维度 pause:inFlight 达到上限;resume:inFlight 跌破 max/2(hysteresis 防抖)
+    boolean capacityPause = inFlight >= max;
+    boolean capacityResumeOk = inFlight < Math.max(1, max / 2);
+    if (capacityPause || platformPaused) {
       if (!paused && !consumer.assignment().isEmpty()) {
         consumer.pause(consumer.assignment());
         paused = true;
@@ -178,15 +186,16 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
             max,
             dispatcher.platformState());
       }
-    } else {
-      if (paused && !consumer.assignment().isEmpty()) {
+    } else if (paused && !platformPaused && capacityResumeOk) {
+      if (!consumer.assignment().isEmpty()) {
         consumer.resume(consumer.assignment());
         paused = false;
         log.info(
-            "consumer resume: inFlight={} max={} platformState={}",
+            "consumer resume: inFlight={} max={} platformState={} (below {}*0.5 hysteresis)",
             inFlight,
             max,
-            dispatcher.platformState());
+            dispatcher.platformState(),
+            max);
       }
     }
   }
