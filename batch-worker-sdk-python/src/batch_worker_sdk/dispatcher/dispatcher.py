@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from typing import Any
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
@@ -44,6 +45,18 @@ from batch_worker_sdk.handler.handler import SdkTaskHandler
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.task.cancellation import CancellationSignal
 from batch_worker_sdk.task.state import WorkerRuntimeState
+
+
+def _new_idempotency_key() -> str:
+    """生成一次性 idempotency-key,对齐 Java ``BatchPlatformClient.newIdempotencyKey()``。
+
+    格式 ``sdk-py-<uuid4>``;``sdk-py`` 前缀区分 Python SDK 与 Java SDK
+    (``sdk-<uuid4>``),方便平台运维按 grep 前缀定位调用源语言。每次
+    CLAIM / REPORT 调用独立 key,符合 wire-protocol §A:5xx 重试同 key
+    (由 ``with_retry`` 内部复用),新 outcome 必须新 key,避免平台幂等
+    存储回放上一次结果。
+    """
+    return f"sdk-py-{uuid.uuid4()}"
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +260,10 @@ class TaskDispatcher:
         ``PlatformError`` 让任务自然等待租约超时重投递。后续可补一条
         结构化的"REPORT failure"路径处理 handler 抛错;当前实现只记日志。
         """
-        idempotency_key = msg.get("idempotencyKey") or f"claim-{task_id}"
+        # wire-protocol §A:每次写操作独立 UUID,5xx 重试由 with_retry 内部
+        # 复用同 key。若上游 kafka msg 显式带 idempotencyKey 则尊重之(平台
+        # 当前不下发,但为向后兼容保留)。
+        idem_claim = msg.get("idempotencyKey") or _new_idempotency_key()
         claim_body: dict[str, Any] = {
             "tenantId": msg.get("tenantId"),
             "workerId": self._config.worker_code,
@@ -258,7 +274,7 @@ class TaskDispatcher:
             claim_body["partitionInvocationId"] = str(p_inv)
 
         try:
-            await self._http.claim(task_id, idempotency_key, claim_body)
+            await self._http.claim(task_id, idem_claim, claim_body)
         except AuthError:
             # wire-protocol §B:401/403 视为持久错误,设 fatal 让
             # KafkaTaskConsumer 停止灌入消息;K8s liveness probe 会回收 pod。
@@ -289,25 +305,49 @@ class TaskDispatcher:
         await self._report_success(task_id, msg)
 
     async def _report_success(self, task_id: int, msg: dict[str, Any]) -> None:
+        # P0-1:对齐平台 ``TaskExecutionReportDto`` —— success(bool) 字段,
+        # 不是 status(string)。Jackson @JsonIgnoreProperties(ignoreUnknown=true)
+        # 会静默丢弃未知字段,旧版 status="SUCCESS" 会导致 success 默认 false,
+        # 平台把每条 Python 任务都判为失败。
         body: dict[str, Any] = {
+            "taskId": task_id,
             "tenantId": msg.get("tenantId"),
             "workerId": self._config.worker_code,
-            "status": "SUCCESS",
+            "success": True,
         }
+        trace_id = msg.get("traceId")
+        if trace_id:
+            body["traceId"] = trace_id
+        runtime_attrs = msg.get("runtimeAttributes") or {}
+        p_inv = runtime_attrs.get("partitionInvocationId")
+        if p_inv is not None:
+            body["partitionInvocationId"] = str(p_inv)
         try:
-            await self._http.report(task_id, f"report-{task_id}", body)
+            await self._http.report(task_id, _new_idempotency_key(), body)
         except PlatformError as ex:
             logger.warning("REPORT success failed for taskId=%s: %s", task_id, ex)
 
     async def _report_failure(self, task_id: int, msg: dict[str, Any], reason: str) -> None:
+        # P0-1:失败侧字段:success=false + resultSummary(自由文本)+
+        # errorCode(机器可读分类)。已废弃 errorMessage,平台读不到。
         body: dict[str, Any] = {
+            "taskId": task_id,
             "tenantId": msg.get("tenantId"),
             "workerId": self._config.worker_code,
-            "status": "FAILED",
-            "errorMessage": reason,
+            "success": False,
+            "message": reason,
+            "resultSummary": reason,
+            "errorCode": "SdkDispatchError",
         }
+        trace_id = msg.get("traceId")
+        if trace_id:
+            body["traceId"] = trace_id
+        runtime_attrs = msg.get("runtimeAttributes") or {}
+        p_inv = runtime_attrs.get("partitionInvocationId")
+        if p_inv is not None:
+            body["partitionInvocationId"] = str(p_inv)
         try:
-            await self._http.report(task_id, f"report-{task_id}", body)
+            await self._http.report(task_id, _new_idempotency_key(), body)
         except PlatformError as ex:
             logger.warning("REPORT failure failed for taskId=%s: %s", task_id, ex)
 

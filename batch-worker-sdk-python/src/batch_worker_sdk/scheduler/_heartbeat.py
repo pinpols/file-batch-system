@@ -28,6 +28,7 @@ from typing import Any, Final, Protocol, runtime_checkable
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import PlatformError
+from batch_worker_sdk.internal import _fingerprint
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._directive import ParsedDirective, parse_directive
 
@@ -56,6 +57,8 @@ class DispatcherLike(Protocol):
     def mark_cancel_requested(self, task_id: int, reason: str) -> None: ...
 
 
+
+
 def _utc_now_iso() -> str:
     """RFC 3339 时间戳,与 Java ``Instant.now().toString()`` 字符串一致。"""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
@@ -80,10 +83,19 @@ class HeartbeatScheduler:
         config: BatchPlatformClientConfig,
         http: PlatformHttpClient,
         dispatcher: DispatcherLike,
+        *,
+        worker_group: str = "sdk-self-hosted",
+        capability_tags: list[str] | None = None,
     ) -> None:
         self._config = config
         self._http = http
         self._dispatcher = dispatcher
+        # P0-4:心跳 body 必须含 worker_group / host_name / host_ip / process_id /
+        # capability_tags / build_id,否则平台 heartbeat 路径会刷新 worker_registry
+        # 把 register 时落下的运维元数据列覆盖为 NULL。这些值在启动期一次性采集,
+        # 整个进程生命周期复用,无需每次 tick 重新解析 hostname / pid。
+        self._worker_group: str = worker_group
+        self._capability_tags: list[str] = list(capability_tags or [])
         self._baseline_s: float = config.heartbeat_interval.total_seconds()
         self._next_interval_s: float = self._baseline_s
         self._task: asyncio.Task[None] | None = None
@@ -142,10 +154,23 @@ class HeartbeatScheduler:
         body: dict[str, Any] = {
             "tenantId": self._config.tenant_id,
             "workerCode": self._config.worker_code,
+            "workerGroup": self._worker_group,
             "status": "RUNNING",
             "heartbeatAt": _utc_now_iso(),
             "currentLoad": self._dispatcher.in_flight_count(),
+            "capabilityTags": self._capability_tags,
         }
+        # 指纹字段尽力而为:None 不写入,避免把 register 时落下的字段静默清空
+        # (平台 jackson NON_NULL 兼容,但 Python 这边自己 elide 也更清晰)。
+        host_name = _fingerprint.host_name()
+        if host_name is not None:
+            body["hostName"] = host_name
+        host_ip = _fingerprint.host_ip()
+        if host_ip is not None:
+            body["hostIp"] = host_ip
+        body["processId"] = _fingerprint.process_id()
+        if self._config.build_id:
+            body["buildId"] = self._config.build_id
         try:
             resp = await self._http.heartbeat(self._config.worker_code, body)
         except PlatformError as ex:
