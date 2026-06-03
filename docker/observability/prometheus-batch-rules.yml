@@ -451,3 +451,41 @@ groups:
         annotations:
           summary: "PostgreSQL replication slot {{ $labels.slot_name }} inactive"
           description: "Slot {{ $labels.slot_name }} 存在但无 active replica 连接,主库 WAL 会持续累积到 slot 被 drop。检查从库连接 + 必要时 SELECT pg_drop_replication_slot('{{ $labels.slot_name }}')。"
+
+  - name: batch.sre
+    rules:
+      - alert: HikariCpConnectionExhausted
+        # 等待连接的线程数 > 10 持续 5m → 池过小或上游慢查询堆积,业务侧会感知到延迟
+        expr: hikaricp_connections_pending > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: infrastructure
+        annotations:
+          summary: "HikariCP pool {{ $labels.pool }} on {{ $labels.application }} pending {{ $value }} connections"
+          description: "连接池长期有 >10 个线程在等连接,通常意味着池容量不足或下游 SQL 慢。检查 pool size + 慢 SQL,必要时扩池或定位阻塞查询。"
+
+      - alert: HikariCpAcquireTimeout
+        # 拿连接超时(SQLTransientConnectionException);任何持续非零都意味着请求被直接 5xx
+        expr: rate(hikaricp_connections_timeout_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: infrastructure
+        annotations:
+          summary: "HikariCP pool {{ $labels.pool }} on {{ $labels.application }} acquire timeout {{ $value | humanize }}/s"
+          description: "线程在 connectionTimeout 内拿不到连接,请求会直接 fail。立刻排查池容量 / 数据库可用性 / 是否有泄漏的连接未归还。"
+
+      - alert: HttpServerErrorRateHigh
+        # 全局 5xx 占比 > 5% → 服务整体异常,需立即介入
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: http
+        annotations:
+          summary: "HTTP 5xx ratio {{ $value | humanizePercentage }} > 5%"
+          description: "近 5min HTTP 5xx 占比超过 5%。结合 grafana-dashboard-batch-sre 中按 uri 分组的 P99 / 5xx 占比定位异常端点。"
