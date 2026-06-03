@@ -78,8 +78,19 @@ if [[ "$BUILD_MODULE" == "true" ]]; then
 fi
 
 # 通过 glob 解析实际产物，避开硬编码版本号；${revision} 改动或 release 升版后无需同步此处。
-JAR_PATH="$(ls -1 "$ROOT_DIR/security-scan/target/security-scan-"*.jar 2>/dev/null \
-  | grep -Ev 'sources|javadoc|original' | head -n 1 || true)"
+# 用 shell glob + 名称过滤代替 ls|grep（规避 SC2010；同时保留 nullglob 兜底，无产物时数组为空）。
+JAR_PATH=""
+shopt -s nullglob
+for _candidate in "$ROOT_DIR/security-scan/target/security-scan-"*.jar; do
+  _base="${_candidate##*/}"
+  case "$_base" in
+    *sources*|*javadoc*|*original*) continue ;;
+  esac
+  JAR_PATH="$_candidate"
+  break
+done
+shopt -u nullglob
+unset _candidate _base
 
 if [[ -z "$JAR_PATH" || ! -f "$JAR_PATH" ]]; then
   printf 'security-scan jar not found under %s\n' "$ROOT_DIR/security-scan/target/" >&2

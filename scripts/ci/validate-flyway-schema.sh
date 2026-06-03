@@ -29,7 +29,6 @@ errors=0
 
 # ── 校验 1+2: 文件名 / 唯一 / 单调 ──────────────────────────────────────────
 seen_versions=""
-prev_v=""
 expected_next=1
 file_count=0
 while IFS= read -r file; do
@@ -56,7 +55,6 @@ while IFS= read -r file; do
     echo "⚠️  WARNING: gap in migration versions (expected V$expected_next, got V$v) — file: $base"
   fi
   expected_next=$((v + 1))
-  prev_v="$v"
 done < <(ls "$MIGRATION_DIR"/V*.sql 2>/dev/null | sort -V)
 
 if [[ $file_count -eq 0 ]]; then
