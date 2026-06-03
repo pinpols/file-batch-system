@@ -59,7 +59,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     ScheduledExecutorService exec = mock(ScheduledExecutorService.class);
     HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, exec);
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
     s.start();
 
     s.tick();
@@ -83,7 +83,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
         .thenAnswer(inv -> firstFuture)
         .thenAnswer(inv -> secondFuture);
     HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, exec);
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
     s.start();
 
     s.tick();
@@ -107,7 +107,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture);
     HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, exec);
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
     s.start();
 
     s.tick();
@@ -130,7 +130,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture);
     HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, exec);
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
     s.start();
 
     s.tick();
@@ -154,7 +154,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
         .thenAnswer(inv -> firstFuture)
         .thenAnswer(inv -> secondFuture);
     HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, exec);
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
     s.start();
 
     s.tick(); // 第一次 hint=20s,触发重排
@@ -176,7 +176,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
         .thenAnswer(inv -> firstFuture);
     when(exec.awaitTermination(anyLong(), any())).thenReturn(true);
     HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, exec);
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
     s.start();
 
     s.close();
@@ -196,7 +196,7 @@ class HeartbeatSchedulerDynamicIntervalTest {
     when(exec.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any()))
         .thenAnswer(inv -> firstFuture);
     HeartbeatScheduler s =
-        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, exec);
+        new HeartbeatScheduler(cfg(Duration.ofSeconds(10)), http, dispatcher, null, exec);
     s.start();
 
     s.tick(); // 不应抛,且不重排

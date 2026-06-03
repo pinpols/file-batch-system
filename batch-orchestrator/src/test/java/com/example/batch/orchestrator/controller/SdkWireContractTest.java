@@ -123,17 +123,21 @@ class SdkWireContractTest {
 
   @Test
   void heartbeatRequestDeserializesToWorkerHeartbeatDto() throws Exception {
+    // Python SDK PR #320 / Java SDK fix/sdk-java-heartbeat-fields-align 对齐:
+    // heartbeat 必须能携带 workerGroup / hostName / hostIp / processId / capabilityTags / buildId
+    // 这 6 字段(register 时已上报,但平台兜底降级 register 路径时需要它们消除字段丢失窗口)。
     HeartbeatRequest sdkSide =
         new HeartbeatRequest(
             "tenant-acme",
             "worker-1",
-            null,
+            "sdk-self-hosted",
             "RUNNING",
-            null,
-            null,
-            null,
+            "host-a",
+            "10.0.0.1",
+            "12345",
+            "build-9",
             Instant.parse("2026-05-31T10:05:00Z"),
-            null,
+            List.of("echo", "sleep"),
             5);
 
     WorkerHeartbeatDto platformSide =
@@ -141,7 +145,13 @@ class SdkWireContractTest {
 
     assertThat(platformSide.tenantId()).isEqualTo("tenant-acme");
     assertThat(platformSide.workerCode()).isEqualTo("worker-1");
+    assertThat(platformSide.workerGroup()).isEqualTo("sdk-self-hosted");
     assertThat(platformSide.status()).isEqualTo("RUNNING");
+    assertThat(platformSide.hostName()).isEqualTo("host-a");
+    assertThat(platformSide.hostIp()).isEqualTo("10.0.0.1");
+    assertThat(platformSide.processId()).isEqualTo("12345");
+    assertThat(platformSide.buildId()).isEqualTo("build-9");
+    assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
     assertThat(platformSide.currentLoad()).isEqualTo(5);
     assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:05:00Z"));
   }
