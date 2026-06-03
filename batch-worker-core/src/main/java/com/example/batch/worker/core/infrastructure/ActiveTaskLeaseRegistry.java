@@ -1,7 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -146,7 +145,7 @@ public class ActiveTaskLeaseRegistry {
   public Collection<ActiveTaskLease> snapshot() {
     shutdownLock.readLock().lock();
     try {
-      return new ArrayList<>(activeTaskLeases.values());
+      return List.copyOf(activeTaskLeases.values());
     } finally {
       shutdownLock.readLock().unlock();
     }
