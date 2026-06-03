@@ -9,6 +9,7 @@ import com.example.batch.common.service.DryRunGuard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.WorkerCheckpointProperties;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
@@ -139,6 +140,9 @@ public class LoadStep implements ImportStageStep {
             int written = flushChunk(plugin, loadCtx, chunk);
             loadedCount += written;
             advanceCheckpoint(ckpt, currentLineNo, written);
+            // 流式进度上报(docs/design/pipeline-stage-progress-display.md):totalRowsHint=null
+            // 因为预扫整文件估总行数代价大于收益(百万行+一次 O(n) I/O),FE 退化为只显计数器不显 ETA。
+            PipelineStageProgressSink.publish(loadedCount, null);
             chunk.clear();
           }
         }
@@ -146,15 +150,19 @@ public class LoadStep implements ImportStageStep {
           int written = flushChunk(plugin, loadCtx, chunk);
           loadedCount += written;
           advanceCheckpoint(ckpt, currentLineNo, written);
+          PipelineStageProgressSink.publish(loadedCount, null);
         }
       }
       completeCheckpoint(ckpt);
       commit(context, importPayload, loadedCount);
+      PipelineStageProgressSink.clear();
       deleteQuietly(validatedRecordsPath);
       deleteQuietly(
           resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
+      // 失败也清掉 progress sink,避免心跳带上失败 stage 的残留(SDK 进程级 sink 跨 stage 共享)
+      PipelineStageProgressSink.clear();
       // M-5: 失败时故意不删除暂存文件（validatedRecordsPath / PARSED_RECORDS_PATH），
       // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
       log.error(

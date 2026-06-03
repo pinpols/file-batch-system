@@ -278,6 +278,32 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .body(byte[].class));
   }
 
+  @Override
+  public List<Map<String, Object>> pipelineProgress(String tenantId, List<String> workerCodes) {
+    if (workerCodes == null || workerCodes.isEmpty()) {
+      return List.of();
+    }
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    String workerCodesParam = String.join(",", workerCodes);
+    return downstreamFallback.callOrFallback(
+        SVC,
+        "pipeline-progress",
+        () ->
+            orchestratorInternalRestClient
+                .build()
+                .get()
+                .uri(
+                    uriBuilder ->
+                        uriBuilder
+                            .path("/internal/pipeline-progress")
+                            .queryParam(PARAM_TENANT_ID, resolved)
+                            .queryParam("workerCodes", workerCodesParam)
+                            .build())
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {}),
+        ex -> List.of());
+  }
+
   private void publishRefresh(String tenantId) {
     domainEventPublisher.publishChanged(tenantId, "workflow-runs", "workflow-run-updated");
     domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");

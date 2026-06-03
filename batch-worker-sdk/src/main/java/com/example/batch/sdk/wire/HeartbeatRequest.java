@@ -33,4 +33,9 @@ public record HeartbeatRequest(
     String buildId,
     Instant heartbeatAt,
     List<String> capabilityTags,
-    Integer currentLoad) {}
+    Integer currentLoad,
+    // 2026-06-03 docs/design/pipeline-stage-progress-display.md:流式 stage(IMPORT LOAD /
+    // EXPORT GENERATE)行级进度上报。仅 LOAD/GENERATE 两个 stage 在跑时非空,其余 stage / 空闲态 null。
+    Long rowsProcessed,
+    // 总量已知时携带;未知时(EXPORT 流式源 / 无法预估)null,FE 降级仅显示计数器不显 ETA。
+    Long totalRowsHint) {}

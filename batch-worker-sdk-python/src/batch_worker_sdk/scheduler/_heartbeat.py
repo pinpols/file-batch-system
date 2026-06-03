@@ -171,6 +171,15 @@ class HeartbeatScheduler:
         body["processId"] = _fingerprint.process_id()
         if self._config.build_id:
             body["buildId"] = self._config.build_id
+        # 2026-06-03 docs/design/pipeline-stage-progress-display.md:流式 stage 行级进度上报。
+        # Python SDK 用 _progress 模块的 sink(LOAD/GENERATE handler 调 publish),tick 时读最新值。
+        from batch_worker_sdk.internal import _progress  # local import 避免循环依赖
+        rows = _progress.current_rows_processed()
+        if rows is not None:
+            body["rowsProcessed"] = rows
+        total = _progress.current_total_rows_hint()
+        if total is not None:
+            body["totalRowsHint"] = total
         try:
             resp = await self._http.heartbeat(self._config.worker_code, body)
         except PlatformError as ex:
