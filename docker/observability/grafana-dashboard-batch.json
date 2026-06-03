@@ -264,8 +264,8 @@
       "title": "Outbox events rate (R7-A6)",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 80 },
       "targets": [
-        { "expr": "rate(batch_outbox_events_published_total[5m])", "legendFormat": "published" },
-        { "expr": "rate(batch_outbox_events_failed_total[5m])", "legendFormat": "failed" },
+        { "expr": "rate(batch_outbox_publish_duration_seconds_count[5m])", "legendFormat": "published" },
+        { "expr": "rate(batch_outbox_publish_duration_seconds_count{outcome=\"failure\"}[5m]) or vector(0)", "legendFormat": "failed" },
         { "expr": "rate(batch_outbox_events_give_up_total[5m])", "legendFormat": "give_up (alert!)" }
       ]
     },
@@ -283,7 +283,7 @@
       "title": "Trigger outbox rates (R7-A6)",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 88 },
       "targets": [
-        { "expr": "rate(batch_trigger_launch_published_total[5m])", "legendFormat": "trigger published" },
+        { "expr": "rate(batch_trigger_outbox_publish_latency_seconds_count[5m])", "legendFormat": "trigger published" },
         { "expr": "rate(batch_trigger_launch_consumed_total[5m])", "legendFormat": "consumer consumed" },
         { "expr": "rate(batch_trigger_outbox_give_up_total[5m])", "legendFormat": "give_up (alert!)" }
       ]
