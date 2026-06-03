@@ -27,23 +27,31 @@ import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 
+// LENIENT:setUp 共享 stub(registry.resolve / filePolicy.type)被部分用例隐式使用,
+// 部分用例(如 invalidSpec/policyNotFound)不触发,符合 CLAUDE.md §测试约定豁免场景。
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SensorStateMachineTest {
 
-  private final SensorPolicyRegistry registry = Mockito.mock(SensorPolicyRegistry.class);
-  private final WorkflowNodeRunMapper nodeRunMapper = Mockito.mock(WorkflowNodeRunMapper.class);
-  private final WorkflowNodeMapper nodeMapper = Mockito.mock(WorkflowNodeMapper.class);
-  private final WorkflowRunMapper workflowRunMapper = Mockito.mock(WorkflowRunMapper.class);
-  private final TaskOutcomeService taskOutcomeService = Mockito.mock(TaskOutcomeService.class);
+  @Mock private SensorPolicyRegistry registry;
+  @Mock private WorkflowNodeRunMapper nodeRunMapper;
+  @Mock private WorkflowNodeMapper nodeMapper;
+  @Mock private WorkflowRunMapper workflowRunMapper;
+  @Mock private TaskOutcomeService taskOutcomeService;
   private final ObjectMapper objectMapper = new ObjectMapper();
-  private final SensorPolicy filePolicy = Mockito.mock(SensorPolicy.class);
-  private final JobInstanceMapper jobInstanceMapper = Mockito.mock(JobInstanceMapper.class);
-  private final WorkflowDagService workflowDagService = Mockito.mock(WorkflowDagService.class);
-  private final WorkflowNodeDispatchService dispatchService =
-      Mockito.mock(WorkflowNodeDispatchService.class);
+  @Mock private SensorPolicy filePolicy;
+  @Mock private JobInstanceMapper jobInstanceMapper;
+  @Mock private WorkflowDagService workflowDagService;
+  @Mock private WorkflowNodeDispatchService dispatchService;
 
   private SensorStateMachine sm;
   private static final Instant NOW = Instant.parse("2026-05-13T12:00:00Z");

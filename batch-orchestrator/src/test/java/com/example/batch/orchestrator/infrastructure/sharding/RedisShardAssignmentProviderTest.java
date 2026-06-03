@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,17 +12,22 @@ import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.DefaultTypedTuple;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 
+@ExtendWith(MockitoExtension.class)
 class RedisShardAssignmentProviderTest {
 
-  private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+  @Mock private StringRedisTemplate redis;
 
   @SuppressWarnings("unchecked")
-  private final ZSetOperations<String, String> zset = mock(ZSetOperations.class);
+  @Mock
+  private ZSetOperations<String, String> zset;
 
   private RedisShardAssignmentProvider provider(String memberId) {
     when(redis.opsForZSet()).thenReturn(zset);
