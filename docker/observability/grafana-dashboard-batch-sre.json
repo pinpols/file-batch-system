@@ -1,0 +1,101 @@
+{
+  "title": "Batch Platform — SRE (HikariCP & HTTP)",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["batch", "sre", "infrastructure"],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "HikariCP pool utilization (active / max)",
+      "description": "连接池使用率;接近 1.0 时即将耗尽。Spring Boot 自动暴露。",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active / hikaricp_connections_max",
+          "legendFormat": "{{application}} {{pool}} util"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HikariCP acquire latency P99 (seconds)",
+      "description": "hikaricp_connections_acquire_seconds — 拿连接等待时间;P99 持续 > 50ms 通常意味着池过小或上游慢查询",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (application, pool, le) (rate(hikaricp_connections_acquire_seconds_bucket[5m])))",
+          "legendFormat": "{{application}} {{pool}} P99"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum by (application, pool, le) (rate(hikaricp_connections_acquire_seconds_bucket[5m])))",
+          "legendFormat": "{{application}} {{pool}} P50"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HikariCP connection timeout rate",
+      "description": "hikaricp_connections_timeout_total — 获取连接超时(SQLTransientConnectionException);任何持续非零都需立即处理",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(hikaricp_connections_timeout_total[5m])",
+          "legendFormat": "{{application}} {{pool}} timeout/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP server request rate by status",
+      "description": "http_server_requests_seconds_count — 流量分布,按 status code",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "status={{status}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP 5xx error ratio",
+      "description": "5xx 占比;> 5% 表示服务整体异常",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "5xx ratio"
+        },
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"4..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m]))",
+          "legendFormat": "4xx ratio"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP server P99 latency by URI (top 10)",
+      "description": "http_server_requests_seconds_bucket histogram_quantile P99,取慢 URI top10",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.99, sum by (uri, le) (rate(http_server_requests_seconds_bucket[5m]))))",
+          "legendFormat": "{{uri}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP server max latency (outliers)",
+      "description": "http_server_requests_seconds_max — 单次请求最长耗时,捕捉 P99 histogram 漏掉的极端 outlier",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "topk(10, http_server_requests_seconds_max)",
+          "legendFormat": "{{uri}} ({{method}})"
+        }
+      ]
+    }
+  ]
+}
