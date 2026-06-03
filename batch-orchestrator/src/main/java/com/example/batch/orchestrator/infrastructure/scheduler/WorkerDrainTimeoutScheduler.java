@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
@@ -49,9 +50,18 @@ public class WorkerDrainTimeoutScheduler {
       if (worker == null || worker.drainDeadlineAt() == null) {
         continue;
       }
+      String tenantId = worker.tenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
       if (!worker.drainDeadlineAt().isAfter(now)) {
-        workerDrainGovernanceService.takeoverAfterDrainTimeout(
-            worker.tenantId(), worker.workerCode());
+        // RLS Phase B：takeoverAfterDrainTimeout 内部强制下线 worker + 重派 partition + 写审计日志，
+        // 全链路 mapper 需要绑定 worker 所属 tenant。
+        RlsTenantContextHolder.runWithTenant(
+            tenantId,
+            () ->
+                workerDrainGovernanceService.takeoverAfterDrainTimeout(
+                    worker.tenantId(), worker.workerCode()));
       }
     }
   }

@@ -1,11 +1,14 @@
 package com.example.batch.orchestrator.infrastructure.sensor;
 
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.sensor.SensorStateMachine;
 import com.example.batch.orchestrator.config.SensorProperties;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,9 @@ public class SensorPollScheduler {
   private final SensorStateMachine stateMachine;
   private final SensorProperties props;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  // RLS Phase B：workflow_node_run 实体没 tenantId，先通过 workflow_run（selectByIdAnyTenant
+  // RLS-bypass）解出 tenant，再绑定 holder 跑 probeOne。
+  private final WorkflowRunMapper workflowRunMapper;
 
   @Scheduled(fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
   @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")
@@ -60,7 +66,14 @@ public class SensorPollScheduler {
         props.getScanInterval());
     for (WorkflowNodeRunEntity nodeRun : due) {
       try {
-        probeOne(nodeRun, now);
+        // 先解 tenantId（workflow_run.selectByIdAnyTenant 走 RLS-bypass，安全）。
+        String tenantId = resolveTenantId(nodeRun);
+        if (tenantId == null || tenantId.isBlank()) {
+          // 拿不到 tenant 退回原行为，避免 nodeRun 残留卡死整 tick。
+          probeOne(nodeRun, now);
+        } else {
+          RlsTenantContextHolder.runWithTenant(tenantId, () -> probeOne(nodeRun, now));
+        }
       } catch (Exception e) {
         // R2-P2-6：e.toString() 只给类名 + message 不带 stack；sensor policy 内部 NPE 等代码缺陷
         // 会留下数千行无 actionable 信息的 warn。带 stack 让运维能直接定位根因。
@@ -68,6 +81,15 @@ public class SensorPollScheduler {
             "Sensor probe tick failed nodeRunId={} err={}", nodeRun.getId(), e.getMessage(), e);
       }
     }
+  }
+
+  /** 通过 selectByIdAnyTenant 解出 nodeRun 所属 workflow_run 的 tenantId；找不到返回 null。 */
+  private String resolveTenantId(WorkflowNodeRunEntity nodeRun) {
+    if (nodeRun == null || nodeRun.getWorkflowRunId() == null) {
+      return null;
+    }
+    WorkflowRunEntity wfRun = workflowRunMapper.selectByIdAnyTenant(nodeRun.getWorkflowRunId());
+    return wfRun == null ? null : wfRun.getTenantId();
   }
 
   /** REQUIRES_NEW: 单节点失败不影响后续节点；FOR UPDATE 行锁在事务结束才释放。 */

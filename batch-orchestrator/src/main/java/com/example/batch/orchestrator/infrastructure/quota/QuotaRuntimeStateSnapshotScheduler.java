@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.quota;
 
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.QuotaProperties;
@@ -66,8 +67,16 @@ public class QuotaRuntimeStateSnapshotScheduler {
     List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();
     int snapshotted = 0;
     for (String tenantId : tenantIds) {
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
       try {
-        snapshotted += snapshotTenant(tenantId);
+        // RLS Phase B 起 biz.* 表强制 app.tenant_id IS NOT NULL；per-tenant 循环必须绑租户上下文，
+        // 否则 mapper SELECT/UPDATE/INSERT 在严格策略下静默 0 行。try/catch 必须包在 runWithTenant 外，
+        // 保证 finally 清 ThreadLocal。
+        int delta =
+            RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotTenant(tenantId));
+        snapshotted += delta;
       } catch (DataAccessException ex) {
         // 单个租户失败不影响其他租户：下一轮自然重试
         log.warn("quota snapshot failed for tenant={}: {}", tenantId, ex.getMessage());
