@@ -233,7 +233,8 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
     _restart_with() {
       lsof -i :"$CONSOLE_PORT" -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print $2}' | xargs -r kill 2>/dev/null
       sleep 2
-      env $* SPRING_PROFILES_ACTIVE=local nohup java -jar "$CONSOLE_JAR" > /tmp/console-strict.log 2>&1 &
+      # 用 "$@" 保留 env value 边界(value 含空格如 "strict-verify blocked" 不会被拆成 2 参)
+      env "$@" SPRING_PROFILES_ACTIVE=local nohup java -jar "$CONSOLE_JAR" > /tmp/console-strict.log 2>&1 &
       local deadline=$(( $(date +%s) + 180 ))
       until curl -sf --max-time 5 --connect-timeout 2 "$BASE/actuator/health" -o /dev/null 2>/dev/null; do
         if (( $(date +%s) > deadline )); then
