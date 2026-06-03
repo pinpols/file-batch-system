@@ -13,9 +13,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -60,19 +58,28 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * log 带堆栈，便于线上诊断。
  */
 @RestControllerAdvice
-@RequiredArgsConstructor
 @Slf4j
 public class ConsoleApiExceptionHandler {
 
   private final ConsoleResponseFactory responseFactory;
 
-  // setter 注入,保持 @RequiredArgsConstructor 生成的构造器签名不变(避免破坏所有
-  // 已构造该 handler 的测试)。BizMessageResolver 在 batch-common 自动装配。
-  private BizMessageResolver bizMessageResolver;
+  // CLAUDE.md §Java #3:构造器注入。
+  private final BizMessageResolver bizMessageResolver;
 
-  @Autowired
-  public void setBizMessageResolver(BizMessageResolver bizMessageResolver) {
+  // 唯一构造器(Spring 4.3+ 单 ctor 自动注入,无需 @Autowired)— 构造器注入符合 CLAUDE.md §Java #3。
+  public ConsoleApiExceptionHandler(
+      ConsoleResponseFactory responseFactory, BizMessageResolver bizMessageResolver) {
+    this.responseFactory = responseFactory;
     this.bizMessageResolver = bizMessageResolver;
+  }
+
+  /**
+   * standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 时 handleBizException 走 null 短路降级返回 raw
+   * message,功能不变。
+   */
+  public static ConsoleApiExceptionHandler forStandaloneTest(
+      ConsoleResponseFactory responseFactory) {
+    return new ConsoleApiExceptionHandler(responseFactory, null);
   }
 
   @ExceptionHandler(BizException.class)

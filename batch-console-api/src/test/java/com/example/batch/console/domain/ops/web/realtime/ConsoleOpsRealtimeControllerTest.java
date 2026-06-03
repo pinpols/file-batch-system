@@ -32,7 +32,8 @@ class ConsoleOpsRealtimeControllerTest {
   @BeforeEach
   void setUp() {
     ConsoleApiExceptionHandler exceptionHandler =
-        new ConsoleApiExceptionHandler(new ConsoleResponseFactory(requestMetadataResolver));
+        ConsoleApiExceptionHandler.forStandaloneTest(
+            new ConsoleResponseFactory(requestMetadataResolver));
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));

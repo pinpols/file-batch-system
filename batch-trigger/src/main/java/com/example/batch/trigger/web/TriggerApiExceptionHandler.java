@@ -3,6 +3,7 @@ package com.example.batch.trigger.web;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.web.AbstractApiExceptionHandler;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
@@ -19,6 +20,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice
 public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
+
+  public TriggerApiExceptionHandler(BizMessageResolver bizMessageResolver) {
+    super(bizMessageResolver);
+  }
+
+  /** standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 走父类降级路径返回 raw message。 */
+  public static TriggerApiExceptionHandler forStandaloneTest() {
+    return new TriggerApiExceptionHandler(null);
+  }
 
   @Override
   protected String modulePrefix() {

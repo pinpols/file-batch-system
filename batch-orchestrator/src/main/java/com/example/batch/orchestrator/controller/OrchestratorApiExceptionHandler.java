@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.web.AbstractApiExceptionHandler;
 import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,15 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice(basePackageClasses = LaunchController.class)
 public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler {
+
+  public OrchestratorApiExceptionHandler(BizMessageResolver bizMessageResolver) {
+    super(bizMessageResolver);
+  }
+
+  /** standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 走父类降级路径返回 raw message。 */
+  public static OrchestratorApiExceptionHandler forStandaloneTest() {
+    return new OrchestratorApiExceptionHandler(null);
+  }
 
   @Override
   protected String modulePrefix() {
