@@ -263,9 +263,9 @@ public class AuditAspect {
    * <p>解析链(从高到低):
    *
    * <ol>
-   *   <li>{@code targetTenantId} —— {@link AuditAction#targetTenantParam()} 显式声明的目标租户,适用于 ROLE_ADMIN
-   *       跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)}),保证审计行 tenant_id 是被改的租户而非
-   *       "system"
+   *   <li>{@code targetTenantId} —— {@link AuditAction#targetTenantParam()} 显式声明的目标租户,适用于
+   *       ROLE_ADMIN 跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)}),保证审计行 tenant_id
+   *       是被改的租户而非 "system"
    *   <li>{@code principal.tenantId()} —— 普通租户用户的会话租户
    *   <li>MDC tenant —— 异步上下文 / TenantGuard 注入的兜底
    *   <li>{@code "system"} 字面值兜底 —— 真正无租路径(login/logout/系统级 healthcheck),避免 NOT NULL 约束拒绝丢失审计行

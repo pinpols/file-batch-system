@@ -113,7 +113,8 @@ public class WaitingPartitionDispatchScheduler {
             // 没 tenantId 的 partition 进不了 RLS 路径，直接退回兜底（与原行为等价：buildCandidate 会再判 null）
             candidate = buildCandidate(partition);
           } else {
-            // RLS Phase B：buildCandidate 内部走 jobTask / jobInstance / jobDefinition / resourceScheduler
+            // RLS Phase B：buildCandidate 内部走 jobTask / jobInstance / jobDefinition /
+            // resourceScheduler
             // 一连串 mapper 查询，全部需要 app.tenant_id 在 ThreadLocal 上。
             candidate =
                 RlsTenantContextHolder.runWithTenant(tenantTag, () -> buildCandidate(partition));
@@ -148,8 +149,7 @@ public class WaitingPartitionDispatchScheduler {
     // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；self-proxy 触发 @Transactional AOP。
     List<WaitingDispatchCandidate> sorted = candidates.stream().sorted(comparator).toList();
     for (WaitingDispatchCandidate candidate : sorted) {
-      String tenantId =
-          candidate.partition() == null ? null : candidate.partition().getTenantId();
+      String tenantId = candidate.partition() == null ? null : candidate.partition().getTenantId();
       if (tenantId == null || tenantId.isBlank()) {
         continue;
       }

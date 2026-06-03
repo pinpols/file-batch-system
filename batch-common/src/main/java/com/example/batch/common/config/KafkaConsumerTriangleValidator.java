@@ -43,11 +43,13 @@ public class KafkaConsumerTriangleValidator {
 
   @PostConstruct
   void validate() {
-    if (heartbeatIntervalMs >= sessionTimeoutMs / 3) {
+    // Kafka 推荐 heartbeat 约 session.timeout/3,等号成立(精确 1/3)是推荐配置,允许通过;
+    // 严格大于 session.timeout/3 才是违约(broker 来不及收到 3 次心跳即判失联)。
+    if (heartbeatIntervalMs > sessionTimeoutMs / 3) {
       throw new IllegalStateException(
           "FATAL: spring.kafka.consumer.properties.heartbeat.interval.ms ("
               + heartbeatIntervalMs
-              + "ms) 必须 < session.timeout.ms / 3 ("
+              + "ms) 必须 ≤ session.timeout.ms / 3 ("
               + (sessionTimeoutMs / 3)
               + "ms)。Kafka 协议硬约束: 心跳间隔过长会被 broker 误判为失联触发 rebalance。");
     }

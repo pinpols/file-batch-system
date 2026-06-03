@@ -157,7 +157,9 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
           result =
               RlsTenantContextHolder.runWithTenant(
                   tenantId,
-                  () -> taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId()));
+                  () ->
+                      taskDispatchExecutor()
+                          .execute(finalMessage, finalRegistration.getWorkerId()));
         } else {
           result = taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId());
         }
