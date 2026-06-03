@@ -495,4 +495,8 @@ else
 fi
 printf '%s\n' "$(printf '=%.0s' {1..64})"
 
-exit $([ $TEST_FAILED -eq 0 ] && echo 0 || echo 1)
+if [ "$TEST_FAILED" -eq 0 ]; then
+  exit 0
+else
+  exit 1
+fi

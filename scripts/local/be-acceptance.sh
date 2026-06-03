@@ -224,6 +224,7 @@ cleanup_stale_runs() {
   #    Flyway 启动期报 "Found more than one migration with version X",E2E/IT 全挂。
   #    收集 source 端所有 V*.sql 文件名作白名单,删 target 里不在白名单的。
   local src_set; src_set=$(mktemp /tmp/src-migrations.XXXXXX)
+  # shellcheck disable=SC2064  # 故意立即展开 src_set,RETURN 时函数局部变量已失效
   trap "rm -f '$src_set'" RETURN
   find . -path "*/db/migration/V*.sql" \
     -not -path "*/target/*" -not -path "*/.claude/*" \

@@ -177,7 +177,11 @@ build_module() {
     _MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
   fi
   "$_MVN" -pl "$mod" -am clean package -DskipTests -q
-  jar="$(ls "$mod/target/$mod"-*-exec.jar 2>/dev/null | head -1 || ls "$mod/target/$mod"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1)"
+  jar="$(find "$mod/target" -maxdepth 1 -name "$mod-*-exec.jar" 2>/dev/null | head -1)"
+  if [[ -z "$jar" ]]; then
+    jar="$(find "$mod/target" -maxdepth 1 -name "$mod-*.jar" 2>/dev/null \
+      | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1)"
+  fi
   cp "$jar" "$RUNTIME_JAR_DIR/$name.jar"
   echo "  构建完成 → build/runtime-jars/$name.jar"
 }
