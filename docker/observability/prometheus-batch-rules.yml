@@ -321,7 +321,7 @@ groups:
       # relay 投出去的速率 > orchestrator 消费速率超过 5/s 持续 10min,
       # 说明 trigger_outbox 在堆积或 consumer 反压.
       - alert: TriggerOutboxBacklogGrowing
-        expr: rate(batch_trigger_launch_published_total[5m])
+        expr: rate(batch_trigger_outbox_publish_latency_seconds_count[5m])
               - rate(batch_trigger_launch_consumed_total[5m]) > 5
         for: 10m
         labels:
@@ -330,7 +330,7 @@ groups:
           alert_group: trigger-async
         annotations:
           summary: "Trigger outbox backlog is growing (publish > consume)"
-          description: "trigger publish 速率超过 consumer {{ $value | humanize }}/s 持续 10min. orchestrator consumer 可能滞后 / lag 过大. 检查 batch.trigger.outbox.publish.latency 指标 + Kafka consumer group orchestrator-trigger-launch."
+          description: "TriggerOutboxRelay 投递速率(batch_trigger_outbox_publish_latency_seconds_count)超过 orchestrator consumer 消费速率(batch_trigger_launch_consumed_total){{ $value | humanize }}/s 持续 10min. consumer 可能滞后 / lag 过大. 检查 batch.trigger.outbox.publish.latency p99 + Kafka consumer group orchestrator-trigger-launch."
 
       - alert: TriggerOutboxPendingHigh
         expr: batch_trigger_outbox_pending_events > 1000

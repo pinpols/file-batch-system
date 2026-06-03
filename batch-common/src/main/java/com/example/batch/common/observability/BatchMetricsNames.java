@@ -32,7 +32,9 @@ public final class BatchMetricsNames {
 
   // ─── outbox 共用(各模块自有 outbox 表都用,加 module tag 区分) ─────
   public static final String OUTBOX_BACKLOG_GAUGE = "batch.outbox.backlog";
-  public static final String OUTBOX_PUBLISH_LATENCY = "batch.outbox.publish.latency";
+  // 注:OUTBOX_PUBLISH_LATENCY 常量已删(2026-06-03 audit) — 实际 Timer 用
+  // "batch.outbox.publish.duration"(DefaultScheduleForwarder @Timed),
+  // 字符串从未被 import,保留只会误导后续接入,以 @Timed 字面量为单一权威源.
   public static final String OUTBOX_GIVE_UP_TOTAL = "batch.outbox.events.give_up.total";
 
   // ─── claim 链路(worker 抢任务) ────────────────────────────────────
