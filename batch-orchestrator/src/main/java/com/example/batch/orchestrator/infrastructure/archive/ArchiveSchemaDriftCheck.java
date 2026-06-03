@@ -2,7 +2,6 @@ package com.example.batch.orchestrator.infrastructure.archive;
 
 import com.example.batch.common.mapper.InformationSchemaMapper;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -118,7 +117,7 @@ public class ArchiveSchemaDriftCheck {
 
   /** Public 让 IT 测试直接调验证查询行为;运行期由 {@link #checkOnStartup()} 内部使用。 */
   public Set<String> columnsOf(String schema, String table) {
-    return new HashSet<>(informationSchemaMapper.listColumns(schema, table));
+    return Set.copyOf(informationSchemaMapper.listColumns(schema, table));
   }
 
   /**

@@ -195,7 +195,7 @@ public class TriggerReconciler {
 
   private Set<JobKey> loadQuartzJobKeys() {
     try {
-      return new HashSet<>(
+      return Set.copyOf(
           scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP)));
     } catch (SchedulerException exception) {
       throw new IllegalStateException("failed to list quartz job keys", exception);
