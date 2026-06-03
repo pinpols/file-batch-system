@@ -7,6 +7,8 @@
         <result column="key_name" property="keyName"/>
         <result column="key_prefix" property="keyPrefix"/>
         <result column="key_hash" property="keyHash"/>
+        <result column="salt" property="salt"/>
+        <result column="key_hash_algo" property="keyHashAlgo"/>
         <result column="scopes" property="scopes"/>
         <result column="enabled" property="enabled"/>
         <result column="expires_at" property="expiresAt"/>
@@ -18,7 +20,7 @@
     </resultMap>
 
     <sql id="selectColumns">
-        id, tenant_id, key_name, key_prefix, key_hash, scopes, enabled,
+        id, tenant_id, key_name, key_prefix, key_hash, salt, key_hash_algo, scopes, enabled,
         expires_at, last_used_at, created_by, revoked_by, revoked_at, created_at
     </sql>
 
@@ -44,8 +46,12 @@
     </select>
 
     <insert id="insert">
-        insert into batch.api_key (tenant_id, key_name, key_prefix, key_hash, scopes, enabled, expires_at, created_by)
-        values (#{tenantId}, #{keyName}, #{keyPrefix}, #{keyHash}, #{scopes}, true, #{expiresAt}, #{operator})
+        insert into batch.api_key
+            (tenant_id, key_name, key_prefix, key_hash, salt, key_hash_algo,
+             scopes, enabled, expires_at, created_by)
+        values
+            (#{tenantId}, #{keyName}, #{keyPrefix}, #{keyHash}, #{salt}, #{keyHashAlgo},
+             #{scopes}, true, #{expiresAt}, #{operator})
     </insert>
 
     <update id="revoke">

@@ -138,19 +138,18 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             return;
           }
 
-          // A3-B fix(2026-05-29):bypass-mode 开启时 JWT 失败应降级到 bypass 分支,
-          // 否则 admin 带过期/失效 cookie 调任何接口直接 401,无法访问 admin 端点(本意是
-          // dev/test 完全免鉴权)。生产关闭 bypass-mode 后此分支不生效,行为不变。
-          if (batchSecurityProperties.isBypassMode()) {
-            // fall through to bypass-mode handler below
-          } else {
-            responseWriter.write(
-                response,
-                HttpStatus.UNAUTHORIZED,
-                ResultCode.UNAUTHORIZED,
-                CommonErrorMessages.INVALID_CONSOLE_JWT);
-            return;
-          }
+          // P1-2 fix(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
+          // 客户端**主动**带了 JWT(cookie)却解析失败 → 一律 401,不再因 bypass-mode 降级到 admin。
+          // 历史 A3-B 降级路径在 prod profile 误漂(SPRING_PROFILES_ACTIVE 缺失)
+          // + bypass-mode=true 同时成立时,变成"过期 cookie 自动升 admin"的认证绕过。
+          // bypass-mode 仍生效于"完全无凭据"路径(下方 if 块):dev/test 不带 cookie 时
+          // 走 default authorities,行为不变;一旦客户端带了 token 就严格按 token 校验。
+          responseWriter.write(
+              response,
+              HttpStatus.UNAUTHORIZED,
+              ResultCode.UNAUTHORIZED,
+              CommonErrorMessages.INVALID_CONSOLE_JWT);
+          return;
         }
       }
 

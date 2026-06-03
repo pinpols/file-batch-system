@@ -10,22 +10,35 @@
             <arg column="scopes" javaType="java.lang.String"/>
             <arg column="enabled" javaType="java.lang.Boolean"/>
             <arg column="expires_at" javaType="java.time.Instant"/>
+            <arg column="key_hash" javaType="java.lang.String"/>
+            <arg column="salt" javaType="java.lang.String"/>
+            <arg column="key_hash_algo" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
-    <select id="findActiveByHashAndTenant" resultMap="apiKeyRecordMap">
-        select id, tenant_id, key_name, scopes, enabled, expires_at
+    <select id="findActiveCandidatesByPrefixAndTenant" resultMap="apiKeyRecordMap">
+        select id, tenant_id, key_name, scopes, enabled, expires_at,
+               key_hash, salt, key_hash_algo
         from batch.api_key
-        where key_hash = #{keyHash}
+        where key_prefix = #{keyPrefix}
           and tenant_id = #{tenantId}
           and enabled = true
           and (expires_at is null or expires_at > now())
           and revoked_at is null
-        limit 1
     </select>
 
     <update id="touchLastUsedAt">
         update batch.api_key set last_used_at = now() where id = #{id}
+    </update>
+
+    <update id="upgradeHashIfLegacy">
+        update batch.api_key
+           set key_hash = #{newHash},
+               salt = #{newSalt},
+               key_hash_algo = 'pbkdf2'
+         where id = #{id}
+           and key_hash_algo = 'sha256'
+           and key_hash = #{oldHash}
     </update>
 
 </mapper>

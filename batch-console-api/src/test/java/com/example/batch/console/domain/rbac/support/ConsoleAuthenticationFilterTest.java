@@ -229,6 +229,25 @@ class ConsoleAuthenticationFilterTest {
   }
 
   @Test
+  void filter_returns401WhenJwtInvalid_evenInBypassMode() throws Exception {
+    // P1-2(2026-06-03): bypass-mode 不再因 JWT 解析失败而自动 admin。
+    // 客户端"主动带了凭据"必须按凭据严格校验,避免 prod profile 漂移 + bypass=true 双失守。
+    batchProperties.setBypassMode(true);
+    when(jwtService.authenticate(anyString())).thenThrow(new RuntimeException("expired"));
+    doNothing().when(responseWriter).write(any(), any(), any(), anyString());
+
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.setCookies(new jakarta.servlet.http.Cookie("batch_console_token", "bad-jwt"));
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter.doFilterInternal(request, response, chain);
+
+    verify(responseWriter).write(eq(response), eq(HttpStatus.UNAUTHORIZED), any(), anyString());
+    verify(chain, never()).doFilter(any(), any());
+  }
+
+  @Test
   void filter_clearSecurityContextInFinally() throws Exception {
     batchProperties.setBypassMode(true);
 

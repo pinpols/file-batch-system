@@ -504,7 +504,11 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
     Map<String, Object> output = new HashMap<>();
     output.put("statusCode", resp.statusCode());
-    output.put("responseHeaders", resp.headers().map());
+    // P2-3(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
+    // 出口 HTTP response 会被 worker 上报到 task_result.output JSONB(后续可被
+    // console / forensic export 读到),Set-Cookie / Authorization 这类回声头若透传落
+    // 库就形成"出口请求 session 泄露"。SensitiveDataValidator 只扫入参,响应需在此前置脱敏。
+    output.put("responseHeaders", sanitizeResponseHeaders(resp.headers().map()));
     output.put("responseBody", responseBody);
     output.put("responseTruncated", truncated);
 
@@ -516,6 +520,34 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           "status " + resp.statusCode() + " not in expected " + inv.expectedStatus);
     }
     return TaskResult.ok("status=" + resp.statusCode(), output);
+  }
+
+  /**
+   * 出口 HTTP 响应头落库前的固定脱敏黑名单(case-insensitive,RFC 7230 头名不区分大小写)。
+   *
+   * <p>对应 docs/analysis/2026-06-03-deep-scan-be-security.md P2-3。这些头若回声到 task_result.output 即等于把
+   * 下游会话凭据落 DB / Kafka,后续 forensic export 一并外泄。
+   */
+  private static final Set<String> SENSITIVE_RESPONSE_HEADERS =
+      Set.of("set-cookie", "set-cookie2", "authorization", "proxy-authorization", "cookie");
+
+  static Map<String, List<String>> sanitizeResponseHeaders(Map<String, List<String>> headers) {
+    if (headers == null || headers.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, List<String>> filtered = new LinkedHashMap<>(headers.size());
+    for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+      String name = entry.getKey();
+      if (name == null) {
+        continue;
+      }
+      if (SENSITIVE_RESPONSE_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
+        filtered.put(name, List.of("[REDACTED]"));
+        continue;
+      }
+      filtered.put(name, entry.getValue());
+    }
+    return filtered;
   }
 
   private static void sleep(long millis) {
