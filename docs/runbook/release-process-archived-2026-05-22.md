@@ -1,6 +1,10 @@
-# Release Process — 2026-05-22
+# Release Process — 2026-05-22 (ARCHIVED)
 
-> **⚠️ 2026-05-23 状态更新**:本文档描述的链路里 `promote-staging.yml` 已删除,**ops 仓自动同步当前未启用**。本文档保留作为未来恢复 GitOps 时的参考蓝图。前置环境搭建见 [gitops-onboarding-2026-05-22.md](./gitops-onboarding-2026-05-22.md)。
+> **🛑 全文废弃(2026-06-03)**:本文档所描述的 `build-image.yml` 与 `promote-staging.yml` workflow 在当前仓库**均不存在**,所述链路无法执行。
+>
+> **当前发布流程以 [`releasing.md`](./releasing.md) 为唯一权威源**;本文件仅作为未来恢复 GitOps 时的历史蓝图保留,**不要按此执行**。
+>
+> 前置环境搭建见 [gitops-onboarding-2026-05-22.md](./gitops-onboarding-2026-05-22.md)。
 
 ---
 

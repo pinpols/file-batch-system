@@ -142,8 +142,10 @@ jobs:
           exit 1
 
       - name: Run strict-verify (live, non-blocking)
-        # continue-on-error:作为非阻断 step。pipeline 默认 step 失败会染红整个 job,
-        # 这里用 || true + 单独捕获 exit code,既保留可观察性又不挡通行。
+        # 报告型非阻断:`set +e` + `exit 0` 已保证本 step 不挂红整个 job,
+        # 真正想阻断时把 `exit 0` 改成 `exit $rc` 即可。
+        # 不再叠 `continue-on-error: true`,避免双重兜底误读为「即使改回 exit $rc
+        # 也仍被吞」。MEMORY: project_strict_verify_local_only.md。
         shell: bash
         run: |
           set +e
@@ -151,7 +153,6 @@ jobs:
           rc=$?
           echo "strict-verify exit code: $rc"
           exit 0   # 永远返回 0,真正想阻断的话改这里为 exit $rc
-        continue-on-error: true
 
       - name: Dump console-api log on failure
         if: always()

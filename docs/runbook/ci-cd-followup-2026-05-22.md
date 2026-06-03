@@ -115,7 +115,7 @@
 - `helm/batch-platform/templates/canary-console.yaml`(57 行) — flagger Canary
 - `helm/batch-platform/values-canary.yaml`(48 行) — canary 模式 values
 - `docs/runbook/gitops-onboarding-2026-05-22.md`(166 行)— ops 接入手册
-- `docs/runbook/release-process-2026-05-22.md`(158 行)— 发布流程
+- `docs/runbook/release-process-archived-2026-05-22.md`(已归档,权威源为 `releasing.md`)— 历史发布流程蓝图
 
 **严重不能验证**:整套 GitOps 还没接 infrastructure,**push main 不会触发任何部署**。当前 build-image.yml on push 已经存在但 ghcr push 会因没配 `GHCR_TOKEN` secret 而失败。
 
