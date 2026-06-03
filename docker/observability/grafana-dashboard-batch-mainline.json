@@ -1,0 +1,207 @@
+{
+  "title": "Batch Platform — mainline blackbox",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "batch-mainline",
+  "editable": true,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Worker task execution duration P99 by tenant",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (tenant_id, le) (rate(worker_task_execution_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{tenant_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker task execution timeout rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id) (rate(worker_task_execution_timeout_total[5m]))",
+          "legendFormat": "{{tenant_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker thread leaked total (累计)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id) (increase(worker_task_execution_thread_leaked_total[1h]))",
+          "legendFormat": "{{tenant_id}} 1h"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker REPORT dropped + failed rate by tenant",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id) (rate(worker_report_dropped_total[5m]))",
+          "legendFormat": "{{tenant_id}} dropped"
+        },
+        {
+          "expr": "sum by (tenant_id) (rate(worker_report_failed_total[5m]))",
+          "legendFormat": "{{tenant_id}} failed"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "batch_worker_report duration P99",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(batch_worker_report_duration_seconds_bucket[5m])))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker DLQ publish success / failed / timeout",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(worker_dlq_publish_success_total[5m]))",
+          "legendFormat": "success"
+        },
+        {
+          "expr": "sum(rate(worker_dlq_publish_failed_total[5m]))",
+          "legendFormat": "failed"
+        },
+        {
+          "expr": "sum(rate(worker_dlq_publish_timeout_total[5m]))",
+          "legendFormat": "timeout"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "REPORT outbox give_up (应永远 0,出现即数据丢失)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(batch_worker_report_outbox_give_up_total)",
+          "legendFormat": "give_up total"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "File arrival SLA violations + max delay seconds",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "batch_file_arrival_delay_violations",
+          "legendFormat": "violations"
+        },
+        {
+          "expr": "batch_file_arrival_delay_max_seconds",
+          "legendFormat": "max delay seconds"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "File arrival group waiting / triggered / timeout",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "expr": "batch_file_arrival_group_waiting_count",
+          "legendFormat": "waiting"
+        },
+        {
+          "expr": "batch_file_arrival_group_triggered_count",
+          "legendFormat": "triggered"
+        },
+        {
+          "expr": "batch_file_arrival_group_timeout_count",
+          "legendFormat": "timeout"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pipeline processing SLA violations + max delay seconds",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "expr": "batch_pipeline_processing_delay_violations",
+          "legendFormat": "violations"
+        },
+        {
+          "expr": "batch_pipeline_processing_delay_max_seconds",
+          "legendFormat": "max delay seconds"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Orchestrator job completion rate by tenant",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id) (rate(batch_orchestrator_job_completion_total[5m]))",
+          "legendFormat": "{{tenant_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Orchestrator job duration P50 / P99",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(batch_orchestrator_job_duration_seconds_bucket[5m])))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(batch_orchestrator_job_duration_seconds_bucket[5m])))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Orchestrator job failure rate by error_code",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "targets": [
+        {
+          "expr": "sum by (error_code) (rate(batch_orchestrator_job_failure_total[5m]))",
+          "legendFormat": "{{error_code}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Scheduler worker_selection.no_match rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id, reason) (rate(batch_scheduler_worker_selection_no_match[5m]))",
+          "legendFormat": "{{tenant_id}}/{{reason}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Orchestrator cas.miss rate (状态机 CAS 失败)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 56 },
+      "targets": [
+        {
+          "expr": "sum by (entity, from_status) (rate(batch_orchestrator_cas_miss[5m]))",
+          "legendFormat": "{{entity}}/{{from_status}}"
+        }
+      ]
+    }
+  ]
+}
