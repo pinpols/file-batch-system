@@ -42,15 +42,15 @@ public class FailureClassifier {
    * @return 永不为 null；最差返回 {@link FailureClass#UNKNOWN}
    */
   public FailureClass classify(String reportedClassCode, Throwable throwable) {
-    // 1) worker 显式上报优先
+    // 1) worker 显式上报优先(用 fromCodeOrUnknown 安全变体,避免 fromCode 抛 BizException 中断分类)
     if (Texts.hasText(reportedClassCode)) {
-      try {
-        return FailureClass.fromCode(reportedClassCode);
-      } catch (IllegalArgumentException unknown) {
-        log.warn(
-            "worker reported unknown failure_class '{}', falling back to classifier",
-            reportedClassCode);
+      FailureClass reported = FailureClass.fromCodeOrUnknown(reportedClassCode);
+      if (reported != FailureClass.UNKNOWN) {
+        return reported;
       }
+      log.warn(
+          "worker reported unknown failure_class '{}', falling back to classifier",
+          reportedClassCode);
     }
     if (throwable == null) {
       return FailureClass.UNKNOWN;
