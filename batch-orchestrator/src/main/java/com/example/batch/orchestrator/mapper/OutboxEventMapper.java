@@ -72,6 +72,20 @@ public interface OutboxEventMapper {
       @Param("ids") List<Long> ids,
       @Param("fromStatuses") List<String> fromStatuses);
 
+  /** P1-3 dry-run: 统计满足 cleanup 条件的 PUBLISHED 行数(不删)。 */
+  int countPublishedBefore(
+      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+
+  /** P1-3 dry-run: 统计满足 cleanup 条件的 GIVE_UP 行数(不删)。 */
+  int countGiveUpBefore(
+      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+
+  /** P1-3 dry-run: 统计 republish 候选(指定 ids ∩ status ∈ fromStatuses)的行数(不改)。 */
+  int countResettable(
+      @Param("tenantId") String tenantId,
+      @Param("ids") List<Long> ids,
+      @Param("fromStatuses") List<String> fromStatuses);
+
   /**
    * Outbox archive 调度器：选出指定 status 中、created_at 早于 cutoff 的事件 id（带 limit）。 status 通常是 PUBLISHED 或
    * GIVE_UP；其他状态（NEW/FAILED/PUBLISHING）属于活跃事件不归档。

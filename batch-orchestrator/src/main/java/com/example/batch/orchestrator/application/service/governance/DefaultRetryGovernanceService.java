@@ -8,13 +8,17 @@ import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
@@ -24,13 +28,16 @@ import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.query.RetryScheduleQuery;
 import com.example.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import com.example.batch.orchestrator.mapper.JobDefinitionMapper;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -96,6 +103,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private final JobStepInstanceMapper jobStepInstanceMapper;
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final BatchOrchestratorGovernanceProperties governance;
+  private final JobExecutionLogMapper jobExecutionLogMapper;
 
   @Override
   @Transactional
@@ -365,6 +373,60 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       return;
     }
     requeueTaskWithoutPartition(tenantId, task, eventKey);
+  }
+
+  @Override
+  @Transactional(
+      propagation = Propagation.REQUIRES_NEW,
+      noRollbackFor = DeadLetterOrphanSourceException.class)
+  public void replayDeadLetter(
+      String tenantId,
+      Long deadLetterTaskId,
+      String operatorId,
+      String reason,
+      String idempotencyKey) {
+    // P1-1: 人工触发的死信重放,先写 audit 再走主流程。
+    // 注:本方法是 REQUIRES_NEW,与 replayDeadLetter(tenantId, id) 共用事务边界;
+    // 走 self-proxy 调用以激活 AOP(否则同类自调用退化为 REQUIRED)。
+    DefaultRetryGovernanceService proxy = replayTransactionalShell();
+    proxy.appendDeadLetterReplayAudit(
+        tenantId, deadLetterTaskId, operatorId, reason, idempotencyKey);
+    proxy.replayDeadLetter(tenantId, deadLetterTaskId);
+  }
+
+  /** 写一条 DEAD_LETTER_REPLAY 审计日志。 独立 REQUIRES_NEW 短事务,保证即使 replayDeadLetter 自身失败,audit 仍留痕。 */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void appendDeadLetterReplayAudit(
+      String tenantId,
+      Long deadLetterTaskId,
+      String operatorId,
+      String reason,
+      String idempotencyKey) {
+    if (jobExecutionLogMapper == null) {
+      return;
+    }
+    JobExecutionLogEntity audit = new JobExecutionLogEntity();
+    audit.setTenantId(tenantId);
+    audit.setJobInstanceId(null);
+    audit.setJobPartitionId(null);
+    audit.setLogLevel("INFO");
+    audit.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
+    audit.setMessage(AuditLogConstants.AUDIT_OP_DEAD_LETTER_REPLAY);
+    audit.setDetailRef(AuditLogConstants.DETAIL_REF_DEAD_LETTER_TASK);
+    Map<String, Object> extra = new LinkedHashMap<>();
+    extra.put("deadLetterTaskId", deadLetterTaskId);
+    extra.put(
+        "operatorId",
+        Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
+    extra.put(
+        "operatorType",
+        Texts.hasText(operatorId)
+            ? AuditLogConstants.OPERATOR_TYPE_REQUEST
+            : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+    extra.put("reason", reason);
+    extra.put("idempotencyKey", idempotencyKey);
+    audit.setExtraJson(JsonUtils.toJson(extra));
+    jobExecutionLogMapper.insert(audit);
   }
 
   @Override

@@ -141,6 +141,33 @@
         </foreach>
     </update>
 
+    <select id="countPublishedBefore" resultType="int">
+        select count(*) from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and publish_status = 'PUBLISHED'
+          and updated_at &lt; #{beforeTime}
+    </select>
+
+    <select id="countGiveUpBefore" resultType="int">
+        select count(*) from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and publish_status = 'GIVE_UP'
+          and updated_at &lt; #{beforeTime}
+    </select>
+
+    <select id="countResettable" resultType="int">
+        select count(*) from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          and publish_status in
+        <foreach collection="fromStatuses" item="s" open="(" separator="," close=")">
+            #{s}
+        </foreach>
+    </select>
+
     <update id="resetStalePublishing">
         update batch.outbox_event
         set publish_status = #{failedStatus},

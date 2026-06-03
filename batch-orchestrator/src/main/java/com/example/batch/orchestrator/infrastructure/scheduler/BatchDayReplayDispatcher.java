@@ -14,6 +14,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -60,6 +62,13 @@ public class BatchDayReplayDispatcher {
   private final BatchDayReplayDispatchProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchDateTimeSupport dateTimeSupport;
+
+  /**
+   * P1-5 修复(AOP 自调用失效): {@link #dispatchEntry} 标了 {@code @Transactional(REQUIRES_NEW)}, 但 {@link
+   * #dispatchSession} 直接 {@code dispatchEntry(...)} 同类调用,Spring AOP 不织入,REQUIRES_NEW 退化。 注入
+   * {@code @Lazy self} 走代理,真正激活独立短事务,避免单条失败回滚整批。 见 CLAUDE.md Java 编码细则 #3 豁免清单。
+   */
+  @Lazy @Autowired private BatchDayReplayDispatcher self;
 
   @Scheduled(fixedDelayString = "${batch.replay.dispatch.poll-interval-millis:30000}")
   @SchedulerLock(
@@ -111,7 +120,9 @@ public class BatchDayReplayDispatcher {
         continue;
       }
       try {
-        dispatchEntry(session, entry);
+        // P1-5: 走 @Lazy self 代理调用,确保 dispatchEntry 的 REQUIRES_NEW 生效。
+        // 测试场景 self 可能未注入(纯单测),退化到 this 调用,语义不变(原行为)。
+        (self != null ? self : this).dispatchEntry(session, entry);
       } catch (Exception entryFailure) {
         log.warn(
             "batch_day_replay dispatch entry error: sessionId={}, entryId={}, jobCode={}, msg={}",
