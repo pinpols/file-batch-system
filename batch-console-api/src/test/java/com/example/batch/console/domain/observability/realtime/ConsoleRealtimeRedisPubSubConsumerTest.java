@@ -12,17 +12,24 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+// LENIENT:message() 工厂内 stub `Message.getChannel()` 用于语义文档化(消息匹配 publisher channel),
+// 部分 consumer 路径仅读 body 不读 channel,strict 会误判 UnnecessaryStubbing。
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ConsoleRealtimeRedisPubSubConsumerTest {
 
-  private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
-  private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
-  private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream =
-      mock(ConsoleOpsSummaryRealtimeStream.class);
-  private final ConsoleRealtimeInstanceIdProvider instanceIdProvider =
-      mock(ConsoleRealtimeInstanceIdProvider.class);
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ConsoleRealtimeEventHub realtimeEventHub;
+  @Mock private ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
+  @Mock private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
   private final ConsoleRealtimeMetrics realtimeMetrics =
       new ConsoleRealtimeMetrics(new SimpleMeterRegistry());
 

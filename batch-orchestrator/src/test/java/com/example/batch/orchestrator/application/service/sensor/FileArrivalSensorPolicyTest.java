@@ -12,14 +12,23 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class FileArrivalSensorPolicyTest {
 
-  private final SensorFileArrivalMapper mapper = Mockito.mock(SensorFileArrivalMapper.class);
-  private final FileArrivalSensorPolicy policy = new FileArrivalSensorPolicy(mapper);
+  @Mock private SensorFileArrivalMapper mapper;
+  private FileArrivalSensorPolicy policy;
+
+  @BeforeEach
+  void setUp() {
+    policy = new FileArrivalSensorPolicy(mapper);
+  }
 
   @Test
   void probe_matched_returnsHit() {

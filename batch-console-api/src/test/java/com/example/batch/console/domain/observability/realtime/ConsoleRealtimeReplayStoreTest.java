@@ -2,7 +2,6 @@ package com.example.batch.console.domain.observability.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,15 +12,24 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+// LENIENT:每个 @Test 内部 stub `redisTemplate.opsForList()`,但 append() 走
+// executePipelined 不读 opsForList,strict 模式会报 UnnecessaryStubbing。
 @SuppressWarnings("unchecked")
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ConsoleRealtimeReplayStoreTest {
 
-  private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
-  private final ListOperations<String, String> listOperations = mock(ListOperations.class);
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ListOperations<String, String> listOperations;
 
   @Test
   void shouldReplayEventsAfterCursor() {

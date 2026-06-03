@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,19 +17,25 @@ import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+// LENIENT:setUp 共享 stub(tenantGuard / cursorFactory / realtimeEventHub.subscribe)
+// 被部分用例不触发,符合 CLAUDE.md §测试约定豁免场景。
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ConsoleOpsSummaryRealtimeStreamTest {
 
-  private final ConsoleOpsApplicationService opsApplicationService =
-      mock(ConsoleOpsApplicationService.class);
-  private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
-  private final ConsoleRealtimeRedisPublisher redisPublisher =
-      mock(ConsoleRealtimeRedisPublisher.class);
-  private final ConsoleRealtimeCursorFactory cursorFactory =
-      mock(ConsoleRealtimeCursorFactory.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  @Mock private ConsoleOpsApplicationService opsApplicationService;
+  @Mock private ConsoleRealtimeEventHub realtimeEventHub;
+  @Mock private ConsoleRealtimeRedisPublisher redisPublisher;
+  @Mock private ConsoleRealtimeCursorFactory cursorFactory;
+  @Mock private ConsoleTenantGuard tenantGuard;
   private ConsoleOpsSummaryRealtimeStream stream;
 
   @BeforeEach
