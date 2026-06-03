@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
       BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: ${BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES:-20000}
@@ -110,7 +110,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -164,7 +164,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms256m -Xmx768m -XX:MaxMetaspaceSize=256m}
+      JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=256m}
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
@@ -218,7 +218,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -277,7 +277,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -336,7 +336,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -395,7 +395,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -457,7 +457,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
