@@ -11,11 +11,20 @@ SDK 仅支持 async(详见 ``sdk-python/README.md`` Roadmap)。
 - POST /internal/workers/register                         (register)
 - POST /internal/workers/{code}/heartbeat                 (heartbeat)
 - POST /internal/workers/{code}/deactivate                (deactivate)
-- GET  /internal/workers/{code}/status                    (get_status)
+- POST /internal/workers/{code}/status                    (update_status)
 - POST /internal/workers/{code}/drain                     (drain)
 - POST /internal/tasks/{id}/claim                         (claim)
 - POST /internal/tasks/{id}/report                        (report)
 - POST /internal/tasks/{id}/renew                         (renew)
+
+刻意不接入的 internal-only 运维端点(由控制台 / 平台运维直接调用,SDK 不应触及):
+
+- POST /internal/workers/{code}/force-offline
+- POST /internal/workers/{code}/takeover
+- POST /internal/workers/{code}/warmup
+- GET  /internal/workers/{code}/claimed-tasks
+- POST /internal/tasks/{id}/cancel
+- POST /internal/tasks/leases/renew-batch  (TODO 性能优化,见 P1-6)
 
 写操作(``claim`` / ``report``)接受 ``idempotency_key`` 参数并通过
 ``Idempotency-Key`` 请求头透传 —— 行为与 Java client 一致。
@@ -107,9 +116,14 @@ class PlatformHttpClient:
         """POST /internal/workers/{code}/deactivate —— 优雅下线。"""
         await self._post_json(f"/internal/workers/{worker_code}/deactivate", body)
 
-    async def get_status(self, worker_code: str) -> dict[str, Any]:
-        """GET /internal/workers/{code}/status —— 单 worker 仪表盘数据。"""
-        return await self._get_json(f"/internal/workers/{worker_code}/status")
+    async def update_status(self, worker_code: str, body: dict[str, Any]) -> dict[str, Any]:
+        """POST /internal/workers/{code}/status —— 运维侧更新 worker 状态。
+
+        对齐 orchestrator ``WorkerController.updateStatus`` —— **POST + body**
+        (WorkerHeartbeatDto schema),不是 GET。平台返回 ``WorkerRegistryEntity``
+        快照。SDK 一般不直接调用本端点(运维路径),保留是为了上层运维工具复用。
+        """
+        return await self._post_json(f"/internal/workers/{worker_code}/status", body)
 
     async def drain(self, worker_code: str, body: dict[str, Any]) -> dict[str, Any]:
         """POST /internal/workers/{code}/drain —— 运维侧主动触发 drain。"""
@@ -175,20 +189,6 @@ class PlatformHttpClient:
 
         async def factory() -> httpx.Response:
             return await self._client.post(path, json=body or {}, headers=headers)
-
-        resp = await with_retry(
-            factory,
-            max_attempts=self.config.retry_max_attempts,
-            base_delay_s=self.config.retry_base_delay.total_seconds(),
-            counter=self._counter,
-        )
-        return _decode_body(resp)
-
-    async def _get_json(self, path: str) -> dict[str, Any]:
-        headers = self._headers(None)
-
-        async def factory() -> httpx.Response:
-            return await self._client.get(path, headers=headers)
 
         resp = await with_retry(
             factory,
