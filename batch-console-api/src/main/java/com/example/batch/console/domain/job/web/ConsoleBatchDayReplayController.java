@@ -50,13 +50,14 @@ public class ConsoleBatchDayReplayController {
     String resolved = tenantGuard.resolveTenant(bodyTenant == null ? null : bodyTenant.toString());
     Map<String, Object> sanitized = new LinkedHashMap<>(command == null ? Map.of() : command);
     sanitized.put("tenantId", resolved);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .post()
             .uri("/internal/orchestrator/batch-day-replay/sessions")
             .body(sanitized)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/sessions/{sessionId}/approve")
@@ -67,7 +68,7 @@ public class ConsoleBatchDayReplayController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("approver") String approver) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .post()
             .uri(
@@ -77,7 +78,8 @@ public class ConsoleBatchDayReplayController {
                 resolved,
                 approver)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/sessions/{sessionId}/cancel")
@@ -87,7 +89,7 @@ public class ConsoleBatchDayReplayController {
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .post()
             .uri(
@@ -95,7 +97,8 @@ public class ConsoleBatchDayReplayController {
                 sessionId,
                 resolved)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   @GetMapping("/sessions/{sessionId}")
@@ -103,7 +106,7 @@ public class ConsoleBatchDayReplayController {
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .get()
             .uri(
@@ -111,7 +114,8 @@ public class ConsoleBatchDayReplayController {
                 sessionId,
                 resolved)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   // P1-5: entries 必须先解析 tenantId 走 guard 守护，避免跨租户拉取条目；改用 URI template

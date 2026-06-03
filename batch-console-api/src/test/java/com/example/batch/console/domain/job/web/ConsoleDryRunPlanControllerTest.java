@@ -22,6 +22,7 @@ import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,8 +68,18 @@ class ConsoleDryRunPlanControllerTest {
     when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
     when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
     when(bodySpec.retrieve()).thenReturn(responseSpec);
+    // 模拟 orchestrator 返 CommonResponse<DryRunPlanResult> envelope —— 与生产端真实 wire 一致。
+    // J1 bugfix 2026-06-04:之前 mock 直接返业务负载,绕开了"双层 envelope"路径,
+    // 让 ConsoleDryRunPlanController 二次 success(resp) 包装 bug 在 unit-test 里看不见。
     when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
-        .thenReturn(Map.of("level", "L1", "ok", true));
+        .thenReturn(
+            Map.of(
+                "success",
+                true,
+                "code",
+                "SUCCESS",
+                "data",
+                Map.of("level", "L1", "ok", true, "findings", List.of())));
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
@@ -111,6 +122,57 @@ class ConsoleDryRunPlanControllerTest {
                 .content("{\"tenantId\":\"tb\"}"))
         .andExpect(status().isForbidden());
     verify(orchestratorInternalRestClient, never()).build();
+  }
+
+  @Test
+  void planShouldUnwrapOrchestratorEnvelopeAndNotDoubleNest() throws Exception {
+    // J1 bugfix 守护:orchestrator 返 {success:true, data:{findings:[]}}, console 应该返
+    // {success:true, data:{findings:[]}} —— 而不是嵌套 data.data。ADR-026 e2e
+    // integration-adr-features:18 之前因为双重包装一直断言 success=false。
+    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+    when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
+        .thenReturn(
+            Map.of(
+                "success",
+                true,
+                "code",
+                "SUCCESS",
+                "data",
+                Map.of("findings", List.of(), "summary", "ok")));
+
+    mockMvc
+        .perform(
+            post("/api/console/ops/dry-run/plan")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"ta\",\"level\":\"L1\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.summary").value("ok"))
+        .andExpect(jsonPath("$.data.findings").isArray())
+        // 关键负向断言:不能有嵌套 data.data / data.code 这条路径
+        .andExpect(jsonPath("$.data.data").doesNotExist())
+        .andExpect(jsonPath("$.data.code").doesNotExist());
+  }
+
+  @Test
+  void planShouldPropagateOrchestratorFailureEnvelope() throws Exception {
+    // orchestrator 显式返 success=false envelope 时(理论上 retrieve() 会因 HTTP 4xx 抛错先
+    // 拦截,但 helper 自身的 success-flag 检查作为防御层兜底),console 必须把失败信号传出去,
+    // 不能把它当 success(payload) 让 FE 误以为成功。
+    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+    when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
+        .thenReturn(
+            Map.of(
+                "success", false,
+                "code", "BUSINESS_ERROR",
+                "message", "dry-run rejected"));
+
+    mockMvc
+        .perform(
+            post("/api/console/ops/dry-run/plan")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"ta\",\"level\":\"L1\"}"))
+        .andExpect(status().is5xxServerError());
   }
 
   @Test
