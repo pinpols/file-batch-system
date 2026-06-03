@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper.auth;
 
-import com.example.batch.orchestrator.auth.ApiKeyRecord;
+import com.example.batch.orchestrator.auth.ApiKeyEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -18,7 +18,7 @@ public interface ApiKeyAuthMapper {
    * P1-1(V166):按 {@code key_prefix}(明文前 8 位)+ tenant 取候选活跃行;由调用方按 KDF / SHA256 algo 与 {@code
    * key_hash} / {@code salt} 常量时间比对。
    */
-  List<ApiKeyRecord> findActiveCandidatesByPrefixAndTenant(
+  List<ApiKeyEntity> findActiveCandidatesByPrefixAndTenant(
       @Param("keyPrefix") String keyPrefix, @Param("tenantId") String tenantId);
 
   /** 异步更新 last_used_at(filter 不阻塞)。 */

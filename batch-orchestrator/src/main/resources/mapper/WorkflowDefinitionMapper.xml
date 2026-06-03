@@ -55,37 +55,4 @@
          order by id asc
          limit #{limit}
     </select>
-
-    <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity"
-            useGeneratedKeys="true" keyProperty="id">
-        insert into batch.workflow_definition (
-            tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
-        ) values (
-            #{tenantId}, #{workflowCode}, #{workflowName}, #{workflowType},
-            <choose>
-                <when test="version != null">#{version}</when>
-                <otherwise>1</otherwise>
-            </choose>,
-            <choose>
-                <when test="enabled != null">#{enabled}</when>
-                <otherwise>true</otherwise>
-            </choose>
-        )
-    </insert>
-
-    <update id="update"
-            parameterType="com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity">
-        update batch.workflow_definition
-           set workflow_name = #{workflowName},
-               workflow_type = #{workflowType},
-               version = #{version},
-               enabled = #{enabled},
-               updated_at = current_timestamp
-         where id = #{id}
-    </update>
-
-    <delete id="deleteById">
-        delete from batch.workflow_definition where id = #{id}
-    </delete>
 </mapper>

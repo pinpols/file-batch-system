@@ -92,7 +92,7 @@ public final class SdkIdempotentHandler implements SdkTaskHandler {
           ex);
     }
 
-    Optional<SdkIdempotencyRecord> existing = store.find(key);
+    Optional<SdkIdempotencyEntity> existing = store.find(key);
     if (existing.isPresent()) {
       log.info("idempotent hit: taskType={} key={} — skipping execution", taskType(), key);
       return existing.get().toResult();
@@ -100,7 +100,7 @@ public final class SdkIdempotentHandler implements SdkTaskHandler {
 
     SdkTaskResult result = delegate.execute(ctx);
     if (result.success()) {
-      store.record(key, SdkIdempotencyRecord.ofResult(result), annotation.ttlMillis());
+      store.record(key, SdkIdempotencyEntity.ofResult(result), annotation.ttlMillis());
     }
     return result;
   }

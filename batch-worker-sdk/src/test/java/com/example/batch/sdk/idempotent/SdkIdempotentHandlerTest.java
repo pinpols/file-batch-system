@@ -56,19 +56,19 @@ class SdkIdempotentHandlerTest {
 
   /** 记录调用的 fake store(可预置命中结果)。 */
   static final class RecordingStore implements SdkIdempotencyStore {
-    final Map<String, SdkIdempotencyRecord> map = new HashMap<>();
+    final Map<String, SdkIdempotencyEntity> map = new HashMap<>();
     final AtomicInteger findCalls = new AtomicInteger();
     String lastRecordKey;
     long lastTtl;
 
     @Override
-    public Optional<SdkIdempotencyRecord> find(String key) {
+    public Optional<SdkIdempotencyEntity> find(String key) {
       findCalls.incrementAndGet();
       return Optional.ofNullable(map.get(key));
     }
 
     @Override
-    public void record(String key, SdkIdempotencyRecord record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
       this.lastRecordKey = key;
       this.lastTtl = ttlMillis;
       map.put(key, record);
@@ -115,7 +115,7 @@ class SdkIdempotentHandlerTest {
     // arrange
     RecordingStore store = new RecordingStore();
     store.map.put(
-        "import:t1:A100", new SdkIdempotencyRecord("imported(cached)", Map.of("rows", 99)));
+        "import:t1:A100", new SdkIdempotencyEntity("imported(cached)", Map.of("rows", 99)));
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
 
@@ -213,12 +213,12 @@ class SdkIdempotentHandlerTest {
   /** find() 抛运行时异常的 fake store —— 验证装饰器不吞,透传给 dispatcher 兜底。 */
   static final class ThrowingStore implements SdkIdempotencyStore {
     @Override
-    public Optional<SdkIdempotencyRecord> find(String key) {
+    public Optional<SdkIdempotencyEntity> find(String key) {
       throw new IllegalStateException("store backend down");
     }
 
     @Override
-    public void record(String key, SdkIdempotencyRecord record, long ttlMillis) {}
+    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {}
   }
 
   @Test

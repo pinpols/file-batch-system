@@ -5,8 +5,8 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * batch.resource_queue CRUD。原 {@code ResourceQueueRepository}（Spring Data JDBC）已下线，
- * 调度配额相关的资源队列读取统一由本 Mapper 接管。
+ * batch.resource_queue 只读 Mapper。CLAUDE.md §持久化"同一表禁双主入口":本表写入主入口在 {@code batch-console-api},orch
+ * 端仅 SELECT。
  */
 public interface ResourceQueueMapper {
 
@@ -14,10 +14,4 @@ public interface ResourceQueueMapper {
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
   ResourceQueueEntity selectById(@Param("id") Long id);
-
-  int insert(ResourceQueueEntity record);
-
-  int update(ResourceQueueEntity record);
-
-  int deleteById(@Param("id") Long id);
 }

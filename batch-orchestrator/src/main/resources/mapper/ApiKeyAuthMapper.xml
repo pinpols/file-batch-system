@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.auth.ApiKeyAuthMapper">
 
-    <resultMap id="apiKeyRecordMap" type="com.example.batch.orchestrator.auth.ApiKeyRecord">
+    <resultMap id="apiKeyRecordMap" type="com.example.batch.orchestrator.auth.ApiKeyEntity">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>

@@ -242,57 +242,58 @@ public class DefaultLaunchService implements LaunchService {
         loaded.jobDefinition().priority() == null ? 5 : loaded.jobDefinition().priority();
     String highWaterMarkIn = resolveHighWaterMarkIn(request.tenantId(), loaded);
     Integer runAttempt = nextRunAttempt(request, dedupKey);
-    return JobInstanceEntity.builder()
-        .tenantId(request.tenantId())
-        .jobDefinitionId(loaded.jobDefinition().id())
-        .triggerRequestId(loaded.triggerRequest().getId())
-        .jobCode(request.jobCode())
-        .instanceNo(IdGenerator.newBusinessNo("inst"))
-        .bizDate(request.bizDate())
-        .triggerType(request.triggerType().code())
-        .instanceStatus(JobInstanceStatus.CREATED.code())
-        .batchNo(launchParamResolver.resolveBatchNo(request.bizDate(), effectiveParams))
-        .operatorId(LaunchParamResolver.resolveOperatorId(effectiveParams))
-        .rerunFlag(launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams))
-        .retryFlag(launchParamResolver.resolveRetryFlag(effectiveParams))
-        .rerunReason(launchParamResolver.resolveRerunReason(effectiveParams))
-        .relatedFileId(launchParamResolver.resolveRelatedFileId(effectiveParams))
-        .parentInstanceId(parentInstanceId)
-        .queueCode(loaded.jobDefinition().queueCode())
-        .workerGroup(loaded.jobDefinition().workerGroup())
-        .priority(priority)
-        .dedupKey(dedupKey)
-        .runAttempt(runAttempt)
-        .jobDefinitionVersion(loaded.jobDefinition().version())
-        .rerunPolicySnapshot(
-            buildRerunPolicySnapshot(request, effectiveParams, parentInstanceId, runAttempt))
-        .version(0L)
-        .expectedPartitionCount(0)
-        .successPartitionCount(0)
-        .failedPartitionCount(0)
-        .traceId(traceId)
-        .paramsSnapshot(
-            launchParamResolver.buildParamsSnapshot(
-                loaded.jobDefinition(), request, effectiveParams, traceId))
-        // V93 P0-4: 创建时从 jobDefinition 抓 calendarCode 快照, 之后 config 变更不污染历史 instance
-        .calendarCode(loaded.jobDefinition().calendarCode())
-        // V94: data_interval 直接透传 LaunchRequest 的字段; trigger 侧已计算好, orchestrator 不再算
-        .dataIntervalStart(request.dataIntervalStart())
-        .dataIntervalEnd(request.dataIntervalEnd())
-        .deadlineAt(
-            launchParamResolver.resolveDeadlineAt(
-                BatchDateTimeSupport.utcNow(),
-                request.bizDate(),
-                loaded.jobDefinition(),
-                effectiveParams,
-                batchDaySlaDeadlineAt))
-        .expectedDurationSeconds(
-            launchParamResolver.resolveExpectedDurationSeconds(
-                loaded.jobDefinition(), effectiveParams))
-        .highWaterMarkIn(highWaterMarkIn)
-        .replaySessionId(request.replaySessionId())
-        .dryRun(request.dryRun())
-        .build();
+    JobInstanceEntity entity = new JobInstanceEntity();
+    entity.setTenantId(request.tenantId());
+    entity.setJobDefinitionId(loaded.jobDefinition().id());
+    entity.setTriggerRequestId(loaded.triggerRequest().getId());
+    entity.setJobCode(request.jobCode());
+    entity.setInstanceNo(IdGenerator.newBusinessNo("inst"));
+    entity.setBizDate(request.bizDate());
+    entity.setTriggerType(request.triggerType().code());
+    entity.setInstanceStatus(JobInstanceStatus.CREATED.code());
+    entity.setBatchNo(launchParamResolver.resolveBatchNo(request.bizDate(), effectiveParams));
+    entity.setOperatorId(LaunchParamResolver.resolveOperatorId(effectiveParams));
+    entity.setRerunFlag(
+        launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams));
+    entity.setRetryFlag(launchParamResolver.resolveRetryFlag(effectiveParams));
+    entity.setRerunReason(launchParamResolver.resolveRerunReason(effectiveParams));
+    entity.setRelatedFileId(launchParamResolver.resolveRelatedFileId(effectiveParams));
+    entity.setParentInstanceId(parentInstanceId);
+    entity.setQueueCode(loaded.jobDefinition().queueCode());
+    entity.setWorkerGroup(loaded.jobDefinition().workerGroup());
+    entity.setPriority(priority);
+    entity.setDedupKey(dedupKey);
+    entity.setRunAttempt(runAttempt);
+    entity.setJobDefinitionVersion(loaded.jobDefinition().version());
+    entity.setRerunPolicySnapshot(
+        buildRerunPolicySnapshot(request, effectiveParams, parentInstanceId, runAttempt));
+    entity.setVersion(0L);
+    entity.setExpectedPartitionCount(0);
+    entity.setSuccessPartitionCount(0);
+    entity.setFailedPartitionCount(0);
+    entity.setTraceId(traceId);
+    entity.setParamsSnapshot(
+        launchParamResolver.buildParamsSnapshot(
+            loaded.jobDefinition(), request, effectiveParams, traceId));
+    // V93 P0-4: 创建时从 jobDefinition 抓 calendarCode 快照, 之后 config 变更不污染历史 instance
+    entity.setCalendarCode(loaded.jobDefinition().calendarCode());
+    // V94: data_interval 直接透传 LaunchRequest 的字段; trigger 侧已计算好, orchestrator 不再算
+    entity.setDataIntervalStart(request.dataIntervalStart());
+    entity.setDataIntervalEnd(request.dataIntervalEnd());
+    entity.setDeadlineAt(
+        launchParamResolver.resolveDeadlineAt(
+            BatchDateTimeSupport.utcNow(),
+            request.bizDate(),
+            loaded.jobDefinition(),
+            effectiveParams,
+            batchDaySlaDeadlineAt));
+    entity.setExpectedDurationSeconds(
+        launchParamResolver.resolveExpectedDurationSeconds(
+            loaded.jobDefinition(), effectiveParams));
+    entity.setHighWaterMarkIn(highWaterMarkIn);
+    entity.setReplaySessionId(request.replaySessionId());
+    entity.setDryRun(request.dryRun());
+    return entity;
   }
 
   private String buildRerunPolicySnapshot(

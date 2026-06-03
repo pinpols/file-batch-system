@@ -15,7 +15,7 @@ import com.example.batch.worker.core.infrastructure.FileErrorRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportSkipProperties;
-import com.example.batch.worker.imports.domain.ImportBadRecord;
+import com.example.batch.worker.imports.domain.ImportBadRecordEntity;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import java.util.HashMap;
@@ -185,7 +185,8 @@ class ImportRecordGovernanceServiceTest {
     assertThat(ctx.getAttributes()).containsEntry("lastErrorMessage", "msg-1");
 
     @SuppressWarnings("unchecked")
-    List<ImportBadRecord> bad = (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
+    List<ImportBadRecordEntity> bad =
+        (List<ImportBadRecordEntity>) ctx.getAttributes().get("badRecords");
     assertThat(bad).hasSize(1);
     assertThat(bad.get(0).skipped()).isTrue();
     assertThat(bad.get(0).stageCode()).isEqualTo("PARSE");
@@ -350,7 +351,8 @@ class ImportRecordGovernanceServiceTest {
             "badRecords",
             new java.util.ArrayList<>(
                 List.of(
-                    new ImportBadRecord(1L, "PARSE", "E", "m", null, false, "CONTINUE", null))));
+                    new ImportBadRecordEntity(
+                        1L, "PARSE", "E", "m", null, false, "CONTINUE", null))));
 
     service.finalizeErrorOutput(ctx);
 
@@ -372,9 +374,10 @@ class ImportRecordGovernanceServiceTest {
     service.recordSkippedRecord(ctx, ImportStage.PARSE, 1L, "E", "m", "raw");
 
     @SuppressWarnings("unchecked")
-    List<ImportBadRecord> bad = (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
+    List<ImportBadRecordEntity> bad =
+        (List<ImportBadRecordEntity>) ctx.getAttributes().get("badRecords");
     assertThat(bad).hasSize(1);
-    assertThat(bad.get(0)).isInstanceOf(ImportBadRecord.class);
+    assertThat(bad.get(0)).isInstanceOf(ImportBadRecordEntity.class);
   }
 
   private Long toLongAnswer(Object value) {

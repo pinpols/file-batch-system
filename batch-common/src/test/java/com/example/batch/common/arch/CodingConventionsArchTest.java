@@ -25,4 +25,9 @@ class CodingConventionsArchTest {
   void charsetForName() {
     CodingConventionsArchRules.charsetForNameRule().check(CLASSES);
   }
+
+  @Test
+  void recordSuffixForbidden() {
+    CodingConventionsArchRules.recordSuffixForbiddenRule().check(CLASSES);
+  }
 }
