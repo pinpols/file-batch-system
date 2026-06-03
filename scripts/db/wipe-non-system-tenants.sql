@@ -7,6 +7,7 @@
 --   - default         系统模板(V55 内置)
 --   - default-tenant  租户初始化复制源(platform_seed.sql)
 --   - ta / tb / tc    长期 dev fixture(团队手测 + 部分 e2e 复用)
+--   - tx              FE e2e RBAC matrix 长期 fixture(op-tx / user-tx)
 --
 -- 任何不在白名单的 tenant_id 视为残留,本脚本全部物理删 + 级联子表。
 --
@@ -21,7 +22,7 @@
 -- =====================================================================
 
 \set ON_ERROR_STOP on
-\set keep '(''system'',''default'',''default-tenant'',''ta'',''tb'',''tc'')'
+\set keep '(''system'',''default'',''default-tenant'',''ta'',''tb'',''tc'',''tx'')'
 
 \echo '== 清理前残留租户(白名单外)=='
 SELECT tenant_id, tenant_name, status, created_at::date
