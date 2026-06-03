@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.ResultVersionRetentionProperties;
 import com.example.batch.orchestrator.domain.entity.ResultVersionEntity;
@@ -68,7 +69,15 @@ public class ResultVersionRetentionScheduler {
       if (row == null || row.id() == null || row.tenantId() == null) {
         continue;
       }
-      int updated = resultVersionMapper.archiveSuperseded(row.tenantId(), row.id(), now, true);
+      String tenantId = row.tenantId();
+      if (tenantId.isBlank()) {
+        continue;
+      }
+      // RLS Phase B：archiveSuperseded 是 UPDATE batch.result_version SET status='ARCHIVED'，
+      // 严格策略下必须显式绑定 app.tenant_id 才能命中行。
+      int updated =
+          RlsTenantContextHolder.runWithTenant(
+              tenantId, () -> resultVersionMapper.archiveSuperseded(tenantId, row.id(), now, true));
       if (updated > 0) {
         archived++;
       }

@@ -8,6 +8,7 @@ import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -108,7 +109,15 @@ public class WaitingPartitionDispatchScheduler {
         String tenantTag = partition == null ? null : partition.getTenantId();
         BatchMdc.put(StructuredLogField.TENANT_ID, tenantTag);
         try {
-          candidate = buildCandidate(partition);
+          if (tenantTag == null || tenantTag.isBlank()) {
+            // 没 tenantId 的 partition 进不了 RLS 路径，直接退回兜底（与原行为等价：buildCandidate 会再判 null）
+            candidate = buildCandidate(partition);
+          } else {
+            // RLS Phase B：buildCandidate 内部走 jobTask / jobInstance / jobDefinition / resourceScheduler
+            // 一连串 mapper 查询，全部需要 app.tenant_id 在 ThreadLocal 上。
+            candidate =
+                RlsTenantContextHolder.runWithTenant(tenantTag, () -> buildCandidate(partition));
+          }
         } catch (RuntimeException exception) {
           // 单个候选的资源评估失败（常见于 quota_runtime_state 的 @Version CAS 冲突）不应中断整批 tick，
           // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 吞掉 → 后面几千条
@@ -139,14 +148,25 @@ public class WaitingPartitionDispatchScheduler {
     // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；self-proxy 触发 @Transactional AOP。
     List<WaitingDispatchCandidate> sorted = candidates.stream().sorted(comparator).toList();
     for (WaitingDispatchCandidate candidate : sorted) {
+      String tenantId =
+          candidate.partition() == null ? null : candidate.partition().getTenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
       try {
-        selfProvider
-            .getObject()
-            .dispatchWaitingPartition(
-                candidate.partition(),
-                candidate.task(),
-                candidate.jobInstance(),
-                candidate.decision());
+        // RLS Phase B：dispatchWaitingPartition → executeDispatch (REQUIRES_NEW) → 多张 batch 表写入，
+        // 必须在 proxy 调用前绑好 holder，REQUIRES_NEW 事务起点才能读到 app.tenant_id。
+        // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
+        RlsTenantContextHolder.runWithTenant(
+            tenantId,
+            () ->
+                selfProvider
+                    .getObject()
+                    .dispatchWaitingPartition(
+                        candidate.partition(),
+                        candidate.task(),
+                        candidate.jobInstance(),
+                        candidate.decision()));
       } catch (RuntimeException exception) {
         log.warn(
             "dispatch waiting partition failed, will retry next tick: tenantId={},"

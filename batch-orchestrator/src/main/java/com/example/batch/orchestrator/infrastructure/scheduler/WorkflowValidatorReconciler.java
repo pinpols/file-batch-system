@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.governance.AlertEventService;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
@@ -54,11 +55,26 @@ public class WorkflowValidatorReconciler {
     int invalidCount = 0;
     for (WorkflowDefinitionEntity wf : enabled) {
       if (wf == null || wf.id() == null) continue;
+      String tenantId = wf.tenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
       try {
-        WorkflowValidationResult result = validator.validate(wf.id());
-        if (result.hasErrors()) {
+        // RLS Phase B：validator.validate 走 workflow_node / job_definition / calendar mapper，
+        // emitInvalid 写 alert_event；都依赖 holder。try/catch 包在 runWithTenant 外保证 finally 清。
+        boolean hasErrors =
+            RlsTenantContextHolder.runWithTenant(
+                tenantId,
+                () -> {
+                  WorkflowValidationResult result = validator.validate(wf.id());
+                  if (result.hasErrors()) {
+                    emitInvalid(wf, result);
+                    return true;
+                  }
+                  return false;
+                });
+        if (hasErrors) {
           invalidCount++;
-          emitInvalid(wf, result);
         }
       } catch (Exception failure) {
         log.warn(

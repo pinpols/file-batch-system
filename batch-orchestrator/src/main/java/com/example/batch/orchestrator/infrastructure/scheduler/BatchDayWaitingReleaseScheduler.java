@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -87,6 +88,10 @@ public class BatchDayWaitingReleaseScheduler {
       if (entity == null || entity.bizDate() == null) {
         continue;
       }
+      String tenantId = entity.tenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
       LocalDate previousBizDate = entity.bizDate().minusDays(1);
       PreviousDayKey key =
           new PreviousDayKey(entity.tenantId(), entity.calendarCode(), previousBizDate);
@@ -95,34 +100,45 @@ public class BatchDayWaitingReleaseScheduler {
         continue;
       }
       previousDaysChecked++;
-      BatchDayInstanceEntity previousDay =
-          batchDayInstanceMapper.selectByTenantCalendarBizDate(
-              entity.tenantId(), entity.calendarCode(), previousBizDate);
-      if (previousDay == null || !isReleasable(previousDay.dayStatus())) {
-        continue;
-      }
+      // RLS Phase B：previousDay 查询 + releaseWaitingLaunchesForBatchDay 内部 launch 重投均要带租户。
+      // try/catch 仍包在 runWithTenant 外，保留"单 day 异常隔离 → 不影响其它 key"语义，且 holder finally 清理。
+      Integer releasedCount = null;
       try {
-        int released =
-            batchDayOperationService.releaseWaitingLaunchesForBatchDay(
-                previousDay, AUTO_RELEASE_OPERATOR);
-        releasedTotal += released;
-        if (released > 0) {
-          log.info(
-              "auto-released {} waiting launch(es): tenantId={}, calendarCode={},"
-                  + " previousBizDate={}",
-              released,
-              previousDay.tenantId(),
-              previousDay.calendarCode(),
-              previousBizDate);
-        }
+        releasedCount =
+            RlsTenantContextHolder.runWithTenant(
+                tenantId,
+                () -> {
+                  BatchDayInstanceEntity previousDay =
+                      batchDayInstanceMapper.selectByTenantCalendarBizDate(
+                          entity.tenantId(), entity.calendarCode(), previousBizDate);
+                  if (previousDay == null || !isReleasable(previousDay.dayStatus())) {
+                    return 0;
+                  }
+                  int released =
+                      batchDayOperationService.releaseWaitingLaunchesForBatchDay(
+                          previousDay, AUTO_RELEASE_OPERATOR);
+                  if (released > 0) {
+                    log.info(
+                        "auto-released {} waiting launch(es): tenantId={}, calendarCode={},"
+                            + " previousBizDate={}",
+                        released,
+                        previousDay.tenantId(),
+                        previousDay.calendarCode(),
+                        previousBizDate);
+                  }
+                  return released;
+                });
       } catch (Exception ex) {
         // 单 day 异常隔离 — 不影响其它 key,下 tick 重试
         log.warn(
             "auto-release failed: tenantId={}, calendarCode={}, previousBizDate={}, msg={}",
-            previousDay.tenantId(),
-            previousDay.calendarCode(),
+            entity.tenantId(),
+            entity.calendarCode(),
             previousBizDate,
             ex.getMessage());
+      }
+      if (releasedCount != null) {
+        releasedTotal += releasedCount;
       }
     }
     if (releasedTotal > 0 || previousDaysChecked > 0) {

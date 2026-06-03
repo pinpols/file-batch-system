@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.service.governance.CompensationService;
 import com.example.batch.orchestrator.config.BatchDayReplayDispatchProperties;
@@ -92,8 +93,15 @@ public class BatchDayReplayDispatcher {
         // OUTPUTS_ONLY 走同步 promote 路径（BatchDayReplayService.executeOutputsOnly），dispatcher 不接管
         continue;
       }
+      String tenantId = session.tenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
+      // RLS Phase B：dispatchSession → dispatchEntry → compensationService.submit 全链路要带租户，
+      // 否则 REQUIRES_NEW entry 事务起点拿不到 app.tenant_id。try/catch 包在 runWithTenant 外以隔离单
+      // session 故障。
       try {
-        dispatchSession(session);
+        RlsTenantContextHolder.runWithTenant(tenantId, () -> dispatchSession(session));
       } catch (Exception failure) {
         log.warn(
             "batch_day_replay dispatch session error: tenantId={}, sessionId={}, msg={}",

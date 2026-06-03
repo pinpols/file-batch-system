@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
@@ -61,7 +62,12 @@ public class TenantSchedulerSnapshotRecorder {
     }
     List<TenantSchedulerSnapshotEntity> rows = new ArrayList<>(tenantIds.size());
     for (String tenantId : tenantIds) {
-      SchedulerSnapshotResponse snap = snapshotService.buildLive(tenantId);
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
+      // RLS Phase B：buildLive 内部走 mapper 查 quota / partition 统计；必须在绑定的租户上下文里做。
+      SchedulerSnapshotResponse snap =
+          RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotService.buildLive(tenantId));
       if (snap.policies().isEmpty()) {
         continue;
       }
