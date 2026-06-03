@@ -703,3 +703,42 @@ groups:
           summary: "Console replica replay lag > 5s"
           description: "console-api 读副本回放延迟持续 > 5s,UI 会看到陈旧状态。检查 PG replication 与 replay 进程。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#replica-replay-lag-high"
+
+      - alert: VerifierFailureRateHigh
+        # content verifier 校验失败率 > 0.05/s,持续 10m → 上游文件批次质量异常或 verifier 配置漂
+        expr: sum(rate(batch_verifier_failures_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-final
+        annotations:
+          summary: "Content verifier failure rate > 0.05/s"
+          description: "verifier 失败率 > 0.05/s 持续 10m。按 verifier + reason label 拆维度,排查源文件或 verifier 规则。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#verifier-failure-rate-high"
+
+      - alert: JobErrorCodeRateHigh
+        # 单一 error_code 5m 内 rate > 0.1/s,定位错误归因聚集
+        expr: sum by (error_code) (rate(batch_orchestrator_job_failure_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-final
+        annotations:
+          summary: "Job failure rate high for error_code={{ $labels.error_code }}"
+          description: "error_code={{ $labels.error_code }} 失败率 > 0.1/s 持续 10m。看具体 error_code 对应根因(资源/超时/依赖)。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#job-error-code-rate-high"
+
+      - alert: ReplicaFailoverOccurred
+        # console 读副本 failover 一旦发生立即告警(rate > 0 即触发)— 表示 primary 不可达或 failover 触发
+        expr: increase(batch_console_replica_failover_count_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-final
+        annotations:
+          summary: "Console replica failover occurred"
+          description: "console-api 读副本发生 failover ≥ 1 次。检查 PG primary 健康 + 路由表是否切换正确,确认无静默主备切换。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#replica-failover-occurred"
