@@ -35,7 +35,8 @@ spring:
 # ------------------------------------------------------------------
   datasource:
     # 平台库 JDBC URL（所有服务模块共用）
-    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    # P1-17 reWriteBatchedInserts=true: pgjdbc 把 batchUpdate 重写成多值 INSERT,batch 写入吞吐 3-5x
+    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform?reWriteBatchedInserts=true}
     # 平台库用户名
     username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
     # 平台库密码（生产请通过环境变量/密钥管理注入）
@@ -65,6 +66,11 @@ spring:
         delivery.timeout.ms: ${BATCH_KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:30000}
         # 单次请求超时（与 delivery.timeout.ms 配合；小于后者，留出重试空间）
         request.timeout.ms: ${BATCH_KAFKA_PRODUCER_REQUEST_TIMEOUT_MS:10000}
+        # P1-14 backpressure: 提升 buffer.memory 上限到 64MB，配合 OutboxPoll 高峰 5k events/tick
+        buffer.memory: ${BATCH_KAFKA_PRODUCER_BUFFER_MEMORY:67108864}
+        # P1-14 backpressure: send() 在 buffer 满时最多阻塞 5s 然后抛 TimeoutException(不再无限挂起)
+        # 与 OutboxPoll 自适应轮询配合，发生堵塞时回调失败由下一轮重试，避免持有 DB 连接
+        max.block.ms: ${BATCH_KAFKA_PRODUCER_MAX_BLOCK_MS:5000}
     listener:
       # 所有 worker 统一手动确认：业务处理成功后显式 ack，避免"处理失败但已提交 offset"
       # 非 worker 模块（不消费 Kafka）不受影响
@@ -76,6 +82,16 @@ spring:
       # 直接跳过那条任务，partition 永远 READY 不动。worker 端的 CLAIM 已是幂等
       # （CLAIM 失败就 skip）兜底，重复消费旧消息无副作用。
       auto-offset-reset: ${BATCH_KAFKA_CONSUMER_AUTO_OFFSET_RESET:earliest}
+      properties:
+        # P1-10 Kafka 三角硬化：显式 session.timeout / heartbeat.interval / max.poll.interval / 分配策略
+        # 避免依赖 client 默认值（不同 Kafka client lib 版本默认值不一致），rolling update 触发 stop-the-world rebalance
+        # 三角关系：heartbeat.interval (15s) ≤ session.timeout (45s) / 3；max.poll.interval (300s) 由 worker 覆盖
+        # CooperativeStickyAssignor: 增量 rebalance，新 worker 加入只交换部分 partition，避免全量停顿
+        # 启动期 fail-fast 校验见 KafkaConsumerTriangleValidator
+        session.timeout.ms: ${BATCH_KAFKA_CONSUMER_SESSION_TIMEOUT_MS:45000}
+        heartbeat.interval.ms: ${BATCH_KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS:15000}
+        max.poll.interval.ms: ${BATCH_KAFKA_CONSUMER_MAX_POLL_INTERVAL_MS:300000}
+        partition.assignment.strategy: ${BATCH_KAFKA_CONSUMER_PARTITION_ASSIGNMENT_STRATEGY:org.apache.kafka.clients.consumer.CooperativeStickyAssignor}
   data:
     redis:
       # Redis：本地 compose 宿主机映射 16379→6379；容器内由环境变量覆盖为 redis:6379
@@ -250,7 +266,8 @@ batch:
         idle-in-transaction-timeout: ${BATCH_PG_BUSINESS_IDLE_IN_TX_TIMEOUT:10m}
     business:
       # 业务库 JDBC URL（worker 侧使用）
-      url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
+      # P1-17 reWriteBatchedInserts=true: Import LOAD batchUpdate 链路收益最大
+      url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business?reWriteBatchedInserts=true}
       # 业务库用户名
       username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
       # 业务库密码（生产请通过环境变量/密钥管理注入）

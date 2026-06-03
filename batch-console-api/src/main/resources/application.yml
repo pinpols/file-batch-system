@@ -42,13 +42,15 @@ batch:
       failure-threshold: ${BATCH_CONSOLE_REPLICA_FAILURE_THRESHOLD:3}
       quarantine-seconds: ${BATCH_CONSOLE_REPLICA_QUARANTINE_SECONDS:30}
       primary:
-        url: ${BATCH_CONSOLE_PRIMARY_URL:jdbc:postgresql://localhost:15432/batch_platform}
+        # P1-17 reWriteBatchedInserts=true: batchUpdate 多值 INSERT 重写
+        url: ${BATCH_CONSOLE_PRIMARY_URL:jdbc:postgresql://localhost:15432/batch_platform?reWriteBatchedInserts=true}
         username: ${BATCH_CONSOLE_PRIMARY_USER:batch_user}
         password: ${BATCH_CONSOLE_PRIMARY_PASSWORD:batch_pass_123}
         maximum-pool-size: ${BATCH_CONSOLE_PRIMARY_POOL:16}
         leak-detection-threshold-millis: ${BATCH_CONSOLE_PRIMARY_LEAK_DETECTION_MS:0}
       replica:
-        url: ${BATCH_CONSOLE_REPLICA_URL:jdbc:postgresql://localhost:15433/batch_platform}
+        # P1-17 reWriteBatchedInserts=true: 即便 replica 主要读,健康检查/explain 链路一致
+        url: ${BATCH_CONSOLE_REPLICA_URL:jdbc:postgresql://localhost:15433/batch_platform?reWriteBatchedInserts=true}
         username: ${BATCH_CONSOLE_REPLICA_USER:batch_user}
         password: ${BATCH_CONSOLE_REPLICA_PASSWORD:batch_pass_123}
         maximum-pool-size: ${BATCH_CONSOLE_REPLICA_POOL:16}

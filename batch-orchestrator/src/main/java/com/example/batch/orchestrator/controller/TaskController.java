@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.controller.request.TaskHeartbeatResponse;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchRequest;
 import com.example.batch.orchestrator.controller.request.TaskLeaseRenewBatchResponse;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,7 +40,8 @@ public class TaskController {
   }
 
   @PostMapping("/{taskId}/report")
-  public void report(@PathVariable Long taskId, @RequestBody TaskExecutionReportDto request) {
+  public void report(
+      @PathVariable Long taskId, @Valid @RequestBody TaskExecutionReportDto request) {
     taskControllerApplicationService.report(taskId, request);
   }
 
