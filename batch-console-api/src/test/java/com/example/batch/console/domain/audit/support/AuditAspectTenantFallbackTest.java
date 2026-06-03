@@ -37,6 +37,19 @@ class AuditAspectTenantFallbackTest {
     // 仅作为反射目标方法
   }
 
+  /**
+   * 模拟 ROLE_ADMIN 跨租操作:{@code targetTenantParam} 指向方法参数 {@code tenantId},应当覆盖 principal.tenantId()
+   * 的 null 以及 MDC,直接落到入参里的目标租户。
+   */
+  @AuditAction(
+      aggregateType = "tenant",
+      aggregateId = "#tenantId",
+      action = "tenant.update",
+      targetTenantParam = "#tenantId")
+  public void sampleTenantUpdate(String tenantId) {
+    // 仅作为反射目标方法
+  }
+
   @BeforeEach
   void setUp() {
     mapper = mock(OperationAuditMapper.class);
@@ -92,6 +105,40 @@ class AuditAspectTenantFallbackTest {
     assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
   }
 
+  @Test
+  void shouldUseTargetTenantParamForRoleAdminCrossTenantOperation() throws Throwable {
+    // ROLE_ADMIN 改 "tenant-x":principal.tenantId() = null,但 targetTenantParam=#tenantId 指向入参
+    // → audit 行 tenant_id 必须是 "tenant-x",而不是默认兜底 "system",否则取证按目标租户查会漏。
+    ConsolePrincipal principal =
+        new ConsolePrincipal("root", null /* tenantId null */, Set.of("ROLE_ADMIN"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null, List.of()));
+    MDC.put("tenant", "should-not-be-used");
+
+    ProceedingJoinPoint pjp = buildTenantUpdateJoinPoint("tenant-x");
+    aspect.wrap(pjp);
+
+    ArgumentCaptor<OperationAuditEvent> captor = ArgumentCaptor.forClass(OperationAuditEvent.class);
+    verify(mapper).insert(captor.capture());
+    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-x");
+  }
+
+  @Test
+  void shouldStillFallbackWhenTargetTenantParamResolvesToNull() throws Throwable {
+    // targetTenantParam=#tenantId 但入参传 null → 必须继续 principal → MDC → "system" 兜底链
+    ConsolePrincipal principal =
+        new ConsolePrincipal("operator", "tenant-a", Set.of("ROLE_TENANT_OPERATOR"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null, List.of()));
+
+    ProceedingJoinPoint pjp = buildTenantUpdateJoinPoint(null);
+    aspect.wrap(pjp);
+
+    ArgumentCaptor<OperationAuditEvent> captor = ArgumentCaptor.forClass(OperationAuditEvent.class);
+    verify(mapper).insert(captor.capture());
+    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
+  }
+
   private ProceedingJoinPoint buildJoinPoint() throws Throwable {
     Method m = getClass().getMethod("sampleAuthLogout");
     MethodSignature sig = mock(MethodSignature.class);
@@ -99,6 +146,17 @@ class AuditAspectTenantFallbackTest {
     ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
     org.mockito.Mockito.when(pjp.getSignature()).thenReturn((Signature) sig);
     org.mockito.Mockito.when(pjp.getArgs()).thenReturn(new Object[0]);
+    org.mockito.Mockito.when(pjp.proceed()).thenReturn(null);
+    return pjp;
+  }
+
+  private ProceedingJoinPoint buildTenantUpdateJoinPoint(String tenantIdArg) throws Throwable {
+    Method m = getClass().getMethod("sampleTenantUpdate", String.class);
+    MethodSignature sig = mock(MethodSignature.class);
+    org.mockito.Mockito.when(sig.getMethod()).thenReturn(m);
+    ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
+    org.mockito.Mockito.when(pjp.getSignature()).thenReturn((Signature) sig);
+    org.mockito.Mockito.when(pjp.getArgs()).thenReturn(new Object[] {tenantIdArg});
     org.mockito.Mockito.when(pjp.proceed()).thenReturn(null);
     return pjp;
   }

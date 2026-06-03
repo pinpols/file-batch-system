@@ -27,14 +27,22 @@ public class ConsoleInstanceController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/{id}/cancel")
-  @AuditAction(action = "instance.cancel", aggregateType = "job_instance", aggregateId = "#id")
+  @AuditAction(
+      action = "instance.cancel",
+      aggregateType = "job_instance",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(orchestratorProxyService.instanceAction(id, tenantId, "cancel"));
   }
 
   @PostMapping("/{id}/terminate")
-  @AuditAction(action = "instance.terminate", aggregateType = "job_instance", aggregateId = "#id")
+  @AuditAction(
+      action = "instance.terminate",
+      aggregateType = "job_instance",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -42,7 +50,11 @@ public class ConsoleInstanceController {
   }
 
   @PostMapping("/partitions/{id}/cancel")
-  @AuditAction(action = "partition.cancel", aggregateType = "job_partition", aggregateId = "#id")
+  @AuditAction(
+      action = "partition.cancel",
+      aggregateType = "job_partition",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> cancelPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -50,7 +62,11 @@ public class ConsoleInstanceController {
   }
 
   @PostMapping("/partitions/{id}/retry")
-  @AuditAction(action = "partition.retry", aggregateType = "job_partition", aggregateId = "#id")
+  @AuditAction(
+      action = "partition.retry",
+      aggregateType = "job_partition",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> retryPartition(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(orchestratorProxyService.partitionAction(id, tenantId, "retry"));
