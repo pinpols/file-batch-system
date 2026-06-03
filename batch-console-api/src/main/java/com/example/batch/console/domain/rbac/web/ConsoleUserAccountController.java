@@ -57,7 +57,10 @@ public class ConsoleUserAccountController {
   }
 
   @PostMapping
-  @AuditAction(action = "user.create", aggregateType = "user_account")
+  @AuditAction(
+      action = "user.create",
+      aggregateType = "user_account",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleUserAccountResponse> create(
       @Validated @RequestBody CreateUserAccountRequest request) {
     return responseFactory.success(

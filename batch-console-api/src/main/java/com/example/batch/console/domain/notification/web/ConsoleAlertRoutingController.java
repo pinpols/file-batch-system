@@ -40,21 +40,32 @@ public class ConsoleAlertRoutingController {
   }
 
   @PostMapping
-  @AuditAction(action = "alertRouting.create", aggregateType = "alert_routing")
+  @AuditAction(
+      action = "alertRouting.create",
+      aggregateType = "alert_routing",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<Map<String, Object>> create(
       @Valid @RequestBody AlertRoutingSaveRequest request) {
     return responseFactory.success(alertRoutingApplicationService.create(request));
   }
 
   @PutMapping("/{id}")
-  @AuditAction(action = "alertRouting.update", aggregateType = "alert_routing", aggregateId = "#id")
+  @AuditAction(
+      action = "alertRouting.update",
+      aggregateType = "alert_routing",
+      aggregateId = "#id",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<Map<String, Object>> update(
       @PathVariable Long id, @Valid @RequestBody AlertRoutingSaveRequest request) {
     return responseFactory.success(alertRoutingApplicationService.update(id, request));
   }
 
   @PostMapping("/{id}/toggle")
-  @AuditAction(action = "alertRouting.toggle", aggregateType = "alert_routing", aggregateId = "#id")
+  @AuditAction(
+      action = "alertRouting.toggle",
+      aggregateType = "alert_routing",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Void> toggle(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,

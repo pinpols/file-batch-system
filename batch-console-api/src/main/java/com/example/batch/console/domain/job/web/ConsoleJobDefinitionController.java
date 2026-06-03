@@ -37,7 +37,10 @@ public class ConsoleJobDefinitionController {
   }
 
   @PostMapping
-  @AuditAction(action = "jobDefinition.create", aggregateType = "job_definition")
+  @AuditAction(
+      action = "jobDefinition.create",
+      aggregateType = "job_definition",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleJobDefinitionResponse> create(
       @Valid @RequestBody JobDefinitionCreateRequest request) {
     return responseFactory.success(jobDefinitionApplicationService.create(request));
@@ -47,7 +50,8 @@ public class ConsoleJobDefinitionController {
   @AuditAction(
       action = "jobDefinition.update",
       aggregateType = "job_definition",
-      aggregateId = "#id")
+      aggregateId = "#id",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleJobDefinitionResponse> update(
       @PathVariable Long id, @Valid @RequestBody JobDefinitionUpdateRequest request) {
     return responseFactory.success(jobDefinitionApplicationService.update(id, request));
@@ -58,7 +62,8 @@ public class ConsoleJobDefinitionController {
   @AuditAction(
       action = "jobDefinition.patch",
       aggregateType = "job_definition",
-      aggregateId = "#id")
+      aggregateId = "#id",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<Void> patch(
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
     jobDefinitionApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
@@ -67,7 +72,10 @@ public class ConsoleJobDefinitionController {
 
   /** 批量启用/禁用作业定义。 */
   @PatchMapping("/batch")
-  @AuditAction(action = "jobDefinition.batchPatch", aggregateType = "job_definition")
+  @AuditAction(
+      action = "jobDefinition.batchPatch",
+      aggregateType = "job_definition",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<Integer> batchPatch(@Valid @RequestBody BatchEnabledPatchRequest request) {
     return responseFactory.success(
         jobDefinitionApplicationService.batchToggle(
@@ -75,7 +83,11 @@ public class ConsoleJobDefinitionController {
   }
 
   @PostMapping("/{id}/copy")
-  @AuditAction(action = "jobDefinition.copy", aggregateType = "job_definition", aggregateId = "#id")
+  @AuditAction(
+      action = "jobDefinition.copy",
+      aggregateType = "job_definition",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleJobDefinitionResponse> copy(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,
@@ -88,7 +100,8 @@ public class ConsoleJobDefinitionController {
   @AuditAction(
       action = "jobDefinition.clone",
       aggregateType = "job_definition",
-      aggregateId = "#id")
+      aggregateId = "#id",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleJobDefinitionResponse> clone(
       @PathVariable Long id, @Valid @RequestBody JobDefinitionCopyRequest request) {
     return responseFactory.success(jobDefinitionApplicationService.copyWithOverrides(id, request));

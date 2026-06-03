@@ -68,7 +68,8 @@ public class ConsoleTenantController {
   @AuditAction(
       action = "tenant.create",
       aggregateType = "tenant",
-      aggregateId = "#request.tenantId")
+      aggregateId = "#request.tenantId",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<ConsoleTenantResponse> create(
       @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
     return responseFactory.success(
@@ -101,7 +102,11 @@ public class ConsoleTenantController {
 
   @PutMapping("/{tenantId}")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  @AuditAction(action = "tenant.update", aggregateType = "tenant", aggregateId = "#tenantId")
+  @AuditAction(
+      action = "tenant.update",
+      aggregateType = "tenant",
+      aggregateId = "#tenantId",
+      targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleTenantResponse> update(
       @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
     return responseFactory.success(
@@ -110,14 +115,22 @@ public class ConsoleTenantController {
 
   @PostMapping("/{tenantId}/suspend")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  @AuditAction(action = "tenant.suspend", aggregateType = "tenant", aggregateId = "#tenantId")
+  @AuditAction(
+      action = "tenant.suspend",
+      aggregateType = "tenant",
+      aggregateId = "#tenantId",
+      targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
     return responseFactory.success(tenantService.suspendTenant(tenantId));
   }
 
   @PostMapping("/{tenantId}/activate")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  @AuditAction(action = "tenant.activate", aggregateType = "tenant", aggregateId = "#tenantId")
+  @AuditAction(
+      action = "tenant.activate",
+      aggregateType = "tenant",
+      aggregateId = "#tenantId",
+      targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
     return responseFactory.success(tenantService.activateTenant(tenantId));
   }
