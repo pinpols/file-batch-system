@@ -66,11 +66,8 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        # 首次接入:Code Scanning 需仓库管理员手动在
-        # Settings → Code security → Code scanning 一键开启(免费)。
-        # 未开启时 SARIF upload 会报 403 让本 job 挂红。挂 continue-on-error
-        # 防 PR 阻塞,开启后移除本行即可恢复硬阻断。
-        # 跟进:docs/runbook/ci.md「CodeQL 启用步骤」TODO。
-        continue-on-error: true
+        # Code Scanning 已启用,移除 continue-on-error 恢复硬阻断;若 SARIF
+        # upload 再次 403,需在 Settings → Code security → Code scanning
+        # 核查授权,而不是把本步骤再次降级。
         with:
           category: "/language:java"

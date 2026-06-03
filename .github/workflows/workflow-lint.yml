@@ -68,10 +68,9 @@ jobs:
       - name: Run zizmor
         shell: bash
         # 本 PR 增量引入:只严扫**本 PR 新建**的 2 个 workflow。
-        # 老 workflow(dependabot-auto-merge / build-image / capacity-gate 等)
-        # 有 cache-poisoning / dangerous-triggers / bot-conditions 等 pre-existing
-        # finding, 拆独立 audit PR 治理(见 docs/runbook/ci.md TODO),
-        # 防本次引入 PR 被旧债阻塞。
+        # 老 workflow(dependabot-auto-merge / capacity-gate 等)有 cache-poisoning /
+        # dangerous-triggers / bot-conditions 等 pre-existing finding,拆独立 audit
+        # PR 治理(见 docs/runbook/ci.md TODO),防本次引入 PR 被旧债阻塞。
         # --min-severity medium:忽略 informational/low,只看真有杀伤力的。
         run: |
           zizmor --min-severity medium \
