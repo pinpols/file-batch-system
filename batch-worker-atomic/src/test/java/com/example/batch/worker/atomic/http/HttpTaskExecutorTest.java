@@ -9,6 +9,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -449,6 +450,74 @@ class HttpTaskExecutorTest {
       // followRedirects=NEVER:返回 301 本身(未跟随到内网);expectStatus=301 命中 → 不跟随得证。
       assertThat(r.success()).isTrue();
       assertThat(r.output()).containsEntry("statusCode", 301);
+    }
+  }
+
+  // ─── P2-3: 响应头脱敏 ─────────────────────────────────────────────────────────
+
+  @Nested
+  class ResponseHeaderRedaction {
+
+    @Test
+    void redactsSetCookieAndAuthorizationHeadersInOutput() {
+      // P2-3(2026-06-03):出口响应若回声 Set-Cookie / Authorization,落 task_result.output
+      // 会形成 forensic 期间凭据泄漏。executor 在写 output 前先按固定黑名单脱敏(case-insensitive)。
+      server.createContext(
+          "/echo",
+          ex -> {
+            ex.getResponseHeaders().add("Set-Cookie", "SESSION=secret-value; HttpOnly");
+            ex.getResponseHeaders().add("Authorization", "Bearer downstream-token");
+            ex.getResponseHeaders().add("X-Trace-Id", "trace-123");
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
+          });
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("url", url("/echo"))));
+
+      assertThat(r.success()).isTrue();
+      @SuppressWarnings("unchecked")
+      Map<String, java.util.List<String>> hdrs =
+          (Map<String, java.util.List<String>>) r.output().get("responseHeaders");
+      // Set-Cookie / Authorization 必须被脱敏(任何大小写形态都不应残留原值)
+      hdrs.forEach(
+          (name, values) -> {
+            String lower = name.toLowerCase(Locale.ROOT);
+            if (lower.equals("set-cookie") || lower.equals("authorization")) {
+              assertThat(values).containsExactly("[REDACTED]");
+            }
+          });
+      // 非敏感头透传(用于业务可观测性)
+      boolean traceFound =
+          hdrs.entrySet().stream().anyMatch(e -> e.getKey().equalsIgnoreCase("X-Trace-Id"));
+      assertThat(traceFound).isTrue();
+    }
+
+    @Test
+    void sanitizeHelperRedactsKnownSensitiveHeadersCaseInsensitive() {
+      // 直接驱动静态 helper,避免 HTTP server 编排成本;case-insensitive 全覆盖。
+      Map<String, java.util.List<String>> in = new java.util.LinkedHashMap<>();
+      in.put("Set-Cookie", java.util.List.of("s=1"));
+      in.put("set-cookie2", java.util.List.of("legacy"));
+      in.put("AUTHORIZATION", java.util.List.of("Bearer abc"));
+      in.put("Proxy-Authorization", java.util.List.of("Basic xx"));
+      in.put("cookie", java.util.List.of("a=b"));
+      in.put("X-Trace-Id", java.util.List.of("t1"));
+
+      Map<String, java.util.List<String>> out = HttpTaskExecutor.sanitizeResponseHeaders(in);
+
+      assertThat(out)
+          .containsEntry("Set-Cookie", java.util.List.of("[REDACTED]"))
+          .containsEntry("set-cookie2", java.util.List.of("[REDACTED]"))
+          .containsEntry("AUTHORIZATION", java.util.List.of("[REDACTED]"))
+          .containsEntry("Proxy-Authorization", java.util.List.of("[REDACTED]"))
+          .containsEntry("cookie", java.util.List.of("[REDACTED]"))
+          .containsEntry("X-Trace-Id", java.util.List.of("t1"));
+    }
+
+    @Test
+    void sanitizeHelperHandlesNullAndEmpty() {
+      assertThat(HttpTaskExecutor.sanitizeResponseHeaders(null)).isEmpty();
+      assertThat(HttpTaskExecutor.sanitizeResponseHeaders(Map.of())).isEmpty();
     }
   }
 

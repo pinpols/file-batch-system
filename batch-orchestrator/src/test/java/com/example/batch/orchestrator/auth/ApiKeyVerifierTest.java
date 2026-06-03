@@ -10,8 +10,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.security.ApiKeyHasher;
 import com.example.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
-import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,38 +26,83 @@ class ApiKeyVerifierTest {
   @Mock private ApiKeyAuthMapper mapper;
   @InjectMocks private ApiKeyVerifier verifier;
 
-  // SHA-256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-  private static final String RAW_KEY = "hello";
-  private static final String EXPECTED_HASH =
-      "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+  // 至少 8 字符 (KEY_PREFIX_LEN)
+  private static final String RAW_KEY = "bk_AAAA-secret-token";
+  private static final String PREFIX = RAW_KEY.substring(0, ApiKeyVerifier.KEY_PREFIX_LEN);
+
+  private static ApiKeyRecord legacyRow(long id, String tenant, String scopes, String rawKey) {
+    String hash = ApiKeyHasher.legacySha256Hex(rawKey);
+    return new ApiKeyRecord(id, tenant, "kn", scopes, true, null, hash, null, "sha256");
+  }
+
+  private static ApiKeyRecord pbkdf2Row(long id, String tenant, String scopes, String rawKey) {
+    ApiKeyHasher.SaltedHash sh = ApiKeyHasher.hashWithSaltKdf(rawKey);
+    return new ApiKeyRecord(id, tenant, "kn", scopes, true, null, sh.hash(), sh.salt(), "pbkdf2");
+  }
 
   @Test
-  void verifyHashesAndQueriesWithTenant() {
-    ApiKeyRecord rec = new ApiKeyRecord(1L, "tx", "kn", "*", true, null);
-    when(mapper.findActiveByHashAndTenant(EXPECTED_HASH, "tx")).thenReturn(Optional.of(rec));
+  void verifyMatchesPbkdf2RowByPrefixAndConstantTimeCompare() {
+    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
     Optional<ApiKeyRecord> result = verifier.verify(RAW_KEY, "tx");
 
     assertThat(result).contains(rec);
-    verify(mapper).findActiveByHashAndTenant(EXPECTED_HASH, "tx");
+    verify(mapper).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
+  }
+
+  @Test
+  void verifyMatchesLegacySha256RowAndTriggersUpgrade() {
+    ApiKeyRecord legacy = legacyRow(42L, "tx", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(legacy));
+
+    Optional<ApiKeyRecord> result = verifier.verify(RAW_KEY, "tx");
+
+    assertThat(result).contains(legacy);
+    // 触发了 upgrade(同步在测试里执行,@Async 无 spring proxy)
+    verify(mapper, times(1))
+        .upgradeHashIfLegacy(eq(42L), eq(legacy.keyHash()), anyString(), anyString());
+  }
+
+  @Test
+  void verifyDoesNotUpgradePbkdf2Row() {
+    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
+
+    verifier.verify(RAW_KEY, "tx");
+
+    verify(mapper, never()).upgradeHashIfLegacy(anyLong(), anyString(), anyString(), anyString());
   }
 
   @Test
   void verifyTouchesLastUsedOnHit() {
-    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
-        .thenReturn(Optional.of(new ApiKeyRecord(42L, "tx", "n", "*", true, Instant.MAX)));
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of(pbkdf2Row(7L, "tx", "*", RAW_KEY)));
 
     verifier.verify(RAW_KEY, "tx");
 
-    verify(mapper, times(1)).touchLastUsedAt(eq(42L));
+    verify(mapper, times(1)).touchLastUsedAt(eq(7L));
   }
 
   @Test
-  void verifyReturnsEmptyOnMiss() {
-    when(mapper.findActiveByHashAndTenant(anyString(), anyString())).thenReturn(Optional.empty());
+  void verifyReturnsEmptyOnNoCandidates() {
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of());
 
     assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
     verify(mapper, never()).touchLastUsedAt(anyLong());
+  }
+
+  @Test
+  void verifyReturnsEmptyOnHashMismatchWithCandidate() {
+    // 候选行存在但 hash 是另一 key 的 — 不应放行,也不触发 touch / upgrade
+    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of(rec));
+
+    assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
+    verify(mapper, never()).touchLastUsedAt(anyLong());
+    verify(mapper, never()).upgradeHashIfLegacy(anyLong(), any(), any(), any());
   }
 
   @Test
@@ -64,37 +110,46 @@ class ApiKeyVerifierTest {
     assertThat(verifier.verify(null, "tx")).isEmpty();
     assertThat(verifier.verify("", "tx")).isEmpty();
     assertThat(verifier.verify("  ", "tx")).isEmpty();
-    verify(mapper, never()).findActiveByHashAndTenant(any(), any());
+    verify(mapper, never()).findActiveCandidatesByPrefixAndTenant(any(), any());
   }
 
   @Test
   void verifyRejectsNullOrBlankTenant() {
     assertThat(verifier.verify(RAW_KEY, null)).isEmpty();
     assertThat(verifier.verify(RAW_KEY, "")).isEmpty();
-    verify(mapper, never()).findActiveByHashAndTenant(any(), any());
+    verify(mapper, never()).findActiveCandidatesByPrefixAndTenant(any(), any());
+  }
+
+  @Test
+  void verifyRejectsShortKey() {
+    // 短于 KEY_PREFIX_LEN(8) 直接拒;防 substring 越界
+    assertThat(verifier.verify("abc", "tx")).isEmpty();
+    verify(mapper, never()).findActiveCandidatesByPrefixAndTenant(any(), any());
   }
 
   // ─── ADR-035 scope 校验 ────────────────────────────────────────────────
 
   @Test
   void verifyWithScopeRequiresScope() {
-    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
-        .thenReturn(Optional.of(new ApiKeyRecord(1L, "tx", "k", "read.only", true, null)));
+    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "read.only", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isEmpty();
   }
 
   @Test
   void verifyWithScopeAcceptsWildcard() {
-    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
-        .thenReturn(Optional.of(new ApiKeyRecord(1L, "tx", "k", "*", true, null)));
+    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();
   }
 
   @Test
   void verifyWithScopeAcceptsExplicitScope() {
-    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
-        .thenReturn(
-            Optional.of(new ApiKeyRecord(1L, "tx", "k", "read, worker.execute", true, null)));
+    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "read, worker.execute", RAW_KEY);
+    when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
+        .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();
   }
 
@@ -112,13 +167,7 @@ class ApiKeyVerifierTest {
 
   @Test
   void touchAsyncSwallowsExceptions() {
-    // touch 失败不应让 verify 异常,因为 hit 已写到 Optional 里(touch 是异步副作用)
-    when(mapper.findActiveByHashAndTenant(anyString(), anyString()))
-        .thenReturn(Optional.of(new ApiKeyRecord(7L, "tx", "n", "*", true, null)));
     when(mapper.touchLastUsedAt(anyLong())).thenThrow(new RuntimeException("DB down"));
-
-    // touchAsync 同步调用(@Async 在测试里无 Spring proxy,直接进方法)— 仍应被 catch 不抛
-    verifier.touchAsync(7L);
-    assertThat(verifier.verify(RAW_KEY, "tx")).isPresent(); // 再走一次也不影响
+    verifier.touchAsync(7L); // 不抛
   }
 }

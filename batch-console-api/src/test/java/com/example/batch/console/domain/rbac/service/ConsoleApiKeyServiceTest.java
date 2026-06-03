@@ -90,6 +90,8 @@ class ConsoleApiKeyServiceTest {
             eq("new-key"),
             anyString(),
             anyString(),
+            anyString(),
+            eq("pbkdf2"),
             eq("read"),
             eq(expiresAt),
             eq("admin"));

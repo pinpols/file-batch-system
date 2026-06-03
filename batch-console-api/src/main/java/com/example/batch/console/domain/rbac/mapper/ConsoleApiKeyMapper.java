@@ -22,6 +22,8 @@ public interface ConsoleApiKeyMapper {
       @Param("keyName") String keyName,
       @Param("keyPrefix") String keyPrefix,
       @Param("keyHash") String keyHash,
+      @Param("salt") String salt,
+      @Param("keyHashAlgo") String keyHashAlgo,
       @Param("scopes") String scopes,
       @Param("expiresAt") Instant expiresAt,
       @Param("operator") String operator);
