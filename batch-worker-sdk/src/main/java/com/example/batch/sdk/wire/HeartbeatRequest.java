@@ -28,6 +28,9 @@ public record HeartbeatRequest(
     String hostName,
     String hostIp,
     String processId,
+    // Python SDK PR #320 对齐:heartbeat 也带 buildId(register 时已发),消除 worker_registry
+    // 行被运维误删后兜底降级 register 路径丢字段的窗口。null 由 NON_NULL 序列化策略略过。
+    String buildId,
     Instant heartbeatAt,
     List<String> capabilityTags,
     Integer currentLoad) {}

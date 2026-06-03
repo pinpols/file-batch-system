@@ -128,7 +128,17 @@ public class BatchPlatformClient {
     this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
     this.kafkaConsumerThread.setDaemon(false);
     this.kafkaConsumerThread.start();
-    this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher);
+    // SDK-P5-3 + Python PR #320 对齐:把 register 时的 6 字段身份快照交给 heartbeat 每次带上,
+    // 防止 worker_registry 行被运维误删 / 平台冷启重建索引导致 heartbeat 兜底降级 register 时丢字段。
+    WorkerIdentity identity =
+        new WorkerIdentity(
+            "sdk-self-hosted",
+            WorkerFingerprint.hostName(),
+            WorkerFingerprint.hostIp(),
+            WorkerFingerprint.processId(),
+            List.copyOf(handlers.keySet()),
+            config.getBuildId());
+    this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher, identity);
     this.heartbeatScheduler.start();
     this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
     this.leaseRenewalScheduler.start();
