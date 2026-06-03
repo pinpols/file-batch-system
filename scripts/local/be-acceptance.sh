@@ -192,7 +192,7 @@ should_run() {
 # 保留 reuse 容器(它们就是为了跨 JVM 复用,不要清)。
 cleanup_stale_runs() {
   # 1. 残留 mvn / surefirebooter / forked JVM
-  local mvn_cnt=$(pgrep -f "[m]vn|[s]urefirebooter|[m]vnd" 2>/dev/null | wc -l | tr -d ' ')
+  local mvn_cnt; mvn_cnt=$(pgrep -f "[m]vn|[s]urefirebooter|[m]vnd" 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$mvn_cnt" -gt 0 ]]; then
     note "清掉 $mvn_cnt 个残留 mvn / surefire / mvnd 进程"
     pkill -9 -f "[m]vn|[s]urefirebooter|[m]vnd" 2>/dev/null || true
@@ -208,7 +208,7 @@ cleanup_stale_runs() {
       fi
     done)
     if [[ -n "$orphans" ]]; then
-      local cnt=$(printf '%s\n' "$orphans" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+      local cnt; cnt=$(printf '%s\n' "$orphans" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
       note "清掉 $cnt 个孤儿 testcontainer(保留 reuse 容器)"
       printf '%s\n' "$orphans" | /usr/bin/xargs -r docker rm -f >/dev/null 2>&1 || true
     fi
@@ -223,14 +223,14 @@ cleanup_stale_runs() {
   # 4. target/test-classes 孤儿 Flyway migration:source 已删但 target stale 会让
   #    Flyway 启动期报 "Found more than one migration with version X",E2E/IT 全挂。
   #    收集 source 端所有 V*.sql 文件名作白名单,删 target 里不在白名单的。
-  local src_set=$(mktemp /tmp/src-migrations.XXXXXX)
+  local src_set; src_set=$(mktemp /tmp/src-migrations.XXXXXX)
   trap "rm -f '$src_set'" RETURN
   find . -path "*/db/migration/V*.sql" \
     -not -path "*/target/*" -not -path "*/.claude/*" \
     -exec basename {} \; 2>/dev/null | sort -u > "$src_set"
   local orphan_cnt=0
   while IFS= read -r f; do
-    local base=$(basename "$f")
+    local base; base=$(basename "$f")
     if ! /usr/bin/grep -qxF "$base" "$src_set"; then
       rm -f "$f"
       orphan_cnt=$((orphan_cnt + 1))
@@ -245,9 +245,9 @@ cleanup_stale_runs() {
 step_0_precheck() {
   hdr 0 "$(step_name 0)"
   cleanup_stale_runs
-  local docker_cnt=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "batch-postgres|batch-kafka|batch-redis|batch-minio" | wc -l | tr -d ' ')
+  local docker_cnt; docker_cnt=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "batch-postgres|batch-kafka|batch-redis|batch-minio" | wc -l | tr -d ' ')
   [[ "$docker_cnt" -ge 4 ]] && ok "docker 容器 $docker_cnt 个运行" || ng "docker 容器 $docker_cnt < 4(可能影响 IT/E2E)"
-  local free_gb=$(df -g "$ROOT_DIR" 2>/dev/null | tail -1 | awk '{print $4}')
+  local free_gb; free_gb=$(df -g "$ROOT_DIR" 2>/dev/null | tail -1 | awk '{print $4}')
   [[ -z "$free_gb" ]] && free_gb="?"
   [[ "$free_gb" != "?" && "$free_gb" -ge 3 ]] && ok "磁盘空间 ${free_gb}GB" || ng "磁盘 ${free_gb}GB < 3,可能不够"
   pgrep -fl cloudflared >/dev/null 2>&1 && ok "tunnel 运行中" || note "tunnel 未启动(隧道验证段跳过)"
@@ -275,7 +275,7 @@ step_1_build_restart() {
     ng "mvn package 失败(看 $LOG_DIR/step1-mvn.log)"
     return 1
   fi
-  local jar=$(find batch-console-api/target -name "*-exec.jar" | head -1)
+  local jar; jar=$(find batch-console-api/target -name "*-exec.jar" | head -1)
   if [[ -z "$jar" ]]; then
     ng "exec jar 不存在(看 $LOG_DIR/step1-mvn.log)"
     return 1
@@ -293,31 +293,31 @@ step_1_build_restart() {
   ok "BE UP"
   note "等 3 min 看日志稳态..."
   sleep 180
-  local err=$(grep -E "ERROR|FATAL" logs/app/console.log 2>/dev/null | grep -v "SwallowedExceptionLogger\|catch:" | wc -l | tr -d ' ')
+  local err; err=$(grep -E "ERROR|FATAL" logs/app/console.log 2>/dev/null | grep -v "SwallowedExceptionLogger\|catch:" | wc -l | tr -d ' ')
   [[ "$err" == "0" ]] && ok "3 min 日志 0 ERROR" || ng "$err 条 ERROR(看 logs/app/console.log)"
 }
 
 step_2_unit() {
   hdr 2 "$(step_name 2)"
   bash scripts/local/run-tests.sh --unit --skip-build > "$LOG_DIR/step2-unit.log" 2>&1
-  local p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step2-unit.log" | tail -1)
-  local f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step2-unit.log" | tail -1)
+  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step2-unit.log" | tail -1)
+  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step2-unit.log" | tail -1)
   [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/test-unit-failed.log)"
 }
 
 step_3_it() {
   hdr 3 "$(step_name 3)"
   bash scripts/local/run-tests.sh --it --skip-build > "$LOG_DIR/step3-it.log" 2>&1
-  local p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step3-it.log" | tail -1)
-  local f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step3-it.log" | tail -1)
+  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step3-it.log" | tail -1)
+  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step3-it.log" | tail -1)
   [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/test-integration-failed.log)"
 }
 
 step_4_e2e() {
   hdr 4 "$(step_name 4)"
   bash scripts/local/run-tests.sh --e2e --skip-build > "$LOG_DIR/step4-e2e.log" 2>&1
-  local p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step4-e2e.log" | tail -1)
-  local f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step4-e2e.log" | tail -1)
+  local p; p=$(grep -oE "PASSED: [0-9]+" "$LOG_DIR/step4-e2e.log" | tail -1)
+  local f; f=$(grep -oE "FAILED: [0-9]+" "$LOG_DIR/step4-e2e.log" | tail -1)
   [[ "$f" == "FAILED: 0" ]] && ok "$p / $f" || ng "$p / $f(看 logs/test/test-e2e-failed.log)"
 }
 
@@ -325,17 +325,19 @@ step_5_strict() {
   hdr 5 "$(step_name 5)"
   bash scripts/local/strict-verify.sh > "$LOG_DIR/step5-strict.log" 2>&1
   local rc=$?
-  local last=$(tail -1 "$LOG_DIR/step5-strict.log")
+  local last; last=$(tail -1 "$LOG_DIR/step5-strict.log")
   [[ "$rc" == "0" ]] && ok "$last" || ng "$last(看 $LOG_DIR/step5-strict.log)"
 }
 
 step_6_scan() {
   hdr 6 "$(step_name 6)"
   # 简单扫(只看 .java,避免 docs/CLAUDE.md 引用规则文本误报)
-  local fqn=$(git log --since='3 days ago' -p -- '*.java' 2>/dev/null \
+  local fqn
+  fqn=$(git log --since='3 days ago' -p -- '*.java' 2>/dev/null \
     | grep '^+' | grep -v '^+++' | grep -v "import\|@link\|//\|^\\+ *\\*" \
     | grep -cE 'com\.example\.batch\.[a-z][a-z0-9_]+(\.[a-z][a-z0-9_]+)+\.[A-Z]' || true)
-  local jpa=$(git log --since='3 days ago' -p -- '*.java' 2>/dev/null \
+  local jpa
+  jpa=$(git log --since='3 days ago' -p -- '*.java' 2>/dev/null \
     | grep '^+' | grep -v '^+++' \
     | grep -cE 'import (javax|jakarta)\.persistence|@Entity\b' || true)
   [[ "$jpa" == "0" ]] && ok "JPA / @Entity 引入: 0" || ng "JPA 引入 $jpa 处(看 git log -p)"
@@ -359,7 +361,7 @@ step_7_fe() {
   # 自动探测 cloudflared tunnel URL(从最近 cloudflared 进程 stdout 找 trycloudflare URL),
   # 没起 tunnel 跳过;有则探活
   local tunnel_url=""
-  local cf_pid=$(pgrep -f "cloudflared.*tunnel" | head -1)
+  local cf_pid; cf_pid=$(pgrep -f "cloudflared.*tunnel" | head -1)
   if [[ -n "$cf_pid" ]]; then
     # 找 cloudflared 进程的 stdout log(可能在 /tmp 或用户指定)
     for log_path in /tmp/claude-501/*/tasks/*.output /tmp/cloudflared-*.log /tmp/vite-preview.log; do
@@ -369,7 +371,7 @@ step_7_fe() {
     done
   fi
   if [[ -n "$tunnel_url" ]]; then
-    local tcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$tunnel_url/" 2>/dev/null || echo "000")
+    local tcode; tcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$tunnel_url/" 2>/dev/null || echo "000")
     [[ "$tcode" == "200" ]] && ok "tunnel UP $tunnel_url" || note "tunnel $tunnel_url HTTP=$tcode"
   else
     note "tunnel 未启动(cloudflared 进程不存在,跳过)"
@@ -379,7 +381,7 @@ step_7_fe() {
 
 step_8_summary() {
   hdr 8 "$(step_name 8)"
-  local health=$(curl -s "http://localhost:$CONSOLE_PORT/actuator/health" | python3 -c "import sys,json;print(json.load(sys.stdin).get('status','?'))" 2>/dev/null)
+  local health; health=$(curl -s "http://localhost:$CONSOLE_PORT/actuator/health" | python3 -c "import sys,json;print(json.load(sys.stdin).get('status','?'))" 2>/dev/null)
   [[ "$health" == "UP" ]] && ok "actuator/health: $health" || ng "actuator/health: $health"
   printf "${GREEN}本轮 PASS: %d${RST}  ${RED}FAIL: %d${RST}\n" "$SEQ_PASS" "$SEQ_FAIL"
 }
@@ -396,7 +398,7 @@ step_9_restore_mvnd() {
 
 step_10_backlog() {
   hdr 10 "$(step_name 10)"
-  local f="docs/backlog/be-acceptance-$(date +%Y-%m-%d).md"
+  local f; f="docs/backlog/be-acceptance-$(date +%Y-%m-%d).md"
   if [[ -f "$f" ]]; then
     note "已存在 $f,不覆盖"
     return 0
@@ -441,12 +443,12 @@ EOF
       ng "gh 未认证(gh auth login)"
       return 1
     fi
-    local cmd="gh issue create --title \"BE 验收 backlog $(date +%Y-%m-%d)\" --body-file \"$f\" --label backlog,be-acceptance"
+    local cmd; cmd="gh issue create --title \"BE 验收 backlog $(date +%Y-%m-%d)\" --body-file \"$f\" --label backlog,be-acceptance"
     if (( AUTO_ISSUE == 2 )); then
       ok "gh 已就位(--auto-issue-dry-run,不真执行)"
       note "命令: $cmd"
     else
-      local url=$(eval "$cmd" 2>&1 | tail -1)
+      local url; url=$(eval "$cmd" 2>&1 | tail -1)
       if [[ "$url" == https://* ]]; then
         ok "issue 已创建 → $url"
       else

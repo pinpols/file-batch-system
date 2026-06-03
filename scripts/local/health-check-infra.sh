@@ -122,7 +122,7 @@ check_pg_primary() {
     ng "PG primary" "psql 连接失败:$out"
     return
   fi
-  local pg_ver=$(echo "$out" | awk -F'|' '{print $2}')
+  local pg_ver; pg_ver=$(echo "$out" | awk -F'|' '{print $2}')
   local tbl_count
   tbl_count=$(PGPASSWORD="$PG_PASSWORD" psql -h "$PG_PRIMARY_HOST" -p "$PG_PRIMARY_PORT" \
               -U "$PG_USER" -d "$PG_DB" -tAc "select count(*) from pg_tables where schemaname='batch'" 2>/dev/null)
