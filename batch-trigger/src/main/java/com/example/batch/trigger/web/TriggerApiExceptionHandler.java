@@ -8,7 +8,6 @@ import com.example.batch.common.web.AbstractApiExceptionHandler;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,14 +22,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
 
-  /** 测试 no-arg(standalone MockMvc):不注入 i18n resolver。 */
-  public TriggerApiExceptionHandler() {
-    super();
-  }
-
-  @Autowired
+  /**
+   * Spring 容器路径:单 public 构造器,Spring 4.3+ 自动注入 ObjectProvider。 standalone MockMvc 测试见 {@link
+   * #forTesting()}。
+   */
   public TriggerApiExceptionHandler(ObjectProvider<BizMessageResolver> bizMessageResolverProvider) {
     super(bizMessageResolverProvider);
+  }
+
+  /** standalone MockMvc 测试用:无 i18n resolver。 */
+  public static TriggerApiExceptionHandler forTesting() {
+    return new TriggerApiExceptionHandler(null);
   }
 
   @Override

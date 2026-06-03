@@ -24,7 +24,7 @@ class ApprovalControllerTest {
       mock(ApprovalWorkflowService.class);
   private final MockMvc mockMvc =
       MockMvcBuilders.standaloneSetup(new ApprovalController(approvalWorkflowService))
-          .setControllerAdvice(new OrchestratorApiExceptionHandler())
+          .setControllerAdvice(OrchestratorApiExceptionHandler.forTesting())
           .build();
 
   @Test

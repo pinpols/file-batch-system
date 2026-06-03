@@ -35,7 +35,7 @@ class TaskControllerTest {
 
   private final MockMvc mockMvc =
       MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
-          .setControllerAdvice(new OrchestratorApiExceptionHandler())
+          .setControllerAdvice(OrchestratorApiExceptionHandler.forTesting())
           .build();
 
   @Test

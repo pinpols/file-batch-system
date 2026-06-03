@@ -34,7 +34,7 @@ class LaunchControllerTest {
   private final MockMvc mockMvc =
       MockMvcBuilders.standaloneSetup(
               new LaunchController(launchApplicationService, gracefulShutdown))
-          .setControllerAdvice(new OrchestratorApiExceptionHandler())
+          .setControllerAdvice(OrchestratorApiExceptionHandler.forTesting())
           .build();
 
   @Test

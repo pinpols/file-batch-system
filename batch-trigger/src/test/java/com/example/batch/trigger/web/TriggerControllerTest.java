@@ -32,7 +32,7 @@ class TriggerControllerTest {
   private final MockMvc mockMvc =
       MockMvcBuilders.standaloneSetup(
               new TriggerController(triggerService, triggerGracefulShutdown))
-          .setControllerAdvice(new TriggerApiExceptionHandler())
+          .setControllerAdvice(TriggerApiExceptionHandler.forTesting())
           .setMessageConverters(new JacksonJsonHttpMessageConverter())
           .build();
 

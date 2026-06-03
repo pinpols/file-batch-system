@@ -6,7 +6,6 @@ import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.web.AbstractApiExceptionHandler;
 import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,15 +15,18 @@ import org.springframework.web.server.ResponseStatusException;
 @RestControllerAdvice(basePackageClasses = LaunchController.class)
 public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler {
 
-  /** 测试 no-arg(standalone MockMvc):不注入 i18n resolver。 */
-  public OrchestratorApiExceptionHandler() {
-    super();
-  }
-
-  @Autowired
+  /**
+   * Spring 容器路径:单 public 构造器,Spring 4.3+ 自动注入 ObjectProvider。 standalone MockMvc 测试见 {@link
+   * #forTesting()}。
+   */
   public OrchestratorApiExceptionHandler(
       ObjectProvider<BizMessageResolver> bizMessageResolverProvider) {
     super(bizMessageResolverProvider);
+  }
+
+  /** standalone MockMvc 测试用:无 i18n resolver。 */
+  public static OrchestratorApiExceptionHandler forTesting() {
+    return new OrchestratorApiExceptionHandler(null);
   }
 
   @Override
