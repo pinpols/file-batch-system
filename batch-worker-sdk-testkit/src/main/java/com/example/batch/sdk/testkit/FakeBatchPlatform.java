@@ -121,8 +121,8 @@ public final class FakeBatchPlatform implements AutoCloseable {
         .kafkaBootstrap(kafkaBootstrap)
         .kafkaTopicPattern(DISPATCH_TOPIC_PATTERN)
         .kafkaGroupId("testkit-" + workerCode)
-        .heartbeatInterval(Duration.ofSeconds(2))
-        .leaseRenewInterval(Duration.ofSeconds(2))
+        .heartbeatInterval(Duration.ofSeconds(30))
+        .leaseRenewInterval(Duration.ofSeconds(30))
         .kafkaPollInterval(Duration.ofMillis(100));
   }
 
