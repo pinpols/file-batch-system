@@ -636,3 +636,70 @@ groups:
           summary: "Workflow stuck before finalized"
           description: "近 1h 有 workflow 节点全跑完但 workflow_run 未 finalized。看 orchestrator finalize 调度 + retry。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#workflow-stuck-finalized"
+
+  - name: batch.mainline-ext
+    rules:
+      - alert: TimeoutEnforcerFailed
+        # timeout enforcer 自身出错 → 超时任务可能不再被强杀
+        expr: rate(batch_timeout_enforcer_failed_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Timeout enforcer failing"
+          description: "timeout enforcer 错误率 > 0.01/s 持续 5m,超时任务可能逃逸强杀。看 orchestrator 日志 + 数据库锁。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#timeout-enforcer-failed"
+
+      - alert: DispatchChannelProbeFailing
+        # 派发通道探活失败 → 下游不可达,任务即将堆积
+        expr: rate(batch_dispatch_channel_probe_failures[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Dispatch channel probe failing"
+          description: "dispatch channel 探活失败 > 0.1/s 持续 5m。检查下游 worker / kafka 通道可达性。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#dispatch-channel-probe-failing"
+
+      - alert: WorkerLeaseCircuitOpen
+        # worker lease 熔断器跳闸 → 该 worker 实际已脱管,任务会被回收
+        expr: rate(batch_worker_lease_circuit_open_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Worker lease circuit open"
+          description: "worker lease 熔断打开 > 0.01/s 持续 5m,该 worker 即将被踢出。看 worker_id 维度 + 心跳通道。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-lease-circuit-open"
+
+      - alert: ProcessStagingOldestAgeHigh
+        # process 模块 staging 区最老文件超过 1h → 孤儿文件没被消费
+        expr: max(batch_worker_process_staging_oldest_age_seconds) > 3600
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Process staging oldest age > 1h"
+          description: "process worker staging 区最老文件存在 > 1h,通常是 stage 转换失败遗留孤儿。看 worker_id + 文件清单。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#process-staging-oldest-age-high"
+
+      - alert: ReplicaReplayLagHigh
+        # console 读副本回放延迟 > 5s,读写分离会读到陈旧数据
+        expr: max(batch_console_replica_replay_lag_seconds) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-ext
+        annotations:
+          summary: "Console replica replay lag > 5s"
+          description: "console-api 读副本回放延迟持续 > 5s,UI 会看到陈旧状态。检查 PG replication 与 replay 进程。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#replica-replay-lag-high"

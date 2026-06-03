@@ -202,6 +202,224 @@
           "legendFormat": "{{entity}}/{{from_status}}"
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Workflow stuck finalized increase (1h)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 64 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id) (increase(batch_workflow_stuck_finalized_total[1h]))",
+          "legendFormat": "{{tenant_id}} 1h"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Workflow DAG ready_check duration P50 / P99",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 64 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(batch_workflow_dag_ready_check_duration_bucket[5m])))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(batch_workflow_dag_ready_check_duration_bucket[5m])))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Timeout enforcer failed rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 72 },
+      "targets": [
+        {
+          "expr": "sum (rate(batch_timeout_enforcer_failed_total[5m]))",
+          "legendFormat": "failed/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Task timeout cancel rate by tenant",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 72 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id) (rate(batch_task_timeout_cancel_total[5m]))",
+          "legendFormat": "{{tenant_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Dispatch channel probe success / failure",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 80 },
+      "targets": [
+        {
+          "expr": "sum (rate(batch_dispatch_channel_probe_successes[5m]))",
+          "legendFormat": "success/s"
+        },
+        {
+          "expr": "sum (rate(batch_dispatch_channel_probe_failures[5m]))",
+          "legendFormat": "failure/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Dispatch receipt poll success / failure",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 80 },
+      "targets": [
+        {
+          "expr": "sum (rate(batch_dispatch_receipt_poll_successes[5m]))",
+          "legendFormat": "success/s"
+        },
+        {
+          "expr": "sum (rate(batch_dispatch_receipt_poll_failures[5m]))",
+          "legendFormat": "failure/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker lease renew batch size P50 / P99",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 88 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(batch_worker_lease_renew_batch_size_bucket[5m])))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(batch_worker_lease_renew_batch_size_bucket[5m])))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker lease consecutive failures",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 88 },
+      "targets": [
+        {
+          "expr": "max by (worker_id) (batch_worker_lease_consecutive_failures)",
+          "legendFormat": "{{worker_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker lease circuit open increase (1h)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 88 },
+      "targets": [
+        {
+          "expr": "sum by (worker_id) (increase(batch_worker_lease_circuit_open_total[1h]))",
+          "legendFormat": "{{worker_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker drain duration P99 by outcome",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 96 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (outcome, le) (rate(batch_worker_drain_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker drain outcome rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 96 },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(batch_worker_drain_outcome_total[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker semaphore available by worker",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 104 },
+      "targets": [
+        {
+          "expr": "min by (worker_id) (batch_worker_semaphore_available)",
+          "legendFormat": "{{worker_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker process staging oldest age (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 104 },
+      "targets": [
+        {
+          "expr": "max by (worker_id) (batch_worker_process_staging_oldest_age_seconds)",
+          "legendFormat": "{{worker_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Trigger launch deduped increase (1h)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 112 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id) (increase(batch_trigger_launch_deduped_total[1h]))",
+          "legendFormat": "{{tenant_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Trigger launch reconciled / skipped rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 112 },
+      "targets": [
+        {
+          "expr": "sum (rate(batch_trigger_launch_reconciled_total[5m]))",
+          "legendFormat": "reconciled/s"
+        },
+        {
+          "expr": "sum (rate(batch_trigger_launch_reconciled_skipped_total[5m]))",
+          "legendFormat": "skipped/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Console session cache hit ratio",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 120 },
+      "targets": [
+        {
+          "expr": "sum(rate(batch_console_session_cache_hit_count[5m])) / clamp_min(sum(rate(batch_console_session_cache_hit_count[5m])) + sum(rate(batch_console_session_cache_miss_count[5m])), 0.001)",
+          "legendFormat": "hit ratio"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Console replica replay lag (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 120 },
+      "targets": [
+        {
+          "expr": "max (batch_console_replica_replay_lag_seconds)",
+          "legendFormat": "lag s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Job SLA escalation rate by level",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 128 },
+      "targets": [
+        {
+          "expr": "sum by (tenant_id, level) (rate(batch_job_sla_escalation_count[5m]))",
+          "legendFormat": "{{tenant_id}}/{{level}}"
+        }
+      ]
     }
   ]
 }
