@@ -43,7 +43,7 @@ public class ReservedPrefixGuard {
    * scripts/db/wipe-non-system-tenants.sql `:keep` 同步)。
    */
   public static final List<String> DEV_FIXTURE_TENANT_IDS =
-      List.of("ta", "tb", "tc", "default-tenant");
+      List.of("ta", "tb", "tc", "tx", "default-tenant");
 
   /** 资源 code 保留前缀 — 防止业务方误用系统级标识。 */
   public static final List<String> RESERVED_CODE_PREFIXES = List.of("SYSTEM_", "INTERNAL_", "_");

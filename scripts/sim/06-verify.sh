@@ -28,6 +28,54 @@ ok()  { printf "  ${GREEN}✓${RST} %-32s %s\n" "$1" "$2"; }
 ng()  { printf "  ${RED}✗${RST} %-32s %s\n" "$1" "$2"; }
 note(){ printf "  ${YELLOW}·${RST} %-32s %s\n" "$1" "$2"; }
 
+# =========================================================
+# PREREQ:报告 0 文件的常见根因(2026-06-03)
+#   1) 03-import-tenants.sh 没跑 → job_definition 缺 EXPORT,launch fail 但 05 不
+#      区分 launch ack 与 后续 worker 执行结果。
+#   2) worker-export 进程没起来(只在仓库本地 Maven 跑,不进 docker compose) →
+#      job_instance.step 永远停在 READY,job 60~120 分钟后超时 FAILED。
+#   3) ROUNDS / sleep 不够,worker 还在 RUNNING。
+# 命中即 echo 引导,不阻断后续打印(继续跑帮助现场观察)。
+# =========================================================
+hdr "PREREQ(若 EXPORT/DISPATCH 报 0 文件先看这里)"
+
+# (a) EXPORT job_definition 是否齐(说明 03-import-tenants.sh 已跑)
+export_defs=$(psql_q batch_platform \
+  "select count(*) from batch.job_definition where job_code in
+   ('TA_EXPORT_REPORT','TB_EXPORT_STATEMENT','TC_EXPORT_RISK_ALERT')" | tr -dc '0-9')
+export_defs="${export_defs:-0}"
+if [[ "$export_defs" -ge 3 ]]; then
+  ok "EXPORT job_definition" "$export_defs / 3"
+else
+  ng "EXPORT job_definition" "$export_defs / 3,请先跑 bash scripts/sim/03-import-tenants.sh"
+fi
+
+# (b) worker-export 进程是否在听 18084 / 容器是否在
+worker_ok=0
+if lsof -i :18084 -sTCP:LISTEN >/dev/null 2>&1; then
+  ok "worker-export :18084" "LISTEN(本地 mvn 进程)"
+  worker_ok=1
+elif docker ps --format '{{.Names}}' | grep -q '^batch-worker-export$'; then
+  ok "worker-export 容器" "running"
+  worker_ok=1
+else
+  ng "worker-export" "未运行,EXPORT step 会停在 READY → 60+min 后 FAILED;请启动 worker-export"
+fi
+
+# (c) 近 10min FAILED 且 step 全停在 READY = 典型无 worker 现场
+ready_fail=$(psql_q batch_platform "select count(*) from batch.job_instance i
+  where i.job_code like '%EXPORT%' and i.instance_status='FAILED'
+    and i.created_at > now() - interval '2 hour'
+    and not exists (select 1 from batch.job_step_instance s
+      where s.job_instance_id=i.id and s.step_status not in ('READY'))" | tr -dc '0-9')
+ready_fail="${ready_fail:-0}"
+if [[ "$ready_fail" -gt 0 ]]; then
+  ng "EXPORT FAILED + step READY" "$ready_fail 个 — 强烈指示 worker-export 当时未运行"
+fi
+
+# (d) 触发后等待:60s 偏短,EXPORT(查询 → 写文件 → upload)在 macOS 上 90~120s 才稳
+note "sleep 提示" "触发 05 后建议 sleep 120(EXPORT 写 MinIO,60s 偏紧)"
+
 hdr "IMPORT 产物(biz.* 表行数)"
 for entry in "ta:customer_account" "tb:transaction" "tc:risk_score"; do
   tenant="${entry%%:*}"; table="${entry##*:}"
