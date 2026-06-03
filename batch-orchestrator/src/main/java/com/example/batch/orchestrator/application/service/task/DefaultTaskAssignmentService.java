@@ -32,6 +32,10 @@ import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +76,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   private final JobDefinitionMapper jobDefinitionMapper;
   private final PartitionLeaseProperties partitionLeaseProperties;
   private final ResourceSchedulerProperties resourceSchedulerProperties;
+  private final MeterRegistry meterRegistry;
 
   @Override
   @Transactional
@@ -253,7 +258,38 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_running_conflict");
     }
+    recordLaunchToRunning(current, startedAt);
     return jobTaskMapper.selectById(tenantId, taskId);
+  }
+
+  /**
+   * F P1：task NEW→RUNNING 启动延迟(派单到 worker 起跑的等待时长)。
+   *
+   * <p>语义:task 行 {@code created_at} 是 orchestrator 派单落库时刻;入参 {@code startedAt} 是 worker CLAIM
+   * 后实际起跑时刻。差值 = 调度队列等待 + worker 拉取 + CLAIM 往返。SLA 关键路径。
+   *
+   * <p>tag 受控:tenant_id + task_type(均低基数);**不**带 task_id / job_instance_id(高基数会爆 cardinality)。
+   * createdAt 为 null(历史脏数据)直接跳过,不污染样本。
+   */
+  private void recordLaunchToRunning(JobTaskEntity task, Instant startedAt) {
+    if (task.getCreatedAt() == null || startedAt == null) {
+      return;
+    }
+    Duration wait = Duration.between(task.getCreatedAt(), startedAt);
+    if (wait.isNegative()) {
+      return;
+    }
+    Timer.builder("batch.task.launch_to_running.duration")
+        .description("Task NEW→RUNNING wait time (orchestrator dispatch → worker start)")
+        .tags(
+            Tags.of(
+                "tenant_id",
+                task.getTenantId() == null ? "unknown" : task.getTenantId(),
+                "task_type",
+                task.getTaskType() == null ? "unknown" : task.getTaskType()))
+        .publishPercentileHistogram()
+        .register(meterRegistry)
+        .record(wait);
   }
 
   @Override

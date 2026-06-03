@@ -16,7 +16,9 @@ import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -69,6 +71,14 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   /** GIVE_UP 终态告警计数器 — 转入 GIVE_UP 即 +1,运维侧通过 Prometheus alert 拉起。 */
   private Counter giveUpCounter;
 
+  /**
+   * F P1:DB select 耗时(只测 selectPending 的 DB 部分)。
+   *
+   * <p>与现有 {@code batch.outbox.publish.duration}(@Timed,poll+send 合体)区分:当告警显示 publish.duration P95
+   * 上升时,看 poll.duration 即可定位是 DB 慢(索引/连接池/锁)还是 Kafka 慢(broker/网络)。
+   */
+  private Timer pollTimer;
+
   @PostConstruct
   void initMetrics() {
     giveUpCounter =
@@ -77,6 +87,13 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
             .description(
                 "Outbox events transitioned to GIVE_UP terminal state — should be 0 in steady"
                     + " state; non-zero rate triggers ops alert.")
+            .register(meterRegistry);
+    pollTimer =
+        Timer.builder("batch.outbox.poll.duration")
+            .description(
+                "Outbox DB selectPending latency — isolated from Kafka send to diagnose slow"
+                    + " queries vs slow brokers when publish.duration spikes.")
+            .publishPercentileHistogram()
             .register(meterRegistry);
   }
 
@@ -104,7 +121,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
             .shardTotal(plan == null ? 1 : plan.getShardTotal())
             .shardIndex(plan == null ? 0 : plan.getShardIndex())
             .build();
+    long pollStartNanos = System.nanoTime();
     List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
+    pollTimer.record(Duration.ofNanos(System.nanoTime() - pollStartNanos));
     // ── 阶段一：批量 markPublishing + 并行触发 Kafka 发送 ──────────────────────
     record InFlight(OutboxEventEntity event, CompletableFuture<Boolean> future) {}
     List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
