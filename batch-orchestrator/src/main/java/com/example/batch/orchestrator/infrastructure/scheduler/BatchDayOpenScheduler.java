@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.AuditLogConstants;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -76,8 +77,18 @@ public class BatchDayOpenScheduler {
     }
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     for (BusinessCalendarEntity calendar : calendars) {
-      // 每个 calendar 一笔 short tx：insert batch_day_instance + 审计日志同事务原子。
-      tx.executeWithoutResult(status -> openOne(calendar, now));
+      if (calendar == null || !Texts.hasText(calendar.tenantId())) {
+        // openOne 内部也校验,这里先过滤一道,避免空 tenant 触发 holder NPE 路径。
+        continue;
+      }
+      // RLS Phase B：openOne 的所有 mapper（batch_day_instance / calendar_dependency /
+      // disaster_day_override / job_execution_log）都依赖租户上下文；绑定要包住整个 tx，让 short tx
+      // 的所有写入都看到 app.tenant_id。
+      RlsTenantContextHolder.runWithTenant(
+          calendar.tenantId(),
+          () ->
+              // 每个 calendar 一笔 short tx：insert batch_day_instance + 审计日志同事务原子。
+              tx.executeWithoutResult(status -> openOne(calendar, now)));
     }
   }
 

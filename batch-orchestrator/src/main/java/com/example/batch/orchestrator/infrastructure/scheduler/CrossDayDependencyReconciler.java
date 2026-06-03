@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.governance.AlertEventService;
@@ -89,10 +90,23 @@ public class CrossDayDependencyReconciler {
   }
 
   void reconcileOne(WorkflowNodeRunEntity nodeRun, Instant now) {
+    // workflow_node_run 实体本身没 tenantId 字段；用 RLS-bypass 的 selectByIdAnyTenant 先解出 tenant，
+    // 之后所有 mapper / dispatchNode / alertEventService 调用都在 runWithTenant 内做，保证 RLS Phase B 通过。
     WorkflowRunEntity workflowRun = loadWorkflowRun(nodeRun.getWorkflowRunId());
     if (workflowRun == null || workflowRun.getRelatedJobInstanceId() == null) {
       return;
     }
+    String tenantId = workflowRun.getTenantId();
+    if (tenantId == null || tenantId.isBlank()) {
+      return;
+    }
+    RlsTenantContextHolder.runWithTenant(
+        tenantId, () -> reconcileOneBound(nodeRun, workflowRun, now));
+  }
+
+  /** 已绑定 RLS 后的真实 reconcile 主体。所有 mapper 调用都依赖此处的 holder。 */
+  private void reconcileOneBound(
+      WorkflowNodeRunEntity nodeRun, WorkflowRunEntity workflowRun, Instant now) {
     JobInstanceEntity jobInstance =
         jobMappers.jobInstanceMapper.selectById(
             workflowRun.getTenantId(), workflowRun.getRelatedJobInstanceId());

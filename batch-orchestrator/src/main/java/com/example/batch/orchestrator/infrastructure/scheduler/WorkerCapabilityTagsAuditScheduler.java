@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -76,14 +77,36 @@ public class WorkerCapabilityTagsAuditScheduler {
     int confirmed = 0;
     int logged = 0;
     for (InvalidCapabilityTagsParam row : rows) {
-      if (!looksValidStringArray(row.getRawValue())) {
+      String tenantId = row == null ? null : row.getTenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        // 没 tenantId 直接判脏（原 looksValidStringArray 逻辑保留）。
+        if (!looksValidStringArray(row == null ? null : row.getRawValue())) {
+          confirmed++;
+        }
+        continue;
+      }
+      // RLS Phase B：审计 loop 当前只跑 JSON 解析、未触 DB，但按统一规范仍以 worker 所属 tenant 绑定，
+      // 让未来扩展（例如把脏行 mark 到 worker_registry.audit_invalid）天然落到正确 RLS 上下文。
+      final int loggedSnapshot = logged;
+      boolean invalid =
+          RlsTenantContextHolder.runWithTenant(
+              tenantId,
+              () -> {
+                if (!looksValidStringArray(row.getRawValue())) {
+                  if (loggedSnapshot < logSampleLimit) {
+                    log.warn(
+                        "invalid capability_tags detected: tenant={} workerCode={} raw={}",
+                        row.getTenantId(),
+                        row.getWorkerCode(),
+                        row.getRawValue());
+                  }
+                  return true;
+                }
+                return false;
+              });
+      if (invalid) {
         confirmed++;
         if (logged < logSampleLimit) {
-          log.warn(
-              "invalid capability_tags detected: tenant={} workerCode={} raw={}",
-              row.getTenantId(),
-              row.getWorkerCode(),
-              row.getRawValue());
           logged++;
         }
       }

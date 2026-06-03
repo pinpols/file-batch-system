@@ -5,6 +5,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
@@ -85,8 +86,15 @@ public class BatchDaySettleScheduler {
       if (candidate == null || candidate.id() == null || Boolean.TRUE.equals(candidate.frozen())) {
         continue;
       }
+      String tenantId = candidate.tenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
       try {
-        self.settleOne(candidate, now);
+        // RLS Phase B：settleOne → claimSettling / finalizeSettling 均是 REQUIRES_NEW；holder 必须在
+        // 代理调用前绑好，否则事务起点拿不到 app.tenant_id，下游 mapper 在严格策略下静默失败。
+        // try/catch 必须包在 runWithTenant 外，保证 finally 清 ThreadLocal。
+        RlsTenantContextHolder.runWithTenant(tenantId, () -> self.settleOne(candidate, now));
       } catch (OptimisticLockingFailureException conflict) {
         // @Version CAS 冲突：其他路径（reopen / 并发 settle）先写了，本轮跳过，下 tick 重扫。
         log.info(
