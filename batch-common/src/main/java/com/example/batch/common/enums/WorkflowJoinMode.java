@@ -1,5 +1,6 @@
 package com.example.batch.common.enums;
 
+import com.example.batch.common.exception.BizException;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -22,7 +23,8 @@ public enum WorkflowJoinMode implements DictEnum {
     }
     WorkflowJoinMode match = DictEnum.fromCode(WorkflowJoinMode.class, code);
     if (match == null) {
-      throw new IllegalArgumentException("Unknown WorkflowJoinMode code: '" + code + "'");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.enum.unknown_workflow_join_mode_code", code);
     }
     return match;
   }

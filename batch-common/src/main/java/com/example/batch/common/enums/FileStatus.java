@@ -1,5 +1,6 @@
 package com.example.batch.common.enums;
 
+import com.example.batch.common.exception.BizException;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -30,7 +31,8 @@ public enum FileStatus implements DictEnum {
     }
     FileStatus match = DictEnum.fromCode(FileStatus.class, code);
     if (match == null) {
-      throw new IllegalArgumentException("Unknown FileStatus code: '" + code + "'");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.enum.unknown_file_status_code", code);
     }
     return match;
   }
