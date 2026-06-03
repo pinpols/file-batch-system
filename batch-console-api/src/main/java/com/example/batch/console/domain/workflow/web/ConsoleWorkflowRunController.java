@@ -23,7 +23,11 @@ public class ConsoleWorkflowRunController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/{id}/cancel")
-  @AuditAction(action = "workflowRun.cancel", aggregateType = "workflow_run", aggregateId = "#id")
+  @AuditAction(
+      action = "workflowRun.cancel",
+      aggregateType = "workflow_run",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> cancel(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -34,7 +38,8 @@ public class ConsoleWorkflowRunController {
   @AuditAction(
       action = "workflowRun.terminate",
       aggregateType = "workflow_run",
-      aggregateId = "#id")
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> terminate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
@@ -42,7 +47,11 @@ public class ConsoleWorkflowRunController {
   }
 
   @PostMapping("/{id}/skip-node")
-  @AuditAction(action = "workflowRun.skipNode", aggregateType = "workflow_run", aggregateId = "#id")
+  @AuditAction(
+      action = "workflowRun.skipNode",
+      aggregateType = "workflow_run",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> skipNode(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,

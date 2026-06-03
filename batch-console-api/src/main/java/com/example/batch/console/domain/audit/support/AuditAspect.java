@@ -90,20 +90,24 @@ public class AuditAspect {
     if (ann == null) return pjp.proceed();
 
     String aggregateId = resolveAggregateId(ann, method, pjp.getArgs());
+    // P0(2026-06-03 audit-tenant):ROLE_ADMIN 跨租操作 principal.tenantId() 为 null,
+    // 之前默认兜底到 "system",导致审计行 tenant_id="system" 而非目标租户,取证查询漏。
+    // 在调用 record 前先按 targetTenantParam 解析目标租户,作为最高优先级覆盖。
+    String targetTenantId = resolveTargetTenant(ann, method, pjp.getArgs());
     // 敏感操作(login / API Key create)显式 recordParams=false 跳过 params 落库,
     // 避免 password / 加密载荷 / 明文密钥泄露到审计表
     String paramsJson = ann.recordParams() ? serializeParams(method, pjp.getArgs()) : null;
 
     try {
       Object result = pjp.proceed();
-      record(ann, aggregateId, paramsJson, null, null);
+      record(ann, aggregateId, targetTenantId, paramsJson, null, null);
       return result;
     } catch (Throwable ex) {
       // 业务事务回滚会带走同事务 audit。用 REQUIRES_NEW 新事务写 FAILED 留痕,保证合规取证可见。
       // 写失败本身只 warn,不影响业务 exception 继续抛出。
       String errorCode = resolveErrorCode(ex);
       String errorMsg = ex.getMessage();
-      recordInNewTransaction(ann, aggregateId, paramsJson, errorCode, errorMsg);
+      recordInNewTransaction(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg);
       throw ex;
     }
   }
@@ -113,10 +117,15 @@ public class AuditAspect {
    * rethrow,审计写不写都不影响业务路径。
    */
   private void recordInNewTransaction(
-      AuditAction ann, String aggregateId, String paramsJson, String errorCode, String errorMsg) {
+      AuditAction ann,
+      String aggregateId,
+      String targetTenantId,
+      String paramsJson,
+      String errorCode,
+      String errorMsg) {
     try {
       requiresNewTemplate.executeWithoutResult(
-          status -> record(ann, aggregateId, paramsJson, errorCode, errorMsg));
+          status -> record(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg));
     } catch (Exception writeFail) {
       log.warn(
           "[audit] FAILED audit write also failed action={} aggregateId={}",
@@ -136,9 +145,14 @@ public class AuditAspect {
   }
 
   private void record(
-      AuditAction ann, String aggregateId, String paramsJson, String errorCode, String errorMsg) {
+      AuditAction ann,
+      String aggregateId,
+      String targetTenantId,
+      String paramsJson,
+      String errorCode,
+      String errorMsg) {
     try {
-      OperatorInfo op = currentOperator();
+      OperatorInfo op = currentOperator(targetTenantId);
       RequestInfo req = currentRequest();
       // canonical record 构造器(豁免参数数量约束),按 DB 列顺序传 16 个字段。
       // 一致性 SUCCESS / FAILED 由 errorCode 是否为 null 决定。
@@ -244,22 +258,36 @@ public class AuditAspect {
   }
 
   /**
-   * console_operation_audit.tenant_id NOT NULL。auth.login/auth.logout 等系统级动作 principal.tenantId() 为
-   * null(ROLE_ADMIN 无具体租户),此时 fallback 到 MDC tenant → "system" 兜底,避免审计行被 DB 约束拒绝丢失。
+   * console_operation_audit.tenant_id NOT NULL。
+   *
+   * <p>解析链(从高到低):
+   *
+   * <ol>
+   *   <li>{@code targetTenantId} —— {@link AuditAction#targetTenantParam()} 显式声明的目标租户,适用于 ROLE_ADMIN
+   *       跨租操作(如 {@code ConsoleTenantController.update(tenantId, ...)}),保证审计行 tenant_id 是被改的租户而非
+   *       "system"
+   *   <li>{@code principal.tenantId()} —— 普通租户用户的会话租户
+   *   <li>MDC tenant —— 异步上下文 / TenantGuard 注入的兜底
+   *   <li>{@code "system"} 字面值兜底 —— 真正无租路径(login/logout/系统级 healthcheck),避免 NOT NULL 约束拒绝丢失审计行
+   * </ol>
    */
-  private OperatorInfo currentOperator() {
+  private OperatorInfo currentOperator(String targetTenantId) {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !(auth.getPrincipal() instanceof ConsolePrincipal p)) {
-      return new OperatorInfo(null, null, resolveTenantFallback(null));
+      return new OperatorInfo(null, null, resolveTenantFallback(targetTenantId, null));
     }
     String role =
         p.authorities() == null || p.authorities().isEmpty()
             ? null
             : p.authorities().iterator().next();
-    return new OperatorInfo(p.username(), role, resolveTenantFallback(p.tenantId()));
+    return new OperatorInfo(
+        p.username(), role, resolveTenantFallback(targetTenantId, p.tenantId()));
   }
 
-  private static String resolveTenantFallback(String principalTenantId) {
+  private static String resolveTenantFallback(String targetTenantId, String principalTenantId) {
+    if (targetTenantId != null && !targetTenantId.isBlank()) {
+      return targetTenantId;
+    }
     if (principalTenantId != null && !principalTenantId.isBlank()) {
       return principalTenantId;
     }
@@ -268,6 +296,51 @@ public class AuditAspect {
       return mdcTenant;
     }
     return "system";
+  }
+
+  /**
+   * 按 {@link AuditAction#targetTenantParam()} 求值得到目标租户 ID。支持两种写法:
+   *
+   * <ul>
+   *   <li>SpEL 表达式(以 {@code #} 开头):{@code "#tenantId"} / {@code "#request.tenantId"}
+   *   <li>纯参数名(无 {@code #}):{@code "tenantId"} —— 直接按参数名取入参值
+   * </ul>
+   *
+   * <p>留空 / 求值失败 / 求值为 null → 返回 null(由 {@link #resolveTenantFallback} 继续往下找 principal/MDC/system)。
+   * 失败只 warn 不抛,绝不拖垮业务路径。
+   */
+  private String resolveTargetTenant(AuditAction ann, Method method, Object[] args) {
+    String expr = ann.targetTenantParam();
+    if (expr == null || expr.isEmpty()) return null;
+    try {
+      String[] names = paramNameDiscoverer.getParameterNames(method);
+      if (expr.startsWith("#")) {
+        SimpleEvaluationContext ctx =
+            SimpleEvaluationContext.forPropertyAccessors(
+                    DataBindingPropertyAccessor.forReadOnlyAccess())
+                .withInstanceMethods()
+                .build();
+        if (names != null) {
+          for (int i = 0; i < names.length && i < args.length; i++) {
+            ctx.setVariable(names[i], args[i]);
+          }
+        }
+        Object v = spel.parseExpression(expr).getValue(ctx);
+        return v == null ? null : String.valueOf(v);
+      }
+      // 纯参数名形式:按名匹配方法参数
+      if (names != null) {
+        for (int i = 0; i < names.length && i < args.length; i++) {
+          if (expr.equals(names[i])) {
+            return args[i] == null ? null : String.valueOf(args[i]);
+          }
+        }
+      }
+      return null;
+    } catch (Exception ex) {
+      log.warn("[audit] targetTenantParam '{}' eval failed: {}", expr, ex.getMessage());
+      return null;
+    }
   }
 
   private RequestInfo currentRequest() {

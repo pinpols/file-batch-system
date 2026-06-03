@@ -54,7 +54,11 @@ public class ConsoleApiKeyController {
   /** 创建 API Key，返回明文密钥（仅此一次可见）。双击/重试可能创建多把密钥 → 强制幂等。 */
   @PostMapping
   @Idempotent
-  @AuditAction(action = "apiKey.create", aggregateType = "api_key", recordParams = false)
+  @AuditAction(
+      action = "apiKey.create",
+      aggregateType = "api_key",
+      recordParams = false,
+      targetTenantParam = "#tenantId")
   public CommonResponse<Map<String, Object>> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateApiKeyRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
@@ -73,7 +77,11 @@ public class ConsoleApiKeyController {
   /** 吊销 API Key。 */
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  @AuditAction(action = "apiKey.revoke", aggregateType = "api_key", aggregateId = "#id")
+  @AuditAction(
+      action = "apiKey.revoke",
+      aggregateType = "api_key",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Void> revoke(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
     String operator = requestMetadataResolver.current().operatorId();

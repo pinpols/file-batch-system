@@ -53,7 +53,10 @@ public class ConsolePipelineDefinitionController {
   }
 
   @PostMapping
-  @AuditAction(action = "pipelineDefinition.create", aggregateType = "pipeline_definition")
+  @AuditAction(
+      action = "pipelineDefinition.create",
+      aggregateType = "pipeline_definition",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<PipelineDefinitionDetailResponse> create(
       @Valid @RequestBody PipelineDefinitionSaveRequest request) {
     return responseFactory.success(pipelineDefinitionApplicationService.create(request));
@@ -63,7 +66,8 @@ public class ConsolePipelineDefinitionController {
   @AuditAction(
       action = "pipelineDefinition.update",
       aggregateType = "pipeline_definition",
-      aggregateId = "#id")
+      aggregateId = "#id",
+      targetTenantParam = "#request.tenantId")
   public CommonResponse<PipelineDefinitionDetailResponse> update(
       @PathVariable Long id, @Valid @RequestBody PipelineDefinitionSaveRequest request) {
     return responseFactory.success(pipelineDefinitionApplicationService.update(id, request));
@@ -73,7 +77,8 @@ public class ConsolePipelineDefinitionController {
   @AuditAction(
       action = "pipelineDefinition.toggle",
       aggregateType = "pipeline_definition",
-      aggregateId = "#id")
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   public CommonResponse<Void> toggle(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,
