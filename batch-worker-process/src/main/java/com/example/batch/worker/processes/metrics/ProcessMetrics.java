@@ -48,7 +48,10 @@ public class ProcessMetrics {
   // stage + success 都是 低基数,组合 < 12 种
   private final ConcurrentMap<String, Timer> stageTimerByKey = new ConcurrentHashMap<>();
 
-  // 单 public 构造器,Spring 4.3+ 自动注入,无需 @Autowired(CLAUDE.md §Java #3)。
+  // 显式 @Autowired:类内有 2 个构造器(public + private),Spring 4.3+ "exactly
+  // one constructor" 自动推断不成立,必须显式标主装配 ctor;CLAUDE.md §Java #3 豁免
+  // 构造器上的 @Autowired(只禁 field/setter)。
+  @org.springframework.beans.factory.annotation.Autowired
   public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.registry = meterRegistryProvider.getIfAvailable();
   }

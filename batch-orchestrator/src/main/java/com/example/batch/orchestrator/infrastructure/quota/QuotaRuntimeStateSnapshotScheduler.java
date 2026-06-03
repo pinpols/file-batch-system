@@ -74,8 +74,7 @@ public class QuotaRuntimeStateSnapshotScheduler {
         // RLS Phase B 起 biz.* 表强制 app.tenant_id IS NOT NULL；per-tenant 循环必须绑租户上下文，
         // 否则 mapper SELECT/UPDATE/INSERT 在严格策略下静默 0 行。try/catch 必须包在 runWithTenant 外，
         // 保证 finally 清 ThreadLocal。
-        int delta =
-            RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotTenant(tenantId));
+        int delta = RlsTenantContextHolder.runWithTenant(tenantId, () -> snapshotTenant(tenantId));
         snapshotted += delta;
       } catch (DataAccessException ex) {
         // 单个租户失败不影响其他租户：下一轮自然重试
