@@ -44,3 +44,24 @@
 | [`../architecture/`](../architecture/README.md) | 架构现状（"是什么"，不含"该改什么"） |
 | [`../runbook/incident-response.md`](../runbook/incident-response.md) | 应急响应（"出问题怎么办"） |
 | [`../archive/analysis/`](../archive/analysis/) | 历史快照 / 一次性 audit / 已 fold 的决策档 |
+| [`../review/`](../review/) | PR / 模块级**代码深度审查**(reviewer 视角,非架构演进) |
+
+## 即时审计 / 日期快照(每次 deep-scan 或 SDK round 落地)
+
+下列文件按日期命名,记录某一时点的专项扫描结果。**主干文档(`deep-issue-analysis.md` / `fix-report.md` / `hardening-backlog.md`)**才是滚动权威;以下文件是**快照证据**,落地完成后视情况移 `archive/analysis/`。
+
+| 文件 | 类型 | 一句话 |
+|---|---|---|
+| `2026-06-03-deep-scan-summary.md` | scan 总览 | 11-lane 深扫总入口 |
+| `2026-06-03-deep-scan-be-architecture.md` | BE 架构 lane | 模块边界 / 抽象层 / 接口契约扫 |
+| `2026-06-03-deep-scan-be-resources-scheduling.md` | BE 资源 lane | 并发 / 线程池 / DB pool / Quartz |
+| `2026-06-03-deep-scan-fe-layout-responsive.md` | FE 布局 lane | 桌面 + 移动响应式 / 组件复用 |
+| `2026-06-03-deep-scan-fe-theme-color-a11y.md` | FE 配色 lane | design token / a11y 对比度 |
+| `2026-06-03-sdk-test-parity-gap.md` | SDK 测试覆盖 | Java vs Python 测试 parity 差距盘点 |
+| `2026-06-02-deep-review-round-2.md` | SDK 二轮复审 | 第二轮 deep review 综合 |
+| `2026-06-02-sdk-code-deep-review.md` | SDK 代码审 | 综合代码深度审查 |
+| `2026-06-02-sdk-atomic-fe-deep-review.md` | SDK + atomic + FE | 三件套综合 |
+| `2026-06-02-java-python-sdk-deep-review.md` | 跨语言对照 | Java 对 Python SDK 一致性审 |
+| `2026-06-02-sdk-fix-execution-plan.md` | SDK 修复 plan | 6-lane 并发修复执行计划(已交付,PR #295-#302) |
+
+新增日期快照时同步在此追加一行;已 fold 进主干或归档的文件移 `archive/analysis/` 并从本表删除。
