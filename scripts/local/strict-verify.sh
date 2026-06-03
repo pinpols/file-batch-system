@@ -155,7 +155,7 @@ fi
 # ───────────────────────────────────────────────────────────
 hdr "2. cron-preview 真实 Quartz 引擎"
 
-simple=$(curl -s -G --data-urlencode "expr=0 0 2 * * ?" --data-urlencode "count=3" "$BASE/api/console/system/cron-preview")
+simple=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 0 2 * * ?" --data-urlencode "count=3" "$BASE/api/console/system/cron-preview")
 valid_field=$(echo "$simple" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 runs_count=$(echo "$simple" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
 [[ "$valid_field" == "True" && "$runs_count" == "3" ]] \
@@ -163,14 +163,14 @@ runs_count=$(echo "$simple" | python3 -c "import sys,json;print(len(json.load(sy
   || fail "简单 expr 异常" "valid=$valid_field runs=$runs_count"
 
 # Quartz L (last Friday of month)
-quartz_l=$(curl -s -G --data-urlencode "expr=0 15 10 ? * 6L" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
+quartz_l=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 15 10 ? * 6L" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
 l_valid=$(echo "$quartz_l" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 [[ "$l_valid" == "True" ]] \
   && pass "Quartz L 高级语法 (0 15 10 ? * 6L)" "valid=true (本地自实现解析必然失败)" \
   || fail "Quartz L 解析失败" "valid=$l_valid"
 
 # 非法表达式不抛 500
-invalid=$(curl -s -G --data-urlencode "expr=garbage" "$BASE/api/console/system/cron-preview")
+invalid=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=garbage" "$BASE/api/console/system/cron-preview")
 i_valid=$(echo "$invalid" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 i_err=$(echo "$invalid" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['error'])" 2>/dev/null)
 [[ "$i_valid" == "False" && -n "$i_err" && "$i_err" != "None" ]] \
@@ -185,7 +185,7 @@ for entry in \
   "0 0 10 ? * 3#2|每月第 2 个周三 10 点" \
   "0 0 0/2 * * ?|每 2 小时"; do
   expr="${entry%%|*}"; label="${entry##*|}"
-  r=$(curl -s -G --data-urlencode "expr=$expr" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
+  r=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=$expr" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
   v=$(echo "$r" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
   c=$(echo "$r" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
   [[ "$v" == "True" && "$c" -ge 1 ]] \
@@ -218,7 +218,7 @@ fi
 # ───────────────────────────────────────────────────────────
 hdr "4. maintenance 状态接口"
 
-MS=$(curl -s "$BASE/api/console/system/maintenance")
+MS=$(curl -s --max-time 30 --connect-timeout 5 "$BASE/api/console/system/maintenance")
 enabled=$(echo "$MS" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['enabled'])" 2>/dev/null)
 [[ "$enabled" == "False" ]] \
   && pass "maintenance status 探活" "enabled=false(正常运行态)" \
@@ -234,20 +234,27 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
       lsof -i :"$CONSOLE_PORT" -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print $2}' | xargs -r kill 2>/dev/null
       sleep 2
       env $* SPRING_PROFILES_ACTIVE=local nohup java -jar "$CONSOLE_JAR" > /tmp/console-strict.log 2>&1 &
-      until curl -sf "$BASE/actuator/health" -o /dev/null 2>/dev/null; do sleep 2; done
+      local deadline=$(( $(date +%s) + 180 ))
+      until curl -sf --max-time 5 --connect-timeout 2 "$BASE/actuator/health" -o /dev/null 2>/dev/null; do
+        if (( $(date +%s) > deadline )); then
+          echo "  ✗ BE 起不来 180s timeout(看 /tmp/console-strict.log)" >&2
+          return 1
+        fi
+        sleep 2
+      done
     }
     # 全冻结
     _restart_with BATCH_CONSOLE_MAINTENANCE_ENABLED=true BATCH_CONSOLE_MAINTENANCE_MESSAGE="strict-verify blocked"
-    blocked=$(curl -sI "$BASE/api/console/queries/instances" | head -1 | awk '{print $2}')
-    xmaint=$(curl -sI "$BASE/api/console/queries/instances" | grep -i "x-maintenance" | head -1)
+    blocked=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" | head -1 | awk '{print $2}')
+    xmaint=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" | grep -i "x-maintenance" | head -1)
     [[ "$blocked" == "503" && -n "$xmaint" ]] \
       && pass "全冻结:GET → 503 + $(echo $xmaint | tr -d '\r')" "" \
       || fail "全冻结异常" "http=$blocked xmaint='$xmaint'"
 
     # readOnly
     _restart_with BATCH_CONSOLE_MAINTENANCE_ENABLED=true BATCH_CONSOLE_MAINTENANCE_READ_ONLY=true BATCH_CONSOLE_MAINTENANCE_MESSAGE="strict-verify readonly"
-    get_code=$(curl -sI "$BASE/api/console/queries/instances" | head -1 | awk '{print $2}')
-    post_code=$(curl -sI -X POST "$BASE/api/console/jobs/bundle/create" | head -1 | awk '{print $2}')
+    get_code=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" | head -1 | awk '{print $2}')
+    post_code=$(curl -sI --max-time 30 --connect-timeout 5 -X POST "$BASE/api/console/jobs/bundle/create" | head -1 | awk '{print $2}')
     [[ "$get_code" != "503" && "$post_code" == "503" ]] \
       && pass "readOnly:GET=$get_code (pass) / POST=$post_code (block)" "X-Maintenance: read-only" \
       || fail "readOnly 模式异常" "get=$get_code post=$post_code(期望 GET 非 503,POST 503)"
@@ -256,8 +263,15 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
     lsof -i :"$CONSOLE_PORT" -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print $2}' | xargs -r kill 2>/dev/null
     sleep 2
     bash scripts/local/restart.sh console > /tmp/restart-normal.log 2>&1
-    until curl -sf "$BASE/actuator/health" -o /dev/null 2>/dev/null; do sleep 2; done
-    enabled_after=$(curl -s "$BASE/api/console/system/maintenance" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['enabled'])" 2>/dev/null)
+    deadline=$(( $(date +%s) + 180 ))
+    until curl -sf --max-time 5 --connect-timeout 2 "$BASE/actuator/health" -o /dev/null 2>/dev/null; do
+      if (( $(date +%s) > deadline )); then
+        fail "maintenance 恢复后 BE 起不来 180s timeout" "看 /tmp/restart-normal.log"
+        break
+      fi
+      sleep 2
+    done
+    enabled_after=$(curl -s --max-time 30 --connect-timeout 5 "$BASE/api/console/system/maintenance" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['enabled'])" 2>/dev/null)
     [[ "$enabled_after" == "False" ]] \
       && pass "恢复正常模式" "enabled=false" \
       || fail "恢复异常" "enabled=$enabled_after"
@@ -270,7 +284,7 @@ fi
 hdr "5. cursor token 损坏安全降级"
 
 # 直接构造坏 token,期望返 200(filter 链鉴权失败 401 也算 — 至少没 500)
-bad=$(curl -s -o /tmp/bad.body -w "%{http_code}" -G \
+bad=$(curl -s --max-time 30 --connect-timeout 5 -o /tmp/bad.body -w "%{http_code}" -G \
   --data-urlencode "cursor=garbage-not-base64-!@#$%" \
   --data-urlencode "tenantId=default-tenant" \
   "$BASE/api/console/queries/instances")
@@ -301,7 +315,7 @@ schema = spec.get('components', {}).get('schemas', {}).get('MaintenanceStatus', 
 print(','.join(sorted(schema.get('properties', {}).keys())))
 " 2>/dev/null)
   # BE 实际响应字段
-  be_fields=$(curl -s "$BASE/api/console/system/maintenance" | \
+  be_fields=$(curl -s --max-time 30 --connect-timeout 5 "$BASE/api/console/system/maintenance" | \
     python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print(','.join(sorted(d.keys())))")
   if [[ "$yaml_fields" == "$be_fields" ]]; then
     pass "MaintenanceStatus schema 对齐" "$yaml_fields"
@@ -317,7 +331,7 @@ with open('$OPENAPI_YAML') as f:
 schema = spec.get('components', {}).get('schemas', {}).get('CronPreview', {})
 print(','.join(sorted(schema.get('properties', {}).keys())))
 " 2>/dev/null)
-  be_cron=$(curl -s -G --data-urlencode "expr=0 0 2 * * ?" "$BASE/api/console/system/cron-preview" | \
+  be_cron=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 0 2 * * ?" "$BASE/api/console/system/cron-preview" | \
     python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print(','.join(sorted(d.keys())))")
   if [[ "$yaml_cron" == "$be_cron" ]]; then
     pass "CronPreview schema 对齐" "$yaml_cron"
