@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Set;
@@ -49,7 +50,29 @@ class ConsoleTenantGuardTest {
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
 
-    assertThatThrownBy(() -> tenantGuard.resolveTenant(" ")).isInstanceOf(BizException.class);
+    // K2 副发现:JWT/RequestScope/参数三处租户上下文均缺失 → FORBIDDEN(授权失败),
+    // 非 UNAUTHORIZED(认证失败);请求方不该被引导去"重新登录"。
+    assertThatThrownBy(() -> tenantGuard.resolveTenant(" "))
+        .isInstanceOf(BizException.class)
+        .extracting(ex -> ((BizException) ex).getCode())
+        .isEqualTo(ResultCode.FORBIDDEN);
+  }
+
+  @Test
+  void shouldRejectWhenJwtParsedButTenantClaimMissing() {
+    // 边缘 case:JWT 解析成功(认证已过)但 tenant claim 为 null(JWT 损坏 / 缺字段),
+    // 且 RequestScope 不可用、调用方未带 requestTenantId → 严格按 FORBIDDEN 拒绝。
+    when(requestMetadataResolver.current())
+        .thenThrow(new IllegalStateException("request scope missing"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("tester", null, Set.of("ROLE_TENANT_USER")), "ignored"));
+
+    assertThatThrownBy(() -> tenantGuard.resolveTenant(null))
+        .isInstanceOf(BizException.class)
+        .extracting(ex -> ((BizException) ex).getCode())
+        .isEqualTo(ResultCode.FORBIDDEN);
   }
 
   @Test

@@ -60,7 +60,9 @@ public class ConsoleTenantGuard {
       effectiveTenantId = normalized;
     }
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.tenant.required");
+      // 认证已通过(JWT 解析成功)但租户上下文判定失败(JWT 缺 tenant claim / 损坏 / RequestScope 缺失且无 fallback)
+      // → 严格语义是 FORBIDDEN(授权失败),而非 UNAUTHORIZED(认证失败)
+      throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.context_missing");
     }
     if (normalized != null && !normalized.equals(effectiveTenantId)) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch");
