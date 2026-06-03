@@ -105,7 +105,7 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
 
   # 生成只含"本 PR 新增行"的临时 diff 文件
   TMP_DIFF=$(mktemp)
-  trap "rm -f $TMP_DIFF" EXIT
+  trap 'rm -f "$TMP_DIFF"' EXIT
   # 用 git diff -U0 + 解析 hunk header 得到"文件:行号:内容"
   # 只保留 + 行(新增),过滤掉 +++ 头部
   for f in $CHANGED_JAVA; do
