@@ -94,7 +94,7 @@ while [[ $# -gt 0 ]]; do
       AUTO_ISSUE=2  # 2 = dry-run,只打印命令不真执行
       ;;
     --list)
-      printf "${BLUE}可用步骤:${RST}\n"
+      printf '%b可用步骤:%b\n' "${BLUE}" "${RST}"
       for n in "${ALL_STEPS[@]}"; do
         printf "  %2d  %s\n" "$n" "$(step_name $n)"
       done
@@ -117,13 +117,13 @@ if (( RESUME == 1 )); then
   if [[ -f "$STATE_FILE" ]]; then
     FROM_STEP=$(grep -E "^last_failed=" "$STATE_FILE" | tail -1 | cut -d= -f2)
     if [[ -z "$FROM_STEP" || "$FROM_STEP" == "0" ]]; then
-      printf "${YELLOW}--resume:state 无失败记录,跑完整流程${RST}\n"
+      printf '%b--resume:state 无失败记录,跑完整流程%b\n' "${YELLOW}" "${RST}"
       FROM_STEP=0
     else
-      printf "${YELLOW}--resume:从 step %d 续跑(上次失败位置)${RST}\n" "$FROM_STEP"
+      printf '%b--resume:从 step %d 续跑(上次失败位置)%b\n' "${YELLOW}" "$FROM_STEP" "${RST}"
     fi
   else
-    printf "${YELLOW}--resume:无 state 文件,跑完整流程${RST}\n"
+    printf '%b--resume:无 state 文件,跑完整流程%b\n' "${YELLOW}" "${RST}"
   fi
 fi
 
@@ -224,7 +224,7 @@ cleanup_stale_runs() {
   #    Flyway 启动期报 "Found more than one migration with version X",E2E/IT 全挂。
   #    收集 source 端所有 V*.sql 文件名作白名单,删 target 里不在白名单的。
   local src_set; src_set=$(mktemp /tmp/src-migrations.XXXXXX)
-  trap "rm -f '$src_set'" RETURN
+  trap 'rm -f "$src_set"' RETURN
   find . -path "*/db/migration/V*.sql" \
     -not -path "*/target/*" -not -path "*/.claude/*" \
     -exec basename {} \; 2>/dev/null | sort -u > "$src_set"
@@ -424,7 +424,7 @@ step_10_backlog() {
 ---
 
 ## 关联日志(本次跑)
-$(ls -1 "$LOG_DIR" | sed 's|^|- '"$LOG_DIR"'/|')
+$(find "$LOG_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | sort | sed 's|^|- |')
 
 ## gh CLI dry-run(确认后自己 push)
 \`\`\`bash
@@ -533,12 +533,12 @@ if (( PARALLEL == 1 )); then
   # 汇报 2+3 输出
   for n in 2 3; do
     [[ -f "$LOG_DIR/step${n}-parallel.log" ]] || continue
-    printf "\n${BLUE}── step %d 输出 ──${RST}\n" "$n"
+    printf '\n%b── step %d 输出 ──%b\n' "${BLUE}" "$n" "${RST}"
     cat "$LOG_DIR/step${n}-parallel.log"
   done
   # 串行跑 4(E2E),避免和 IT race
   if should_run 4; then
-    printf "${DIM}   串行跑 step 4(E2E,避免与 IT race)${RST}\n"
+    printf '%b   串行跑 step 4(E2E,避免与 IT race)%b\n' "${DIM}" "${RST}"
     run_step 4
   fi
 else

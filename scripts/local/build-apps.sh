@@ -54,9 +54,11 @@ NAMES=(orchestrator trigger console worker-import worker-export worker-process w
 for i in "${!MODULES[@]}"; do
   module="${MODULES[$i]}"
   name="${NAMES[$i]}"
-  jar="$(ls "$ROOT/$module/target/${module}"-*-exec.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
+  jar="$(find "$ROOT/$module/target" -maxdepth 1 -name "${module}-*-exec.jar" 2>/dev/null \
+          | grep -Ev 'sources|javadoc' | head -1 || true)"
   if [[ -z "$jar" || ! -f "$jar" ]]; then
-    jar="$(ls "$ROOT/$module/target/${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1 || true)"
+    jar="$(find "$ROOT/$module/target" -maxdepth 1 -name "${module}-*.jar" 2>/dev/null \
+            | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1 || true)"
   fi
   if [[ -z "$jar" || ! -f "$jar" ]]; then
     echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar" >&2
