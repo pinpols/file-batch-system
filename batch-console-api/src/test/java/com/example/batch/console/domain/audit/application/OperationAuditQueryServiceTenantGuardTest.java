@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,6 +19,11 @@ import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -27,17 +31,20 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * P0 回归:OperationAuditQueryService 必须经 ConsoleTenantGuard.resolveTenant 解析后下发 mapper, 否则租户用户传
  * null/blank 即可绕过 SQL 租户过滤拿全租户审计。
  */
+// LENIENT:setUp 共享 stub(mapper.count/query)被 reject 类用例不触发,符合 §测试约定豁免。
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class OperationAuditQueryServiceTenantGuardTest {
 
-  private final OperationAuditMapper mapper = mock(OperationAuditMapper.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
-  private final ConsoleTenantGuard tenantGuard = new ConsoleTenantGuard(requestMetadataResolver);
-  private final OperationAuditQueryService service =
-      new OperationAuditQueryService(mapper, tenantGuard);
+  @Mock private OperationAuditMapper mapper;
+  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+  private ConsoleTenantGuard tenantGuard;
+  private OperationAuditQueryService service;
 
   @BeforeEach
   void setUp() {
+    tenantGuard = new ConsoleTenantGuard(requestMetadataResolver);
+    service = new OperationAuditQueryService(mapper, tenantGuard);
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
     when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any()))
