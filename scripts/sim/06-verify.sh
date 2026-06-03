@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "❌ 需 bash 4+,macOS 默认 3.2 不支持新一代关联数组语法。请 brew install bash 后用 /usr/local/bin/bash 跑。" >&2
+  exit 1
+fi
 # =========================================================
 # 06-verify.sh:对账 4 类 worker 的产物
 #
@@ -14,8 +18,9 @@ MINIO="${MINIO_CONTAINER:-batch-minio}"
 BUCKET="${MINIO_BUCKET:-batch-dev}"
 MOCK_BASE="${MOCK_BASE:-http://localhost:11080}"
 
-psql_q() { docker exec "$PG" psql -U batch_user -d "$1" -tAc "$2" 2>/dev/null; }
-psql_b() { docker exec "$PG" psql -U batch_user -d batch_business -tAc "$1" 2>/dev/null; }
+PG_USER="${PG_USER:-batch_user}"
+psql_q() { docker exec "$PG" psql -U "$PG_USER" -d "$1" -tAc "$2" 2>/dev/null; }
+psql_b() { docker exec "$PG" psql -U "$PG_USER" -d batch_business -tAc "$1" 2>/dev/null; }
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' RST='\033[0m'
 hdr() { printf "\n${BLUE}── %s ──${RST}\n" "$1"; }
@@ -26,17 +31,19 @@ note(){ printf "  ${YELLOW}·${RST} %-32s %s\n" "$1" "$2"; }
 hdr "IMPORT 产物(biz.* 表行数)"
 for entry in "ta:customer_account" "tb:transaction" "tc:risk_score"; do
   tenant="${entry%%:*}"; table="${entry##*:}"
-  cnt=$(psql_b "select count(*) from biz.$table where tenant_id='$tenant'" || echo 0)
-  if [[ "${cnt:-0}" -gt 0 ]]; then
-    ok "biz.$table[$tenant]" "$cnt 行"
+  cnt=$(psql_b "select count(*) from biz.$table where tenant_id='$tenant'" 2>/dev/null | tr -dc '0-9')
+  cnt="${cnt:-0}"
+  if [[ "$cnt" -gt 0 ]]; then
+    ok "biz.${table}[${tenant}]" "$cnt 行"
   else
-    note "biz.$table[$tenant]" "0 行(任务可能未跑完 / source 缺数据)"
+    note "biz.${table}[${tenant}]" "0 行(任务可能未跑完 / source 缺数据)"
   fi
 done
 
 hdr "EXPORT 产物(MinIO $BUCKET 各 tenant outbound)"
 for prefix in "ta/outbound/report" "tb/outbound/statement" "tc/outbound/risk-alert"; do
-  cnt=$(docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null | grep -cv "\.keep$" || echo 0)
+  cnt=$(docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null | grep -cv "\.keep$" 2>/dev/null | tr -dc '0-9')
+  cnt="${cnt:-0}"
   if [[ "$cnt" -gt 0 ]]; then
     ok "$prefix" "$cnt 文件"
     docker exec "$MINIO" mc ls "local/$BUCKET/$prefix" 2>/dev/null | grep -v "\.keep" | head -3 | sed 's/^/      /'
@@ -47,10 +54,11 @@ done
 
 hdr "DISPATCH 产物(MockServer 收到的请求数)"
 for path in "/tb/callback" "/tb/ingest" "/tc/ingest"; do
-  cnt=$(curl -sf -X PUT "$MOCK_BASE/mockserver/retrieve?type=REQUESTS&format=JSON" \
+  cnt=$(curl -sf --max-time 30 --connect-timeout 5 -X PUT "$MOCK_BASE/mockserver/retrieve?type=REQUESTS&format=JSON" \
         -H "Content-Type: application/json" \
-        -d "{\"path\":\"$path\"}" 2>/dev/null | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
-  if [[ "${cnt:-0}" -gt 0 ]]; then
+        -d "{\"path\":\"$path\"}" 2>/dev/null | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null | tr -dc '0-9')
+  cnt="${cnt:-0}"
+  if [[ "$cnt" -gt 0 ]]; then
     ok "POST $path" "$cnt 次"
   else
     note "POST $path" "0 次(DISPATCH 可能未跑)"
@@ -61,8 +69,9 @@ hdr "WORKFLOW + 全局 job_instance 状态"
 psql_q batch_platform "select status, count(*) from batch.job_instance where create_time > now() - interval '10 min' group by status" | head -10 | sed 's/^/    /'
 
 hdr "Outbox 积压检查(健康度)"
-backlog=$(psql_q batch_platform "select count(*) from batch.outbox_event where publish_status in ('NEW','FAILED')")
-if [[ "${backlog:-0}" -lt 10 ]]; then
+backlog=$(psql_q batch_platform "select count(*) from batch.outbox_event where publish_status in ('NEW','FAILED')" 2>/dev/null | tr -dc '0-9')
+backlog="${backlog:-0}"
+if [[ "$backlog" -lt 10 ]]; then
   ok "outbox backlog" "$backlog(健康)"
 else
   ng "outbox backlog" "$backlog ⚠️ 上游有积压"

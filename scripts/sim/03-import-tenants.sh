@@ -23,7 +23,7 @@ import_one() {
   echo "── tenant $tenant"
   # 1) upload
   local upload_resp
-  upload_resp=$(curl -sf -X POST \
+  upload_resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
     -H "X-Tenant-Id: $tenant" "${AUTH_HEADER[@]}" \
     -F "file=@${file}" \
     "$CONSOLE_BASE/api/console/config/tenant-package/excel/upload" 2>&1)
@@ -37,7 +37,7 @@ import_one() {
 
   # 2) apply
   local apply_resp
-  apply_resp=$(curl -sf -X POST \
+  apply_resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
     -H "X-Tenant-Id: $tenant" "${AUTH_HEADER[@]}" \
     "$CONSOLE_BASE/api/console/config/tenant-package/excel/apply/$token" 2>&1)
   local code
@@ -50,7 +50,7 @@ import_one() {
 }
 
 echo "==> console-api health"
-curl -sf "$CONSOLE_BASE/actuator/health" -o /dev/null && echo "  ✓ UP" || { echo "  ✗ console-api DOWN"; exit 1; }
+curl -sf --max-time 30 --connect-timeout 5 "$CONSOLE_BASE/actuator/health" -o /dev/null && echo "  ✓ UP" || { echo "  ✗ console-api DOWN"; exit 1; }
 
 echo "==> 导入 3 个租户配置(ta / tb / tc)"
 for t in ta tb tc; do

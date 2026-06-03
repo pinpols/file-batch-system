@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "❌ 需 bash 4+,macOS 默认 3.2 不支持新一代关联数组语法。请 brew install bash 后用 /usr/local/bin/bash 跑。" >&2
+  exit 1
+fi
 # =========================================================
 # 07-atomic-load.sh:触发 ADR-029 专用 atomic worker 的 4 类原子任务(shell/sql/stored-proc/http)
 #
@@ -37,7 +41,7 @@ for round in $(seq 1 "$ROUNDS"); do
   for job in "${ATOMIC_JOBS[@]}"; do
     total=$((total + 1))
     req_id="sim-atomic-${round}-${job}-$(date +%s%N | tail -c 8)"
-    resp=$(curl -sf -X POST \
+    resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
       -H "Content-Type: application/json" \
       -H "X-Internal-Secret: $INTERNAL_SECRET" \
       -H "Idempotency-Key: $req_id" \
