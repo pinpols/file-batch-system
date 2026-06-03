@@ -2,8 +2,10 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.web.AbstractApiExceptionHandler;
 import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,6 +14,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice(basePackageClasses = LaunchController.class)
 public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler {
+
+  @Autowired
+  public OrchestratorApiExceptionHandler(BizMessageResolver bizMessageResolver) {
+    super(bizMessageResolver);
+  }
+
+  // standalone MockMvc 测试场景兜底(沿父类 no-arg ctor;bizMessageResolver=null 已有降级)。
+  public OrchestratorApiExceptionHandler() {
+    super();
+  }
 
   @Override
   protected String modulePrefix() {

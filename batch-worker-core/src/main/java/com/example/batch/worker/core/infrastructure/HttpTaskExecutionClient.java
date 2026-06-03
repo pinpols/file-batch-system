@@ -54,6 +54,8 @@ public class HttpTaskExecutionClient
   // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
   private volatile RestClient restClient;
 
+  // 构造器注入(CLAUDE.md §Java #3 合规)。MeterRegistry 为 optional bean,沿用
+  // @Autowired(required=false) 在 ctor 参数上 — 这是构造器注入,不是 field/setter 注入。
   public HttpTaskExecutionClient(
       OrchestratorTaskClientProperties properties,
       BatchSecurityProperties securityProperties,

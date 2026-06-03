@@ -7,7 +7,6 @@ import com.example.batch.common.exception.SystemException;
 import com.example.batch.common.i18n.BizMessageResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -29,11 +28,17 @@ public abstract class AbstractApiExceptionHandler {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
 
-  private BizMessageResolver bizMessageResolver;
+  private final BizMessageResolver bizMessageResolver;
 
-  @Autowired
-  public void setBizMessageResolver(BizMessageResolver bizMessageResolver) {
+  // CLAUDE.md §Java #3:构造器注入(子类 super 调用一致传入)。
+  protected AbstractApiExceptionHandler(BizMessageResolver bizMessageResolver) {
     this.bizMessageResolver = bizMessageResolver;
+  }
+
+  // standalone MockMvc 测试场景(无 Spring 容器),提供 no-arg 兜底:
+  // bizMessageResolver=null 时,resolveBizMessage / resolveCommonCode 已有 null 短路降级。
+  protected AbstractApiExceptionHandler() {
+    this(null);
   }
 
   /** 日志前缀，用于区分模块来源（"trigger" / "orchestrator" / "console"）。 */
