@@ -2,6 +2,7 @@ package com.example.batch.common.spi.task;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -57,7 +58,7 @@ public class BatchTaskExecutorRegistry {
     this.enabledFilter = filter;
 
     Map<String, BatchTaskExecutor> merged = new LinkedHashMap<>();
-    Set<String> filteredOut = new java.util.LinkedHashSet<>();
+    Set<String> filteredOut = new LinkedHashSet<>();
 
     // 1) Spring 容器内的所有 BatchTaskExecutor bean
     for (BatchTaskExecutor exec : springBeans) {
