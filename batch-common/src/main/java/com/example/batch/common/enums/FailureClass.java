@@ -1,5 +1,6 @@
 package com.example.batch.common.enums;
 
+import com.example.batch.common.exception.BizException;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -45,7 +46,8 @@ public enum FailureClass implements DictEnum {
     }
     FailureClass match = DictEnum.fromCode(FailureClass.class, code);
     if (match == null) {
-      throw new IllegalArgumentException("Unknown FailureClass code: '" + code + "'");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.enum.unknown_failure_class_code", code);
     }
     return match;
   }

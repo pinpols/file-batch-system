@@ -3,6 +3,7 @@ package com.example.batch.common.enums;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.exception.BizException;
 import org.junit.jupiter.api.Test;
 
 class WorkflowJoinModeTest {
@@ -29,10 +30,10 @@ class WorkflowJoinModeTest {
   }
 
   @Test
-  void fromCode_unknownCode_throwsIllegalArgument() {
+  void fromCode_unknownCode_throwsBizException() {
     assertThatThrownBy(() -> WorkflowJoinMode.fromCode("NONE"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("NONE");
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("unknown_workflow_join_mode_code");
   }
 
   @Test

@@ -1,5 +1,7 @@
 package com.example.batch.common.event;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,16 +28,16 @@ public record DomainEvent(
 
   public DomainEvent {
     if (tenantId == null || tenantId.isBlank()) {
-      throw new IllegalArgumentException("DomainEvent.tenantId must not be blank");
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.tenant_id_blank");
     }
     if (aggregateType == null || aggregateType.isBlank()) {
-      throw new IllegalArgumentException("DomainEvent.aggregateType must not be blank");
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.aggregate_type_blank");
     }
     if (eventType == null || eventType.isBlank()) {
-      throw new IllegalArgumentException("DomainEvent.eventType must not be blank");
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_type_blank");
     }
     if (eventKey == null || eventKey.isBlank()) {
-      throw new IllegalArgumentException("DomainEvent.eventKey must not be blank");
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.domain_event.event_key_blank");
     }
     // Map.copyOf 不允许 null 值,但 outbox payload 允许 null(JSON 序列化为 null,业务依赖此语义)
     payload =

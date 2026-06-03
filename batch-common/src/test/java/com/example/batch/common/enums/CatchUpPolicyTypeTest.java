@@ -3,6 +3,7 @@ package com.example.batch.common.enums;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.exception.BizException;
 import org.junit.jupiter.api.Test;
 
 class CatchUpPolicyTypeTest {
@@ -30,10 +31,10 @@ class CatchUpPolicyTypeTest {
   }
 
   @Test
-  void fromCode_unknownCode_throwsIllegalArgument() {
+  void fromCode_unknownCode_throwsBizException() {
     assertThatThrownBy(() -> CatchUpPolicyType.fromCode("UNKNOWN"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("UNKNOWN");
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("unknown_catch_up_policy_type_code");
   }
 
   @Test
