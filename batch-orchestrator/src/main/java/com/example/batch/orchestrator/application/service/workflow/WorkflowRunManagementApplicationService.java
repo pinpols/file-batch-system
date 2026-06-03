@@ -3,18 +3,26 @@ package com.example.batch.orchestrator.application.service.workflow;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
+import com.example.batch.orchestrator.application.service.governance.AlertEventService;
 import com.example.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
+import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
 import com.example.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +58,9 @@ public class WorkflowRunManagementApplicationService {
   private final WorkflowDagService workflowDagService;
   private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;
   private final OrchestratorJobMappers jobMappers;
+  // P1-2: audit + alert 依赖。新增可选 bean,生产环境必然装配;单测构造可传 null。
+  private final ObjectProvider<JobExecutionLogMapper> jobExecutionLogMapperProvider;
+  private final ObjectProvider<AlertEventService> alertEventServiceProvider;
 
   @Transactional
   public Map<String, Object> cancel(String tenantId, Long id) {
@@ -73,8 +84,14 @@ public class WorkflowRunManagementApplicationService {
     return flipToTerminated(run, TERMINABLE);
   }
 
-  @Transactional
+  /** 老入口,backward-compat;新代码请传 operatorId / reason。 */
   public Map<String, Object> skipNode(String tenantId, Long id, String nodeCode) {
+    return skipNode(tenantId, id, nodeCode, null, null);
+  }
+
+  @Transactional
+  public Map<String, Object> skipNode(
+      String tenantId, Long id, String nodeCode, String operatorId, String reason) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!"RUNNING".equals(run.getRunStatus()) && !"FAILED".equals(run.getRunStatus())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.skip_node_state_invalid");
@@ -99,7 +116,67 @@ public class WorkflowRunManagementApplicationService {
             .finishedAt(BatchDateTimeSupport.utcNow())
             .build());
     advanceDownstreamAfterSkip(run, nodeCode);
+    // P1-2: 写 audit 行 + 发 WARN alert,补齐"运维介入"事后追溯。
+    appendSkipNodeAudit(run, nodeCode, nodeRun.getId(), operatorId, reason);
+    emitSkipNodeAlert(run, nodeCode, operatorId);
     return Map.of("id", id, "nodeCode", nodeCode, "nodeStatus", "SKIPPED");
+  }
+
+  private void appendSkipNodeAudit(
+      WorkflowRunEntity run, String nodeCode, Long nodeRunId, String operatorId, String reason) {
+    JobExecutionLogMapper mapper =
+        jobExecutionLogMapperProvider == null
+            ? null
+            : jobExecutionLogMapperProvider.getIfAvailable();
+    if (mapper == null) {
+      return;
+    }
+    JobExecutionLogEntity audit = new JobExecutionLogEntity();
+    audit.setTenantId(run.getTenantId());
+    audit.setJobInstanceId(run.getRelatedJobInstanceId());
+    audit.setLogLevel("INFO");
+    audit.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
+    audit.setMessage(AuditLogConstants.AUDIT_OP_WORKFLOW_NODE_SKIP);
+    audit.setDetailRef(AuditLogConstants.DETAIL_REF_WORKFLOW_NODE_RUN);
+    Map<String, Object> extra = new LinkedHashMap<>();
+    extra.put("workflowRunId", run.getId());
+    extra.put("nodeCode", nodeCode);
+    extra.put("nodeRunId", nodeRunId);
+    extra.put(
+        "operatorId",
+        Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
+    extra.put(
+        "operatorType",
+        Texts.hasText(operatorId)
+            ? AuditLogConstants.OPERATOR_TYPE_REQUEST
+            : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+    extra.put("reason", reason);
+    audit.setExtraJson(JsonUtils.toJson(extra));
+    mapper.insert(audit);
+  }
+
+  private void emitSkipNodeAlert(WorkflowRunEntity run, String nodeCode, String operatorId) {
+    AlertEventService alertService =
+        alertEventServiceProvider == null ? null : alertEventServiceProvider.getIfAvailable();
+    if (alertService == null) {
+      return;
+    }
+    String resourceKey = "workflow_run:" + run.getId() + ":node:" + nodeCode;
+    Map<String, Object> detail = new LinkedHashMap<>();
+    detail.put("workflowRunId", run.getId());
+    detail.put("nodeCode", nodeCode);
+    detail.put("operatorId", operatorId);
+    alertService.emit(
+        AlertEmitRequest.builder()
+            .tenantId(run.getTenantId())
+            .serviceName("batch-orchestrator")
+            .alertType("WORKFLOW_NODE_MANUAL_SKIP")
+            .severity("WARN")
+            .title("Workflow node manually skipped")
+            .resourceKey(resourceKey)
+            .detailJson(JsonUtils.toJson(detail))
+            .traceId(null)
+            .build());
   }
 
   /** 把 run 切到 TERMINATED：SQL 期望前态守护 + 同事务发 outbox 终态事件。 */

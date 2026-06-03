@@ -32,14 +32,28 @@ class DeadLetterControllerTest {
                 .content("{\"tenantId\":\"t1\"}"))
         .andExpect(status().isOk());
 
-    verify(retryGovernanceService).replayDeadLetter("t1", 42L);
+    verify(retryGovernanceService).replayDeadLetter("t1", 42L, null, null, null);
+  }
+
+  @Test
+  void shouldForwardOperatorAndReasonToService() throws Exception {
+    mockMvc
+        .perform(
+            post("/internal/dead-letters/77/replay")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    "{\"tenantId\":\"t1\",\"operatorId\":\"alice\","
+                        + "\"reason\":\"manual recovery\",\"idempotencyKey\":\"k-1\"}"))
+        .andExpect(status().isOk());
+
+    verify(retryGovernanceService).replayDeadLetter("t1", 77L, "alice", "manual recovery", "k-1");
   }
 
   @Test
   void shouldReturnConflictWhenReplayEncountersOrphanDeadLetterSource() throws Exception {
     doThrow(new DeadLetterOrphanSourceException("orphan"))
         .when(retryGovernanceService)
-        .replayDeadLetter("t1", 99L);
+        .replayDeadLetter("t1", 99L, null, null, null);
 
     mockMvc
         .perform(

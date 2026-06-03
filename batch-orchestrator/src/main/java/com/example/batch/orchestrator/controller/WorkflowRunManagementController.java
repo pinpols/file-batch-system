@@ -33,7 +33,11 @@ public class WorkflowRunManagementController {
   public Map<String, Object> skipNode(
       @PathVariable Long id,
       @RequestParam("tenantId") String tenantId,
-      @RequestParam("nodeCode") String nodeCode) {
-    return workflowRunManagementApplicationService.skipNode(tenantId, id, nodeCode);
+      @RequestParam("nodeCode") String nodeCode,
+      @RequestParam(value = "operatorId", required = false) String operatorId,
+      @RequestParam(value = "reason", required = false) String reason) {
+    // P1-2: operatorId / reason 用于 audit + alert,backward-compatible 默认 null
+    return workflowRunManagementApplicationService.skipNode(
+        tenantId, id, nodeCode, operatorId, reason);
   }
 }
