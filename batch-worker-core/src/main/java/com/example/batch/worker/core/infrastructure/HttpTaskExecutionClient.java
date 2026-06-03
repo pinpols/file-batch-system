@@ -27,7 +27,6 @@ import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -59,16 +58,50 @@ public class HttpTaskExecutionClient
       BatchSecurityProperties securityProperties,
       ObjectProvider<RestClient.Builder> restClientBuilderProvider,
       Environment environment,
-      @Autowired(required = false) MeterRegistry meterRegistry,
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
       ObjectProvider<WorkerReportOutboxCoordinator> reportOutboxCoordinator,
       WorkerLeaseProperties leaseProperties) {
     this.properties = properties;
     this.securityProperties = securityProperties;
     this.restClientBuilderProvider = restClientBuilderProvider;
     this.environment = environment;
-    this.meterRegistry = Optional.ofNullable(meterRegistry);
+    // CLAUDE.md §Java #3:原 @Autowired(required=false) 参数迁 ObjectProvider,语义等价。
+    this.meterRegistry = Optional.ofNullable(meterRegistryProvider.getIfAvailable());
     this.reportOutboxCoordinator = reportOutboxCoordinator;
     this.renewBatchMaxItems = Math.max(1, leaseProperties.getRenewBatchMaxItems());
+  }
+
+  /** 测试辅助:把裸 MeterRegistry(可 null)包装为单值 ObjectProvider,避免测试样板重复。 */
+  public static ObjectProvider<MeterRegistry> meterRegistryProvider(MeterRegistry registry) {
+    return new SingleObjectProvider<>(registry);
+  }
+
+  private static final class SingleObjectProvider<T> implements ObjectProvider<T> {
+    private final T value;
+
+    SingleObjectProvider(T value) {
+      this.value = value;
+    }
+
+    @Override
+    public T getObject() {
+      return value;
+    }
+
+    @Override
+    public T getObject(Object... args) {
+      return value;
+    }
+
+    @Override
+    public T getIfAvailable() {
+      return value;
+    }
+
+    @Override
+    public T getIfUnique() {
+      return value;
+    }
   }
 
   /**

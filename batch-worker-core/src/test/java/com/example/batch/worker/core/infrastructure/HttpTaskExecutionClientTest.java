@@ -49,7 +49,7 @@ class HttpTaskExecutionClientTest {
               new BatchSecurityProperties(),
               restClientBuilderProvider(),
               new MockEnvironment(),
-              registry,
+              HttpTaskExecutionClient.meterRegistryProvider(registry),
               noopCoordinator,
               new WorkerLeaseProperties());
 
@@ -90,7 +90,7 @@ class HttpTaskExecutionClientTest {
               new BatchSecurityProperties(),
               restClientBuilderProvider(),
               new MockEnvironment(),
-              registry,
+              HttpTaskExecutionClient.meterRegistryProvider(registry),
               noopCoordinator,
               new WorkerLeaseProperties());
 
@@ -133,7 +133,7 @@ class HttpTaskExecutionClientTest {
               new BatchSecurityProperties(),
               restClientBuilderProvider(),
               new MockEnvironment(),
-              registry,
+              HttpTaskExecutionClient.meterRegistryProvider(registry),
               noopCoordinator,
               new WorkerLeaseProperties());
 
@@ -178,7 +178,7 @@ class HttpTaskExecutionClientTest {
               new BatchSecurityProperties(),
               restClientBuilderProvider(),
               new MockEnvironment(),
-              registry,
+              HttpTaskExecutionClient.meterRegistryProvider(registry),
               coordinatorProvider,
               new WorkerLeaseProperties());
 
@@ -218,7 +218,7 @@ class HttpTaskExecutionClientTest {
               new BatchSecurityProperties(),
               restClientBuilderProvider(),
               new MockEnvironment(),
-              null,
+              HttpTaskExecutionClient.meterRegistryProvider(null),
               noopCoordinator,
               new WorkerLeaseProperties());
 

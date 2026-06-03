@@ -7,7 +7,7 @@ import com.example.batch.common.exception.SystemException;
 import com.example.batch.common.i18n.BizMessageResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -29,10 +29,21 @@ public abstract class AbstractApiExceptionHandler {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
 
-  private BizMessageResolver bizMessageResolver;
+  // CLAUDE.md §Java #3:构造器注入。i18n resolver 为可选(standalone MockMvc 测试可省),
+  // 由子类 super(provider) 注入;Spring 容器路径走 ObjectProvider#getIfAvailable() 拿到 bean,
+  // 测试路径子类无参构造自调 super(null)。
+  private final BizMessageResolver bizMessageResolver;
 
-  @Autowired
-  public void setBizMessageResolver(BizMessageResolver bizMessageResolver) {
+  protected AbstractApiExceptionHandler() {
+    this((BizMessageResolver) null);
+  }
+
+  protected AbstractApiExceptionHandler(
+      ObjectProvider<BizMessageResolver> bizMessageResolverProvider) {
+    this(bizMessageResolverProvider == null ? null : bizMessageResolverProvider.getIfAvailable());
+  }
+
+  protected AbstractApiExceptionHandler(BizMessageResolver bizMessageResolver) {
     this.bizMessageResolver = bizMessageResolver;
   }
 

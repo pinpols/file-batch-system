@@ -96,7 +96,7 @@ class WorkerReportOutboxCoordinatorTest {
               new BatchSecurityProperties(),
               restClientBuilderProvider(),
               new MockEnvironment(),
-              null,
+              HttpTaskExecutionClient.meterRegistryProvider(null),
               coordinatorProvider,
               new com.example.batch.worker.core.config.WorkerLeaseProperties());
 

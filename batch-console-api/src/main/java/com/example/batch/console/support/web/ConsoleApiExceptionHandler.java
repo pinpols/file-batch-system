@@ -14,8 +14,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Tolerate;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -66,13 +66,14 @@ public class ConsoleApiExceptionHandler {
 
   private final ConsoleResponseFactory responseFactory;
 
-  // setter 注入,保持 @RequiredArgsConstructor 生成的构造器签名不变(避免破坏所有
-  // 已构造该 handler 的测试)。BizMessageResolver 在 batch-common 自动装配。
-  private BizMessageResolver bizMessageResolver;
+  // CLAUDE.md §Java #3:构造器注入(原 setter @Autowired 已迁移)。
+  // BizMessageResolver 在 batch-common 自动装配;@Tolerate 单参构造保留大量
+  // standalone MockMvc 测试的 `new ConsoleApiExceptionHandler(responseFactory)` 兼容。
+  private final BizMessageResolver bizMessageResolver;
 
-  @Autowired
-  public void setBizMessageResolver(BizMessageResolver bizMessageResolver) {
-    this.bizMessageResolver = bizMessageResolver;
+  @Tolerate
+  public ConsoleApiExceptionHandler(ConsoleResponseFactory responseFactory) {
+    this(responseFactory, null);
   }
 
   @ExceptionHandler(BizException.class)

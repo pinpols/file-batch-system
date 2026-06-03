@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 
@@ -94,21 +93,63 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
   // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
-  // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
-  // 注入不到时 topicPattern() 走默认 PATTERN 行为。
-  @Autowired(required = false)
-  private WorkerKafkaSubscribeProperties subscribeProperties;
+  // P2-5 worker 端 Kafka 订阅模式开关;optional 走 ObjectProvider#getIfAvailable() 兼容旧测试 /
+  // 不开启此特性的 e2e。CLAUDE.md §Java #3:构造器注入(原 @Autowired(required=false) field 已迁移)。
+  private final ObjectProvider<WorkerKafkaSubscribeProperties> subscribePropertiesProvider;
 
   private volatile Semaphore semaphore;
 
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
+      ObjectProvider<WorkerKafkaSubscribeProperties> subscribePropertiesProvider,
       @org.springframework.beans.factory.annotation.Value("${batch.worker.max-concurrent-tasks:8}")
           int maxConcurrentTasks) {
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.subscribePropertiesProvider = subscribePropertiesProvider;
     this.maxConcurrentTasks = maxConcurrentTasks;
+  }
+
+  /**
+   * 兼容构造器(P1-A 迁移):旧 3 参子类与测试沿用,内部把 subscribeProperties 退化为永远 empty 的 ObjectProvider(等价 PATTERN
+   * 默认行为)。新子类应直接走 4 参构造器接收 ObjectProvider。
+   */
+  protected AbstractTaskConsumer(
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      int maxConcurrentTasks) {
+    this(
+        kafkaListenerEndpointRegistry,
+        meterRegistryProvider,
+        EmptySubscribePropertiesProvider.INSTANCE,
+        maxConcurrentTasks);
+  }
+
+  private static final class EmptySubscribePropertiesProvider
+      implements ObjectProvider<WorkerKafkaSubscribeProperties> {
+    private static final EmptySubscribePropertiesProvider INSTANCE =
+        new EmptySubscribePropertiesProvider();
+
+    @Override
+    public WorkerKafkaSubscribeProperties getObject() {
+      return null;
+    }
+
+    @Override
+    public WorkerKafkaSubscribeProperties getObject(Object... args) {
+      return null;
+    }
+
+    @Override
+    public WorkerKafkaSubscribeProperties getIfAvailable() {
+      return null;
+    }
+
+    @Override
+    public WorkerKafkaSubscribeProperties getIfUnique() {
+      return null;
+    }
   }
 
   /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */
@@ -384,6 +425,8 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
             ? null
             : "\\.node\\." + escapeRegex(configuredWorkerCode);
 
+    WorkerKafkaSubscribeProperties subscribeProperties =
+        subscribePropertiesProvider.getIfAvailable();
     WorkerKafkaSubscribeProperties.Mode mode =
         subscribeProperties == null
             ? WorkerKafkaSubscribeProperties.Mode.PATTERN

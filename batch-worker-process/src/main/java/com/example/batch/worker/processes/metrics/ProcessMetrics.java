@@ -9,7 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -49,7 +48,6 @@ public class ProcessMetrics {
   // stage + success 都是 低基数,组合 < 12 种
   private final ConcurrentMap<String, Timer> stageTimerByKey = new ConcurrentHashMap<>();
 
-  @Autowired
   public ProcessMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.registry = meterRegistryProvider.getIfAvailable();
   }

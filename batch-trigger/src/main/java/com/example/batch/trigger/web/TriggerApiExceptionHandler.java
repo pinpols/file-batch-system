@@ -3,9 +3,12 @@ package com.example.batch.trigger.web;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.web.AbstractApiExceptionHandler;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -19,6 +22,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice
 public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
+
+  /** 测试 no-arg(standalone MockMvc):不注入 i18n resolver。 */
+  public TriggerApiExceptionHandler() {
+    super();
+  }
+
+  @Autowired
+  public TriggerApiExceptionHandler(ObjectProvider<BizMessageResolver> bizMessageResolverProvider) {
+    super(bizMessageResolverProvider);
+  }
 
   @Override
   protected String modulePrefix() {
