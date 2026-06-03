@@ -23,7 +23,8 @@ spring:
       fetch-min-size: ${BATCH_WORKER_EXPORT_KAFKA_FETCH_MIN_SIZE:1024}
       fetch-max-wait: ${BATCH_WORKER_EXPORT_KAFKA_FETCH_MAX_WAIT:500}
       # 两次 poll 之间允许的最大处理时长；需大于单批 max-poll-records 条任务的最长执行时间
-      max-poll-interval-ms: ${BATCH_WORKER_EXPORT_KAFKA_MAX_POLL_INTERVAL_MS:600000}
+      # P1-10 Kafka 三角硬化：改 300s 与 batch-defaults.yml 三角对齐
+      max-poll-interval-ms: ${BATCH_WORKER_EXPORT_KAFKA_MAX_POLL_INTERVAL_MS:300000}
 
 batch:
   worker:
