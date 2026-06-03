@@ -9,6 +9,7 @@ import com.example.batch.common.spi.task.TaskResult;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import java.time.Duration;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -52,7 +53,7 @@ public class ImportTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        java.util.Set.of(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET),
+        Set.of(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET),
         false, // 文件 IMPORT 通常一次性,不视为幂等
         true,
         Duration.ofMinutes(30) // import 大文件可能跑久

@@ -22,6 +22,7 @@ import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -82,7 +83,7 @@ public class BatchDayGateService {
     if (POLICY_ALLOW_OVERLAP.equals(policy)) {
       return GateDecision.allow();
     }
-    java.time.LocalDate prevBizDate = request.bizDate().minusDays(1);
+    LocalDate prevBizDate = request.bizDate().minusDays(1);
     BatchDayInstanceEntity previous =
         batchDayInstanceMapper.selectByTenantCalendarBizDate(
             request.tenantId(), job.calendarCode(), prevBizDate);
@@ -120,10 +121,7 @@ public class BatchDayGateService {
    * <p>非 null 返回值表示阻塞原因(同 job 或同组前一日仍有非终态实例); null 表示通过。
    */
   private String checkFineGrainedDependency(
-      String scope,
-      LaunchRequest request,
-      JobDefinitionEntity job,
-      java.time.LocalDate prevBizDate) {
+      String scope, LaunchRequest request, JobDefinitionEntity job, LocalDate prevBizDate) {
     if ("SAME_JOB_GROUP".equals(scope) && Texts.hasText(job.jobGroupCode())) {
       int active =
           jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(

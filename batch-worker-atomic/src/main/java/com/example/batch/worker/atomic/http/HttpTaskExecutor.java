@@ -20,12 +20,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -327,7 +329,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         case '*' -> regex.append("[^.]*");
         case '.' -> regex.append("\\.");
         case '?' -> regex.append("[^.]");
-        default -> regex.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+        default -> regex.append(Pattern.quote(String.valueOf(c)));
       }
     }
     regex.append("$");
@@ -343,7 +345,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       return Set.of(n.intValue());
     }
     if (raw instanceof List<?> list) {
-      java.util.HashSet<Integer> out = new java.util.HashSet<>();
+      HashSet<Integer> out = new HashSet<>();
       for (Object o : list) {
         if (o instanceof Number) {
           out.add(((Number) o).intValue());
