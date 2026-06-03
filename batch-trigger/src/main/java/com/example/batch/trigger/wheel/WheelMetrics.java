@@ -66,7 +66,10 @@ public class WheelMetrics {
   private final ConcurrentMap<String, Counter> fireDuplicateSkippedByGroup =
       new ConcurrentHashMap<>();
   private final ConcurrentMap<String, Counter> misfireHandledByPolicy = new ConcurrentHashMap<>();
-  private final ConcurrentMap<String, Counter> advanceFailedByJob = new ConcurrentHashMap<>();
+
+  // ADR/audit 2026-06-03:advance.failed 移除 jobCode tag(高基数 = 租户 × 作业,
+  // Prometheus series 爆炸风险);改全局 counter,具体 jobCode 走日志/trace 关联.
+  private final Counter advanceFailedCounter;
 
   public WheelMetrics(MeterRegistry registry) {
     this.registry = registry;
@@ -87,6 +90,11 @@ public class WheelMetrics {
     this.leaderAcquireCounter = Counter.builder(LEADER_ACQUIRE).register(registry);
     this.leaderAcquireDurationTimer = Timer.builder(LEADER_ACQUIRE_DURATION).register(registry);
     this.staleMarkerReleasedCounter = Counter.builder(STALE_MARKER_RELEASED).register(registry);
+    this.advanceFailedCounter =
+        Counter.builder(ADVANCE_FAILED)
+            .description(
+                "advanceAfterFire DB update failed; next_fire_time may be stale → re-fire risk")
+            .register(registry);
   }
 
   /** P0 (audit 2026-05-23):fire 异步池队列堆积监控。Gauge,supplier 由 executor bean 提供。 */
@@ -184,19 +192,11 @@ public class WheelMetrics {
   /**
    * R2-P0-3: advanceAfterFire DB 失败计数；持续增长表示 wheel 处于"成功 fire 但 next_fire_time 没推进" 的危险态——会被下一 tick
    * 重复 fire，触发条件通常是 DB 短暂不可达 / 锁等待超时。
+   *
+   * <p>audit 2026-06-03:已移除 jobCode tag(高基数 = 租户 × 作业,Prometheus series 爆炸风险);jobCode 入参保留 用作未来
+   * log/trace 钩子,当前仅用于告警全局聚合,具体作业定位走日志/trace 关联(MDC + traceId)。
    */
   public void incrementAdvanceFailed(String jobCode) {
-    String key = jobCode == null ? "unknown" : jobCode;
-    advanceFailedByJob
-        .computeIfAbsent(
-            key,
-            j ->
-                Counter.builder(ADVANCE_FAILED)
-                    .description(
-                        "advanceAfterFire DB update failed; next_fire_time may be stale →"
-                            + " re-fire risk")
-                    .tags(Tags.of("jobCode", j))
-                    .register(registry))
-        .increment();
+    advanceFailedCounter.increment();
   }
 }
