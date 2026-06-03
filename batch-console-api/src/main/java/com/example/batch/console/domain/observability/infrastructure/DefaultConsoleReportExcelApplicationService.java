@@ -261,7 +261,7 @@ public class DefaultConsoleReportExcelApplicationService
       return headers;
     }
     if (!rows.isEmpty() && rows.get(0) instanceof Map<?, ?> map) {
-      return new ArrayList<>(map.keySet().stream().map(String::valueOf).toList());
+      return map.keySet().stream().map(String::valueOf).toList();
     }
     try {
       return Arrays.stream(Introspector.getBeanInfo(rowType, Object.class).getPropertyDescriptors())
