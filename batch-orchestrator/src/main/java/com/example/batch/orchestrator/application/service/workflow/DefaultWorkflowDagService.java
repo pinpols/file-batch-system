@@ -19,6 +19,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -120,7 +121,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       List<WorkflowNodeEntity> nodes =
           workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCodesIn(
               workflowDefinitionId, wantedCodes);
-      nodeByCode = new java.util.HashMap<>(nodes.size() * 2);
+      nodeByCode = new HashMap<>(nodes.size() * 2);
       for (WorkflowNodeEntity node : nodes) {
         nodeByCode.put(node.getNodeCode(), node);
       }
@@ -202,7 +203,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (!fromCodes.isEmpty()) {
       List<WorkflowNodeRunEntity> runs =
           workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(workflowRunId, fromCodes);
-      latestRunByCode = new java.util.HashMap<>(runs.size() * 2);
+      latestRunByCode = new HashMap<>(runs.size() * 2);
       for (WorkflowNodeRunEntity r : runs) {
         latestRunByCode.put(r.getNodeCode(), r);
       }
@@ -293,7 +294,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if (!fromCodes.isEmpty()) {
       List<WorkflowNodeRunEntity> runs =
           workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(workflowRunId, fromCodes);
-      latestRunByCode = new java.util.HashMap<>(runs.size() * 2);
+      latestRunByCode = new HashMap<>(runs.size() * 2);
       for (WorkflowNodeRunEntity r : runs) {
         latestRunByCode.put(r.getNodeCode(), r);
       }

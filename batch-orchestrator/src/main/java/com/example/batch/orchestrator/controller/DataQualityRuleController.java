@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.controller;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import com.example.batch.orchestrator.mapper.DataQualityRuleMapper;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,7 +32,7 @@ public class DataQualityRuleController {
 
   /** 按 (tenantId, businessKey 前缀) 列出 enabled 规则。 */
   @GetMapping
-  public CommonResponse<java.util.List<DataQualityRuleEntity>> list(
+  public CommonResponse<List<DataQualityRuleEntity>> list(
       @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
     return CommonResponse.success(ruleMapper.selectEnabledByBusinessKey(tenantId, businessKey));
   }
