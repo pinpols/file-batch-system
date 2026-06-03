@@ -5,6 +5,7 @@ import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +32,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
    * 的严重 bug。
    */
   protected static final int DEFAULT_MAX_PAGES = 100_000;
+
+  /**
+   * 2026-06-04 docs/design/pipeline-stage-progress-display.md:EXPORT GENERATE 行级进度上报节流。 心跳默认
+   * 30s/次,每行 publish 是无意义的 AtomicReference set;每 1000 行 publish 一次足够细。
+   */
+  private static final int PROGRESS_PUBLISH_EVERY_N_ROWS = 1000;
 
   protected static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -69,6 +76,13 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       for (Map<String, Object> detail : details) {
         rowWriter.writeRow(ctx.batch(), detail, recordCount);
         recordCount++;
+        // 2026-06-04 docs/design/pipeline-stage-progress-display.md:每 1000 行 publish 一次,
+        // 节流匹配心跳节奏(30s/次);AtomicReference set 极廉价但无须每行调。
+        // totalRowsHint=null:export 走 cursor 分页 plugin 不报总量,FE 退化为只显计数器不显 ETA;
+        // 未来 ExportDataPlugin 暴露 estimateTotal() 时可在此带上。
+        if (recordCount % PROGRESS_PUBLISH_EVERY_N_ROWS == 0) {
+          PipelineStageProgressSink.publish(recordCount, null);
+        }
       }
       Object cursor = page.nextCursor();
       if (cursor == null) {
@@ -82,6 +96,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       }
       page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
     }
+    // 终态收尾上报(若总行数不是 1000 的倍数,最后一段不会被循环里的节流捕获)
+    PipelineStageProgressSink.publish(recordCount, null);
     return recordCount;
   }
 
