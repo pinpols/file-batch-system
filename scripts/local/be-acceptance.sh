@@ -277,7 +277,14 @@ step_1_build_restart() {
   fi
   cp "$jar" build/runtime-jars/console.jar
   bash scripts/local/restart.sh console > "$LOG_DIR/step1-restart.log" 2>&1
-  until curl -sf "http://localhost:$CONSOLE_PORT/actuator/health" -o /dev/null; do sleep 2; done
+  local deadline=$(( $(date +%s) + 180 ))
+  until curl -sf --max-time 5 --connect-timeout 2 "http://localhost:$CONSOLE_PORT/actuator/health" -o /dev/null; do
+    if (( $(date +%s) > deadline )); then
+      ng "BE 起不来 180s timeout(看 $LOG_DIR/step1-restart.log)"
+      return 1
+    fi
+    sleep 2
+  done
   ok "BE UP"
   note "等 3 min 看日志稳态..."
   sleep 180

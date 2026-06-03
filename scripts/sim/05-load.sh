@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "❌ 需 bash 4+,macOS 默认 3.2 不支持 declare -A。请 brew install bash 后用 /usr/local/bin/bash 跑。" >&2
+  exit 1
+fi
 # =========================================================
 # 05-load.sh:中量触发 ta/tb/tc 的 4 类 job(IMPORT / EXPORT / DISPATCH / WORKFLOW)
 #
@@ -34,7 +38,7 @@ for round in $(seq 1 "$ROUNDS"); do
     for job in ${JOBS[$tenant]}; do
       total=$((total + 1))
       req_id="sim-${round}-${tenant}-${job}-$(date +%s%N | tail -c 8)"
-      resp=$(curl -sf -X POST \
+      resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
         -H "Content-Type: application/json" \
         -H "X-Tenant-Id: $tenant" \
         -H "X-Request-Id: $req_id" \

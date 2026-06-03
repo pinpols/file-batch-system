@@ -175,7 +175,7 @@ trap on_exit EXIT
 http_post() {
   local path="$1"; shift
   local body="$1"; shift
-  local args=(-sS -o /tmp/resp.body -w "%{http_code}" -X POST
+  local args=(-sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" -X POST
     "http://localhost:${TRIGGER_PORT}${path}"
     -H "Content-Type: application/json"
     -H "X-Internal-Secret: $INTERNAL_SECRET")
@@ -189,7 +189,7 @@ http_post() {
 # ---------- 0. 探活 ----------
 section "0. 探活"
 
-if curl -sf "http://localhost:${TRIGGER_PORT}/actuator/health" >/dev/null 2>&1; then
+if curl -sf --max-time 30 --connect-timeout 5 "http://localhost:${TRIGGER_PORT}/actuator/health" >/dev/null 2>&1; then
   result pass "trigger UP" "port $TRIGGER_PORT"
 else
   result fail "trigger UP" "port $TRIGGER_PORT 不响应"
@@ -197,7 +197,7 @@ else
   exit 1
 fi
 
-if curl -sf "http://localhost:${ORCH_PORT}/actuator/health" >/dev/null 2>&1; then
+if curl -sf --max-time 30 --connect-timeout 5 "http://localhost:${ORCH_PORT}/actuator/health" >/dev/null 2>&1; then
   result pass "orchestrator UP" "port $ORCH_PORT"
 else
   result fail "orchestrator UP" "port $ORCH_PORT 不响应"
@@ -222,7 +222,7 @@ if [[ "$STRICT" == "1" ]]; then
   for _pair in "import:${_W_IMP}" "export:${_W_EXP}" "dispatch:${_W_DISP}" "process:${_W_PROC}"; do
     _name="${_pair%%:*}"
     _port="${_pair##*:}"
-    if curl -sf "http://localhost:${_port}/actuator/health" >/dev/null 2>&1; then
+    if curl -sf --max-time 30 --connect-timeout 5 "http://localhost:${_port}/actuator/health" >/dev/null 2>&1; then
       result pass "worker-${_name} UP" "port ${_port}（与各模块默认 BATCH_WORKER_*_TENANT_ID=default-tenant 一致）"
     else
       result fail "worker-${_name} UP" "port ${_port} 无响应 — 请 START_WORKERS=1 bash scripts/local/start-all.sh（勿单独改租户为 ta/tb/tc）"
@@ -405,7 +405,7 @@ else
 fi
 
 # 7. 异常: 缺幂等键
-http_code=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+http_code=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
   -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/launch" \
   -H "Content-Type: application/json" \
   -H "X-Internal-Secret: $INTERNAL_SECRET" \
@@ -418,7 +418,7 @@ else
 fi
 
 # 8. 异常: 缺 X-Internal-Secret
-http_code=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+http_code=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
   -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/launch" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: ${PROBE_TAG}-no-secret" \
@@ -723,7 +723,7 @@ if [[ "$ADVANCED" == "1" ]]; then
   section "9. Advanced (ADVANCED=1): orch /internal/* + console auth + trigger cron"
 
   # 9.1 Outbox cleanup smoke
-  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+  resp=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
     -X POST "http://localhost:${ORCH_PORT}/internal/outbox/cleanup?tenantId=ta&retainDays=99999" \
     -H "X-Internal-Secret: $INTERNAL_SECRET" 2>/dev/null)
   if [[ "$resp" == "200" ]]; then
@@ -734,7 +734,7 @@ if [[ "$ADVANCED" == "1" ]]; then
   fi
 
   # 9.2 Outbox republish smoke (空列表,验证接口可达 + 返回 reset=0)
-  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+  resp=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
     -X POST "http://localhost:${ORCH_PORT}/internal/outbox/republish?tenantId=ta" \
     -H "X-Internal-Secret: $INTERNAL_SECRET" \
     -H "Content-Type: application/json" \
@@ -753,7 +753,7 @@ if [[ "$ADVANCED" == "1" ]]; then
   # 9.3 Compensate submit (使用合法 type=JOB + 不存在的 instance, 期望 4xx 业务错误而非 500)
   # 注意: 已知 bug — DefaultCompensationService 的 audit log 用 'COMPENSATION_REJECTED' log_type
   # 但 V13 ck_job_execution_log_type CHECK 约束不含此值,导致 reject 路径会回 500 而不是 4xx
-  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+  resp=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
     -X POST "http://localhost:${ORCH_PORT}/internal/compensations" \
     -H "X-Internal-Secret: $INTERNAL_SECRET" \
     -H "Content-Type: application/json" \
@@ -775,7 +775,7 @@ if [[ "$ADVANCED" == "1" ]]; then
   esac
 
   # 9.4 Console-api auth gate
-  resp=$(curl -sS -o /tmp/resp.body -w "%{http_code}" \
+  resp=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{http_code}" \
     "http://localhost:${CONSOLE_PORT}/api/console/queries/job-definitions?tenantId=ta&pageNo=1&pageSize=5" 2>/dev/null)
   case "$resp" in
     401) result pass "Console-api 鉴权拦截" "HTTP 401(无认证 token,gate 工作)" ;;
