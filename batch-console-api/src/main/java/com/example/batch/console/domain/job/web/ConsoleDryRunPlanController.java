@@ -56,6 +56,9 @@ public class ConsoleDryRunPlanController {
             .body(sanitized)
             .retrieve()
             .body(new ParameterizedTypeReference<>() {});
-    return responseFactory.success(resp);
+    // J1 bugfix 2026-06-04:orchestrator 返 CommonResponse<DryRunPlanResult> envelope;
+    // 直接 success(resp) 会让 FE 见到 {success:true, data:{success:true, data:{...}}} 嵌套,
+    // ADR-026 e2e integration-adr-features:18 据此误判 success=false。透传 envelope.data。
+    return responseFactory.forwardOrchestrator(resp);
   }
 }

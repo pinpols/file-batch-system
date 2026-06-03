@@ -1328,6 +1328,11 @@ paths:
         L1 解析 cron / DAG / 参数；L2 复用 SchedulePlanBuilder 输出 partition / worker route；
         L3 在 L2 基础上叠加 SQL EXPLAIN / MinIO bucketExists / HTTP HEAD reachability。
         响应含 findings (PASS/WARN/ERROR) + summary。**不写 instance / 不调外部投递**（priority-scope §ADR-026 §5）。
+
+        **2026-06-04 wire 修复**：BFF 此前把 orchestrator 整层 `CommonResponse<T>` envelope
+        当 data 二次包装导致 FE 收到 `{data:{data:{...}}}` 嵌套（e2e ADR-026 spec 误判
+        success=false）。现走 `ConsoleResponseFactory.forwardOrchestrator(...)` 透传内层 data —
+        响应 schema 仍为单层 `CommonResponseObject`，**外层结构不变**，仅修复 nesting bug。
       operationId: dryRunPlan
       requestBody:
         required: true

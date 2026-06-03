@@ -64,7 +64,7 @@ public class ConsoleResultVersionController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .get()
             .uri(
@@ -73,7 +73,8 @@ public class ConsoleResultVersionController {
                 resolved,
                 businessKey)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   @GetMapping("/{id}")
@@ -81,12 +82,13 @@ public class ConsoleResultVersionController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .get()
             .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   // P0-1: promote/reject 是高危结果版本变更，要求管理员/配置管理员权限；P1-6：强制幂等键
@@ -98,7 +100,7 @@ public class ConsoleResultVersionController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .post()
             .uri(
@@ -106,7 +108,8 @@ public class ConsoleResultVersionController {
                 id,
                 resolved)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/{id}/reject")
@@ -117,7 +120,7 @@ public class ConsoleResultVersionController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(
+    Map<String, Object> resp =
         proxyClient()
             .post()
             .uri(
@@ -125,7 +128,8 @@ public class ConsoleResultVersionController {
                 id,
                 resolved)
             .retrieve()
-            .body(unwrapToMap()));
+            .body(unwrapToMap());
+    return responseFactory.forwardOrchestrator(resp);
   }
 
   private RestClient proxyClient() {
