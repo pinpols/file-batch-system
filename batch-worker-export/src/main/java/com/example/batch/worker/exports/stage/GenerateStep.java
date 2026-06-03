@@ -9,6 +9,7 @@ import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
@@ -131,8 +132,13 @@ public class GenerateStep implements ExportStageStep {
           .getAttributes()
           .put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
       context.getAttributes().put("fileSizeBytes", Files.size(generatedFile));
+      // 2026-06-04 docs/design/pipeline-stage-progress-display.md:stage 结束清 sink,
+      // 避免下一个 CLAIM 心跳带上残留;AbstractExportFormat.generatePaged 已在循环里每 1000 行 publish。
+      PipelineStageProgressSink.clear();
       return ExportStageResult.success(stage());
     } catch (Exception ex) {
+      // 失败也清,同理
+      PipelineStageProgressSink.clear();
       logFailureThrottled(context, exportPayload, ex);
 
       deleteQuietly(generatedFile);
