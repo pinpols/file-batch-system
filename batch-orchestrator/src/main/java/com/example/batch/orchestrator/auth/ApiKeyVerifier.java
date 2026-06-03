@@ -43,21 +43,21 @@ public class ApiKeyVerifier {
   /**
    * @param rawKey 客户端传来的 X-Batch-Api-Key 原文
    * @param claimedTenantId 客户端传来的 X-Batch-Tenant-Id;必须与 key 在表里的 tenant_id 一致
-   * @return 命中且活跃的 {@link ApiKeyRecord};否则空(filter 直接返 401,不暴露具体原因防侧信道)
+   * @return 命中且活跃的 {@link ApiKeyEntity};否则空(filter 直接返 401,不暴露具体原因防侧信道)
    */
-  public Optional<ApiKeyRecord> verify(String rawKey, String claimedTenantId) {
+  public Optional<ApiKeyEntity> verify(String rawKey, String claimedTenantId) {
     if (rawKey == null || rawKey.isBlank()) return Optional.empty();
     if (claimedTenantId == null || claimedTenantId.isBlank()) return Optional.empty();
     if (rawKey.length() < KEY_PREFIX_LEN) return Optional.empty();
 
     String prefix = rawKey.substring(0, KEY_PREFIX_LEN);
-    List<ApiKeyRecord> candidates =
+    List<ApiKeyEntity> candidates =
         mapper.findActiveCandidatesByPrefixAndTenant(prefix, claimedTenantId);
     if (candidates == null || candidates.isEmpty()) return Optional.empty();
 
     // 候选数极小(同一租户同一前缀的活跃 key,索引剪枝后通常 0-1 行,极端冲突 <5)。
     // 逐行常量时间比对,命中即停;legacy sha256 命中后异步升级 KDF。
-    for (ApiKeyRecord rec : candidates) {
+    for (ApiKeyEntity rec : candidates) {
       String algo = rec.keyHashAlgo() == null ? ApiKeyHasher.ALGO_SHA256_LEGACY : rec.keyHashAlgo();
       if (ApiKeyHasher.verify(rawKey, rec.keyHash(), rec.salt(), algo)) {
         touchAsync(rec.id());
@@ -73,9 +73,9 @@ public class ApiKeyVerifier {
   /**
    * 同 {@link #verify} 但强制 key.scope 含 {@code requiredScope}(或 {@code "*"} 通配)。
    *
-   * @return 命中且 scope 通过的 {@link ApiKeyRecord};否则空(scope 不通过也返空,filter 一律 401,不区分原因)
+   * @return 命中且 scope 通过的 {@link ApiKeyEntity};否则空(scope 不通过也返空,filter 一律 401,不区分原因)
    */
-  public Optional<ApiKeyRecord> verifyWithScope(
+  public Optional<ApiKeyEntity> verifyWithScope(
       String rawKey, String claimedTenantId, String requiredScope) {
     return verify(rawKey, claimedTenantId).filter(rec -> scopesAllow(rec.scopes(), requiredScope));
   }

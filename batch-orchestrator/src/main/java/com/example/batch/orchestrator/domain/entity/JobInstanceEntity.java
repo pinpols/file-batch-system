@@ -4,12 +4,14 @@ import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * CLAUDE.md §Java 红线:持久化类不加 {@code @Builder}。本类是 MyBatis ResultMap target, 走 setter 注入 + canonical
+ * constructor;创建实例请直接 {@code new + setter},不再用 builder。
+ */
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class JobInstanceEntity implements Stateful {

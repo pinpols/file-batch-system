@@ -11,15 +11,15 @@ import java.util.Map;
  * @param message 原成功 message
  * @param output 原成功 output(下游 step / job 的 runtimeAttributes)
  */
-public record SdkIdempotencyRecord(String message, Map<String, Object> output) {
+public record SdkIdempotencyEntity(String message, Map<String, Object> output) {
 
-  public SdkIdempotencyRecord {
+  public SdkIdempotencyEntity {
     output = output == null ? Map.of() : Map.copyOf(output);
   }
 
   /** 从一次成功结果抽快照。 */
-  public static SdkIdempotencyRecord ofResult(SdkTaskResult result) {
-    return new SdkIdempotencyRecord(result.message(), result.output());
+  public static SdkIdempotencyEntity ofResult(SdkTaskResult result) {
+    return new SdkIdempotencyEntity(result.message(), result.output());
   }
 
   /** 重建成功结果(命中跳过执行时返回)。 */

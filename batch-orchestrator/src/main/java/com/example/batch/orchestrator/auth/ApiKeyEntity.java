@@ -9,7 +9,7 @@ import java.time.Instant;
  * (P1-1)。filter 拿候选行后由 {@link ApiKeyVerifier} 用 {@link
  * com.example.batch.common.security.ApiKeyHasher} 常量时间比对。
  */
-public record ApiKeyRecord(
+public record ApiKeyEntity(
     Long id,
     String tenantId,
     String keyName,

@@ -5,8 +5,11 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * batch.workflow_definition CRUD。原 {@code WorkflowDefinitionRepository}（Spring Data JDBC）已下线，
- * 配置态写读统一由本 Mapper 接管。
+ * batch.workflow_definition 只读 Mapper。CLAUDE.md §持久化"同一表禁双主入口":本表写入主入口在 {@code
+ * batch-console-api}(用户 UI CRUD),orch 端仅 SELECT 用于缓存 / reconciler。
+ *
+ * <p>orchestrator 若需要 seeding / 修复定义数据,走 db migration 或调用 console-api 的 ProxyService, 不得在本接口加
+ * insert/update/delete。
  */
 public interface WorkflowDefinitionMapper {
 
@@ -24,10 +27,4 @@ public interface WorkflowDefinitionMapper {
 
   /** ADR-025 reconciler：跨租户列出 enabled=true 全量。 */
   List<WorkflowDefinitionEntity> selectAllEnabled(@Param("limit") int limit);
-
-  int insert(WorkflowDefinitionEntity record);
-
-  int update(WorkflowDefinitionEntity record);
-
-  int deleteById(@Param("id") Long id);
 }

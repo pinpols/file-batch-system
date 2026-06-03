@@ -144,7 +144,8 @@ class TriggerLaunchConsumerTest {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-wb1");
     when(launchApplicationService.launch(any(LaunchRequest.class)))
         .thenReturn(new LaunchResponse("inst-77", "trace-1"));
-    JobInstanceEntity job = JobInstanceEntity.builder().id(7701L).build();
+    JobInstanceEntity job = new JobInstanceEntity();
+    job.setId(7701L);
     when(jobInstanceMapper.selectByInstanceNo("tenant-a", "inst-77")).thenReturn(job);
 
     consumer.consume(record(envelope), ack);

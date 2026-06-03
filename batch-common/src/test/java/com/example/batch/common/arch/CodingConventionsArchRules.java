@@ -49,6 +49,44 @@ public final class CodingConventionsArchRules {
   }
 
   /**
+   * 禁止 {@code *Record} 后缀的持久化/领域类:CLAUDE.md §持久化(ADR-001)明文统一 {@code *Entity} 后缀。
+   *
+   * <p>豁免:Java 14+ JEP 359 的"record"类型本身(因为 record 关键字与命名后缀语义不同),仅当类名是 "Record"(裸名)或位于 SDK
+   * testkit/example 时跳过。
+   */
+  public static ArchRule recordSuffixForbiddenRule() {
+    return noClasses()
+        .that()
+        .haveSimpleNameEndingWith("Record")
+        .and()
+        .haveSimpleNameNotEndingWith("RecordEntity")
+        .and(
+            new DescribedPredicate<>("is not the bare name \"Record\"") {
+              @Override
+              public boolean test(JavaClass clazz) {
+                return !"Record".equals(clazz.getSimpleName());
+              }
+            })
+        .should(existAtAll())
+        .allowEmptyShould(true)
+        .because(
+            "CLAUDE.md §持久化(ADR-001):表行/领域类一律 *Entity 后缀,禁 *Record。"
+                + "新增以 Record 结尾的类必须改名 *Entity(例如 ApiKeyEntity / ImportBadRecordEntity)。");
+  }
+
+  private static ArchCondition<JavaClass> existAtAll() {
+    return new ArchCondition<>("not exist (any match = violation)") {
+      @Override
+      public void check(JavaClass item, ConditionEvents events) {
+        events.add(
+            SimpleConditionEvent.violated(
+                item,
+                item.getName() + " ends with \"Record\" — 违反 CLAUDE.md §持久化命名约束,请改为 *Entity 后缀"));
+      }
+    };
+  }
+
+  /**
    * Spring Boot Application 类的 {@code @SpringBootApplication.scanBasePackages}(或
    * {@code @ComponentScan.basePackages})必须覆盖给定 {@code requiredPrefixes}。
    *

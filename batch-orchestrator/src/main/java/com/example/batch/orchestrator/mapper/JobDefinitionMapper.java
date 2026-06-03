@@ -5,11 +5,8 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * batch.job_definition CRUD。原 {@code JobDefinitionRepository}（Spring Data JDBC）已下线， 配置态读写统一由本
- * Mapper 接管。
- *
- * <p>{@code param_schema} / {@code default_params} 是 {@code Map<String,Object>} → JSONB；读路径走 {@code
- * ::text + MapJsonbTypeHandler}，写路径走 {@code cast(#{...} as jsonb)} + {@code MapJsonbTypeHandler}。
+ * batch.job_definition 只读 Mapper。CLAUDE.md §持久化"同一表禁双主入口":本表写入主入口在 {@code batch-console-api},orch
+ * 端仅 SELECT。{@code param_schema} / {@code default_params} 走 {@code ::text + MapJsonbTypeHandler}。
  */
 public interface JobDefinitionMapper {
 
@@ -22,10 +19,4 @@ public interface JobDefinitionMapper {
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
   JobDefinitionEntity selectById(@Param("id") Long id);
-
-  int insert(JobDefinitionEntity record);
-
-  int update(JobDefinitionEntity record);
-
-  int deleteById(@Param("id") Long id);
 }

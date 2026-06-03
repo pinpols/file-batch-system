@@ -5,8 +5,8 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * batch.tenant_quota_policy CRUD。原 {@code TenantQuotaPolicyRepository}（Spring Data JDBC）已下线， 配额策略读取
- * + reconciler / snapshot 的 distinct tenant 枚举统一由本 Mapper 接管。
+ * batch.tenant_quota_policy 只读 Mapper。CLAUDE.md §持久化"同一表禁双主入口":本表写入主入口在 {@code
+ * batch-console-api},orch 端仅 SELECT + reconciler / snapshot 的 distinct tenant 枚举。
  */
 public interface TenantQuotaPolicyMapper {
 
@@ -21,10 +21,4 @@ public interface TenantQuotaPolicyMapper {
   List<String> selectDistinctEnabledTenantIds();
 
   TenantQuotaPolicyEntity selectById(@Param("id") Long id);
-
-  int insert(TenantQuotaPolicyEntity record);
-
-  int update(TenantQuotaPolicyEntity record);
-
-  int deleteById(@Param("id") Long id);
 }

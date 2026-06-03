@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.orchestrator.auth.ApiKeyRecord;
+import com.example.batch.orchestrator.auth.ApiKeyEntity;
 import com.example.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
 import java.util.Optional;
@@ -43,7 +43,7 @@ class InternalAuthFilterTest {
     // /internal/workers/* + /internal/tasks/* 现在走 verifyWithScope(worker.execute)
     when(verifier.verifyWithScope("raw-key", "tx", "worker.execute"))
         .thenReturn(
-            Optional.of(new ApiKeyRecord(1L, "tx", "n", "*", true, null, "h", "s", "pbkdf2")));
+            Optional.of(new ApiKeyEntity(1L, "tx", "n", "*", true, null, "h", "s", "pbkdf2")));
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);

@@ -16,7 +16,6 @@ import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration.FileProcessing;
-import com.example.batch.worker.imports.domain.CustomerImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
@@ -40,8 +39,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * 单测：LoadStep —— 流式路径 / legacy 路径 / dry-run / 插件配置错误 / 全跳过 等关键分支。 不重复测
- * AbstractPipelineStepExecutionAdapter 的通用治理逻辑。
+ * 单测：LoadStep —— 流式路径 / dry-run / 插件配置错误 / 全跳过 等关键分支。 不重复测 AbstractPipelineStepExecutionAdapter
+ * 的通用治理逻辑。
  */
 @ExtendWith(MockitoExtension.class)
 class LoadStepTest {
@@ -165,41 +164,18 @@ class LoadStepTest {
   }
 
   @Test
-  void shouldFallbackToLegacy_whenValidatedPathSetButFileMissing() {
+  void shouldFailNoPayload_whenValidatedPathSetButFileMissing() {
     ImportJobContext ctx = streamingContext(tempDir.resolve("ghost.ndjson"), null);
-    // legacy path: no customerPayloads → IMPORT_LOAD_NO_PAYLOAD
+    // streaming path: validated 文件不存在 → IMPORT_LOAD_NO_PAYLOAD(ADR-038 P3 legacy 已下线)
     ImportStageResult result = loadStep.execute(ctx);
 
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("IMPORT_LOAD_NO_PAYLOAD");
   }
 
-  // ── legacy path ──
-
   @Test
-  void shouldLegacyLoad_fromCustomerPayloads() throws Exception {
+  void shouldFailNoPayload_whenValidatedPathMissing() {
     ImportJobContext ctx = baseContext();
-    ctx.getAttributes()
-        .put(
-            "customerPayloads",
-            List.of(
-                new CustomerImportPayload("C001", "n", "PERSONAL", "id", "m", "e", "ACTIVE"),
-                new CustomerImportPayload("C002", "n", "PERSONAL", "id", "m", "e", "ACTIVE"),
-                new CustomerImportPayload("C003", "n", "PERSONAL", "id", "m", "e", "ACTIVE")));
-    when(runtimeRepository.toLong(any())).thenReturn(99L);
-    when(plugin.loadChunk(any(), any())).thenAnswer(inv -> ((List<?>) inv.getArgument(1)).size());
-
-    ImportStageResult result = loadStep.execute(ctx);
-
-    assertThat(result.success()).isTrue();
-    verify(plugin, times(2)).loadChunk(any(), any());
-    assertThat(ctx.getAttributes()).containsEntry("loadedCount", 3L);
-  }
-
-  @Test
-  void shouldReturnNoPayload_whenLegacyListEmptyAndNoSkippedCount() {
-    ImportJobContext ctx = baseContext();
-    ctx.getAttributes().put("customerPayloads", List.of());
 
     ImportStageResult result = loadStep.execute(ctx);
 

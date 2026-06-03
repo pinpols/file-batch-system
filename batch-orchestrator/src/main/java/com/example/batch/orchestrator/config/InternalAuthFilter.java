@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.config;
 
 import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.orchestrator.auth.ApiKeyRecord;
+import com.example.batch.orchestrator.auth.ApiKeyEntity;
 import com.example.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -43,7 +43,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
   /** Filter 校验通过后写入,controller 通过 {@code request.getAttribute} 取。 */
   public static final String ATTR_RESOLVED_TENANT_ID = "batch.auth.resolvedTenantId";
 
-  /** Filter 校验通过后写入,值为 {@link ApiKeyRecord};secret 通道写 null。 */
+  /** Filter 校验通过后写入,值为 {@link ApiKeyEntity};secret 通道写 null。 */
   public static final String ATTR_API_KEY_RECORD = "batch.auth.apiKeyRecord";
 
   private static final String UNAUTHORIZED_BODY =
@@ -81,7 +81,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
           (uri.startsWith("/internal/workers/") || uri.startsWith("/internal/tasks/"))
               ? ApiKeyVerifier.SCOPE_WORKER_EXECUTE
               : null;
-      Optional<ApiKeyRecord> rec =
+      Optional<ApiKeyEntity> rec =
           requiredScope == null
               ? apiKeyVerifier.verify(apiKey, tenantHeader)
               : apiKeyVerifier.verifyWithScope(apiKey, tenantHeader, requiredScope);
