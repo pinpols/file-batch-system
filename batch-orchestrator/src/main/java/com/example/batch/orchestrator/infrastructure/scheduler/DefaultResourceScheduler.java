@@ -26,6 +26,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.LongSupplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -262,7 +263,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     return (int) Math.min(count, Integer.MAX_VALUE);
   }
 
-  private long cachedCount(String key, java.util.function.LongSupplier loader) {
+  private long cachedCount(String key, LongSupplier loader) {
     Map<String, Long> cache = TICK_CACHE.get();
     if (cache == null) {
       return loader.getAsLong();

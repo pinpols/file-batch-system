@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.mapper;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -19,8 +20,7 @@ public interface WorkflowNodeRunMapper {
    * node_code, run_seq DESC。 调用方需保证 nodeCodes 非空。
    */
   List<WorkflowNodeRunEntity> selectLatestByWorkflowRunIdAndNodeCodesIn(
-      @Param("workflowRunId") Long workflowRunId,
-      @Param("nodeCodes") java.util.Collection<String> nodeCodes);
+      @Param("workflowRunId") Long workflowRunId, @Param("nodeCodes") Collection<String> nodeCodes);
 
   // C-1/C-3: pessimistic lock to serialize concurrent recordNodeRunFinish /
   // isNodeAlreadyActivated

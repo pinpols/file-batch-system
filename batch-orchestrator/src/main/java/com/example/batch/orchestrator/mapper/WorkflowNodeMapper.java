@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -18,5 +19,5 @@ public interface WorkflowNodeMapper {
    */
   List<WorkflowNodeEntity> selectByWorkflowDefinitionIdAndNodeCodesIn(
       @Param("workflowDefinitionId") Long workflowDefinitionId,
-      @Param("nodeCodes") java.util.Collection<String> nodeCodes);
+      @Param("nodeCodes") Collection<String> nodeCodes);
 }

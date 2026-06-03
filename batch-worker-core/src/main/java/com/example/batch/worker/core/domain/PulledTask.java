@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.domain;
 
+import java.time.Instant;
 import lombok.Data;
 
 /**
@@ -52,8 +53,8 @@ public class PulledTask {
    * ExecutionContext.getAttributes().get(PipelineRuntimeKeys.DATA_INTERVAL_START)} 拼 SQL {@code
    * WHERE update_time >= :start}. null 时退化为 bizDate.atStartOfDay (worker 端兜底).
    */
-  private java.time.Instant dataIntervalStart;
+  private Instant dataIntervalStart;
 
   /** V94: data_interval 半开区间终点. null 时退化为 bizDate+1.atStartOfDay (worker 端兜底). */
-  private java.time.Instant dataIntervalEnd;
+  private Instant dataIntervalEnd;
 }

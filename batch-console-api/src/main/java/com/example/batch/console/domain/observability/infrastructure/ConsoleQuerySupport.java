@@ -8,7 +8,6 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.page.CursorCodec;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -16,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -185,7 +185,7 @@ public final class ConsoleQuerySupport {
     if (value instanceof LocalDate localDate) {
       return localDate;
     }
-    if (value instanceof Date sqlDate) {
+    if (value instanceof java.sql.Date sqlDate) {
       return sqlDate.toLocalDate();
     }
     return LocalDate.parse(String.valueOf(value));
@@ -238,7 +238,7 @@ public final class ConsoleQuerySupport {
     if (value instanceof LocalDateTime localDateTime) {
       return localDateTime.toInstant(ZoneOffset.UTC);
     }
-    if (value instanceof java.util.Date date) {
+    if (value instanceof Date date) {
       return date.toInstant();
     }
     return Instant.parse(String.valueOf(value));

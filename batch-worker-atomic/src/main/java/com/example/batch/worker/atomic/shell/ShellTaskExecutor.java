@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
@@ -406,8 +407,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
   }
 
   // 用 ConcurrentMap 接收异步 reader 结果(简化:仅 2 个线程,小 map 够用)
-  private final java.util.concurrent.ConcurrentHashMap<String, ReaderResult> readerResults =
-      new java.util.concurrent.ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, ReaderResult> readerResults = new ConcurrentHashMap<>();
 
   private Thread startReaderThread(InputStream in, int maxBytes, String name) {
     Thread t =

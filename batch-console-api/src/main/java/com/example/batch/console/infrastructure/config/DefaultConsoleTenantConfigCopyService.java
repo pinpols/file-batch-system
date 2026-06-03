@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -603,7 +604,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     return left != null && !left.isBlank() && left.equals(right);
   }
 
-  private static <T> List<T> filter(List<T> source, java.util.function.Predicate<T> predicate) {
+  private static <T> List<T> filter(List<T> source, Predicate<T> predicate) {
     if (source == null || source.isEmpty()) {
       return List.of();
     }

@@ -17,6 +17,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -263,7 +265,7 @@ public class ReceiveStep implements ImportStageStep {
       return null;
     }
     // 迭代 BFS：用显式 Deque 替代递归调用栈，深度由 MAX_FIND_DEPTH 硬上限
-    java.util.Deque<NodeAtDepth> queue = new java.util.ArrayDeque<>();
+    Deque<NodeAtDepth> queue = new ArrayDeque<>();
     queue.add(new NodeAtDepth(node, 0));
     while (!queue.isEmpty()) {
       NodeAtDepth current = queue.poll();

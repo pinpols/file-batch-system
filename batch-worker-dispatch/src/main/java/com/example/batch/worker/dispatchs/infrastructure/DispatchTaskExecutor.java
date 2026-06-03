@@ -9,6 +9,7 @@ import com.example.batch.common.spi.task.TaskResult;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import java.time.Duration;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -33,7 +34,7 @@ public class DispatchTaskExecutor implements BatchTaskExecutor {
   @Override
   public TaskCapability capability() {
     return new TaskCapability(
-        java.util.Set.of(ResourceKind.NET, ResourceKind.DISK), false, true, Duration.ofMinutes(15));
+        Set.of(ResourceKind.NET, ResourceKind.DISK), false, true, Duration.ofMinutes(15));
   }
 
   @Override

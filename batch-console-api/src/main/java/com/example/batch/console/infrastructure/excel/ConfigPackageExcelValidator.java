@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -1151,7 +1152,7 @@ public class ConfigPackageExcelValidator {
       if (!Texts.hasText(params)) {
         continue;
       }
-      java.util.regex.Matcher m = DSL_NODE_REF.matcher(params);
+      Matcher m = DSL_NODE_REF.matcher(params);
       while (m.find()) {
         String ref = m.group(1);
         if (!byCode.containsKey(ref)) {
