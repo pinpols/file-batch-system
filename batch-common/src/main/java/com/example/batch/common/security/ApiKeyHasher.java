@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -100,8 +101,7 @@ public final class ApiKeyHasher {
       SecretKeyFactory factory = SecretKeyFactory.getInstance(PBKDF2_ALGO);
       byte[] out = factory.generateSecret(spec).getEncoded();
       return Base64.getEncoder().encodeToString(out);
-    } catch (java.security.NoSuchAlgorithmException
-        | java.security.spec.InvalidKeySpecException e) {
+    } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
       throw new IllegalStateException("PBKDF2 derivation failed", e);
     }
   }

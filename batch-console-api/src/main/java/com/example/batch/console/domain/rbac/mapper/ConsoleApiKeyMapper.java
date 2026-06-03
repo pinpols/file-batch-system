@@ -17,6 +17,8 @@ public interface ConsoleApiKeyMapper {
   Optional<ApiKeyEntity> findByTenantAndName(
       @Param("tenantId") String tenantId, @Param("keyName") String keyName);
 
+  // MyBatis 列绑定签名，等价于 record/DTO 构造器——按 build/pmd-ruleset.xml 注释规约豁免
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   void insert(
       @Param("tenantId") String tenantId,
       @Param("keyName") String keyName,
