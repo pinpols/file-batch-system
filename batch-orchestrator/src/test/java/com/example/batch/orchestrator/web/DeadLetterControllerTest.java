@@ -20,7 +20,7 @@ class DeadLetterControllerTest {
   private final RetryGovernanceService retryGovernanceService = mock(RetryGovernanceService.class);
   private final MockMvc mockMvc =
       MockMvcBuilders.standaloneSetup(new DeadLetterController(retryGovernanceService))
-          .setControllerAdvice(new OrchestratorApiExceptionHandler())
+          .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
           .build();
 
   @Test

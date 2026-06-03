@@ -30,7 +30,7 @@ class WorkerControllerTest {
   private final MockMvc mockMvc =
       MockMvcBuilders.standaloneSetup(
               new WorkerController(workerRegistryService, workerDrainGovernanceService))
-          .setControllerAdvice(new OrchestratorApiExceptionHandler())
+          .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
           .build();
 
   @Test

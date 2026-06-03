@@ -14,7 +14,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -67,18 +66,20 @@ public class ConsoleApiExceptionHandler {
   // CLAUDE.md §Java #3:构造器注入。
   private final BizMessageResolver bizMessageResolver;
 
-  // 主构造器:Spring 通过它注入(两个 ctor 共存时,@Autowired 显式标记主装配候选)。
-  @Autowired
+  // 唯一构造器(Spring 4.3+ 单 ctor 自动注入,无需 @Autowired)— 构造器注入符合 CLAUDE.md §Java #3。
   public ConsoleApiExceptionHandler(
       ConsoleResponseFactory responseFactory, BizMessageResolver bizMessageResolver) {
     this.responseFactory = responseFactory;
     this.bizMessageResolver = bizMessageResolver;
   }
 
-  // standalone MockMvc 测试场景(无 Spring 容器,不需要 i18n 翻译):
-  // bizMessageResolver=null 时 handleBizException 已有 null 短路降级返回 raw message。
-  public ConsoleApiExceptionHandler(ConsoleResponseFactory responseFactory) {
-    this(responseFactory, null);
+  /**
+   * standalone MockMvc 测试用 — 无 Spring 容器,resolver=null 时 handleBizException 走 null 短路降级返回 raw
+   * message,功能不变。
+   */
+  public static ConsoleApiExceptionHandler forStandaloneTest(
+      ConsoleResponseFactory responseFactory) {
+    return new ConsoleApiExceptionHandler(responseFactory, null);
   }
 
   @ExceptionHandler(BizException.class)
