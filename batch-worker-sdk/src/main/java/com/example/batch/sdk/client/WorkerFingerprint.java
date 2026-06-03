@@ -19,11 +19,11 @@ import java.net.UnknownHostException;
  *
  * <p>全部字段「尽力而为」:任一采集失败均降级为 null,绝不让指纹采集阻断 worker 启动。
  */
-final class WorkerFingerprint {
+public final class WorkerFingerprint {
 
   private WorkerFingerprint() {}
 
-  static String hostName() {
+  public static String hostName() {
     try {
       return InetAddress.getLocalHost().getHostName();
     } catch (UnknownHostException e) {
@@ -32,7 +32,7 @@ final class WorkerFingerprint {
     }
   }
 
-  static String hostIp() {
+  public static String hostIp() {
     try {
       return InetAddress.getLocalHost().getHostAddress();
     } catch (UnknownHostException e) {
@@ -40,12 +40,12 @@ final class WorkerFingerprint {
     }
   }
 
-  static String processId() {
+  public static String processId() {
     return Long.toString(ProcessHandle.current().pid());
   }
 
   /** 本 SDK 库版本 — 从 jar manifest Implementation-Version 读;非 jar 运行(IDE / 测试)返回 null。 */
-  static String sdkVersion() {
+  public static String sdkVersion() {
     Package pkg = WorkerFingerprint.class.getPackage();
     return pkg == null ? null : pkg.getImplementationVersion();
   }

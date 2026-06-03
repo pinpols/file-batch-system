@@ -1,6 +1,7 @@
 package com.example.batch.sdk.scheduler;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
+import com.example.batch.sdk.client.WorkerIdentity;
 import com.example.batch.sdk.dispatcher.HeartbeatDirective;
 import com.example.batch.sdk.dispatcher.TaskDispatcher;
 import com.example.batch.sdk.internal.PlatformHttpClient;
@@ -34,6 +35,7 @@ public class HeartbeatScheduler implements AutoCloseable {
   private final BatchPlatformClientConfig config;
   private final PlatformHttpClient httpClient;
   private final TaskDispatcher dispatcher;
+  private final WorkerIdentity identity;
   private final ScheduledExecutorService scheduler;
 
   /** Lane I:当前 schedule 的 future,收到 hint 时先 cancel 再重排。 */
@@ -44,7 +46,19 @@ public class HeartbeatScheduler implements AutoCloseable {
 
   public HeartbeatScheduler(
       BatchPlatformClientConfig config, PlatformHttpClient httpClient, TaskDispatcher dispatcher) {
-    this(config, httpClient, dispatcher, defaultScheduler());
+    this(config, httpClient, dispatcher, null, defaultScheduler());
+  }
+
+  /**
+   * 带 {@link WorkerIdentity} 的构造器 — 业务侧应优先用这个,确保 heartbeat 与 Python SDK PR #320 对齐(6 字段:
+   * workerGroup/hostName/hostIp/processId/capabilityTags/buildId)。
+   */
+  public HeartbeatScheduler(
+      BatchPlatformClientConfig config,
+      PlatformHttpClient httpClient,
+      TaskDispatcher dispatcher,
+      WorkerIdentity identity) {
+    this(config, httpClient, dispatcher, identity, defaultScheduler());
   }
 
   // 包内可见 — 单测注入 mock ScheduledExecutorService 验证 fixed-delay vs fixed-rate
@@ -52,10 +66,12 @@ public class HeartbeatScheduler implements AutoCloseable {
       BatchPlatformClientConfig config,
       PlatformHttpClient httpClient,
       TaskDispatcher dispatcher,
+      WorkerIdentity identity,
       ScheduledExecutorService scheduler) {
     this.config = config;
     this.httpClient = httpClient;
     this.dispatcher = dispatcher;
+    this.identity = identity;
     this.scheduler = scheduler;
   }
 
@@ -88,7 +104,23 @@ public class HeartbeatScheduler implements AutoCloseable {
       body.put("status", "RUNNING");
       body.put("heartbeatAt", Instant.now().toString());
       body.put("currentLoad", dispatcher.inFlightCount());
-      // capabilityTags 留空(可选);workerGroup/hostName/hostIp/processId 平台从 register 拿
+      // Lane I / Python SDK PR #320 对齐:把 register 时已上报的 6 字段也带到每次 heartbeat。
+      // 动机:DefaultWorkerRegistryService#heartbeat 在 registry 行不存在时会兜底降级到 register
+      // 路径(运维误删 / 平台冷启重建索引等场景),那一刻若 body 缺这些字段,worker_registry 行
+      // 就会带 null 字段重建。把字段每次都带上消除该窗口。null 字段由 Jackson NON_NULL 略过,平台
+      // 端 record 允许 null。TODO:platform 端 heartbeat 路径目前仅消费 status/load/capabilityTags,
+      // workerGroup/host*/processId/buildId 暂不刷新 worker_registry(见
+      // DefaultWorkerRegistryService#heartbeat),后续 ORCH-P5 把这些列也纳入 touchHeartbeat。
+      if (identity != null) {
+        putIfPresent(body, "workerGroup", identity.workerGroup());
+        putIfPresent(body, "hostName", identity.hostName());
+        putIfPresent(body, "hostIp", identity.hostIp());
+        putIfPresent(body, "processId", identity.processId());
+        putIfPresent(body, "buildId", identity.buildId());
+        if (identity.capabilityTags() != null && !identity.capabilityTags().isEmpty()) {
+          body.put("capabilityTags", identity.capabilityTags());
+        }
+      }
       Map<String, Object> resp = httpClient.heartbeat(config.getWorkerCode(), body);
       // Phase 2 §2.4:回包是 platform directive,据此驱动 dispatcher 4 态状态机
       directive = HeartbeatDirective.fromResponse(resp);
@@ -135,6 +167,12 @@ public class HeartbeatScheduler implements AutoCloseable {
   /** 当前生效心跳间隔(ms),包内可见供单测断言。 */
   long currentIntervalMs() {
     return currentIntervalMs.get();
+  }
+
+  private static void putIfPresent(Map<String, Object> body, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      body.put(key, value);
+    }
   }
 
   @Override
