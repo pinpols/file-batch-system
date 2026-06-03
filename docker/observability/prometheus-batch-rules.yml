@@ -489,3 +489,150 @@ groups:
         annotations:
           summary: "HTTP 5xx ratio {{ $value | humanizePercentage }} > 5%"
           description: "近 5min HTTP 5xx 占比超过 5%。结合 grafana-dashboard-batch-sre 中按 uri 分组的 P99 / 5xx 占比定位异常端点。"
+
+  - name: batch.mainline
+    rules:
+      - alert: WorkerReportDropped
+        # 数据丢失类:REPORT 在 worker 侧被丢弃(队列满 / 序列化失败等)→ orchestrator 永远收不到结果
+        expr: rate(worker_report_dropped_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker REPORT dropped on {{ $labels.tenant_id }}"
+          description: "5m 内有 REPORT 被 worker 丢弃,orchestrator 不会收到任务结果,等价数据丢失。立刻看 worker 日志 + REPORT 队列容量。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-report-dropped"
+
+      - alert: WorkerReportOutboxGaveUp
+        # 数据丢失类:REPORT outbox 重试耗尽后 give_up,该 REPORT 永远不会送达 orchestrator
+        expr: increase(batch_worker_report_outbox_give_up_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker REPORT outbox gave up"
+          description: "REPORT outbox 重试耗尽,该任务结果永久丢失。立刻定位 give_up 的 task_id 走 orchestrator 强制 RECONCILE。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-report-outbox-give-up"
+
+      - alert: WorkerDlqPublishFailed
+        # DLQ 发布失败 → 失败任务无处归档,审计/排障盲区
+        expr: rate(worker_dlq_publish_failed_total[5m]) > 0.01
+        for: 10m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker DLQ publish failing"
+          description: "DLQ 发布失败率 > 0.01/s 持续 10m,失败任务无 DLQ 留底。检查 DLQ topic / Kafka 健康。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-dlq-publish-failed"
+
+      - alert: WorkerTaskTimeoutHigh
+        # 超时率高 → worker 容量不足或任务异常长尾
+        expr: rate(worker_task_execution_timeout_total[5m]) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker task timeout rate high"
+          description: "Worker 任务超时率 > 0.05/s 持续 10m,容量不足或任务长尾。看 worker pool 利用率 + 任务分布。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-task-timeout-high"
+
+      - alert: WorkerThreadLeaked
+        # 线程泄漏:执行线程未被中断回收 → 池容量持续下降
+        expr: increase(worker_task_execution_thread_leaked_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Worker thread leaked"
+          description: "近 1h 检测到执行线程泄漏,worker 池容量在持续下降。立刻 thread dump 看泄漏栈 + 重启 worker。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-thread-leaked"
+
+      - alert: FileArrivalSlaViolation
+        # 文件到达 SLA 违反:上游延迟到货,下游 pipeline 起不来
+        expr: batch_file_arrival_delay_violations > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "File arrival SLA violated"
+          description: "文件到达 SLA 违反持续 10m,上游延迟或文件缺失。看 batch_file_arrival_group_* 找出哪个组在 waiting。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#file-arrival-sla"
+
+      - alert: PipelineProcessingSlaViolation
+        # Pipeline 处理 SLA 违反:文件已到但处理超时
+        expr: batch_pipeline_processing_delay_violations > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Pipeline processing SLA violated"
+          description: "Pipeline 处理 SLA 违反持续 10m。看 worker_task_execution_duration P99 + pipeline stage 卡点。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#pipeline-processing-sla"
+
+      - alert: JobFailureRateHigh
+        # Job 失败率高(失败 / 完成 > 10%)
+        expr: |
+          rate(batch_orchestrator_job_failure_total[5m])
+            / clamp_min(rate(batch_orchestrator_job_completion_total[5m]), 0.001) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Job failure rate > 10%"
+          description: "Job 失败率 > 10% 持续 10m。按 error_code 分组看 batch_orchestrator_job_failure_total 找主因。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#job-failure-rate-high"
+
+      - alert: WorkerSelectionNoMatch
+        # 调度选不到 worker → 任务积压,通常是 worker 全宕或 tag/affinity 配置错
+        expr: rate(batch_scheduler_worker_selection_no_match[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Scheduler cannot find matching worker"
+          description: "调度选不到 worker > 0.1/s 持续 5m。检查 worker 健康 + tag/affinity 配置。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-selection-no-match"
+
+      - alert: OrchestratorCasMiss
+        # CAS 失败率高 → 并发竞争或重复 REPORT,可能有重复消费 bug
+        expr: rate(batch_orchestrator_cas_miss[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Orchestrator CAS miss rate high"
+          description: "状态机 CAS 失败 > 0.5/s 持续 5m,通常意味着重复消费 / 并发 bug。看 entity/from_status 维度 + 关联 trace。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#orchestrator-cas-miss"
+
+      - alert: WorkflowStuckFinalized
+        # workflow 卡在 finalized 之前(节点全跑完但 workflow_run 未收尾)
+        expr: increase(batch_workflow_stuck_finalized_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline
+        annotations:
+          summary: "Workflow stuck before finalized"
+          description: "近 1h 有 workflow 节点全跑完但 workflow_run 未 finalized。看 orchestrator finalize 调度 + retry。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#workflow-stuck-finalized"
