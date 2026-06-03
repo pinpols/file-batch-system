@@ -167,13 +167,18 @@ async def test_renew_posts_to_tasks_renew(client: PlatformHttpClient, httpx_mock
     assert out["cancelRequested"] is True
 
 
-async def test_get_status_uses_get(client: PlatformHttpClient, httpx_mock: HTTPXMock):
+async def test_update_status_posts(client: PlatformHttpClient, httpx_mock: HTTPXMock):
+    # P0-2:对齐 orchestrator WorkerController.updateStatus —— POST + body,
+    # 不是 GET。平台返回 WorkerRegistryEntity 快照。
     httpx_mock.add_response(
         url=f"{_BASE}/internal/workers/w-1/status",
-        method="GET",
+        method="POST",
         json={"workerCode": "w-1", "status": "ONLINE"},
     )
-    out = await client.get_status("w-1")
+    out = await client.update_status(
+        "w-1",
+        {"tenantId": "acme", "workerCode": "w-1", "status": "RUNNING"},
+    )
     assert out["status"] == "ONLINE"
 
 

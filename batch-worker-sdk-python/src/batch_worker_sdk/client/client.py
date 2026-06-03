@@ -32,10 +32,15 @@ from typing import Any, Protocol
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.handler.handler import SdkTaskHandler
-from batch_worker_sdk.internal import _lifecycle
+from batch_worker_sdk.internal import _fingerprint, _lifecycle
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._heartbeat import DispatcherLike, HeartbeatScheduler
 from batch_worker_sdk.scheduler._lease import LeaseRenewalScheduler
+
+# 与 Java BatchPlatformClient.start() 一致的固定 worker_group 标识 —— 自托管 SDK
+# worker 与平台原生 worker(import / export / process / dispatch / atomic)在
+# worker_registry 表里通过此列区分。
+_WORKER_GROUP = "sdk-self-hosted"
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +168,13 @@ class BatchPlatformClient:
             await self._http.register(self._build_register_body())
 
             self._dispatcher = self._build_dispatcher()
-            self._heartbeat = HeartbeatScheduler(self._config, self._http, self._dispatcher)
+            self._heartbeat = HeartbeatScheduler(
+                self._config,
+                self._http,
+                self._dispatcher,
+                worker_group=_WORKER_GROUP,
+                capability_tags=sorted(self._handlers.keys()),
+            )
             self._lease = LeaseRenewalScheduler(self._config, self._http, self._dispatcher)
 
             # 调度器先,Kafka 后 —— 详见本类的 docstring。
@@ -207,13 +218,21 @@ class BatchPlatformClient:
         body: dict[str, Any] = {
             "tenantId": self._config.tenant_id,
             "workerCode": self._config.worker_code,
-            "workerGroup": "sdk-self-hosted",
+            "workerGroup": _WORKER_GROUP,
             "status": "RUNNING",
             "heartbeatAt": _utc_now_iso(),
             "currentLoad": 0,
             "capabilityTags": sorted(self._handlers.keys()),
             "sdkVersion": self._config.sdk_version,
         }
+        # SDK-P5-3 运行指纹:host/pid 尽力采集,None 字段不写入。
+        host_name = _fingerprint.host_name()
+        if host_name is not None:
+            body["hostName"] = host_name
+        host_ip = _fingerprint.host_ip()
+        if host_ip is not None:
+            body["hostIp"] = host_ip
+        body["processId"] = _fingerprint.process_id()
         if self._config.build_id:
             body["buildId"] = self._config.build_id
         descriptors: list[dict[str, Any]] = []
