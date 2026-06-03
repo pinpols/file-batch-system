@@ -85,7 +85,7 @@ OutboxRetryScheduler 扫 event_outbox_retry
 ## 4. 新事件类型选型决策树
 
 ```
-我要发送一个新的异步事件
+发送新的异步事件
   ↓
 是不是 trigger fire（定时 / 手动 / API）→ orchestrator launch？
   │
