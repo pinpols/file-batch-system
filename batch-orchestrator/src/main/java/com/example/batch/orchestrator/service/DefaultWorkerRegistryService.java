@@ -10,6 +10,7 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import com.example.batch.orchestrator.domain.param.TouchHeartbeatParam;
 import com.example.batch.orchestrator.domain.value.JsonbString;
+import com.example.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
 import com.example.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
@@ -41,6 +42,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
 
   private final WorkerRegistryMapper workerRegistryMapper;
   private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+  private final PipelineStageProgressCache pipelineStageProgressCache;
 
   @Lazy @Autowired private DefaultWorkerRegistryService self;
 
@@ -165,6 +167,10 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
             .currentLoad(newLoad)
             .capabilityTags(newTags == null ? null : newTags.getValue())
             .build());
+    // pipeline stage 行级进度(docs/design/pipeline-stage-progress-display.md):仅 LOAD/GENERATE
+    // 在跑时非空,写 in-mem cache(不持久化,5min TTL,FE 经 Console 端点读)
+    pipelineStageProgressCache.publish(
+        request.tenantId(), workerCode, request.rowsProcessed(), request.totalRowsHint());
     return workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
   }
 

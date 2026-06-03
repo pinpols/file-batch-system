@@ -112,7 +112,8 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     throw new IllegalStateException("batch.orchestrator.base-url is required but not configured");
   }
 
-  private WorkerHeartbeatDto toHeartbeatDto(WorkerRegistration registration) {
+  // package-private 暴露给同包测试覆盖(LoadStep/GenerateStep 接入测试也用同一签名)
+  WorkerHeartbeatDto toHeartbeatDto(WorkerRegistration registration) {
     return new WorkerHeartbeatDto(
         registration.getTenantId(),
         registration.getWorkerId(),
@@ -130,6 +131,10 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         registration.getCapabilityTags(),
         registration.getCurrentLoad(),
         // file-pipeline worker 不声明自定义 taskType(仅 SDK 自托管 worker 用,见 SDK Phase 3 M3.1)
-        null);
+        null,
+        // pipeline-stage 行级进度由 LoadStep/GenerateStep
+        // 透传(docs/design/pipeline-stage-progress-display.md)
+        PipelineStageProgressSink.currentRowsProcessed(),
+        PipelineStageProgressSink.currentTotalRowsHint());
   }
 }

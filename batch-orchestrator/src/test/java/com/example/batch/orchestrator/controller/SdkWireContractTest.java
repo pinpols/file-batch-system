@@ -138,7 +138,9 @@ class SdkWireContractTest {
             "build-9",
             Instant.parse("2026-05-31T10:05:00Z"),
             List.of("echo", "sleep"),
-            5);
+            5,
+            123_456L,
+            1_000_000L);
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);
@@ -154,6 +156,35 @@ class SdkWireContractTest {
     assertThat(platformSide.capabilityTags()).containsExactly("echo", "sleep");
     assertThat(platformSide.currentLoad()).isEqualTo(5);
     assertThat(platformSide.heartbeatAt()).isEqualTo(Instant.parse("2026-05-31T10:05:00Z"));
+    // 2026-06-03 pipeline stage 行级进度 wire(docs/design/pipeline-stage-progress-display.md)
+    assertThat(platformSide.rowsProcessed()).isEqualTo(123_456L);
+    assertThat(platformSide.totalRowsHint()).isEqualTo(1_000_000L);
+  }
+
+  @Test
+  void heartbeatRequestPipelineProgressFieldsAreOptional() throws Exception {
+    // 2026-06-03:rowsProcessed / totalRowsHint 是可选字段,LOAD/GENERATE 之外的 stage / 空闲态都是 null
+    HeartbeatRequest sdkSide =
+        new HeartbeatRequest(
+            "tenant-acme",
+            "worker-1",
+            null,
+            "IDLE",
+            null,
+            null,
+            null,
+            null,
+            Instant.parse("2026-05-31T10:05:00Z"),
+            null,
+            0,
+            null,
+            null);
+    String json = MAPPER.writeValueAsString(sdkSide);
+    // NON_NULL 序列化策略下 null 字段不应出现
+    assertThat(json).doesNotContain("rowsProcessed").doesNotContain("totalRowsHint");
+    WorkerHeartbeatDto platformSide = MAPPER.readValue(json, WorkerHeartbeatDto.class);
+    assertThat(platformSide.rowsProcessed()).isNull();
+    assertThat(platformSide.totalRowsHint()).isNull();
   }
 
   // ─── /internal/tasks/{taskId}/claim ─────────────────────────────────────
