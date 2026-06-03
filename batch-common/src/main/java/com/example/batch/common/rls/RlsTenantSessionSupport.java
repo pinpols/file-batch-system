@@ -2,8 +2,10 @@ package com.example.batch.common.rls;
 
 import com.example.batch.common.utils.Texts;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.datasource.DataSourceUtils;
@@ -26,6 +28,16 @@ public final class RlsTenantSessionSupport {
   /** PostgreSQL custom GUC 名(`app.*` 前缀避开内置 namespace)。RLS policy 用 current_setting 读。 */
   public static final String SESSION_VAR_NAME = "app.tenant_id";
 
+  /**
+   * tenantId 形态白名单。
+   *
+   * <p>P2-2(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):虽然 {@code
+   * set_config('app.tenant_id', ?, true)} 已是 PreparedStatement 绑定参数(SQL 注入路径关闭),仍保留形态白名单 做"纵深防御 +
+   * 类型守护"——RLS 策略期望 tenant_id 是 ASCII 短串,任何 Unicode escape / 控制字符进 GUC 会让 RLS policy
+   * 比较语义异常(NULL/类型转换/隐式 collation)。
+   */
+  static final Pattern TENANT_ID_PATTERN = Pattern.compile("^[A-Za-z0-9_\\-]{1,64}$");
+
   private RlsTenantSessionSupport() {}
 
   /**
@@ -42,18 +54,27 @@ public final class RlsTenantSessionSupport {
     if (!Texts.hasText(tenantId)) {
       return;
     }
+    if (!TENANT_ID_PATTERN.matcher(tenantId).matches()) {
+      // 形态不合法即认为上游 @ValidTenantId 失守,不进 GUC 防 RLS policy 语义崩。
+      // 保留 WARN 让运维侧暴露(prod 会被 alerting 抓到)。
+      log.warn("RLS skip: tenantId shape rejected (len={})", tenantId.length());
+      return;
+    }
     Connection conn = DataSourceUtils.getConnection(dataSource);
     boolean releaseAfter = !DataSourceUtils.isConnectionTransactional(conn, dataSource);
-    try (Statement stmt = conn.createStatement()) {
-      // tenant_id 已是受控字符串(来自 JobInstance.tenant_id,带 @ValidTenantId 校验);
-      // 但为防御 SQL injection,显式 escape 单引号。
-      stmt.execute("SET LOCAL " + SESSION_VAR_NAME + " = '" + escapeSqlLiteral(tenantId) + "'");
+    try (PreparedStatement ps = conn.prepareStatement("SELECT set_config(?, ?, true)")) {
+      // P2-2(2026-06-03):改 PreparedStatement,GUC 名与 tenantId 均走 bind 参数,
+      // 关闭字符串拼接路径(任何 escape 漏洞 / Unicode 注入都不再相关)。
+      // set_config(.,.,true) 等价于 SET LOCAL,事务结束(COMMIT/ROLLBACK)自动 reset。
+      ps.setString(1, SESSION_VAR_NAME);
+      ps.setString(2, tenantId);
+      ps.execute();
       if (log.isTraceEnabled()) {
-        log.trace("RLS SET LOCAL {} = {}", SESSION_VAR_NAME, tenantId);
+        log.trace("RLS set_config {} = {}", SESSION_VAR_NAME, tenantId);
       }
     } catch (SQLException e) {
       // Phase A transition 模式下 RLS 不严,SET 失败只是兜底缺失,不阻断业务
-      log.warn("RLS SET LOCAL failed (tenant={}): {}", tenantId, e.getMessage());
+      log.warn("RLS set_config failed (tenant={}): {}", tenantId, e.getMessage());
     } finally {
       if (releaseAfter) {
         DataSourceUtils.releaseConnection(conn, dataSource);
@@ -74,10 +95,5 @@ public final class RlsTenantSessionSupport {
         DataSourceUtils.releaseConnection(conn, dataSource);
       }
     }
-  }
-
-  /** SQL 字符串字面量内单引号 escape:`'` → `''`(PostgreSQL 标准)。 */
-  private static String escapeSqlLiteral(String raw) {
-    return raw.replace("'", "''");
   }
 }

@@ -139,6 +139,35 @@ public class ConsoleSecurityProperties {
   }
 
   /**
+   * P2-1(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md): 启动期强校验 {@code
+   * cors-allowed-origins} 不含通配符 {@code "*"} / {@code "null"} / 空白。
+   *
+   * <p>{@code allowCredentials=true} 时浏览器规范本就拒收 {@code Access-Control-Allow-Origin: *},
+   * 但配置层无守护则部署侧仍可能错填导致 CORS 静默失败 + 上线后回归。本守护**全 profile 生效** (含 dev / test),让本地误配也早暴露。
+   */
+  @PostConstruct
+  void validateCorsAllowedOrigins() {
+    if (corsAllowedOrigins == null || corsAllowedOrigins.isEmpty()) {
+      return; // 空 = 同域,不发 CORS 头,放行
+    }
+    for (String origin : corsAllowedOrigins) {
+      if (origin == null || origin.isBlank()) {
+        throw new IllegalStateException(
+            "FATAL: batch.console.security.cors-allowed-origins 含空白条目,"
+                + "必须是显式 origin(如 https://console.example.com)");
+      }
+      String trimmed = origin.trim();
+      if ("*".equals(trimmed) || "null".equalsIgnoreCase(trimmed)) {
+        throw new IllegalStateException(
+            "FATAL: batch.console.security.cors-allowed-origins='"
+                + trimmed
+                + "' 被禁止 —— allowCredentials=true 与通配符 origin 不兼容(W3C CORS 规范),"
+                + "必须显式列具体 origin。");
+      }
+    }
+  }
+
+  /**
    * Prod-like profile 强制 {@code loginEncryption.enabled=true} 且 {@code required=true}。 dev / local
    * / test 下用户自由配,以保证 e2e / API direct 测试不破。
    */

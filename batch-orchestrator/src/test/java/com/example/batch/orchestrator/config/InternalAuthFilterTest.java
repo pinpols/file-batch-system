@@ -42,7 +42,8 @@ class InternalAuthFilterTest {
     req.addHeader("X-Batch-Tenant-Id", "tx");
     // /internal/workers/* + /internal/tasks/* 现在走 verifyWithScope(worker.execute)
     when(verifier.verifyWithScope("raw-key", "tx", "worker.execute"))
-        .thenReturn(Optional.of(new ApiKeyRecord(1L, "tx", "n", "*", true, null)));
+        .thenReturn(
+            Optional.of(new ApiKeyRecord(1L, "tx", "n", "*", true, null, "h", "s", "pbkdf2")));
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);

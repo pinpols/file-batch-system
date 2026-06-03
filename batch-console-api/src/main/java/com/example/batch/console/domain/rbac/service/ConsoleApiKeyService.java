@@ -2,16 +2,13 @@ package com.example.batch.console.domain.rbac.service;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.security.ApiKeyHasher;
 import com.example.batch.console.domain.rbac.entity.ApiKeyEntity;
 import com.example.batch.console.domain.rbac.mapper.ConsoleApiKeyMapper;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.HexFormat;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,13 +48,17 @@ public class ConsoleApiKeyService {
 
     String rawKey = generateRawKey();
     String prefix = rawKey.substring(0, 8);
-    String hash = sha256Hex(rawKey);
+    // P1-1(2026-06-03,docs/analysis/2026-06-03-deep-scan-be-security.md):
+    // 新 key 一律 PBKDF2-HMAC-SHA256 + per-key 16B salt(裸 SHA-256 仅 verifier 兼容老行)。
+    ApiKeyHasher.SaltedHash hashed = ApiKeyHasher.hashWithSaltKdf(rawKey);
 
     repository.insert(
         resolved,
         keyName,
         prefix,
-        hash,
+        hashed.hash(),
+        hashed.salt(),
+        ApiKeyHasher.ALGO_PBKDF2,
         scopes == null || scopes.isBlank() ? "*" : scopes,
         expiresAt,
         operator);
@@ -85,16 +86,6 @@ public class ConsoleApiKeyService {
     byte[] bytes = new byte[RAW_KEY_BYTES];
     SECURE_RANDOM.nextBytes(bytes);
     return "bk_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-  }
-
-  private String sha256Hex(String input) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-      return HexFormat.of().formatHex(hash);
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 not available", e);
-    }
   }
 
   public record CreateResult(ApiKeyEntity entity, String rawKey) {}
