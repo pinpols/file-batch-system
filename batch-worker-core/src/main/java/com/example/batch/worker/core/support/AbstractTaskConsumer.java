@@ -4,6 +4,7 @@ import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.config.WorkerConfiguration;
@@ -143,8 +144,21 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider {
       }
       injectMdc(message, registration);
       try {
-        WorkerExecutionResult result =
-            taskDispatchExecutor().execute(message, registration.getWorkerId());
+        // P1 fix(be-kafka-rls):tenantId 非空且非占位时绑 RLS holder,让 biz DS 事务起点把
+        // app.tenant_id 推到 PG session,触发 RLS policy。tenantId=null/"unknown" 不绑
+        // (让 RLS Phase B 严格策略拒绝,防伪造)。accepts() 已校验非空 → 此处一般不会为 null,但保留双保险。
+        final TaskDispatchMessage finalMessage = message;
+        final WorkerRegistration finalRegistration = registration;
+        String tenantId = finalMessage.tenantId();
+        WorkerExecutionResult result;
+        if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
+          result =
+              RlsTenantContextHolder.runWithTenant(
+                  tenantId,
+                  () -> taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId()));
+        } else {
+          result = taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId());
+        }
         if (result == null) {
           log.info(
               "{} task skipped after claim check: taskId={}",

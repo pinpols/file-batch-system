@@ -7,6 +7,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.rls.RlsTenantContextHolder;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.task.LaunchApplicationService;
 import com.example.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
@@ -121,15 +122,32 @@ public class TriggerLaunchConsumer {
     BatchMdc.put(StructuredLogField.TRACE_ID, request.traceId());
     BatchMdc.put(StructuredLogField.REQUEST_ID, request.requestId());
     try {
-      LaunchResponse response = launchApplicationService.launch(request);
+      // P1 fix(be-kafka-rls):tenantId 非空且非占位时绑 RLS holder,让 biz DS 事务起点把
+      // app.tenant_id 推到 PG session,触发 biz.* RLS policy。tenantId="unknown" 不绑,
+      // 让 RLS Phase B 严格策略拒绝(防伪造)。
+      final String boundTenantId = tenantId;
+      final LaunchRequest boundRequest = request;
+      LaunchResponse response;
+      if (boundTenantId != null && !boundTenantId.isBlank() && !"unknown".equals(boundTenantId)) {
+        response =
+            RlsTenantContextHolder.runWithTenant(
+                boundTenantId,
+                () -> {
+                  LaunchResponse r = launchApplicationService.launch(boundRequest);
+                  // 闭环回写也在 holder 作用域内,确保 trigger_request UPDATE 走 RLS。
+                  writeBackTriggerRequestLaunched(boundTenantId, boundRequest.requestId(), r);
+                  return r;
+                });
+      } else {
+        response = launchApplicationService.launch(boundRequest);
+        writeBackTriggerRequestLaunched(boundTenantId, boundRequest.requestId(), response);
+      }
       log.info(
           "TriggerLaunchConsumer launch 成功: tenantId={} requestId={} instanceNo={}",
           tenantId,
           request.requestId(),
           response == null ? null : response.instanceNo());
       counter(METRIC_CONSUMED, "tenant", tenantTag, "outcome", "ok").increment();
-      // 2026-05-02 ADR-010 闭环:回写 trigger_request.LAUNCHED + relatedJobInstanceId
-      writeBackTriggerRequestLaunched(tenantId, request.requestId(), response);
       ack.acknowledge();
     } catch (ResponseStatusException ex) {
       if (ex.getStatusCode().value() == 409) {
