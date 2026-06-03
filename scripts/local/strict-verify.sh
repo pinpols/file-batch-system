@@ -369,8 +369,8 @@ fi
 # ───────────────────────────────────────────────────────────
 TOTAL_RUNS=$((PASS + FAIL))
 echo
-printf "${BLUE}━━━ 汇总 ━━━${RST}\n"
-printf "  PASS: ${GREEN}%s${RST}  FAIL: ${RED}%s${RST}  / 总数 %s\n" "$PASS" "$FAIL" "$TOTAL_RUNS"
+printf '%b━━━ 汇总 ━━━%b\n' "${BLUE}" "${RST}"
+printf '  PASS: %b%s%b  FAIL: %b%s%b  / 总数 %s\n' "${GREEN}" "$PASS" "${RST}" "${RED}" "$FAIL" "${RST}" "$TOTAL_RUNS"
 if [[ "$FAIL" -gt 0 ]]; then
   exit 1
 fi

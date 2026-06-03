@@ -12,7 +12,7 @@ cd "$ROOT"
 
 BIZ_DATE="${BIZ_DATE:-$(date +%Y%m%d)}"
 TMP=$(mktemp -d)
-trap "rm -rf $TMP" EXIT
+trap 'rm -rf "$TMP"' EXIT
 
 echo "==> 生成假数据(bizDate=$BIZ_DATE)"
 
