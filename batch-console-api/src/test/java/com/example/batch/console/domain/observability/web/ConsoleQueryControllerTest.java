@@ -56,9 +56,11 @@ class ConsoleQueryControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
+    // ConsoleQueryController 4 个构造参数:applicationService / responseFactory /
+    // operationAuditQueryService / orchestratorProxy。本测试只覆盖 query 路径,后两者 null。
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleQueryController(queryApplicationService, responseFactory, null))
+                new ConsoleQueryController(queryApplicationService, responseFactory, null, null))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
