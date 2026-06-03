@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
-import com.example.batch.console.domain.ops.mapper.OutboxEventMapper;
+import com.example.batch.console.domain.ops.mapper.ConsoleOutboxEventReadMapper;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxCleanupResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxStatsResponse;
@@ -20,19 +20,19 @@ import org.junit.jupiter.api.Test;
 class DefaultConsoleOutboxOpsApplicationServiceTest {
 
   private ConsoleTenantGuard tenantGuard;
-  private OutboxEventMapper outboxEventMapper;
+  private ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
   private ConsoleOrchestratorProxyService orchestratorProxy;
   private DefaultConsoleOutboxOpsApplicationService service;
 
   @BeforeEach
   void setUp() {
     tenantGuard = mock(ConsoleTenantGuard.class);
-    outboxEventMapper = mock(OutboxEventMapper.class);
+    consoleOutboxEventReadMapper = mock(ConsoleOutboxEventReadMapper.class);
     orchestratorProxy = mock(ConsoleOrchestratorProxyService.class);
     service =
         new DefaultConsoleOutboxOpsApplicationService(
             tenantGuard,
-            outboxEventMapper,
+            consoleOutboxEventReadMapper,
             mock(ConsoleRealtimeDomainEventPublisher.class),
             orchestratorProxy);
   }
@@ -42,7 +42,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     List<Map<String, Object>> breakdown =
         List.of(Map.of("status", "NEW", "count", 10), Map.of("status", "PUBLISHED", "count", 50));
-    when(outboxEventMapper.statsByStatus("tenant-a")).thenReturn(breakdown);
+    when(consoleOutboxEventReadMapper.statsByStatus("tenant-a")).thenReturn(breakdown);
 
     ConsoleOutboxStatsResponse response = service.stats("tenant-a");
 

@@ -30,22 +30,22 @@ class ApiKeyVerifierTest {
   private static final String RAW_KEY = "bk_AAAA-secret-token";
   private static final String PREFIX = RAW_KEY.substring(0, ApiKeyVerifier.KEY_PREFIX_LEN);
 
-  private static ApiKeyRecord legacyRow(long id, String tenant, String scopes, String rawKey) {
+  private static ApiKeyEntity legacyRow(long id, String tenant, String scopes, String rawKey) {
     String hash = ApiKeyHasher.legacySha256Hex(rawKey);
-    return new ApiKeyRecord(id, tenant, "kn", scopes, true, null, hash, null, "sha256");
+    return new ApiKeyEntity(id, tenant, "kn", scopes, true, null, hash, null, "sha256");
   }
 
-  private static ApiKeyRecord pbkdf2Row(long id, String tenant, String scopes, String rawKey) {
+  private static ApiKeyEntity pbkdf2Row(long id, String tenant, String scopes, String rawKey) {
     ApiKeyHasher.SaltedHash sh = ApiKeyHasher.hashWithSaltKdf(rawKey);
-    return new ApiKeyRecord(id, tenant, "kn", scopes, true, null, sh.hash(), sh.salt(), "pbkdf2");
+    return new ApiKeyEntity(id, tenant, "kn", scopes, true, null, sh.hash(), sh.salt(), "pbkdf2");
   }
 
   @Test
   void verifyMatchesPbkdf2RowByPrefixAndConstantTimeCompare() {
-    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
-    Optional<ApiKeyRecord> result = verifier.verify(RAW_KEY, "tx");
+    Optional<ApiKeyEntity> result = verifier.verify(RAW_KEY, "tx");
 
     assertThat(result).contains(rec);
     verify(mapper).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
@@ -53,10 +53,10 @@ class ApiKeyVerifierTest {
 
   @Test
   void verifyMatchesLegacySha256RowAndTriggersUpgrade() {
-    ApiKeyRecord legacy = legacyRow(42L, "tx", "*", RAW_KEY);
+    ApiKeyEntity legacy = legacyRow(42L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(legacy));
 
-    Optional<ApiKeyRecord> result = verifier.verify(RAW_KEY, "tx");
+    Optional<ApiKeyEntity> result = verifier.verify(RAW_KEY, "tx");
 
     assertThat(result).contains(legacy);
     // 触发了 upgrade(同步在测试里执行,@Async 无 spring proxy)
@@ -66,7 +66,7 @@ class ApiKeyVerifierTest {
 
   @Test
   void verifyDoesNotUpgradePbkdf2Row() {
-    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
     verifier.verify(RAW_KEY, "tx");
@@ -96,7 +96,7 @@ class ApiKeyVerifierTest {
   @Test
   void verifyReturnsEmptyOnHashMismatchWithCandidate() {
     // 候选行存在但 hash 是另一 key 的 — 不应放行,也不触发 touch / upgrade
-    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
 
@@ -131,7 +131,7 @@ class ApiKeyVerifierTest {
 
   @Test
   void verifyWithScopeRequiresScope() {
-    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "read.only", RAW_KEY);
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "read.only", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isEmpty();
@@ -139,7 +139,7 @@ class ApiKeyVerifierTest {
 
   @Test
   void verifyWithScopeAcceptsWildcard() {
-    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();
@@ -147,7 +147,7 @@ class ApiKeyVerifierTest {
 
   @Test
   void verifyWithScopeAcceptsExplicitScope() {
-    ApiKeyRecord rec = pbkdf2Row(1L, "tx", "read, worker.execute", RAW_KEY);
+    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "read, worker.execute", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();

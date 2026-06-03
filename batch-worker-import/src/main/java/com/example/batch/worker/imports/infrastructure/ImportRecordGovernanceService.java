@@ -13,7 +13,7 @@ import com.example.batch.worker.core.infrastructure.FileErrorRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportSkipProperties;
-import com.example.batch.worker.imports.domain.ImportBadRecord;
+import com.example.batch.worker.imports.domain.ImportBadRecordEntity;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import java.util.ArrayList;
@@ -148,7 +148,7 @@ public class ImportRecordGovernanceService {
   }
 
   public void finalizeErrorOutput(ImportJobContext context) {
-    List<ImportBadRecord> badRecords = badRecords(context);
+    List<ImportBadRecordEntity> badRecords = badRecords(context);
     if (badRecords.isEmpty()) {
       return;
     }
@@ -241,8 +241,8 @@ public class ImportRecordGovernanceService {
     String errorMessage = brc.errorMessage();
     Object rawRecord = brc.rawRecord();
     boolean skipped = brc.skipped();
-    ImportBadRecord badRecord =
-        new ImportBadRecord(
+    ImportBadRecordEntity badRecord =
+        new ImportBadRecordEntity(
             recordNo,
             stage == null ? null : stage.name(),
             errorCode,
@@ -322,25 +322,25 @@ public class ImportRecordGovernanceService {
   }
 
   @SuppressWarnings("unchecked")
-  private List<ImportBadRecord> badRecords(ImportJobContext context) {
+  private List<ImportBadRecordEntity> badRecords(ImportJobContext context) {
     Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
     if (existing instanceof List<?> list) {
-      // Validate all elements are ImportBadRecord; if so return the original
+      // Validate all elements are ImportBadRecordEntity; if so return the original
       // list reference (mutating) so subsequent recordBadRecord adds are
       // visible. Returning a defensive copy here silently dropped 2nd+ bad
       // records.
       boolean allMatch = true;
       for (Object item : list) {
-        if (!(item instanceof ImportBadRecord)) {
+        if (!(item instanceof ImportBadRecordEntity)) {
           allMatch = false;
           break;
         }
       }
       if (allMatch) {
-        return (List<ImportBadRecord>) existing;
+        return (List<ImportBadRecordEntity>) existing;
       }
     }
-    List<ImportBadRecord> created = new ArrayList<>();
+    List<ImportBadRecordEntity> created = new ArrayList<>();
     context.getAttributes().put(BAD_RECORDS_KEY, created);
     return created;
   }

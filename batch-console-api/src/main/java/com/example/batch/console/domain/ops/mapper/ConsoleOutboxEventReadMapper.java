@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Param;
  * outbox_event；cleanup / republish 等运维操作由 ConsoleOrchestratorProxyService 转发到 orchestrator
  * 内部接口（/internal/outbox/*）执行。
  */
-public interface OutboxEventMapper {
+public interface ConsoleOutboxEventReadMapper {
 
   long countByStatus(
       @Param("tenantId") String tenantId, @Param("publishStatus") String publishStatus);

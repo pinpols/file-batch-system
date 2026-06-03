@@ -3,7 +3,7 @@ package com.example.batch.console.domain.ops.infrastructure;
 import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
-import com.example.batch.console.domain.ops.mapper.OutboxEventMapper;
+import com.example.batch.console.domain.ops.mapper.ConsoleOutboxEventReadMapper;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxCleanupResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxStatsResponse;
@@ -25,14 +25,15 @@ public class DefaultConsoleOutboxOpsApplicationService
     implements ConsoleOutboxOpsApplicationService {
 
   private final ConsoleTenantGuard tenantGuard;
-  private final OutboxEventMapper outboxEventMapper;
+  private final ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final ConsoleOrchestratorProxyService orchestratorProxy;
 
   @Override
   public ConsoleOutboxStatsResponse stats(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return new ConsoleOutboxStatsResponse(resolved, outboxEventMapper.statsByStatus(resolved));
+    return new ConsoleOutboxStatsResponse(
+        resolved, consoleOutboxEventReadMapper.statsByStatus(resolved));
   }
 
   @Override

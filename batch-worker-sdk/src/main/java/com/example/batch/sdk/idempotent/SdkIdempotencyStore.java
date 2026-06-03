@@ -19,7 +19,7 @@ public interface SdkIdempotencyStore {
    * @param key 解析后的幂等键
    * @return 已记录结果(命中)/ 空(未命中,需执行)
    */
-  Optional<SdkIdempotencyRecord> find(String key);
+  Optional<SdkIdempotencyEntity> find(String key);
 
   /**
    * 记录一次成功执行结果。
@@ -28,17 +28,17 @@ public interface SdkIdempotencyStore {
    * @param record 结果快照(message + output)
    * @param ttlMillis 存活毫秒({@code <= 0} = 永久),由实现决定如何使用
    */
-  void record(String key, SdkIdempotencyRecord record, long ttlMillis);
+  void record(String key, SdkIdempotencyEntity record, long ttlMillis);
 
   /** 默认 no-op 实现 —— 永不命中,等价关闭幂等(便于本地 / 测试占位)。 */
   final class NoOp implements SdkIdempotencyStore {
     @Override
-    public Optional<SdkIdempotencyRecord> find(String key) {
+    public Optional<SdkIdempotencyEntity> find(String key) {
       return Optional.empty();
     }
 
     @Override
-    public void record(String key, SdkIdempotencyRecord record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
       // no-op
     }
   }

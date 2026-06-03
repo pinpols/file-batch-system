@@ -5,7 +5,7 @@ import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
-import com.example.batch.worker.imports.domain.ImportBadRecord;
+import com.example.batch.worker.imports.domain.ImportBadRecordEntity;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import java.io.BufferedWriter;
@@ -38,7 +38,8 @@ public class ImportErrorOutputStorage {
   private final MinioStorageProperties minioStorageProperties;
   private final MinioClient minioClient;
 
-  public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
+  public String writeErrorOutput(
+      String tenantId, String fileId, List<ImportBadRecordEntity> badRecords) {
     if (!Texts.hasText(tenantId)
         || !Texts.hasText(fileId)
         || badRecords == null
@@ -57,7 +58,7 @@ public class ImportErrorOutputStorage {
     try {
       spool = Files.createTempFile("import-error-", ".jsonl");
       try (BufferedWriter writer = Files.newBufferedWriter(spool, StandardCharsets.UTF_8)) {
-        for (ImportBadRecord badRecord : badRecords) {
+        for (ImportBadRecordEntity badRecord : badRecords) {
           writer.write(JsonUtils.toJson(badRecord));
           writer.write('\n');
         }

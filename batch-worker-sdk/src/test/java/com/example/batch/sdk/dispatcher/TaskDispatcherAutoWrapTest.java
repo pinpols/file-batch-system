@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import com.example.batch.sdk.client.BatchPlatformClientConfig;
 import com.example.batch.sdk.idempotent.Idempotent;
-import com.example.batch.sdk.idempotent.SdkIdempotencyRecord;
+import com.example.batch.sdk.idempotent.SdkIdempotencyEntity;
 import com.example.batch.sdk.idempotent.SdkIdempotencyStore;
 import com.example.batch.sdk.idempotent.SdkIdempotentHandler;
 import com.example.batch.sdk.internal.PlatformHttpClient;
@@ -226,18 +226,18 @@ class TaskDispatcherAutoWrapTest {
 
   /** 记录调用的 fake store(可预置命中结果)。 */
   static final class RecordingStore implements SdkIdempotencyStore {
-    final Map<String, SdkIdempotencyRecord> map = new HashMap<>();
+    final Map<String, SdkIdempotencyEntity> map = new HashMap<>();
     final AtomicInteger findCalls = new AtomicInteger();
     final AtomicInteger recordCalls = new AtomicInteger();
 
     @Override
-    public Optional<SdkIdempotencyRecord> find(String key) {
+    public Optional<SdkIdempotencyEntity> find(String key) {
       findCalls.incrementAndGet();
       return Optional.ofNullable(map.get(key));
     }
 
     @Override
-    public void record(String key, SdkIdempotencyRecord record, long ttlMillis) {
+    public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
       recordCalls.incrementAndGet();
       map.put(key, record);
     }

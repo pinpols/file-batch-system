@@ -14,7 +14,6 @@ import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPositio
 import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
-import com.example.batch.worker.imports.domain.CustomerImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
@@ -38,15 +37,10 @@ import org.springframework.stereotype.Component;
 /**
  * Import pipeline 的 LOAD 阶段：将校验通过的记录通过 {@link ImportLoadPlugin} 批量写入目标存储。
  *
- * <p><b>两条执行路径</b>：
+ * <p><b>执行路径</b>:流式 — 读取 {@code VALIDATED_RECORDS_PATH} 暂存文件,按 {@code chunk_size} 分块调 {@link
+ * ImportLoadPlugin#loadChunk};完成后删除暂存文件(parse/validate 两个阶段的临时文件一并清理)。 失败时故意保留暂存文件,便于运维检查或重放。
  *
- * <ul>
- *   <li><b>流式路径</b>：读取 {@code VALIDATED_RECORDS_PATH} 暂存文件，按 {@code chunk_size} 分块调 {@link
- *       ImportLoadPlugin#loadChunk}；完成后删除暂存文件（parse/validate 两个阶段的临时文件一并清理）。 失败时故意保留暂存文件，便于运维检查或重放。
- *   <li><b>Legacy 路径</b>：暂存文件不存在时，从上下文 {@code customerPayloads} 列表直接加载（向后兼容旧调用方）。
- * </ul>
- *
- * <p>插件由 {@code load_target_ref}（模板配置）决定，默认为 {@code IMPORT_LOAD_JDBC_MAPPED}。 完成后更新 {@code
+ * <p>插件由 {@code load_target_ref}(模板配置)决定,默认为 {@code IMPORT_LOAD_JDBC_MAPPED}。 完成后更新 {@code
  * file_record} 状态为 {@code LOADED} 并写入加载统计元数据。
  */
 @Slf4j
@@ -88,12 +82,12 @@ public class LoadStep implements ImportStageStep {
     if (Texts.hasText(validatedRecordsPath)) {
       return executeStreaming(context, Path.of(validatedRecordsPath));
     }
-    return executeLegacy(context);
+    return missingPayload(context);
   }
 
   private ImportStageResult executeStreaming(ImportJobContext context, Path validatedRecordsPath) {
     if (!Files.exists(validatedRecordsPath)) {
-      return executeLegacy(context);
+      return missingPayload(context);
     }
     try {
       if (numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0
@@ -275,68 +269,20 @@ public class LoadStep implements ImportStageStep {
       String tenantId, long pipelineInstanceId, long startLineNo, boolean completed) {}
 
   /**
-   * Legacy 路径:从 context 的 customerPayloads 列表加载,无暂存文件。新写入方一律走 streaming 路径
-   * (VALIDATED_RECORDS_PATH);此方法仅作旧调用方兼容,将在下一版本下线,不再加新特性。
+   * VALIDATED_RECORDS_PATH 缺失或暂存文件不存在时:全部记录被 skip 则视为成功;否则 fail。 (ADR-038 P3:Legacy
+   * customerPayloads 路径已下线,所有写入方必须走 streaming 路径。)
    */
-  @Deprecated
-  private ImportStageResult executeLegacy(ImportJobContext context) {
-    Object payload = context == null ? null : context.getAttributes().get("customerPayloads");
-    if (!(payload instanceof List<?> payloads) || payloads.isEmpty()) {
-      if (numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0) {
-        return markLoaded(context, 0L);
-      }
-      return ImportStageResult.failure(
-          stage(),
-          "IMPORT_LOAD_NO_PAYLOAD",
-          "error.import.load.no_payload",
-          new Object[0],
-          "no records to load (legacy path)",
-          objectMapper);
+  private ImportStageResult missingPayload(ImportJobContext context) {
+    if (context != null && numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0) {
+      return markLoaded(context, 0L);
     }
-    @SuppressWarnings("unchecked")
-    List<CustomerImportPayload> customerPayloads = (List<CustomerImportPayload>) payloads;
-    ImportPayload importPayload =
-        context.getAttributes().get("importPayload") instanceof ImportPayload item ? item : null;
-    Object fileRecord = context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD);
-    String sourceFileName =
-        fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null
-            ? String.valueOf(row.get(KEY_FILE_NAME))
-            : context.getFileId();
-    try {
-      ImportLoadPlugin plugin =
-          importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
-      ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
-      int chunkSize = resolveChunkSize(context);
-      long n = 0L;
-      List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
-      for (CustomerImportPayload customerPayload : customerPayloads) {
-        chunk.add(objectMapper.convertValue(customerPayload, MAP_TYPE));
-        if (chunk.size() >= chunkSize) {
-          n += flushChunk(plugin, loadCtx, chunk);
-          chunk.clear();
-        }
-      }
-      if (!chunk.isEmpty()) {
-        n += flushChunk(plugin, loadCtx, chunk);
-      }
-      commit(context, importPayload, n);
-      return ImportStageResult.success(stage());
-    } catch (Exception ex) {
-      log.error(
-          "load stage (legacy) failed: tenantId={}, fileId={}, message={}",
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          ex.getMessage(),
-          ex);
-      boolean configError = ex instanceof WorkerConfigException;
-      return ImportStageResult.failure(
-          stage(),
-          configError ? "IMPORT_LOAD_CONFIG_INVALID" : "IMPORT_LOAD_FAILED",
-          configError ? "error.import.load.config_invalid" : "error.import.load.failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
-          objectMapper);
-    }
+    return ImportStageResult.failure(
+        stage(),
+        "IMPORT_LOAD_NO_PAYLOAD",
+        "error.import.load.no_payload",
+        new Object[0],
+        "no records to load (validated path missing)",
+        objectMapper);
   }
 
   /**
