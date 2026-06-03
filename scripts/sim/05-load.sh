@@ -56,3 +56,7 @@ done
 echo
 ELAPSED=$(($(date +%s) - START))
 echo "==> ✅ 完成:total=$total succ=$succ time=${ELAPSED}s rate=$(echo "scale=1; $total/$ELAPSED" | bc 2>/dev/null || echo '?')/s"
+echo
+echo "提示:launch 仅是触发 ack,worker 真正写 MinIO/biz.* 还要 60~120s。"
+echo "      建议 sleep 120 后再跑 scripts/sim/06-verify.sh(EXPORT 写文件偏慢)。"
+echo "      若 06 报 EXPORT 0 文件,先看 06 PREREQ 段(worker-export 是否在跑 / job_definition 是否齐)。"
