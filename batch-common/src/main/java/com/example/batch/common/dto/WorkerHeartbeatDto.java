@@ -18,7 +18,11 @@ public record WorkerHeartbeatDto(
     List<String> capabilityTags,
     Integer currentLoad,
     // SDK Phase 3 M3.1 — register 时上报自定义 taskType 描述符;heartbeat 不带(null)。
-    List<WorkerTaskTypeDescriptorDto> taskTypes) {
+    List<WorkerTaskTypeDescriptorDto> taskTypes,
+    // 2026-06-03 docs/design/pipeline-stage-progress-display.md:流式 stage(IMPORT LOAD /
+    // EXPORT GENERATE)行级进度上报。仅这两个 stage 在跑时非空,FE 据此显示计数器 + ETA。
+    Long rowsProcessed,
+    Long totalRowsHint) {
   public WorkerHeartbeatDto {
     Integer normalizedCurrentLoad = currentLoad;
     if (normalizedCurrentLoad == null || normalizedCurrentLoad < 0) {

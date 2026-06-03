@@ -84,4 +84,14 @@ public interface ConsoleOrchestratorProxyService {
    * <p>orchestrator 内部接口已经把 sha256 放在 `X-Forensic-Sha256` header；console 透传给前端。
    */
   byte[] downloadForensicExport(String tenantId, String exportId);
+
+  /**
+   * 2026-06-03 拉取一组 worker 当前的 pipeline stage 行级进度(仅 IMPORT LOAD / EXPORT GENERATE 流式 stage 有值)。
+   *
+   * <p>详见 {@code docs/design/pipeline-stage-progress-display.md}。orchestrator 端是 in-memory cache,
+   * 调用失败 / 5min 无心跳 → 返回空 list,FE 列展示「—」。
+   *
+   * @return key=workerCode / rowsProcessed / totalRowsHint(可空)/ heartbeatAt
+   */
+  List<Map<String, Object>> pipelineProgress(String tenantId, List<String> workerCodes);
 }

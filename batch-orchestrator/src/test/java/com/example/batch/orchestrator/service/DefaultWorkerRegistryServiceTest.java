@@ -45,12 +45,15 @@ class DefaultWorkerRegistryServiceTest {
 
   @Mock private WorkerRegistryMapper mapper;
   @Mock private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+  private final com.example.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache
+      progressCache =
+          new com.example.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache();
 
   private DefaultWorkerRegistryService service;
 
   @BeforeEach
   void setUp() throws Exception {
-    service = new DefaultWorkerRegistryService(mapper, customTaskTypeRegistryMapper);
+    service = new DefaultWorkerRegistryService(mapper, customTaskTypeRegistryMapper, progressCache);
     // @Lazy self 字段注入,单元测下用反射手动指向自己 (走非事务路径)
     Field self = DefaultWorkerRegistryService.class.getDeclaredField("self");
     self.setAccessible(true);
@@ -71,6 +74,8 @@ class DefaultWorkerRegistryServiceTest {
         Instant.now(),
         List.of(),
         1,
+        null,
+        null,
         null);
   }
 
@@ -88,7 +93,9 @@ class DefaultWorkerRegistryServiceTest {
         Instant.now(),
         List.of(),
         1,
-        taskTypes);
+        taskTypes,
+        null,
+        null);
   }
 
   private WorkerRegistryEntity entityWithStatus(String status) {

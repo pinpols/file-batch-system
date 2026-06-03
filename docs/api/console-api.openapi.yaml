@@ -3154,6 +3154,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
+  /api/console/queries/pipeline-progress:
+    get:
+      tags: [Queries]
+      summary: 2026-06-03 拉取一组 worker 当前的 pipeline stage 行级进度(仅 IMPORT LOAD 流式 stage 在跑时有值)
+      operationId: queryPipelineProgress
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: workerCodes
+          in: query
+          required: true
+          description: 逗号分隔的 workerCode 列表(Spring 自动按 comma split)
+          schema:
+            type: array
+            items: { type: string }
+      responses:
+        '200':
+          description: Pipeline progress list(仅含有进度的 worker;无进度 / 已过期 5min 不出现)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        workerCode: { type: string }
+                        rowsProcessed: { type: integer, format: int64, nullable: true }
+                        totalRowsHint: { type: integer, format: int64, nullable: true }
+                        heartbeatAt: { type: string, format: date-time }
   /api/console/queries/alerts:
     get:
       tags: [Queries]

@@ -94,6 +94,21 @@ public class ConsoleQueryController {
   private final ConsoleQueryApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
   private final OperationAuditQueryService operationAuditQueryService;
+  private final com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService
+      orchestratorProxy;
+
+  /**
+   * 2026-06-03 GET /pipeline-progress — 拉取一组 worker 当前的 pipeline stage 行级进度。
+   *
+   * <p>仅 IMPORT LOAD 流式 stage 在跑时有值;其他 stage / 空闲 worker 不出现在结果列表。详见 {@code
+   * docs/design/pipeline-stage-progress-display.md}。
+   */
+  @GetMapping("/pipeline-progress")
+  public CommonResponse<java.util.List<java.util.Map<String, Object>>> pipelineProgress(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("workerCodes") java.util.List<String> workerCodes) {
+    return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
+  }
 
   /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */
   @GetMapping("/audits")
