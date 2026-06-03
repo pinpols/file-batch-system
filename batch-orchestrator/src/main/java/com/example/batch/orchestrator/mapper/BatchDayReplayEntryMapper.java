@@ -25,6 +25,16 @@ public interface BatchDayReplayEntryMapper {
   BatchDayReplayEntryEntity selectByRerunInstanceId(
       @Param("tenantId") String tenantId, @Param("rerunInstanceId") Long rerunInstanceId);
 
+  /**
+   * 根据 (sessionId, sourceInstanceId) 精确反查 entry。终态回填首选路径(P0-2 修复)。 SCOPE_ALL 同 jobCode 多
+   * sourceInstance 时,按 jobCode 线性扫会回填到第一条 entry,真正的 entry 永远 PENDING。 改按 sourceInstanceId 精确匹配后,只有
+   * sourceInstanceId 为 null(运维清理)才降级到 jobCode 兜底。
+   */
+  BatchDayReplayEntryEntity selectBySessionAndSourceInstanceId(
+      @Param("sessionId") Long sessionId,
+      @Param("tenantId") String tenantId,
+      @Param("sourceInstanceId") Long sourceInstanceId);
+
   /** 推进 status + 关联字段。 */
   int updateStatus(
       @Param("id") Long id,

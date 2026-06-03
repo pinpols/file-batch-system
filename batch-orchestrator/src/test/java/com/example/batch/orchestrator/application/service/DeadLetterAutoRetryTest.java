@@ -70,7 +70,8 @@ class DeadLetterAutoRetryTest {
             jobInstanceMapper,
             jobStepInstanceMapper,
             taskDispatchOutboxService,
-            governance);
+            governance,
+            null /* jobExecutionLogMapper: audit 在本测试不覆盖 */);
   }
 
   /**

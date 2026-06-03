@@ -73,13 +73,15 @@ public class BatchDayReplayTerminalReconciler {
           jobCode);
       return;
     }
-    BatchDayReplayEntryEntity entry = findEntry(replaySessionId, tenantId, jobCode);
+    BatchDayReplayEntryEntity entry = findEntry(replaySessionId, tenantId, jobCode, jobInstanceId);
     if (entry == null) {
       log.warn(
-          "replay terminal reconcile: entry not found; sessionId={}, tenantId={}, jobCode={}",
+          "replay terminal reconcile: entry not found; sessionId={}, tenantId={}, jobCode={},"
+              + " jobInstanceId={}",
           replaySessionId,
           tenantId,
-          jobCode);
+          jobCode,
+          jobInstanceId);
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
@@ -88,8 +90,38 @@ public class BatchDayReplayTerminalReconciler {
     advanceSessionCounts(session, now);
   }
 
-  /** 简单线性扫描：单 session 里 entries 量级在 100s，contains check 比加专属 mapper 方法更省事。 */
-  private BatchDayReplayEntryEntity findEntry(Long sessionId, String tenantId, String jobCode) {
+  /**
+   * 三级查找(P0-2 修复优先级):
+   *
+   * <ol>
+   *   <li>rerun_instance_id == jobInstanceId 精确反查(本 reconciler 第一次执行就会回填
+   *       rerun_instance_id,后续重入/重试天然命中);
+   *   <li>(sessionId, sourceInstanceId == jobInstanceId 的父 source) 精确反查 —— 兜底覆盖单次首报场景,只要
+   *       jobInstanceId 是 rerun 实例本身,会与 entry.rerun_instance_id 匹配走分支 1;若上游传的是 source 实例 id(legacy
+   *       路径),走分支 2;
+   *   <li>退化到 (sessionId, tenantId, jobCode) 线性扫第一条 —— 仅在 source/rerun 都对不上时使用,保留向后兼容。
+   * </ol>
+   *
+   * <p>注:当前 schema {@code uk_replay_entry_session_job} 阻止同 jobCode 多 entry,所以分支 3 实际不会
+   * 误命中重复行;若未来放宽该约束(允许同 jobCode 多 source instance 区分),分支 1/2 仍能精确定位。
+   */
+  private BatchDayReplayEntryEntity findEntry(
+      Long sessionId, String tenantId, String jobCode, Long jobInstanceId) {
+    // 1) rerun 命中(重入场景)
+    if (jobInstanceId != null) {
+      BatchDayReplayEntryEntity byRerun =
+          entryMapper.selectByRerunInstanceId(tenantId, jobInstanceId);
+      if (byRerun != null && sessionId.equals(byRerun.sessionId())) {
+        return byRerun;
+      }
+      // 2) source 命中(首报且上游误传 sourceInstanceId 而非 rerunInstanceId)
+      BatchDayReplayEntryEntity bySource =
+          entryMapper.selectBySessionAndSourceInstanceId(sessionId, tenantId, jobInstanceId);
+      if (bySource != null) {
+        return bySource;
+      }
+    }
+    // 3) jobCode 兜底
     List<BatchDayReplayEntryEntity> all = entryMapper.selectBySessionId(sessionId);
     if (all == null) {
       return null;

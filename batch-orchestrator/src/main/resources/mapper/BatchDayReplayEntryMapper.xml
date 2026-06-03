@@ -71,6 +71,14 @@
         limit 1
     </select>
 
+    <select id="selectBySessionAndSourceInstanceId" resultMap="ReplayEntryResultMap">
+        select * from batch.batch_day_replay_entry
+        where session_id = #{sessionId}
+          and tenant_id = #{tenantId}
+          and source_instance_id = #{sourceInstanceId}
+        limit 1
+    </select>
+
     <update id="updateStatus">
         update batch.batch_day_replay_entry
         set status            = #{toStatus},
