@@ -86,7 +86,7 @@ public final class JsonUtils {
   @SuppressWarnings("unchecked")
   public static Map<String, Object> toMap(Object value) {
     if (value == null) {
-      return new LinkedHashMap<>();
+      return Map.of();
     }
     return MAPPER.convertValue(value, LinkedHashMap.class);
   }

@@ -1,5 +1,6 @@
 package com.example.batch.common.enums;
 
+import com.example.batch.common.exception.BizException;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -22,7 +23,8 @@ public enum CatchUpPolicyType implements DictEnum {
     }
     CatchUpPolicyType match = DictEnum.fromCode(CatchUpPolicyType.class, code);
     if (match == null) {
-      throw new IllegalArgumentException("Unknown CatchUpPolicyType code: '" + code + "'");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.enum.unknown_catch_up_policy_type_code", code);
     }
     return match;
   }
