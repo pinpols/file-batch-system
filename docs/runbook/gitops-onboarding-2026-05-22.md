@@ -165,4 +165,4 @@ Canary 期间 metric 连续 5 次失败(成功率 < 99% 或 p99 > 500ms),flagger
 - flagger docs: https://docs.flagger.app/
 - 本仓库 `helm/batch-platform/values-canary.yaml`(canary 模式 values)
 - 本仓库 `helm/batch-platform/templates/canary-console.yaml`(Canary CRD 模板)
-- 发布操作流程: [release-process-2026-05-22.md](./release-process-2026-05-22.md)
+- 发布操作流程: [releasing.md](./releasing.md)(权威);历史蓝图见 [release-process-archived-2026-05-22.md](./release-process-archived-2026-05-22.md)

@@ -34,7 +34,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: sdk-python
+    working-directory: batch-worker-sdk-python
 
 jobs:
   lint:
