@@ -25,6 +25,7 @@ import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,7 +72,8 @@ class DefaultTaskAssignmentServiceTest {
             workerRegistryMapper,
             jobDefinitionMapper,
             leaseProps,
-            resourceProps);
+            resourceProps,
+            new SimpleMeterRegistry());
   }
 
   // ===== assignWorker =====
