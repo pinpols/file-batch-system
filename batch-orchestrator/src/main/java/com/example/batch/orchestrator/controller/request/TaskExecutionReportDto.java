@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.controller.request;
 
 import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
@@ -22,9 +23,29 @@ public class TaskExecutionReportDto extends AbstractLocalizedErrorEntity {
 
   private boolean success;
   private String code;
+
+  /**
+   * P1-12: 8KB 上界守护,防止 worker 异常或恶意 SDK 发送巨型 message 触发 Jackson + PG JSONB OOM。 旧版 worker 用 message
+   * 字段、新版用父类 errorMessage,两者守护一致。
+   */
+  @Size(max = 8 * 1024, message = "{validation.task_report.error_message_too_long}")
   private String message;
+
+  /** P1-12: 4KB 上界守护,防止 worker 异常或恶意 SDK 发送巨型 resultSummary 触发 Jackson + PG JSONB OOM。 */
+  @Size(max = 4 * 1024, message = "{validation.task_report.result_summary_too_long}")
   private String resultSummary;
+
   private String errorCode;
+
+  /**
+   * P1-12: override 父类 {@code errorMessage} getter,在 controller 入口加 8KB 守护; 父类字段本身不动(避免影响持久化路径的其它
+   * entity 子类)。
+   */
+  @Override
+  @Size(max = 8 * 1024, message = "{validation.task_report.error_message_too_long}")
+  public String getErrorMessage() {
+    return super.getErrorMessage();
+  }
 
   /** 增量执行模式下 worker 上报的新水位高点。仅在成功路径回写 {@code job_instance.high_water_mark_out}; null 表示无变化。 */
   private String highWaterMarkOut;

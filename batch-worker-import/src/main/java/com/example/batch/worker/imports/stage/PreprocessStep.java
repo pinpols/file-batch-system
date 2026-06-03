@@ -15,7 +15,10 @@ import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -282,6 +285,12 @@ public class PreprocessStep implements ImportStageStep {
    * readAllBytes() 把结果再分配一次 byte[], 100 MB 输入瞬间 200 MB 堆峰. 现在写 temp file 后立刻让 caller GC rawBytes,
    * 解密结果只占单次 byte[] 大小. 失败按原 IOException 透传成 IllegalStateException, 保持调用方语义.
    */
+  /**
+   * P1-11 流式 buffer 大小:8KB,与 BufferedInputStream / ByteArrayOutputStream 配合避免 readAllBytes
+   * 的一次性巨块分配。
+   */
+  private static final int DECRYPT_STREAM_BUFFER_BYTES = 8 * 1024;
+
   private byte[] decryptViaSpool(byte[] rawBytes) {
     Path encrypted = null;
     Path decrypted = null;
@@ -291,7 +300,19 @@ public class PreprocessStep implements ImportStageStep {
       Files.write(
           encrypted, rawBytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
       cryptoService.decrypt(encrypted, decrypted);
-      return Files.readAllBytes(decrypted);
+      // P1-11: 用 8K BufferedInputStream + Files.copy(InputStream, OutputStream) 取代
+      // Files.readAllBytes 一次性大块分配,降低 GC 抖动 + 避免 JDK 内部 grow buffer 的 2x 峰值。
+      // ByteArrayOutputStream 按文件大小预分配,Files.copy 内部用 BufferedInputStream 提供的 8K buffer 流式
+      // transfer。
+      long size = Files.size(decrypted);
+      int initialCapacity = (int) Math.min(size, Integer.MAX_VALUE - 8);
+      try (InputStream in =
+              new BufferedInputStream(
+                  Files.newInputStream(decrypted), DECRYPT_STREAM_BUFFER_BYTES);
+          ByteArrayOutputStream out = new ByteArrayOutputStream(initialCapacity)) {
+        in.transferTo(out);
+        return out.toByteArray();
+      }
     } catch (IOException ex) {
       throw new IllegalStateException("failed to spool-decrypt large payload", ex);
     } finally {

@@ -17,13 +17,14 @@ fullnameOverride: ""
 # ── Infrastructure ─────────────────────────────────────────────────────────────
 
 postgresql:
+  # P1-17 reWriteBatchedInserts=true: pgjdbc 把 batchUpdate 重写成多值 INSERT,batch 写入吞吐 3-5x
   platform:
-    url: "jdbc:postgresql://postgresql:5432/batch_platform"
+    url: "jdbc:postgresql://postgresql:5432/batch_platform?reWriteBatchedInserts=true"
     username: "batch_user"
     # password: set via --set or external secret
     password: ""
   business:
-    url: "jdbc:postgresql://postgresql:5432/batch_business"
+    url: "jdbc:postgresql://postgresql:5432/batch_business?reWriteBatchedInserts=true"
     username: "batch_user"
     password: ""
     schema: "biz"
@@ -579,8 +580,9 @@ affinity: {}
 
 javaOpts: >-
   -XX:+UseContainerSupport
-  -XX:MaxRAMPercentage=70.0
-  -XX:InitialRAMPercentage=70.0
+  -XX:MaxRAMPercentage=75.0
+  -XX:InitialRAMPercentage=50.0
+  -XX:+UseG1GC
   -XX:MaxDirectMemorySize=512m
   -XX:NativeMemoryTracking=summary
   -XX:MaxMetaspaceSize=256m

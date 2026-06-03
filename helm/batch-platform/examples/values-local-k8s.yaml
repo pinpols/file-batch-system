@@ -67,7 +67,7 @@ workerDispatch:
   service: {port: 18085, type: ClusterIP}
 
 # Spring Boot lazy-initialization：default profile 不开会让 startupProbe 超时
-javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.main.lazy-initialization=true"
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -Dspring.main.lazy-initialization=true"
 
 # ADR-029 专用 SPI worker
 workerAtomic:

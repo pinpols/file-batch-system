@@ -24,23 +24,25 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
+      # P1-9 容器感知 JVM 内存:Xmx/Xms 由容器 mem_limit + MaxRAMPercentage/InitialRAMPercentage 驱动,
+      # 改 mem_limit 内存自动跟随;G1 显式声明 + ExitOnOOM 让 K8s/compose health 重启而非僵尸态。
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
       BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: ${BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES:-20000}
       BATCH_CONSOLE_REALTIME_REPLAY_TTL: ${BATCH_CONSOLE_REALTIME_REPLAY_TTL:-24h}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dummy-openai-key}
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       # P2-4: 读写分离开关 — 跟 application.yml fallback 一致默认 true。`up-apps.sh`
       # 已带 --profile replica 把 postgres-replica 一起拉起来；fail-open 已就位，从库挂
       # 也会自动降级主库。如需关闭，在 .env 显式置 false。
       BATCH_CONSOLE_READ_REPLICA_ENABLED: ${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}
-      BATCH_CONSOLE_PRIMARY_URL: ${BATCH_CONSOLE_PRIMARY_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_CONSOLE_PRIMARY_URL: ${BATCH_CONSOLE_PRIMARY_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_CONSOLE_PRIMARY_USER: ${BATCH_CONSOLE_PRIMARY_USER:-batch_user}
       BATCH_CONSOLE_PRIMARY_PASSWORD: ${BATCH_CONSOLE_PRIMARY_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
-      BATCH_CONSOLE_REPLICA_URL: ${BATCH_CONSOLE_REPLICA_URL:-jdbc:postgresql://postgres-replica:5432/batch_platform}
+      BATCH_CONSOLE_REPLICA_URL: ${BATCH_CONSOLE_REPLICA_URL:-jdbc:postgresql://postgres-replica:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_CONSOLE_REPLICA_USER: ${BATCH_CONSOLE_REPLICA_USER:-batch_user}
       BATCH_CONSOLE_REPLICA_PASSWORD: ${BATCH_CONSOLE_REPLICA_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
       BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
@@ -103,9 +105,11 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
+      # P1-9 容器感知 JVM 内存:Xmx/Xms 由容器 mem_limit + MaxRAMPercentage/InitialRAMPercentage 驱动,
+      # 改 mem_limit 内存自动跟随;G1 显式声明 + ExitOnOOM 让 K8s/compose health 重启而非僵尸态。
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
@@ -150,8 +154,9 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=256m}
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      # P1-9 容器感知 JVM 内存(orchestrator 同 app 模式,Metaspace 上限保留 256m)
+      JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=256m}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
@@ -201,14 +206,16 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
+      # P1-9 容器感知 JVM 内存:Xmx/Xms 由容器 mem_limit + MaxRAMPercentage/InitialRAMPercentage 驱动,
+      # 改 mem_limit 内存自动跟随;G1 显式声明 + ExitOnOOM 让 K8s/compose health 重启而非僵尸态。
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?reWriteBatchedInserts=true}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:?BATCH_BUSINESS_DB_PASSWORD is required}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -257,14 +264,16 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
+      # P1-9 容器感知 JVM 内存:Xmx/Xms 由容器 mem_limit + MaxRAMPercentage/InitialRAMPercentage 驱动,
+      # 改 mem_limit 内存自动跟随;G1 显式声明 + ExitOnOOM 让 K8s/compose health 重启而非僵尸态。
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?reWriteBatchedInserts=true}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:?BATCH_BUSINESS_DB_PASSWORD is required}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -313,14 +322,16 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
+      # P1-9 容器感知 JVM 内存:Xmx/Xms 由容器 mem_limit + MaxRAMPercentage/InitialRAMPercentage 驱动,
+      # 改 mem_limit 内存自动跟随;G1 显式声明 + ExitOnOOM 让 K8s/compose health 重启而非僵尸态。
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?reWriteBatchedInserts=true}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:?BATCH_BUSINESS_DB_PASSWORD is required}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -369,14 +380,16 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-runtime-env
-      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:MaxMetaspaceSize=192m}
+      # P1-9 容器感知 JVM 内存:Xmx/Xms 由容器 mem_limit + MaxRAMPercentage/InitialRAMPercentage 驱动,
+      # 改 mem_limit 内存自动跟随;G1 显式声明 + ExitOnOOM 让 K8s/compose health 重启而非僵尸态。
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?reWriteBatchedInserts=true}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:?BATCH_BUSINESS_DB_PASSWORD is required}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}

@@ -15,7 +15,9 @@ spring:
       max-poll-records: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_RECORDS:20}
       fetch-min-size: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MIN_SIZE:1024}
       fetch-max-wait: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MAX_WAIT:500}
-      max-poll-interval-ms: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_INTERVAL_MS:600000}
+      # P1-10 Kafka 三角硬化：max.poll.interval.ms 改 300s 与 batch-defaults.yml 一致；
+      # session.timeout.ms / heartbeat.interval.ms / partition.assignment.strategy 走 batch-defaults.yml
+      max-poll-interval-ms: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_INTERVAL_MS:300000}
 
 batch:
   worker:
