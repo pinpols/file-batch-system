@@ -1,0 +1,165 @@
+{
+  "title": "Batch Platform — Trigger Wheel",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["batch", "trigger-wheel"],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Trigger wheel fire rate (success vs failed)",
+      "description": "batch.trigger.wheel.fire.{success,failed} counter rate over 5m",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(batch_trigger_wheel_fire_success_total[5m])",
+          "legendFormat": "fire success"
+        },
+        {
+          "expr": "rate(batch_trigger_wheel_fire_failed_total[5m])",
+          "legendFormat": "fire failed"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Trigger wheel fire lag (seconds)",
+      "description": "batch.trigger.wheel.fire.lag.seconds — gap between scheduled fire time and actual fire",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "batch_trigger_wheel_fire_lag_seconds",
+          "legendFormat": "fire lag"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Leader acquire rate (success vs failed)",
+      "description": "batch.trigger.wheel.leader.acquire.{success,failed}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(batch_trigger_wheel_leader_acquire_success_total[5m])",
+          "legendFormat": "acquire success"
+        },
+        {
+          "expr": "rate(batch_trigger_wheel_leader_acquire_failed_total[5m])",
+          "legendFormat": "acquire failed"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Scan duration P99 (seconds)",
+      "description": "batch.trigger.wheel.scan.duration.seconds — wheel slot scan latency",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(batch_trigger_wheel_scan_duration_seconds_bucket[5m])))",
+          "legendFormat": "scan P99"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(batch_trigger_wheel_scan_duration_seconds_bucket[5m])))",
+          "legendFormat": "scan P50"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Wheel advance failures (rate)",
+      "description": "batch.trigger.wheel.advance.failed.total — global counter (jobCode tag removed in #341)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "rate(batch_trigger_wheel_advance_failed_total[5m])",
+          "legendFormat": "advance failed"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Misfire rate",
+      "description": "batch.trigger.wheel.misfire.total — fires that missed their scheduled slot",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "rate(batch_trigger_wheel_misfire_total[5m])",
+          "legendFormat": "wheel misfire"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tasks scheduled rate",
+      "description": "batch.trigger.wheel.tasks.scheduled.total — new tasks placed on the wheel",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "rate(batch_trigger_wheel_tasks_scheduled_total[5m])",
+          "legendFormat": "tasks scheduled"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Quartz execution duration P99 (seconds)",
+      "description": "batch.trigger.quartz.execution.duration — only populated if Quartz mode is in use",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(batch_trigger_quartz_execution_duration_seconds_bucket[5m])))",
+          "legendFormat": "quartz exec P99"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Quartz fire rate",
+      "description": "batch.trigger.quartz.fire.total",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "expr": "rate(batch_trigger_quartz_fire_total[5m])",
+          "legendFormat": "quartz fire"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Quartz misfire rate",
+      "description": "batch.trigger.quartz.misfire.total",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "expr": "rate(batch_trigger_quartz_misfire_total[5m])",
+          "legendFormat": "quartz misfire"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Quartz active triggers",
+      "description": "batch.trigger.quartz.triggers.active — current gauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "targets": [
+        {
+          "expr": "batch_trigger_quartz_triggers_active",
+          "legendFormat": "active triggers"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Fire success ratio",
+      "description": "成功率 = success / (success + failed),用于快速判定 wheel 健康",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "targets": [
+        {
+          "expr": "sum(rate(batch_trigger_wheel_fire_success_total[5m])) / (sum(rate(batch_trigger_wheel_fire_success_total[5m])) + sum(rate(batch_trigger_wheel_fire_failed_total[5m])))",
+          "legendFormat": "fire success ratio"
+        }
+      ]
+    }
+  ]
+}
