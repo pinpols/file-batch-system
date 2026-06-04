@@ -72,7 +72,10 @@ public class ArchiveSchemaDriftCheck {
           // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
           "pipeline_progress",
           // V165 (Round-1 TOP-8 / R3-5) — atomic_task_config 归档表;租户保存的 atomic 节点配置。
-          "atomic_task_config");
+          "atomic_task_config",
+          // V167 (workflow-dag-designer Polish) — workflow_definition_version 归档表;fullUpdate
+          // 全量历史快照。
+          "workflow_definition_version");
 
   private final InformationSchemaMapper informationSchemaMapper;
 

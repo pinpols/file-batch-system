@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -193,6 +194,20 @@ class DefaultWorkerRegistryServiceTest {
     verify(mapper).insert(any());
     verify(mapper, never()).updateById(any());
     assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("register: 上报非枚举状态(自托管 SDK 恒发 RUNNING)→ 落库归一为 ONLINE,不违反 ck_worker_registry_status")
+  void registerNonEnumStatusNormalizedToOnline() {
+    when(mapper.selectByTenantAndWorkerCode(eq("ta"), eq("w1")))
+        .thenReturn(null, entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+    service.register(dto("RUNNING"));
+
+    verify(mapper).insert(captor.capture());
+    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
   }
 
   @Test
