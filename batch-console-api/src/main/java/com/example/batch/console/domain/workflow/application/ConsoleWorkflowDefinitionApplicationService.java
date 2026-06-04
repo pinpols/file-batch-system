@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.workflow.application;
 
+import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
 import java.util.List;
@@ -12,6 +13,14 @@ public interface ConsoleWorkflowDefinitionApplicationService {
   WorkflowDefinitionDetailResponse create(WorkflowDefinitionSaveRequest request);
 
   WorkflowDefinitionDetailResponse update(Long id, WorkflowDefinitionSaveRequest request);
+
+  /**
+   * BE Spike:画布全量替换 (definition + nodes + edges)。
+   *
+   * <p>同事务:删旧 node/edge → 重写 → version += 1;锁不归属当前 user / expectedVersion 不匹配 → BizException。
+   */
+  WorkflowDefinitionDetailResponse fullUpdate(
+      Long id, WorkflowDefinitionFullUpdateRequest request, String currentUser);
 
   void toggleEnabled(Long id, String tenantId, Boolean enabled);
 

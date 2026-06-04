@@ -57,7 +57,10 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
             jobDefinitionMapper,
             mock(ConsoleRealtimeDomainEventPublisher.class),
             tenantGuard,
-            mock(ConsoleConfigCacheInvalidationService.class));
+            mock(ConsoleConfigCacheInvalidationService.class),
+            mock(
+                com.example.batch.console.domain.workflow.application.WorkflowDesignLockService
+                    .class));
   }
 
   @Test
