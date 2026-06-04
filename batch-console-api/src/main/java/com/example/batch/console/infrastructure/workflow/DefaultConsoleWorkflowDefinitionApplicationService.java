@@ -20,6 +20,7 @@ import com.example.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import com.example.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import com.example.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import com.example.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
@@ -77,6 +78,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
   private final WorkflowDesignLockService designLockService;
+  private final WorkflowDagValidator dagValidator;
 
   @Override
   public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
@@ -174,6 +176,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
       throw BizException.of(
           ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", holder.lockedBy());
     }
+
+    // BE 兜底:DAG 拓扑 + 引用完整性校验(范围 = 拓扑;业务对错见 ADR-021,不在此处)
+    dagValidator.validate(resolvedTenant, body);
 
     int rows =
         definitionMapper.updateAndBumpVersion(
