@@ -31,4 +31,8 @@ public interface JobDefinitionMapper {
       @Param("updatedBy") String updatedBy);
 
   int copyJobDefinition(String tenantId, Long sourceId, String newJobCode, String createdBy);
+
+  /** BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, jobName)。 */
+  List<com.example.batch.console.domain.workflow.web.response.CodeNameOption> selectActiveCodeNames(
+      @Param("tenantId") String tenantId);
 }

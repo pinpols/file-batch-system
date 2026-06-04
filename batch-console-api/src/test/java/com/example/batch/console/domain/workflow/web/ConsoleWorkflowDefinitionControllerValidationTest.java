@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
+import com.example.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
@@ -33,6 +34,7 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
 
   private final ConsoleWorkflowDefinitionApplicationService service =
       mock(ConsoleWorkflowDefinitionApplicationService.class);
+  private final WorkflowDesignLockService lockService = mock(WorkflowDesignLockService.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;
@@ -54,7 +56,7 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleWorkflowDefinitionController(service, responseFactory))
+                new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
