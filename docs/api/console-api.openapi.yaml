@@ -4617,6 +4617,82 @@ paths:
         '409':
           description: Lock expired (caller must re-acquire)
 
+  # ─── Polish: workflow-dag-designer 版本下拉(降级实现,无历史归档表)─────────────────
+  # 说明:平台尚无 workflow_definition_version 历史表,list 仅返当前 1 条;detail 仅支持
+  # version == current,其他版本号一律 404。follow-up 引入归档表后接口语义不变,只是返回更长 list。
+  /api/console/workflow-definitions/{id}/versions:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: List workflow definition versions (degraded — current only)
+      description: |
+        Returns the workflow's version history. Current degraded implementation
+        returns a single entry representing the current version (workflow_definition.version),
+        because the workflow_definition_version archive table has not been provisioned
+        yet. Follow-up migration will extend the list with historical entries.
+      operationId: listWorkflowDefinitionVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Version list (single entry under degraded mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionVersionSummaryList'
+        '404':
+          description: Workflow definition not found / tenant mismatch
+
+  /api/console/workflow-definitions/{id}/versions/{version}:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: Get workflow definition at a specific version (degraded — current only)
+      description: |
+        Returns the full definition (nodes + edges) at the requested version.
+        Under the current degraded mode (no archive table), only `version == current`
+        is satisfiable; any other version yields 404 NOT_FOUND with i18n key
+        `error.workflow_version.not_found`.
+      operationId: getWorkflowDefinitionVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full definition at the requested version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
+        '404':
+          description: Requested version not available (degraded — only current version supported)
+
   # ─── P0: Instance operations ──────────────────────────────────────────────────
   /api/console/instances/{id}/cancel:
     post:
@@ -9249,6 +9325,41 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/WorkflowDesignLockResponse'
+    WorkflowDefinitionVersionSummaryResponse:
+      type: object
+      required: [version]
+      description: |
+        工作流定义版本摘要。降级期(无 workflow_definition_version 历史表)
+        savedBy / summary 恒为 null,savedAt 取 workflow_definition.updated_at,current 恒为 true。
+      properties:
+        version:
+          type: integer
+          description: 版本号(对应 workflow_definition.version)。
+        savedBy:
+          type: string
+          nullable: true
+          description: 写入人 username。降级期为 null。
+        savedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 写入时间。降级期取 workflow_definition.updated_at。
+        summary:
+          type: string
+          nullable: true
+          description: 版本备注。降级期为 null(无历史表无法记录)。
+        current:
+          type: boolean
+          description: 是否当前生效版本。降级期恒为 true。
+    CommonResponseWorkflowDefinitionVersionSummaryList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkflowDefinitionVersionSummaryResponse'
     CodeNameOption:
       type: object
       required: [code, name]

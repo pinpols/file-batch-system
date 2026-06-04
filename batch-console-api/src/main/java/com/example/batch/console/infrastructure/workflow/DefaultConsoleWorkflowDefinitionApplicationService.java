@@ -26,6 +26,7 @@ import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionS
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -241,6 +242,36 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
             .map(DagValidationResult.Finding::message)
             .toList();
     return new DagValidationResult(errors.isEmpty(), errors, findings);
+  }
+
+  // ── 版本列表 / 版本详情(降级实现) ─────────────────────────────────────────
+  // workflow_definition_version 历史归档表尚未引入(follow-up migration),当前只能从主表读"当前版本"。
+  // 详见 docs/api/console-api-protocol.md Changelog 2026-06-04 与该方法 Javadoc。
+
+  @Override
+  public List<WorkflowDefinitionVersionSummaryResponse> listVersions(Long id, String tenantId) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    WorkflowDefinitionEntity def =
+        Guard.requireFound(
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    // 降级:savedBy 暂为 null(entity 未映射 updated_by,引入历史表时一并补)
+    return List.of(
+        new WorkflowDefinitionVersionSummaryResponse(
+            def.getVersion(), null, def.getUpdatedAt(), null, Boolean.TRUE));
+  }
+
+  @Override
+  public WorkflowDefinitionDetailResponse getVersion(Long id, String tenantId, Integer version) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    WorkflowDefinitionEntity def =
+        Guard.requireFound(
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    // 降级:无历史表,仅支持当前版本
+    if (version == null || !version.equals(def.getVersion())) {
+      throw BizException.of(
+          ResultCode.NOT_FOUND, "error.workflow_version.not_found", id, version, def.getVersion());
+    }
+    return getById(id, resolvedTenant);
   }
 
   private void upsertNodesAndEdges(
