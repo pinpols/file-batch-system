@@ -4538,6 +4538,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
 
+  /api/console/workflow-definitions/{id}/versions:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: List all version snapshots for a workflow definition
+      description: |
+        workflow-dag-designer Polish — reads `workflow_definition_version` (V167).
+        Returned list is sorted by `version desc`; the entry matching the master
+        `workflow_definition.version` carries `current=true`. When the history table
+        has no rows yet (e.g. just after V167 migration) the endpoint degrades to a
+        single `current` row built from the master table (compatible with the
+        pre-history single-version PR #370 behavior).
+      operationId: listWorkflowDefinitionVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Version list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionVersionSummaryList'
+
+  /api/console/workflow-definitions/{id}/versions/{version}:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: Read a specific workflow definition version (current or historical)
+      description: |
+        Current `version` (== master `workflow_definition.version`) is served from
+        the master tables (`workflow_definition` + `workflow_node` + `workflow_edge`);
+        historical versions are deserialized from `workflow_definition_version.nodes_json`
+        / `edges_json`. Unknown versions return NOT_FOUND.
+      operationId: getWorkflowDefinitionVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow definition detail at the requested version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
+        '404':
+          description: Version not found
+
   /api/console/workflow-definitions/{id}/lock:
     put:
       tags: [WorkflowDefinitions]
@@ -9030,6 +9104,37 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/WorkflowDefinitionDetailResponse'
+    CommonResponseWorkflowDefinitionVersionSummaryList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkflowDefinitionVersionSummaryResponse'
+    WorkflowDefinitionVersionSummaryResponse:
+      type: object
+      description: |
+        workflow-dag-designer Polish — entry in the per-definition version list.
+        `current=true` flags the version equal to master `workflow_definition.version`.
+      properties:
+        version:
+          type: integer
+          format: int32
+        savedBy:
+          type: string
+          nullable: true
+          description: console account that triggered the fullUpdate (SecurityContext.username)
+        savedAt:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          nullable: true
+          description: optional change summary; Spike does not surface this in FE
+        current:
+          type: boolean
     CommonResponseConsoleAuthTokenResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'

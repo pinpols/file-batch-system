@@ -139,6 +139,12 @@ public class WorkflowDagValidator {
     detectUnreachable(startNodes.get(0), nodeCodes, adj);
 
     // 8/9/10/11. 节点字段引用完整性
+    validateNodeReferences(tenantId, nodes, outDegree);
+  }
+
+  /** 8/9/10/11:JOB / FILE_STEP / GATEWAY 节点字段引用完整性 + gateway 出度下限。 */
+  private void validateNodeReferences(
+      String tenantId, List<NodeItem> nodes, Map<String, Integer> outDegree) {
     for (NodeItem n : nodes) {
       String type = n.getNodeType();
       if (WorkflowNodeType.JOB.code().equalsIgnoreCase(type)) {

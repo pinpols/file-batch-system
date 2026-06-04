@@ -54,6 +54,9 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
             definitionMapper,
             nodeMapper,
             edgeMapper,
+            mock(
+                com.example.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper
+                    .class),
             jobDefinitionMapper,
             mock(ConsoleRealtimeDomainEventPublisher.class),
             tenantGuard,
@@ -61,7 +64,8 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
             mock(
                 com.example.batch.console.domain.workflow.application.WorkflowDesignLockService
                     .class),
-            mock(com.example.batch.console.domain.workflow.validation.WorkflowDagValidator.class));
+            mock(com.example.batch.console.domain.workflow.validation.WorkflowDagValidator.class),
+            new com.fasterxml.jackson.databind.ObjectMapper());
   }
 
   @Test

@@ -87,6 +87,7 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("Job Instance", "/monitor/job-instances", "Monitor", ROLE_VIEWER),
                   new MenuItem("Job Step Instance", "/monitor/job-steps", "Timer", ROLE_VIEWER),
                   new MenuItem("Workflow Run", "/monitor/workflow-runs", "Promotion", ROLE_VIEWER),
+                  new MenuItem("全部运行", "/runs", "List", ROLE_VIEWER),
                   new MenuItem("日志", "/logs", "Reading", ROLE_VIEWER),
                   new MenuItem("告警", "/observability/alerts", "WarningFilled", ROLE_VIEWER),
                   new MenuItem("审计", "/observability/audits", "Memo", ROLE_VIEWER),

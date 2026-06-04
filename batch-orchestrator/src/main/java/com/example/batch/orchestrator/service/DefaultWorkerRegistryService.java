@@ -229,9 +229,25 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   private String resolveIncomingStatus(
       WorkerHeartbeatDto request, String defaultStatus, String currentStatus) {
     String requestedStatus = request == null ? null : request.status();
-    if (requestedStatus == null || requestedStatus.isBlank()) {
+    // SDK 上报的是 worker 存活态(register/heartbeat 恒发 "RUNNING"),非注册表可用性枚举。
+    // 仅当上报值是合法 WorkerRegistryStatus(ONLINE/OFFLINE/DRAINING/DECOMMISSIONED)才采纳,
+    // 否则回落 defaultStatus(register/heartbeat 默认 ONLINE)/ currentStatus。
+    // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
+    // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
+    if (requestedStatus == null
+        || requestedStatus.isBlank()
+        || !isValidRegistryStatus(requestedStatus)) {
       return defaultStatus == null || defaultStatus.isBlank() ? currentStatus : defaultStatus;
     }
     return requestedStatus;
+  }
+
+  private static boolean isValidRegistryStatus(String code) {
+    for (WorkerRegistryStatus status : WorkerRegistryStatus.values()) {
+      if (status.code().equals(code)) {
+        return true;
+      }
+    }
+    return false;
   }
 }
