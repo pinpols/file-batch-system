@@ -1,7 +1,6 @@
 package com.example.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -24,17 +23,20 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P2: ConsoleConfigSyncController export/preview/import/logs 透传到 application service。 */
+@ExtendWith(MockitoExtension.class)
 class ConsoleConfigSyncControllerTest {
 
-  private final ConsoleConfigSyncApplicationService service =
-      mock(ConsoleConfigSyncApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock private ConsoleConfigSyncApplicationService service;
+  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

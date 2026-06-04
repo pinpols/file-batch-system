@@ -2,7 +2,6 @@ package com.example.batch.console.domain.observability.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,15 +13,19 @@ import com.example.batch.console.domain.observability.application.ConsoleReportE
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+@ExtendWith(MockitoExtension.class)
 class ConsoleReportExcelControllerTest {
 
-  private final ConsoleReportExcelApplicationService reportService =
-      mock(ConsoleReportExcelApplicationService.class);
+  @Mock private ConsoleReportExcelApplicationService reportService;
+
   private MockMvc mockMvc;
 
   @BeforeEach
