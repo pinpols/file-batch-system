@@ -1,7 +1,6 @@
 package com.example.batch.orchestrator.web;
 
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,17 +10,28 @@ import com.example.batch.orchestrator.application.service.governance.DeadLetterO
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.controller.DeadLetterController;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@ExtendWith(MockitoExtension.class)
 class DeadLetterControllerTest {
 
-  private final RetryGovernanceService retryGovernanceService = mock(RetryGovernanceService.class);
-  private final MockMvc mockMvc =
-      MockMvcBuilders.standaloneSetup(new DeadLetterController(retryGovernanceService))
-          .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-          .build();
+  @Mock private RetryGovernanceService retryGovernanceService;
+
+  private MockMvc mockMvc;
+
+  @BeforeEach
+  void setUp() {
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(new DeadLetterController(retryGovernanceService))
+            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+            .build();
+  }
 
   @Test
   void shouldReplayDeadLetter() throws Exception {

@@ -2,7 +2,6 @@ package com.example.batch.orchestrator.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -17,21 +16,30 @@ import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler
 import com.example.batch.orchestrator.controller.WorkerController;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import com.example.batch.orchestrator.service.WorkerRegistryServerService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@ExtendWith(MockitoExtension.class)
 class WorkerControllerTest {
 
-  private final WorkerRegistryServerService workerRegistryService =
-      mock(WorkerRegistryServerService.class);
-  private final WorkerDrainGovernanceService workerDrainGovernanceService =
-      mock(WorkerDrainGovernanceService.class);
-  private final MockMvc mockMvc =
-      MockMvcBuilders.standaloneSetup(
-              new WorkerController(workerRegistryService, workerDrainGovernanceService))
-          .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-          .build();
+  @Mock private WorkerRegistryServerService workerRegistryService;
+  @Mock private WorkerDrainGovernanceService workerDrainGovernanceService;
+
+  private MockMvc mockMvc;
+
+  @BeforeEach
+  void setUp() {
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new WorkerController(workerRegistryService, workerDrainGovernanceService))
+            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+            .build();
+  }
 
   @Test
   void shouldBindDrainRequestTimeoutSeconds() throws Exception {

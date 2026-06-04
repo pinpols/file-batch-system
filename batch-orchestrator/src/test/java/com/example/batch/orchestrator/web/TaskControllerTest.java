@@ -3,7 +3,6 @@ package com.example.batch.orchestrator.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -22,21 +21,31 @@ import com.example.batch.orchestrator.controller.TaskController;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@ExtendWith(MockitoExtension.class)
 class TaskControllerTest {
 
-  private final TaskExecutionService taskExecutionService = mock(TaskExecutionService.class);
-  private final TaskControllerApplicationService taskControllerApplicationService =
-      new TaskControllerApplicationService(taskExecutionService, new ObjectMapper());
+  @Mock private TaskExecutionService taskExecutionService;
 
-  private final MockMvc mockMvc =
-      MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
-          .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-          .build();
+  private MockMvc mockMvc;
+
+  @BeforeEach
+  void setUp() {
+    TaskControllerApplicationService taskControllerApplicationService =
+        new TaskControllerApplicationService(taskExecutionService, new ObjectMapper());
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
+            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+            .build();
+  }
 
   @Test
   void shouldReturn200WhenClaimSucceeds() throws Exception {
