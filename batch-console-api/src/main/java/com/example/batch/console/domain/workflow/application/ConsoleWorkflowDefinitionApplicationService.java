@@ -28,18 +28,19 @@ public interface ConsoleWorkflowDefinitionApplicationService {
   DagValidationResult validate(Long id, String tenantId);
 
   /**
-   * workflow-dag-designer Polish — 列出工作流定义所有历史版本。
+   * 列出工作流定义所有历史版本(workflow-dag-designer Polish — V167 历史表闭环)。
    *
-   * <p>真实读 {@code batch.workflow_definition_version}(V167);历史表无数据时降级为单条 current(兼容 PR #370 行为)。 列表按
-   * version desc 排序,最新 version 携带 {@code current=true}。
+   * <p>真实读 {@code batch.workflow_definition_version}(V167),version desc 排序,最新 version 携带 {@code
+   * current=true}。历史表无数据时(刚迁移后)降级为单条 current,兼容 PR #370 降级返回行为。前端用此 list 渲染版本下拉,from/to
+   * 选择仅一项时回退「to=current / from=空」。
    */
   List<WorkflowDefinitionVersionSummaryResponse> listVersions(Long id, String tenantId);
 
   /**
-   * workflow-dag-designer Polish — 读取工作流定义历史 / 当前版本完整 detail。
+   * 获取指定版本的完整 definition(workflow-dag-designer Polish — V167 历史表闭环)。
    *
    * <p>当前 version(== 主表 version)直接返主表 + 关联节点边;历史 version 从 {@code workflow_definition_version} 反序列化
-   * nodes_json / edges_json。
+   * nodes_json / edges_json;不存在的版本一律 NOT_FOUND。
    */
   WorkflowDefinitionDetailResponse getVersion(Long id, String tenantId, Integer version);
 

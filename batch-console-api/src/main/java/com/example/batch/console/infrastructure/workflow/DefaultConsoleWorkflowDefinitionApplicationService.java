@@ -300,6 +300,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     return new DagValidationResult(errors.isEmpty(), errors, findings);
   }
 
+  // 版本列表 / 版本详情真实实现见文件末尾的 listVersions / getVersion(V167 历史表闭环)。
+
   private void upsertNodesAndEdges(
       String tenantId, Long definitionId, WorkflowDefinitionSaveRequest request) {
     if (request.getNodes() != null) {
@@ -715,7 +717,8 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     WorkflowDefinitionVersionEntity snapshot =
         versionMapper.findByDefinitionIdAndVersion(resolvedTenant, id, version);
     if (snapshot == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.version.not_found", id, version);
+      throw BizException.of(
+          ResultCode.NOT_FOUND, "error.workflow_version.not_found", id, version, def.getVersion());
     }
     List<WorkflowNodeEntity> nodes = readNodesJson(snapshot.getNodesJson());
     List<WorkflowEdgeEntity> edges = readEdgesJson(snapshot.getEdgesJson());
