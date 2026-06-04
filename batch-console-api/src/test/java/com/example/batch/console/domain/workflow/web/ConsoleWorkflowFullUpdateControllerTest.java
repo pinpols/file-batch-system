@@ -123,6 +123,43 @@ class ConsoleWorkflowFullUpdateControllerTest {
   }
 
   @Test
+  @DisplayName("DAG 含环:service 抛 VALIDATION_ERROR → 400 cycle_detected")
+  void shouldReturnBadRequest_whenDagHasCycle() throws Exception {
+    when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
+        .thenThrow(
+            BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.dag.cycle_detected", "a"));
+
+    mockMvc
+        .perform(
+            put("/api/console/workflow-definitions/42/full")
+                .contentType(APPLICATION_JSON)
+                .content(validBody()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+  }
+
+  @Test
+  @DisplayName(
+      "FILE_STEP pipelineCode 不存在:service 抛 VALIDATION_ERROR → 400 file_step_pipeline_not_found")
+  void shouldReturnBadRequest_whenFileStepPipelineNotFound() throws Exception {
+    when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
+        .thenThrow(
+            BizException.of(
+                ResultCode.VALIDATION_ERROR,
+                "error.workflow.dag.file_step_pipeline_not_found",
+                "fs",
+                "ghost_pipeline"));
+
+    mockMvc
+        .perform(
+            put("/api/console/workflow-definitions/42/full")
+                .contentType(APPLICATION_JSON)
+                .content(validBody()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+  }
+
+  @Test
   @DisplayName("嵌套 @Valid 失败:nodeCode 含空格 → 400 VALIDATION_ERROR,不调 service")
   void shouldRejectValidation_whenNestedNodeCodeInvalid() throws Exception {
     String body =

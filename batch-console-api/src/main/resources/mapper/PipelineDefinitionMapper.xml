@@ -95,6 +95,14 @@
         where tenant_id = #{tenantId} and id = #{id}
     </delete>
 
+    <!-- MVP DAG 兜底校验:FILE_STEP.related_pipeline_code 必须在同租户 pipeline_definition 存在。 -->
+    <select id="countByJobCode" resultType="long">
+        select count(1)
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </select>
+
     <!-- BE Spike (workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序。
          workflow_node.related_pipeline_code 跨域引用 FILE_STEP 专用。 -->
     <select id="selectActiveCodeNames"

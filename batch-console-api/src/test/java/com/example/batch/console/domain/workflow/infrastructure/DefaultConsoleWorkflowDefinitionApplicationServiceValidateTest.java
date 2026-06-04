@@ -60,7 +60,8 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceValidateTest {
             mock(ConsoleConfigCacheInvalidationService.class),
             mock(
                 com.example.batch.console.domain.workflow.application.WorkflowDesignLockService
-                    .class));
+                    .class),
+            mock(com.example.batch.console.domain.workflow.validation.WorkflowDagValidator.class));
   }
 
   @Test
