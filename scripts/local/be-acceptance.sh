@@ -224,7 +224,10 @@ cleanup_stale_runs() {
   #    Flyway 启动期报 "Found more than one migration with version X",E2E/IT 全挂。
   #    收集 source 端所有 V*.sql 文件名作白名单,删 target 里不在白名单的。
   local src_set; src_set=$(mktemp /tmp/src-migrations.XXXXXX)
-  trap 'rm -f "$src_set"' RETURN
+  # 立即展开 $src_set:RETURN trap 在 func return 后才跑,那时 local 变量已 out-of-scope,
+  # 延后展开 + set -u 会抛 unbound。SC2064 在这里必须豁免。
+  # shellcheck disable=SC2064
+  trap "rm -f \"$src_set\"" RETURN
   find . -path "*/db/migration/V*.sql" \
     -not -path "*/target/*" -not -path "*/.claude/*" \
     -exec basename {} \; 2>/dev/null | sort -u > "$src_set"
