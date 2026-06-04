@@ -19,6 +19,8 @@ TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
 ROUNDS="${ROUNDS:-5}"
 ONLY="${ONLY:-}"      # ta|tb|tc 或空表示全部
 BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
+# /api/triggers/launch 走内部鉴权 + 幂等键;secret 默认 internal-secret,本地若 .env.local 注入 BATCH_INTERNAL_SECRET 则用之
+INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
 
 declare -A JOBS=(
   [ta]="TA_IMPORT_CUSTOMER TA_IMPORT_ORDER TA_EXPORT_REPORT TA_DISPATCH_ORDER TA_WF_SETTLEMENT"
@@ -30,7 +32,7 @@ TENANTS=(ta tb tc)
 [[ -n "$ONLY" ]] && TENANTS=("$ONLY")
 
 total=0; succ=0
-echo "==> 启动 ${ROUNDS} 轮 × $(for t in "${TENANTS[@]}"; do echo "${JOBS[$t]}" | wc -w; done | paste -sd+ | bc) jobs"
+echo "==> 启动 ${ROUNDS} 轮 × $(for t in "${TENANTS[@]}"; do echo "${JOBS[$t]}" | wc -w; done | paste -sd+ - | bc) jobs"
 START=$(date +%s)
 
 for round in $(seq 1 "$ROUNDS"); do
@@ -41,6 +43,8 @@ for round in $(seq 1 "$ROUNDS"); do
       resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
         -H "Content-Type: application/json" \
         -H "X-Tenant-Id: $tenant" \
+        -H "X-Internal-Secret: $INTERNAL_SECRET" \
+        -H "Idempotency-Key: $req_id" \
         -H "X-Request-Id: $req_id" \
         "$TRIGGER_BASE/api/triggers/launch" \
         -d "{\"tenantId\":\"$tenant\",\"jobCode\":\"$job\",\"triggerType\":\"API\",\"bizDate\":\"$BIZ_DATE\",\"requestId\":\"$req_id\"}" 2>&1)
