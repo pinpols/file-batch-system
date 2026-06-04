@@ -13,11 +13,13 @@ import com.example.batch.console.domain.workflow.infrastructure.WorkflowMermaidR
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDesignLockResponse;
 import com.example.batch.console.domain.workflow.web.response.WorkflowMermaidResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -98,6 +100,29 @@ public class ConsoleWorkflowDefinitionController {
         workflowDefinitionApplicationService.getById(id, tenantId);
     return responseFactory.success(
         new WorkflowMermaidResponse(WorkflowMermaidRenderer.render(detail)));
+  }
+
+  // ─── Polish: 版本列表 / 版本详情(workflow-dag-designer diff 页面真实接入)───────────
+  // 当前降级:无 workflow_definition_version 历史表,list 仅返当前一条;detail 仅支持 version==current。
+  // 详见 docs/api/console-api-protocol.md Changelog 2026-06-04。
+
+  /** 列出工作流定义的历史版本(降级返当前 1 条)。 */
+  @GetMapping("/{id}/versions")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  public CommonResponse<List<WorkflowDefinitionVersionSummaryResponse>> listVersions(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(workflowDefinitionApplicationService.listVersions(id, tenantId));
+  }
+
+  /** 获取指定版本的完整 definition(降级仅支持当前版本,其他 404)。 */
+  @GetMapping("/{id}/versions/{version}")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  public CommonResponse<WorkflowDefinitionDetailResponse> getVersion(
+      @PathVariable Long id,
+      @PathVariable Integer version,
+      @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        workflowDefinitionApplicationService.getVersion(id, tenantId, version));
   }
 
   // ─── BE Spike: workflow-dag-designer 全量替换 + 单人编辑锁 ───────────────────────────

@@ -3,6 +3,7 @@ package com.example.batch.console.domain.workflow.application;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
 import java.util.List;
 
 /** 工作流定义应用服务：管理工作流定义的 CRUD 及 DAG 校验操作。 */
@@ -25,6 +26,22 @@ public interface ConsoleWorkflowDefinitionApplicationService {
   void toggleEnabled(Long id, String tenantId, Boolean enabled);
 
   DagValidationResult validate(Long id, String tenantId);
+
+  /**
+   * 列出工作流定义的历史版本(降级版本)。
+   *
+   * <p>当前实现:平台尚无 {@code workflow_definition_version} 历史表,该方法仅返回单条"当前版本"摘要,等同于 workflow_definition
+   * 主表当前快照。完整历史 follow-up 需新 migration,届时改为读 archive 表。前端用此 list 渲染版本下拉,from/to 选择仅一项时回退「to=current
+   * / from=空」。
+   */
+  List<WorkflowDefinitionVersionSummaryResponse> listVersions(Long id, String tenantId);
+
+  /**
+   * 获取指定版本的完整 definition(降级版本)。
+   *
+   * <p>无历史表场景下:仅支持 {@code version == 当前版本} 的请求;其他版本号一律 NOT_FOUND。
+   */
+  WorkflowDefinitionDetailResponse getVersion(Long id, String tenantId, Integer version);
 
   /**
    * DAG 静态校验结果。
