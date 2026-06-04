@@ -742,3 +742,57 @@ groups:
           summary: "Console replica failover occurred"
           description: "console-api 读副本发生 failover ≥ 1 次。检查 PG primary 健康 + 路由表是否切换正确,确认无静默主备切换。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#replica-failover-occurred"
+
+  - name: batch.mainline-extra
+    rules:
+      - alert: WebhookDeliveryGiveUpHigh
+        # webhook delivery 累计放弃率 > 0.01/s 持续 10m,说明下游 endpoint 持续不可达或速率被限
+        expr: sum(rate(batch_webhook_delivery_give_up_total[5m])) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Webhook delivery give-up rate > 0.01/s"
+          description: "webhook 投递放弃率 > 0.01/s 持续 10m。检查目标 endpoint 健康 / 鉴权 / dispatcher 配置。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#webhook-delivery-give-up-high"
+
+      - alert: RealtimeReplayCursorMissHigh
+        # SSE 重放 cursor miss > 0.5/s 持续 5m,客户端断连后落入空洞,需检查 buffer 容量 / TTL
+        expr: sum(rate(batch_console_realtime_replay_cursor_miss_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Realtime SSE replay cursor miss > 0.5/s"
+          description: "SSE 客户端重连频繁落入 cursor 空洞 (> 0.5/s for 5m),buffer TTL/容量不足或客户端断连过久。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#realtime-replay-cursor-miss-high"
+
+      - alert: WorkerLeaseFastRetryStorm
+        # lease 快速重试 > 1/s 持续 5m,说明 lease 续约抖动,可能是网络/orch 拥塞/时钟漂移
+        expr: sum(rate(batch_worker_lease_fast_retry_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Worker lease fast-retry storm (> 1/s)"
+          description: "worker lease 快速重试 > 1/s 持续 5m。按 reason 拆维度,常见根因:orchestrator 拥塞 / 网络抖动 / 时钟漂移。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-lease-fast-retry-storm"
+
+      - alert: WorkerReportOutboxGiveUpHigh
+        # worker report outbox give_up 增长 > 0,说明 orch 长时间不可达导致 outbox 放弃
+        expr: increase(batch_worker_report_outbox_give_up_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: mainline-extra
+        annotations:
+          summary: "Worker report outbox give-up occurred"
+          description: "worker report outbox 放弃投递 ≥ 1 条 (10m 内)。orchestrator 长时间不可达或回报 endpoint 错误,会丢失状态回报。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-report-outbox-give-up-high"
