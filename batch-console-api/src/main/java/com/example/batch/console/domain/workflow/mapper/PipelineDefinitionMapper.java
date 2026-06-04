@@ -35,4 +35,10 @@ public interface PipelineDefinitionMapper {
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 
   int deleteByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /**
+   * BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, pipelineName)。
+   */
+  List<com.example.batch.console.domain.workflow.web.response.CodeNameOption> selectActiveCodeNames(
+      @Param("tenantId") String tenantId);
 }

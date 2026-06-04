@@ -94,4 +94,15 @@
         delete from batch.pipeline_definition
         where tenant_id = #{tenantId} and id = #{id}
     </delete>
+
+    <!-- BE Spike (workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序。
+         workflow_node.related_pipeline_code 跨域引用 FILE_STEP 专用。 -->
+    <select id="selectActiveCodeNames"
+            resultType="com.example.batch.console.domain.workflow.web.response.CodeNameOption">
+        select job_code as code, pipeline_name as name
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+          and enabled = true
+        order by job_code asc
+    </select>
 </mapper>

@@ -218,3 +218,49 @@ GET /api/console/queries/job-definitions/codes?tenantId=
 - 多人协同编辑(yjs / OT — 重活,等业务需求)
 - 节点级权限(VIEWER 角色只看不改 — 现有 `v-permission` 适配即可,简单)
 - 大模型辅助生成 DAG
+
+## 13. BE Spike 已落地状态(2026-06-04)
+
+> 本节由 BE Spike PR 维护;FE 接入对账以此为准。
+
+### 端点(URL 前缀沿用 `/api/console/workflow-definitions`,**不另立** `/api/console/workflow/definitions/`)
+
+| 第 7 节 spec | 实际落地 path | 状态 |
+|---|---|---|
+| `PUT /workflow/definitions/{id}/full` | `PUT /api/console/workflow-definitions/{id}/full` | 落地 |
+| `PUT /workflow/definitions/{id}/lock` | `PUT /api/console/workflow-definitions/{id}/lock` | 落地 |
+| `DELETE /workflow/definitions/{id}/lock` | `DELETE /api/console/workflow-definitions/{id}/lock` | 落地 |
+| `PUT /workflow/definitions/{id}/lock/renew` | `PUT /api/console/workflow-definitions/{id}/lock/renew` | 落地 |
+| `GET /queries/job-definitions/codes` | 同 | 落地 |
+| `GET /queries/pipeline-definitions/codes` | 同 | 落地 |
+| `GET /workflow/definitions/{id}/full` | 复用现有 `GET /api/console/workflow-definitions/{id}` | 已具备(不另立 path) |
+
+### 字段补充
+
+- `PUT .../full` body 形态:`{ definition: WorkflowDefinitionSaveRequest, expectedVersion?: number, lockToken?: string }`
+- `expectedVersion` 用作乐观锁谓词;不传则跳过版本冲突校验
+- `lockToken` Spike 阶段忽略,锁归属以 SecurityContext.username 为权威
+- `workflowCode` 不可改(全量替换时若 body 试图改 → `INVALID_ARGUMENT`)
+
+### 锁实现
+
+- **Redis SETNX**(`StringRedisTemplate.opsForValue().setIfAbsent`),独立 `WorkflowDesignLockService`
+- Key:`wf-design-lock:{tenantId}:{definitionId}`;Value:JSON `{ lockedBy, expiresAt }`;TTL:5min,renew 重置
+- **不走 ShedLock**(后者是 scheduled job 进程级互斥,语义不复用)
+- 进程崩溃 / Redis 重启锁丢失即重新申请,无持久化
+
+### RBAC
+
+- `full` + `lock`(3 端点):`ROLE_ADMIN | ROLE_TENANT_ADMIN`
+- `codes`(2 端点):沿用 `ConsoleQueryController` 类级 `ROLE_ADMIN | ROLE_AUDITOR | ROLE_TENANT_ADMIN | ROLE_TENANT_USER`
+- 租户作用域:全部走 `ConsoleTenantGuard.resolveTenant`
+
+### 错误码 i18n
+
+`error.workflow_design_lock.{held_by_other, required, not_owner, expired, serialize_failed}` + `error.workflow_full_update.{code_immutable, version_conflict}`,en + zh_CN 已落 `messages.properties` / `messages_zh_CN.properties`。
+
+### 测试
+
+- `WorkflowDesignLockServiceTest`(6 case)
+- `ConsoleWorkflowFullUpdateControllerTest`(3 case)
+- `mvn -pl batch-console-api test -DskipITs` 全绿(844 / 0 fail / 1 skip)

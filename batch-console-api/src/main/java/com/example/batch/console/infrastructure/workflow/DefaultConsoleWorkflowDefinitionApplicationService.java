@@ -8,6 +8,8 @@ import com.example.batch.console.domain.job.mapper.JobDefinitionMapper;
 import com.example.batch.console.domain.observability.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefinitionApplicationService;
+import com.example.batch.console.domain.workflow.application.WorkflowDesignLockService;
+import com.example.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -18,6 +20,7 @@ import com.example.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import com.example.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import com.example.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
@@ -73,6 +76,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
+  private final WorkflowDesignLockService designLockService;
 
   @Override
   public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
@@ -138,6 +142,60 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     upsertNodesAndEdges(resolvedTenant, id, request);
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-updated");
+
+    return loadDetail(resolvedTenant, id);
+  }
+
+  @Override
+  @Transactional
+  public WorkflowDefinitionDetailResponse fullUpdate(
+      Long id, WorkflowDefinitionFullUpdateRequest request, String currentUser) {
+    WorkflowDefinitionSaveRequest body = request.getDefinition();
+    String resolvedTenant = tenantGuard.resolveTenant(body.getTenantId());
+
+    WorkflowDefinitionEntity def =
+        Guard.requireFound(
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+
+    // workflowCode 不可改:保持持久化引用稳定(workflow_node.workflow_definition_id 等下游不感知 code 变更)
+    if (body.getWorkflowCode() != null && !body.getWorkflowCode().equals(def.getWorkflowCode())) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.workflow_full_update.code_immutable",
+          def.getWorkflowCode());
+    }
+
+    // 锁归属校验:必须当前 user 持锁(锁不存在 → CONFLICT 让前端重新申请;别人持锁 → CONFLICT 含 lockedBy)
+    LockHolder holder = designLockService.currentHolder(resolvedTenant, id);
+    if (holder == null) {
+      throw BizException.of(ResultCode.CONFLICT, "error.workflow_design_lock.required");
+    }
+    if (!holder.lockedBy().equals(currentUser)) {
+      throw BizException.of(
+          ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", holder.lockedBy());
+    }
+
+    int rows =
+        definitionMapper.updateAndBumpVersion(
+            resolvedTenant,
+            id,
+            request.getExpectedVersion(),
+            body.getWorkflowName(),
+            body.getWorkflowType(),
+            body.getEnabled() != null ? body.getEnabled() : def.getEnabled());
+    if (rows == 0) {
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.workflow_full_update.version_conflict",
+          request.getExpectedVersion(),
+          def.getVersion());
+    }
+
+    nodeMapper.deleteByWorkflowDefinitionId(id);
+    edgeMapper.deleteByWorkflowDefinitionId(id);
+    upsertNodesAndEdges(resolvedTenant, id, body);
+    cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
+    publishRefresh(resolvedTenant, "workflow-definition-full-updated");
 
     return loadDetail(resolvedTenant, id);
   }
