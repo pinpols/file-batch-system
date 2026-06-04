@@ -106,6 +106,7 @@ public final class ConsoleMenuRegistry {
               List.of(
                   new MenuItem("调度快照", "/scheduler/snapshot", "TrendCharts", ROLE_VIEWER),
                   new MenuItem("批次日与窗口", "/scheduler/batch-days", "Calendar", ROLE_VIEWER),
+                  new MenuItem("批次日重放", "/ops/batch-day-replay", "RefreshRight", ROLE_OPERATOR),
                   new MenuItem("Catch-up 审批", "/scheduler/catch-up-approvals", "Memo", ROLE_VIEWER),
                   new MenuItem("租户配额", "/governance/quota", "Briefcase", ROLE_OPERATOR),
                   // 队列/窗口/日历是租户级配置 CRUD,与「配置发布」「Excel 维护」同档,
