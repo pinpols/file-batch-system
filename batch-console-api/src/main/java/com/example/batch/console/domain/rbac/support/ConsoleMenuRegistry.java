@@ -90,7 +90,11 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("全部运行", "/runs", "List", ROLE_VIEWER),
                   new MenuItem("日志", "/logs", "Reading", ROLE_VIEWER),
                   new MenuItem("告警", "/observability/alerts", "WarningFilled", ROLE_VIEWER),
+                  new MenuItem(
+                      "告警路由", "/observability/alert-routings", "Connection", ROLE_OPERATOR),
                   new MenuItem("审计", "/observability/audits", "Memo", ROLE_VIEWER),
+                  new MenuItem("操作审计", "/observability/operation-audits", "Document", ROLE_VIEWER),
+                  new MenuItem("Trace 诊断", "/observability/trace", "Search", ROLE_VIEWER),
                   new MenuItem("Outbox", "/observability/outbox", "Box", ROLE_OPERATOR),
                   new MenuItem("可观测性查询", "/observability/queries", "Search", ROLE_VIEWER),
                   new MenuItem("事件目录", "/system/event-catalog", "Collection", ROLE_VIEWER))),
