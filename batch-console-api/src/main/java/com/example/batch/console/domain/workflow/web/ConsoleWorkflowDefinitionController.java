@@ -103,20 +103,30 @@ public class ConsoleWorkflowDefinitionController {
   }
 
   // ─── Polish: 版本列表 / 版本详情(workflow-dag-designer diff 页面真实接入)───────────
-  // 当前降级:无 workflow_definition_version 历史表,list 仅返当前一条;detail 仅支持 version==current。
+  // V167 后真实读 workflow_definition_version;历史表无数据时降级单条 current。
   // 详见 docs/api/console-api-protocol.md Changelog 2026-06-04。
 
-  /** 列出工作流定义的历史版本(降级返当前 1 条)。 */
+  /**
+   * 列出工作流定义的所有历史版本(workflow-dag-designer Polish — 闭环 FE diff 页)。
+   *
+   * <p>真实读 {@code workflow_definition_version};历史表无数据(刚迁移后)→ 单条 current 降级兼容。
+   */
   @GetMapping("/{id}/versions")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<List<WorkflowDefinitionVersionSummaryResponse>> listVersions(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionApplicationService.listVersions(id, tenantId));
   }
 
-  /** 获取指定版本的完整 definition(降级仅支持当前版本,其他 404)。 */
+  /**
+   * 读取指定 version 的完整 detail(当前 version → 主表 + 关联节点边;历史 version → 快照反序列化)。
+   *
+   * <p>不存在的版本 → NOT_FOUND。
+   */
   @GetMapping("/{id}/versions/{version}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
   public CommonResponse<WorkflowDefinitionDetailResponse> getVersion(
       @PathVariable Long id,
       @PathVariable Integer version,
