@@ -1,6 +1,5 @@
 package com.example.batch.orchestrator.controller;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -12,17 +11,20 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@ExtendWith(MockitoExtension.class)
 class OrchestratorDrainControllerTest {
 
-  private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     mockMvc =
         MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(gracefulShutdown)).build();
   }

@@ -3,7 +3,6 @@ package com.example.batch.trigger.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -18,23 +17,33 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.service.TriggerService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@ExtendWith(MockitoExtension.class)
 class TriggerControllerTest {
 
-  private final TriggerService triggerService = mock(TriggerService.class);
-  private final TriggerGracefulShutdown triggerGracefulShutdown =
-      mock(TriggerGracefulShutdown.class);
-  private final MockMvc mockMvc =
-      MockMvcBuilders.standaloneSetup(
-              new TriggerController(triggerService, triggerGracefulShutdown))
-          .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
-          .setMessageConverters(new JacksonJsonHttpMessageConverter())
-          .build();
+  @Mock private TriggerService triggerService;
+  @Mock private TriggerGracefulShutdown triggerGracefulShutdown;
+
+  private MockMvc mockMvc;
+
+  @BeforeEach
+  void setUp() {
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new TriggerController(triggerService, triggerGracefulShutdown))
+            .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
+            .setMessageConverters(new JacksonJsonHttpMessageConverter())
+            .build();
+  }
 
   @Test
   void shouldGenerateRequestAndTraceIdsWhenHeadersAreMissing() throws Exception {
