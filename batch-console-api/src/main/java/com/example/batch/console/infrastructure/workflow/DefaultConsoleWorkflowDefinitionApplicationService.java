@@ -11,11 +11,14 @@ import com.example.batch.console.domain.workflow.application.ConsoleWorkflowDefi
 import com.example.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import com.example.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
+import com.example.batch.console.domain.workflow.entity.WorkflowDefinitionVersionEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
+import com.example.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import com.example.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
+import com.example.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
 import com.example.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import com.example.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import com.example.batch.console.domain.workflow.query.WorkflowEdgeQuery;
@@ -26,7 +29,11 @@ import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionS
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
 import com.example.batch.console.infrastructure.config.ConsoleConfigCacheInvalidationService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -73,12 +80,20 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
   private final WorkflowDefinitionMapper definitionMapper;
   private final WorkflowNodeMapper nodeMapper;
   private final WorkflowEdgeMapper edgeMapper;
+  private final WorkflowDefinitionVersionMapper versionMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
   private final WorkflowDesignLockService designLockService;
   private final WorkflowDagValidator dagValidator;
+  private final ObjectMapper objectMapper;
+
+  // 反序列化历史 nodes_json / edges_json — JSONB 全文 → entity list
+  private static final TypeReference<List<WorkflowNodeEntity>> NODE_LIST_TYPE =
+      new TypeReference<>() {};
+  private static final TypeReference<List<WorkflowEdgeEntity>> EDGE_LIST_TYPE =
+      new TypeReference<>() {};
 
   @Override
   public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
@@ -199,10 +214,52 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     nodeMapper.deleteByWorkflowDefinitionId(id);
     edgeMapper.deleteByWorkflowDefinitionId(id);
     upsertNodesAndEdges(resolvedTenant, id, body);
+
+    // 同事务追加版本快照(workflow-dag-designer Polish):新 version = 旧 version + 1。
+    // 序列化用 ObjectMapper 写当前持久化后的 entity list — 与 detail 读路径一致,
+    // 避免基于 request DTO 序列化导致下游字段差异。
+    Integer newVersion = def.getVersion() + 1;
+    appendVersionSnapshot(resolvedTenant, id, def.getWorkflowCode(), newVersion, body, currentUser);
+
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-full-updated");
 
     return loadDetail(resolvedTenant, id);
+  }
+
+  private void appendVersionSnapshot(
+      String tenantId,
+      Long definitionId,
+      String workflowCode,
+      Integer newVersion,
+      WorkflowDefinitionSaveRequest body,
+      String savedBy) {
+    List<WorkflowNodeEntity> nodes =
+        nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null));
+    List<WorkflowEdgeEntity> edges =
+        edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(tenantId, definitionId, null));
+    WorkflowDefinitionVersionInsertParam param = new WorkflowDefinitionVersionInsertParam();
+    param.setTenantId(tenantId);
+    param.setWorkflowDefinitionId(definitionId);
+    param.setWorkflowCode(workflowCode);
+    param.setVersion(newVersion);
+    param.setWorkflowName(body.getWorkflowName());
+    param.setWorkflowType(body.getWorkflowType());
+    param.setEnabled(body.getEnabled());
+    try {
+      param.setNodesJson(objectMapper.writeValueAsString(nodes));
+      param.setEdgesJson(objectMapper.writeValueAsString(edges));
+    } catch (JsonProcessingException e) {
+      // 主路径已持久化成功;序列化失败属编程错(entity 字段全 Jackson-friendly POJO),
+      // 走 BizException 让事务回滚,避免主表 + 历史表分裂。
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.workflow.version_snapshot.serialize_failed",
+          e.getMessage());
+    }
+    param.setSavedBy(savedBy);
+    // summary 暂留 null(FE 未提交字段,Spike 不展示)
+    versionMapper.insertVersionSnapshot(param);
   }
 
   @Override
@@ -612,5 +669,96 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
 
   private void publishRefresh(String tenantId, String eventType) {
     domainEventPublisher.publishChanged(tenantId, "workflow-definitions", eventType);
+  }
+
+  // ─── workflow-dag-designer Polish: 版本列表 / 单版本读取 ──────────────────────────
+
+  @Override
+  public List<WorkflowDefinitionVersionSummaryResponse> listVersions(Long id, String tenantId) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    WorkflowDefinitionEntity def =
+        Guard.requireFound(
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+
+    List<WorkflowDefinitionVersionEntity> rows =
+        versionMapper.listByDefinitionId(resolvedTenant, id);
+    if (rows.isEmpty()) {
+      // 降级路径:历史表无数据(刚迁移后 / 从未 fullUpdate)→ 单条返回主表 current,
+      // 与 PR #370 行为一致,FE diff 页可降级显示"当前 vs 空"。
+      return List.of(
+          new WorkflowDefinitionVersionSummaryResponse(
+              def.getVersion(), null, def.getUpdatedAt(), null, true));
+    }
+    Integer currentVersion = def.getVersion();
+    return rows.stream()
+        .map(
+            r ->
+                new WorkflowDefinitionVersionSummaryResponse(
+                    r.getVersion(),
+                    r.getSavedBy(),
+                    r.getSavedAt(),
+                    r.getSummary(),
+                    r.getVersion().equals(currentVersion)))
+        .toList();
+  }
+
+  @Override
+  public WorkflowDefinitionDetailResponse getVersion(Long id, String tenantId, Integer version) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    WorkflowDefinitionEntity def =
+        Guard.requireFound(
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    if (version == null || version.equals(def.getVersion())) {
+      // 当前 version → 主表 + 关联节点边(loadDetail 路径)
+      return loadDetail(resolvedTenant, id);
+    }
+    WorkflowDefinitionVersionEntity snapshot =
+        versionMapper.findByDefinitionIdAndVersion(resolvedTenant, id, version);
+    if (snapshot == null) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.version.not_found", id, version);
+    }
+    List<WorkflowNodeEntity> nodes = readNodesJson(snapshot.getNodesJson());
+    List<WorkflowEdgeEntity> edges = readEdgesJson(snapshot.getEdgesJson());
+    return new WorkflowDefinitionDetailResponse(
+        def.getId(),
+        def.getTenantId(),
+        snapshot.getWorkflowCode(),
+        snapshot.getWorkflowName(),
+        snapshot.getWorkflowType(),
+        snapshot.getVersion(),
+        snapshot.getEnabled(),
+        def.getDescription(),
+        def.getCreatedAt(),
+        snapshot.getSavedAt(),
+        nodes.stream().map(this::toNodeResponse).toList(),
+        edges.stream().map(this::toEdgeResponse).toList());
+  }
+
+  private List<WorkflowNodeEntity> readNodesJson(String json) {
+    if (json == null || json.isBlank()) {
+      return List.of();
+    }
+    try {
+      return objectMapper.readValue(json, NODE_LIST_TYPE);
+    } catch (JsonProcessingException e) {
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.workflow.version_snapshot.deserialize_failed",
+          e.getMessage());
+    }
+  }
+
+  private List<WorkflowEdgeEntity> readEdgesJson(String json) {
+    if (json == null || json.isBlank()) {
+      return List.of();
+    }
+    try {
+      return objectMapper.readValue(json, EDGE_LIST_TYPE);
+    } catch (JsonProcessingException e) {
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.workflow.version_snapshot.deserialize_failed",
+          e.getMessage());
+    }
   }
 }

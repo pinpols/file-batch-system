@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper">
+    <resultMap id="WorkflowDefinitionVersionResultMap"
+               type="com.example.batch.console.domain.workflow.entity.WorkflowDefinitionVersionEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="workflow_definition_id" property="workflowDefinitionId"/>
+        <result column="workflow_code" property="workflowCode"/>
+        <result column="version" property="version"/>
+        <result column="workflow_name" property="workflowName"/>
+        <result column="workflow_type" property="workflowType"/>
+        <result column="enabled" property="enabled"/>
+        <result column="nodes_json" property="nodesJson"/>
+        <result column="edges_json" property="edgesJson"/>
+        <result column="saved_by" property="savedBy"/>
+        <result column="saved_at" property="savedAt"/>
+        <result column="summary" property="summary"/>
+    </resultMap>
+
+    <!--
+        nodes_json / edges_json 是 JSONB,以 ::text 读出原样透传 service/FE;
+        与 AtomicTaskConfigMapper.xml 同一风格。
+    -->
+    <insert id="insertVersionSnapshot" useGeneratedKeys="true" keyProperty="p.id">
+        insert into batch.workflow_definition_version (
+            tenant_id,
+            workflow_definition_id,
+            workflow_code,
+            version,
+            workflow_name,
+            workflow_type,
+            enabled,
+            nodes_json,
+            edges_json,
+            saved_by,
+            saved_at,
+            summary
+        ) values (
+            #{p.tenantId},
+            #{p.workflowDefinitionId},
+            #{p.workflowCode},
+            #{p.version},
+            #{p.workflowName},
+            #{p.workflowType},
+            #{p.enabled},
+            #{p.nodesJson,jdbcType=VARCHAR}::jsonb,
+            #{p.edgesJson,jdbcType=VARCHAR}::jsonb,
+            #{p.savedBy},
+            current_timestamp,
+            #{p.summary}
+        )
+    </insert>
+
+    <select id="listByDefinitionId" resultMap="WorkflowDefinitionVersionResultMap">
+        select id, tenant_id, workflow_definition_id, workflow_code, version,
+               workflow_name, workflow_type, enabled,
+               nodes_json::text as nodes_json,
+               edges_json::text as edges_json,
+               saved_by, saved_at, summary
+        from batch.workflow_definition_version
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+        order by version desc, id desc
+    </select>
+
+    <select id="findByDefinitionIdAndVersion" resultMap="WorkflowDefinitionVersionResultMap">
+        select id, tenant_id, workflow_definition_id, workflow_code, version,
+               workflow_name, workflow_type, enabled,
+               nodes_json::text as nodes_json,
+               edges_json::text as edges_json,
+               saved_by, saved_at, summary
+        from batch.workflow_definition_version
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and version = #{version}
+        limit 1
+    </select>
+</mapper>

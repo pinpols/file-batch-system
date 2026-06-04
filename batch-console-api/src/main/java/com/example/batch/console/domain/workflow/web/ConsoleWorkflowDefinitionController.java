@@ -13,11 +13,13 @@ import com.example.batch.console.domain.workflow.infrastructure.WorkflowMermaidR
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionFullUpdateRequest;
 import com.example.batch.console.domain.workflow.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.domain.workflow.web.response.WorkflowDefinitionVersionSummaryResponse;
 import com.example.batch.console.domain.workflow.web.response.WorkflowDesignLockResponse;
 import com.example.batch.console.domain.workflow.web.response.WorkflowMermaidResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -132,6 +134,35 @@ public class ConsoleWorkflowDefinitionController {
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     designLockService.release(tenantId, id, currentUsername());
     return ResponseEntity.noContent().build();
+  }
+
+  /**
+   * 列出工作流定义的所有历史版本(workflow-dag-designer Polish — 闭环 FE diff 页)。
+   *
+   * <p>真实读 {@code workflow_definition_version};历史表无数据(刚迁移后)→ 单条 current 降级兼容。
+   */
+  @GetMapping("/{id}/versions")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  public CommonResponse<List<WorkflowDefinitionVersionSummaryResponse>> listVersions(
+      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(workflowDefinitionApplicationService.listVersions(id, tenantId));
+  }
+
+  /**
+   * 读取指定 version 的完整 detail(当前 version → 主表 + 关联节点边;历史 version → 快照反序列化)。
+   *
+   * <p>不存在的版本 → NOT_FOUND。
+   */
+  @GetMapping("/{id}/versions/{version}")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  public CommonResponse<WorkflowDefinitionDetailResponse> getVersion(
+      @PathVariable Long id,
+      @PathVariable Integer version,
+      @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        workflowDefinitionApplicationService.getVersion(id, tenantId, version));
   }
 
   /** 续期编辑锁(再续 5min);锁已过期 → 409(让前端重新 acquire)。 */
