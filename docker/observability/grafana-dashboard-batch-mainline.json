@@ -2,7 +2,7 @@
   "title": "Batch Platform — mainline blackbox",
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "uid": "batch-mainline",
   "editable": true,
   "panels": [
@@ -747,6 +747,186 @@
         {
           "expr": "sum by (service, outcome) (rate(downstream_call_total[5m]))",
           "legendFormat": "{{service}}/{{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Webhook delivery give-up rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 176
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(batch_webhook_delivery_give_up_total[5m]))",
+          "legendFormat": "give_up/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Verifier duration P99 by code",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 176
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (code, le) (rate(batch_verifier_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{code}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Verifier failures by code / reason",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 184
+      },
+      "targets": [
+        {
+          "expr": "sum by (code, reason) (rate(batch_verifier_failures_total[5m]))",
+          "legendFormat": "{{code}}/{{reason}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Realtime SSE active subscriptions",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 184
+      },
+      "targets": [
+        {
+          "expr": "max(batch_console_realtime_subscriptions_active)",
+          "legendFormat": "active"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Realtime replay events rate by stream",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 192
+      },
+      "targets": [
+        {
+          "expr": "sum by (stream) (rate(batch_console_realtime_replay_events_total[5m]))",
+          "legendFormat": "{{stream}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Realtime replay cursor miss / decode failures",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 192
+      },
+      "targets": [
+        {
+          "expr": "sum by (stream) (rate(batch_console_realtime_replay_cursor_miss_total[5m]))",
+          "legendFormat": "miss {{stream}}"
+        },
+        {
+          "expr": "sum by (stream) (rate(batch_console_realtime_replay_decode_failures_total[5m]))",
+          "legendFormat": "decode_fail {{stream}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker process staging orphan cleaned rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 200
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(batch_worker_process_staging_orphan_cleaned_total[5m]))",
+          "legendFormat": "cleaned/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker lease fast_retry rate by reason",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 200
+      },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(batch_worker_lease_fast_retry_total[5m]))",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker report outbox give-up rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 208
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(batch_worker_report_outbox_give_up_total[5m]))",
+          "legendFormat": "give_up/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker report duration P99 by workerType / outcome",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 208
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (workerType, outcome, le) (rate(batch_worker_report_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{workerType}}/{{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Realtime pubsub handle failures by stream / eventType",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 216
+      },
+      "targets": [
+        {
+          "expr": "sum by (stream, eventType) (rate(batch_console_realtime_pubsub_handle_failures_total[5m]))",
+          "legendFormat": "{{stream}}/{{eventType}}"
         }
       ]
     }
