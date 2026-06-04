@@ -111,9 +111,9 @@ public class ConsoleQueryController {
    * docs/design/pipeline-stage-progress-display.md}。
    */
   @GetMapping("/pipeline-progress")
-  public CommonResponse<java.util.List<java.util.Map<String, Object>>> pipelineProgress(
+  public CommonResponse<List<Map<String, Object>>> pipelineProgress(
       @RequestParam("tenantId") String tenantId,
-      @RequestParam("workerCodes") java.util.List<String> workerCodes) {
+      @RequestParam("workerCodes") List<String> workerCodes) {
     return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
   }
 
