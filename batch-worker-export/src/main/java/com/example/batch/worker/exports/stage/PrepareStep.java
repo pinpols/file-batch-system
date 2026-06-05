@@ -59,10 +59,17 @@ public class PrepareStep implements ExportStageStep {
               : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
       context.getAttributes().put("exportPayload", payload);
       Map<String, Object> templateConfig = Map.of();
-      if (Texts.hasText(payload.templateCode())) {
+      // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 兜底加载导出模板;
+      // 否则 TEMPLATE_CONFIG 为空 → GenerateStep 报「export_data_ref is required」、导出永久失败转死信。
+      // 约定不命中(如 *_TPL2)则 loadLatestTemplateConfig 返回空,回退原行为(清晰失败),无副作用。
+      String effectiveTemplateCode =
+          Texts.hasText(payload.templateCode())
+              ? payload.templateCode()
+              : context.getJobCode() + "_TPL";
+      if (Texts.hasText(effectiveTemplateCode)) {
         templateConfig =
             runtimeRepository.loadLatestTemplateConfig(
-                context.getTenantId(), payload.templateCode(), ExportWorkerType.EXPORT);
+                context.getTenantId(), effectiveTemplateCode, ExportWorkerType.EXPORT);
         if (!templateConfig.isEmpty()) {
           context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
         }
