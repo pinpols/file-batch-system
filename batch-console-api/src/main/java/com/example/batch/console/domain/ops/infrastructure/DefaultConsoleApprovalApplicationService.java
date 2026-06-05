@@ -12,6 +12,7 @@ import com.example.batch.console.domain.file.web.request.PresignDownloadFileRequ
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobApplicationService;
 import com.example.batch.console.domain.job.web.request.CompensationCommandRequest;
+import com.example.batch.console.domain.job.web.request.RerunRequest;
 import com.example.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
@@ -38,6 +39,7 @@ import org.springframework.web.client.RestClient;
  *   <li>按 {@code actionType} 分派到对应 application service 执行真实业务：
  *       <ul>
  *         <li>{@code COMPENSATION} → {@link ConsoleJobApplicationService#compensation}
+ *         <li>{@code RERUN} → {@link ConsoleJobApplicationService#rerun}（SELF_SERVICE 自助重跑）
  *         <li>{@code DLQ_REPLAY} → {@link ConsoleJobApplicationService#replayDeadLetter}
  *         <li>{@code DOWNLOAD} → {@link ConsoleFileApplicationService#presignDownload}
  *         <li>{@code CATCH_UP} → {@link ConsoleJobApplicationService#approveCatchUp}
@@ -77,6 +79,14 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 JsonUtils.fromJson(record.getPayloadJson(), CompensationCommandRequest.class);
             request.setApprovalId(approvalNo);
             yield consoleJobApplicationService.compensation(request, approvalNo);
+          }
+          case "RERUN" -> {
+            // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
+            // {tenantId, jobCode, bizDate, targetInstanceNo, reason}。approve 后 dispatch 到
+            // recovery rerun 真正提交补跑;approvalId 回填 approvalNo 与 COMPENSATION 一致。
+            RerunRequest request = JsonUtils.fromJson(record.getPayloadJson(), RerunRequest.class);
+            request.setApprovalId(approvalNo);
+            yield consoleJobApplicationService.rerun(request, approvalNo);
           }
           case "DLQ_REPLAY" -> {
             DeadLetterReplayRequest request =
