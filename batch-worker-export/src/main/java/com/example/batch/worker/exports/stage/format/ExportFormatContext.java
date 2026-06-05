@@ -22,4 +22,7 @@ public record ExportFormatContext(
     Path generatedFile,
     ExportJobContext jobContext,
     ExportDataPlugin dataPlugin,
-    ExportDataContext dataCtx) {}
+    ExportDataContext dataCtx,
+    // ADR-038 P3:GENERATE 续跑编排;null = 续跑关闭(开关 off / 无 pipelineInstanceId / Excel 格式),
+    // 此时 generate 走与今天完全一致的全量写路径。
+    GenerateCheckpoint checkpoint) {}

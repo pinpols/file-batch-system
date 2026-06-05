@@ -8,8 +8,12 @@ import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.worker.core.config.WorkerCheckpointProperties;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PipelineStageProgressSink;
+import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
+import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
+import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
@@ -19,6 +23,8 @@ import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import com.example.batch.worker.exports.stage.format.ExportFormatContext;
 import com.example.batch.worker.exports.stage.format.ExportFormatStrategy;
 import com.example.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
+import com.example.batch.worker.exports.stage.format.GenerateCheckpoint;
+import com.example.batch.worker.exports.stage.format.GenerateCursorCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -52,6 +58,10 @@ public class GenerateStep implements ExportStageStep {
   private final ExportFormatStrategyRegistry formatStrategyRegistry;
   private final ExportWorkerConfiguration workerConfiguration;
   private final ObjectMapper objectMapper;
+  // ADR-038 P3:GENERATE 续跑(默认禁用,开关 batch.worker.checkpoint.enabled=true 才生效)。
+  private final WorkerCheckpointProperties checkpointProperties;
+  private final ProcessingPositionStore positionStore;
+  private final GenerateCursorCodec cursorCodec;
 
   @Override
   public ExportStage stage() {
@@ -72,6 +82,8 @@ public class GenerateStep implements ExportStageStep {
           objectMapper);
     }
     Path generatedFile = null;
+    // ADR-038 P3:续跑激活时,失败要保留残文件供下次 truncate+续写(类比 Import 失败保留 staging)。
+    boolean keepPartialFileOnFailure = false;
     try {
       String exportDataRef = resolveExportDataRef(context, exportPayload);
       context.getAttributes().put("exportDataRef", exportDataRef);
@@ -107,7 +119,35 @@ public class GenerateStep implements ExportStageStep {
       int chunkSize = resolveChunkSize(context);
       String fileFormatType =
           String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
-      generatedFile = createGeneratedFile(context, exportPayload, fileFormatType);
+
+      // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
+      // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
+      Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
+      boolean checkpointEnabled = checkpointInstanceId != null;
+      generatedFile =
+          checkpointEnabled
+              ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
+              : createGeneratedFile(context, exportPayload, fileFormatType);
+
+      GenerateCheckpoint checkpoint = null;
+      if (checkpointEnabled) {
+        ProcessingPosition pos =
+            positionStore.load(
+                context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
+        if (pos.completed() && Files.exists(generatedFile)) {
+          // 幂等跳过:GENERATE 已整体完成且文件仍在(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
+          return completeWithoutRegenerate(context, batch, generatedFile, pos.processedCount());
+        }
+        checkpoint =
+            GenerateCheckpoint.open(
+                positionStore,
+                cursorCodec,
+                context.getTenantId(),
+                checkpointInstanceId,
+                pos,
+                generatedFile);
+        keepPartialFileOnFailure = true;
+      }
 
       ExportFormatStrategy strategy = formatStrategyRegistry.resolve(fileFormatType);
       ExportFormatContext formatCtx =
@@ -120,8 +160,14 @@ public class GenerateStep implements ExportStageStep {
               .jobContext(context)
               .dataPlugin(dataPlugin)
               .dataCtx(dataCtx)
+              .checkpoint(checkpoint)
               .build();
       long recordCount = strategy.generate(formatCtx);
+
+      if (checkpoint != null) {
+        // 整体完成 → 补记终页行数 + 标记 completed;此后该实例重派会走上面的幂等跳过分支。
+        checkpoint.complete(recordCount);
+      }
 
       context.getAttributes().put("exportBatch", batch);
       context
@@ -141,7 +187,10 @@ public class GenerateStep implements ExportStageStep {
       PipelineStageProgressSink.clear();
       logFailureThrottled(context, exportPayload, ex);
 
-      deleteQuietly(generatedFile);
+      // 续跑激活时故意保留残文件:下次重派 truncate 到 fsync 位点后续写。否则按今天行为删临时文件。
+      if (!keepPartialFileOnFailure) {
+        deleteQuietly(generatedFile);
+      }
       boolean configError = ex instanceof WorkerConfigException;
       return ExportStageResult.failure(
           stage(),
@@ -253,6 +302,66 @@ public class GenerateStep implements ExportStageStep {
         };
     return Files.createTempFile(
         BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()), suffix);
+  }
+
+  /**
+   * ADR-038 P3:续跑启用时返回 {@code null}(不续跑),否则返回 pipelineInstanceId。续跑要求:开关开 + 有正的 pipelineInstanceId
+   * + 非 Excel(SXSSF zip 工作簿无法 append/truncate,不参与续跑,见 runbook)。
+   */
+  private Long resolveCheckpointInstanceId(ExportJobContext context, String fileFormatType) {
+    if (checkpointProperties == null
+        || !checkpointProperties.isEnabled()
+        || positionStore == null
+        || "EXCEL".equalsIgnoreCase(fileFormatType)) {
+      return null;
+    }
+    Long instanceId = toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    return instanceId != null && instanceId > 0L ? instanceId : null;
+  }
+
+  /**
+   * 续跑用的确定化生成文件路径 {@code ${tmpdir}/file-batch-export/inst-<id>.<ext>}:同一 pipeline 实例多次
+   * 重派落到同一文件,崩溃后下次能找到残文件续写。STORE 成功上传后照常删除该文件。
+   */
+  private Path deterministicGeneratedFile(long pipelineInstanceId, String fileFormatType)
+      throws Exception {
+    String suffix =
+        switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
+          case "DELIMITED" -> BatchFileConstants.CSV_SUFFIX;
+          case "EXCEL" -> BatchFileConstants.XLSX_SUFFIX;
+          case "FIXED_WIDTH" -> BatchFileConstants.TXT_SUFFIX;
+          default -> BatchFileConstants.JSON_SUFFIX;
+        };
+    Path dir = Path.of(System.getProperty("java.io.tmpdir"), "file-batch-export");
+    Files.createDirectories(dir);
+    return dir.resolve("inst-" + pipelineInstanceId + suffix);
+  }
+
+  /** 幂等跳过(GENERATE 已完成且文件仍在):不重生成,仅补齐下游 STORE/FEEDBACK 需要的 attribute。 */
+  private ExportStageResult completeWithoutRegenerate(
+      ExportJobContext context, Map<String, Object> batch, Path generatedFile, long recordCount)
+      throws Exception {
+    context.getAttributes().put("exportBatch", batch);
+    context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
+    context.getAttributes().put("recordCount", recordCount);
+    context.getAttributes().put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
+    context.getAttributes().put("fileSizeBytes", Files.size(generatedFile));
+    PipelineStageProgressSink.clear();
+    return ExportStageResult.success(stage());
+  }
+
+  private static Long toLong(Object value) {
+    if (value instanceof Number n) {
+      return n.longValue();
+    }
+    if (value == null) {
+      return null;
+    }
+    try {
+      return Long.parseLong(String.valueOf(value).trim());
+    } catch (NumberFormatException ex) {
+      return null;
+    }
   }
 
   private void logFailureThrottled(ExportJobContext context, ExportPayload payload, Exception ex) {

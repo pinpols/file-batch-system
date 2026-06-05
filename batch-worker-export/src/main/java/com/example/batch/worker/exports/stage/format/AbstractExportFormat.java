@@ -9,6 +9,9 @@ import com.example.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -61,12 +64,46 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       ExportDataPlugin.DetailPage preFetchedFirstPage,
       PageRowWriter rowWriter)
       throws Exception {
+    return generatePaged(ctx, preFetchedFirstPage, null, rowWriter);
+  }
+
+  /** 无预取首页版本，从 {@code cursor=null} 开始加载。 */
+  protected long generatePaged(ExportFormatContext ctx, PageRowWriter rowWriter) throws Exception {
+    return generatePaged(ctx, null, null, rowWriter);
+  }
+
+  /**
+   * ADR-038 P3 续跑感知版本:在 {@code preFetchedFirstPage} + {@code rowWriter} 之外接入 {@link
+   * FileSync},于<b>分页边界</b> fsync 文件并推进续跑位点。
+   *
+   * <p>续跑(ctx.checkpoint().resuming())时:起始 recordCount = 续跑行数、忽略预取首页、从 {@code resumeCursor} 续拉;
+   * 位点仅在 {@code cursor != null}(还有后继页)时推进 —— 终页交由 {@code GenerateStep.markCompleted} 收尾, 以保证存下来的
+   * cursor 永远是有效续跑起点。{@code fileSync == null} 或无 checkpoint 时退化为纯全量写(行为同今天)。
+   *
+   * @return 已处理的 row 总数(含续跑前已写的行)
+   */
+  protected long generatePaged(
+      ExportFormatContext ctx,
+      ExportDataPlugin.DetailPage preFetchedFirstPage,
+      FileSync fileSync,
+      PageRowWriter rowWriter)
+      throws Exception {
     Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
-    ExportDataPlugin.DetailPage page =
-        preFetchedFirstPage != null
-            ? preFetchedFirstPage
-            : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
-    long recordCount = 0L;
+    GenerateCheckpoint checkpoint = ctx.checkpoint();
+    boolean resuming = checkpoint != null && checkpoint.resuming();
+    long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
+    ExportDataPlugin.DetailPage page;
+    if (resuming) {
+      page =
+          ctx.dataPlugin()
+              .loadDetailPage(
+                  ctx.dataCtx(), batchIdLong, ctx.pageSize(), checkpoint.resumeCursor());
+    } else {
+      page =
+          preFetchedFirstPage != null
+              ? preFetchedFirstPage
+              : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+    }
     int pageNo = 0;
     while (true) {
       List<Map<String, Object>> details = page.rows();
@@ -85,6 +122,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         }
       }
       Object cursor = page.nextCursor();
+      // ADR-038 P3:页边界 fsync + 推进位点。仅在还有后继页(cursor != null)时推进 ——
+      // 终页不记位点,避免存下 null cursor 导致续跑从头重写。fileSync/checkpoint 为空时无位点(全量跑)。
+      if (checkpoint != null && fileSync != null && cursor != null) {
+        long byteOffset = fileSync.flushAndSync();
+        checkpoint.advance(byteOffset, cursor, recordCount);
+      }
       if (cursor == null) {
         break;
       }
@@ -101,9 +144,29 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return recordCount;
   }
 
-  /** 无预取首页版本，从 {@code cursor=null} 开始加载。 */
-  protected long generatePaged(ExportFormatContext ctx, PageRowWriter rowWriter) throws Exception {
-    return generatePaged(ctx, null, rowWriter);
+  /**
+   * 按续跑状态打开生成文件:续跑则先 {@code FileChannel.truncate} 到已 fsync 的字节位点再 append;首跑则截断到 0 重写。
+   * 续跑写出来的行序号(rowIndex)接着续跑行数往后排,故 JSON 的「行前逗号」、Delimited 的换行等增量语义天然衔接。
+   */
+  protected ResumableExportFile openExportFile(ExportFormatContext ctx) throws IOException {
+    if (isResuming(ctx)) {
+      try (FileChannel ch = FileChannel.open(ctx.generatedFile(), StandardOpenOption.WRITE)) {
+        ch.truncate(ctx.checkpoint().resumeByteOffset());
+      }
+      return ResumableExportFile.append(ctx.generatedFile());
+    }
+    return ResumableExportFile.truncate(ctx.generatedFile());
+  }
+
+  /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
+  protected boolean isResuming(ExportFormatContext ctx) {
+    return ctx.checkpoint() != null && ctx.checkpoint().resuming();
+  }
+
+  /** 分页边界文件同步回调:flush + fsync,返回当前字节数(续跑 truncate 目标)。 */
+  @FunctionalInterface
+  protected interface FileSync {
+    long flushAndSync() throws Exception;
   }
 
   /**

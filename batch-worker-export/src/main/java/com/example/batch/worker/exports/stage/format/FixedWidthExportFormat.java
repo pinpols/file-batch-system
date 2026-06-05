@@ -3,9 +3,6 @@ package com.example.batch.worker.exports.stage.format;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -39,17 +36,17 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
     int recordLength = resolveTemplateInt(ctx.jobContext(), "record_length", 0);
     int headerRows = resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig()).headerRows();
 
-    try (BufferedWriter writer =
-        Files.newBufferedWriter(
-            ctx.generatedFile(),
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
-      writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows);
+    // ADR-038 P3:首页仅用于列解析(只读、幂等);续跑时 generatePaged 会忽略它、从 resumeCursor 续拉。
+    try (ResumableExportFile file = openExportFile(ctx)) {
+      BufferedWriter writer = file.writer();
+      // 续跑时残文件已含表头,不可重写。
+      if (!isResuming(ctx)) {
+        writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows);
+      }
       return generatePaged(
           ctx,
           firstPage,
+          file::flushAndSync,
           (batch, detail, rowIndex) -> {
             StringBuilder line = new StringBuilder();
             for (ColumnLayout column : columns) {
