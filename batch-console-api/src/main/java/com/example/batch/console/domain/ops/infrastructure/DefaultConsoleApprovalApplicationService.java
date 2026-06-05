@@ -78,6 +78,11 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             CompensationCommandRequest request =
                 JsonUtils.fromJson(record.getPayloadJson(), CompensationCommandRequest.class);
             request.setApprovalId(approvalNo);
+            // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
+            // 「必须指定补偿类型」、审批单卡死无从补救。按目标类型确定性推导补偿粒度兜底。
+            if (request.getCompensationType() == null || request.getCompensationType().isBlank()) {
+              request.setCompensationType(deriveCompensationType(record.getTargetType()));
+            }
             yield consoleJobApplicationService.compensation(request, approvalNo);
           }
           case "RERUN" -> {
@@ -251,6 +256,24 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         .body(new ApprovalTenantRequest(tenantId))
         .retrieve()
         .toBodilessEntity();
+  }
+
+  /**
+   * 补偿单缺 compensationType 时,按审批目标类型推导补偿粒度(JOB_INSTANCE→JOB、STEP→STEP …)。 合法值对齐
+   * ck_compensation_command_type:JOB/STEP/PARTITION/FILE/BATCH/DLQ。
+   */
+  private static String deriveCompensationType(String targetType) {
+    if (targetType == null) {
+      return "JOB";
+    }
+    return switch (targetType) {
+      case "STEP_INSTANCE", "STEP" -> "STEP";
+      case "PARTITION" -> "PARTITION";
+      case "FILE", "FILE_RECORD" -> "FILE";
+      case "BATCH", "BATCH_DAY" -> "BATCH";
+      case "DLQ", "DEAD_LETTER" -> "DLQ";
+      default -> "JOB";
+    };
   }
 
   private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
