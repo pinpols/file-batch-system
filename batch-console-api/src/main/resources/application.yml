@@ -10,8 +10,13 @@ spring:
     # console 不拥有平台 schema，DB 版本由 batch-orchestrator / batch-trigger 管理；此处关闭避免双写 flyway_schema_history 及重复执行迁移脚本。
     enabled: false
   config:
-    # 引入共享默认配置基线（来自 batch-common 的 resources）
-    import: "classpath:batch-defaults.yml"
+    # 引入共享默认配置基线（来自 batch-common 的 resources）+ 侧边栏菜单(外置可覆盖)。
+    # 后者覆盖前者:classpath:menu.yml 是随 jar 的默认菜单;部署侧放 config/menu.yml(或 env
+    # BATCH_CONSOLE_MENU_FILE 指定路径)即可改菜单,免重编译。
+    import:
+      - "classpath:batch-defaults.yml"
+      - "classpath:menu.yml"
+      - "optional:file:${BATCH_CONSOLE_MENU_FILE:config/menu.yml}"
   # 注：DataRedisRepositoriesAutoConfiguration 已在 BatchConsoleApiApplication 主类 @SpringBootApplication(exclude=...) 排除
   #     data.redis.repositories.enabled=false 已在 batch-defaults.yml 设置；此处不再重复
   ai:
