@@ -24,6 +24,7 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileRecordRespo
 import com.example.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import com.example.batch.console.domain.governance.web.query.DeadLetterQueryRequest;
 import com.example.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
+import com.example.batch.console.domain.job.mapper.JobDefinitionMapper;
 import com.example.batch.console.domain.job.web.query.BatchDayQueryRequest;
 import com.example.batch.console.domain.job.web.query.BatchDayWindowQueryRequest;
 import com.example.batch.console.domain.job.web.query.JobDefinitionQueryRequest;
@@ -49,12 +50,15 @@ import com.example.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLo
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
+import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
 import com.example.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
 import com.example.batch.console.domain.workflow.web.query.WorkflowNodeQueryRequest;
 import com.example.batch.console.domain.workflow.web.query.WorkflowNodeRunQueryRequest;
 import com.example.batch.console.domain.workflow.web.query.WorkflowRunQueryRequest;
 import com.example.batch.console.domain.workflow.web.query.WorkflowTopologyQueryRequest;
+import com.example.batch.console.domain.workflow.web.response.CodeNameOption;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowDefinitionResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeResponse;
@@ -96,6 +100,9 @@ public class ConsoleQueryController {
   private final OperationAuditQueryService operationAuditQueryService;
   private final com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService
       orchestratorProxy;
+  private final JobDefinitionMapper jobDefinitionMapper;
+  private final PipelineDefinitionMapper pipelineDefinitionMapper;
+  private final ConsoleTenantGuard tenantGuard;
 
   /**
    * 2026-06-03 GET /pipeline-progress — 拉取一组 worker 当前的 pipeline stage 行级进度。
@@ -104,9 +111,9 @@ public class ConsoleQueryController {
    * docs/design/pipeline-stage-progress-display.md}。
    */
   @GetMapping("/pipeline-progress")
-  public CommonResponse<java.util.List<java.util.Map<String, Object>>> pipelineProgress(
+  public CommonResponse<List<Map<String, Object>>> pipelineProgress(
       @RequestParam("tenantId") String tenantId,
-      @RequestParam("workerCodes") java.util.List<String> workerCodes) {
+      @RequestParam("workerCodes") List<String> workerCodes) {
     return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
   }
 
@@ -174,6 +181,32 @@ public class ConsoleQueryController {
   public CommonResponse<PageResponse<ConsoleJobDefinitionResponse>> jobDefinitions(
       @Valid @ModelAttribute JobDefinitionQueryRequest request) {
     return responseFactory.success(applicationService.jobDefinitions(request));
+  }
+
+  /**
+   * GET /job-definitions/codes — workflow-dag-designer BE Spike 下拉数据源。
+   *
+   * <p>仅 ACTIVE(enabled=true),按 jobCode 升序;不分页(下拉假定 &lt; 几百条数量级)。详见
+   * docs/design/workflow-dag-designer.md。
+   */
+  @GetMapping("/job-definitions/codes")
+  public CommonResponse<List<CodeNameOption>> jobDefinitionCodes(
+      @RequestParam("tenantId") String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return responseFactory.success(jobDefinitionMapper.selectActiveCodeNames(resolved));
+  }
+
+  /**
+   * GET /pipeline-definitions/codes — workflow-dag-designer BE Spike 下拉数据源(FILE_STEP 跨域引用)。
+   *
+   * <p>仅 ACTIVE(enabled=true),按 jobCode 升序。 {@code workflow_node.related_pipeline_code →
+   * pipeline_definition.job_code}。
+   */
+  @GetMapping("/pipeline-definitions/codes")
+  public CommonResponse<List<CodeNameOption>> pipelineDefinitionCodes(
+      @RequestParam("tenantId") String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return responseFactory.success(pipelineDefinitionMapper.selectActiveCodeNames(resolved));
   }
 
   /** GET /outbox-retries — Outbox 重试日志。 */

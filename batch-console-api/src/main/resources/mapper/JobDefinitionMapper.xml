@@ -196,4 +196,14 @@
         from batch.job_definition
         where tenant_id = #{tenantId} and id = #{sourceId}
     </insert>
+
+    <!-- BE Spike (workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序。 -->
+    <select id="selectActiveCodeNames"
+            resultType="com.example.batch.console.domain.workflow.web.response.CodeNameOption">
+        select job_code as code, job_name as name
+        from batch.job_definition
+        where tenant_id = #{tenantId}
+          and enabled = true
+        order by job_code asc
+    </select>
 </mapper>

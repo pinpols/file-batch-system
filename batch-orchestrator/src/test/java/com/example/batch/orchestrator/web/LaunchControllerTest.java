@@ -1,7 +1,6 @@
 package com.example.batch.orchestrator.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,25 +16,33 @@ import com.example.batch.orchestrator.controller.LaunchController;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.service.LaunchService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@ExtendWith(MockitoExtension.class)
 class LaunchControllerTest {
 
-  private final LaunchService launchService = mock(LaunchService.class);
-  private final TenantActionRateLimiter tenantActionRateLimiter =
-      mock(TenantActionRateLimiter.class);
-  private final LaunchApplicationService launchApplicationService =
-      new LaunchApplicationService(launchService, tenantActionRateLimiter);
-  private final OrchestratorGracefulShutdown gracefulShutdown =
-      mock(OrchestratorGracefulShutdown.class);
+  @Mock private LaunchService launchService;
+  @Mock private TenantActionRateLimiter tenantActionRateLimiter;
+  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
 
-  private final MockMvc mockMvc =
-      MockMvcBuilders.standaloneSetup(
-              new LaunchController(launchApplicationService, gracefulShutdown))
-          .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
-          .build();
+  private MockMvc mockMvc;
+
+  @BeforeEach
+  void setUp() {
+    LaunchApplicationService launchApplicationService =
+        new LaunchApplicationService(launchService, tenantActionRateLimiter);
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new LaunchController(launchApplicationService, gracefulShutdown))
+            .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
+            .build();
+  }
 
   @Test
   void shouldReturnLaunchResponseOnSuccess() throws Exception {

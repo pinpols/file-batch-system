@@ -35,4 +35,17 @@ public interface PipelineDefinitionMapper {
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 
   int deleteByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+  /**
+   * BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, pipelineName)。
+   */
+  List<com.example.batch.console.domain.workflow.web.response.CodeNameOption> selectActiveCodeNames(
+      @Param("tenantId") String tenantId);
+
+  /**
+   * MVP DAG 兜底校验:FILE_STEP.related_pipeline_code 是否在同租户 pipeline_definition 存在(任意 enabled)。
+   *
+   * <p>单一查询 method:返回该 jobCode 在同租户下的记录数,>0 即存在。
+   */
+  long countByJobCode(@Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
 }

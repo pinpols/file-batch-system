@@ -3279,6 +3279,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseJobDefinitionList'
+  /api/console/queries/job-definitions/codes:
+    get:
+      tags: [Queries]
+      summary: Active job definition (code, name) options for workflow designer dropdown
+      operationId: queryJobDefinitionCodes
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Active job (code, name) list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseCodeNameOptionList'
+  /api/console/queries/pipeline-definitions/codes:
+    get:
+      tags: [Queries]
+      summary: Active pipeline definition (code, name) options for workflow designer dropdown (FILE_STEP cross-domain ref)
+      operationId: queryPipelineDefinitionCodes
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Active pipeline (code, name) list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseCodeNameOptionList'
   /api/console/queries/outbox-retries:
     get:
       tags: [Queries]
@@ -4475,6 +4503,193 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowMermaidResponse'
+
+  # ─── BE Spike: workflow-dag-designer 全量替换 + 单人编辑锁 ───────────────────
+  # See docs/design/workflow-dag-designer.md
+  /api/console/workflow-definitions/{id}/full:
+    put:
+      tags: [WorkflowDefinitions]
+      summary: Full replace workflow definition (definition + nodes + edges)
+      description: |
+        Canvas Save: same-tx delete nodes/edges + rewrite + bump version.
+        Caller must hold the design lock; CONFLICT on lock not held / version mismatch.
+      operationId: fullUpdateWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowDefinitionFullUpdateRequest'
+      responses:
+        '200':
+          description: Updated workflow definition detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
+
+  /api/console/workflow-definitions/{id}/versions:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: List all version snapshots for a workflow definition
+      description: |
+        workflow-dag-designer Polish — reads `workflow_definition_version` (V167).
+        Returned list is sorted by `version desc`; the entry matching the master
+        `workflow_definition.version` carries `current=true`. When the history table
+        has no rows yet (e.g. just after V167 migration) the endpoint degrades to a
+        single `current` row built from the master table (compatible with the
+        pre-history single-version PR #370 behavior).
+      operationId: listWorkflowDefinitionVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Version list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionVersionSummaryList'
+
+  /api/console/workflow-definitions/{id}/versions/{version}:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: Read a specific workflow definition version (current or historical)
+      description: |
+        Current `version` (== master `workflow_definition.version`) is served from
+        the master tables (`workflow_definition` + `workflow_node` + `workflow_edge`);
+        historical versions are deserialized from `workflow_definition_version.nodes_json`
+        / `edges_json`. Unknown versions return NOT_FOUND.
+      operationId: getWorkflowDefinitionVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow definition detail at the requested version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
+        '404':
+          description: Version not found
+
+  /api/console/workflow-definitions/{id}/lock:
+    put:
+      tags: [WorkflowDefinitions]
+      summary: Acquire workflow design lock (5min TTL)
+      operationId: acquireWorkflowDesignLock
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lock acquired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDesignLockResponse'
+        '409':
+          description: Lock held by other user (response body includes lockedBy)
+    delete:
+      tags: [WorkflowDefinitions]
+      summary: Release workflow design lock (owner only)
+      operationId: releaseWorkflowDesignLock
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Released (or already expired — idempotent no-op)
+
+  /api/console/workflow-definitions/{id}/lock/renew:
+    put:
+      tags: [WorkflowDefinitions]
+      summary: Renew workflow design lock (extend TTL by 5min, owner only)
+      operationId: renewWorkflowDesignLock
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Renewed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDesignLockResponse'
+        '409':
+          description: Lock expired (caller must re-acquire)
 
   # ─── P0: Instance operations ──────────────────────────────────────────────────
   /api/console/instances/{id}/cancel:
@@ -8889,6 +9104,37 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/WorkflowDefinitionDetailResponse'
+    CommonResponseWorkflowDefinitionVersionSummaryList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkflowDefinitionVersionSummaryResponse'
+    WorkflowDefinitionVersionSummaryResponse:
+      type: object
+      description: |
+        workflow-dag-designer Polish — entry in the per-definition version list.
+        `current=true` flags the version equal to master `workflow_definition.version`.
+      properties:
+        version:
+          type: integer
+          format: int32
+        savedBy:
+          type: string
+          nullable: true
+          description: console account that triggered the fullUpdate (SecurityContext.username)
+        savedAt:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          nullable: true
+          description: optional change summary; Spike does not surface this in FE
+        current:
+          type: boolean
     CommonResponseConsoleAuthTokenResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -9077,6 +9323,54 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/WorkflowMermaidResponse'
+    # ─── BE Spike: workflow-dag-designer ─────────────────────────────────────────
+    WorkflowDefinitionFullUpdateRequest:
+      type: object
+      required: [definition]
+      properties:
+        definition:
+          $ref: '#/components/schemas/WorkflowDefinitionSaveRequest'
+        expectedVersion:
+          type: integer
+          description: 客户端最近 GET 拿到的 version,用于乐观锁;不传则跳过版本冲突校验。
+        lockToken:
+          type: string
+          description: 预留 lockToken;Spike 阶段以 SecurityContext.username 为权威。
+    WorkflowDesignLockResponse:
+      type: object
+      required: [lockedBy, expiresAt]
+      properties:
+        lockedBy:
+          type: string
+          description: 持锁人 console username。
+        expiresAt:
+          type: string
+          format: date-time
+          description: 过期 UTC 时间(5min TTL)。
+    CommonResponseWorkflowDesignLockResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WorkflowDesignLockResponse'
+    CodeNameOption:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+    CommonResponseCodeNameOptionList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/CodeNameOption'
     # ─── Web Push schemas (2026-05-16 实装合并) ─────────────────────────────────
     ConsolePushSubscribeRequest:
       type: object

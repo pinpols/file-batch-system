@@ -125,6 +125,22 @@
           and id = #{id}
     </update>
 
+    <!-- BE Spike (workflow-dag-designer): 全量替换路径专用,字段全更新 + version += 1。
+         expectedVersion 非空时作为乐观锁谓词,避免多 tab 互覆盖。 -->
+    <update id="updateAndBumpVersion">
+        update batch.workflow_definition
+        set workflow_name = #{workflowName},
+            workflow_type = #{workflowType},
+            enabled = #{enabled},
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          <if test="expectedVersion != null">
+              and version = #{expectedVersion}
+          </if>
+    </update>
+
     <insert id="upsertWorkflowDefinition">
         insert into batch.workflow_definition (
             tenant_id,
