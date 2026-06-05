@@ -1,6 +1,8 @@
 package com.example.batch.orchestrator.application.service.governance;
 
 import com.example.batch.common.enums.ApprovalCommandStatus;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity;
@@ -126,7 +128,9 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     ApprovalCommandEntity entity =
         approvalCommandMapper.selectByTenantAndApprovalNo(tenantId, approvalNo);
     if (entity == null) {
-      throw new IllegalStateException("approval request not found");
+      // 审批单不存在 → 404 NOT_FOUND（之前抛 IllegalStateException 被兜底 handler 当 500 系统错误,
+      // console 代理如实透传 500 误导调用方）。approve / reject / get 共用本方法,一处修三处生效。
+      throw BizException.of(ResultCode.NOT_FOUND, "error.approval.not_found");
     }
     return entity;
   }

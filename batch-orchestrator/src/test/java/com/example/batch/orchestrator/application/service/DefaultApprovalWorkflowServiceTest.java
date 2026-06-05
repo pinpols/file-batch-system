@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.ApprovalCommandStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import com.example.batch.orchestrator.application.service.governance.DefaultApprovalWorkflowService;
 import com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity;
@@ -141,8 +142,8 @@ class DefaultApprovalWorkflowServiceTest {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
 
     assertThatThrownBy(() -> service.approve("t1", "apr-000", "approver-001", "approved"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("not found");
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.approval.not_found");
   }
 
   @Test
@@ -189,7 +190,8 @@ class DefaultApprovalWorkflowServiceTest {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-999")).thenReturn(null);
 
     assertThatThrownBy(() -> service.reject("t1", "apr-999", "approver-001", "reason"))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.approval.not_found");
   }
 
   @Test
@@ -266,7 +268,8 @@ class DefaultApprovalWorkflowServiceTest {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
 
     assertThatThrownBy(() -> service.get("t1", "apr-000"))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.approval.not_found");
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

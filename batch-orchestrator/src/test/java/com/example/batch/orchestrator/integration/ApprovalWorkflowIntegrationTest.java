@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
@@ -192,7 +193,8 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
             () ->
                 approvalWorkflowService.get(
                     "t1", "apr-nonexistent-" + BatchDateTimeSupport.utcEpochMillis()))
-        .isInstanceOf(IllegalStateException.class);
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.approval.not_found");
   }
 
   @Test

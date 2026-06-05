@@ -107,7 +107,7 @@
                                    make_interval(secs =&gt; #{maxBackoffMillis} / 1000.0),
                                    make_interval(
                                      secs =&gt; #{probeIntervalMillis} / 1000.0
-                                       * power(2, greatest(consecutive_failures - 1, 0))))
+                                       * power(2, least(greatest(consecutive_failures - 1, 0), 30))))
          where tenant_id   = #{tenantId}
            and channel_code = #{channelCode}
     </update>

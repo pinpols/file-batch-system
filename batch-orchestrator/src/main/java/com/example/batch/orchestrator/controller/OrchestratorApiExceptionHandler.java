@@ -7,6 +7,7 @@ import com.example.batch.common.web.AbstractApiExceptionHandler;
 import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,6 +35,21 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
       DeadLetterOrphanSourceException exception) {
     return ResponseEntity.status(HttpStatus.CONFLICT)
         .body(CommonResponse.failure(ResultCode.CONFLICT, exception.getMessage()));
+  }
+
+  /**
+   * 请求体反序列化失败（如 enum 非法值 {@code DryRunLevel="BOGUS_LEVEL"}、JSON 格式错）→ 400 INVALID_ARGUMENT， 而非落到
+   * {@code Exception} 兜底的 500 系统错误。对标 console 侧同款处理,保证非法入参对外是 4xx。
+   */
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<CommonResponse<Void>> handleMessageNotReadable(
+      HttpMessageNotReadableException exception) {
+    return ResponseEntity.badRequest()
+        .body(
+            CommonResponse.failure(
+                ResultCode.INVALID_ARGUMENT,
+                resolveCommonCode(
+                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
   }
 
   /** orchestrator 特有：把 Spring 的 ResponseStatusException 映射回 CommonResponse。 */
