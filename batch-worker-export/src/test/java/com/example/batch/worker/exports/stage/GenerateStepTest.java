@@ -7,7 +7,9 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
+import com.example.batch.worker.core.config.WorkerCheckpointProperties;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
@@ -18,6 +20,7 @@ import com.example.batch.worker.exports.stage.format.DelimitedExportFormat;
 import com.example.batch.worker.exports.stage.format.ExcelExportFormat;
 import com.example.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
 import com.example.batch.worker.exports.stage.format.FixedWidthExportFormat;
+import com.example.batch.worker.exports.stage.format.GenerateCursorCodec;
 import com.example.batch.worker.exports.stage.format.JsonExportFormat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
@@ -71,7 +74,16 @@ class GenerateStepTest {
                 new DelimitedExportFormat(objectMapper),
                 new ExcelExportFormat(objectMapper),
                 new FixedWidthExportFormat(objectMapper)));
-    generateStep = new GenerateStep(pluginRegistry, formatStrategyRegistry, config, objectMapper);
+    // 续跑默认禁用(WorkerCheckpointProperties.enabled=false)→ positionStore 不会被调用,行为同今天。
+    generateStep =
+        new GenerateStep(
+            pluginRegistry,
+            formatStrategyRegistry,
+            config,
+            objectMapper,
+            new WorkerCheckpointProperties(),
+            mock(ProcessingPositionStore.class),
+            new GenerateCursorCodec());
   }
 
   // ── DELIMITED / CSV ────────────────────────────────────────────────────────

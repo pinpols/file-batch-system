@@ -6,9 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -27,31 +24,33 @@ public class JsonExportFormat extends AbstractExportFormat {
 
   @Override
   public long generate(ExportFormatContext ctx) throws Exception {
-    try (BufferedWriter writer =
-        Files.newBufferedWriter(
-            ctx.generatedFile(),
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
-      return writeJson(writer, ctx);
+    // ADR-038 P3:openExportFile 按续跑状态决定 truncate(首跑) / truncate-to-offset+append(续跑)。
+    try (ResumableExportFile file = openExportFile(ctx)) {
+      return writeJson(file, ctx);
     }
   }
 
-  private long writeJson(BufferedWriter writer, ExportFormatContext ctx) throws Exception {
-    Object snapshot = ctx.jobContext().getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT);
-    if (snapshot == null) {
-      snapshot = Map.of();
+  private long writeJson(ResumableExportFile file, ExportFormatContext ctx) throws Exception {
+    BufferedWriter writer = file.writer();
+    // 续跑时残文件已含前缀 {"snapshot":…,"batch":…,"details":[ + 若干 detail,不可重写前缀。
+    if (!isResuming(ctx)) {
+      Object snapshot = ctx.jobContext().getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT);
+      if (snapshot == null) {
+        snapshot = Map.of();
+      }
+      writer.write("{\"snapshot\":");
+      writeJsonValue(writer, snapshot);
+      writer.write(",\"batch\":");
+      writeJsonValue(writer, ctx.batch());
+      writer.write(",\"details\":[");
     }
-    writer.write("{\"snapshot\":");
-    writeJsonValue(writer, snapshot);
-    writer.write(",\"batch\":");
-    writeJsonValue(writer, ctx.batch());
-    writer.write(",\"details\":[");
     long recordCount =
         generatePaged(
             ctx,
+            null,
+            file::flushAndSync,
             (batch, detail, rowIndex) -> {
+              // rowIndex 续跑时接续跑行数往后排,故 >0 自然在续写首行前补逗号,衔接残文件末尾的 …,detailN。
               if (rowIndex > 0) {
                 writer.write(",");
               }
@@ -60,6 +59,7 @@ public class JsonExportFormat extends AbstractExportFormat {
                 writer.flush();
               }
             });
+    // 后缀只在生成整体完成时写一次(首跑/续跑皆然);崩溃残文件因尚未写后缀,续跑 truncate 后续写,收尾再补 ]}。
     writer.write("]}");
     return recordCount;
   }

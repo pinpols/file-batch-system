@@ -1,6 +1,8 @@
 # Spike: ADR-038 P3 Export GENERATE 文件恢复方案对比
 
-- **Status**: Spike（方案对比 + 推荐落地草案，纯文档不动代码）
+- **Status**: ✅ **已落地（2026-06-05）** —— 采用**单文件 + 字节位点截断**方案（详见下方「落地说明」），非本 spike 原推荐的 Option A（chunk 分片 + STORE 拼接）。
+- **落地说明**: 本 spike 原推荐 Option A（每页写 `chunk-N` 文件、STORE 阶段按格式拼接）。落地时改走更轻的**单文件法**:GENERATE 仍写单文件,每页 `flush + FileDescriptor.sync()` 后把 `<byteOffset>@<typed-cursor>` 记进位点;续跑时 `FileChannel.truncate(byteOffset)` 砍掉崩溃残尾 + 从 cursor 续写;STORE **完全不改**。两者崩溃安全性等价(都靠 fsync 边界 durability + 续跑前先 truncate,不会重复/丢行),但单文件法省掉了整套 concat 机器与 4 套 per-format 拼接逻辑(数据完整性风险点大减),且与 `WorkerCheckpointProperties` javadoc 既有的「Export 续 cursor」描述一致。Excel 不可 append/truncate → 全量重跑兜底(同 Option C);cursor 类型不可序列化(如 UUID)→ 降级全量跑 + WARN。实现见 `batch-worker-export` 的 `GenerateCheckpoint` / `GenerateCursorCodec` / `ResumableExportFile` + `GenerateStep`;运维见 [runbook](../runbook/platform-worker-checkpoint-howto.md) §Export GENERATE 续跑。
+- **原 Status**: Spike（方案对比 + 推荐落地草案，纯文档不动代码）
 - **Related**: [ADR-038 Platform Worker Checkpoint & Resume](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)
 - **Runbook**: [platform-worker-checkpoint-howto](../runbook/platform-worker-checkpoint-howto.md)
 - **Scope**: 仅评估 Export GENERATE 阶段的临时文件恢复策略；不包含 STORE 跨 worker 协调、不重谈 LOAD（已 P2 落地）
@@ -16,7 +18,7 @@ ADR-038 已在 main 落地两个阶段：
 | --- | --- | --- |
 | **P1** | `ProcessingPosition` 模型 + `pipeline_progress` 持久化 + migration（含 archive 镜像） | ✅ 已合并 |
 | **P2** | Import **LOAD**：`flushChunkWithPosition` 同事务推进位点 + 启动 skip 行号续跑 + `markCompleted` | ✅ 已合并 |
-| **P3** | Export **GENERATE**：cursor 位点 + 临时分片续跑 | ⏸️ **本 spike 解锁** |
+| **P3** | Export **GENERATE**：cursor 位点 + 单文件字节位点截断续跑 | ✅ 已落地（2026-06-05，单文件法,见顶部「落地说明」） |
 
 P3 卡点不在"位点存哪儿"——P1 已经把模型铺好了——而在 **文件 I/O 是非事务性的**：
 GENERATE 阶段把游标分页结果写到本地临时文件（`${tmpdir}/${pipelineInstanceId}.<ext>`），worker 崩溃时文件可能停在任意字节位置：
