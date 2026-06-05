@@ -115,7 +115,7 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("Worker 管理", "/workers/management", "Cpu", ROLE_OPERATOR),
                   new MenuItem("Trigger 管理", "/system/triggers", "Timer", ROLE_OPERATOR),
                   // SDK 自定义 taskType(只读,租户管理员排查 worker register 上报情况)
-                  new MenuItem("自定义任务类型", "/ops/custom-task-types", "Cpu", ROLE_OPERATOR),
+                  new MenuItem("自定义任务类型", "/ops/custom-task-types", "Grid", ROLE_OPERATOR),
                   // Worker fingerprint 看板(SDK Phase 5 dual-rollout 灰度切流可视化)
                   new MenuItem(
                       "Worker 指纹看板", "/ops/worker-fingerprints", "Monitor", ROLE_OPERATOR))),
