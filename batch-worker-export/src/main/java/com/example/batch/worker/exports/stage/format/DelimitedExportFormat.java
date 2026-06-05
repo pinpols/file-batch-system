@@ -3,9 +3,6 @@ package com.example.batch.worker.exports.stage.format;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.StringJoiner;
 import org.springframework.stereotype.Component;
@@ -40,17 +37,17 @@ public class DelimitedExportFormat extends AbstractExportFormat {
     DelimitedFormatConfig formatConfig =
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
 
-    try (BufferedWriter writer =
-        Files.newBufferedWriter(
-            ctx.generatedFile(),
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
-      writeDelimitedHeaderRows(writer, columns, formatConfig);
+    // ADR-038 P3:首页仅用于列解析(只读、幂等);续跑时 generatePaged 会忽略它、从 resumeCursor 续拉。
+    try (ResumableExportFile file = openExportFile(ctx)) {
+      BufferedWriter writer = file.writer();
+      // 续跑时残文件已含表头,不可重写。
+      if (!isResuming(ctx)) {
+        writeDelimitedHeaderRows(writer, columns, formatConfig);
+      }
       return generatePaged(
           ctx,
           firstPage,
+          file::flushAndSync,
           (batch, detail, rowIndex) -> {
             StringJoiner joiner = new StringJoiner(formatConfig.delimiter());
             for (ColumnLayout column : columns) {
