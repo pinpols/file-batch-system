@@ -114,10 +114,10 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("Worker 管理", "/workers/management", "Cpu", ROLE_OPERATOR),
                   new MenuItem("Trigger 管理", "/system/triggers", "Timer", ROLE_OPERATOR),
                   // SDK 自定义 taskType(只读,租户管理员排查 worker register 上报情况)
-                  new MenuItem("自定义 taskType", "/ops/custom-task-types", "Cpu", ROLE_OPERATOR),
+                  new MenuItem("自定义任务类型", "/ops/custom-task-types", "Cpu", ROLE_OPERATOR),
                   // Worker fingerprint 看板(SDK Phase 5 dual-rollout 灰度切流可视化)
                   new MenuItem(
-                      "Worker fingerprint", "/ops/worker-fingerprints", "Monitor", ROLE_OPERATOR))),
+                      "Worker 指纹看板", "/ops/worker-fingerprints", "Monitor", ROLE_OPERATOR))),
           new MenuGroup(
               "system",
               "系统",
@@ -132,8 +132,7 @@ public final class ConsoleMenuRegistry {
                   new MenuItem("系统参数", "/system/parameters", "Setting", ROLE_ADMIN),
                   new MenuItem("通知与投递", "/system/notifications", "Bell", ROLE_OPERATOR),
                   // Atomic 节点配置中心(平台内置 sql / shell / stored_proc / http 四类)
-                  new MenuItem(
-                      "Atomic 节点配置中心", "/system/atomic-task-types", "Box", ROLE_OPERATOR))));
+                  new MenuItem("原子节点配置中心", "/system/atomic-task-types", "Box", ROLE_OPERATOR))));
 
   /** 根据用户 authorities 过滤可见菜单。 */
   public static List<MenuGroup> filterByAuthorities(Set<String> authorities) {
