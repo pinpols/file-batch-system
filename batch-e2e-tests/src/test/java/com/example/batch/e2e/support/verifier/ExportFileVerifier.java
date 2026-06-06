@@ -2,17 +2,22 @@ package com.example.batch.e2e.support.verifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 /**
  * Content-level verifier for Export pipeline E2E tests.
@@ -40,8 +45,8 @@ public final class ExportFileVerifier implements E2eVerifier {
   private final BigDecimal expectedMinTotalAmount;
   private final int expectedMinFileRows;
   private final List<String> expectedContentSnippets;
-  private final String minioEndpoint;
-  private final String minioBucket;
+  private final String s3Endpoint;
+  private final String s3Bucket;
 
   private ExportFileVerifier(Builder builder) {
     this.tenantId = builder.tenantId;
@@ -52,8 +57,8 @@ public final class ExportFileVerifier implements E2eVerifier {
     this.expectedMinTotalAmount = builder.expectedMinTotalAmount;
     this.expectedMinFileRows = builder.expectedMinFileRows;
     this.expectedContentSnippets = List.copyOf(builder.expectedContentSnippets);
-    this.minioEndpoint = builder.minioEndpoint;
-    this.minioBucket = builder.minioBucket;
+    this.s3Endpoint = builder.s3Endpoint;
+    this.s3Bucket = builder.s3Bucket;
   }
 
   @Override
@@ -121,23 +126,29 @@ public final class ExportFileVerifier implements E2eVerifier {
     if (storagePath == null
         || storagePath.startsWith("/")
         || storagePath.startsWith("file://")
-        || minioEndpoint == null) {
+        || s3Endpoint == null) {
       return;
     }
-    try {
-      MinioClient client =
-          MinioClient.builder()
-              .endpoint(minioEndpoint)
-              .credentials("minioadmin", "minioadmin")
-              .build();
-      String bucket = minioBucket != null ? minioBucket : "batch-dev";
+    try (S3Client client =
+        S3Client.builder()
+            .endpointOverride(URI.create(s3Endpoint))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create("minioadmin", "minioadmin")))
+            .forcePathStyle(true)
+            .region(Region.US_EAST_1)
+            .build()) {
+      String bucket = s3Bucket != null ? s3Bucket : "batch-dev";
       String objectKey =
           storagePath.startsWith(bucket + "/")
               ? storagePath.substring(bucket.length() + 1)
               : storagePath;
 
-      try (var stream =
-              client.getObject(GetObjectArgs.builder().bucket(bucket).object(objectKey).build());
+      byte[] objectBytes =
+          client
+              .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(objectKey).build())
+              .asByteArray();
+      try (var stream = new ByteArrayInputStream(objectBytes);
           BufferedReader reader =
               new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
 
@@ -183,8 +194,8 @@ public final class ExportFileVerifier implements E2eVerifier {
     private BigDecimal expectedMinTotalAmount;
     private int expectedMinFileRows;
     private List<String> expectedContentSnippets = List.of();
-    private String minioEndpoint;
-    private String minioBucket;
+    private String s3Endpoint;
+    private String s3Bucket;
 
     private Builder(String tenantId) {
       this.tenantId = tenantId;
@@ -225,13 +236,13 @@ public final class ExportFileVerifier implements E2eVerifier {
       return this;
     }
 
-    public Builder minioEndpoint(String endpoint) {
-      this.minioEndpoint = endpoint;
+    public Builder s3Endpoint(String endpoint) {
+      this.s3Endpoint = endpoint;
       return this;
     }
 
-    public Builder minioBucket(String bucket) {
-      this.minioBucket = bucket;
+    public Builder s3Bucket(String bucket) {
+      this.s3Bucket = bucket;
       return this;
     }
 

@@ -48,7 +48,7 @@ class FileGovernanceArrivalGroupGuardTest {
     scheduler =
         new FileGovernanceScheduler(
             repository,
-            mock(MinioGovernanceStorage.class),
+            mock(S3GovernanceStorage.class),
             properties,
             mock(FileGovernanceMetricsCacheService.class),
             new SimpleMeterRegistry());

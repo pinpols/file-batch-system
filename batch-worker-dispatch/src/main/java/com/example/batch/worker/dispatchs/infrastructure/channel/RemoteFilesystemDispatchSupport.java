@@ -4,13 +4,10 @@ import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
+import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.RemoveObjectArgs;
-import io.minio.StatObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -56,8 +53,6 @@ final class RemoteFilesystemDispatchSupport {
   // 则所有 NAS dispatch 的 realPath 必须落在该根内，否则拒绝；未设置则仅 WARN 不阻断（兼容模式）。
   // 生产强烈建议设置此属性以彻底关闭 symlink 逃逸攻击面。
   private static final String SANDBOX_ROOT_PROP = "batch.dispatch.nas-sandbox-root";
-
-  private static final int MINIO_PART_SIZE = 10 * 1024 * 1024;
 
   // Dedup: 每个 configured NAS path 的 symlink WARN 只报一次；否则每次 dispatch 都会刷同样告警
   // （macOS 本地 `/tmp → /private/tmp` 是典型场景）。路径在进程生命周期内稳定，内存开销可忽略。
@@ -213,13 +208,12 @@ final class RemoteFilesystemDispatchSupport {
   static DispatchResult dispatchOss(
       DispatchCommand command,
       DispatchFileContentResolver contentResolver,
-      S3StorageProperties minioProperties,
-      MinioClient minioClient) {
+      S3StorageProperties s3Properties,
+      BatchObjectStore objectStore) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
-      MinioClient client = minioClient(minioProperties, minioClient);
       String bucket =
-          firstText(channelConfig, "oss_bucket", "storage_bucket", minioProperties.getBucket());
+          firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
       if (!Texts.hasText(bucket)) {
         return new DispatchResult(false, null, null, false, false, "oss_bucket missing", null);
       }
@@ -232,13 +226,14 @@ final class RemoteFilesystemDispatchSupport {
       String contentType =
           firstText(
               command.fileRecord(), "mime_type", BatchFileConstants.CONTENT_TYPE_OCTET_STREAM);
+      // AWS SDK v2 RequestBody.fromInputStream 需要确定的 contentLength；分发流可能已解密、
+      // 长度与声明值不一致，故先读入内存再以精确字节数上传（与 probeOss 的 ByteArrayInputStream 一致）。
+      byte[] payload;
       try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
-        client.putObject(
-            PutObjectArgs.builder().bucket(bucket).object(objectName).stream(
-                    in, -1, MINIO_PART_SIZE)
-                .contentType(contentType)
-                .build());
+        payload = in.readAllBytes();
       }
+      objectStore.put(
+          bucket, objectName, new ByteArrayInputStream(payload), payload.length, contentType);
       return finishResult(
           command,
           externalRequestId,
@@ -294,27 +289,27 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeOss(
       Map<String, Object> channelConfig,
-      S3StorageProperties minioProperties,
-      MinioClient minioClient) {
+      S3StorageProperties s3Properties,
+      BatchObjectStore objectStore) {
     try {
-      MinioClient client = minioClient(minioProperties, minioClient);
       String bucket =
-          firstText(channelConfig, "oss_bucket", "storage_bucket", minioProperties.getBucket());
+          firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
       if (!Texts.hasText(bucket)) {
         return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
       }
       String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
       String objectName = normalizeObjectName(prefix, BatchFileConstants.newHealthProbeName());
       byte[] payload = ("probe@" + BatchDateTimeSupport.utcNow()).getBytes(StandardCharsets.UTF_8);
-      client.putObject(
-          PutObjectArgs.builder().bucket(bucket).object(objectName).stream(
-                  new ByteArrayInputStream(payload), payload.length, MINIO_PART_SIZE)
-              .contentType(BatchFileConstants.CONTENT_TYPE_TEXT_UTF8)
-              .build());
+      objectStore.put(
+          bucket,
+          objectName,
+          new ByteArrayInputStream(payload),
+          payload.length,
+          BatchFileConstants.CONTENT_TYPE_TEXT_UTF8);
       try {
-        client.statObject(StatObjectArgs.builder().bucket(bucket).object(objectName).build());
+        objectStore.statSize(bucket, objectName);
       } finally {
-        client.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(objectName).build());
+        objectStore.delete(bucket, objectName);
       }
       return new DispatchChannelProbeResult(
           true, "oss probe ok", "oss://" + bucket + PATH_SEP + objectName);
@@ -411,14 +406,14 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeChannel(
       Map<String, Object> channelConfig,
-      S3StorageProperties minioProperties,
-      MinioClient minioClient,
+      S3StorageProperties s3Properties,
+      BatchObjectStore objectStore,
       boolean dnsGuardEnabled) {
     String channelType =
         String.valueOf(channelConfig.getOrDefault("channel_type", "")).toUpperCase(Locale.ROOT);
     return switch (channelType) {
       case "NAS" -> probeNas(channelConfig);
-      case "OSS" -> probeOss(channelConfig, minioProperties, minioClient);
+      case "OSS" -> probeOss(channelConfig, s3Properties, objectStore);
       case "SFTP" -> probeSftp(channelConfig, dnsGuardEnabled);
       case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled);
       case "API", "API_PUSH" -> probeHttp(channelConfig, dnsGuardEnabled);
@@ -553,21 +548,5 @@ final class RemoteFilesystemDispatchSupport {
 
   private static Object firstNonNull(Object a, Object b) {
     return a != null ? a : b;
-  }
-
-  private static MinioClient minioClient(S3StorageProperties properties, MinioClient minioClient) {
-    if (minioClient != null) {
-      return minioClient;
-    }
-    if (properties == null
-        || !Texts.hasText(properties.getEndpoint())
-        || !Texts.hasText(properties.getAccessKey())
-        || !Texts.hasText(properties.getSecretKey())) {
-      throw new IllegalStateException("MinIO not configured");
-    }
-    return MinioClient.builder()
-        .endpoint(properties.getEndpoint())
-        .credentials(properties.getAccessKey(), properties.getSecretKey())
-        .build();
   }
 }

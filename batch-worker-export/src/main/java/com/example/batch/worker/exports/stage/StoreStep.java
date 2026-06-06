@@ -9,7 +9,7 @@ import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
-import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
+import com.example.batch.worker.exports.infrastructure.S3ExportStorage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,11 +25,11 @@ public class StoreStep implements ExportStageStep {
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
-  private final MinioExportStorage minioExportStorage;
+  private final S3ExportStorage s3ExportStorage;
   private final BatchObjectCryptoService cryptoService;
 
-  public StoreStep(MinioExportStorage minioExportStorage, BatchObjectCryptoService cryptoService) {
-    this.minioExportStorage = minioExportStorage;
+  public StoreStep(S3ExportStorage s3ExportStorage, BatchObjectCryptoService cryptoService) {
+    this.s3ExportStorage = s3ExportStorage;
     this.cryptoService = cryptoService;
   }
 
@@ -80,7 +80,7 @@ public class StoreStep implements ExportStageStep {
       context.getAttributes().put("checksumValue", expectedSha);
 
       String tempKey =
-          minioExportStorage.writeObject(
+          s3ExportStorage.writeObject(
               tempObjectName,
               uploadPath,
               encrypt ? BatchFileConstants.CONTENT_TYPE_OCTET_STREAM : contentType);
@@ -177,9 +177,9 @@ public class StoreStep implements ExportStageStep {
 
   private ExportStageResult verifyPartUpload(String expectedSha, String tempKey, Path encryptedPath)
       throws Exception {
-    String remotePartSha = minioExportStorage.sha256Hex(tempKey);
+    String remotePartSha = s3ExportStorage.sha256Hex(tempKey);
     if (!expectedSha.equalsIgnoreCase(remotePartSha)) {
-      minioExportStorage.removeObject(tempKey);
+      s3ExportStorage.removeObject(tempKey);
       if (encryptedPath != null) {
         Files.deleteIfExists(encryptedPath);
       }
@@ -196,11 +196,11 @@ public class StoreStep implements ExportStageStep {
 
   private ExportStageResult promoteAndVerifyFinal(
       String expectedSha, String tempKey, String objectName, Path encryptedPath) throws Exception {
-    minioExportStorage.copyObject(tempKey, objectName);
-    String remoteFinalSha = minioExportStorage.sha256Hex(objectName);
+    s3ExportStorage.copyObject(tempKey, objectName);
+    String remoteFinalSha = s3ExportStorage.sha256Hex(objectName);
     if (!expectedSha.equalsIgnoreCase(remoteFinalSha)) {
-      minioExportStorage.removeObject(objectName);
-      minioExportStorage.removeObject(tempKey);
+      s3ExportStorage.removeObject(objectName);
+      s3ExportStorage.removeObject(tempKey);
       if (encryptedPath != null) {
         Files.deleteIfExists(encryptedPath);
       }
@@ -212,7 +212,7 @@ public class StoreStep implements ExportStageStep {
           "final object digest mismatch after promote",
           ERROR_OBJECT_MAPPER);
     }
-    minioExportStorage.removeObject(tempKey);
+    s3ExportStorage.removeObject(tempKey);
     return null;
   }
 

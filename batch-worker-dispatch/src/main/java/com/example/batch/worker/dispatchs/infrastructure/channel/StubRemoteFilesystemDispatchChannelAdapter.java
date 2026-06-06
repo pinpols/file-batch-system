@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  * NAS 渠道存根适配器:本地/IT 环境下没有真 NAS 服务,以与 LOCAL 相同的方式将分发信封写到文件系统 供运维捡收;通过信封中的 {@code transportStub}
  * 字段显式标记非真传输。
  *
- * <p>OSS 不在 supports 集合内:test profile 下的 IT 通过 {@code MinIOContainer} 起真实 OSS, 走 {@link
+ * <p>OSS 不在 supports 集合内:test profile 下的 IT 通过 {@code ObjectStoreContainer} 起真实 OSS, 走 {@link
  * OssDispatchChannelAdapter} 验证端到端;若把 OSS 也存根, {@code
  * DispatchExternalChannelIntegrationTest#shouldDispatchFileToRealMinioObjectStorage} 等"对实
  * OSS"的断言无法工作。

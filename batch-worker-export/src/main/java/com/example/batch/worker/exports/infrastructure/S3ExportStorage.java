@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class MinioExportStorage {
+public class S3ExportStorage {
 
   // byte[] 上传的最大允许大小（10 MB）；超过此阈值应使用 writeObject(Path, ...) 流式上传
   private static final int MAX_BYTE_UPLOAD_SIZE = 10 * 1024 * 1024;
@@ -179,7 +179,7 @@ public class MinioExportStorage {
     try {
       return objectStore.exists(properties.getBucket(), objectName);
     } catch (Exception ex) {
-      SwallowedExceptionLogger.warn(MinioExportStorage.class, "catch:Exception", ex);
+      SwallowedExceptionLogger.warn(S3ExportStorage.class, "catch:Exception", ex);
 
       return false;
     }

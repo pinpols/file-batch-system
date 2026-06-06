@@ -20,7 +20,7 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
-import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage;
+import com.example.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
@@ -61,7 +61,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   private final JobInstanceMapper jobInstanceMapper;
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final FileGovernanceProperties fileGovernanceProperties;
-  private final MinioGovernanceStorage minioGovernanceStorage;
+  private final S3GovernanceStorage s3GovernanceStorage;
   private final BatchSecurityProperties batchSecurityProperties;
 
   @Override
@@ -136,8 +136,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     int expirySeconds =
         Math.max(60, fileGovernanceProperties.getAccess().getPresignExpirySeconds());
     String presignedUrl =
-        minioGovernanceStorage.createPresignedDownloadUrl(
-            storageBucket, storagePath, expirySeconds);
+        s3GovernanceStorage.createPresignedDownloadUrl(storageBucket, storagePath, expirySeconds);
     Map<String, Object> auditDetail = new LinkedHashMap<>();
     auditDetail.put("storageBucket", storageBucket);
     auditDetail.put("storagePath", storagePath);

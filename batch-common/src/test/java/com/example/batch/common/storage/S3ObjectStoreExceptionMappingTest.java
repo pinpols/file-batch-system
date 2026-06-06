@@ -6,22 +6,25 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.S3StorageProperties;
-import io.minio.MinioClient;
-import io.minio.StatObjectArgs;
-import io.minio.errors.ErrorResponseException;
-import io.minio.messages.ErrorResponse;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
-/** 不依赖容器的轻量单测：验证 MinIO {@link ErrorResponseException} 各 code 到统一异常体系的映射。 */
+/** 不依赖容器的轻量单测：验证 AWS SDK v2 {@link S3Exception} 各 errorCode 到统一异常体系的映射。 */
 @ExtendWith(MockitoExtension.class)
 class S3ObjectStoreExceptionMappingTest {
 
-  @Mock private MinioClient minioClient;
+  @Mock private S3Client s3Client;
+  @Mock private S3Presigner presigner;
 
   private S3ObjectStore store;
 
@@ -29,33 +32,48 @@ class S3ObjectStoreExceptionMappingTest {
   void setUp() {
     S3StorageProperties properties = new S3StorageProperties();
     properties.setBucket("bucket");
-    store = new S3ObjectStore(minioClient, properties);
+    store = new S3ObjectStore(s3Client, presigner, properties);
   }
 
   @Test
-  void shouldMapNoSuchKeyToObjectNotFound() throws Exception {
-    stubStatThrows("NoSuchKey");
+  void shouldMapNoSuchKeyToObjectNotFound() {
+    stubHeadThrows("NoSuchKey");
     assertThatThrownBy(() -> store.statSize("bucket", "key"))
         .isInstanceOf(ObjectNotFoundException.class);
   }
 
   @Test
-  void shouldMapAccessDeniedToAccessException() throws Exception {
-    stubStatThrows("AccessDenied");
+  void shouldMapEmptyErrorCode404ToObjectNotFound() {
+    // 真实 HEAD 响应无 body → SDK 拿不到 errorCode，仅有 statusCode 404；必须仍判定为对象不存在。
+    S3Exception ex =
+        (S3Exception)
+            S3Exception.builder()
+                .awsErrorDetails(AwsErrorDetails.builder().errorCode("").build())
+                .message("Not Found")
+                .statusCode(404)
+                .build();
+    when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(ex);
+    assertThatThrownBy(() -> store.statSize("bucket", "key"))
+        .isInstanceOf(ObjectNotFoundException.class);
+  }
+
+  @Test
+  void shouldMapAccessDeniedToAccessException() {
+    stubHeadThrows("AccessDenied");
     assertThatThrownBy(() -> store.statSize("bucket", "key"))
         .isInstanceOf(ObjectStoreAccessException.class);
   }
 
   @Test
-  void shouldMapSignatureMismatchToAccessException() throws Exception {
-    stubStatThrows("SignatureDoesNotMatch");
+  void shouldMapSignatureMismatchToAccessException() {
+    stubHeadThrows("SignatureDoesNotMatch");
     assertThatThrownBy(() -> store.statSize("bucket", "key"))
         .isInstanceOf(ObjectStoreAccessException.class);
   }
 
   @Test
-  void shouldMapUnknownCodeToBaseException() throws Exception {
-    stubStatThrows("InternalError");
+  void shouldMapUnknownCodeToBaseException() {
+    stubHeadThrows("InternalError");
     assertThatThrownBy(() -> store.statSize("bucket", "key"))
         .isInstanceOf(ObjectStoreException.class)
         .isNotInstanceOf(ObjectNotFoundException.class)
@@ -63,9 +81,9 @@ class S3ObjectStoreExceptionMappingTest {
   }
 
   @Test
-  void shouldMapNonErrorResponseToBaseException() throws Exception {
-    when(minioClient.statObject(any(StatObjectArgs.class)))
-        .thenThrow(new IOException("socket reset"));
+  void shouldMapNonS3ExceptionToBaseException() {
+    when(s3Client.headObject(any(HeadObjectRequest.class)))
+        .thenThrow(new UncheckedIOException(new IOException("socket reset")));
     assertThatThrownBy(() -> store.statSize("bucket", "key"))
         .isInstanceOf(ObjectStoreException.class)
         .isNotInstanceOf(ObjectNotFoundException.class)
@@ -73,22 +91,26 @@ class S3ObjectStoreExceptionMappingTest {
   }
 
   @Test
-  void existsShouldReturnFalseOnNoSuchKey() throws Exception {
-    stubStatThrows("NoSuchKey");
+  void existsShouldReturnFalseOnNoSuchKey() {
+    stubHeadThrows("NoSuchKey");
     assertThat(store.exists("bucket", "key")).isFalse();
   }
 
   @Test
-  void existsShouldThrowAccessExceptionOnAccessDenied() throws Exception {
-    stubStatThrows("AccessDenied");
+  void existsShouldThrowAccessExceptionOnAccessDenied() {
+    stubHeadThrows("AccessDenied");
     assertThatThrownBy(() -> store.exists("bucket", "key"))
         .isInstanceOf(ObjectStoreAccessException.class);
   }
 
-  private void stubStatThrows(String code) throws Exception {
-    ErrorResponse errorResponse =
-        new ErrorResponse(code, "msg", "bucket", "key", "key", "rid", "hid");
-    ErrorResponseException ex = new ErrorResponseException(errorResponse, null, "http trace");
-    when(minioClient.statObject(any(StatObjectArgs.class))).thenThrow(ex);
+  private void stubHeadThrows(String code) {
+    S3Exception ex =
+        (S3Exception)
+            S3Exception.builder()
+                .awsErrorDetails(AwsErrorDetails.builder().errorCode(code).build())
+                .message("msg")
+                .statusCode(code.equals("NoSuchKey") ? 404 : 403)
+                .build();
+    when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(ex);
   }
 }

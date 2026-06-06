@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class MinioGovernanceStorage {
+public class S3GovernanceStorage {
 
   private final S3StorageProperties properties;
   private final BatchObjectStore objectStore;
@@ -51,7 +51,7 @@ public class MinioGovernanceStorage {
       }
       return objects;
     } catch (Exception exception) {
-      throw new IllegalStateException("failed to list minio objects", exception);
+      throw new IllegalStateException("failed to list objectStore objects", exception);
     }
   }
 

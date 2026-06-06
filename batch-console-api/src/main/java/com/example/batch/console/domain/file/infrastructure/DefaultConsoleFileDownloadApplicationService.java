@@ -17,7 +17,6 @@ import com.example.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.domain.file.query.FileErrorRecordQuery;
 import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.minio.errors.ErrorResponseException;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
  * 文件下载端点：console 侧代理 MinIO 下载，承担审批门控 + 按需解密，对应 {@code DefaultConsoleFileGovernanceService}
@@ -58,9 +58,9 @@ public class DefaultConsoleFileDownloadApplicationService
   private final FileRecordMapper fileRecordMapper;
   private final FileErrorRecordMapper fileErrorRecordMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
-  private final S3StorageProperties minioStorageProperties;
-  // R2-P0-5：复用 Spring 管理的对象存储 bean（其内部 MinioClient 共享 OkHttp 连接池 + 后台线程）。
-  // 之前每次 download() 都 new 一个 MinioClient，各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
+  private final S3StorageProperties s3StorageProperties;
+  // R2-P0-5：复用 Spring 管理的对象存储 bean（其内部 S3Client 共享 OkHttp 连接池 + 后台线程）。
+  // 之前每次 download() 都 new 一个 S3Client，各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
   private final BatchObjectStore objectStore;
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties batchSecurityProperties;
@@ -85,7 +85,7 @@ public class DefaultConsoleFileDownloadApplicationService
     }
     String bucket = stringValue(fileRecord.get("storage_bucket"));
     if (!Texts.hasText(bucket)) {
-      bucket = minioStorageProperties.getBucket();
+      bucket = s3StorageProperties.getBucket();
     }
     String objectName = stringValue(fileRecord.get("storage_path"));
     if (!Texts.hasText(objectName)) {
@@ -184,14 +184,19 @@ public class DefaultConsoleFileDownloadApplicationService
     return value;
   }
 
-  /** 透过 {@link BatchObjectStore} 包装后的异常链识别底层 {@code NoSuchBucket}（保留旧的桶缺失→404 语义）。 */
+  /**
+   * 透过 {@link BatchObjectStore} 包装后的异常链识别底层 {@code NoSuchBucket}（保留旧的桶缺失→404 语义）。
+   *
+   * <p>{@code S3ObjectStore} 把 NoSuchBucket 归入默认分支 {@code ObjectStoreException}，原始 {@link
+   * S3Exception} 作为 cause 保留；这里 unwrap 到 {@link S3Exception} 后按 {@code
+   * awsErrorDetails().errorCode()} 含 "NoSuch" 或 HTTP 404 判定。
+   */
   private static boolean isNoSuchBucket(Throwable exception) {
     Throwable current = exception;
     while (current != null) {
-      if (current instanceof ErrorResponseException errorResponse) {
-        String code =
-            errorResponse.errorResponse() == null ? null : errorResponse.errorResponse().code();
-        return "NoSuchBucket".equals(code);
+      if (current instanceof S3Exception s3) {
+        String code = s3.awsErrorDetails() == null ? null : s3.awsErrorDetails().errorCode();
+        return s3.statusCode() == 404 || (code != null && code.contains("NoSuch"));
       }
       current = current.getCause();
     }

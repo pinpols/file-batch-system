@@ -27,7 +27,7 @@ public abstract class AbstractIntegrationTest {
   private static final String KAFKA_IMAGE = "apache/kafka:4.1.2";
   // 版本需与 .env.example VALKEY_IMAGE_TAG 保持一致
   private static final String REDIS_IMAGE = "valkey/valkey:8.1";
-  // MinIO 版本在 MinIOContainer 中维护，需与 .env.example MINIO_IMAGE_TAG 保持一致
+  // MinIO 版本在 ObjectStoreContainer 中维护，需与 .env.example MINIO_IMAGE_TAG 保持一致
 
   private static final String DEFAULT_DB_USER = "batch_user";
   private static final String DEFAULT_DB_PASSWORD = "batch_pass_123";
@@ -62,7 +62,7 @@ public abstract class AbstractIntegrationTest {
       new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));
 
   @SuppressWarnings("resource")
-  private static final MinIOContainer MINIO = new MinIOContainer().withReuse(true);
+  private static final ObjectStoreContainer MINIO = new ObjectStoreContainer().withReuse(true);
 
   @SuppressWarnings("resource")
   private static final GenericContainer<?> REDIS =
@@ -133,15 +133,15 @@ public abstract class AbstractIntegrationTest {
     }
   }
 
-  protected static String minioEndpoint() {
+  protected static String s3Endpoint() {
     return MINIO.getEndpoint();
   }
 
-  protected static String minioBucket() {
+  protected static String s3Bucket() {
     return MINIO.getDefaultBucket();
   }
 
-  protected static void ensureMinioBucket(String bucketName) {
+  protected static void ensureS3Bucket(String bucketName) {
     MINIO.ensureBucketExists(bucketName);
   }
 

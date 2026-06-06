@@ -5,16 +5,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.example.batch.common.config.S3StorageProperties;
-import com.example.batch.testing.MinIOContainer;
-import io.minio.MinioClient;
+import com.example.batch.testing.ObjectStoreContainer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
  * {@link S3ObjectStore} 契约测试：用 Testcontainers MinIO 跑 put/get/getFrom/statSize/exists/list/delete
@@ -22,7 +28,7 @@ import org.testcontainers.DockerClientFactory;
  */
 class S3ObjectStoreTest {
 
-  private static MinIOContainer minio;
+  private static ObjectStoreContainer objectStore;
   private static S3ObjectStore store;
   private static String bucket;
 
@@ -31,28 +37,40 @@ class S3ObjectStoreTest {
     assumeTrue(
         DockerClientFactory.instance().isDockerAvailable(),
         "Docker unavailable; skipping MinIO IT");
-    minio = new MinIOContainer();
-    minio.start();
-    bucket = minio.getDefaultBucket();
+    objectStore = new ObjectStoreContainer();
+    objectStore.start();
+    bucket = objectStore.getDefaultBucket();
 
-    MinioClient client =
-        MinioClient.builder()
-            .endpoint(minio.getEndpoint())
-            .credentials(minio.getAccessKey(), minio.getSecretKey())
+    StaticCredentialsProvider credentials =
+        StaticCredentialsProvider.create(
+            AwsBasicCredentials.create(objectStore.getAccessKey(), objectStore.getSecretKey()));
+    S3Client s3Client =
+        S3Client.builder()
+            .endpointOverride(URI.create(objectStore.getEndpoint()))
+            .credentialsProvider(credentials)
+            .forcePathStyle(true)
+            .region(Region.US_EAST_1)
+            .build();
+    S3Presigner presigner =
+        S3Presigner.builder()
+            .endpointOverride(URI.create(objectStore.getEndpoint()))
+            .credentialsProvider(credentials)
+            .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+            .region(Region.US_EAST_1)
             .build();
     S3StorageProperties properties = new S3StorageProperties();
-    properties.setEndpoint(minio.getEndpoint());
-    properties.setAccessKey(minio.getAccessKey());
-    properties.setSecretKey(minio.getSecretKey());
+    properties.setEndpoint(objectStore.getEndpoint());
+    properties.setAccessKey(objectStore.getAccessKey());
+    properties.setSecretKey(objectStore.getSecretKey());
     properties.setBucket(bucket);
     properties.setAutoCreateBucket(true);
-    store = new S3ObjectStore(client, properties);
+    store = new S3ObjectStore(s3Client, presigner, properties);
   }
 
   @AfterAll
   static void stopMinio() {
-    if (minio != null) {
-      minio.stop();
+    if (objectStore != null) {
+      objectStore.stop();
     }
   }
 
