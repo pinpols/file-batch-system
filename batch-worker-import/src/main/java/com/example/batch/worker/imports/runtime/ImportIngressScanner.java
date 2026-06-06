@@ -2,18 +2,16 @@ package com.example.batch.worker.imports.runtime;
 
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.storage.BatchObjectStore;
+import com.example.batch.common.storage.ObjectListing;
+import com.example.batch.common.storage.ObjectSummary;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.common.utils.MinioBucketSupport;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
-import io.minio.ListObjectsArgs;
-import io.minio.MinioClient;
-import io.minio.Result;
-import io.minio.messages.Item;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -60,7 +58,7 @@ public class ImportIngressScanner {
   private final ImportWorkerConfiguration workerConfiguration;
   private final ImportScannerProperties scannerProperties;
   private final S3StorageProperties minioStorageProperties;
-  private final MinioClient minioClient;
+  private final BatchObjectStore objectStore;
   private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
 
   /** 扫描器只负责“安全发现 + 登记”，不绕过 Trigger/Orchestrator 直接起任务。 */
@@ -73,9 +71,6 @@ public class ImportIngressScanner {
   /** 无锁入口，供测试和手动调用使用。调度逻辑留在 {@link #scheduledScan()} 中，直接调用时始终执行扫描逻辑。 */
   public void scan() {
     if (!scannerProperties.isEnabled()) {
-      return;
-    }
-    if (!ensureBucket()) {
       return;
     }
     Map<String, ObjectSnapshot> snapshots = listSnapshots();
@@ -341,28 +336,27 @@ public class ImportIngressScanner {
 
   private Map<String, ObjectSnapshot> listSnapshots() {
     Map<String, ObjectSnapshot> snapshots = new HashMap<>();
-    int count = 0;
+    int batchSize = scannerProperties.getBatchSize();
+    String bucket = minioStorageProperties.getBucket();
+    String prefix = scannerProperties.getPrefix();
     try {
-      Iterable<Result<Item>> objects =
-          minioClient.listObjects(
-              ListObjectsArgs.builder()
-                  .bucket(minioStorageProperties.getBucket())
-                  .prefix(scannerProperties.getPrefix())
-                  .recursive(true)
-                  .build());
-      for (Result<Item> result : objects) {
-        if (count >= scannerProperties.getBatchSize()) {
+      String marker = null;
+      // 循环翻页累计，直到取满 batchSize（截断语义同旧实现）或末页（nextMarker==null）。
+      while (snapshots.size() < batchSize) {
+        ObjectListing listing = objectStore.list(bucket, prefix, marker, batchSize);
+        for (ObjectSummary summary : listing.objects()) {
+          if (snapshots.size() >= batchSize) {
+            break;
+          }
+          snapshots.put(
+              summary.key(),
+              new ObjectSnapshot(
+                  summary.key(), summary.size(), summary.etag(), summary.lastModified()));
+        }
+        marker = listing.nextMarker();
+        if (marker == null) {
           break;
         }
-        Item item = result.get();
-        snapshots.put(
-            item.objectName(),
-            new ObjectSnapshot(
-                item.objectName(),
-                item.size(),
-                item.etag(),
-                item.lastModified() == null ? null : item.lastModified().toInstant()));
-        count++;
       }
       return snapshots;
     } catch (Exception exception) {
@@ -396,15 +390,6 @@ public class ImportIngressScanner {
 
   private String sanitizeTrace(String fileName) {
     return fileName == null ? "object" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-  }
-
-  private boolean ensureBucket() {
-    return MinioBucketSupport.ensureBucket(
-        minioClient,
-        minioStorageProperties.getBucket(),
-        log,
-        "import scanner",
-        minioStorageProperties.isAutoCreateBucket());
   }
 
   private record ObjectSnapshot(String objectName, long size, String etag, Instant lastModified) {}

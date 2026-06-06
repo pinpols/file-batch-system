@@ -59,7 +59,7 @@ class PreprocessStepKmsDecryptTest {
             security,
             cryptoService,
             mock(com.example.batch.common.config.S3StorageProperties.class),
-            mock(io.minio.MinioClient.class));
+            mock(com.example.batch.common.storage.BatchObjectStore.class));
   }
 
   @Test

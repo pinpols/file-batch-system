@@ -2,9 +2,8 @@ package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.utils.Texts;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -22,15 +21,15 @@ public class DispatchFileContentResolver {
 
   private final S3StorageProperties minioProperties;
   private final BatchObjectCryptoService cryptoService;
-  // 复用中心 client(带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
-  private final ObjectProvider<MinioClient> minioClientProvider;
-  private MinioClient minioClient;
+  // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
+  private final ObjectProvider<BatchObjectStore> objectStoreProvider;
+  private BatchObjectStore objectStore;
 
   @PostConstruct
   void init() {
-    // 中心 client 仅在 MinIO 配置有效时由 MinioAutoConfiguration 建出;未配则 null
-    // (LOCAL 路径无需 MinIO;远程路径在 openInputStream 里按 null 抛"MinIO not configured")。
-    this.minioClient = minioClientProvider.getIfAvailable();
+    // 对象存储 bean 仅在 MinIO 配置有效时装配;未配则 null
+    // (LOCAL 路径无需对象存储;远程路径在 openInputStream 里按 null 抛"MinIO not configured")。
+    this.objectStore = objectStoreProvider.getIfAvailable();
   }
 
   /** 打开文件内容流（调用方负责关闭）；大文件建议使用 {@link #streamToConsumer}。 */
@@ -49,7 +48,7 @@ public class DispatchFileContentResolver {
     if ("LOCAL".equals(storageType) || Files.isRegularFile(local)) {
       return Files.newInputStream(local);
     }
-    if (minioClient == null) {
+    if (objectStore == null) {
       throw new IllegalStateException("MinIO not configured for remote storage");
     }
     String bucket =
@@ -57,9 +56,8 @@ public class DispatchFileContentResolver {
     if (!Texts.hasText(bucket)) {
       bucket = minioProperties.getBucket();
     }
-    // M-7: 若 decryptIfNeeded 抛异常，确保 MinIO 流被关闭
-    InputStream inputStream =
-        minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(storagePath).build());
+    // M-7: 若 decryptIfNeeded 抛异常，确保对象存储流被关闭
+    InputStream inputStream = objectStore.get(bucket, storagePath);
     try {
       if (cryptoService.isBypassMode()) {
         return inputStream;
