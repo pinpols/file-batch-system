@@ -173,7 +173,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     throw new IllegalStateException("no binding for column: " + col);
   }
 
-  private String resolveBinding(String pattern, ImportLoadContext context) {
+  // package-private static:纯函数(pattern + context → 值),便于单测 systemBindings 占位符解析。
+  static String resolveBinding(String pattern, ImportLoadContext context) {
     if (pattern == null) {
       return null;
     }
@@ -183,11 +184,13 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         .replace("${workerId}", nullSafe(context.workerId()))
         .replace("${sourceFileName}", nullSafe(context.sourceFileName()))
         .replace("${batchNo}", nullSafe(context.batchNo()))
+        .replace("${bizDate}", nullSafe(context.bizDate()))
+        .replace("${bizType}", nullSafe(context.bizType()))
         .replace("${jobCode}", nullSafe(context.jobCode()))
         .replace("${templateCode}", nullSafe(context.templateCode()));
   }
 
-  private String nullSafe(String v) {
+  private static String nullSafe(String v) {
     return v == null ? "" : v;
   }
 

@@ -341,6 +341,7 @@ public class LoadStep implements ImportStageStep {
         context.getWorkerId(),
         sourceFileName,
         batchNo,
+        context.getBizDate(),
         bizType,
         templateCode,
         tc);
