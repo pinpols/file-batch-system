@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.plugin;
 
+import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.plugin.IdempotencyCapability;
 import com.example.batch.common.plugin.ImportLoadContext;
@@ -14,6 +15,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -76,6 +78,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     // A-3.5：严格幂等模式下，模板必须声明 conflictColumns；否则立即拒绝加载
     spec.validateIdentifiers(
         securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
+    // 地区(per-run):触发未传 region 时用模板 defaultRegion 兜底;allowedRegions 非空时做字典校验。
+    // 用新局部变量(不重赋参数)——下方匿名内部类引用要求 effectively final。
+    final ImportLoadContext loadContext = applyRegion(context, spec);
 
     List<String> insertCols = orderedInsertColumns(spec);
     String sql = buildSql(spec, insertCols);
@@ -112,7 +117,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
               new BatchPreparedStatementSetter() {
                 @Override
                 public void setValues(PreparedStatement ps, int i) throws SQLException {
-                  Object[] args = buildArgs(insertCols, spec, records.get(i), context);
+                  Object[] args = buildArgs(insertCols, spec, records.get(i), loadContext);
                   for (int j = 0; j < args.length; j++) {
                     ps.setObject(j + 1, args[j]);
                   }
@@ -173,7 +178,37 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     throw new IllegalStateException("no binding for column: " + col);
   }
 
-  // package-private static:纯函数(pattern + context → 值),便于单测 systemBindings 占位符解析。
+  /**
+   * 地区解析:context.region(触发 metadata)优先,缺省用模板 defaultRegion 兜底;allowedRegions 非空时做字典校验, 非法地区直接
+   * WorkerConfigException 拒绝。返回 region 已规整(含默认)的 context 供 ${region} binding 用。
+   */
+  static ImportLoadContext applyRegion(ImportLoadContext context, JdbcMappedImportSpec spec) {
+    String region =
+        context.region() != null && !context.region().isBlank()
+            ? context.region()
+            : spec.defaultRegion();
+    List<String> allowed = spec.allowedRegions();
+    if (allowed != null && !allowed.isEmpty() && (region == null || !allowed.contains(region))) {
+      throw new WorkerConfigException(
+          "import region not in allowedRegions: region=" + region + ", allowed=" + allowed);
+    }
+    if (Objects.equals(region, context.region())) {
+      return context;
+    }
+    return new ImportLoadContext(
+        context.tenantId(),
+        context.jobCode(),
+        context.traceId(),
+        context.workerId(),
+        context.sourceFileName(),
+        context.batchNo(),
+        context.bizDate(),
+        context.bizType(),
+        region,
+        context.templateCode(),
+        context.templateConfig());
+  }
+
   static String resolveBinding(String pattern, ImportLoadContext context) {
     if (pattern == null) {
       return null;
@@ -186,6 +221,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
         .replace("${batchNo}", nullSafe(context.batchNo()))
         .replace("${bizDate}", nullSafe(context.bizDate()))
         .replace("${bizType}", nullSafe(context.bizType()))
+        .replace("${region}", nullSafe(context.region()))
         .replace("${jobCode}", nullSafe(context.jobCode()))
         .replace("${templateCode}", nullSafe(context.templateCode()));
   }

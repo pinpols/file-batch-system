@@ -24,7 +24,9 @@ public record JdbcMappedImportSpec(
     String tenantColumn,
     List<ColumnMapping> columnMappings,
     List<String> conflictColumns,
-    Map<String, String> systemBindings) {
+    Map<String, String> systemBindings,
+    String defaultRegion,
+    List<String> allowedRegions) {
   public record ColumnMapping(String from, String to) {}
 
   public static JdbcMappedImportSpec parse(
@@ -44,7 +46,12 @@ public record JdbcMappedImportSpec(
     }
     List<String> conflicts = parseStringList(root.get("conflictColumns"));
     Map<String, String> system = parseSystemBindings(root.get("systemBindings"));
-    return new JdbcMappedImportSpec(schema, table, tenantColumn, mappings, conflicts, system);
+    // 地区维度(per-run):defaultRegion 触发未传 region 时兜底;allowedRegions 非空时作字典校验。
+    Object dr = root.get("defaultRegion");
+    String defaultRegion = dr == null ? null : String.valueOf(dr).trim();
+    List<String> allowedRegions = parseStringList(root.get("allowedRegions"));
+    return new JdbcMappedImportSpec(
+        schema, table, tenantColumn, mappings, conflicts, system, defaultRegion, allowedRegions);
   }
 
   private static String required(Map<String, Object> root, String key) {

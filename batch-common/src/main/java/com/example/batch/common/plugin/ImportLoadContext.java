@@ -15,5 +15,6 @@ public record ImportLoadContext(
     String batchNo,
     String bizDate,
     String bizType,
+    String region,
     String templateCode,
     Map<String, Object> templateConfig) {}

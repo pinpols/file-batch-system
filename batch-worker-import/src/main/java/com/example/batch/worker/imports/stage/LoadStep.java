@@ -331,6 +331,11 @@ public class LoadStep implements ImportStageStep {
             ? importPayload.bizType()
             : context.getJobCode();
     String templateCode = importPayload != null ? importPayload.templateCode() : null;
+    // 地区(per-run):从触发 payload 的 metadata.region 取(可选);模板 defaultRegion 兜底 + 字典校验在 plugin。
+    String region =
+        importPayload != null && importPayload.metadata() != null
+            ? metaString(importPayload.metadata(), "region")
+            : null;
     return new ImportLoadContext(
         context.getTenantId(),
         context.getJobCode(),
@@ -343,8 +348,14 @@ public class LoadStep implements ImportStageStep {
         batchNo,
         context.getBizDate(),
         bizType,
+        region,
         templateCode,
         tc);
+  }
+
+  private static String metaString(Map<String, Object> meta, String key) {
+    Object v = meta == null ? null : meta.get(key);
+    return v == null ? null : String.valueOf(v).trim();
   }
 
   private String resolveLoadTargetRef(ImportJobContext context, ImportPayload importPayload) {
