@@ -12,14 +12,10 @@ import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetupTest;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.StatObjectArgs;
 import jakarta.mail.Message;
 import jakarta.mail.internet.MimeMultipart;
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,6 +35,14 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @SpringBootTest(
     classes = BatchWorkerDispatchApplication.class,
@@ -90,13 +94,15 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     String targetObject = "output-" + UUID.randomUUID() + ".txt";
     byte[] content = ("oss-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
 
-    MinioClient minioClient = minioClient();
+    S3Client s3Client = s3Client();
     ensureMinioBucket(minioBucket());
-    minioClient.putObject(
-        PutObjectArgs.builder().bucket(minioBucket()).object(sourceObject).stream(
-                new ByteArrayInputStream(content), content.length, 10 * 1024 * 1024)
+    s3Client.putObject(
+        PutObjectRequest.builder()
+            .bucket(minioBucket())
+            .key(sourceObject)
             .contentType("text/plain")
-            .build());
+            .build(),
+        RequestBody.fromBytes(content));
 
     DispatchResult result =
         dispatch(
@@ -114,14 +120,15 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     assertThat(result.evidenceRef()).isEqualTo("oss://" + minioBucket() + "/" + targetObject);
 
     assertThat(
-            minioClient.statObject(
-                StatObjectArgs.builder().bucket(minioBucket()).object(targetObject).build()))
+            s3Client.headObject(
+                HeadObjectRequest.builder().bucket(minioBucket()).key(targetObject).build()))
         .isNotNull();
-    try (InputStream in =
-        minioClient.getObject(
-            GetObjectArgs.builder().bucket(minioBucket()).object(targetObject).build())) {
-      assertThat(in.readAllBytes()).isEqualTo(content);
-    }
+    byte[] downloaded =
+        s3Client
+            .getObjectAsBytes(
+                GetObjectRequest.builder().bucket(minioBucket()).key(targetObject).build())
+            .asByteArray();
+    assertThat(downloaded).isEqualTo(content);
   }
 
   @Test
@@ -204,10 +211,14 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     }
   }
 
-  private MinioClient minioClient() {
-    return MinioClient.builder()
-        .endpoint(minioEndpoint())
-        .credentials("minioadmin", "minioadmin123")
+  private S3Client s3Client() {
+    return S3Client.builder()
+        .endpointOverride(URI.create(minioEndpoint()))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+        .forcePathStyle(true)
+        .region(Region.US_EAST_1)
         .build();
   }
 

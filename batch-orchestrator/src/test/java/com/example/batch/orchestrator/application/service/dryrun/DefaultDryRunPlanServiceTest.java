@@ -14,7 +14,6 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
-import io.minio.MinioClient;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
+import software.amazon.awssdk.services.s3.S3Client;
 
 class DefaultDryRunPlanServiceTest {
 
@@ -39,7 +39,7 @@ class DefaultDryRunPlanServiceTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<JdbcTemplate> jdbcTemplateProvider = mock(ObjectProvider.class);
     @SuppressWarnings("unchecked")
-    ObjectProvider<MinioClient> minioClientProvider = mock(ObjectProvider.class);
+    ObjectProvider<S3Client> s3ClientProvider = mock(ObjectProvider.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<S3StorageProperties> minioPropsProvider = mock(ObjectProvider.class);
     service =
@@ -50,7 +50,7 @@ class DefaultDryRunPlanServiceTest {
             edgeMapper,
             tz,
             jdbcTemplateProvider,
-            minioClientProvider,
+            s3ClientProvider,
             minioPropsProvider);
   }
 

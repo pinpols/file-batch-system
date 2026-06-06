@@ -14,10 +14,8 @@ import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetrics
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.StatObjectArgs;
 import java.io.ByteArrayInputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -37,6 +35,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @SpringBootTest(
     classes = FileGovernanceIntegrationTest.TestApplication.class,
@@ -120,10 +125,14 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   static class TestApplication {
 
     @Bean
-    MinioClient minioClient(S3StorageProperties props) {
-      return MinioClient.builder()
-          .endpoint(props.getEndpoint())
-          .credentials(props.getAccessKey(), props.getSecretKey())
+    S3Client s3Client(S3StorageProperties props) {
+      return S3Client.builder()
+          .endpointOverride(URI.create(props.getEndpoint()))
+          .credentialsProvider(
+              StaticCredentialsProvider.create(
+                  AwsBasicCredentials.create(props.getAccessKey(), props.getSecretKey())))
+          .forcePathStyle(true)
+          .region(Region.US_EAST_1)
           .build();
     }
   }
@@ -207,11 +216,11 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             fileId);
     assertThat(auditCount).isEqualTo(1);
 
-    MinioClient client = minioClient();
+    S3Client client = s3Client();
     assertThatThrownBy(
             () ->
-                client.statObject(
-                    StatObjectArgs.builder().bucket(minioBucket()).object(objectName).build()))
+                client.headObject(
+                    HeadObjectRequest.builder().bucket(minioBucket()).key(objectName).build()))
         .isInstanceOf(Exception.class);
   }
 
@@ -354,18 +363,24 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private void putObject(String objectName, String content) throws Exception {
     byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
-    minioClient()
+    s3Client()
         .putObject(
-            PutObjectArgs.builder().bucket(minioBucket()).object(objectName).stream(
-                    new ByteArrayInputStream(bytes), bytes.length, 5 * 1024 * 1024)
+            PutObjectRequest.builder()
+                .bucket(minioBucket())
+                .key(objectName)
                 .contentType("text/plain")
-                .build());
+                .build(),
+            RequestBody.fromInputStream(new ByteArrayInputStream(bytes), bytes.length));
   }
 
-  private MinioClient minioClient() {
-    return MinioClient.builder()
-        .endpoint(minioEndpoint())
-        .credentials("minioadmin", "minioadmin123")
+  private S3Client s3Client() {
+    return S3Client.builder()
+        .endpointOverride(URI.create(minioEndpoint()))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+        .forcePathStyle(true)
+        .region(Region.US_EAST_1)
         .build();
   }
 

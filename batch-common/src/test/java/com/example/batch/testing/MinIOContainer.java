@@ -1,15 +1,20 @@
 package com.example.batch.testing;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
-import io.minio.BucketExistsArgs;
-import io.minio.MakeBucketArgs;
-import io.minio.MinioClient;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 /** 集成测试使用的轻量 MinIO 测试容器封装。 */
 public final class MinIOContainer extends GenericContainer<MinIOContainer> {
@@ -61,18 +66,23 @@ public final class MinIOContainer extends GenericContainer<MinIOContainer> {
     return defaultBucket;
   }
 
-  public MinioClient client() {
-    return MinioClient.builder().endpoint(getEndpoint()).credentials(accessKey, secretKey).build();
+  public S3Client client() {
+    return S3Client.builder()
+        .endpointOverride(URI.create(getEndpoint()))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
+        .forcePathStyle(true)
+        .region(Region.US_EAST_1)
+        .build();
   }
 
   public void ensureBucketExists(String bucketName) {
     Instant deadline = BatchDateTimeSupport.utcNow().plus(Duration.ofMinutes(2));
     Exception lastFailure = null;
     while (BatchDateTimeSupport.utcNow().isBefore(deadline)) {
-      try {
-        MinioClient client = client();
-        if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
-          client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
+      try (S3Client client = client()) {
+        if (!bucketExists(client, bucketName)) {
+          client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
         }
         return;
       } catch (Exception exception) {
@@ -81,6 +91,15 @@ public final class MinIOContainer extends GenericContainer<MinIOContainer> {
       }
     }
     throw new IllegalStateException("failed to ensure MinIO bucket: " + bucketName, lastFailure);
+  }
+
+  private boolean bucketExists(S3Client client, String bucketName) {
+    try {
+      client.headBucket(HeadBucketRequest.builder().bucket(bucketName).build());
+      return true;
+    } catch (NoSuchBucketException notFound) {
+      return false;
+    }
   }
 
   private void sleepBeforeRetry() {

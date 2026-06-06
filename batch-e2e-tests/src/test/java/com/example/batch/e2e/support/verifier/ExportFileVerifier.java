@@ -2,17 +2,22 @@ package com.example.batch.e2e.support.verifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 /**
  * Content-level verifier for Export pipeline E2E tests.
@@ -124,20 +129,26 @@ public final class ExportFileVerifier implements E2eVerifier {
         || minioEndpoint == null) {
       return;
     }
-    try {
-      MinioClient client =
-          MinioClient.builder()
-              .endpoint(minioEndpoint)
-              .credentials("minioadmin", "minioadmin")
-              .build();
+    try (S3Client client =
+        S3Client.builder()
+            .endpointOverride(URI.create(minioEndpoint))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create("minioadmin", "minioadmin")))
+            .forcePathStyle(true)
+            .region(Region.US_EAST_1)
+            .build()) {
       String bucket = minioBucket != null ? minioBucket : "batch-dev";
       String objectKey =
           storagePath.startsWith(bucket + "/")
               ? storagePath.substring(bucket.length() + 1)
               : storagePath;
 
-      try (var stream =
-              client.getObject(GetObjectArgs.builder().bucket(bucket).object(objectKey).build());
+      byte[] objectBytes =
+          client
+              .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(objectKey).build())
+              .asByteArray();
+      try (var stream = new ByteArrayInputStream(objectBytes);
           BufferedReader reader =
               new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
 
