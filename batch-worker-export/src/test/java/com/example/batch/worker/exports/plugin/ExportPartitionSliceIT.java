@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -218,7 +219,7 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
     Object cursor = null;
     // 可变 exportSnapshot：与生产 GenerateStep 一致（planner 会把 keyset 边界缓存写入），
     // 不能用不可变 Map.of()，否则 planner 的 snap.put 抛 UnsupportedOperationException。
-    Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+    Map<String, Object> snapshot = new LinkedHashMap<>();
 
     while (true) {
       ExportDataContext ctx =

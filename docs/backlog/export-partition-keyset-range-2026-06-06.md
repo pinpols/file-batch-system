@@ -1,6 +1,6 @@
 # Backlog: EXPORT 分片 hashtext 全扫放大 → keyset 区间分片优化(方案 A)
 
-> 状态:**已设计,待实测瓶颈驱动**(与 import Range 下载对称的导出侧放大优化)。
+> 状态:**✅ 已实现(2026-06-06)**。实现见末尾「实现记录」;下文设计保留作背景。
 > 日期:2026-06-06　模块:batch-worker-export、batch-common
 > 对照:[import-line-mod-read-amplification-2026-06-05.md](import-line-mod-read-amplification-2026-06-05.md)(导入侧同类放大,已实现 Range 下载)
 > 前置:[export-partition-slice-fix-2026-06-06.md](export-partition-slice-fix-2026-06-06.md)(导出 partition-aware 分片治本,本文是其放大优化)
@@ -133,3 +133,15 @@ keyset 边界是 plugin 内部计算,不外溢。
 - `batch-common/.../plugin/ExportDataContext.java`(partition 通道,#390 已加)
 - `ShardStrategy` / ADR-005(切分维度由 worker plugin 解释)
 - 分支:业务模块代码 → `feature/<topic>` 标准分支 → PR → main(非部署分支)
+
+## 10. 实现记录(2026-06-06)
+
+按设计落地,TDD,无偏离。组件:
+- `ExportKeysetRange`(record):等宽切分 `[loN,hiN)`,**末片 includeUpper=true 含上界防丢 max 行**;`lo>=hi`/单片 → inactive 但保留 count/no 供 hashtext 退化。
+- `ExportKeysetRangePlanner`:判激活(`partitionCount>1` + 模板 `partition_keyset_range=true`)+ 调 min/max 回调算区间,**结果(含 INACTIVE)缓存进 `exportSnapshot`,每分区只算一次**;未激活时**短路不调** min/max(默认导出零额外成本);min/max 空/非数值/抛异常 → INACTIVE 退 hashtext。
+- 两 plugin 对称接入:`SqlTemplateExportDataPlugin`(min/max over `(baseSql)` 子查询)与 `GenericJdbcMappedExportDataPlugin`(min/max over 物理 detail 表 + fk 过滤);谓词激活时 `cur>=:lo AND cur<(=):hi` 替代 hashtext,标识符 quotePg、边界走参数绑定。
+- v1 仅**数值游标列**(min/max 非 Number → 退 hashtext);时间/分位切留扩展(§4)。
+
+测试:`ExportKeysetRangePlannerTest`(6 单测:等宽/缓存只算一次/未opt-in/单片/异常退化/null退化)、`SqlTemplateExportKeysetRangeTest`(4)、`GenericJdbcMappedExportKeysetRangeTest`(4,`containsExactly` 锁 positional args 顺序)、`ExportKeysetRangeIT`(5 端到端:4片无重叠+全覆盖 / 倾斜无重无漏 / 退hashtext / 边界只算一次 / jdbc_mapped 变体,按 id 集合比对真无重漏)。
+
+> 注:实现期发现 `ExportKeysetRangePlanner` 无条件写 `exportSnapshot` 缓存,会让传不可变 `Map.of()` 的旧测试 harness 抛 `UnsupportedOperationException`;经核实生产两处 `ExportDataContext` 构造点(`GenerateStep`/`RegisterStep`)均建可变 `LinkedHashMap`,故仅把老测试对齐为可变 map,planner 不加冗余防御。
