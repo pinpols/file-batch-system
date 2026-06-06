@@ -16,8 +16,6 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
-import io.minio.BucketExistsArgs;
-import io.minio.MinioClient;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,6 +37,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 /**
  * ADR-026 §三层粒度 演练计划服务实现。priority-scope §ADR-026 红线：
@@ -80,7 +81,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final BatchTimezoneProvider timezoneProvider;
   private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
-  private final ObjectProvider<MinioClient> minioClientProvider;
+  private final ObjectProvider<S3Client> s3ClientProvider;
   private final ObjectProvider<S3StorageProperties> minioPropertiesProvider;
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(HTTP_PROBE_TIMEOUT).build();
@@ -92,7 +93,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       WorkflowEdgeMapper workflowEdgeMapper,
       BatchTimezoneProvider timezoneProvider,
       ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
-      ObjectProvider<MinioClient> minioClientProvider,
+      ObjectProvider<S3Client> s3ClientProvider,
       ObjectProvider<S3StorageProperties> minioPropertiesProvider) {
     this.configCacheService = configCacheService;
     this.schedulePlanBuilder = schedulePlanBuilder;
@@ -100,7 +101,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     this.workflowEdgeMapper = workflowEdgeMapper;
     this.timezoneProvider = timezoneProvider;
     this.jdbcTemplateProvider = jdbcTemplateProvider;
-    this.minioClientProvider = minioClientProvider;
+    this.s3ClientProvider = s3ClientProvider;
     this.minioPropertiesProvider = minioPropertiesProvider;
   }
 
@@ -431,18 +432,24 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
               bucket));
       return 1;
     }
-    MinioClient client = minioClientProvider.getIfAvailable();
+    S3Client client = s3ClientProvider.getIfAvailable();
     if (client == null) {
       findings.add(
           DryRunFinding.warn(
               "EXEC_MINIO_CLIENT_UNAVAILABLE",
               SCOPE_EXECUTION,
-              "MinioClient bean unavailable; bucket name passed regex only",
+              "S3Client bean unavailable; bucket name passed regex only",
               bucket));
       return 1;
     }
     try {
-      boolean exists = client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+      boolean exists;
+      try {
+        client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+        exists = true;
+      } catch (NoSuchBucketException notFound) {
+        exists = false;
+      }
       if (exists) {
         findings.add(
             DryRunFinding.pass(

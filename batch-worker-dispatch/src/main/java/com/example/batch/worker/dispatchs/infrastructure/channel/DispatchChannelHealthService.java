@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.SecretMasking;
 import com.example.batch.common.utils.Texts;
@@ -11,7 +12,6 @@ import com.example.batch.worker.dispatchs.config.DispatchCircuitBreakerPropertie
 import com.example.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
@@ -61,9 +61,9 @@ public class DispatchChannelHealthService {
   private final BatchSecurityProperties securityProperties;
   private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;
-  // 复用中心 client(带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
-  private final ObjectProvider<MinioClient> minioClientProvider;
-  private MinioClient minioClient;
+  // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
+  private final ObjectProvider<BatchObjectStore> objectStoreProvider;
+  private BatchObjectStore objectStore;
   private final AtomicLong probeSuccessCount = new AtomicLong();
   private final AtomicLong probeFailureCount = new AtomicLong();
   private ExecutorService probeExecutor;
@@ -80,8 +80,8 @@ public class DispatchChannelHealthService {
           return thread;
         };
     this.probeExecutor = Executors.newFixedThreadPool(PROBE_PARALLELISM, factory);
-    // 中心 client 仅在 MinIO 配置有效时由 MinioAutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
-    this.minioClient = minioClientProvider.getIfAvailable();
+    // 中心对象存储仅在 MinIO 配置有效时由 S3AutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
+    this.objectStore = objectStoreProvider.getIfAvailable();
     meterRegistry.gauge("batch.dispatch.channel.probe.successes", probeSuccessCount);
     meterRegistry.gauge("batch.dispatch.channel.probe.failures", probeFailureCount);
   }
@@ -277,7 +277,7 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelProbeResult result =
         RemoteFilesystemDispatchSupport.probeChannel(
-            channelConfig, minioStorageProperties, minioClient, !securityProperties.isBypassMode());
+            channelConfig, minioStorageProperties, objectStore, !securityProperties.isBypassMode());
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();
