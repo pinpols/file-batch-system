@@ -9,6 +9,7 @@ import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -202,7 +203,7 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
   /** 对 1..PARTITION_COUNT 的每个分片调用 {@code loadDetailPage} 分页，收集所有 id。 */
   private List<Set<Object>> collectAllPartitions(
       ExportDataPlugin plugin, Map<String, Object> templateConfig, long batchId) throws Exception {
-    java.util.List<Set<Object>> result = new java.util.ArrayList<>();
+    List<Set<Object>> result = new ArrayList<>();
     for (int partNo = 1; partNo <= PARTITION_COUNT; partNo++) {
       result.add(collectPartition(plugin, templateConfig, batchId, partNo));
     }
