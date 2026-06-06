@@ -128,11 +128,11 @@ services:
     container_name: batch-redis-exporter
     restart: unless-stopped
     environment:
-      REDIS_ADDR: redis:6379
+      REDIS_ADDR: valkey:6379
     networks:
       - batch-network
     depends_on:
-      redis:
+      valkey:
         condition: service_healthy
 
   postgres-exporter:

@@ -313,7 +313,7 @@ docker compose --env-file "$COMPOSE_ENV_FILE" ${COMPOSE_PROFILES[@]+"${COMPOSE_P
 echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
 wait_postgres & _pid_pg=$!
 wait_container_healthy batch-minio "MinIO" & _pid_minio=$!
-wait_container_healthy batch-redis "Redis" & _pid_redis=$!
+wait_container_healthy batch-valkey "Redis" & _pid_redis=$!
 wait_kafka_topics_ready & _pid_kafka=$!
 _pid_replica=
 if [[ "${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}" == "true" ]]; then
