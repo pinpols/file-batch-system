@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.utils.MinioBucketSupport;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.ListObjectsArgs;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MinioGovernanceStorage {
 
-  private final MinioStorageProperties properties;
+  private final S3StorageProperties properties;
   private final MinioClient minioClient;
 
   /** 治理任务只做对象清点和清理，不在这里承载业务编排。 */
@@ -100,7 +100,8 @@ public class MinioGovernanceStorage {
   }
 
   private boolean ensureBucket(String bucket) {
-    return MinioBucketSupport.ensureBucket(minioClient, bucket, log, "orchestrator governance");
+    return MinioBucketSupport.ensureBucket(
+        minioClient, bucket, log, "orchestrator governance", properties.isAutoCreateBucket());
   }
 
   public record StorageObjectView(

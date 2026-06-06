@@ -1,6 +1,6 @@
 package com.example.batch.common.health;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
@@ -20,7 +20,7 @@ public class MinioHealthIndicator implements HealthIndicator {
   private final MinioClient minioClient;
   private final String bucket;
 
-  public MinioHealthIndicator(MinioClient minioClient, MinioStorageProperties properties) {
+  public MinioHealthIndicator(MinioClient minioClient, S3StorageProperties properties) {
     this.minioClient = minioClient;
     this.bucket = properties.getBucket();
   }

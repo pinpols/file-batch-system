@@ -4,7 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
@@ -24,7 +24,7 @@ class ImportIngressScannerTest {
 
   private ImportWorkerConfiguration workerConfiguration;
   private ImportScannerProperties scannerProperties;
-  private MinioStorageProperties minioStorageProperties;
+  private S3StorageProperties minioStorageProperties;
   private ImportIngressScanner scanner;
 
   @BeforeEach
@@ -48,7 +48,7 @@ class ImportIngressScannerTest {
     scannerProperties.setRequireDoneFile(false);
     scannerProperties.setStabilityWindowSeconds(0L);
 
-    minioStorageProperties = new MinioStorageProperties();
+    minioStorageProperties = new S3StorageProperties();
     minioStorageProperties.setBucket("batch-dev");
 
     scanner =

@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.testing.MinIOContainer;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -61,7 +61,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     PlatformFileRuntimeRepository runtimeRepo = mock(PlatformFileRuntimeRepository.class);
     when(runtimeRepo.toLong(any())).thenReturn(1L);
     when(runtimeRepo.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
-    MinioStorageProperties props = new MinioStorageProperties();
+    S3StorageProperties props = new S3StorageProperties();
     props.setBucket(bucket);
     return new PreprocessStep(
         runtimeRepo, security, mock(BatchObjectCryptoService.class), props, client);

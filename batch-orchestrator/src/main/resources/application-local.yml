@@ -127,7 +127,7 @@ batch:
       enabled: true
       presign-expiry-seconds: 600
   storage:
-    minio:
+    s3:
       endpoint: http://localhost:19000
       access-key: minioadmin
       secret-key: minioadmin123

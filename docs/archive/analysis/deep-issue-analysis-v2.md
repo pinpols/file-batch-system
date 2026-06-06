@@ -71,7 +71,7 @@ private String internalSecret = "internal-secret";
 
 ```yaml
 BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
+BATCH_S3_SECRET_KEY: ${BATCH_S3_SECRET_KEY:-minioadmin123}
 ```
 
 **修复**：移除默认密码，改为无默认值（未设置则启动失败）。使用 Docker Secrets 或外部密钥管理。
