@@ -21,7 +21,7 @@ kafka:
 redis:
   host: "host.docker.internal"
   port: "16379"
-minio:
+objectStorage:
   endpoint: "http://host.docker.internal:19000"
   accessKey: "minioadmin"
   secretKey: "minioadmin"

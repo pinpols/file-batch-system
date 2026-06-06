@@ -3,8 +3,8 @@
 #     -f helm/values-prod.yaml \
 #     --set postgresql.platform.password=$DB_PASS \
 #     --set postgresql.business.password=$DB_PASS \
-#     --set minio.accessKey=$MINIO_AK \
-#     --set minio.secretKey=$MINIO_SK \
+#     --set objectStorage.accessKey=$MINIO_AK \
+#     --set objectStorage.secretKey=$MINIO_SK \
 #     --set security.internalSecret=$BATCH_INTERNAL_SECRET \
 #     --set security.consoleJwtSecret=$BATCH_CONSOLE_JWT_SECRET
 
@@ -28,7 +28,7 @@ postgresql:
 kafka:
   bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
 
-minio:
+objectStorage:
   endpoint: "http://minio.minio.svc.cluster.local:9000"
   bucket: "batch-prod"
 

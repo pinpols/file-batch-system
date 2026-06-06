@@ -32,9 +32,9 @@ data:
   BATCH_WORKER_PROCESS_PORT: {{ .Values.workerProcess.port | quote }}
   BATCH_WORKER_DISPATCH_PORT: {{ .Values.workerDispatch.port | quote }}
 
-  # ── MinIO ──────────────────────────────────────────────────────────────────
-  BATCH_S3_ENDPOINT: {{ .Values.minio.endpoint | quote }}
-  BATCH_S3_BUCKET: {{ .Values.minio.bucket | quote }}
+  # ── Object Storage (S3) ─────────────────────────────────────────────────────
+  BATCH_S3_ENDPOINT: {{ .Values.objectStorage.endpoint | quote }}
+  BATCH_S3_BUCKET: {{ .Values.objectStorage.bucket | quote }}
 
   # ── Cross-service ──────────────────────────────────────────────────────────
   BATCH_ORCHESTRATOR_BASE_URL: {{ .Values.orchestratorBaseUrl | quote }}

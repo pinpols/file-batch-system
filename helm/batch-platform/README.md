@@ -32,8 +32,8 @@ helm upgrade --install batch-platform ./helm/batch-platform \
 - `image.registry` / `image.tag`
 - `postgresql.platform.password`
 - `postgresql.business.password`
-- `minio.accessKey`
-- `minio.secretKey`
+- `objectStorage.accessKey`
+- `objectStorage.secretKey`
 - `consoleApi.ingress.enabled`
 - `otelCollector.enabled`
 

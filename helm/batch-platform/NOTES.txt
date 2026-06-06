@@ -22,7 +22,7 @@ Console API ingress is disabled. To expose externally:
 Prerequisites (must be provisioned externally):
   - PostgreSQL : {{ .Values.postgresql.platform.url }}
   - Kafka      : {{ .Values.kafka.bootstrapServers }}
-  - MinIO      : {{ .Values.minio.endpoint }}
+  - 对象存储   : {{ .Values.objectStorage.endpoint }}
 
 To check pod status:
   kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
