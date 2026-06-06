@@ -136,7 +136,7 @@ CI `pr-gate` 拦截漂移。
 | Mock 框架 | **Mockito**,**禁** EasyMock / PowerMock |
 | Mock 初始化 | 新单测一律 `@ExtendWith(MockitoExtension.class)` + `@Mock` + `@InjectMocks`(声明式);**禁** `MockitoAnnotations.openMocks(this)` 命令式与 `private Foo foo = Mockito.mock(Foo.class)` 字段直 mock(改动旧代码时顺带迁) |
 | Mock strictness | 默认 strict(MockitoExtension 自带),**禁** `@MockitoSettings(strictness = Strictness.LENIENT)` 当模板拷贝带入;只有跨方法共享 stub 且部分方法不触发的场景才允许,需注释说明 |
-| 类命名 | 单测 `XxxTest`,集成测 `XxxIT`(Maven failsafe 区分),**禁** `XxxTests` / `XxxSpec` |
+| 类命名 | 单测 `XxxTest`;**集成测 `XxxIntegrationTest`**(仓库主流命名,103+ 个)。**例外保留两类后缀**:① 端到端 `XxxE2eIT`(`batch-e2e-tests` 模块 failsafe 显式只抓 `**/*E2eIT.java`,命名是工具配合的一部分);② 混沌注入 `XxxToxicIT`(走专用基类 `AbstractChaosIntegrationTest`)。**禁** `XxxTests` / `XxxSpec` / 普通集成测用 `XxxIT` |
 | 方法命名 | **首选** `shouldDoX_whenY()`,**接受** `xxx_when_yyy()` 下划线风格(老代码 ~48%),**禁** `testXxx` / `test1` |
 | `@DisplayName` | 业务复杂或方法名表达不清时**强烈推荐**中文 `@DisplayName`(参考 `SoftDeleteRecoveryIntegrationTest`);简单字段校验可省 |
 | `@Nested` | Controller / Service 测试 ≥ 15 方法时**建议**用 `@Nested` 分组(目前 0 使用,新模块可示范) |
