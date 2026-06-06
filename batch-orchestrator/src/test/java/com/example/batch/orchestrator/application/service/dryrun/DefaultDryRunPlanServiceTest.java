@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -41,7 +41,7 @@ class DefaultDryRunPlanServiceTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MinioClient> minioClientProvider = mock(ObjectProvider.class);
     @SuppressWarnings("unchecked")
-    ObjectProvider<MinioStorageProperties> minioPropsProvider = mock(ObjectProvider.class);
+    ObjectProvider<S3StorageProperties> minioPropsProvider = mock(ObjectProvider.class);
     service =
         new DefaultDryRunPlanService(
             configCache,

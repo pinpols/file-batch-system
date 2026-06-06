@@ -1,6 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
 public class OssDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private final DispatchFileContentResolver contentResolver;
-  private final MinioStorageProperties minioStorageProperties;
+  private final S3StorageProperties minioStorageProperties;
   // 复用 MinioAutoConfiguration 装配的中心 client(带 OkHttp 连接/读/写超时 + 连接池);
   // ObjectProvider 惰性取,避免硬依赖——未配 MinIO 时保持 null(同历史行为)。
   private final ObjectProvider<MinioClient> minioClientProvider;

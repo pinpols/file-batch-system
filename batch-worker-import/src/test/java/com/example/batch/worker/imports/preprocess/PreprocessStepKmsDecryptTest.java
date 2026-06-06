@@ -58,7 +58,7 @@ class PreprocessStepKmsDecryptTest {
             runtimeRepo,
             security,
             cryptoService,
-            mock(com.example.batch.common.config.MinioStorageProperties.class),
+            mock(com.example.batch.common.config.S3StorageProperties.class),
             mock(io.minio.MinioClient.class));
   }
 

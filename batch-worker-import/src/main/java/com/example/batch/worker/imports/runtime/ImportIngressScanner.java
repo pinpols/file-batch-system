@@ -1,6 +1,6 @@
 package com.example.batch.worker.imports.runtime;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.MinioBucketSupport;
@@ -59,7 +59,7 @@ public class ImportIngressScanner {
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ImportWorkerConfiguration workerConfiguration;
   private final ImportScannerProperties scannerProperties;
-  private final MinioStorageProperties minioStorageProperties;
+  private final S3StorageProperties minioStorageProperties;
   private final MinioClient minioClient;
   private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
 
@@ -400,7 +400,11 @@ public class ImportIngressScanner {
 
   private boolean ensureBucket() {
     return MinioBucketSupport.ensureBucket(
-        minioClient, minioStorageProperties.getBucket(), log, "import scanner");
+        minioClient,
+        minioStorageProperties.getBucket(),
+        log,
+        "import scanner",
+        minioStorageProperties.isAutoCreateBucket());
   }
 
   private record ObjectSnapshot(String objectName, long size, String etag, Instant lastModified) {}

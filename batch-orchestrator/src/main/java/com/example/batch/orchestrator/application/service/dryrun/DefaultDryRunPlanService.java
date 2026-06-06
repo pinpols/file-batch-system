@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.application.service.dryrun;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.ScheduleType;
 import com.example.batch.common.exception.BizException;
@@ -81,7 +81,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   private final BatchTimezoneProvider timezoneProvider;
   private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
   private final ObjectProvider<MinioClient> minioClientProvider;
-  private final ObjectProvider<MinioStorageProperties> minioPropertiesProvider;
+  private final ObjectProvider<S3StorageProperties> minioPropertiesProvider;
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(HTTP_PROBE_TIMEOUT).build();
 
@@ -93,7 +93,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       BatchTimezoneProvider timezoneProvider,
       ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
       ObjectProvider<MinioClient> minioClientProvider,
-      ObjectProvider<MinioStorageProperties> minioPropertiesProvider) {
+      ObjectProvider<S3StorageProperties> minioPropertiesProvider) {
     this.configCacheService = configCacheService;
     this.schedulePlanBuilder = schedulePlanBuilder;
     this.workflowNodeMapper = workflowNodeMapper;
@@ -410,7 +410,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
    * L3-2: MinIO bucket 探测。
    *
    * <ul>
-   *   <li>若 params.minioBucket 缺失，回退到 MinioStorageProperties.bucket 默认；
+   *   <li>若 params.minioBucket 缺失，回退到 S3StorageProperties.bucket 默认；
    *   <li>校验 bucket 命名合法（DNS-style）；
    *   <li>若 MinioClient 可用，调用 bucketExists；不可用降级为只校验命名规则。
    * </ul>
@@ -418,7 +418,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   private int probeMinioBucket(Map<String, Object> params, List<DryRunFinding> findings) {
     String bucket = stringValue(params, "minioBucket");
     if (!Texts.hasText(bucket)) {
-      MinioStorageProperties props = minioPropertiesProvider.getIfAvailable();
+      S3StorageProperties props = minioPropertiesProvider.getIfAvailable();
       bucket = props == null ? null : props.getBucket();
     }
     if (!Texts.hasText(bucket)) return 0;

@@ -1,6 +1,6 @@
 package com.example.batch.worker.exports.stage;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
@@ -36,12 +36,12 @@ public class RegisterStep implements ExportStageStep {
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ExportDataPluginRegistry exportDataPluginRegistry;
-  private final MinioStorageProperties minioStorageProperties;
+  private final S3StorageProperties minioStorageProperties;
 
   public RegisterStep(
       PlatformFileRuntimeRepository runtimeRepository,
       ExportDataPluginRegistry exportDataPluginRegistry,
-      MinioStorageProperties minioStorageProperties) {
+      S3StorageProperties minioStorageProperties) {
     this.runtimeRepository = runtimeRepository;
     this.exportDataPluginRegistry = exportDataPluginRegistry;
     this.minioStorageProperties = minioStorageProperties;

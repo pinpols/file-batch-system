@@ -63,7 +63,7 @@ class ConfigDriftGuardTest {
           // batch.* 共享键
           "batch.timezone.default-zone",
           "batch.orchestrator.base-url",
-          "batch.storage.minio.endpoint",
+          "batch.storage.s3.endpoint",
           "batch.security.internal-secret",
           "batch.mq.topics.task-result",
           "batch.mq.topics.task-retry",

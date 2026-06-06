@@ -23,9 +23,18 @@ public final class MinioBucketSupport {
   private MinioBucketSupport() {}
 
   public static boolean ensureBucket(
-      MinioClient minioClient, String bucket, Logger log, String componentName) {
+      MinioClient minioClient,
+      String bucket,
+      Logger log,
+      String componentName,
+      boolean autoCreate) {
     if (minioClient == null || !Texts.hasText(bucket)) {
       return false;
+    }
+    // autoCreate=false（托管云 S3/OSS/COS）：bucket 由外部预建、凭据通常无 CreateBucket（甚至无 HeadBucket）
+    // 权限,这里不校验/不创建,直接放行;若 bucket 真缺失,在首次 put/get 时报明确错误。
+    if (!autoCreate) {
+      return true;
     }
     try {
       boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());

@@ -207,7 +207,7 @@ function Initialize-AppComposeEnv {
   # 3) 补齐 docker-compose.app.yml 强制要求(:?required)但 .env(.example) 未定义的变量：
   #    BATCH_PLATFORM_DB_PASSWORD / BATCH_BUSINESS_DB_PASSWORD —— 应用以 postgres 超级
   #      用户(POSTGRES_USER=batch_user)连库，未显式提供时从 POSTGRES_PASSWORD 派生；
-  #    BATCH_MINIO_SECRET_KEY / BATCH_MINIO_ACCESS_KEY —— 应用访问 MinIO 用 root 凭据，
+  #    BATCH_S3_SECRET_KEY / BATCH_S3_ACCESS_KEY —— 应用访问 MinIO 用 root 凭据，
   #      未显式提供时从 MINIO_ROOT_PASSWORD / MINIO_ROOT_USER 派生。
   #    否则 docker compose up 会直接报 "... is required" 失败。
   # 4) 默认开启 BuildKit
@@ -232,11 +232,11 @@ function Initialize-AppComposeEnv {
 
   $minioUser = Get-EnvValue "MINIO_ROOT_USER" ""
   $minioPass = Get-EnvValue "MINIO_ROOT_PASSWORD" ""
-  if ([string]::IsNullOrEmpty((Get-EnvValue "BATCH_MINIO_SECRET_KEY" "")) -and $minioPass) {
-    $env:BATCH_MINIO_SECRET_KEY = $minioPass
+  if ([string]::IsNullOrEmpty((Get-EnvValue "BATCH_S3_SECRET_KEY" "")) -and $minioPass) {
+    $env:BATCH_S3_SECRET_KEY = $minioPass
   }
-  if ([string]::IsNullOrEmpty((Get-EnvValue "BATCH_MINIO_ACCESS_KEY" "")) -and $minioUser) {
-    $env:BATCH_MINIO_ACCESS_KEY = $minioUser
+  if ([string]::IsNullOrEmpty((Get-EnvValue "BATCH_S3_ACCESS_KEY" "")) -and $minioUser) {
+    $env:BATCH_S3_ACCESS_KEY = $minioUser
   }
 
   $env:DOCKER_BUILDKIT = Get-EnvValue "DOCKER_BUILDKIT" "1"
