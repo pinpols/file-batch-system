@@ -7,9 +7,7 @@ import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.BatchWorkerImportApplication;
 import com.example.batch.worker.imports.runtime.ImportIngressScanner;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import java.io.ByteArrayInputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -18,6 +16,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * 集成测试：ImportIngressScanner 发现放置在 MinIO 中的 CSV 文件并将其注册为数据库中的平台文件记录。
@@ -51,20 +55,14 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
     String objectName = "ingress/it-scan-test.csv";
-    String bucket = minioBucket();
+    String bucket = s3Bucket();
 
     // 上传一个最小化的 CSV 到 MinIO
     byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
-    MinioClient client =
-        MinioClient.builder()
-            .endpoint(minioEndpoint())
-            .credentials("minioadmin", "minioadmin123")
-            .build();
+    S3Client client = s3Client();
     client.putObject(
-        PutObjectArgs.builder().bucket(bucket).object(objectName).stream(
-                new ByteArrayInputStream(content), content.length, -1)
-            .contentType("text/csv")
-            .build());
+        PutObjectRequest.builder().bucket(bucket).key(objectName).contentType("text/csv").build(),
+        RequestBody.fromBytes(content));
 
     // 调度器中扫描已禁用，但我们直接调用 scan()
     scanner.scan();
@@ -83,19 +81,13 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldNotRegisterAlreadyKnownFile() throws Exception {
     String objectName = "ingress/it-scan-already-known.csv";
-    String bucket = minioBucket();
+    String bucket = s3Bucket();
 
     byte[] content = "id,name\n2,Bob\n".getBytes(StandardCharsets.UTF_8);
-    MinioClient client =
-        MinioClient.builder()
-            .endpoint(minioEndpoint())
-            .credentials("minioadmin", "minioadmin123")
-            .build();
+    S3Client client = s3Client();
     client.putObject(
-        PutObjectArgs.builder().bucket(bucket).object(objectName).stream(
-                new ByteArrayInputStream(content), content.length, -1)
-            .contentType("text/csv")
-            .build());
+        PutObjectRequest.builder().bucket(bucket).key(objectName).contentType("text/csv").build(),
+        RequestBody.fromBytes(content));
 
     // 第一次扫描：注册文件
     scanner.scan();
@@ -110,5 +102,16 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     Map<String, Object> after =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
     assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
+  }
+
+  private S3Client s3Client() {
+    return S3Client.builder()
+        .endpointOverride(URI.create(s3Endpoint()))
+        .credentialsProvider(
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+        .forcePathStyle(true)
+        .region(Region.US_EAST_1)
+        .build();
   }
 }

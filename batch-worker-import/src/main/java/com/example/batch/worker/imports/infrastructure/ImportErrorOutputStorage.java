@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ImportErrorOutputStorage {
 
-  private final S3StorageProperties minioStorageProperties;
+  private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
 
   public String writeErrorOutput(
@@ -65,7 +65,7 @@ public class ImportErrorOutputStorage {
       long size = Files.size(spool);
       try (InputStream in = Files.newInputStream(spool)) {
         objectStore.put(
-            minioStorageProperties.getBucket(),
+            s3StorageProperties.getBucket(),
             objectKey,
             in,
             size,

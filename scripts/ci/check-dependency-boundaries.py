@@ -33,7 +33,8 @@ def main() -> int:
     errors: list[str] = []
 
     grandfathered_common_runtime = {
-        ("io.minio", "minio"),
+        ("software.amazon.awssdk", "s3"),
+        ("software.amazon.awssdk", "apache-client"),
         ("io.micrometer", "micrometer-tracing-bridge-otel"),
         ("io.opentelemetry", "opentelemetry-exporter-otlp"),
         ("io.opentelemetry", "opentelemetry-exporter-sender-jdk"),

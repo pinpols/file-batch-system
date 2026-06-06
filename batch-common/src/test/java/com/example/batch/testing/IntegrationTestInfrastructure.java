@@ -22,12 +22,12 @@ final class IntegrationTestInfrastructure {
       PostgreSQLContainer<?> platformPostgres,
       PostgreSQLContainer<?> businessPostgres,
       KafkaContainer kafka,
-      MinIOContainer minio,
+      ObjectStoreContainer objectStore,
       GenericContainer<?> redis) {
     registerPlatformDatabaseProperties(registry, platformPostgres);
     registerKafkaProperties(registry, kafka);
     registerBusinessDatabaseProperties(registry, businessPostgres);
-    registerMinioProperties(registry, minio);
+    registerObjectStoreProperties(registry, objectStore);
     registerRedisProperties(registry, redis);
     registerSecurityProperties(registry);
   }
@@ -58,11 +58,12 @@ final class IntegrationTestInfrastructure {
     registry.add("batch.datasource.business.schema", () -> "biz");
   }
 
-  static void registerMinioProperties(DynamicPropertyRegistry registry, MinIOContainer minio) {
-    registry.add("batch.storage.s3.endpoint", minio::getEndpoint);
-    registry.add("batch.storage.s3.access-key", minio::getAccessKey);
-    registry.add("batch.storage.s3.secret-key", minio::getSecretKey);
-    registry.add("batch.storage.s3.bucket", minio::getDefaultBucket);
+  static void registerObjectStoreProperties(
+      DynamicPropertyRegistry registry, ObjectStoreContainer objectStore) {
+    registry.add("batch.storage.s3.endpoint", objectStore::getEndpoint);
+    registry.add("batch.storage.s3.access-key", objectStore::getAccessKey);
+    registry.add("batch.storage.s3.secret-key", objectStore::getSecretKey);
+    registry.add("batch.storage.s3.bucket", objectStore::getDefaultBucket);
   }
 
   static void registerRedisProperties(DynamicPropertyRegistry registry, GenericContainer<?> redis) {

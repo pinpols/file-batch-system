@@ -4,7 +4,7 @@ import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
-import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.StorageObjectView;
+import com.example.batch.orchestrator.infrastructure.file.S3GovernanceStorage.StorageObjectView;
 import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -45,7 +45,7 @@ public class FileGovernanceScheduler {
       ArrivalGroupKey key, ArrivalGroupUpdateState state, ArrivalGroupUpdateFiles files) {}
 
   private final FileGovernanceRepository fileGovernanceRepository;
-  private final MinioGovernanceStorage minioGovernanceStorage;
+  private final S3GovernanceStorage s3GovernanceStorage;
   private final FileGovernanceProperties properties;
   private final FileGovernanceMetricsCacheService metricsCacheService;
   private final MeterRegistry meterRegistry;
@@ -190,7 +190,7 @@ public class FileGovernanceScheduler {
       return;
     }
     List<StorageObjectView> objects =
-        minioGovernanceStorage.listObjects(
+        s3GovernanceStorage.listObjects(
             properties.getReconcile().getPrefix(),
             properties.getReconcile().getBatchSize(),
             properties.getReconcile().isIncludeTemporaryObjects());
@@ -213,7 +213,7 @@ public class FileGovernanceScheduler {
         return;
       }
       if ("S3".equalsIgnoreCase(storageType) || "OSS".equalsIgnoreCase(storageType)) {
-        minioGovernanceStorage.removeObject(storagePath);
+        s3GovernanceStorage.removeObject(storagePath);
       }
       Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
       cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());

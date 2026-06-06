@@ -9,15 +9,13 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.storage.S3ObjectStore;
-import com.example.batch.testing.MinIOContainer;
+import com.example.batch.testing.ObjectStoreContainer;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStageResult;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import java.io.ByteArrayInputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +23,14 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
  * ADR-sim #382 回归:PREPROCESS 从对象存储拉取大文件(storagePath→MinIO)。
@@ -36,23 +42,34 @@ import org.junit.jupiter.api.Test;
 @Tag("integration")
 class PreprocessStepObjectLoadIntegrationTest {
 
-  private static MinIOContainer minio;
+  private static ObjectStoreContainer objectStore;
   private static String bucket;
-  private static MinioClient client;
+  private static S3Client client;
+  private static S3Presigner presigner;
 
   @BeforeAll
   static void startMinio() {
-    minio = new MinIOContainer();
-    minio.start();
-    bucket = minio.getDefaultBucket();
-    client = minio.client();
-    minio.ensureBucketExists(bucket);
+    objectStore = new ObjectStoreContainer();
+    objectStore.start();
+    bucket = objectStore.getDefaultBucket();
+    client = objectStore.client();
+    presigner =
+        S3Presigner.builder()
+            .endpointOverride(URI.create(objectStore.getEndpoint()))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(
+                        objectStore.getAccessKey(), objectStore.getSecretKey())))
+            .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+            .region(Region.US_EAST_1)
+            .build();
+    objectStore.ensureBucketExists(bucket);
   }
 
   @AfterAll
   static void stopMinio() {
-    if (minio != null) {
-      minio.stop();
+    if (objectStore != null) {
+      objectStore.stop();
     }
   }
 
@@ -69,15 +86,13 @@ class PreprocessStepObjectLoadIntegrationTest {
         security,
         mock(BatchObjectCryptoService.class),
         props,
-        new S3ObjectStore(client, props));
+        new S3ObjectStore(client, presigner, props));
   }
 
   private void putObject(String key, String content) throws Exception {
     byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
     client.putObject(
-        PutObjectArgs.builder().bucket(bucket).object(key).stream(
-                new ByteArrayInputStream(bytes), bytes.length, -1)
-            .build());
+        PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(bytes));
   }
 
   private ImportJobContext contextWithBlankRawPayload(ImportPayload payload) {

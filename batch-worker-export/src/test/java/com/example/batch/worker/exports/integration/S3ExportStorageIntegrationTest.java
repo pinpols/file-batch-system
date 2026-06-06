@@ -6,10 +6,8 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
-import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
-import java.io.InputStream;
+import com.example.batch.worker.exports.infrastructure.S3ExportStorage;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -18,19 +16,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
-/** Integration test: MinioExportStorage read/write/copy/remove against real MinIO container. */
+/** Integration test: S3ExportStorage read/write/copy/remove against real MinIO container. */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
+class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 
   @DynamicPropertySource
   static void orchestratorStub(DynamicPropertyRegistry registry) {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired private MinioExportStorage storage;
+  @Autowired private S3ExportStorage storage;
 
   @Test
   void shouldWriteAndDetectJsonObject() {
@@ -113,15 +116,21 @@ class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
 
     storage.writeJson(objectName, content);
 
-    MinioClient client =
-        MinioClient.builder()
-            .endpoint(minioEndpoint())
-            .credentials("minioadmin", "minioadmin123")
-            .build();
-    try (InputStream in =
-        client.getObject(
-            GetObjectArgs.builder().bucket(minioBucket()).object(objectName).build())) {
-      String read = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    try (S3Client client =
+        S3Client.builder()
+            .endpointOverride(URI.create(s3Endpoint()))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create("minioadmin", "minioadmin123")))
+            .forcePathStyle(true)
+            .region(Region.US_EAST_1)
+            .build()) {
+      byte[] bytes =
+          client
+              .getObjectAsBytes(
+                  GetObjectRequest.builder().bucket(s3Bucket()).key(objectName).build())
+              .asByteArray();
+      String read = new String(bytes, StandardCharsets.UTF_8);
       assertThat(read).isEqualTo(content);
     }
   }

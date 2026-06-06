@@ -27,7 +27,7 @@ class RegisterStepTest {
   private PlatformFileRuntimeRepository runtimeRepository;
   private ExportDataPluginRegistry exportDataPluginRegistry;
   private ExportDataPlugin exportDataPlugin;
-  private S3StorageProperties minioStorageProperties;
+  private S3StorageProperties s3StorageProperties;
   private RegisterStep step;
 
   @BeforeEach
@@ -35,9 +35,9 @@ class RegisterStepTest {
     runtimeRepository = mock(PlatformFileRuntimeRepository.class);
     exportDataPluginRegistry = mock(ExportDataPluginRegistry.class);
     exportDataPlugin = mock(ExportDataPlugin.class);
-    minioStorageProperties = new S3StorageProperties();
-    minioStorageProperties.setBucket("bucket-1");
-    step = new RegisterStep(runtimeRepository, exportDataPluginRegistry, minioStorageProperties);
+    s3StorageProperties = new S3StorageProperties();
+    s3StorageProperties.setBucket("bucket-1");
+    step = new RegisterStep(runtimeRepository, exportDataPluginRegistry, s3StorageProperties);
   }
 
   @Test

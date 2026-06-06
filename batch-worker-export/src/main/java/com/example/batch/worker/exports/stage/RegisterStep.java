@@ -36,15 +36,15 @@ public class RegisterStep implements ExportStageStep {
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ExportDataPluginRegistry exportDataPluginRegistry;
-  private final S3StorageProperties minioStorageProperties;
+  private final S3StorageProperties s3StorageProperties;
 
   public RegisterStep(
       PlatformFileRuntimeRepository runtimeRepository,
       ExportDataPluginRegistry exportDataPluginRegistry,
-      S3StorageProperties minioStorageProperties) {
+      S3StorageProperties s3StorageProperties) {
     this.runtimeRepository = runtimeRepository;
     this.exportDataPluginRegistry = exportDataPluginRegistry;
-    this.minioStorageProperties = minioStorageProperties;
+    this.s3StorageProperties = s3StorageProperties;
   }
 
   @Override
@@ -83,7 +83,7 @@ public class RegisterStep implements ExportStageStep {
     String fileName = String.valueOf(context.getAttributes().get("fileName"));
     String fileFormatType =
         String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
-    String bucket = minioStorageProperties.getBucket();
+    String bucket = s3StorageProperties.getBucket();
     String expectedChecksum = nullableText(context.getAttributes().get("checksumValue"));
     // 相同路径的 file_record 已存在时进行幂等复用（STORE → REGISTER 重试场景）
     if (runtimeRepository.existsFileRecordByStoragePath(

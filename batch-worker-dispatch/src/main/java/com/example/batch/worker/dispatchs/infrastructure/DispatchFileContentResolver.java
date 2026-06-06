@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchFileContentResolver {
 
-  private final S3StorageProperties minioProperties;
+  private final S3StorageProperties s3Properties;
   private final BatchObjectCryptoService cryptoService;
   // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
   private final ObjectProvider<BatchObjectStore> objectStoreProvider;
@@ -52,9 +52,9 @@ public class DispatchFileContentResolver {
       throw new IllegalStateException("MinIO not configured for remote storage");
     }
     String bucket =
-        String.valueOf(fileRecord.getOrDefault("storage_bucket", minioProperties.getBucket()));
+        String.valueOf(fileRecord.getOrDefault("storage_bucket", s3Properties.getBucket()));
     if (!Texts.hasText(bucket)) {
-      bucket = minioProperties.getBucket();
+      bucket = s3Properties.getBucket();
     }
     // M-7: 若 decryptIfNeeded 抛异常，确保对象存储流被关闭
     InputStream inputStream = objectStore.get(bucket, storagePath);

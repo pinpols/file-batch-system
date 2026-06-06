@@ -118,7 +118,7 @@ batch-worker-dispatch
 - `spring-boot-dependencies` 统一托管版本，业务模块尽量不手写第三方版本
 - PostgreSQL 迁移统一使用 `flyway-core + flyway-database-postgresql`
 - Kafka 依赖跟随 Spring Boot 管理版本，不在业务模块单独锁定 `kafka-clients`
-- MinIO Java SDK 在父工程统一声明版本
+- AWS SDK for Java v2 在父工程统一声明版本
 - 复杂 SQL 场景统一使用 `mybatis-spring-boot-starter`；**全业务模块禁止** `spring-boot-starter-data-jdbc`
 - `batch-common`、`batch-worker-core` 这类纯库模块不引入 `spring-boot-maven-plugin`
 - 所有可执行模块补齐 `spring-boot-starter-actuator`
@@ -424,7 +424,7 @@ BIN / 自定义二进制文件不作为一期标准能力。
 
 对象存储统一采用：
 
-- **MinIO Java SDK**
+- **AWS SDK for Java v2**
 
 适用场景：
 
@@ -475,7 +475,7 @@ BIN / 自定义二进制文件不作为一期标准能力。
 - PostgreSQL Driver
 - MyBatis Spring Boot Starter
 - Flyway
-- MinIO Java SDK
+- AWS SDK for Java v2
 - univocity-parsers
 - Apache POI
 - Commons Compress
@@ -519,7 +519,7 @@ BIN / 自定义二进制文件不作为一期标准能力。
 - MyBatis
 - PostgreSQL Driver
 - Kafka
-- MinIO SDK
+- AWS SDK v2
 - Apache POI
 - univocity-parsers
 
@@ -539,7 +539,7 @@ BIN / 自定义二进制文件不作为一期标准能力。
 该模块不建议直接依赖：
 
 - 文件解析与生成相关库
-- MinIO SDK
+- AWS SDK v2
 - Apache POI
 - univocity-parsers
 
@@ -590,7 +590,7 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - Apache POI
 - univocity-parsers
 - Commons Compress
-- MinIO SDK
+- AWS SDK v2
 - Jakarta Mail
 
 这些应下沉到具体业务 Worker 模块。`batch-worker-core` 应保持轻量，聚焦：
@@ -613,7 +613,7 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - Apache POI
 - Commons Compress
 - Jackson / Jackson XML
-- MinIO Java SDK
+- AWS SDK for Java v2
 - PostgreSQL Driver（通常由上层统一提供）
 
 定义类配置读取与运行日志、导入记录、状态推进**统一**建议走 MyBatis。
@@ -637,7 +637,7 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - `univocity-parsers`
 - Apache POI
 - Commons Compress
-- MinIO Java SDK
+- AWS SDK for Java v2
 - Jackson（如模板或元数据需要）
 - PostgreSQL Driver（通常由上层统一提供）
 
@@ -666,7 +666,7 @@ Trigger 的职责是**发起触发**，而不是执行文件处理。
 - `batch-worker-core`
 - `batch-common`
 - `mybatis-spring-boot-starter`
-- MinIO Java SDK
+- AWS SDK for Java v2
 - SFTP/SSH 客户端
 - Jakarta Mail（如支持邮件分发）
 - HTTP Client / Spring Web Client
@@ -796,7 +796,7 @@ spring:
 - Kafka Client
 - Quartz
 - MyBatis
-- MinIO Java SDK
+- AWS SDK for Java v2
 - Jackson
 - Commons Lang3
 - Commons IO

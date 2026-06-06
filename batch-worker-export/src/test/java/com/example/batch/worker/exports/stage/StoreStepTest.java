@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.worker.exports.domain.ExportJobContext;
-import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
+import com.example.batch.worker.exports.infrastructure.S3ExportStorage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -21,7 +21,7 @@ class StoreStepTest {
 
   @Test
   void execute_returnsInvalid_whenGeneratedFilePathMissing() {
-    MinioExportStorage storage = mock(MinioExportStorage.class);
+    S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
     StoreStep step = new StoreStep(storage, crypto);
 
@@ -37,7 +37,7 @@ class StoreStepTest {
 
   @Test
   void execute_returnsInvalid_whenGeneratedFileMissingOnDisk() {
-    MinioExportStorage storage = mock(MinioExportStorage.class);
+    S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
     StoreStep step = new StoreStep(storage, crypto);
 
@@ -54,7 +54,7 @@ class StoreStepTest {
 
   @Test
   void execute_uploadsAndPromotes_whenDigestMatches_andDeletesLocalFile() throws Exception {
-    MinioExportStorage storage = mock(MinioExportStorage.class);
+    S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
     when(crypto.shouldEncrypt(any())).thenReturn(false);
 
