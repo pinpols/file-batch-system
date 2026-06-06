@@ -31,9 +31,12 @@
         approval_id, request_payload::text as request_payload_text, trace_id, created_at
     </sql>
 
+    <!-- BatchDayOperationAuditEntity 是不可变 record(无 setter):不能用 useGeneratedKeys 回填 id,
+         否则 MyBatis 抛 "No setter found for keyProperty 'id'",使每次 batch-day operate
+         (freeze/release/skip/reopen/close)整体 500。调用方 BatchDayOperationService#insertOperationAudit
+         也不使用返回的自增 id,直接插入即可。 -->
     <insert id="insert"
-            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity"
-            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+            parameterType="com.example.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity">
         insert into batch.batch_day_operation_audit (
             tenant_id, calendar_code, biz_date, operation_type,
             from_status, to_status, from_frozen, to_frozen,
