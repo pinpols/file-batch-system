@@ -71,8 +71,8 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   private static final Set<String> ENDPOINT_PARAM_KEYS =
       Set.of("endpointUrl", "callbackUrl", "channelEndpoint", "dispatchTarget");
 
-  /** MinIO bucket 命名规则（DNS-style：3-63 字符，小写字母 / 数字 / `-`，不能 `-` 起止）。 */
-  private static final Pattern MINIO_BUCKET_PATTERN =
+  /** S3 bucket 命名规则（DNS-style：3-63 字符，小写字母 / 数字 / `-`，不能 `-` 起止）。 */
+  private static final Pattern S3_BUCKET_PATTERN =
       Pattern.compile("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$");
 
   private final OrchestratorConfigCacheService configCacheService;
@@ -339,17 +339,17 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     Map<String, Object> params = request.params() == null ? Map.of() : request.params();
 
     int sqlProbed = probeSqlExplain(params, findings);
-    int minioProbed = probeMinioBucket(params, findings);
+    int s3Probed = probeS3Bucket(params, findings);
     int endpointProbed = probeEndpointReachability(params, findings);
     summary.put("l3SqlProbed", sqlProbed);
-    summary.put("l3MinioProbed", minioProbed);
+    summary.put("l3S3Probed", s3Probed);
     summary.put("l3EndpointProbed", endpointProbed);
-    if (sqlProbed + minioProbed + endpointProbed == 0) {
+    if (sqlProbed + s3Probed + endpointProbed == 0) {
       findings.add(
           DryRunFinding.pass(
               "EXEC_PLAN_NO_PROBES_TRIGGERED",
               SCOPE_EXECUTION,
-              "no SQL / MinIO / endpoint params to probe; L3 reduces to L2 result"));
+              "no SQL / S3 / endpoint params to probe; L3 reduces to L2 result"));
     }
     return DryRunPlanResult.of(DryRunLevel.EXECUTION_PLAN, findings, summary);
   }
@@ -408,27 +408,27 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   }
 
   /**
-   * L3-2: MinIO bucket 探测。
+   * L3-2: S3 bucket 探测。
    *
    * <ul>
-   *   <li>若 params.minioBucket 缺失，回退到 S3StorageProperties.bucket 默认；
+   *   <li>若 params.s3Bucket 缺失，回退到 S3StorageProperties.bucket 默认；
    *   <li>校验 bucket 命名合法（DNS-style）；
-   *   <li>若 S3Client 可用，调用 bucketExists；不可用降级为只校验命名规则。
+   *   <li>若 S3Client 可用，调用 headBucket；不可用降级为只校验命名规则。
    * </ul>
    */
-  private int probeMinioBucket(Map<String, Object> params, List<DryRunFinding> findings) {
-    String bucket = stringValue(params, "minioBucket");
+  private int probeS3Bucket(Map<String, Object> params, List<DryRunFinding> findings) {
+    String bucket = stringValue(params, "s3Bucket");
     if (!Texts.hasText(bucket)) {
       S3StorageProperties props = s3PropertiesProvider.getIfAvailable();
       bucket = props == null ? null : props.getBucket();
     }
     if (!Texts.hasText(bucket)) return 0;
-    if (!MINIO_BUCKET_PATTERN.matcher(bucket).matches()) {
+    if (!S3_BUCKET_PATTERN.matcher(bucket).matches()) {
       findings.add(
           DryRunFinding.error(
-              "EXEC_MINIO_BUCKET_INVALID",
+              "EXEC_S3_BUCKET_INVALID",
               SCOPE_EXECUTION,
-              "minio bucket name does not match DNS-style rule: " + bucket,
+              "s3 bucket name does not match DNS-style rule: " + bucket,
               bucket));
       return 1;
     }
@@ -436,7 +436,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     if (client == null) {
       findings.add(
           DryRunFinding.warn(
-              "EXEC_MINIO_CLIENT_UNAVAILABLE",
+              "EXEC_S3_CLIENT_UNAVAILABLE",
               SCOPE_EXECUTION,
               "S3Client bean unavailable; bucket name passed regex only",
               bucket));
@@ -453,21 +453,21 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       if (exists) {
         findings.add(
             DryRunFinding.pass(
-                "EXEC_MINIO_BUCKET_OK", SCOPE_EXECUTION, "minio bucket exists: " + bucket));
+                "EXEC_S3_BUCKET_OK", SCOPE_EXECUTION, "s3 bucket exists: " + bucket));
       } else {
         findings.add(
             DryRunFinding.error(
-                "EXEC_MINIO_BUCKET_MISSING",
+                "EXEC_S3_BUCKET_MISSING",
                 SCOPE_EXECUTION,
-                "minio bucket not found: " + bucket,
+                "s3 bucket not found: " + bucket,
                 bucket));
       }
     } catch (Exception ex) {
       findings.add(
           DryRunFinding.warn(
-              "EXEC_MINIO_PROBE_FAILED",
+              "EXEC_S3_PROBE_FAILED",
               SCOPE_EXECUTION,
-              "minio probe failed: " + ex.getMessage(),
+              "s3 probe failed: " + ex.getMessage(),
               bucket));
     }
     return 1;

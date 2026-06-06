@@ -59,7 +59,7 @@ public class DefaultConsoleFileDownloadApplicationService
   private final FileErrorRecordMapper fileErrorRecordMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final S3StorageProperties s3StorageProperties;
-  // R2-P0-5：复用 Spring 管理的对象存储 bean（其内部 S3Client 共享 OkHttp 连接池 + 后台线程）。
+  // R2-P0-5：复用 Spring 管理的对象存储 bean（其内部 S3Client 共享 Apache HttpClient 连接池 + 后台线程）。
   // 之前每次 download() 都 new 一个 S3Client，各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
   private final BatchObjectStore objectStore;
   private final BatchObjectCryptoService cryptoService;
