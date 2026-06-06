@@ -5,6 +5,7 @@ import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentReso
 import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -24,24 +25,16 @@ public class OssDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private final DispatchFileContentResolver contentResolver;
   private final MinioStorageProperties minioStorageProperties;
+  // 复用 MinioAutoConfiguration 装配的中心 client(带 OkHttp 连接/读/写超时 + 连接池);
+  // ObjectProvider 惰性取,避免硬依赖——未配 MinIO 时保持 null(同历史行为)。
+  private final ObjectProvider<MinioClient> minioClientProvider;
   private MinioClient minioClient;
 
   @PostConstruct
   void init() {
-    if (minioStorageProperties != null
-        && minioStorageProperties.getEndpoint() != null
-        && !minioStorageProperties.getEndpoint().isBlank()
-        && minioStorageProperties.getAccessKey() != null
-        && !minioStorageProperties.getAccessKey().isBlank()
-        && minioStorageProperties.getSecretKey() != null
-        && !minioStorageProperties.getSecretKey().isBlank()) {
-      this.minioClient =
-          MinioClient.builder()
-              .endpoint(minioStorageProperties.getEndpoint())
-              .credentials(
-                  minioStorageProperties.getAccessKey(), minioStorageProperties.getSecretKey())
-              .build();
-    }
+    // 中心 client 仅在 MinIO 配置有效时由 MinioAutoConfiguration 建出;未配则 getIfAvailable() 返回 null
+    // (保持历史"未配置 → minioClient 为 null"语义,下游按 null 判定降级)。
+    this.minioClient = minioClientProvider.getIfAvailable();
   }
 
   @Override

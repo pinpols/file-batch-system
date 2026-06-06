@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /** 解析分发文件字节：支持本地路径或对象存储（MinIO/S3 兼容）。 */
@@ -21,19 +22,15 @@ public class DispatchFileContentResolver {
 
   private final MinioStorageProperties minioProperties;
   private final BatchObjectCryptoService cryptoService;
+  // 复用中心 client(带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
+  private final ObjectProvider<MinioClient> minioClientProvider;
   private MinioClient minioClient;
 
   @PostConstruct
   void init() {
-    if (Texts.hasText(minioProperties.getEndpoint())
-        && Texts.hasText(minioProperties.getAccessKey())
-        && Texts.hasText(minioProperties.getSecretKey())) {
-      this.minioClient =
-          MinioClient.builder()
-              .endpoint(minioProperties.getEndpoint())
-              .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
-              .build();
-    }
+    // 中心 client 仅在 MinIO 配置有效时由 MinioAutoConfiguration 建出;未配则 null
+    // (LOCAL 路径无需 MinIO;远程路径在 openInputStream 里按 null 抛"MinIO not configured")。
+    this.minioClient = minioClientProvider.getIfAvailable();
   }
 
   /** 打开文件内容流（调用方负责关闭）；大文件建议使用 {@link #streamToConsumer}。 */
