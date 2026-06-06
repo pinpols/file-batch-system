@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
-import io.minio.MinioClient;
+import com.example.batch.common.storage.BatchObjectStore;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,14 +28,14 @@ class DispatchFileContentResolverPathTest {
 
   @Mock private BatchObjectCryptoService cryptoService;
 
-  @Mock private ObjectProvider<MinioClient> minioClientProvider;
+  @Mock private ObjectProvider<BatchObjectStore> objectStoreProvider;
 
   private DispatchFileContentResolver resolver;
 
   @BeforeEach
   void setUp() throws Exception {
-    // 未配 MinIO:provider.getIfAvailable() 默认返回 null → minioClient 为 null(测 LOCAL 路径)。
-    resolver = new DispatchFileContentResolver(minioProperties, cryptoService, minioClientProvider);
+    // 未配 MinIO:provider.getIfAvailable() 默认返回 null → objectStore 为 null(测 LOCAL 路径)。
+    resolver = new DispatchFileContentResolver(minioProperties, cryptoService, objectStoreProvider);
     var init = DispatchFileContentResolver.class.getDeclaredMethod("init");
     init.setAccessible(true);
     init.invoke(resolver);

@@ -1,14 +1,16 @@
 package com.example.batch.worker.imports.runtime;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.S3StorageProperties;
+import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
-import io.minio.MinioClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +22,7 @@ class ImportIngressScannerTest {
 
   @Mock private PlatformFileRuntimeRepository runtimeRepository;
 
-  @Mock private MinioClient minioClient;
+  @Mock private BatchObjectStore objectStore;
 
   private ImportWorkerConfiguration workerConfiguration;
   private ImportScannerProperties scannerProperties;
@@ -57,14 +59,17 @@ class ImportIngressScannerTest {
             workerConfiguration,
             scannerProperties,
             minioStorageProperties,
-            minioClient);
+            objectStore);
   }
 
   @Test
-  void scan_skipsWhenBucketEnsureFails() throws Exception {
-    when(minioClient.bucketExists(any())).thenThrow(new RuntimeException("minio unavailable"));
+  void scan_propagatesAndSkipsRegistration_whenListFails() {
+    when(objectStore.list(any(), any(), any(), anyInt()))
+        .thenThrow(new RuntimeException("storage unavailable"));
 
-    scanner.scan();
+    assertThatThrownBy(() -> scanner.scan())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("failed to scan minio ingress objects");
 
     verifyNoInteractions(runtimeRepository);
   }

@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -16,9 +17,6 @@ import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
-import io.minio.StatObjectArgs;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -71,19 +69,19 @@ public class PreprocessStep implements ImportStageStep {
   // ADR-sim:大文件对象自动加载——内联 content 受 Kafka 消息体上限(~1MB)限制,
   // 大文件须把对象路径下发、由 worker 直接从 MinIO 拉取(payload 只带 path,不带内容)。
   private final S3StorageProperties minioStorageProperties;
-  private final MinioClient minioClient;
+  private final BatchObjectStore objectStore;
 
   public PreprocessStep(
       PlatformFileRuntimeRepository runtimeRepository,
       BatchSecurityProperties batchSecurityProperties,
       BatchObjectCryptoService cryptoService,
       S3StorageProperties minioStorageProperties,
-      MinioClient minioClient) {
+      BatchObjectStore objectStore) {
     this.runtimeRepository = runtimeRepository;
     this.batchSecurityProperties = batchSecurityProperties;
     this.cryptoService = cryptoService;
     this.minioStorageProperties = minioStorageProperties;
-    this.minioClient = minioClient;
+    this.objectStore = objectStore;
   }
 
   @Override
@@ -281,8 +279,7 @@ public class PreprocessStep implements ImportStageStep {
             ? importPayload.storageBucket()
             : minioStorageProperties.getBucket();
     String object = importPayload.storagePath();
-    try (InputStream in =
-        minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(object).build())) {
+    try (InputStream in = objectStore.get(bucket, object)) {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       byte[] buf = new byte[64 * 1024];
       long total = 0;
@@ -349,10 +346,7 @@ public class PreprocessStep implements ImportStageStep {
             ? importPayload.storageBucket()
             : minioStorageProperties.getBucket();
     try {
-      return minioClient
-          .statObject(
-              StatObjectArgs.builder().bucket(bucket).object(importPayload.storagePath()).build())
-          .size();
+      return objectStore.statSize(bucket, importPayload.storagePath());
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:statObject", ex);
       return -1L;
@@ -386,8 +380,7 @@ public class PreprocessStep implements ImportStageStep {
     try {
       spool = Files.createTempFile("batch-preprocess-obj-", ".raw");
       long bytes;
-      try (InputStream in =
-          minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(object).build())) {
+      try (InputStream in = objectStore.get(bucket, object)) {
         bytes = Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
       }
       Charset charset = resolveCharset(importPayload, templateConfigObject);
@@ -528,9 +521,7 @@ public class PreprocessStep implements ImportStageStep {
     try {
       spool = Files.createTempFile("batch-preprocess-obj-p" + partitionNo + "-", ".raw");
       long keptBytes;
-      try (InputStream in =
-              minioClient.getObject(
-                  GetObjectArgs.builder().bucket(bucket).object(object).offset(rawStart).build());
+      try (InputStream in = objectStore.getFrom(bucket, object, rawStart);
           OutputStream out =
               Files.newOutputStream(
                   spool,
