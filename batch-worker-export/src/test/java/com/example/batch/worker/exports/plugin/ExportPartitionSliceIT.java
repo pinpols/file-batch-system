@@ -216,6 +216,9 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
       throws Exception {
     Set<Object> ids = new HashSet<>();
     Object cursor = null;
+    // 可变 exportSnapshot：与生产 GenerateStep 一致（planner 会把 keyset 边界缓存写入），
+    // 不能用不可变 Map.of()，否则 planner 的 snap.put 抛 UnsupportedOperationException。
+    Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
 
     while (true) {
       ExportDataContext ctx =
@@ -225,7 +228,7 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
               BATCH_NO,
               "TPL",
               templateConfig,
-              Map.of(),
+              snapshot,
               partitionNo,
               PARTITION_COUNT);
 
