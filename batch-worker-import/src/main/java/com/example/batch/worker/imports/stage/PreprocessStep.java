@@ -161,10 +161,7 @@ public class PreprocessStep implements ImportStageStep {
               importPayload,
               templateConfig,
               templateConfigObject,
-              directCharset,
-              directStreamObjectBytes,
-              partitionNo,
-              partitionCount);
+              new RangeSlice(directCharset, directStreamObjectBytes, partitionNo, partitionCount));
         }
         return streamObjectToSpoolAndReturn(
             context, importPayload, templateConfig, templateConfigObject);
@@ -505,15 +502,20 @@ public class PreprocessStep implements ImportStageStep {
    * spool,置 {@link PipelineRuntimeKeys#PARTITION_PRESLICED} 让 PARSE 跳过 line-mod。 失败时清理 spool
    * 并**回退整份流式直载**(优化绝不导致导入失败)。
    */
+  /** range-slice 入参打包(避免 streamObjectRangeToSpool 超 6 参,PMD ExcessiveParameterList)。 */
+  private record RangeSlice(
+      Charset charset, long objectBytes, int partitionNo, int partitionCount) {}
+
   private ImportStageResult streamObjectRangeToSpool(
       ImportJobContext context,
       ImportPayload importPayload,
       Map<String, Object> templateConfig,
       Object templateConfigObject,
-      Charset charset,
-      long objectBytes,
-      int partitionNo,
-      int partitionCount) {
+      RangeSlice slice) {
+    Charset charset = slice.charset();
+    long objectBytes = slice.objectBytes();
+    int partitionNo = slice.partitionNo();
+    int partitionCount = slice.partitionCount();
     String bucket =
         Texts.hasText(importPayload.storageBucket())
             ? importPayload.storageBucket()

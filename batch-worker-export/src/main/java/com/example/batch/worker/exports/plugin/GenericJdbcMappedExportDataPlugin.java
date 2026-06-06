@@ -107,10 +107,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
     PagedQuery pq =
         buildDetailQuery(
-            cols.toString(),
-            fq,
-            fk,
-            ob,
+            new DetailSql(cols.toString(), fq, fk, ob),
             batchId,
             cursor,
             pageSize,
@@ -150,16 +147,15 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   /** 构造明细分页 SQL + 顺序参数。partitionCount>1 时叠加 hashtext 分片谓词。 */
   static record PagedQuery(String sql, Object[] args) {}
 
+  /** 明细 SQL 片段打包(避免 buildDetailQuery 超 6 参,PMD ExcessiveParameterList)。 */
+  static record DetailSql(String cols, String fq, String fk, String ob) {}
+
   static PagedQuery buildDetailQuery(
-      String cols,
-      String fq,
-      String fk,
-      String ob,
-      Long batchId,
-      Object cursor,
-      int pageSize,
-      int partitionCount,
-      int partitionNo) {
+      DetailSql q, Long batchId, Object cursor, int pageSize, int partitionCount, int partitionNo) {
+    String cols = q.cols();
+    String fq = q.fq();
+    String fk = q.fk();
+    String ob = q.ob();
     StringBuilder sql =
         new StringBuilder("SELECT ")
             .append(cols)
