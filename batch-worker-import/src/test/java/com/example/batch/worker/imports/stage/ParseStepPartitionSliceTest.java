@@ -120,6 +120,22 @@ class ParseStepPartitionSliceTest {
   }
 
   @Test
+  void shouldKeepAllRowsWhenPreslicedByPreprocess() {
+    // range-slice 优化:PREPROCESS 已只下本片字节并置 PARTITION_PRESLICED;
+    // ParseStep 必须跳过 line-mod(否则二次切分丢数据),staging 全量即本片。
+    String json = buildJsonArray(9);
+    ImportJobContext context = buildContext(json, /*partitionNo*/ 2, /*partitionCount*/ 3, true);
+    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
+
+    ImportStageResult result = parseStep.execute(context);
+
+    assertThat(result.success()).isTrue();
+    // 不再按 lineNo%3 过滤 → 9 行全保留(本片内容由 PREPROCESS 的 range 切分决定,这里输入即全量)
+    assertThat(context.getAttributes().get("totalCount")).isEqualTo(9L);
+    assertNdjsonLineCount(context, 9);
+  }
+
+  @Test
   void shouldKeepAllRowsWhenPartitionNoOutOfRange() {
     String json = buildJsonArray(5);
     // partitionNo=4 超过 count=3 → 警告 + 直通
