@@ -1,7 +1,7 @@
 package com.example.batch.console.domain.file.infrastructure;
 
 import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.service.BatchObjectCryptoService;
@@ -58,7 +58,7 @@ public class DefaultConsoleFileDownloadApplicationService
   private final FileRecordMapper fileRecordMapper;
   private final FileErrorRecordMapper fileErrorRecordMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
-  private final MinioStorageProperties minioStorageProperties;
+  private final S3StorageProperties minioStorageProperties;
   // R2-P0-5：注入 Spring 管理的 MinioClient bean（MinioAutoConfiguration 提供），
   // 复用其内部 OkHttp 连接池 + 后台线程。之前每次 download() 都 new 一个 MinioClient，
   // 各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。

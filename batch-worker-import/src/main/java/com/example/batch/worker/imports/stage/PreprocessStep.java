@@ -1,7 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.EncodingUtils;
@@ -70,14 +70,14 @@ public class PreprocessStep implements ImportStageStep {
   private final BatchObjectCryptoService cryptoService;
   // ADR-sim:大文件对象自动加载——内联 content 受 Kafka 消息体上限(~1MB)限制,
   // 大文件须把对象路径下发、由 worker 直接从 MinIO 拉取(payload 只带 path,不带内容)。
-  private final MinioStorageProperties minioStorageProperties;
+  private final S3StorageProperties minioStorageProperties;
   private final MinioClient minioClient;
 
   public PreprocessStep(
       PlatformFileRuntimeRepository runtimeRepository,
       BatchSecurityProperties batchSecurityProperties,
       BatchObjectCryptoService cryptoService,
-      MinioStorageProperties minioStorageProperties,
+      S3StorageProperties minioStorageProperties,
       MinioClient minioClient) {
     this.runtimeRepository = runtimeRepository;
     this.batchSecurityProperties = batchSecurityProperties;

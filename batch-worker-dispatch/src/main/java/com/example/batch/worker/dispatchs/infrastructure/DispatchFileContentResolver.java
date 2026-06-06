@@ -1,6 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.Texts;
 import io.minio.GetObjectArgs;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchFileContentResolver {
 
-  private final MinioStorageProperties minioProperties;
+  private final S3StorageProperties minioProperties;
   private final BatchObjectCryptoService cryptoService;
   // 复用中心 client(带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
   private final ObjectProvider<MinioClient> minioClientProvider;

@@ -59,10 +59,10 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerMinioProperties(DynamicPropertyRegistry registry, MinIOContainer minio) {
-    registry.add("batch.storage.minio.endpoint", minio::getEndpoint);
-    registry.add("batch.storage.minio.access-key", minio::getAccessKey);
-    registry.add("batch.storage.minio.secret-key", minio::getSecretKey);
-    registry.add("batch.storage.minio.bucket", minio::getDefaultBucket);
+    registry.add("batch.storage.s3.endpoint", minio::getEndpoint);
+    registry.add("batch.storage.s3.access-key", minio::getAccessKey);
+    registry.add("batch.storage.s3.secret-key", minio::getSecretKey);
+    registry.add("batch.storage.s3.bucket", minio::getDefaultBucket);
   }
 
   static void registerRedisProperties(DynamicPropertyRegistry registry, GenericContainer<?> redis) {

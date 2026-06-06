@@ -1,6 +1,6 @@
 package com.example.batch.worker.imports.infrastructure;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.JsonUtils;
@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ImportErrorOutputStorage {
 
-  private final MinioStorageProperties minioStorageProperties;
+  private final S3StorageProperties minioStorageProperties;
   private final MinioClient minioClient;
 
   public String writeErrorOutput(

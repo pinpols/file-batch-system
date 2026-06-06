@@ -77,7 +77,7 @@ tenantIsolation:
       enabled: true
       stringData:
         BATCH_SFTP_PASSWORD: "..."        # 覆盖共享 Secret 同名 key
-        BATCH_MINIO_SECRET_KEY: "..."
+        BATCH_S3_SECRET_KEY: "..."
         BATCH_BUSINESS_DB_PASSWORD: "..." # 若该租户用专属业务库账号
     networkPolicy:
       enabled: true

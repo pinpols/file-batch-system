@@ -1,7 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.SecretMasking;
@@ -57,7 +57,7 @@ public class DispatchChannelHealthService {
   private final DispatchChannelHealthRepository repository;
   private final DispatchChannelHealthProperties properties;
   private final DispatchCircuitBreakerProperties circuitBreakerProperties;
-  private final MinioStorageProperties minioStorageProperties;
+  private final S3StorageProperties minioStorageProperties;
   private final BatchSecurityProperties securityProperties;
   private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;

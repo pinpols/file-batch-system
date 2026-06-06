@@ -10,7 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -27,7 +27,7 @@ class RegisterStepTest {
   private PlatformFileRuntimeRepository runtimeRepository;
   private ExportDataPluginRegistry exportDataPluginRegistry;
   private ExportDataPlugin exportDataPlugin;
-  private MinioStorageProperties minioStorageProperties;
+  private S3StorageProperties minioStorageProperties;
   private RegisterStep step;
 
   @BeforeEach
@@ -35,7 +35,7 @@ class RegisterStepTest {
     runtimeRepository = mock(PlatformFileRuntimeRepository.class);
     exportDataPluginRegistry = mock(ExportDataPluginRegistry.class);
     exportDataPlugin = mock(ExportDataPlugin.class);
-    minioStorageProperties = new MinioStorageProperties();
+    minioStorageProperties = new S3StorageProperties();
     minioStorageProperties.setBucket("bucket-1");
     step = new RegisterStep(runtimeRepository, exportDataPluginRegistry, minioStorageProperties);
   }

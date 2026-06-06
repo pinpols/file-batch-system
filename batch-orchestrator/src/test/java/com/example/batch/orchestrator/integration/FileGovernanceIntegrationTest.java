@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.config.BatchClockConfig;
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
@@ -107,7 +107,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @EnableAutoConfiguration
   @ImportAutoConfiguration(RestClientAutoConfiguration.class)
   @EnableScheduling
-  @EnableConfigurationProperties({FileGovernanceProperties.class, MinioStorageProperties.class})
+  @EnableConfigurationProperties({FileGovernanceProperties.class, S3StorageProperties.class})
   @MapperScan("com.example.batch.orchestrator.mapper")
   @Import({
     BatchClockConfig.class,
@@ -120,7 +120,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   static class TestApplication {
 
     @Bean
-    MinioClient minioClient(MinioStorageProperties props) {
+    MinioClient minioClient(S3StorageProperties props) {
       return MinioClient.builder()
           .endpoint(props.getEndpoint())
           .credentials(props.getAccessKey(), props.getSecretKey())

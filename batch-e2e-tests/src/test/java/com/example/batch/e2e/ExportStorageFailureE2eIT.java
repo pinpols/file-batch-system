@@ -62,7 +62,7 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
 
   @DynamicPropertySource
   static void useUnreachableMinio(DynamicPropertyRegistry registry) {
-    registry.add("batch.storage.minio.endpoint", () -> "http://127.0.0.1:19987");
+    registry.add("batch.storage.s3.endpoint", () -> "http://127.0.0.1:19987");
   }
 
   @Autowired private LaunchService launchService;

@@ -3,7 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import io.minio.MinioClient;
 import java.io.InputStream;
@@ -24,7 +24,7 @@ class DispatchFileContentResolverPathTest {
 
   @TempDir Path tempDir;
 
-  @Mock private MinioStorageProperties minioProperties;
+  @Mock private S3StorageProperties minioProperties;
 
   @Mock private BatchObjectCryptoService cryptoService;
 

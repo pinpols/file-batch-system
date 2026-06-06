@@ -650,7 +650,7 @@ tenantWorkerPools: []
 #       enabled: true
 #       stringData:
 #         BATCH_SFTP_PASSWORD: "..."        # 覆盖共享 Secret 同名 key
-#         BATCH_MINIO_SECRET_KEY: "..."
+#         BATCH_S3_SECRET_KEY: "..."
 #     networkPolicy:
 #       enabled: true
 #       extraEgress: []                     # 集群外 RDS/Kafka 时补 ipBlock

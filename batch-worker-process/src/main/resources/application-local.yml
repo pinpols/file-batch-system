@@ -71,7 +71,7 @@ batch:
       password: batch_pass_123
       schema: biz
   storage:
-    minio:
+    s3:
       # PROCESS worker 不直接读写 MinIO,但 batch-common MinioAutoConfiguration 仍会装配
       # MinioClient bean 并要求 access/secret 非空,这里给本地占位值即可。
       endpoint: http://localhost:19000

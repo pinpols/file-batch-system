@@ -43,7 +43,7 @@
 
 - **路由**：`DispatchChannelGateway`（熔断 + 健康短路 + Micrometer）按 **`channel_type`**：`API` / `API_PUSH` → HTTP；`LOCAL` → 本地目录；**`NAS`** → 共享目录写入；**`OSS`** → MinIO / S3 兼容对象存储；**`SFTP`** → JSch；**`EMAIL`** → SMTP。
 - **渠道配置**：表字段 + **`config_json`** 合并（**`ChannelConfigMerge`**），密钥与 `sftp_*` / `smtp_*` / `receipt_poll_url` 等放在 **`config_json`**；`channel_type` / `channel_code` 等治理保留键不允许被 JSON 覆盖。
-- **NAS / OSS 配置**：`nas_remote_directory` / `nas_remote_file_name` 用于共享目录落盘；`oss_bucket` / `oss_object_prefix` 用于对象存储落盘，兼容 `batch.storage.minio` 默认连接信息。
+- **NAS / OSS 配置**：`nas_remote_directory` / `nas_remote_file_name` 用于共享目录落盘；`oss_bucket` / `oss_object_prefix` 用于对象存储落盘，兼容 `batch.storage.s3` 默认连接信息。
 - **异步回执**：**`DispatchReceiptPollScheduler`** GET **`receipt_poll_url?externalRequestId=`**（`SENT`+`PENDING` 行）。
 - **健康治理**：`DispatchChannelHealthService` 维护 `batch.file_channel_health`，对 NAS/OSS 做主动探测和失败退避，网关在 dispatch 前会做健康短路。
 - **扩展**：替换 NAS/OSS = 新 `DispatchChannelAdapter` 独占类型。

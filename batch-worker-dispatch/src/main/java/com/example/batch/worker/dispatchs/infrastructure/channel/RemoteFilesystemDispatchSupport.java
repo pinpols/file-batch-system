@@ -1,6 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.security.DnsResolveGuard;
@@ -213,7 +213,7 @@ final class RemoteFilesystemDispatchSupport {
   static DispatchResult dispatchOss(
       DispatchCommand command,
       DispatchFileContentResolver contentResolver,
-      MinioStorageProperties minioProperties,
+      S3StorageProperties minioProperties,
       MinioClient minioClient) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
@@ -294,7 +294,7 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeOss(
       Map<String, Object> channelConfig,
-      MinioStorageProperties minioProperties,
+      S3StorageProperties minioProperties,
       MinioClient minioClient) {
     try {
       MinioClient client = minioClient(minioProperties, minioClient);
@@ -411,7 +411,7 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeChannel(
       Map<String, Object> channelConfig,
-      MinioStorageProperties minioProperties,
+      S3StorageProperties minioProperties,
       MinioClient minioClient,
       boolean dnsGuardEnabled) {
     String channelType =
@@ -555,8 +555,7 @@ final class RemoteFilesystemDispatchSupport {
     return a != null ? a : b;
   }
 
-  private static MinioClient minioClient(
-      MinioStorageProperties properties, MinioClient minioClient) {
+  private static MinioClient minioClient(S3StorageProperties properties, MinioClient minioClient) {
     if (minioClient != null) {
       return minioClient;
     }

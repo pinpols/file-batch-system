@@ -1,6 +1,6 @@
 package com.example.batch.worker.exports.infrastructure;
 
-import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.MinioBucketSupport;
@@ -32,7 +32,7 @@ public class MinioExportStorage {
   // byte[] 上传的最大允许大小（10 MB）；超过此阈值应使用 writeObject(Path, ...) 流式上传
   private static final int MAX_BYTE_UPLOAD_SIZE = 10 * 1024 * 1024;
 
-  private final MinioStorageProperties properties;
+  private final S3StorageProperties properties;
   private final MinioClient minioClient;
 
   /**
@@ -214,7 +214,11 @@ public class MinioExportStorage {
 
   private boolean ensureBucket() {
     return MinioBucketSupport.ensureBucket(
-        minioClient, properties.getBucket(), log, "export storage");
+        minioClient,
+        properties.getBucket(),
+        log,
+        "export storage",
+        properties.isAutoCreateBucket());
   }
 
   private void ensureBucketOrThrow() {
