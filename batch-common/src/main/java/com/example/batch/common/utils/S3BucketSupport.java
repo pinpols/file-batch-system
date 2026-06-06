@@ -9,6 +9,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 /**
  * S3 Bucket 自动初始化辅助工具类。 {@code ensureBucket} 在 Bucket 不存在时自动创建，成功返回 {@code true}，失败返回 {@code false}
@@ -39,6 +40,13 @@ public final class S3BucketSupport {
         s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
         exists = true;
       } catch (NoSuchBucketException e) {
+        exists = false;
+      } catch (S3Exception e) {
+        // HEAD 无 body，部分后端把 bucket 不存在表现为通用 S3Exception(404) 而非类型化
+        // NoSuchBucketException；按 404 判定为不存在，其余状态码（如 403 无权限）继续上抛。
+        if (e.statusCode() != 404) {
+          throw e;
+        }
         exists = false;
       }
       if (!exists) {

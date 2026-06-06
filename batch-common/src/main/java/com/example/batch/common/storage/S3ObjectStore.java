@@ -127,6 +127,7 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
     List<ObjectSummary> summaries = new ArrayList<>();
+    boolean truncated;
     try {
       ListObjectsV2Response resp =
           s3Client.listObjectsV2(
@@ -137,19 +138,16 @@ public class S3ObjectStore implements BatchObjectStore {
                   .maxKeys(maxKeys)
                   .build());
       for (S3Object item : resp.contents()) {
-        if (summaries.size() >= maxKeys) {
-          break;
-        }
         summaries.add(new ObjectSummary(item.key(), item.size(), item.lastModified(), item.eTag()));
       }
+      truncated = Boolean.TRUE.equals(resp.isTruncated());
     } catch (Exception ex) {
       throw mapException("list", bucket, prefix, ex);
     }
-    // 收满 maxKeys → 可能还有下一页，nextMarker 取最后一个 key；否则末页。
+    // 接口用 startAfter(key) 翻页而非 continuationToken，故以最后一个 key 作 nextMarker；
+    // 仅当 S3 标记本页截断（isTruncated）时才给 marker，避免末页恰为整数倍时多一次空查询。
     String nextMarker =
-        summaries.size() >= maxKeys && !summaries.isEmpty()
-            ? summaries.get(summaries.size() - 1).key()
-            : null;
+        truncated && !summaries.isEmpty() ? summaries.get(summaries.size() - 1).key() : null;
     return new ObjectListing(List.copyOf(summaries), nextMarker);
   }
 
@@ -175,6 +173,11 @@ public class S3ObjectStore implements BatchObjectStore {
     if (ex instanceof S3Exception s3) {
       String code = s3.awsErrorDetails() == null ? "" : s3.awsErrorDetails().errorCode();
       String message = message(operation, bucket, key);
+      // HEAD 操作（headObject/headBucket）响应无 body，SDK 拿不到 errorCode；只能靠 statusCode 或
+      // 类型化的 NoSuchKeyException 识别"对象不存在"。否则 statSize/getFrom 对缺失对象会退化成通用异常。
+      if (ex instanceof NoSuchKeyException || s3.statusCode() == 404) {
+        return new ObjectNotFoundException(message, ex);
+      }
       return switch (code == null ? "" : code) {
         case "NoSuchKey", "NoSuchObject" -> new ObjectNotFoundException(message, ex);
         case "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch" ->

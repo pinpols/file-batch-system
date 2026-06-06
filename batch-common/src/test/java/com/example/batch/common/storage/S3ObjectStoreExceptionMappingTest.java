@@ -43,6 +43,21 @@ class S3ObjectStoreExceptionMappingTest {
   }
 
   @Test
+  void shouldMapEmptyErrorCode404ToObjectNotFound() {
+    // 真实 HEAD 响应无 body → SDK 拿不到 errorCode，仅有 statusCode 404；必须仍判定为对象不存在。
+    S3Exception ex =
+        (S3Exception)
+            S3Exception.builder()
+                .awsErrorDetails(AwsErrorDetails.builder().errorCode("").build())
+                .message("Not Found")
+                .statusCode(404)
+                .build();
+    when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(ex);
+    assertThatThrownBy(() -> store.statSize("bucket", "key"))
+        .isInstanceOf(ObjectNotFoundException.class);
+  }
+
+  @Test
   void shouldMapAccessDeniedToAccessException() {
     stubHeadThrows("AccessDenied");
     assertThatThrownBy(() -> store.statSize("bucket", "key"))

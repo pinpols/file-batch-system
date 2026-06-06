@@ -22,7 +22,7 @@ public final class ObjectStoreContainer extends GenericContainer<ObjectStoreCont
   private static final int MINIO_API_PORT = 9000;
   private static final int MINIO_CONSOLE_PORT = 9001;
   private static final DockerImageName IMAGE =
-      DockerImageName.parse("objectStore/objectStore:RELEASE.2025-09-07T16-13-09Z");
+      DockerImageName.parse("minio/minio:RELEASE.2025-09-07T16-13-09Z");
 
   private final String accessKey;
   private final String secretKey;
