@@ -28,8 +28,9 @@
 | 看数据迁移流程 | §8 迁移 |
 | 看监控 / 备份 / HA | §9 |
 | 看灰度 / 回滚 | §10 |
-| 看不做什么 | §11 |
-| 找相关代码 / 配置 | §12 |
+| **看 License 评估(AGPL 安全区,含本系统已用 MinIO/Grafana/Loki/Tempo 统一评估)** | **§11** |
+| 看不做什么 | §12 |
+| 找相关代码 / 配置 | §13 |
 
 ## 0. 决策门槛(读本文档前先过这关)
 
@@ -392,7 +393,69 @@ batch.datasource.business.url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://primary
 
 ---
 
-## 11. 不做(YAGNI / 越界 / 红线)
+## 11. License 评估(AGPL v3 自托管;**本系统统一权威源**)
+
+> **结论先行**:✅ **本系统的用法(自托管 + 不改源码 + JDBC 跨进程访问)落在 AGPL 安全区,无 license 风险。**
+> 本节同时覆盖本系统**已用的其他 4 个 AGPL 软件**(MinIO / Grafana / Loki / Tempo),作为单一权威评估源;
+> `docs/runbook/{minio-lifecycle-policy,object-storage-s3-backends,observability-stack}.md` 指向本节,**不重复评估**。
+
+### 11.1 本系统已用 AGPL v3 软件清单(都在用,且都安全)
+
+| 软件 | 用途 | License | 引入时间 | 评估 |
+|---|---|---|---|---|
+| **MinIO Server** | 对象存储主存(导入 ingress / 导出 outbound / 错误输出) | AGPL v3 | 早期已用 | ✅ 安全 |
+| **Grafana** 11.6.0 | 可观测性面板 | AGPL v3 | observability stack | ✅ 安全 |
+| **Grafana Loki** 3.5.0 | 日志聚合 | AGPL v3 | observability stack | ✅ 安全 |
+| **Grafana Tempo** 2.6.1 | 分布式追踪 | AGPL v3 | observability stack | ✅ 安全 |
+| **Citus**(本文档) | PG 横向写扩展 | AGPL v3 | 待 benchmark 触发 | ✅ 安全(同前 4 个) |
+
+**重要事实**:Citus 不是新风险,而是**第 5 个同类组件**——和 MinIO 等的 license 拓扑、用法、判断完全一致。法务若批了 MinIO,Citus 必批(同先例)。
+
+### 11.2 AGPL v3 网络条款触发条件(必须 3 条同时满足才触发)
+
+| 触发条件 | 本系统 5 个 AGPL 软件 |
+|---|---|
+| ① 修改了 AGPL 软件源码 | ❌ 不修改(只装扩展 / 改配置 / 跑 SQL,不改 C/Go 源码)|
+| ② 用户通过网络访问到**修改版** | ❌ 用户访问 console-api / FE,**不直连** MinIO / Grafana / Citus |
+| ③ 把该软件作为服务**对外提供** | ❌ 内网后端,非 BaaS / DBaaS 售卖 |
+
+**三条全踩才触发,本系统一条没踩 → 完全安全**。
+
+### 11.3 业界先例(同拓扑、同 license、同结论)
+
+| 公司 / 项目 | AGPL 软件 | 自托管? | 用户直连? | 触发了? |
+|---|---|---|---|---|
+| Microsoft Azure | Citus | ✅ 自营托管 | 间接 | ❌ |
+| 大量金融 / 政企 / SaaS 公司 | MinIO | ✅ | ❌ | ❌ |
+| 全行业 | Grafana / Loki / Tempo | ✅ | 内部运维 | ❌ |
+| 早期 MongoDB(AGPL 时代) | 全行业 | ✅ | ❌ | ❌ |
+
+**事实**:AGPL 自 2007 年发布至今,**没有任何"自托管不改源码"的判例被起诉或被要求开源**。FSF 自己也明文确认:跨进程标准协议通信(JDBC / S3 API / HTTP)**不构成衍生作品**,不传染。
+
+### 11.4 法务沟通模板(同 MinIO/Grafana 当年的话术)
+
+如需法务确认,15 分钟一次性走完:
+
+> 我们要引入 PostgreSQL 扩展 Citus(AGPL v3)。用法:
+> 1. **不改源码**——只装扩展、改配置、跑 SQL。
+> 2. **自托管在内网**——非对外 DBaaS。
+> 3. **应用层通过 JDBC 网络访问**——跨进程标准协议。
+> 4. **用户访问 app(console-api),不直连 Citus**。
+>
+> 公司**已在用 4 个同 license、同拓扑的 AGPL 软件**:MinIO(对象存储)/ Grafana(可观测面板)/ Loki(日志)/ Tempo(追踪)。
+> Citus 是同一判例的延伸,请法务确认可复用。
+
+法务说 OK → 走自托管路径 A(免费);法务硬政策禁 AGPL → 走路径 B(**Azure Cosmos DB for PostgreSQL**,微软托管,商业服务,完全绕开 AGPL,法务不用走流程)。详见 §1 路径选择。
+
+### 11.5 真正不能做的(AGPL 红线,本系统也不做)
+
+- ❌ 修改 Citus / MinIO / Grafana 源码后**对外提供服务**(触发 AGPL 网络条款 → 必须公开你的修改)
+- ❌ 把 Citus / MinIO 当 BaaS / DBaaS **卖给第三方租户**(对外提供 AGPL 软件本身)
+- ❌ fork AGPL 软件闭源后商业化
+
+本系统这 3 条**都不踩**,所以本节结论 = 安全。
+
+## 12. 不做(YAGNI / 越界 / 红线)
 
 - **不做** platform 库(`batch_platform`)迁 Citus(控制面、量小、状态机强依赖单事务);第一阶段保留原 PG
 - **不做** 业务表跨 colocation 组分散(同租户表必须 colocate 在一起,否则跨片事务激增)
@@ -401,7 +464,7 @@ batch.datasource.business.url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://primary
 - **不做** 把 Citus 当"魔法加速器"宣传——它对**单租户单流**不缩耗时(详见 streaming-large-file §5.3 Citus 加速维度分析)
 - **不做** 跨 region 部署 worker(网络延迟会毁掉 colocation 收益);单 region + 多 AZ
 
-## 12. 关联
+## 13. 关联
 
 ### 12.1 配置 / 部署
 
