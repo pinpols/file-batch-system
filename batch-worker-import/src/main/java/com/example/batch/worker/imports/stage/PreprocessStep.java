@@ -253,7 +253,8 @@ public class PreprocessStep implements ImportStageStep {
       while ((n = in.read(buf)) >= 0) {
         total += n;
         if (total > MAX_OBJECT_BYTES) {
-          throw new IllegalStateException(
+          throw new ImportPreprocessException(
+              "IMPORT_PREPROCESS_OBJECT_TOO_LARGE",
               "import object exceeds max-object-bytes="
                   + MAX_OBJECT_BYTES
                   + " (bucket="
@@ -270,10 +271,13 @@ public class PreprocessStep implements ImportStageStep {
           object,
           total);
       return out.toByteArray();
-    } catch (IllegalStateException ex) {
+    } catch (ImportPreprocessException ex) {
       throw ex;
     } catch (Exception ex) {
-      throw new IllegalStateException(
+      // 对象缺失 / 拉取失败 → 走 PREPROCESS 优雅失败(execute 的 catch 转 ImportStageResult.failure),
+      // 而非裸抛未捕获异常。
+      throw new ImportPreprocessException(
+          "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED",
           "failed to load import object from storage (bucket="
               + bucket
               + ", object="
