@@ -113,7 +113,13 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       runExplainCheck(baseSql, baseParams, context);
     }
 
-    String sql = buildPagedSql(baseSql, spec.cursorColumn(), cursor != null);
+    String sql =
+        buildPagedSql(
+            baseSql,
+            spec.cursorColumn(),
+            cursor != null,
+            context.partitionCount(),
+            context.partitionNo());
 
     Map<String, Object> params = new LinkedHashMap<>(baseParams);
     if (cursor != null) {
@@ -195,18 +201,32 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   }
 
   /**
-   * 将基础 SQL 包装为 keyset 分页查询（CTE + WHERE cursor > :__cursor + LIMIT :__limit）。
+   * 将基础 SQL 包装为 keyset 分页查询（CTE + 可选分片谓词 + WHERE cursor > :__cursor + LIMIT :__limit）。
    *
    * @param baseSql 原始 SELECT SQL
    * @param cursorColumn 游标列名
    * @param hasCursor 是否携带游标（非首页时为 true）
+   * @param partitionCount 分片总数（为 1 时不注入分片谓词）
+   * @param partitionNo 当前分片编号（1-based）
    * @return 分页 SQL 字符串
    */
-  static String buildPagedSql(String baseSql, String cursorColumn, boolean hasCursor) {
+  static String buildPagedSql(
+      String baseSql, String cursorColumn, boolean hasCursor, int partitionCount, int partitionNo) {
     // R2-P2-4 二层防御：之前手动 `"` 拼接 cursorColumn 依赖上游 requireIdentifier 校验。
     // 改为统一走 quotePg（同样调 requireIdentifier 但出于此函数自管），即使未来调用绕过 spec.parse 也安全。
     String cursorIdent = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
-    String whereClause = hasCursor ? "WHERE base.%s > :__cursor%n".formatted(cursorIdent) : "";
+    StringBuilder where = new StringBuilder();
+    if (partitionCount > 1) {
+      where.append(
+          "WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
+              .formatted(
+                  cursorIdent, partitionCount, partitionCount, partitionCount, partitionNo - 1));
+    }
+    if (hasCursor) {
+      where
+          .append(where.isEmpty() ? "WHERE " : "AND ")
+          .append("base.%s > :__cursor%n".formatted(cursorIdent));
+    }
     return """
     WITH base AS (
     %s
@@ -216,6 +236,6 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     %sORDER BY base.%s ASC
     LIMIT :__limit
     """
-        .formatted(baseSql, whereClause, cursorIdent);
+        .formatted(baseSql, where, cursorIdent);
   }
 }

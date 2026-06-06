@@ -23,6 +23,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -137,12 +138,31 @@ public class PreprocessStep implements ImportStageStep {
       // 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退 byte[] 路径。
       // 仅大对象(≥ spool 阈值 16MB,本就要落盘)走流式直载;小文件继续走轻量内存 byte[] 路径
       // (设 normalizedPayload,无临时文件开销)。
-      if (importPayload != null
-          && Texts.hasText(importPayload.storagePath())
-          && !Texts.hasText(importPayload.content())
-          && !Texts.hasText(importPayload.contentBase64())
-          && canStreamObjectDirect(importPayload, templateConfig)
-          && objectSizeBytes(importPayload) >= SPOOL_THRESHOLD_BYTES) {
+      long directStreamObjectBytes =
+          (importPayload != null
+                  && Texts.hasText(importPayload.storagePath())
+                  && !Texts.hasText(importPayload.content())
+                  && !Texts.hasText(importPayload.contentBase64())
+                  && canStreamObjectDirect(importPayload, templateConfig))
+              ? objectSizeBytes(importPayload)
+              : -1L;
+      if (directStreamObjectBytes >= SPOOL_THRESHOLD_BYTES) {
+        // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
+        // (消除每片 N× 下载/解析放大);否则维持整份流式直载。range 路径任何异常都回退整份(不抛)。
+        Integer partitionNo =
+            intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
+        Integer partitionCount =
+            intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+        Charset directCharset = resolveCharset(importPayload, templateConfigObject);
+        if (rangeSliceEligible(
+            importPayload, templateConfig, partitionNo, partitionCount, directCharset)) {
+          return streamObjectRangeToSpool(
+              context,
+              importPayload,
+              templateConfig,
+              templateConfigObject,
+              new RangeSlice(directCharset, directStreamObjectBytes, partitionNo, partitionCount));
+        }
         return streamObjectToSpoolAndReturn(
             context, importPayload, templateConfig, templateConfigObject);
       }
@@ -412,6 +432,220 @@ public class PreprocessStep implements ImportStageStep {
               + ex.getMessage(),
           ex);
     }
+  }
+
+  /**
+   * range-slice 资格判定:多分片 + 物理换行=记录边界的安全格式 + 0x0A 安全字符集。 直载前提(纯文本/无变换/≥16MB)由调用方已 gate。任一不满足 →
+   * 回退整份直载 + line-mod。
+   */
+  static boolean rangeSliceEligible(
+      ImportPayload importPayload,
+      Map<String, Object> tc,
+      Integer partitionNo,
+      Integer partitionCount,
+      Charset charset) {
+    if (partitionNo == null || partitionCount == null || partitionCount <= 1) {
+      return false;
+    }
+    if (partitionNo < 1 || partitionNo > partitionCount) {
+      return false;
+    }
+    if (!isNewlineSafeCharset(charset)) {
+      return false;
+    }
+    return isRangeSliceableFormat(resolveFileFormatType(importPayload, tc), tc);
+  }
+
+  /**
+   * 物理换行=记录边界才能按字节切:FIXED_WIDTH 逐行读 → 自动安全;DELIMITED/CSV/TSV 走 Univocity RFC4180 (支持引号内嵌跨行字段)→
+   * 默认不安全,仅当模板 {@code partition_range_slice=true} 声明无内嵌换行才 opt-in; JSON/XML/EXCEL 等多行结构 → 不安全。
+   */
+  private static boolean isRangeSliceableFormat(String format, Map<String, Object> tc) {
+    if (!Texts.hasText(format)) {
+      return false;
+    }
+    String u = format.trim().toUpperCase();
+    if ("FIXED_WIDTH".equals(u) || "FIXEDWIDTH".equals(u)) {
+      return true;
+    }
+    if ("DELIMITED".equals(u) || "CSV".equals(u) || "TSV".equals(u)) {
+      Object optIn = tc == null ? null : tc.get("partition_range_slice");
+      return optIn != null && "true".equalsIgnoreCase(String.valueOf(optIn).trim());
+    }
+    return false;
+  }
+
+  /** 0x0A 始终是 LF、不会是多字节续字节的字符集(UTF-8 自同步 / ASCII / Latin-1 单字节),才能字节级扫换行切片。 */
+  private static boolean isNewlineSafeCharset(Charset charset) {
+    return StandardCharsets.UTF_8.equals(charset)
+        || StandardCharsets.US_ASCII.equals(charset)
+        || StandardCharsets.ISO_8859_1.equals(charset);
+  }
+
+  private static Integer intOrNull(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Number n) {
+      return n.intValue();
+    }
+    try {
+      return Integer.parseInt(String.valueOf(value).trim());
+    } catch (NumberFormatException ignored) {
+      SwallowedExceptionLogger.info(PreprocessStep.class, "catch:NumberFormatException", ignored);
+      return null;
+    }
+  }
+
+  /**
+   * range-slice 大文件直载:对象存储 range GET(offset=rawStart)只下本片 {@code [rawStart, rawEnd)} 字节,行边界对齐后落
+   * spool,置 {@link PipelineRuntimeKeys#PARTITION_PRESLICED} 让 PARSE 跳过 line-mod。 失败时清理 spool
+   * 并**回退整份流式直载**(优化绝不导致导入失败)。
+   */
+  /** range-slice 入参打包(避免 streamObjectRangeToSpool 超 6 参,PMD ExcessiveParameterList)。 */
+  private record RangeSlice(
+      Charset charset, long objectBytes, int partitionNo, int partitionCount) {}
+
+  private ImportStageResult streamObjectRangeToSpool(
+      ImportJobContext context,
+      ImportPayload importPayload,
+      Map<String, Object> templateConfig,
+      Object templateConfigObject,
+      RangeSlice slice) {
+    Charset charset = slice.charset();
+    long objectBytes = slice.objectBytes();
+    int partitionNo = slice.partitionNo();
+    int partitionCount = slice.partitionCount();
+    String bucket =
+        Texts.hasText(importPayload.storageBucket())
+            ? importPayload.storageBucket()
+            : minioStorageProperties.getBucket();
+    String object = importPayload.storagePath();
+    long rawStart = objectBytes * (partitionNo - 1) / partitionCount;
+    long rawEnd =
+        partitionNo == partitionCount ? objectBytes : objectBytes * partitionNo / partitionCount;
+    Path spool = null;
+    try {
+      spool = Files.createTempFile("batch-preprocess-obj-p" + partitionNo + "-", ".raw");
+      long keptBytes;
+      try (InputStream in =
+              minioClient.getObject(
+                  GetObjectArgs.builder().bucket(bucket).object(object).offset(rawStart).build());
+          OutputStream out =
+              Files.newOutputStream(
+                  spool,
+                  StandardOpenOption.CREATE,
+                  StandardOpenOption.TRUNCATE_EXISTING,
+                  StandardOpenOption.WRITE)) {
+        keptBytes = copyPartitionRange(in, out, rawEnd - rawStart, partitionNo > 1);
+      }
+      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
+      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
+      context.getAttributes().put(PipelineRuntimeKeys.PARTITION_PRESLICED, Boolean.TRUE);
+      context.setRawPayload("");
+      context.getAttributes().remove("normalizedPayload");
+      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+      log.info(
+          "import preprocess range-sliced object to spool: bucket={}, object={}, partition={}/{},"
+              + " offset={}, sliceBytes={}, keptBytes={}, spool={}",
+          bucket,
+          object,
+          partitionNo,
+          partitionCount,
+          rawStart,
+          rawEnd - rawStart,
+          keptBytes,
+          spool);
+      Map<String, Object> fileMetadata = new LinkedHashMap<>();
+      fileMetadata.put("preprocessed", Boolean.TRUE);
+      String fmt = resolveFileFormatType(importPayload, templateConfig);
+      fileMetadata.put("preprocessFormat", fmt == null ? "" : fmt);
+      fileMetadata.put("sourceObject", object);
+      fileMetadata.put("rangeSlice", partitionNo + "/" + partitionCount);
+      runtimeRepository.updateFileStatus(
+          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+          "PARSING",
+          fileMetadata);
+      return ImportStageResult.success(stage());
+    } catch (Exception ex) {
+      if (spool != null) {
+        try {
+          Files.deleteIfExists(spool);
+        } catch (IOException ignored) {
+          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
+        }
+      }
+      // range 优化失败不让导入挂:清掉 preslice 标记,回退整份流式直载(current behavior)。
+      context.getAttributes().remove(PipelineRuntimeKeys.PARTITION_PRESLICED);
+      log.warn(
+          "import preprocess range-slice failed, fallback to full stream: object={},"
+              + " partition={}/{}, err={}",
+          object,
+          partitionNo,
+          partitionCount,
+          ex.getMessage());
+      return streamObjectToSpoolAndReturn(
+          context, importPayload, templateConfig, templateConfigObject);
+    }
+  }
+
+  /**
+   * 从已定位到 rawStart 的 ranged 流拷出本片**完整行**到 out(标准 split 边界法,同 Hadoop TextInputFormat):
+   *
+   * <ul>
+   *   <li>{@code skipPartialFirstLine}(partitionNo&gt;1)为 true:先丢弃 rawStart 后到首个 {@code '\n'}(含)的残行
+   *       —— 该残行归上一分片(上一分片读过其 rawEnd 补齐了它)。
+   *   <li>之后逐行拷贝:仅当**行起始偏移** {@code consumed <= sliceLen}(= rawEnd-rawStart)时才读该行,并把它读完整 (可能越过
+   *       rawEnd 到行尾)。保证每条完整行被恰好一个分片拥有,无重叠无遗漏。
+   * </ul>
+   *
+   * <p>仅在 0x0A 安全字符集下调用(UTF-8/ASCII/Latin-1),字节级扫 {@code '\n'} 不会误命中多字节续字节。 返回写出字节数。
+   * package-private static 便于纯函数单测。
+   */
+  static long copyPartitionRange(
+      InputStream rawIn, OutputStream out, long sliceLen, boolean skipPartialFirstLine)
+      throws IOException {
+    BufferedInputStream in =
+        rawIn instanceof BufferedInputStream buffered
+            ? buffered
+            : new BufferedInputStream(rawIn, 64 * 1024);
+    long consumed = 0; // 自 rawStart 起从流读出的字节数(含跳过的残行)
+    long written = 0;
+    int b;
+    if (skipPartialFirstLine) {
+      while ((b = in.read()) >= 0) {
+        consumed++;
+        if (b == '\n') {
+          break;
+        }
+      }
+    }
+    // consumed 此刻 = 本分片首条完整行的起始偏移。逐行读:行起始 <= sliceLen 才属本片。
+    while (consumed <= sliceLen) {
+      int c = in.read();
+      if (c < 0) {
+        break; // EOF
+      }
+      consumed++;
+      out.write(c);
+      written++;
+      if (c == '\n') {
+        continue; // 空行/单字节行,循环重新判定下一行起始偏移
+      }
+      // 行已开读 → 读到 '\n'/EOF 整行收完(允许越过 sliceLen 补齐跨界末行)
+      while ((c = in.read()) >= 0) {
+        consumed++;
+        out.write(c);
+        written++;
+        if (c == '\n') {
+          break;
+        }
+      }
+      if (c < 0) {
+        break; // 末行无换行结尾
+      }
+    }
+    return written;
   }
 
   private Charset resolveCharsetForContentBytes(

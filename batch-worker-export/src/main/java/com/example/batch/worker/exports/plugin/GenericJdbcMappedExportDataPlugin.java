@@ -8,6 +8,7 @@ import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
 import com.example.batch.worker.exports.jdbc.JdbcMappedExportSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,26 +105,16 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     cols.setLength(cols.length() - 1);
     String fk = JdbcMappedSqlValidator.quotePg(spec.detailFkColumn());
     String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
-    StringBuilder sql =
-        new StringBuilder("SELECT ")
-            .append(cols)
-            .append(" FROM ")
-            .append(fq)
-            .append(" WHERE ")
-            .append(fk)
-            .append(" = ?");
-    String finalSql;
-    Object[] sqlArgs;
-    if (cursor != null) {
-      sql.append(" AND ").append(ob).append(" > ?");
-      sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
-      finalSql = sql.toString();
-      sqlArgs = new Object[] {batchId, cursor, pageSize};
-    } else {
-      sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
-      finalSql = sql.toString();
-      sqlArgs = new Object[] {batchId, pageSize};
-    }
+    PagedQuery pq =
+        buildDetailQuery(
+            new DetailSql(cols.toString(), fq, fk, ob),
+            batchId,
+            cursor,
+            pageSize,
+            context.partitionCount(),
+            context.partitionNo());
+    final String finalSql = pq.sql();
+    final Object[] sqlArgs = pq.args();
     List<Map<String, Object>> rows =
         txTemplate.execute(
             status -> {
@@ -151,5 +142,43 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     return spec.detailSelectColumns().stream()
         .map(col -> new DelimitedColumn(col, "detail." + col))
         .toList();
+  }
+
+  /** 构造明细分页 SQL + 顺序参数。partitionCount>1 时叠加 hashtext 分片谓词。 */
+  static record PagedQuery(String sql, Object[] args) {}
+
+  /** 明细 SQL 片段打包(避免 buildDetailQuery 超 6 参,PMD ExcessiveParameterList)。 */
+  static record DetailSql(String cols, String fq, String fk, String ob) {}
+
+  static PagedQuery buildDetailQuery(
+      DetailSql q, Long batchId, Object cursor, int pageSize, int partitionCount, int partitionNo) {
+    String cols = q.cols();
+    String fq = q.fq();
+    String fk = q.fk();
+    String ob = q.ob();
+    StringBuilder sql =
+        new StringBuilder("SELECT ")
+            .append(cols)
+            .append(" FROM ")
+            .append(fq)
+            .append(" WHERE ")
+            .append(fk)
+            .append(" = ?");
+    List<Object> args = new ArrayList<>();
+    args.add(batchId);
+    if (partitionCount > 1) {
+      sql.append(" AND ((hashtext(").append(ob).append("::text) % ?) + ?) % ? = ?");
+      args.add(partitionCount);
+      args.add(partitionCount);
+      args.add(partitionCount);
+      args.add(partitionNo - 1);
+    }
+    if (cursor != null) {
+      sql.append(" AND ").append(ob).append(" > ?");
+      args.add(cursor);
+    }
+    sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
+    args.add(pageSize);
+    return new PagedQuery(sql.toString(), args.toArray());
   }
 }

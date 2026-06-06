@@ -89,8 +89,17 @@ public class PrepareStep implements ExportStageStep {
       // 地区(per-run):metadata.region 优先 → 模板 defaultRegion 兜底 → allowedRegions 字典校验。
       // 在此统一解析:既喂文件名 ${region} 占位,也经 exportSnapshot 透传给 GENERATE 查询插件绑定 :region。
       String region = ExportRegionResolver.resolve(templateConfig, payload.metadata());
-      String fileName = resolveFileName(context, payload, templateConfig, fileFormatType, region);
-      String finalObjectName = resolveObjectName(context, payload, fileName);
+      int partitionNo =
+          intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO), 1);
+      int partitionCount =
+          intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
+      String fileName =
+          BatchFileConstants.insertPartitionTag(
+              resolveFileName(context, payload, templateConfig, fileFormatType, region),
+              partitionNo,
+              partitionCount);
+      String finalObjectName =
+          resolveObjectName(context, payload, fileName, partitionNo, partitionCount);
       String tempObjectName =
           BatchFileConstants.tempObjectName(context.getTenantId(), bizDate, fileName);
       Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
@@ -151,9 +160,14 @@ public class PrepareStep implements ExportStageStep {
   }
 
   private String resolveObjectName(
-      ExportJobContext context, ExportPayload payload, String fileName) {
+      ExportJobContext context,
+      ExportPayload payload,
+      String fileName,
+      int partitionNo,
+      int partitionCount) {
     if (Texts.hasText(payload.objectName())) {
-      return payload.objectName();
+      return BatchFileConstants.insertPartitionTag(
+          payload.objectName(), partitionNo, partitionCount);
     }
     String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
     String bizDate = resolveBizDate(context, payload);
@@ -179,6 +193,20 @@ public class PrepareStep implements ExportStageStep {
 
   private String defaultText(String value, String fallback) {
     return Texts.hasText(value) ? value : fallback;
+  }
+
+  private static int intOrDefault(Object value, int def) {
+    if (value instanceof Number n) {
+      return n.intValue();
+    }
+    if (value == null) {
+      return def;
+    }
+    try {
+      return Integer.parseInt(String.valueOf(value).trim());
+    } catch (NumberFormatException ignored) {
+      return def;
+    }
   }
 
   /**
