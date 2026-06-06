@@ -37,5 +37,16 @@ CREATE INDEX IF NOT EXISTS idx_process_staging_target_batch
 CREATE INDEX IF NOT EXISTS idx_process_staging_staged_at
     ON batch.process_staging (staged_at);
 
+-- 高翻台暂存表:批次写满即清,DELETE 产生大量死元组依赖 autovacuum 回收。
+-- 调低触发阈值,让 autovacuum/analyze 对本表更勤快,避免长期物理膨胀。
+-- 只调触发频率,不动 cost_delay/cost_limit(避免表级 IO 节流影响整库)。
+-- 独立 ALTER(非建表内联 WITH):对已存在的表重跑也能更新参数,幂等。
+ALTER TABLE batch.process_staging SET (
+    autovacuum_vacuum_scale_factor        = 0.05,
+    autovacuum_vacuum_threshold           = 1000,
+    autovacuum_vacuum_insert_scale_factor = 0.05,
+    autovacuum_analyze_scale_factor       = 0.05
+);
+
 COMMENT ON TABLE batch.process_staging IS
     'PROCESS WAP pipeline staging area; rows written at COMPUTE, validated at VALIDATE, published at COMMIT, cleaned at FEEDBACK. Lives in business DB to share transaction with biz.<target>.';
