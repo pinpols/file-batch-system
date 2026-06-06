@@ -2,10 +2,10 @@ package com.example.batch.worker.dispatchs.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import io.minio.MinioClient;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
 class DispatchFileContentResolverPathTest {
@@ -27,13 +28,14 @@ class DispatchFileContentResolverPathTest {
 
   @Mock private BatchObjectCryptoService cryptoService;
 
+  @Mock private ObjectProvider<MinioClient> minioClientProvider;
+
   private DispatchFileContentResolver resolver;
 
   @BeforeEach
   void setUp() throws Exception {
-    when(minioProperties.getEndpoint()).thenReturn(null);
-    resolver = new DispatchFileContentResolver(minioProperties, cryptoService);
-    // call PostConstruct manually (endpoint is blank, so minioClient stays null)
+    // 未配 MinIO:provider.getIfAvailable() 默认返回 null → minioClient 为 null(测 LOCAL 路径)。
+    resolver = new DispatchFileContentResolver(minioProperties, cryptoService, minioClientProvider);
     var init = DispatchFileContentResolver.class.getDeclaredMethod("init");
     init.setAccessible(true);
     init.invoke(resolver);

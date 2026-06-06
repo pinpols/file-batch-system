@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -60,6 +61,8 @@ public class DispatchChannelHealthService {
   private final BatchSecurityProperties securityProperties;
   private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;
+  // 复用中心 client(带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
+  private final ObjectProvider<MinioClient> minioClientProvider;
   private MinioClient minioClient;
   private final AtomicLong probeSuccessCount = new AtomicLong();
   private final AtomicLong probeFailureCount = new AtomicLong();
@@ -77,17 +80,8 @@ public class DispatchChannelHealthService {
           return thread;
         };
     this.probeExecutor = Executors.newFixedThreadPool(PROBE_PARALLELISM, factory);
-    if (minioStorageProperties != null
-        && Texts.hasText(minioStorageProperties.getEndpoint())
-        && Texts.hasText(minioStorageProperties.getAccessKey())
-        && Texts.hasText(minioStorageProperties.getSecretKey())) {
-      this.minioClient =
-          MinioClient.builder()
-              .endpoint(minioStorageProperties.getEndpoint())
-              .credentials(
-                  minioStorageProperties.getAccessKey(), minioStorageProperties.getSecretKey())
-              .build();
-    }
+    // 中心 client 仅在 MinIO 配置有效时由 MinioAutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
+    this.minioClient = minioClientProvider.getIfAvailable();
     meterRegistry.gauge("batch.dispatch.channel.probe.successes", probeSuccessCount);
     meterRegistry.gauge("batch.dispatch.channel.probe.failures", probeFailureCount);
   }
