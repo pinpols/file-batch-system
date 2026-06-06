@@ -134,6 +134,14 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>apache-client</artifactId>
+        </dependency>
         <!-- okhttp 5.x:minio 传递的 `okhttp` 工件在 5.x 是空壳,需显式补 `okhttp-jvm` 拿到 JVM 类
              (MinioAutoConfiguration 显式构造 OkHttpClient,测试用 MinIOContainer 引用 HttpUrl)。 -->
         <dependency>

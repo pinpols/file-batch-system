@@ -74,6 +74,14 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>apache-client</artifactId>
+        </dependency>
         <!-- okhttp 5.x:Maven `okhttp` artifact 是空壳,实际 JVM 类在 `okhttp-jvm`。
              minio 传递的 okhttp 不带 jvm 实现,需显式声明,否则 MinioClient 引用的
              okhttp3.RequestBody 等类运行期 NoClassDefFoundError。 -->
