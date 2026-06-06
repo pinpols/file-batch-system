@@ -139,17 +139,18 @@ def update_tb():
     ])
 
     ps = wb["pipeline_step_definition"]
+    # step_params 必须带路由提示,否则 ACK 成功后顺延落到 COMPENSATE 把已成功记录冲正(参见 tc 正确配置)。
     dispatch_steps = [
-        ("STEP_PREPARE",   "分发前准备","PREPARE",   1,"DISPATCH_PREPARE"),
-        ("STEP_DISPATCH",  "实际下发",  "DISPATCH",  2,"DISPATCH_DISPATCH"),
-        ("STEP_ACK",       "回执确认",  "ACK",       3,"DISPATCH_ACK"),
-        ("STEP_RETRY",     "失败重试",  "RETRY",     4,"DISPATCH_RETRY"),
-        ("STEP_COMPENSATE","补偿冲正",  "COMPENSATE",5,"DISPATCH_COMPENSATE"),
-        ("STEP_COMPLETE",  "完结",      "COMPLETE",  6,"DISPATCH_COMPLETE"),
+        ("STEP_PREPARE",   "分发前准备","PREPARE",   1,"DISPATCH_PREPARE",   "{}"),
+        ("STEP_DISPATCH",  "实际下发",  "DISPATCH",  2,"DISPATCH_DISPATCH",  "{}"),
+        ("STEP_ACK",       "回执确认",  "ACK",       3,"DISPATCH_ACK",       '{"onSuccessNextStageCode": "COMPLETE"}'),
+        ("STEP_RETRY",     "失败重试",  "RETRY",     4,"DISPATCH_RETRY",     '{"onFailureNextStageCode": "COMPENSATE"}'),
+        ("STEP_COMPENSATE","补偿冲正",  "COMPENSATE",5,"DISPATCH_COMPENSATE",'{"terminalOnSuccess": true}'),
+        ("STEP_COMPLETE",  "完结",      "COMPLETE",  6,"DISPATCH_COMPLETE",  '{"terminalOnSuccess": true}'),
     ]
-    for sc, sn, stage, order, impl in dispatch_steps:
+    for sc, sn, stage, order, impl, params in dispatch_steps:
         append_if_new(ps, [0,2], ["TB_DISPATCH_SETTLE", sc], [
-            "TB_DISPATCH_SETTLE",1,sc,sn,stage,order,impl,"{}",300,"FIXED",2,"TRUE",
+            "TB_DISPATCH_SETTLE",1,sc,sn,stage,order,impl,params,300,"FIXED",2,"TRUE",
         ])
 
     wb.save(path)

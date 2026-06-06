@@ -33,8 +33,8 @@
 
 ### 2. ADR 路线图全栈完成
 
-- **ADR-009 Workflow DSL**：Stage 1（V72 列）/ 1.2（worker outputs 上报）/ 2（`WorkflowParamResolver` 160 LOC + 10 单测）/ 3（`DefaultWorkflowNodeDispatchService.mergeNodeParams` 集成）全栈；Stage 4（7 workflow 配 DSL）业务方按需触发 deferred
-- **ADR-010 trigger 异步解耦**：Stage 1-5 代码 100%，Stage 6 灰度 operational，Stage 7 物理删除等 1 minor
+- **ADR-009 Workflow DSL**：Stage 1（V72 列）/ 1.2（worker outputs 上报）/ 2（`WorkflowParamResolver` 160 LOC + 10 单测）/ 3（`WorkflowNodePayloadBuilder.mergeNodeParams` 集成）/ 4（seed DSL 演示）**全 4 stage 已落地**（2026-06-05 复核，与 ADR 文档头部一致）
+- **ADR-010 trigger 异步解耦**：**全 7 stage 已完成**——Stage 1-5 代码 100%，Stage 6 灰度 2026-05-02 全量上线，Stage 7 旧 HTTP 同步路径（`HttpOrchestratorTriggerAdapter` + `async-launch.enabled` 开关）已物理删除
 - 配套：V80 `trigger_outbox_event` schema + `docs/runbook/trigger-async-launch-rollout.md` 280 行 SOP + `heal-zombie-pipelines.sh` ops 脚本
 
 ### 3. v2 评估锁定 4 项硬化条目
@@ -86,9 +86,9 @@
 
 | 编号 | 主题 | 触发条件 |
 |---|---|---|
-| V6-D-1 | ADR-009 Stage 4 业务配 DSL | 现有 seed 节点间 `mergeUpstreamPartitionOutputs` 自动透传 fileId 已够用；业务方设计跨节点参数串联时按 §10 文档配 |
-| V6-D-2 | ADR-010 Stage 6 灰度 operational | staging → canary → prod 按 `trigger-async-launch-rollout.md` SOP 执行（需真部署环境）|
-| V6-D-3 | ADR-010 Stage 7 物理删除旧 HTTP 路径 | 灰度全量切稳定 1 minor 后 |
+| V6-D-1 | ~~ADR-009 Stage 4 业务配 DSL~~ | ✅ 已完成：seed `multi-tenant-seed.sql` 配了 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` DSL 演示；节点间 `mergeUpstreamPartitionOutputs` 自动透传 fileId。业务方需更多跨节点串联时按 §10 文档继续配（机制已就绪） |
+| V6-D-2 | ~~ADR-010 Stage 6 灰度 operational~~ | ✅ 已完成:ADR-010 文档头部记 **2026-05-02 全量上线**（异步 launch 路径已固化）|
+| V6-D-3 | ~~ADR-010 Stage 7 物理删除旧 HTTP 路径~~ | ✅ 已完成:`HttpOrchestratorTriggerAdapter` 与 `batch.trigger.async-launch.enabled` 开关已物理删除（2026-06-05 复核确认仓库已无残留），trigger 只走 outbox relay |
 | V6-D-4 | ~~I4 `buildContext` 模板抽取~~ | ✅ 2026-05-21 完成：未抽 `AbstractJobContext`（4 个 context 仅 5 字段共享、`ExecutionContext` 接口已覆盖 getter；剩 2~3 字段抽基类收益 < 继承+`@EqualsAndHashCode(callSuper=true)` 成本），改抽 `populateCommonFields` 模板 + `putIfPresent` helper 到 `AbstractPipelineStepExecutionAdapter`，去掉 4 处 `buildContext` 5 行 setter 重复与 4 处 `putIfPresent` 8 行同字节复制 |
 | V6-D-5 | Worker 4 模块单测密度补齐 | 各 `Default*StageExecutor` + `*StepExecutionAdapter` 加 5-10 单测 |
 
@@ -102,17 +102,17 @@
 - `dispatchJobNode.buildChildLaunchRequest` 调 `mergeNodeParams` ✅
 - `WORKFLOW_INTERNAL_PAYLOAD_KEYS` 防泄露 ✅
 
-**仍缺**：上游节点 output → 下游节点 param 的 DSL 映射（如 SETTLE 生成的 fileId 自动塞进 DISPATCH partition）。
+**已实现**（2026-06-05 复核）：上游节点 output → 下游节点 param 的 DSL 映射已落地——worker 上报 `outputs` → orchestrator 写 `workflow_node_run.output` → `WorkflowParamResolver` 解析下游 `node_params` 里的 `$.xxx` 引用。SETTLE→DISPATCH 透传由 `mergeUpstreamPartitionOutputs` 自动处理（fileId），DSL 用于显式跨节点参数串联。
 
 **ADR 已立项**：[ADR-009 Workflow 节点间参数串联 DSL](../architecture/adr/ADR-009-workflow-param-dsl.md)（2026-04-26 Proposed）—— JSONPath-like DSL + worker 上报 outputs + WorkflowParamResolver 解析；分 4 stage 落地，~3 人天。
 
-**当前进度**：
-- ✅ Stage 1：`db/migration/V72__add_workflow_node_run_output.sql` schema 落地（output JSONB 列）
-- ⏳ Stage 2：worker 上报 outputs Map
-- ⏳ Stage 3：WorkflowParamResolver 实现 + 单测
-- ⏳ Stage 4：集成到 DefaultSchedulePlanBuilder + E2E
+**当前进度**（2026-06-05 复核：全 4 stage 已落地，本清单此前漏同步 → 校正）：
+- ✅ Stage 1：`db/migration/V72__add_workflow_node_run_output.sql` schema 落地（output JSONB 列）+ worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String,Object>`）
+- ✅ Stage 2：`WorkflowParamResolver` + `WorkflowParamResolverTest`（10 单测全绿，复核日重跑确认）
+- ✅ Stage 3：集成在 `WorkflowNodePayloadBuilder.mergeNodeParams`（实现选 payload 装配点，比设计稿假想的 `DefaultSchedulePlanBuilder` 更准确）+ `loadWorkflowRunContext` 加载上游节点 output
+- ✅ Stage 4：测试 seed `batch-e2e-tests/.../multi-tenant-seed.sql` 已配 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` DSL 演示
 
-**成本**：L —— Stage 2-4 跨 worker 协议 / orchestrator 核心调度，按 ADR-009 单独 sprint 推进。
+**成本**：L —— 已完成（与 ADR-009 文档头部「Stage 1-4 全 ✅」一致）。
 
 ---
 

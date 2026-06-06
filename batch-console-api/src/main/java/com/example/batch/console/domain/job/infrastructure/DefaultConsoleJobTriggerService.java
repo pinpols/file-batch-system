@@ -1,6 +1,8 @@
 package com.example.batch.console.domain.job.infrastructure;
 
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.domain.job.application.ConsoleJobTriggerService;
@@ -38,10 +40,20 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
   @Override
   public String trigger(TriggerRequest request, String idempotencyKey) {
     String tenantId = ops.resolveTenant(request.getTenantId());
+    String jobCode = ConsoleTextSanitizer.safeInput(request.getJobCode(), 128);
+    // 触发前同步校验 job 存在且启用:否则 trigger 服务收单后 orchestrator 异步以 NOT_FOUND drop,
+    // 而同步响应却是 200 SUCCESS（且不建实例、静默丢弃),调用方无从察觉 jobCode 写错。这里抛 4xx 让前端立刻知情。
+    var jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+    if (jobDef == null) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+    }
+    if (jobDef.getEnabled() != null && !jobDef.getEnabled()) {
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.job.definition_disabled");
+    }
     String result =
         ops.delegateLaunch(
             tenantId,
-            ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
+            jobCode,
             request.getBizDate(),
             ops.resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
             ops.parsePayload(request.getPayload()),

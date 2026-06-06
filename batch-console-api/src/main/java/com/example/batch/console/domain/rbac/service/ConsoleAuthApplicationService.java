@@ -44,6 +44,7 @@ public class ConsoleAuthApplicationService {
   private final ConsoleSessionRegistry sessionRegistry;
   private final ConsoleSecurityProperties securityProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
+  private final ConsoleMenuRegistry menuRegistry;
 
   public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
     return loginService.login(request);
@@ -62,7 +63,7 @@ public class ConsoleAuthApplicationService {
         username(authentication),
         tenantId(authentication),
         auths,
-        ConsoleMenuRegistry.filterByAuthorities(auths));
+        menuRegistry.filterByAuthorities(auths));
   }
 
   private String username(Authentication authentication) {

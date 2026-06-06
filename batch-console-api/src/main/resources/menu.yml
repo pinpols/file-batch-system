@@ -1,0 +1,100 @@
+# 控制台侧边栏菜单(外置配置 · 绑定 ConsoleMenuProperties)
+#
+# 改菜单 = 改本文件 + 重启 console-api(不重编译、不走 DB)。
+# 部署侧可用外置文件覆盖:见 application.yml 的 spring.config.import
+#   optional:file:${BATCH_CONSOLE_MENU_FILE:config/menu.yml}
+#
+# 字段:
+#   groups[].key/title/icon/minRole      —— 组
+#   groups[].children[].title/path/icon/minRole —— 菜单项
+# minRole 取值:VIEWER < TENANT_ADMIN < ADMIN(未知/缺失 fail-secure 当 ADMIN)。
+# icon 为 @element-plus/icons-vue 图标名。path 必须是 FE 已存在的路由(配置化不能新增页面)。
+batch:
+  console:
+    menu:
+      groups:
+        - key: ops
+          title: 运营概览
+          icon: Histogram
+          minRole: VIEWER
+          children:
+            - { title: 控制面板快照, path: /ops/summary, icon: TrendCharts, minRole: VIEWER }
+            - { title: 审批中心, path: /approvals, icon: Stamp, minRole: TENANT_ADMIN }
+            - { title: 导出中心, path: /reports, icon: Download, minRole: VIEWER }
+            - { title: 自助服务, path: /self-service, icon: Tickets, minRole: TENANT_ADMIN }
+            - { title: Atomic 运行时, path: /ops/atomic-runtime, icon: Cpu, minRole: TENANT_ADMIN }
+            - { title: 运维诊断, path: /ops/diagnostic, icon: Tools, minRole: ADMIN }
+        - key: config
+          title: 配置与发布
+          icon: Operation
+          minRole: TENANT_ADMIN
+          children:
+            - { title: 配置发布, path: /config/releases, icon: DocumentChecked, minRole: TENANT_ADMIN }
+            - { title: Excel 维护, path: /config/excel, icon: List, minRole: TENANT_ADMIN }
+            - { title: 合并导入, path: /config/tenant-package, icon: Box, minRole: TENANT_ADMIN }
+            - { title: 配置管理, path: /config/management, icon: Memo, minRole: TENANT_ADMIN }
+            - { title: 标签管理, path: /system/tags, icon: PriceTag, minRole: TENANT_ADMIN }
+        - key: files
+          title: 文件中心
+          icon: FolderOpened
+          minRole: VIEWER
+          children:
+            - { title: 文件列表, path: /files/list, icon: Files, minRole: VIEWER }
+            - { title: 文件模板, path: /files/templates, icon: Document, minRole: VIEWER }
+            - { title: 文件组到达治理, path: /files/arrival-groups, icon: CollectionTag, minRole: VIEWER }
+            - { title: 流水线观测, path: /files/pipeline-obs, icon: DataAnalysis, minRole: VIEWER }
+        - key: jobs
+          title: 任务管理
+          icon: Management
+          minRole: VIEWER
+          children:
+            - { title: Job 定义, path: /jobs/definitions, icon: List, minRole: VIEWER }
+            - { title: Workflow 定义, path: /workflow/definitions, icon: Collection, minRole: VIEWER }
+            - { title: Pipeline 定义, path: /jobs/pipelines, icon: Share, minRole: VIEWER }
+            - { title: Workflow 编排, path: /workflow/designer, icon: Guide, minRole: TENANT_ADMIN }
+        - key: monitor
+          title: 执行与观测
+          icon: Monitor
+          minRole: VIEWER
+          children:
+            - { title: Job Instance, path: /monitor/job-instances, icon: Monitor, minRole: VIEWER }
+            - { title: Job Step Instance, path: /monitor/job-steps, icon: Timer, minRole: VIEWER }
+            - { title: Workflow Run, path: /monitor/workflow-runs, icon: Promotion, minRole: VIEWER }
+            - { title: 全部运行, path: /runs, icon: List, minRole: VIEWER }
+            - { title: 日志, path: /logs, icon: Reading, minRole: VIEWER }
+            - { title: 告警, path: /observability/alerts, icon: WarningFilled, minRole: VIEWER }
+            - { title: 告警路由, path: /observability/alert-routings, icon: Connection, minRole: TENANT_ADMIN }
+            - { title: 审计, path: /observability/audits, icon: Memo, minRole: VIEWER }
+            - { title: 操作审计, path: /observability/operation-audits, icon: Document, minRole: VIEWER }
+            - { title: Trace 诊断, path: /observability/trace, icon: Search, minRole: VIEWER }
+            - { title: Outbox, path: /observability/outbox, icon: Box, minRole: TENANT_ADMIN }
+            - { title: 可观测性查询, path: /observability/queries, icon: Search, minRole: VIEWER }
+            - { title: 事件目录, path: /system/event-catalog, icon: Collection, minRole: VIEWER }
+        - key: scheduler
+          title: 调度与治理
+          icon: DataAnalysis
+          minRole: VIEWER
+          children:
+            - { title: 调度快照, path: /scheduler/snapshot, icon: TrendCharts, minRole: VIEWER }
+            - { title: 批次日与窗口, path: /scheduler/batch-days, icon: Calendar, minRole: VIEWER }
+            - { title: 批次日重放, path: /ops/batch-day-replay, icon: RefreshRight, minRole: TENANT_ADMIN }
+            - { title: Catch-up 审批, path: /scheduler/catch-up-approvals, icon: Memo, minRole: VIEWER }
+            - { title: 租户配额, path: /governance/quota, icon: Briefcase, minRole: TENANT_ADMIN }
+            - { title: 队列 & 窗口, path: /governance/queues, icon: Tools, minRole: TENANT_ADMIN }
+            - { title: Worker 管理, path: /workers/management, icon: Cpu, minRole: TENANT_ADMIN }
+            - { title: Trigger 管理, path: /system/triggers, icon: Timer, minRole: TENANT_ADMIN }
+            - { title: 自定义任务类型, path: /ops/custom-task-types, icon: Grid, minRole: TENANT_ADMIN }
+            - { title: Worker 指纹看板, path: /ops/worker-fingerprints, icon: Monitor, minRole: TENANT_ADMIN }
+        - key: system
+          title: 系统
+          icon: Setting
+          minRole: TENANT_ADMIN
+          children:
+            - { title: 租户管理, path: /system/tenants, icon: Briefcase, minRole: TENANT_ADMIN }
+            - { title: 用户账户, path: /system/user-accounts, icon: Tickets, minRole: ADMIN }
+            - { title: 当前登录态, path: /system/users, icon: Tickets, minRole: ADMIN }
+            - { title: AI 助手, path: /system/ai-chat, icon: Document, minRole: ADMIN }
+            - { title: API Key, path: /system/api-keys, icon: Key, minRole: ADMIN }
+            - { title: 系统参数, path: /system/parameters, icon: Setting, minRole: ADMIN }
+            - { title: 通知与投递, path: /system/notifications, icon: Bell, minRole: TENANT_ADMIN }
+            - { title: 原子节点配置中心, path: /system/atomic-task-types, icon: Box, minRole: TENANT_ADMIN }
