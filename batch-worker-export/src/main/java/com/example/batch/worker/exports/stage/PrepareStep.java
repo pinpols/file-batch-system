@@ -11,6 +11,7 @@ import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.domain.ExportWorkerType;
+import com.example.batch.worker.exports.region.ExportRegionResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -85,11 +86,17 @@ public class PrepareStep implements ExportStageStep {
             objectMapper);
       }
       String fileFormatType = resolveText(templateConfig.get("file_format_type"), "JSON");
-      String fileName = resolveFileName(context, payload, templateConfig, fileFormatType);
+      // 地区(per-run):metadata.region 优先 → 模板 defaultRegion 兜底 → allowedRegions 字典校验。
+      // 在此统一解析:既喂文件名 ${region} 占位,也经 exportSnapshot 透传给 GENERATE 查询插件绑定 :region。
+      String region = ExportRegionResolver.resolve(templateConfig, payload.metadata());
+      String fileName = resolveFileName(context, payload, templateConfig, fileFormatType, region);
       String finalObjectName = resolveObjectName(context, payload, fileName);
       String tempObjectName =
           BatchFileConstants.tempObjectName(context.getTenantId(), bizDate, fileName);
       Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
+      if (Texts.hasText(region)) {
+        exportSnapshot.put("region", region);
+      }
       context.getAttributes().put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
       context.getAttributes().put("fileName", fileName);
       context.getAttributes().put("exportFileFormatType", fileFormatType);
@@ -113,7 +120,8 @@ public class PrepareStep implements ExportStageStep {
       ExportJobContext context,
       ExportPayload payload,
       Map<String, Object> templateConfig,
-      String fileFormatType) {
+      String fileFormatType,
+      String region) {
     if (Texts.hasText(payload.fileName())) {
       return payload.fileName();
     }
@@ -136,6 +144,7 @@ public class PrepareStep implements ExportStageStep {
           .replace("${bizDate}", bizDate)
           .replace("${tenantId}", context.getTenantId())
           .replace("${batchNo}", defaultText(payload.batchNo(), "batch"))
+          .replace("${region}", defaultText(region, ""))
           .replace("${version}", "v1");
     }
     return bizType + "_" + bizDate + "_" + defaultText(payload.batchNo(), "batch") + extension;
