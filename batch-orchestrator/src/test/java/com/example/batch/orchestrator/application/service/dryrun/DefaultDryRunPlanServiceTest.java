@@ -202,7 +202,7 @@ class DefaultDryRunPlanServiceTest {
         .contains("EXEC_PLAN_NO_PROBES_TRIGGERED");
     assertThat(result.summary())
         .containsEntry("l3SqlProbed", 0)
-        .containsEntry("l3MinioProbed", 0)
+        .containsEntry("l3S3Probed", 0)
         .containsEntry("l3EndpointProbed", 0);
   }
 
