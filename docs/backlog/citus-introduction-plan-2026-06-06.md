@@ -8,10 +8,24 @@
 ## TL;DR
 
 1. **何时启用**:Tier-A + Tier-B 全做完仍不达目标,**且**有多租户并发洪峰实测信号(单租户单流 Citus 不缩耗时)。
-2. **改的是运维,几乎不动应用**:Citus 是 PG 扩展,JDBC 驱动 / SQL / RLS / ON CONFLICT / jsonb 全照旧;主要工作在 docker-compose / K8s / DBA。
+2. **改的是运维,但应用层改动 ≠ 极小**——见下方 ⚠️ 修正。
 3. **路径二选一**:**A** 自托管开源 Citus(免费、可控)/ **B** Azure Cosmos DB for PostgreSQL(托管 Citus,免 AGPL + 免运维)。
-4. **唯一阻塞前置 POC**:**RLS 过 coordinator**——`SET LOCAL app.tenant_id` 必须能透传到 worker 分片;**这条不过,整条路径作废**。
+4. **两个并列阻塞前置 POC**:① **RLS 过 coordinator**(`SET LOCAL app.tenant_id` 透传 worker,不过则路径作废)② **PK 复合化爆炸半径**(见 §0.5)。
 5. **数据迁移可在线做**:`create_distributed_table` 原地分片,业务停机最小化。
+
+> ## ⚠️ 0.5 实测硬阻塞前置(2026-06-07 schema 实扫,修正本文档原"几乎不动应用"的乐观假设)
+>
+> 本文档原假设"CLAUDE.md 强制 UNIQUE 含 tenant_id → distributed 前置满足、应用几乎不动"。**实扫 DDL 后该假设被推翻**:
+>
+> | 阻塞 | 实测 | 性质 |
+> |---|---|---|
+> | **PK 是单列 `id BIGSERIAL`** | `job_instance` 等 23 张候选表 PK 不含 tenant_id(只有 UNIQUE 含)。Citus distributed **要求 PK 含分片键** | 🔴 硬阻塞·大:改复合 `(tenant_id,id)` 连带应用层千+ 处 `findById`/FK/mapper,**应用重构级,非"几乎不动"** |
+> | **二级 UNIQUE 不含 tenant_id** | `job_partition`/`pipeline_step_run`/`workflow_node_run` 等的 `UNIQUE(parent_id, ...)` | 🔴 硬阻塞·中:每个 UNIQUE 都须含分片键 |
+> | **缺 tenant_id 列** | `pipeline_step_run` / `workflow_node_run`(run 明细子表,见 CLAUDE.md 多租隔离第②类豁免) | 🔴 须补列 + 回填(Citus 驱动) |
+> | **definition 表分类** | `job/pipeline/workflow_definition` 宜 **reference** 非 distributed | 🟡 决策 |
+> | **序列 / useGeneratedKeys** | 43 处 mapper `useGeneratedKeys`,distributed insert 取自增 id 行为 | 🟡 POC 验证 |
+>
+> **修正后定位**:Citus 不是"运维改造为主、应用极小",而是 **PK 复合化驱动的跨 23 表 + 千处应用代码重构**(估 12-20 周)。所以 §7 RLS POC **之外**必须再加一个 **PK 复合化 POC**(选 1-2 张核心表先改复合主键,实测应用层爆炸半径),两个 POC 都过才进入实施。
 
 ## 章节速览
 

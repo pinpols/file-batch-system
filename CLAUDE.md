@@ -53,9 +53,13 @@
 
 所有业务表必须带 `tenant_id`;所有 UNIQUE / PRIMARY 约束必须含 `tenant_id`(首选直接含 `UNIQUE (tenant_id, code)`)。
 
-合法豁免仅 4 张系统表:`batch_runtime_default_parameter` / `step_registry` / `shedlock` / `biz_table_schema`。
+合法豁免两类:
+- **① 系统表**(4 张):`batch_runtime_default_parameter` / `step_registry` / `shedlock` / `biz_table_schema`。
+- **② run 明细子表**(仅经父表 id 访问、不独立按业务键查询):如 `pipeline_step_run` / `workflow_node_run`——靠父表(`pipeline_instance` / `workflow_run`)的 FK + 父 id 隔离,mapper 一律 `WHERE <parent>_id = ?`,**不冗余 tenant_id 列**。platform 库(`batch.*`)本就不走 RLS(RLS 仅覆盖 `biz.*` + `batch.process_staging`),故无 RLS 盲区。新增此类子表前先确认确实"只经父 id 查";若会独立按业务键查询,则必须带 tenant_id。
 
 守护:`MultiTenantIsolationIntegrationTest`(batch-orchestrator)+ 各模块 `MapperXmlTenantGuardArchTest`(静态扫描 mapper XML,禁可空 `<if tenantId>` 守护)。
+
+> ⚠️ 引入 Citus(分布式)时,第 ② 类豁免**失效**——distributed table 要求 PK + 每个 UNIQUE 都含分片键(tenant_id),这类子表须补 `tenant_id` 列。这是 Citus 需求驱动,非当前缺口。详见 `docs/backlog/citus-introduction-plan-2026-06-06.md`。
 
 ## 异步事件路由
 
