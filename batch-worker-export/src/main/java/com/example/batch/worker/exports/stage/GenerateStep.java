@@ -210,13 +210,33 @@ public class GenerateStep implements ExportStageStep {
     if (snap instanceof Map<?, ?> raw) {
       raw.forEach((k, v) -> snapMap.put(String.valueOf(k), v));
     }
+    int partitionNo =
+        intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO), 1);
+    int partitionCount =
+        intOrDefault(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
     return new ExportDataContext(
         context.getTenantId(),
         context.getJobCode(),
         exportPayload.batchNo(),
         exportPayload.templateCode(),
         tc,
-        snapMap);
+        snapMap,
+        partitionNo,
+        partitionCount);
+  }
+
+  private static int intOrDefault(Object value, int def) {
+    if (value instanceof Number n) {
+      return n.intValue();
+    }
+    if (value == null) {
+      return def;
+    }
+    try {
+      return Integer.parseInt(String.valueOf(value).trim());
+    } catch (NumberFormatException ignored) {
+      return def;
+    }
   }
 
   private Map<String, Object> templateConfigMap(ExportJobContext context) {

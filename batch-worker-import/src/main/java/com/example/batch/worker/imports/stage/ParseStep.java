@@ -379,6 +379,11 @@ public class ParseStep implements ImportStageStep {
     if (partitionNo == null || partitionCount == null || partitionCount <= 1) {
       return totalCount;
     }
+    // range-slice 优化:PREPROCESS 已用对象存储 range GET 只下本片字节(行边界对齐),staging 已只含本片记录。
+    // 此时再做 line-mod 过滤会二次切分丢数据,直接跳过(staging 全量即本片)。
+    if (Boolean.TRUE.equals(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_PRESLICED))) {
+      return totalCount;
+    }
     if (templateConfig instanceof Map<?, ?> tc) {
       Object switchVal = tc.get("partition_aware_parse");
       if (switchVal == null) {

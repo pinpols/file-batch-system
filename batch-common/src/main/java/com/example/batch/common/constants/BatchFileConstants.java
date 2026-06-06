@@ -80,6 +80,20 @@ public final class BatchFileConstants {
     return HEALTH_PROBE_PREFIX + UUID.randomUUID() + HEALTH_PROBE_SUFFIX;
   }
 
+  /** partitionCount&gt;1 时在「扩展名之前」插入 _p{no}of{count} 分片标记;否则原样返回。 */
+  public static String insertPartitionTag(String name, int partitionNo, int partitionCount) {
+    if (name == null || partitionCount <= 1) {
+      return name;
+    }
+    String tag = "_p" + partitionNo + "of" + partitionCount;
+    int dot = name.lastIndexOf('.');
+    int slash = name.lastIndexOf('/');
+    if (dot > slash) {
+      return name.substring(0, dot) + tag + name.substring(dot);
+    }
+    return name + tag;
+  }
+
   public static String sanitize(String value) {
     if (value == null || value.isBlank()) {
       return "unknown";
