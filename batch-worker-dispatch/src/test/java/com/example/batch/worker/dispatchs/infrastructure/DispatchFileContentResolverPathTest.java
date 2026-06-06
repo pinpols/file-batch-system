@@ -24,7 +24,7 @@ class DispatchFileContentResolverPathTest {
 
   @TempDir Path tempDir;
 
-  @Mock private S3StorageProperties minioProperties;
+  @Mock private S3StorageProperties s3Properties;
 
   @Mock private BatchObjectCryptoService cryptoService;
 
@@ -35,7 +35,7 @@ class DispatchFileContentResolverPathTest {
   @BeforeEach
   void setUp() throws Exception {
     // 未配 MinIO:provider.getIfAvailable() 默认返回 null → objectStore 为 null(测 LOCAL 路径)。
-    resolver = new DispatchFileContentResolver(minioProperties, cryptoService, objectStoreProvider);
+    resolver = new DispatchFileContentResolver(s3Properties, cryptoService, objectStoreProvider);
     var init = DispatchFileContentResolver.class.getDeclaredMethod("init");
     init.setAccessible(true);
     init.invoke(resolver);

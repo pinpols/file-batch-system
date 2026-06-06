@@ -26,7 +26,7 @@ class ImportIngressScannerTest {
 
   private ImportWorkerConfiguration workerConfiguration;
   private ImportScannerProperties scannerProperties;
-  private S3StorageProperties minioStorageProperties;
+  private S3StorageProperties s3StorageProperties;
   private ImportIngressScanner scanner;
 
   @BeforeEach
@@ -50,15 +50,15 @@ class ImportIngressScannerTest {
     scannerProperties.setRequireDoneFile(false);
     scannerProperties.setStabilityWindowSeconds(0L);
 
-    minioStorageProperties = new S3StorageProperties();
-    minioStorageProperties.setBucket("batch-dev");
+    s3StorageProperties = new S3StorageProperties();
+    s3StorageProperties.setBucket("batch-dev");
 
     scanner =
         new ImportIngressScanner(
             runtimeRepository,
             workerConfiguration,
             scannerProperties,
-            minioStorageProperties,
+            s3StorageProperties,
             objectStore);
   }
 
