@@ -53,7 +53,13 @@ class PreprocessStepKmsDecryptTest {
     when(runtimeRepo.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
     // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
 
-    preprocessStep = new PreprocessStep(runtimeRepo, security, cryptoService);
+    preprocessStep =
+        new PreprocessStep(
+            runtimeRepo,
+            security,
+            cryptoService,
+            mock(com.example.batch.common.config.MinioStorageProperties.class),
+            mock(io.minio.MinioClient.class));
   }
 
   @Test
