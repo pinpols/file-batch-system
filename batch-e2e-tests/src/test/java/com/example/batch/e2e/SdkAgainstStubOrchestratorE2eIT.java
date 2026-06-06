@@ -59,6 +59,11 @@ import org.testcontainers.utility.DockerImageName;
  * boot + 经 LaunchService → outbox 推 SDK 的全栈版本留作 R3-6 follow-up。
  *
  * <p>预算:Kafka container 启动 ~10s + SDK rebalance + dispatch + report ≈ 30s 内跑完。
+ *
+ * <p><b>测试基类例外(必须裸协议层)</b>:本 IT 故意不继承 {@code AbstractIntegrationTest}。本 POC 只验 SDK→BE 的 wire 协议契约(真
+ * Kafka producer/consumer + 真 HTTP client),需要的隔离正是「**不要** 平台全栈」——基类拽起 PG/Redis/MinIO/Spring
+ * Boot,SDK 拿到这些会改变 fail-fast 路径,反而测不出 协议层缺陷。仅起独立 Kafka container + HTTP stub 是必要的协议层隔离,与「必须裸
+ * JDBC」同理。
  */
 @Tag("smoke")
 @Tag("e2e")

@@ -34,6 +34,11 @@ import org.testcontainers.utility.DockerImageName;
  * </ol>
  *
  * <p>用单 PG container,避免 PSQL_BUSINESS 跨 JVM 状态污染。
+ *
+ * <p><b>测试基类例外(必须裸 JDBC)</b>:本测试故意不继承 {@code AbstractIntegrationTest}。RLS POLICY USING/WITH CHECK
+ * 的反例验证依赖 {@code SET LOCAL app.tenant_id} session-scope GUC + 显式 INSERT, 而 HikariCP 池化 connection
+ * 跨测试复用会污染 GUC 状态;基类提供的 Spring tx 模板与 RLS 反例所需的 「裸 connection 直发 SET LOCAL + INSERT +
+ * SELECT」不兼容。自起独立 PG 容器是必要隔离。
  */
 @DisplayName("Phase A · 业务库 RLS 行级隔离 反例")
 class RlsTenantIsolationIntegrationTest {
