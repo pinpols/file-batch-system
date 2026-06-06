@@ -45,8 +45,8 @@ public final class ExportFileVerifier implements E2eVerifier {
   private final BigDecimal expectedMinTotalAmount;
   private final int expectedMinFileRows;
   private final List<String> expectedContentSnippets;
-  private final String minioEndpoint;
-  private final String minioBucket;
+  private final String s3Endpoint;
+  private final String s3Bucket;
 
   private ExportFileVerifier(Builder builder) {
     this.tenantId = builder.tenantId;
@@ -57,8 +57,8 @@ public final class ExportFileVerifier implements E2eVerifier {
     this.expectedMinTotalAmount = builder.expectedMinTotalAmount;
     this.expectedMinFileRows = builder.expectedMinFileRows;
     this.expectedContentSnippets = List.copyOf(builder.expectedContentSnippets);
-    this.minioEndpoint = builder.minioEndpoint;
-    this.minioBucket = builder.minioBucket;
+    this.s3Endpoint = builder.s3Endpoint;
+    this.s3Bucket = builder.s3Bucket;
   }
 
   @Override
@@ -126,19 +126,19 @@ public final class ExportFileVerifier implements E2eVerifier {
     if (storagePath == null
         || storagePath.startsWith("/")
         || storagePath.startsWith("file://")
-        || minioEndpoint == null) {
+        || s3Endpoint == null) {
       return;
     }
     try (S3Client client =
         S3Client.builder()
-            .endpointOverride(URI.create(minioEndpoint))
+            .endpointOverride(URI.create(s3Endpoint))
             .credentialsProvider(
                 StaticCredentialsProvider.create(
                     AwsBasicCredentials.create("minioadmin", "minioadmin")))
             .forcePathStyle(true)
             .region(Region.US_EAST_1)
             .build()) {
-      String bucket = minioBucket != null ? minioBucket : "batch-dev";
+      String bucket = s3Bucket != null ? s3Bucket : "batch-dev";
       String objectKey =
           storagePath.startsWith(bucket + "/")
               ? storagePath.substring(bucket.length() + 1)
@@ -194,8 +194,8 @@ public final class ExportFileVerifier implements E2eVerifier {
     private BigDecimal expectedMinTotalAmount;
     private int expectedMinFileRows;
     private List<String> expectedContentSnippets = List.of();
-    private String minioEndpoint;
-    private String minioBucket;
+    private String s3Endpoint;
+    private String s3Bucket;
 
     private Builder(String tenantId) {
       this.tenantId = tenantId;
@@ -236,13 +236,13 @@ public final class ExportFileVerifier implements E2eVerifier {
       return this;
     }
 
-    public Builder minioEndpoint(String endpoint) {
-      this.minioEndpoint = endpoint;
+    public Builder s3Endpoint(String endpoint) {
+      this.s3Endpoint = endpoint;
       return this;
     }
 
-    public Builder minioBucket(String bucket) {
-      this.minioBucket = bucket;
+    public Builder s3Bucket(String bucket) {
+      this.s3Bucket = bucket;
       return this;
     }
 

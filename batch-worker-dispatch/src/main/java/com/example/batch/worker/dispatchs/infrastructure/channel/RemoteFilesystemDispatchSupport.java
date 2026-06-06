@@ -208,12 +208,12 @@ final class RemoteFilesystemDispatchSupport {
   static DispatchResult dispatchOss(
       DispatchCommand command,
       DispatchFileContentResolver contentResolver,
-      S3StorageProperties minioProperties,
+      S3StorageProperties s3Properties,
       BatchObjectStore objectStore) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String bucket =
-          firstText(channelConfig, "oss_bucket", "storage_bucket", minioProperties.getBucket());
+          firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
       if (!Texts.hasText(bucket)) {
         return new DispatchResult(false, null, null, false, false, "oss_bucket missing", null);
       }
@@ -289,11 +289,11 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeOss(
       Map<String, Object> channelConfig,
-      S3StorageProperties minioProperties,
+      S3StorageProperties s3Properties,
       BatchObjectStore objectStore) {
     try {
       String bucket =
-          firstText(channelConfig, "oss_bucket", "storage_bucket", minioProperties.getBucket());
+          firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
       if (!Texts.hasText(bucket)) {
         return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
       }
@@ -406,14 +406,14 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeChannel(
       Map<String, Object> channelConfig,
-      S3StorageProperties minioProperties,
+      S3StorageProperties s3Properties,
       BatchObjectStore objectStore,
       boolean dnsGuardEnabled) {
     String channelType =
         String.valueOf(channelConfig.getOrDefault("channel_type", "")).toUpperCase(Locale.ROOT);
     return switch (channelType) {
       case "NAS" -> probeNas(channelConfig);
-      case "OSS" -> probeOss(channelConfig, minioProperties, objectStore);
+      case "OSS" -> probeOss(channelConfig, s3Properties, objectStore);
       case "SFTP" -> probeSftp(channelConfig, dnsGuardEnabled);
       case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled);
       case "API", "API_PUSH" -> probeHttp(channelConfig, dnsGuardEnabled);

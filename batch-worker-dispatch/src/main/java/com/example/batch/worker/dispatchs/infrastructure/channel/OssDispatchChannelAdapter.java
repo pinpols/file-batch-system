@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
 public class OssDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private final DispatchFileContentResolver contentResolver;
-  private final S3StorageProperties minioStorageProperties;
+  private final S3StorageProperties s3StorageProperties;
   // 复用 Spring 装配的中心对象存储 bean(底层 client 带超时 + 连接池);
   // ObjectProvider 惰性取,避免硬依赖——未配 MinIO 时保持 null(同历史行为)。
   private final ObjectProvider<BatchObjectStore> objectStoreProvider;
@@ -45,6 +45,6 @@ public class OssDispatchChannelAdapter implements DispatchChannelAdapter {
   @Override
   public DispatchResult dispatch(DispatchCommand command) {
     return RemoteFilesystemDispatchSupport.dispatchOss(
-        command, contentResolver, minioStorageProperties, objectStore);
+        command, contentResolver, s3StorageProperties, objectStore);
   }
 }

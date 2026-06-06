@@ -40,8 +40,8 @@ import org.springframework.test.context.jdbc.Sql;
  *   <li>业务批次记录仍可查询，导出不会破坏结算批次主数据
  * </ul>
  *
- * <p>说明：MinIO 读取使用 {@link AbstractIntegrationTest#minioEndpoint()} / {@link
- * AbstractIntegrationTest#minioBucket()}。 若未来导出存储路径或桶策略变更，测试允许退化为“平台表记录了
+ * <p>说明：MinIO 读取使用 {@link AbstractIntegrationTest#s3Endpoint()} / {@link
+ * AbstractIntegrationTest#s3Bucket()}。 若未来导出存储路径或桶策略变更，测试允许退化为“平台表记录了
  * storage_path”这一弱内容信号，避免把环境差异当成业务失败。
  */
 @SpringBootTest(
@@ -163,8 +163,8 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
         .batchNo(BATCH_NO)
         .expectedMinFileRows(1)
         .expectedContentSnippets("E2E-CV-001", "E2E-CV-002")
-        .minioEndpoint(minioEndpoint())
-        .minioBucket(minioBucket())
+        .s3Endpoint(s3Endpoint())
+        .s3Bucket(s3Bucket())
         .build()
         .verify();
   }

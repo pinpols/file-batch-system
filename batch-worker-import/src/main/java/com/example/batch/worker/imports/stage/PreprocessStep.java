@@ -68,19 +68,19 @@ public class PreprocessStep implements ImportStageStep {
   private final BatchObjectCryptoService cryptoService;
   // ADR-sim:大文件对象自动加载——内联 content 受 Kafka 消息体上限(~1MB)限制,
   // 大文件须把对象路径下发、由 worker 直接从 MinIO 拉取(payload 只带 path,不带内容)。
-  private final S3StorageProperties minioStorageProperties;
+  private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
 
   public PreprocessStep(
       PlatformFileRuntimeRepository runtimeRepository,
       BatchSecurityProperties batchSecurityProperties,
       BatchObjectCryptoService cryptoService,
-      S3StorageProperties minioStorageProperties,
+      S3StorageProperties s3StorageProperties,
       BatchObjectStore objectStore) {
     this.runtimeRepository = runtimeRepository;
     this.batchSecurityProperties = batchSecurityProperties;
     this.cryptoService = cryptoService;
-    this.minioStorageProperties = minioStorageProperties;
+    this.s3StorageProperties = s3StorageProperties;
     this.objectStore = objectStore;
   }
 
@@ -277,7 +277,7 @@ public class PreprocessStep implements ImportStageStep {
     String bucket =
         Texts.hasText(importPayload.storageBucket())
             ? importPayload.storageBucket()
-            : minioStorageProperties.getBucket();
+            : s3StorageProperties.getBucket();
     String object = importPayload.storagePath();
     try (InputStream in = objectStore.get(bucket, object)) {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -344,7 +344,7 @@ public class PreprocessStep implements ImportStageStep {
     String bucket =
         Texts.hasText(importPayload.storageBucket())
             ? importPayload.storageBucket()
-            : minioStorageProperties.getBucket();
+            : s3StorageProperties.getBucket();
     try {
       return objectStore.statSize(bucket, importPayload.storagePath());
     } catch (Exception ex) {
@@ -374,7 +374,7 @@ public class PreprocessStep implements ImportStageStep {
     String bucket =
         Texts.hasText(importPayload.storageBucket())
             ? importPayload.storageBucket()
-            : minioStorageProperties.getBucket();
+            : s3StorageProperties.getBucket();
     String object = importPayload.storagePath();
     Path spool = null;
     try {
@@ -512,7 +512,7 @@ public class PreprocessStep implements ImportStageStep {
     String bucket =
         Texts.hasText(importPayload.storageBucket())
             ? importPayload.storageBucket()
-            : minioStorageProperties.getBucket();
+            : s3StorageProperties.getBucket();
     String object = importPayload.storagePath();
     long rawStart = objectBytes * (partitionNo - 1) / partitionCount;
     long rawEnd =

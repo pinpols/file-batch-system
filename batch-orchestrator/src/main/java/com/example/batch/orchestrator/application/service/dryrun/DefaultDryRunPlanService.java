@@ -82,7 +82,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   private final BatchTimezoneProvider timezoneProvider;
   private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
   private final ObjectProvider<S3Client> s3ClientProvider;
-  private final ObjectProvider<S3StorageProperties> minioPropertiesProvider;
+  private final ObjectProvider<S3StorageProperties> s3PropertiesProvider;
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(HTTP_PROBE_TIMEOUT).build();
 
@@ -94,7 +94,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
       BatchTimezoneProvider timezoneProvider,
       ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
       ObjectProvider<S3Client> s3ClientProvider,
-      ObjectProvider<S3StorageProperties> minioPropertiesProvider) {
+      ObjectProvider<S3StorageProperties> s3PropertiesProvider) {
     this.configCacheService = configCacheService;
     this.schedulePlanBuilder = schedulePlanBuilder;
     this.workflowNodeMapper = workflowNodeMapper;
@@ -102,7 +102,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     this.timezoneProvider = timezoneProvider;
     this.jdbcTemplateProvider = jdbcTemplateProvider;
     this.s3ClientProvider = s3ClientProvider;
-    this.minioPropertiesProvider = minioPropertiesProvider;
+    this.s3PropertiesProvider = s3PropertiesProvider;
   }
 
   @Override
@@ -413,13 +413,13 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
    * <ul>
    *   <li>若 params.minioBucket 缺失，回退到 S3StorageProperties.bucket 默认；
    *   <li>校验 bucket 命名合法（DNS-style）；
-   *   <li>若 MinioClient 可用，调用 bucketExists；不可用降级为只校验命名规则。
+   *   <li>若 S3Client 可用，调用 bucketExists；不可用降级为只校验命名规则。
    * </ul>
    */
   private int probeMinioBucket(Map<String, Object> params, List<DryRunFinding> findings) {
     String bucket = stringValue(params, "minioBucket");
     if (!Texts.hasText(bucket)) {
-      S3StorageProperties props = minioPropertiesProvider.getIfAvailable();
+      S3StorageProperties props = s3PropertiesProvider.getIfAvailable();
       bucket = props == null ? null : props.getBucket();
     }
     if (!Texts.hasText(bucket)) return 0;

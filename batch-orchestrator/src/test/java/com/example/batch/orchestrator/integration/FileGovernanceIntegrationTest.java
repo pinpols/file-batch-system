@@ -9,7 +9,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
-import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage;
+import com.example.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -118,7 +118,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     BatchClockConfig.class,
     FileGovernanceScheduler.class,
     FileGovernanceRepository.class,
-    MinioGovernanceStorage.class,
+    S3GovernanceStorage.class,
     OrchestratorRedisSupport.class,
     FileGovernanceMetricsCacheService.class
   })
@@ -375,7 +375,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private S3Client s3Client() {
     return S3Client.builder()
-        .endpointOverride(URI.create(minioEndpoint()))
+        .endpointOverride(URI.create(s3Endpoint()))
         .credentialsProvider(
             StaticCredentialsProvider.create(
                 AwsBasicCredentials.create("minioadmin", "minioadmin123")))

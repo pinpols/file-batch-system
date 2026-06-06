@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class MinioGovernanceStorage {
+public class S3GovernanceStorage {
 
   private final S3StorageProperties properties;
   private final BatchObjectStore objectStore;

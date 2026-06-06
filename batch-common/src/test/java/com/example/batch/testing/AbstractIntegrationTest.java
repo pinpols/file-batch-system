@@ -133,7 +133,7 @@ public abstract class AbstractIntegrationTest {
     }
   }
 
-  protected static String minioEndpoint() {
+  protected static String s3Endpoint() {
     return MINIO.getEndpoint();
   }
 

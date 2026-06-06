@@ -57,7 +57,7 @@ public class ImportIngressScanner {
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ImportWorkerConfiguration workerConfiguration;
   private final ImportScannerProperties scannerProperties;
-  private final S3StorageProperties minioStorageProperties;
+  private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
   private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
 
@@ -126,7 +126,7 @@ public class ImportIngressScanner {
       return;
     }
     if (runtimeRepository.existsFileRecordByStoragePath(
-        resolvedTenant, minioStorageProperties.getBucket(), snapshot.objectName())) {
+        resolvedTenant, s3StorageProperties.getBucket(), snapshot.objectName())) {
       return;
     }
     String fileName =
@@ -185,7 +185,7 @@ public class ImportIngressScanner {
                 .checksumValue(null)
                 .storageType("S3")
                 .storagePath(snapshot.objectName())
-                .storageBucket(minioStorageProperties.getBucket())
+                .storageBucket(s3StorageProperties.getBucket())
                 .fileVersion(null)
                 .bizDate(bizDate)
                 .sourceType(scannerProperties.getSourceType())
@@ -337,7 +337,7 @@ public class ImportIngressScanner {
   private Map<String, ObjectSnapshot> listSnapshots() {
     Map<String, ObjectSnapshot> snapshots = new HashMap<>();
     int batchSize = scannerProperties.getBatchSize();
-    String bucket = minioStorageProperties.getBucket();
+    String bucket = s3StorageProperties.getBucket();
     String prefix = scannerProperties.getPrefix();
     try {
       String marker = null;

@@ -57,7 +57,7 @@ public class DispatchChannelHealthService {
   private final DispatchChannelHealthRepository repository;
   private final DispatchChannelHealthProperties properties;
   private final DispatchCircuitBreakerProperties circuitBreakerProperties;
-  private final S3StorageProperties minioStorageProperties;
+  private final S3StorageProperties s3StorageProperties;
   private final BatchSecurityProperties securityProperties;
   private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;
@@ -277,7 +277,7 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelProbeResult result =
         RemoteFilesystemDispatchSupport.probeChannel(
-            channelConfig, minioStorageProperties, objectStore, !securityProperties.isBypassMode());
+            channelConfig, s3StorageProperties, objectStore, !securityProperties.isBypassMode());
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();

@@ -213,7 +213,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
   private S3Client s3Client() {
     return S3Client.builder()
-        .endpointOverride(URI.create(minioEndpoint()))
+        .endpointOverride(URI.create(s3Endpoint()))
         .credentialsProvider(
             StaticCredentialsProvider.create(
                 AwsBasicCredentials.create("minioadmin", "minioadmin123")))

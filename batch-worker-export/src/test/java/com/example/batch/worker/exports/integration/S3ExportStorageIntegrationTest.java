@@ -6,7 +6,7 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
-import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
+import com.example.batch.worker.exports.infrastructure.S3ExportStorage;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -22,18 +22,18 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
-/** Integration test: MinioExportStorage read/write/copy/remove against real MinIO container. */
+/** Integration test: S3ExportStorage read/write/copy/remove against real MinIO container. */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
+class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 
   @DynamicPropertySource
   static void orchestratorStub(DynamicPropertyRegistry registry) {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired private MinioExportStorage storage;
+  @Autowired private S3ExportStorage storage;
 
   @Test
   void shouldWriteAndDetectJsonObject() {
@@ -118,7 +118,7 @@ class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
 
     try (S3Client client =
         S3Client.builder()
-            .endpointOverride(URI.create(minioEndpoint()))
+            .endpointOverride(URI.create(s3Endpoint()))
             .credentialsProvider(
                 StaticCredentialsProvider.create(
                     AwsBasicCredentials.create("minioadmin", "minioadmin123")))

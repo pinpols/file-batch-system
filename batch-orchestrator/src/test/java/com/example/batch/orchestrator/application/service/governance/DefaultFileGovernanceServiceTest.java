@@ -25,7 +25,7 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
-import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage;
+import com.example.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
@@ -52,7 +52,7 @@ class DefaultFileGovernanceServiceTest {
   @Mock private JobPartitionMapper jobPartitionMapper;
   @Mock private JobInstanceMapper jobInstanceMapper;
   @Mock private TaskDispatchOutboxService taskDispatchOutboxService;
-  @Mock private MinioGovernanceStorage minioGovernanceStorage;
+  @Mock private S3GovernanceStorage s3GovernanceStorage;
 
   private final FileGovernanceProperties fileGovernanceProperties = new FileGovernanceProperties();
   private final BatchSecurityProperties batchSecurityProperties = new BatchSecurityProperties();
@@ -69,7 +69,7 @@ class DefaultFileGovernanceServiceTest {
             jobInstanceMapper,
             taskDispatchOutboxService,
             fileGovernanceProperties,
-            minioGovernanceStorage,
+            s3GovernanceStorage,
             batchSecurityProperties);
   }
 
@@ -252,7 +252,7 @@ class DefaultFileGovernanceServiceTest {
                 "storage_bucket", "bucket-a",
                 "storage_path", "path/to/file.csv"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
-    when(minioGovernanceStorage.createPresignedDownloadUrl(
+    when(s3GovernanceStorage.createPresignedDownloadUrl(
             eq("bucket-a"), eq("path/to/file.csv"), anyInt()))
         .thenReturn("https://minio/presigned/url");
 
@@ -269,13 +269,12 @@ class DefaultFileGovernanceServiceTest {
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
         .thenReturn(Map.of("storage_bucket", "b", "storage_path", "p"));
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
-    when(minioGovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), eq(60)))
-        .thenReturn("u");
+    when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), eq(60))).thenReturn("u");
 
     String url = service.presignFileDownload(cmd);
 
     assertThat(url).isEqualTo("u");
-    verify(minioGovernanceStorage).createPresignedDownloadUrl("b", "p", 60);
+    verify(s3GovernanceStorage).createPresignedDownloadUrl("b", "p", 60);
   }
 
   @Test
@@ -296,7 +295,7 @@ class DefaultFileGovernanceServiceTest {
         .startsWith("/api/console/files/1/download?tenantId=t1")
         .contains("approvalId=appr-1");
     // 加密文件路径不调 MinIO 直连
-    verify(minioGovernanceStorage, never()).createPresignedDownloadUrl(any(), any(), anyInt());
+    verify(s3GovernanceStorage, never()).createPresignedDownloadUrl(any(), any(), anyInt());
     verify(fileGovernanceRepository).appendAudit(any());
   }
 
@@ -348,7 +347,7 @@ class DefaultFileGovernanceServiceTest {
             Map.of(
                 "content_encryption_enabled", true,
                 "download_requires_approval", true));
-    when(minioGovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), anyInt()))
+    when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), anyInt()))
         .thenReturn("https://direct-minio");
 
     String url = service.presignFileDownload(cmd);
