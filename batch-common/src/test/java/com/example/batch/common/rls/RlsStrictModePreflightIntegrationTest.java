@@ -36,6 +36,11 @@ import org.testcontainers.utility.DockerImageName;
  * <p>本测试是 strict 翻转 PR 的安全网:翻 strict 前必须本测试全过。
  *
  * <p>详见 docs/runbook/multi-tenant-rls.md §3.3 翻 strict 模式 前置 checklist · 项 D。
+ *
+ * <p><b>测试基类例外(必须裸 JDBC)</b>:本测试故意不继承 {@code AbstractIntegrationTest}。 RLS 策略验证依赖 {@code SET LOCAL
+ * app.tenant_id} 这个 session-scope GUC,而 HikariCP 池化的 connection 在不同测试间复用会污染 session 语义(rollback 不重置
+ * GUC,只有 `RESET` 才行),导致策略测试出假阳/假阴。 自起独立 PG 容器 + 直接 DriverManager.getConnection 是验 POLICY USING/WITH
+ * CHECK 的必要隔离,非违规。
  */
 @DisplayName("Phase A · Strict 模式翻转 preflight")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
