@@ -89,7 +89,7 @@ for entry in "ta:customer_account" "tb:transaction" "tc:risk_score"; do
 done
 
 hdr "EXPORT 产物(MinIO $BUCKET 各 tenant outbound)"
-for prefix in "ta/outbound/report" "tb/outbound/statement" "tc/outbound/risk-alert"; do
+for prefix in "outbound/TA_EXPORT_REPORT" "outbound/TB_EXPORT_STATEMENT" "outbound/TC_EXPORT_RISK_ALERT"; do
   cnt=$(docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null | grep -cv "\.keep$" 2>/dev/null | tr -dc '0-9')
   cnt="${cnt:-0}"
   if [[ "$cnt" -gt 0 ]]; then

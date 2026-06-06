@@ -17,6 +17,7 @@ import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalR
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
+import io.minio.errors.ErrorResponseException;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -119,6 +120,14 @@ public class DefaultConsoleFileDownloadApplicationService
                   .toString())
           .contentType(MediaType.parseMediaType(contentType))
           .body(resource);
+    } catch (ErrorResponseException exception) {
+      // 存储中对象不存在(NoSuchKey/NoSuchBucket,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
+      // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。其余存储异常仍按系统错误抛。
+      String code = exception.errorResponse() == null ? null : exception.errorResponse().code();
+      if ("NoSuchKey".equals(code) || "NoSuchBucket".equals(code)) {
+        throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
+      }
+      throw new IllegalStateException("failed to open download stream", exception);
     } catch (Exception exception) {
       throw new IllegalStateException("failed to open download stream", exception);
     }

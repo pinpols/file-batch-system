@@ -12,6 +12,7 @@ import com.example.batch.console.domain.file.web.request.PresignDownloadFileRequ
 import com.example.batch.console.domain.governance.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.domain.job.application.ConsoleJobApplicationService;
 import com.example.batch.console.domain.job.web.request.CompensationCommandRequest;
+import com.example.batch.console.domain.job.web.request.RerunRequest;
 import com.example.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.domain.ops.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.domain.ops.web.response.ConsoleBatchApprovalResultResponse;
@@ -38,6 +39,7 @@ import org.springframework.web.client.RestClient;
  *   <li>按 {@code actionType} 分派到对应 application service 执行真实业务：
  *       <ul>
  *         <li>{@code COMPENSATION} → {@link ConsoleJobApplicationService#compensation}
+ *         <li>{@code RERUN} → {@link ConsoleJobApplicationService#rerun}（SELF_SERVICE 自助重跑）
  *         <li>{@code DLQ_REPLAY} → {@link ConsoleJobApplicationService#replayDeadLetter}
  *         <li>{@code DOWNLOAD} → {@link ConsoleFileApplicationService#presignDownload}
  *         <li>{@code CATCH_UP} → {@link ConsoleJobApplicationService#approveCatchUp}
@@ -76,7 +78,20 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             CompensationCommandRequest request =
                 JsonUtils.fromJson(record.getPayloadJson(), CompensationCommandRequest.class);
             request.setApprovalId(approvalNo);
+            // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
+            // 「必须指定补偿类型」、审批单卡死无从补救。按目标类型确定性推导补偿粒度兜底。
+            if (request.getCompensationType() == null || request.getCompensationType().isBlank()) {
+              request.setCompensationType(deriveCompensationType(record.getTargetType()));
+            }
             yield consoleJobApplicationService.compensation(request, approvalNo);
+          }
+          case "RERUN" -> {
+            // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
+            // {tenantId, jobCode, bizDate, targetInstanceNo, reason}。approve 后 dispatch 到
+            // recovery rerun 真正提交补跑;approvalId 回填 approvalNo 与 COMPENSATION 一致。
+            RerunRequest request = JsonUtils.fromJson(record.getPayloadJson(), RerunRequest.class);
+            request.setApprovalId(approvalNo);
+            yield consoleJobApplicationService.rerun(request, approvalNo);
           }
           case "DLQ_REPLAY" -> {
             DeadLetterReplayRequest request =
@@ -241,6 +256,24 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         .body(new ApprovalTenantRequest(tenantId))
         .retrieve()
         .toBodilessEntity();
+  }
+
+  /**
+   * 补偿单缺 compensationType 时,按审批目标类型推导补偿粒度(JOB_INSTANCE→JOB、STEP→STEP …)。 合法值对齐
+   * ck_compensation_command_type:JOB/STEP/PARTITION/FILE/BATCH/DLQ。
+   */
+  private static String deriveCompensationType(String targetType) {
+    if (targetType == null) {
+      return "JOB";
+    }
+    return switch (targetType) {
+      case "STEP_INSTANCE", "STEP" -> "STEP";
+      case "PARTITION" -> "PARTITION";
+      case "FILE", "FILE_RECORD" -> "FILE";
+      case "BATCH", "BATCH_DAY" -> "BATCH";
+      case "DLQ", "DEAD_LETTER" -> "DLQ";
+      default -> "JOB";
+    };
   }
 
   private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}

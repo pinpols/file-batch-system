@@ -8,9 +8,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.console.config.ConsoleMenuProperties;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.domain.rbac.support.ConsoleJwtService;
 import com.example.batch.console.domain.rbac.support.ConsoleLoginService;
+import com.example.batch.console.domain.rbac.support.ConsoleMenuRegistry;
 import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
 import com.example.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import com.example.batch.console.domain.rbac.web.request.ConsoleLoginRequest;
@@ -47,7 +49,12 @@ class ConsoleAuthApplicationServiceTest {
 
     service =
         new ConsoleAuthApplicationService(
-            jwtService, loginService, sessionRegistry, securityProperties, requestMetadataResolver);
+            jwtService,
+            loginService,
+            sessionRegistry,
+            securityProperties,
+            requestMetadataResolver,
+            new ConsoleMenuRegistry(new ConsoleMenuProperties()));
   }
 
   @Test

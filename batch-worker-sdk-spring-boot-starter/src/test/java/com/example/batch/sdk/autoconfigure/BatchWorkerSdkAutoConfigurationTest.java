@@ -39,10 +39,10 @@ class BatchWorkerSdkAutoConfigurationTest {
             "batch.worker-sdk.kafka-group-id=tenant-a-workers",
             "batch.worker-sdk.build-id=git-abc123",
             "batch.worker-sdk.http-timeout=7s",
-            "batch.worker-sdk.heartbeat-interval=11s",
+            "batch.worker-sdk.heartbeat-interval=15s",
             "batch.worker-sdk.max-concurrent-tasks=9",
             "batch.worker-sdk.kafka-poll-interval=150ms",
-            "batch.worker-sdk.lease-renew-interval=45s",
+            "batch.worker-sdk.lease-renew-interval=22s",
             "batch.worker-sdk.claim-max-5xx-retries=5",
             "batch.worker-sdk.claim-retry-base-delay=350ms",
             "batch.worker-sdk.client-error-fail-fast-threshold=6",
@@ -62,10 +62,10 @@ class BatchWorkerSdkAutoConfigurationTest {
               assertThat(config.getKafkaGroupId()).isEqualTo("tenant-a-workers");
               assertThat(config.getBuildId()).isEqualTo("git-abc123");
               assertThat(config.getHttpTimeout()).isEqualTo(Duration.ofSeconds(7));
-              assertThat(config.getHeartbeatInterval()).isEqualTo(Duration.ofSeconds(11));
+              assertThat(config.getHeartbeatInterval()).isEqualTo(Duration.ofSeconds(15));
               assertThat(config.getMaxConcurrentTasks()).isEqualTo(9);
               assertThat(config.getKafkaPollInterval()).isEqualTo(Duration.ofMillis(150));
-              assertThat(config.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(45));
+              assertThat(config.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(22));
               assertThat(config.getClaimMax5xxRetries()).isEqualTo(5);
               assertThat(config.getClaimRetryBaseDelay()).isEqualTo(Duration.ofMillis(350));
               assertThat(config.getClientErrorFailFastThreshold()).isEqualTo(6);
