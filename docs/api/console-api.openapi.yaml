@@ -2784,6 +2784,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
+  /api/console/files/fs-download:
+    get:
+      tags: [Files]
+      summary: HMAC-token download (FilesystemObjectStore backend only)
+      description: |
+        Token-authenticated download for `batch.storage.backend=filesystem`. S3 backend
+        uses real presigned URLs (storage-direct); FS backend has no native presign, so
+        the application signs an HMAC token and serves bytes via this endpoint.
+        Anonymous — the token IS the authorization. Loaded only when backend=filesystem.
+      operationId: filesystemPresignDownload
+      parameters:
+        - in: query
+          name: b
+          required: true
+          schema: { type: string }
+        - in: query
+          name: k
+          required: true
+          schema: { type: string }
+        - in: query
+          name: e
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: s
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: File content stream
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401':
+          description: Token invalid (bad signature / tampered / expired)
+        '404':
+          description: Object not found
   /api/console/files/presign-download:
     post:
       tags: [Files]
