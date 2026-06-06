@@ -137,11 +137,11 @@ public abstract class AbstractIntegrationTest {
     return MINIO.getEndpoint();
   }
 
-  protected static String minioBucket() {
+  protected static String s3Bucket() {
     return MINIO.getDefaultBucket();
   }
 
-  protected static void ensureMinioBucket(String bucketName) {
+  protected static void ensureS3Bucket(String bucketName) {
     MINIO.ensureBucketExists(bucketName);
   }
 

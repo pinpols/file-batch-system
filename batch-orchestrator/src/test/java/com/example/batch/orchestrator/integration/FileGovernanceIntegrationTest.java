@@ -163,7 +163,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                 "S3",
                 "incoming/delay-file-" + suffix + ".csv",
                 "{\"expectedArrivalTime\":\"" + now.minusSeconds(7200) + "\"}")
-            .storageBucket(minioBucket())
+            .storageBucket(s3Bucket())
             .createdAt(now)
             .updatedAt(now));
 
@@ -177,7 +177,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldArchiveExpiredFilesAndWriteCleanupAudit() throws Exception {
-    ensureMinioBucket(minioBucket());
+    ensureS3Bucket(s3Bucket());
     String objectName = "archive/cleanup/" + suffix() + ".csv";
     putObject(objectName, "one,two,three\n");
 
@@ -191,7 +191,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                     "S3",
                     objectName,
                     "{}")
-                .storageBucket(minioBucket())
+                .storageBucket(s3Bucket())
                 .createdAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L))
                 .updatedAt(BatchDateTimeSupport.utcNow().minusSeconds(9L * 24L * 3600L)));
 
@@ -220,7 +220,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     assertThatThrownBy(
             () ->
                 client.headObject(
-                    HeadObjectRequest.builder().bucket(minioBucket()).key(objectName).build()))
+                    HeadObjectRequest.builder().bucket(s3Bucket()).key(objectName).build()))
         .isInstanceOf(Exception.class);
   }
 
@@ -366,7 +366,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     s3Client()
         .putObject(
             PutObjectRequest.builder()
-                .bucket(minioBucket())
+                .bucket(s3Bucket())
                 .key(objectName)
                 .contentType("text/plain")
                 .build(),

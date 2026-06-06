@@ -55,7 +55,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
     String objectName = "ingress/it-scan-test.csv";
-    String bucket = minioBucket();
+    String bucket = s3Bucket();
 
     // 上传一个最小化的 CSV 到 MinIO
     byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
@@ -81,7 +81,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldNotRegisterAlreadyKnownFile() throws Exception {
     String objectName = "ingress/it-scan-already-known.csv";
-    String bucket = minioBucket();
+    String bucket = s3Bucket();
 
     byte[] content = "id,name\n2,Bob\n".getBytes(StandardCharsets.UTF_8);
     S3Client client = s3Client();

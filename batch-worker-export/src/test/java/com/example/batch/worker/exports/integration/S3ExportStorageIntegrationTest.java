@@ -128,7 +128,7 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
       byte[] bytes =
           client
               .getObjectAsBytes(
-                  GetObjectRequest.builder().bucket(minioBucket()).key(objectName).build())
+                  GetObjectRequest.builder().bucket(s3Bucket()).key(objectName).build())
               .asByteArray();
       String read = new String(bytes, StandardCharsets.UTF_8);
       assertThat(read).isEqualTo(content);

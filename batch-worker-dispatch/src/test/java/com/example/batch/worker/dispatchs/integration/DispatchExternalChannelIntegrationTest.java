@@ -95,10 +95,10 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
     byte[] content = ("oss-payload-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
 
     S3Client s3Client = s3Client();
-    ensureMinioBucket(minioBucket());
+    ensureS3Bucket(s3Bucket());
     s3Client.putObject(
         PutObjectRequest.builder()
-            .bucket(minioBucket())
+            .bucket(s3Bucket())
             .key(sourceObject)
             .contentType("text/plain")
             .build(),
@@ -111,22 +111,22 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
                 "tenant_id", tenantId,
                 "channel_type", "OSS",
                 "channel_code", channelCode,
-                "oss_bucket", minioBucket(),
+                "oss_bucket", s3Bucket(),
                 "oss_object_name", targetObject),
-            fileRecord(sourceObject, "OSS", minioBucket(), "input.txt", "text/plain"),
+            fileRecord(sourceObject, "OSS", s3Bucket(), "input.txt", "text/plain"),
             payload("file-oss", channelCode, "req-oss", "rc-oss"));
 
     assertThat(result.success()).isTrue();
-    assertThat(result.evidenceRef()).isEqualTo("oss://" + minioBucket() + "/" + targetObject);
+    assertThat(result.evidenceRef()).isEqualTo("oss://" + s3Bucket() + "/" + targetObject);
 
     assertThat(
             s3Client.headObject(
-                HeadObjectRequest.builder().bucket(minioBucket()).key(targetObject).build()))
+                HeadObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build()))
         .isNotNull();
     byte[] downloaded =
         s3Client
             .getObjectAsBytes(
-                GetObjectRequest.builder().bucket(minioBucket()).key(targetObject).build())
+                GetObjectRequest.builder().bucket(s3Bucket()).key(targetObject).build())
             .asByteArray();
     assertThat(downloaded).isEqualTo(content);
   }
