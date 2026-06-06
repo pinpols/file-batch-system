@@ -25,8 +25,8 @@ public abstract class AbstractIntegrationTest {
   private static final String POSTGRES_IMAGE = "postgres:17";
   // 版本需与 .env.example KAFKA_IMAGE_TAG 保持一致；KafkaContainer 仅支持 apache/kafka 镜像（非 Confluent）
   private static final String KAFKA_IMAGE = "apache/kafka:4.1.2";
-  // 版本需与 .env.example REDIS_IMAGE_TAG 保持一致
-  private static final String REDIS_IMAGE = "redis:7.4";
+  // 版本需与 .env.example VALKEY_IMAGE_TAG 保持一致
+  private static final String REDIS_IMAGE = "valkey/valkey:8.1";
   // MinIO 版本在 ObjectStoreContainer 中维护，需与 .env.example MINIO_IMAGE_TAG 保持一致
 
   private static final String DEFAULT_DB_USER = "batch_user";

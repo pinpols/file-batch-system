@@ -1,5 +1,5 @@
 # 宿主机映射由 .env.local / .env.example 控制（如 POSTGRES_PORT=15432、KAFKA_HOST_PORT=19092、
-# MINIO_API_PORT=19000、REDIS_PORT=16379）。容器内端口（5432、9092、9000、6379 等）为服务原生监听，勿与映射混淆。
+# MINIO_API_PORT=19000、REDIS_PORT=16379(Valkey 服务)）。容器内端口（5432、9092、9000、6379 等）为服务原生监听，勿与映射混淆。
 x-common-runtime-env: &common-runtime-env
   LANG: ${BATCH_LOCALE:-C.UTF-8}
   LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
@@ -193,22 +193,22 @@ services:
     networks:
       - batch-network
 
-  redis:
-    image: redis:${REDIS_IMAGE_TAG:-7.4}
-    container_name: batch-redis
+  valkey:
+    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1}
+    container_name: batch-valkey
     restart: unless-stopped
     ports:
       - "${REDIS_PORT:-16379}:6379"
     environment:
-      # 全栈 UTF-8：Redis 是 binary-safe，locale 只影响 redis-cli 输出/日志。
+      # 全栈 UTF-8：Valkey(Redis 协议兼容)是 binary-safe，locale 只影响 redis-cli 输出/日志。
       <<: *common-runtime-env
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["valkey-server", "--appendonly", "yes"]
     volumes:
-      - redis-data:/data
+      - valkey-data:/data
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 15
@@ -218,7 +218,7 @@ volumes:
   postgres-replica-data:
   kafka-data:
   minio-data:
-  redis-data:
+  valkey-data:
 
 networks:
   batch-network:

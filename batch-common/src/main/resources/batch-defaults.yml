@@ -94,7 +94,7 @@ spring:
         partition.assignment.strategy: ${BATCH_KAFKA_CONSUMER_PARTITION_ASSIGNMENT_STRATEGY:org.apache.kafka.clients.consumer.CooperativeStickyAssignor}
   data:
     redis:
-      # Redis：本地 compose 宿主机映射 16379→6379；容器内由环境变量覆盖为 redis:6379
+      # Redis：本地 compose 宿主机映射 16379→6379；容器内由环境变量覆盖为 valkey:6379
       host: ${BATCH_REDIS_HOST:localhost}
       port: ${BATCH_REDIS_PORT:16379}
       # 仅用 Redis 作缓存/消息，不使用 Spring Data Redis Repository；避免与 JDBC Repository 混扫产生 INFO

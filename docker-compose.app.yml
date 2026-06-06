@@ -45,7 +45,7 @@ services:
       BATCH_CONSOLE_REPLICA_URL: ${BATCH_CONSOLE_REPLICA_URL:-jdbc:postgresql://postgres-replica:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_CONSOLE_REPLICA_USER: ${BATCH_CONSOLE_REPLICA_USER:-batch_user}
       BATCH_CONSOLE_REPLICA_PASSWORD: ${BATCH_CONSOLE_REPLICA_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
-      BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
+      BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-valkey}
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-console-api.log
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
@@ -82,7 +82,7 @@ services:
         condition: service_healthy
       postgres-replica:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -135,7 +135,7 @@ services:
     depends_on:
       postgres-primary:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       kafka:
         condition: service_healthy
@@ -166,7 +166,7 @@ services:
       BATCH_S3_SECRET_KEY: ${BATCH_S3_SECRET_KEY:?BATCH_S3_SECRET_KEY is required}
       BATCH_S3_BUCKET: ${BATCH_S3_BUCKET:-batch-dev}
       BATCH_SECURITY_BYPASS_MODE: ${BATCH_SECURITY_BYPASS_MODE:-false}
-      BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
+      BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-valkey}
       BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
       SERVER_PORT: 18082
@@ -187,7 +187,7 @@ services:
     depends_on:
       postgres-primary:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -243,7 +243,7 @@ services:
     depends_on:
       postgres-primary:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -301,7 +301,7 @@ services:
     depends_on:
       postgres-primary:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -359,7 +359,7 @@ services:
     depends_on:
       postgres-primary:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -417,7 +417,7 @@ services:
     depends_on:
       postgres-primary:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
