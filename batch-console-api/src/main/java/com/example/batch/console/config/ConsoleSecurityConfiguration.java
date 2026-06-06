@@ -75,6 +75,11 @@ public class ConsoleSecurityConfiguration {
                         "/api/console/push/vapid-public-key",
                         "/api/console/system/maintenance",
                         "/api/console/system/cron-preview",
+                        // FS 后端 presign 代下端点：URL 自带 HMAC 令牌即授权（见
+                        // ConsoleFilesystemPresignDownloadController），无登录态；S3 后端
+                        // ConditionalOnProperty 不装
+                        // controller，permitAll 仅是路径白名单不会引入新攻击面。
+                        "/api/console/files/fs-download",
                         "/console-login.html",
                         "/favicon.ico")
                     .permitAll()

@@ -1,0 +1,120 @@
+package com.example.batch.common.storage;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.example.batch.common.config.BatchKmsProperties;
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.service.BatchObjectCryptoService;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Base64;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+/** {@link EncryptingObjectStore} 单测：覆盖 put/get round-trip / bypass 透传 / getFrom 拒绝 / 其它透传。 */
+class EncryptingObjectStoreTest {
+
+  private static final String BUCKET = "enc-bucket";
+  private static final String KEY_REF = "DEFAULT_TEST";
+  private static final String PRESIGN_SECRET = "test-presign-secret-1234567890";
+  private static final String DOWNLOAD_BASE_URL =
+      "https://example.invalid/api/console/files/fs-download";
+
+  private FilesystemObjectStore newRaw(Path root) {
+    return new FilesystemObjectStore(root.toString(), DOWNLOAD_BASE_URL, PRESIGN_SECRET);
+  }
+
+  private BatchObjectCryptoService newCrypto(BatchSecurityProperties securityProperties) {
+    BatchKmsProperties kms = new BatchKmsProperties();
+    kms.setDefaultKeyRef(KEY_REF);
+    byte[] keyBytes = new byte[32];
+    for (int i = 0; i < keyBytes.length; i++) {
+      keyBytes[i] = (byte) i;
+    }
+    kms.getKeys().put(KEY_REF, Base64.getEncoder().encodeToString(keyBytes));
+    return new BatchObjectCryptoService(securityProperties, kms);
+  }
+
+  @Test
+  void shouldEncryptOnPutAndDecryptOnGet(@TempDir Path root) throws Exception {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    FilesystemObjectStore raw = newRaw(root);
+    BatchObjectCryptoService crypto = newCrypto(security);
+    EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF);
+
+    byte[] plaintext = "very-secret-payload".getBytes(StandardCharsets.UTF_8);
+    store.put(BUCKET, "enc.bin", new ByteArrayInputStream(plaintext), plaintext.length, "x");
+
+    // raw 存的是密文（含 BATCHENC magic），不等于明文
+    try (InputStream rawIn = raw.get(BUCKET, "enc.bin")) {
+      byte[] cipher = rawIn.readAllBytes();
+      assertThat(cipher).isNotEqualTo(plaintext);
+      assertThat(new String(cipher, 0, 8, StandardCharsets.US_ASCII)).isEqualTo("BATCHENC");
+    }
+
+    // 经 EncryptingObjectStore get 拿到的是明文
+    try (InputStream in = store.get(BUCKET, "enc.bin")) {
+      assertThat(in.readAllBytes()).isEqualTo(plaintext);
+    }
+  }
+
+  @Test
+  void bypassModeShouldPassThrough(@TempDir Path root) throws Exception {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(true);
+    FilesystemObjectStore raw = newRaw(root);
+    BatchObjectCryptoService crypto = newCrypto(security);
+    EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF);
+
+    byte[] plaintext = "no-encrypt-in-bypass".getBytes(StandardCharsets.UTF_8);
+    store.put(BUCKET, "p.bin", new ByteArrayInputStream(plaintext), plaintext.length, "x");
+
+    // raw 存的就是明文
+    try (InputStream rawIn = raw.get(BUCKET, "p.bin")) {
+      assertThat(rawIn.readAllBytes()).isEqualTo(plaintext);
+    }
+    // get 也直透
+    try (InputStream in = store.get(BUCKET, "p.bin")) {
+      assertThat(in.readAllBytes()).isEqualTo(plaintext);
+    }
+  }
+
+  @Test
+  void getFromShouldAlwaysThrowEvenInBypass(@TempDir Path root) {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(true);
+    FilesystemObjectStore raw = newRaw(root);
+    BatchObjectCryptoService crypto = newCrypto(security);
+    EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF);
+
+    assertThatThrownBy(() -> store.getFrom(BUCKET, "any", 0))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessageContaining("range read");
+  }
+
+  @Test
+  void otherOperationsShouldDelegate(@TempDir Path root) throws Exception {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(true);
+    FilesystemObjectStore raw = newRaw(root);
+    BatchObjectCryptoService crypto = newCrypto(security);
+    EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF);
+
+    byte[] payload = "x".getBytes(StandardCharsets.UTF_8);
+    store.put(BUCKET, "a", new ByteArrayInputStream(payload), payload.length, "x");
+    assertThat(store.exists(BUCKET, "a")).isTrue();
+    assertThat(store.statSize(BUCKET, "a")).isEqualTo(1);
+    store.copy(BUCKET, "a", "b");
+    assertThat(store.exists(BUCKET, "b")).isTrue();
+    assertThat(store.list(BUCKET, "", null, 10).objects()).hasSize(2);
+    String url = store.presign(BUCKET, "a", Duration.ofMinutes(1));
+    assertThat(url).contains("b=" + BUCKET);
+    store.delete(BUCKET, "a");
+    assertThat(store.exists(BUCKET, "a")).isFalse();
+  }
+}
