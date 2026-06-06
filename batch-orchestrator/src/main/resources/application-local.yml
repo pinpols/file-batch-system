@@ -22,7 +22,7 @@ spring:
     bootstrap-servers: localhost:19092
   data:
     redis:
-      # 宿主机裸 jar 联调：须连 compose 映射端口；勿依赖 BATCH_REDIS_HOST=redis（主机 DNS 常指向错误 IP）
+      # 宿主机裸 jar 联调：须连 compose 映射端口；勿依赖 BATCH_REDIS_HOST=valkey（主机 DNS 常指向错误 IP）
       host: localhost
       port: 16379
       repositories:
