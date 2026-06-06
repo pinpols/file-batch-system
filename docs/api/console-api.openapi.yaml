@@ -10159,7 +10159,7 @@ components:
           description: |
             可选 effectiveParams；L3 EXECUTION_PLAN 中识别以下 key 触发探测：
             - sql / querySql / sourceQuery / validationSql / selectSql → JdbcTemplate EXPLAIN
-            - minioBucket → MinioClient.bucketExists（命名 DNS-style 校验）
+            - s3Bucket → S3Client.headBucket（命名 DNS-style 校验）
             - endpointUrl / callbackUrl / channelEndpoint / dispatchTarget → HTTP HEAD（5s timeout）
       required: [tenantId, jobCode]
     BatchDayOperateRequest:

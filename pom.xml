@@ -59,10 +59,14 @@
              (latest 5.0.0-alpha.16,2025-05-29 发布,无 beta/rc/GA),但 Square 官方声明
              "alpha 的 API 稳定性等同 RC,Square 自家 prod 已在使用"(见 okhttp 5 README)。
              同时 mockwebserver 在 5.x 改名为 mockwebserver3(包名 mockwebserver3),
-             test 依赖同步切换。主链路使用面:MinIO HTTP / Worker dispatch / report-outbox。
+             test 依赖同步切换。使用面:worker-dispatch HTTP/OSS 渠道(okhttp 客户端)+
+             worker-core report-outbox / http-task 测试(mockwebserver3)。
              启动条件:5.x 释 GA tag 后去掉本注释。 -->
         <okhttp.version>5.0.0-alpha.16</okhttp.version>
         <okio.version>3.17.0</okio.version>
+        <!-- org.jetbrains:annotations(@Contract/@Nullable):batch-common Guard/Texts 编译期用。
+             此前靠 minio→okhttp→kotlin-stdlib 传递带入,#401 删 minio 后改为显式直依赖。 -->
+        <jetbrains-annotations.version>17.0.0</jetbrains-annotations.version>
         <lombok.version>1.18.46</lombok.version>
         <mockito.version>5.20.0</mockito.version>
         <mybatis-spring-boot.version>4.0.1</mybatis-spring-boot.version>
@@ -140,7 +144,7 @@
                  真正的 JVM 类在 `okhttp-jvm` 里;且 `okhttp` 的 pom 未声明对 `okhttp-jvm` 的依赖。
                  因此 Maven 工程必须直接依赖 `okhttp-jvm`。两个 artifactId 都登记进
                  dependencyManagement:`okhttp-jvm` 是实际 JVM 类来源;`okhttp` 仅为
-                 强制覆盖 minio / mockwebserver3 等三方库的传递版本(避免拉到 4.x 旧 jar)。
+                 强制覆盖 mockwebserver3 等三方库的传递版本(避免拉到 4.x 旧 jar)。
                  回到 4.x 时合并为单条 `okhttp`。 -->
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
@@ -158,6 +162,12 @@
                 <version>${okio.version}</version>
             </dependency>
             <!-- okio-jvm 是 okio 的 JVM multi-platform 实现，由 okio 自动传递引入，不需要显式声明 -->
+
+            <dependency>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>${jetbrains-annotations.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
