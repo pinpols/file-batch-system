@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.EncodingUtils;
@@ -15,6 +16,8 @@ import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -52,17 +55,32 @@ public class PreprocessStep implements ImportStageStep {
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
+  /**
+   * 对象存储拉取的单文件字节上限(防 OOM)。默认 512 MiB,系统属性 {@code batch.worker.import.max-object-bytes} 可调。超限直接
+   * fail,避免把超大对象整块读进 byte[]。
+   */
+  private static final long MAX_OBJECT_BYTES =
+      Long.getLong("batch.worker.import.max-object-bytes", 512L * 1024 * 1024);
+
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final BatchSecurityProperties batchSecurityProperties;
   private final BatchObjectCryptoService cryptoService;
+  // ADR-sim:大文件对象自动加载——内联 content 受 Kafka 消息体上限(~1MB)限制,
+  // 大文件须把对象路径下发、由 worker 直接从 MinIO 拉取(payload 只带 path,不带内容)。
+  private final MinioStorageProperties minioStorageProperties;
+  private final MinioClient minioClient;
 
   public PreprocessStep(
       PlatformFileRuntimeRepository runtimeRepository,
       BatchSecurityProperties batchSecurityProperties,
-      BatchObjectCryptoService cryptoService) {
+      BatchObjectCryptoService cryptoService,
+      MinioStorageProperties minioStorageProperties,
+      MinioClient minioClient) {
     this.runtimeRepository = runtimeRepository;
     this.batchSecurityProperties = batchSecurityProperties;
     this.cryptoService = cryptoService;
+    this.minioStorageProperties = minioStorageProperties;
+    this.minioClient = minioClient;
   }
 
   @Override
@@ -88,7 +106,9 @@ public class PreprocessStep implements ImportStageStep {
     if (!Texts.hasText(context.getRawPayload())
         && (importPayload == null
             || (!Texts.hasText(importPayload.content())
-                && !Texts.hasText(importPayload.contentBase64())))) {
+                && !Texts.hasText(importPayload.contentBase64())
+                // 大文件对象自动加载:无内联内容但带 storagePath 时,源在对象存储,放行到 resolveRawBytes 拉取。
+                && !Texts.hasText(importPayload.storagePath())))) {
       return ImportStageResult.failure(
           stage(),
           "IMPORT_PREPROCESS_INVALID",
@@ -205,8 +225,63 @@ public class PreprocessStep implements ImportStageStep {
       Charset cs = resolveCharsetForContentBytes(importPayload, templateConfigObject);
       return importPayload.content().getBytes(cs);
     }
+    // ADR-sim 大文件对象自动加载:无内联内容但带 storagePath → 直接从 MinIO 拉对象(扫描器登记的
+    // RECEIVED 大文件 / 大数据由此入库,绕开 Kafka 消息体上限——payload 只带 path 不带内容)。
+    if (importPayload != null && Texts.hasText(importPayload.storagePath())) {
+      return downloadObjectBytes(importPayload);
+    }
     String raw = context.getRawPayload();
     return raw == null ? new byte[0] : raw.getBytes(StandardCharsets.UTF_8);
+  }
+
+  /**
+   * 从对象存储拉取 import 源对象的原始字节。bucket 取 {@code payload.storageBucket},缺省回退默认 bucket; object 取 {@code
+   * payload.storagePath}。超 {@link #MAX_OBJECT_BYTES} fail-fast 防 OOM。
+   */
+  private byte[] downloadObjectBytes(ImportPayload importPayload) {
+    String bucket =
+        Texts.hasText(importPayload.storageBucket())
+            ? importPayload.storageBucket()
+            : minioStorageProperties.getBucket();
+    String object = importPayload.storagePath();
+    try (InputStream in =
+        minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(object).build())) {
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      byte[] buf = new byte[64 * 1024];
+      long total = 0;
+      int n;
+      while ((n = in.read(buf)) >= 0) {
+        total += n;
+        if (total > MAX_OBJECT_BYTES) {
+          throw new IllegalStateException(
+              "import object exceeds max-object-bytes="
+                  + MAX_OBJECT_BYTES
+                  + " (bucket="
+                  + bucket
+                  + ", object="
+                  + object
+                  + "); raise batch.worker.import.max-object-bytes or split the file");
+        }
+        out.write(buf, 0, n);
+      }
+      log.info(
+          "import preprocess loaded object from storage: bucket={}, object={}, bytes={}",
+          bucket,
+          object,
+          total);
+      return out.toByteArray();
+    } catch (IllegalStateException ex) {
+      throw ex;
+    } catch (Exception ex) {
+      throw new IllegalStateException(
+          "failed to load import object from storage (bucket="
+              + bucket
+              + ", object="
+              + object
+              + "): "
+              + ex.getMessage(),
+          ex);
+    }
   }
 
   private Charset resolveCharsetForContentBytes(
