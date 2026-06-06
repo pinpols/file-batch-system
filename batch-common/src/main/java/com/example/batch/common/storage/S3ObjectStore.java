@@ -130,6 +130,9 @@ public class S3ObjectStore implements BatchObjectStore {
                   .prefix(prefix)
                   .startAfter(afterMarker)
                   .maxKeys(maxKeys)
+                  // 递归列举：返回 prefix 下所有层级的对象键（不按 '/' 折叠成公共前缀）。
+                  // 对齐 ingress 扫描 / governance 清点对嵌套键（如 ingress/tenant/f.csv）的全量列举语义。
+                  .recursive(true)
                   .build());
       for (Result<Item> result : results) {
         if (summaries.size() >= maxKeys) {

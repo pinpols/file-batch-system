@@ -5,6 +5,8 @@ import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import com.example.batch.common.storage.BatchObjectStore;
+import com.example.batch.common.storage.ObjectNotFoundException;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
@@ -15,8 +17,6 @@ import com.example.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.domain.file.query.FileErrorRecordQuery;
 import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
 import io.minio.errors.ErrorResponseException;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -59,10 +59,9 @@ public class DefaultConsoleFileDownloadApplicationService
   private final FileErrorRecordMapper fileErrorRecordMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final S3StorageProperties minioStorageProperties;
-  // R2-P0-5：注入 Spring 管理的 MinioClient bean（MinioAutoConfiguration 提供），
-  // 复用其内部 OkHttp 连接池 + 后台线程。之前每次 download() 都 new 一个 MinioClient，
-  // 各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
-  private final MinioClient minioClient;
+  // R2-P0-5：复用 Spring 管理的对象存储 bean（其内部 MinioClient 共享 OkHttp 连接池 + 后台线程）。
+  // 之前每次 download() 都 new 一个 MinioClient，各自带连接池 + 非守护线程，并发下载下持续堆积 socket/线程。
+  private final BatchObjectStore objectStore;
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties batchSecurityProperties;
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
@@ -98,8 +97,7 @@ public class DefaultConsoleFileDownloadApplicationService
       contentType = "application/octet-stream";
     }
     try {
-      InputStream inputStream =
-          minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(objectName).build());
+      InputStream inputStream = objectStore.get(bucket, objectName);
       InputStream payload =
           batchSecurityProperties.isBypassMode()
               ? inputStream
@@ -120,15 +118,15 @@ public class DefaultConsoleFileDownloadApplicationService
                   .toString())
           .contentType(MediaType.parseMediaType(contentType))
           .body(resource);
-    } catch (ErrorResponseException exception) {
-      // 存储中对象不存在(NoSuchKey/NoSuchBucket,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
-      // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。其余存储异常仍按系统错误抛。
-      String code = exception.errorResponse() == null ? null : exception.errorResponse().code();
-      if ("NoSuchKey".equals(code) || "NoSuchBucket".equals(code)) {
+    } catch (ObjectNotFoundException exception) {
+      // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
+      // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
+    } catch (Exception exception) {
+      // bucket 整体缺失(NoSuchBucket)同样视作"内容已失效"→ 404；其余存储异常按系统错误抛。
+      if (isNoSuchBucket(exception)) {
         throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
       }
-      throw new IllegalStateException("failed to open download stream", exception);
-    } catch (Exception exception) {
       throw new IllegalStateException("failed to open download stream", exception);
     }
   }
@@ -184,6 +182,20 @@ public class DefaultConsoleFileDownloadApplicationService
       return "\"" + value.replace("\"", "\"\"") + "\"";
     }
     return value;
+  }
+
+  /** 透过 {@link BatchObjectStore} 包装后的异常链识别底层 {@code NoSuchBucket}（保留旧的桶缺失→404 语义）。 */
+  private static boolean isNoSuchBucket(Throwable exception) {
+    Throwable current = exception;
+    while (current != null) {
+      if (current instanceof ErrorResponseException errorResponse) {
+        String code =
+            errorResponse.errorResponse() == null ? null : errorResponse.errorResponse().code();
+        return "NoSuchBucket".equals(code);
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 
   private Map<String, Object> templateSecurity(String tenantId, Long fileId) {

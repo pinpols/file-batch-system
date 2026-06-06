@@ -1,14 +1,10 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.common.config.S3StorageProperties;
-import com.example.batch.common.utils.MinioBucketSupport;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.ListObjectsArgs;
-import io.minio.MinioClient;
-import io.minio.RemoveObjectArgs;
-import io.minio.Result;
-import io.minio.http.Method;
-import io.minio.messages.Item;
+import com.example.batch.common.storage.BatchObjectStore;
+import com.example.batch.common.storage.ObjectListing;
+import com.example.batch.common.storage.ObjectSummary;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,41 +18,36 @@ import org.springframework.stereotype.Component;
 public class MinioGovernanceStorage {
 
   private final S3StorageProperties properties;
-  private final MinioClient minioClient;
+  private final BatchObjectStore objectStore;
 
   /** 治理任务只做对象清点和清理，不在这里承载业务编排。 */
   public List<StorageObjectView> listObjects(
       String prefix, int limit, boolean includeTemporaryObjects) {
-    if (!ensureBucket()) {
-      return List.of();
-    }
+    String bucket = properties.getBucket();
+    String effectivePrefix = prefix == null ? "" : prefix;
     List<StorageObjectView> objects = new ArrayList<>();
     try {
-      Iterable<Result<Item>> results =
-          minioClient.listObjects(
-              ListObjectsArgs.builder()
-                  .bucket(properties.getBucket())
-                  .prefix(prefix == null ? "" : prefix)
-                  .recursive(true)
-                  .maxKeys(limit)
-                  .build());
-      for (Result<Item> result : results) {
-        if (objects.size() >= limit) {
+      String marker = null;
+      // 循环翻页累计，直到取满 limit 个（过滤临时对象后的）结果或末页（nextMarker==null）。
+      while (objects.size() < limit) {
+        ObjectListing listing = objectStore.list(bucket, effectivePrefix, marker, limit);
+        for (ObjectSummary summary : listing.objects()) {
+          if (objects.size() >= limit) {
+            break;
+          }
+          String objectName = summary.key();
+          if (!includeTemporaryObjects
+              && (objectName.endsWith(".part") || objectName.startsWith("tmp/"))) {
+            continue;
+          }
+          objects.add(
+              new StorageObjectView(
+                  bucket, objectName, summary.size(), summary.etag(), summary.lastModified()));
+        }
+        marker = listing.nextMarker();
+        if (marker == null) {
           break;
         }
-        Item item = result.get();
-        String objectName = item.objectName();
-        if (!includeTemporaryObjects
-            && (objectName.endsWith(".part") || objectName.startsWith("tmp/"))) {
-          continue;
-        }
-        objects.add(
-            new StorageObjectView(
-                properties.getBucket(),
-                objectName,
-                item.size(),
-                item.etag(),
-                item.lastModified() == null ? null : item.lastModified().toInstant()));
       }
       return objects;
     } catch (Exception exception) {
@@ -65,12 +56,8 @@ public class MinioGovernanceStorage {
   }
 
   public void removeObject(String objectName) {
-    if (!ensureBucket()) {
-      throw new IllegalStateException("minio bucket unavailable: " + properties.getBucket());
-    }
     try {
-      minioClient.removeObject(
-          RemoveObjectArgs.builder().bucket(properties.getBucket()).object(objectName).build());
+      objectStore.delete(properties.getBucket(), objectName);
     } catch (Exception exception) {
       throw new IllegalStateException("failed to remove object: " + objectName, exception);
     }
@@ -79,29 +66,12 @@ public class MinioGovernanceStorage {
   public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
     try {
       String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
-      if (!ensureBucket(targetBucket)) {
-        throw new IllegalStateException("minio bucket unavailable: " + targetBucket);
-      }
-      return minioClient.getPresignedObjectUrl(
-          GetPresignedObjectUrlArgs.builder()
-              .method(Method.GET)
-              .bucket(targetBucket)
-              .object(objectName)
-              .expiry(Math.max(60, expirySeconds))
-              .build());
+      return objectStore.presign(
+          targetBucket, objectName, Duration.ofSeconds(Math.max(60, expirySeconds)));
     } catch (Exception exception) {
       throw new IllegalStateException(
           "failed to create presigned url for object: " + objectName, exception);
     }
-  }
-
-  private boolean ensureBucket() {
-    return ensureBucket(properties.getBucket());
-  }
-
-  private boolean ensureBucket(String bucket) {
-    return MinioBucketSupport.ensureBucket(
-        minioClient, bucket, log, "orchestrator governance", properties.isAutoCreateBucket());
   }
 
   public record StorageObjectView(

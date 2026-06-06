@@ -3,14 +3,7 @@ package com.example.batch.worker.exports.infrastructure;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
-import com.example.batch.common.utils.MinioBucketSupport;
-import io.minio.CopyObjectArgs;
-import io.minio.CopySource;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.RemoveObjectArgs;
-import io.minio.StatObjectArgs;
+import com.example.batch.common.storage.BatchObjectStore;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -33,7 +26,7 @@ public class MinioExportStorage {
   private static final int MAX_BYTE_UPLOAD_SIZE = 10 * 1024 * 1024;
 
   private final S3StorageProperties properties;
-  private final MinioClient minioClient;
+  private final BatchObjectStore objectStore;
 
   /**
    * 将 JSON 字符串写入对象存储。
@@ -63,7 +56,6 @@ public class MinioExportStorage {
           "content too large for byte[] upload (%d bytes); use writeObject(Path, ...) instead"
               .formatted(content.length));
     }
-    ensureBucketOrThrow();
     String targetObjectName = objectName;
     if (targetObjectName == null || targetObjectName.isBlank()) {
       targetObjectName =
@@ -72,11 +64,12 @@ public class MinioExportStorage {
               + BatchFileConstants.BIN_SUFFIX;
     }
     try {
-      minioClient.putObject(
-          PutObjectArgs.builder().bucket(properties.getBucket()).object(targetObjectName).stream(
-                  new ByteArrayInputStream(content), content.length, -1)
-              .contentType(contentType)
-              .build());
+      objectStore.put(
+          properties.getBucket(),
+          targetObjectName,
+          new ByteArrayInputStream(content),
+          content.length,
+          contentType);
       return targetObjectName;
     } catch (Exception ex) {
       throw new IllegalStateException("failed to write export object", ex);
@@ -92,7 +85,6 @@ public class MinioExportStorage {
    * @return 实际写入的对象路径
    */
   public String writeObject(String objectName, Path contentPath, String contentType) {
-    ensureBucketOrThrow();
     if (contentPath == null || !Files.exists(contentPath)) {
       throw new IllegalArgumentException("contentPath is required");
     }
@@ -104,11 +96,12 @@ public class MinioExportStorage {
               + BatchFileConstants.BIN_SUFFIX;
     }
     try (InputStream inputStream = Files.newInputStream(contentPath)) {
-      minioClient.putObject(
-          PutObjectArgs.builder().bucket(properties.getBucket()).object(targetObjectName).stream(
-                  inputStream, Files.size(contentPath), -1)
-              .contentType(contentType)
-              .build());
+      objectStore.put(
+          properties.getBucket(),
+          targetObjectName,
+          inputStream,
+          Files.size(contentPath),
+          contentType);
       return targetObjectName;
     } catch (Exception ex) {
       throw new IllegalStateException("failed to write export object", ex);
@@ -122,18 +115,8 @@ public class MinioExportStorage {
    * @param targetObjectName 目标对象路径
    */
   public void copyObject(String sourceObjectName, String targetObjectName) {
-    ensureBucketOrThrow();
     try {
-      minioClient.copyObject(
-          CopyObjectArgs.builder()
-              .bucket(properties.getBucket())
-              .object(targetObjectName)
-              .source(
-                  CopySource.builder()
-                      .bucket(properties.getBucket())
-                      .object(sourceObjectName)
-                      .build())
-              .build());
+      objectStore.copy(properties.getBucket(), sourceObjectName, targetObjectName);
     } catch (Exception ex) {
       throw new IllegalStateException("failed to copy export object", ex);
     }
@@ -145,10 +128,8 @@ public class MinioExportStorage {
    * @param objectName 要删除的对象路径
    */
   public void removeObject(String objectName) {
-    ensureBucketOrThrow();
     try {
-      minioClient.removeObject(
-          RemoveObjectArgs.builder().bucket(properties.getBucket()).object(objectName).build());
+      objectStore.delete(properties.getBucket(), objectName);
     } catch (Exception ex) {
       throw new IllegalStateException("failed to remove export object", ex);
     }
@@ -165,15 +146,12 @@ public class MinioExportStorage {
    * @return SHA-256 十六进制字符串
    */
   public String sha256Hex(String objectName) {
-    ensureBucketOrThrow();
     if (objectName == null || objectName.isBlank()) {
       throw new IllegalArgumentException("objectName is required");
     }
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      try (InputStream inputStream =
-          minioClient.getObject(
-              GetObjectArgs.builder().bucket(properties.getBucket()).object(objectName).build())) {
+      try (InputStream inputStream = objectStore.get(properties.getBucket(), objectName)) {
         byte[] buffer = new byte[8192];
         int read;
         while ((read = inputStream.read(buffer)) >= 0) {
@@ -195,35 +173,15 @@ public class MinioExportStorage {
    * @return 存在返回 {@code true}，否则返回 {@code false}
    */
   public boolean objectExists(String objectName) {
-    if (!ensureBucket()) {
-      return false;
-    }
     if (objectName == null || objectName.isBlank()) {
       return false;
     }
     try {
-      minioClient.statObject(
-          StatObjectArgs.builder().bucket(properties.getBucket()).object(objectName).build());
-      return true;
+      return objectStore.exists(properties.getBucket(), objectName);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(MinioExportStorage.class, "catch:Exception", ex);
 
       return false;
-    }
-  }
-
-  private boolean ensureBucket() {
-    return MinioBucketSupport.ensureBucket(
-        minioClient,
-        properties.getBucket(),
-        log,
-        "export storage",
-        properties.isAutoCreateBucket());
-  }
-
-  private void ensureBucketOrThrow() {
-    if (!ensureBucket()) {
-      throw new IllegalStateException("minio bucket unavailable: " + properties.getBucket());
     }
   }
 }

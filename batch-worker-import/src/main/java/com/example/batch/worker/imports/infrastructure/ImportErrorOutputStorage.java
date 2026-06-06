@@ -3,11 +3,10 @@ package com.example.batch.worker.imports.infrastructure;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportBadRecordEntity;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,7 +35,7 @@ import org.springframework.stereotype.Component;
 public class ImportErrorOutputStorage {
 
   private final S3StorageProperties minioStorageProperties;
-  private final MinioClient minioClient;
+  private final BatchObjectStore objectStore;
 
   public String writeErrorOutput(
       String tenantId, String fileId, List<ImportBadRecordEntity> badRecords) {
@@ -65,13 +64,12 @@ public class ImportErrorOutputStorage {
       }
       long size = Files.size(spool);
       try (InputStream in = Files.newInputStream(spool)) {
-        minioClient.putObject(
-            PutObjectArgs.builder()
-                .bucket(minioStorageProperties.getBucket())
-                .object(objectKey)
-                .stream(in, size, -1)
-                .contentType(BatchFileConstants.CONTENT_TYPE_NDJSON)
-                .build());
+        objectStore.put(
+            minioStorageProperties.getBucket(),
+            objectKey,
+            in,
+            size,
+            BatchFileConstants.CONTENT_TYPE_NDJSON);
       }
       return objectKey;
     } catch (Exception exception) {

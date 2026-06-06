@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import com.example.batch.common.storage.S3ObjectStore;
 import com.example.batch.testing.MinIOContainer;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -64,7 +65,11 @@ class PreprocessStepObjectLoadIntegrationTest {
     S3StorageProperties props = new S3StorageProperties();
     props.setBucket(bucket);
     return new PreprocessStep(
-        runtimeRepo, security, mock(BatchObjectCryptoService.class), props, client);
+        runtimeRepo,
+        security,
+        mock(BatchObjectCryptoService.class),
+        props,
+        new S3ObjectStore(client, props));
   }
 
   private void putObject(String key, String content) throws Exception {
