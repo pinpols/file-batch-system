@@ -56,7 +56,7 @@ for ($i = 1; $i -le 90; $i++) {
   Start-Sleep -Seconds 2
 }
 Wait-ContainerHealthy batch-minio "MinIO"
-Wait-ContainerHealthy batch-redis "Redis"
+Wait-ContainerHealthy batch-valkey "Redis"
 if ((Get-EnvValue "BATCH_CONSOLE_READ_REPLICA_ENABLED" "true") -eq "true") {
   Wait-ContainerHealthy batch-postgres-replica "PG Replica"
 }

@@ -248,7 +248,7 @@ cleanup_stale_runs() {
 step_0_precheck() {
   hdr 0 "$(step_name 0)"
   cleanup_stale_runs
-  local docker_cnt; docker_cnt=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "batch-postgres|batch-kafka|batch-redis|batch-minio" | wc -l | tr -d ' ')
+  local docker_cnt; docker_cnt=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "batch-postgres|batch-kafka|batch-valkey|batch-minio" | wc -l | tr -d ' ')
   [[ "$docker_cnt" -ge 4 ]] && ok "docker 容器 $docker_cnt 个运行" || ng "docker 容器 $docker_cnt < 4(可能影响 IT/E2E)"
   local free_gb; free_gb=$(df -g "$ROOT_DIR" 2>/dev/null | tail -1 | awk '{print $4}')
   [[ -z "$free_gb" ]] && free_gb="?"

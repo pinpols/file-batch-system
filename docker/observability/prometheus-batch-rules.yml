@@ -133,7 +133,7 @@ groups:
         labels:
           severity: warning
           team: batch-platform
-          alert_group: redis
+          alert_group: valkey
         annotations:
           summary: "Redis memory usage is high"
           description: "Redis memory usage has exceeded 80% for 10 minutes. Check replay buffer retention, session keys, and cache TTL settings."
@@ -144,7 +144,7 @@ groups:
         labels:
           severity: warning
           team: batch-platform
-          alert_group: redis
+          alert_group: valkey
         annotations:
           summary: "Redis connected clients are high"
           description: "Redis connected clients stayed above 200 for 10 minutes. Check SSE fanout load, exporter connections, and leaked clients."
