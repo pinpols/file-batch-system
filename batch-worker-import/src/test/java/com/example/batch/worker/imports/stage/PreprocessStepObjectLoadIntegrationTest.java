@@ -144,4 +144,34 @@ class PreprocessStepObjectLoadIntegrationTest {
             .execute(contextWithBlankRawPayload(objectPayload("ingress/objload-it/nope.json")));
     assertThat(result.success()).isFalse();
   }
+
+  @Test
+  void largeObject_streamsToSpoolWithoutHeapBuffering() throws Exception {
+    // ≥16MB(spool 阈值)的对象走流式直载:落 spool 文件 + 设 IMPORT_LARGE_TEXT_PATH 交 PARSE 流式消费,
+    // 不读进堆(normalizedPayload 不在 PREPROCESS 设置)。生成 ~17MB CSV 验证。
+    String key = "ingress/objload-it/big.csv";
+    StringBuilder sb = new StringBuilder(18 * 1024 * 1024);
+    sb.append("entity_id,entity_type,score_value,score_band,score_date\n");
+    int row = 0;
+    while (sb.length() < 17 * 1024 * 1024) {
+      sb.append("BIGSTREAM-").append(row++).append(",CUSTOMER,42,HIGH,2026-06-06\n");
+    }
+    putObject(key, sb.toString());
+
+    ImportJobContext context = contextWithBlankRawPayload(objectPayload(key));
+    ImportStageResult result = newStep().execute(context);
+
+    assertThat(result.success()).as("large object stream-direct should succeed").isTrue();
+    // 流式直载:设 spool 路径,PREPROCESS 不落 normalizedPayload(交给 PARSE 流式解码)
+    Object spoolPath = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
+    assertThat(spoolPath).as("spool path should be set for large object").isNotNull();
+    assertThat(context.getAttributes().get("normalizedPayload"))
+        .as("PREPROCESS should NOT materialize normalizedPayload for large object")
+        .isNull();
+    java.nio.file.Path spool = java.nio.file.Path.of(spoolPath.toString());
+    assertThat(java.nio.file.Files.size(spool))
+        .as("spool file should hold the streamed object bytes")
+        .isGreaterThan(16L * 1024 * 1024);
+    java.nio.file.Files.deleteIfExists(spool);
+  }
 }

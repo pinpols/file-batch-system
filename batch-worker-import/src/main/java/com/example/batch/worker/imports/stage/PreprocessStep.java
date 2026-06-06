@@ -18,6 +18,7 @@ import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
+import io.minio.StatObjectArgs;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -30,6 +31,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -129,6 +131,21 @@ public class PreprocessStep implements ImportStageStep {
       Object templateConfigObject =
           context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
       Map<String, Object> templateConfig = toStringKeyMap(templateConfigObject);
+
+      // 大文件流式直载:无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件,
+      // 交 PARSE 流式逐行消费,全程不把整文件读进堆(突破 byte[]/MAX_OBJECT_BYTES 内存天花板,
+      // 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退 byte[] 路径。
+      // 仅大对象(≥ spool 阈值 16MB,本就要落盘)走流式直载;小文件继续走轻量内存 byte[] 路径
+      // (设 normalizedPayload,无临时文件开销)。
+      if (importPayload != null
+          && Texts.hasText(importPayload.storagePath())
+          && !Texts.hasText(importPayload.content())
+          && !Texts.hasText(importPayload.contentBase64())
+          && canStreamObjectDirect(importPayload, templateConfig)
+          && objectSizeBytes(importPayload) >= SPOOL_THRESHOLD_BYTES) {
+        return streamObjectToSpoolAndReturn(
+            context, importPayload, templateConfig, templateConfigObject);
+      }
 
       byte[] rawBytes = resolveRawBytes(context, importPayload, templateConfigObject);
       // 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）。
@@ -279,6 +296,115 @@ public class PreprocessStep implements ImportStageStep {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED",
           "failed to load import object from storage (bucket="
+              + bucket
+              + ", object="
+              + object
+              + "): "
+              + ex.getMessage(),
+          ex);
+    }
+  }
+
+  /**
+   * 是否可对 storagePath 对象走「流式直载」(不读进堆):纯文本格式 + 无 compress / encrypt(非 NONE)/ preprocess_pipeline
+   * 变换。需变换或二进制(EXCEL/BINARY)时返回 false,回退 byte[] 路径(受 MAX_OBJECT_BYTES 限)。
+   */
+  private boolean canStreamObjectDirect(ImportPayload importPayload, Map<String, Object> tc) {
+    if (isBinaryImportFormat(resolveFileFormatType(importPayload, tc))) {
+      return false;
+    }
+    Object pp = tc.get("preprocess_pipeline");
+    if (pp != null
+        && Texts.hasText(String.valueOf(pp))
+        && !"[]".equals(String.valueOf(pp).trim())) {
+      return false;
+    }
+    return isNoneOrBlank(tc.get("compress_type")) && isNoneOrBlank(tc.get("encrypt_type"));
+  }
+
+  /** statObject 取对象字节数;失败(对象缺失/网络)返回 -1 → 调用方不走流式,交 byte[] 路径报明确错误。 */
+  private long objectSizeBytes(ImportPayload importPayload) {
+    String bucket =
+        Texts.hasText(importPayload.storageBucket())
+            ? importPayload.storageBucket()
+            : minioStorageProperties.getBucket();
+    try {
+      return minioClient
+          .statObject(
+              StatObjectArgs.builder().bucket(bucket).object(importPayload.storagePath()).build())
+          .size();
+    } catch (Exception ex) {
+      SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:statObject", ex);
+      return -1L;
+    }
+  }
+
+  private static boolean isNoneOrBlank(Object v) {
+    if (v == null) {
+      return true;
+    }
+    String s = String.valueOf(v).trim();
+    return s.isEmpty() || "NONE".equalsIgnoreCase(s);
+  }
+
+  /**
+   * 流式把对象存储里的源对象拷到 spool 临时文件,设 {@code IMPORT_LARGE_TEXT_PATH}/charset 交 PARSE 流式逐行消费。 全程 {@code
+   * Files.copy(InputStream, Path)} 8K 缓冲流转,不分配整文件 byte[],无堆内存上限(仅受 /tmp 磁盘)。 spool 文件生命周期由 PARSE
+   * 收尾删除;本方法失败时自行清理并抛 {@link ImportPreprocessException}。
+   */
+  private ImportStageResult streamObjectToSpoolAndReturn(
+      ImportJobContext context,
+      ImportPayload importPayload,
+      Map<String, Object> templateConfig,
+      Object templateConfigObject) {
+    String bucket =
+        Texts.hasText(importPayload.storageBucket())
+            ? importPayload.storageBucket()
+            : minioStorageProperties.getBucket();
+    String object = importPayload.storagePath();
+    Path spool = null;
+    try {
+      spool = Files.createTempFile("batch-preprocess-obj-", ".raw");
+      long bytes;
+      try (InputStream in =
+          minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(object).build())) {
+        bytes = Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
+      }
+      Charset charset = resolveCharset(importPayload, templateConfigObject);
+      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
+      context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
+      context.setRawPayload("");
+      context.getAttributes().remove("normalizedPayload");
+      context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+      log.info(
+          "import preprocess streamed object to spool (no heap buffering): bucket={}, object={},"
+              + " bytes={}, spool={}",
+          bucket,
+          object,
+          bytes,
+          spool);
+      Map<String, Object> fileMetadata = new LinkedHashMap<>();
+      fileMetadata.put("preprocessed", Boolean.TRUE);
+      String fmt = resolveFileFormatType(importPayload, templateConfig);
+      fileMetadata.put("preprocessFormat", fmt == null ? "" : fmt);
+      fileMetadata.put("sourceObject", object);
+      fileMetadata.put("sourceBytes", bytes);
+      runtimeRepository.updateFileStatus(
+          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+          "PARSING",
+          fileMetadata);
+      return ImportStageResult.success(stage());
+    } catch (Exception ex) {
+      if (spool != null) {
+        try {
+          Files.deleteIfExists(spool);
+        } catch (IOException ignored) {
+          SwallowedExceptionLogger.warn(PreprocessStep.class, "catch:IOException", ignored);
+        }
+      }
+      throw new ImportPreprocessException(
+          "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED",
+          "failed to stream import object from storage (bucket="
               + bucket
               + ", object="
               + object
