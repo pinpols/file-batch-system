@@ -2,6 +2,8 @@
 
 > 整合自原 4 个 runbook：prometheus-grafana-baseline / observability-loki-tempo / otel-integration / structured-logging-pipeline。
 > 三件套一体化呈现：metrics（Prom + Grafana baseline）+ traces（Tempo + Jaeger 兼容）+ logs（Loki + 结构化 pipeline）+ OTel Collector 多路复用。
+>
+> **License 提示**：Grafana / Loki / Tempo 均为 **AGPL v3**;Prometheus / OTel Collector 为 Apache 2.0。本系统自托管 + 不改源码 + 用户不直连(运维内部访问)→ **无 license 风险**(同 Citus / MinIO,统一评估见 [`docs/backlog/citus-introduction-plan-2026-06-06.md`](../backlog/citus-introduction-plan-2026-06-06.md) §11)。
 
 ## 1. Loki + Tempo 三件套主部署
 

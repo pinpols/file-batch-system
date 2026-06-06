@@ -3,6 +3,8 @@
 平台对象存储底层用 MinIO Java SDK——一个**通用 S3 协议客户端**。同一套配置(前缀 `batch.storage.s3`)可接
 **自建 MinIO / Ceph、AWS S3、阿里云 OSS（S3 兼容）、腾讯云 COS（S3 兼容）**:换后端只改配置,**不换 SDK、不改业务代码、不加依赖**。
 
+> **License 提示**:MinIO Server = AGPL v3(自建场景);MinIO Java SDK = Apache 2.0;AWS S3 / 阿里 OSS / 腾讯 COS 是商业云服务无 license 问题。**本系统自托管 MinIO + 不改源码 + 用户不直连 → 无 license 风险**(同 Citus / Grafana / Loki / Tempo,统一评估见 [`docs/backlog/citus-introduction-plan-2026-06-06.md`](../backlog/citus-introduction-plan-2026-06-06.md) §11)。
+
 > 非 S3 协议的 Azure Blob / GCS 不在此列——那需要存储抽象层 + 独立后端实现(另见规划)。
 
 ## 配置项(`batch.storage.s3.*`)
