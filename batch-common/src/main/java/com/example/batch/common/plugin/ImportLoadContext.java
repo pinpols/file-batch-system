@@ -13,6 +13,7 @@ public record ImportLoadContext(
     String workerId,
     String sourceFileName,
     String batchNo,
+    String bizDate,
     String bizType,
     String templateCode,
     Map<String, Object> templateConfig) {}
