@@ -103,6 +103,10 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     Map<String, Object> baseParams = new LinkedHashMap<>();
     baseParams.put("tenantId", context.tenantId());
     baseParams.put("batchNo", context.batchNo());
+    // 地区过滤(per-run):PrepareStep 已解析并注入 exportSnapshot,模板 SQL 可声明 `WHERE region = :region`。
+    // 始终绑定(即使 null):模板引用 :region 时缺参会让 NamedParameterJdbcTemplate 抛 No value for parameter。
+    // region 由 allowedRegions 字典在 PREPARE 阶段把关,这里仅透传不再校验。
+    baseParams.put("region", regionFromSnapshot(context));
 
     // 首页（cursor == null）时执行 EXPLAIN 预检
     if (cursor == null && security != null && security.isExplainCheckEnabled()) {
@@ -134,6 +138,12 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       nextCursor = row.get(spec.cursorColumn());
     }
     return new DetailPage(rows, nextCursor);
+  }
+
+  /** 从 exportSnapshot 取 PrepareStep 已解析的 region(可能为 null:模板未配 region 时)。 */
+  private static Object regionFromSnapshot(ExportDataContext context) {
+    Map<String, Object> snap = context.exportSnapshot();
+    return snap == null ? null : snap.get("region");
   }
 
   private void runExplainCheck(
