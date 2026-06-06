@@ -1,32 +1,31 @@
 package com.example.batch.common.storage;
 
 import com.example.batch.common.config.S3StorageProperties;
-import com.example.batch.common.utils.MinioBucketSupport;
-import io.minio.CopyObjectArgs;
-import io.minio.CopySource;
-import io.minio.GetObjectArgs;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.ListObjectsArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.RemoveObjectArgs;
-import io.minio.Result;
-import io.minio.StatObjectArgs;
-import io.minio.errors.ErrorResponseException;
-import io.minio.http.Method;
-import io.minio.messages.Item;
+import com.example.batch.common.utils.S3BucketSupport;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 /**
- * 基于 MinIO Java SDK 的 S3 协议对象存储实现。覆盖 S3 协议全系（MinIO / AWS S3 / 阿里 OSS / 腾讯 COS / GCS），靠 endpoint +
+ * 基于 AWS SDK for Java v2 的 S3 实现。覆盖 S3 协议全系（MinIO / AWS S3 / 阿里 OSS / 腾讯 COS / GCS），靠 endpoint +
  * credentials 配置切换后端，非一云一实现。
- *
- * <p>这是 §11 命名边界里「SDK 包装内层」——它内部包的就是 {@code io.minio} 库，是全仓唯一允许直 {@code import io.minio} 的收口点。
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -34,17 +33,17 @@ public class S3ObjectStore implements BatchObjectStore {
 
   private static final String COMPONENT_NAME = "s3-object-store";
 
-  private final MinioClient minioClient;
+  private final S3Client s3Client;
+  private final S3Presigner presigner;
   private final S3StorageProperties properties;
 
   @Override
   public void put(String bucket, String key, InputStream in, long size, String contentType) {
     ensureBucket(bucket);
     try {
-      minioClient.putObject(
-          PutObjectArgs.builder().bucket(bucket).object(key).stream(in, size, -1)
-              .contentType(contentType)
-              .build());
+      s3Client.putObject(
+          PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
+          RequestBody.fromInputStream(in, size));
     } catch (Exception ex) {
       throw mapException("put", bucket, key, ex);
     }
@@ -53,11 +52,12 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public void copy(String bucket, String srcKey, String dstKey) {
     try {
-      minioClient.copyObject(
-          CopyObjectArgs.builder()
-              .bucket(bucket)
-              .object(dstKey)
-              .source(CopySource.builder().bucket(bucket).object(srcKey).build())
+      s3Client.copyObject(
+          CopyObjectRequest.builder()
+              .sourceBucket(bucket)
+              .sourceKey(srcKey)
+              .destinationBucket(bucket)
+              .destinationKey(dstKey)
               .build());
     } catch (Exception ex) {
       throw mapException("copy", bucket, srcKey, ex);
@@ -67,7 +67,7 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public void delete(String bucket, String key) {
     try {
-      minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(key).build());
+      s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     } catch (Exception ex) {
       throw mapException("delete", bucket, key, ex);
     }
@@ -76,7 +76,7 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public InputStream get(String bucket, String key) {
     try {
-      return minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build());
+      return s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build());
     } catch (Exception ex) {
       throw mapException("get", bucket, key, ex);
     }
@@ -85,8 +85,12 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public InputStream getFrom(String bucket, String key, long offset) {
     try {
-      return minioClient.getObject(
-          GetObjectArgs.builder().bucket(bucket).object(key).offset(offset).build());
+      return s3Client.getObject(
+          GetObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .range("bytes=" + offset + "-")
+              .build());
     } catch (Exception ex) {
       throw mapException("getFrom", bucket, key, ex);
     }
@@ -95,9 +99,9 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public long statSize(String bucket, String key) {
     try {
-      return minioClient
-          .statObject(StatObjectArgs.builder().bucket(bucket).object(key).build())
-          .size();
+      return s3Client
+          .headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build())
+          .contentLength();
     } catch (Exception ex) {
       throw mapException("statSize", bucket, key, ex);
     }
@@ -106,14 +110,15 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public boolean exists(String bucket, String key) {
     try {
-      minioClient.statObject(StatObjectArgs.builder().bucket(bucket).object(key).build());
+      s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
       return true;
-    } catch (ErrorResponseException ex) {
-      String code = ex.errorResponse().code();
-      if ("NoSuchKey".equals(code) || "NoSuchObject".equals(code)) {
+    } catch (NoSuchKeyException ex) {
+      return false;
+    } catch (S3Exception ex) {
+      if (ex.statusCode() == 404) {
         return false;
       }
-      throw mapErrorResponse("exists", bucket, key, ex, code);
+      throw mapException("exists", bucket, key, ex);
     } catch (Exception ex) {
       throw mapException("exists", bucket, key, ex);
     }
@@ -123,30 +128,19 @@ public class S3ObjectStore implements BatchObjectStore {
   public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
     List<ObjectSummary> summaries = new ArrayList<>();
     try {
-      Iterable<Result<Item>> results =
-          minioClient.listObjects(
-              ListObjectsArgs.builder()
+      ListObjectsV2Response resp =
+          s3Client.listObjectsV2(
+              ListObjectsV2Request.builder()
                   .bucket(bucket)
                   .prefix(prefix)
                   .startAfter(afterMarker)
                   .maxKeys(maxKeys)
-                  // 递归列举：返回 prefix 下所有层级的对象键（不按 '/' 折叠成公共前缀）。
-                  // 对齐 ingress 扫描 / governance 清点对嵌套键（如 ingress/tenant/f.csv）的全量列举语义。
-                  .recursive(true)
                   .build());
-      for (Result<Item> result : results) {
+      for (S3Object item : resp.contents()) {
         if (summaries.size() >= maxKeys) {
-          // MinIO SDK 的 maxKeys 只控制每次请求页大小、不限制迭代器总量（内部自动翻 continuation
-          // token）。这里手动在收满 maxKeys 时停止，对齐接口的「单页最多 maxKeys」语义。
           break;
         }
-        Item item = result.get();
-        summaries.add(
-            new ObjectSummary(
-                item.objectName(),
-                item.size(),
-                item.lastModified() == null ? null : item.lastModified().toInstant(),
-                item.etag()));
+        summaries.add(new ObjectSummary(item.key(), item.size(), item.lastModified(), item.eTag()));
       }
     } catch (Exception ex) {
       throw mapException("list", bucket, prefix, ex);
@@ -162,41 +156,33 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public String presign(String bucket, String key, Duration ttl) {
     try {
-      return minioClient.getPresignedObjectUrl(
-          GetPresignedObjectUrlArgs.builder()
-              .method(Method.GET)
-              .bucket(bucket)
-              .object(key)
-              .expiry((int) ttl.toSeconds())
-              .build());
+      GetObjectRequest get = GetObjectRequest.builder().bucket(bucket).key(key).build();
+      GetObjectPresignRequest req =
+          GetObjectPresignRequest.builder().signatureDuration(ttl).getObjectRequest(get).build();
+      return presigner.presignGetObject(req).url().toString();
     } catch (Exception ex) {
       throw mapException("presign", bucket, key, ex);
     }
   }
 
   private void ensureBucket(String bucket) {
-    MinioBucketSupport.ensureBucket(
-        minioClient, bucket, log, COMPONENT_NAME, properties.isAutoCreateBucket());
+    S3BucketSupport.ensureBucket(
+        s3Client, bucket, log, COMPONENT_NAME, properties.isAutoCreateBucket());
   }
 
   private ObjectStoreException mapException(
       String operation, String bucket, String key, Exception ex) {
-    if (ex instanceof ErrorResponseException errorResponse) {
-      return mapErrorResponse(
-          operation, bucket, key, errorResponse, errorResponse.errorResponse().code());
+    if (ex instanceof S3Exception s3) {
+      String code = s3.awsErrorDetails() == null ? "" : s3.awsErrorDetails().errorCode();
+      String message = message(operation, bucket, key);
+      return switch (code == null ? "" : code) {
+        case "NoSuchKey", "NoSuchObject" -> new ObjectNotFoundException(message, ex);
+        case "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch" ->
+            new ObjectStoreAccessException(message, ex);
+        default -> new ObjectStoreException(message, ex);
+      };
     }
     return new ObjectStoreException(message(operation, bucket, key), ex);
-  }
-
-  private ObjectStoreException mapErrorResponse(
-      String operation, String bucket, String key, ErrorResponseException ex, String code) {
-    String message = message(operation, bucket, key);
-    return switch (code == null ? "" : code) {
-      case "NoSuchKey", "NoSuchObject" -> new ObjectNotFoundException(message, ex);
-      case "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch" ->
-          new ObjectStoreAccessException(message, ex);
-      default -> new ObjectStoreException(message, ex);
-    };
   }
 
   private static String message(String operation, String bucket, String key) {

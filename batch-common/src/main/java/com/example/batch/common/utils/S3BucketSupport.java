@@ -1,34 +1,31 @@
 package com.example.batch.common.utils;
 
 import com.example.batch.common.time.BatchDateTimeSupport;
-import io.minio.BucketExistsArgs;
-import io.minio.MakeBucketArgs;
-import io.minio.MinioClient;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 /**
- * MinIO Bucket 自动初始化辅助工具类。 {@code ensureBucket} 在 Bucket 不存在时自动创建，成功返回 {@code true}，失败返回 {@code
- * false} 并记录警告日志。 为避免高频失败场景刷屏，日志输出有 5 分钟冷却窗口（per component+bucket 维度）。 MinioClient 为 {@code null} 或
- * bucket 名为空时直接返回 {@code false}，不抛异常。
+ * S3 Bucket 自动初始化辅助工具类。 {@code ensureBucket} 在 Bucket 不存在时自动创建，成功返回 {@code true}，失败返回 {@code false}
+ * 并记录警告日志。 为避免高频失败场景刷屏，日志输出有 5 分钟冷却窗口（per component+bucket 维度）。 S3Client 为 {@code null} 或 bucket
+ * 名为空时直接返回 {@code false}，不抛异常。
  */
-public final class MinioBucketSupport {
+public final class S3BucketSupport {
 
   private static final long FAILURE_LOG_COOLDOWN_MILLIS = Duration.ofMinutes(5).toMillis();
   private static final ConcurrentHashMap<String, AtomicLong> LAST_FAILURE_LOG_AT =
       new ConcurrentHashMap<>();
 
-  private MinioBucketSupport() {}
+  private S3BucketSupport() {}
 
   public static boolean ensureBucket(
-      MinioClient minioClient,
-      String bucket,
-      Logger log,
-      String componentName,
-      boolean autoCreate) {
-    if (minioClient == null || !Texts.hasText(bucket)) {
+      S3Client s3Client, String bucket, Logger log, String componentName, boolean autoCreate) {
+    if (s3Client == null || !Texts.hasText(bucket)) {
       return false;
     }
     // autoCreate=false（托管云 S3/OSS/COS）：bucket 由外部预建、凭据通常无 CreateBucket（甚至无 HeadBucket）
@@ -37,9 +34,15 @@ public final class MinioBucketSupport {
       return true;
     }
     try {
-      boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+      boolean exists;
+      try {
+        s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+        exists = true;
+      } catch (NoSuchBucketException e) {
+        exists = false;
+      }
       if (!exists) {
-        minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+        s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
       }
       LAST_FAILURE_LOG_AT.remove(cacheKey(componentName, bucket));
       return true;
@@ -52,7 +55,7 @@ public final class MinioBucketSupport {
       if (now - previous >= FAILURE_LOG_COOLDOWN_MILLIS
           && lastLoggedAt.compareAndSet(previous, now)) {
         log.warn(
-            "{} minio bucket ensure failed: bucket={}, cause={}",
+            "{} s3 bucket ensure failed: bucket={}, cause={}",
             componentName,
             bucket,
             ex.getMessage());
@@ -62,6 +65,6 @@ public final class MinioBucketSupport {
   }
 
   private static String cacheKey(String componentName, String bucket) {
-    return (componentName == null ? "minio" : componentName) + "::" + bucket;
+    return (componentName == null ? "s3" : componentName) + "::" + bucket;
   }
 }

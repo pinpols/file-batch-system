@@ -6,7 +6,6 @@ import com.example.batch.common.storage.EncryptingObjectStore;
 import com.example.batch.common.storage.FilesystemObjectStore;
 import com.example.batch.common.storage.S3ObjectStore;
 import com.example.batch.common.utils.Texts;
-import io.minio.MinioClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -15,6 +14,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
  * {@link BatchObjectStore} 后端选择器 + 加密装饰层装配（Phase 2）。
@@ -33,8 +34,8 @@ import org.springframework.context.annotation.Bean;
  * <p>raw store bean 命名 {@code rawObjectStore}（用 {@link Qualifier} 区分），业务代码注入的 {@link
  * BatchObjectStore} 始终是最外层 bean。
  */
-@AutoConfiguration(after = {MinioAutoConfiguration.class, BatchObjectCryptoAutoConfiguration.class})
-@ConditionalOnClass(MinioClient.class)
+@AutoConfiguration(after = {S3AutoConfiguration.class, BatchObjectCryptoAutoConfiguration.class})
+@ConditionalOnClass(S3Client.class)
 @EnableConfigurationProperties({
   S3StorageProperties.class,
   FilesystemStorageProperties.class,
@@ -47,8 +48,8 @@ public class BatchObjectStoreAutoConfiguration {
   @ConditionalOnMissingBean(name = "rawObjectStore")
   @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "s3", matchIfMissing = true)
   public BatchObjectStore s3RawObjectStore(
-      MinioClient minioClient, S3StorageProperties properties) {
-    return new S3ObjectStore(minioClient, properties);
+      S3Client s3Client, S3Presigner presigner, S3StorageProperties properties) {
+    return new S3ObjectStore(s3Client, presigner, properties);
   }
 
   /** FS 后端 raw 实现。 */

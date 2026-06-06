@@ -11,8 +11,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * 注册 batch-common 自定义健康探针。仅当目标 bean / 类可见时才生效,避免污染不依赖该组件的模块(例如 worker 不引 Minio
- * 时,MinioHealthIndicator 不注册)。
+ * 注册 batch-common 自定义健康探针。仅当目标 bean / 类可见时才生效,避免污染不依赖该组件的模块(例如 worker 不引 S3 时,S3HealthIndicator
+ * 不注册)。
  */
 @AutoConfiguration
 @EnableConfigurationProperties(HikariSaturationProperties.class)
