@@ -29,6 +29,8 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   /** Phase A RLS:export query 需 tx 包 SET LOCAL,触发 biz.* SELECT 时的 USING 过滤(防跨租户读)。 */
   private final org.springframework.transaction.support.TransactionTemplate txTemplate;
 
+  private final ExportKeysetRangePlanner keysetRangePlanner = new ExportKeysetRangePlanner();
+
   public GenericJdbcMappedExportDataPlugin(
       @Qualifier("exportBusinessDataSource") DataSource businessDataSource,
       ObjectMapper objectMapper,
@@ -105,14 +107,11 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     cols.setLength(cols.length() - 1);
     String fk = JdbcMappedSqlValidator.quotePg(spec.detailFkColumn());
     String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
+    ExportKeysetRange keysetRange =
+        keysetRangePlanner.resolve(context, () -> minMax(spec, batchId));
     PagedQuery pq =
         buildDetailQuery(
-            new DetailSql(cols.toString(), fq, fk, ob),
-            batchId,
-            cursor,
-            pageSize,
-            context.partitionCount(),
-            context.partitionNo());
+            new DetailSql(cols.toString(), fq, fk, ob), batchId, cursor, pageSize, keysetRange);
     final String finalSql = pq.sql();
     final Object[] sqlArgs = pq.args();
     List<Map<String, Object>> rows =
@@ -151,7 +150,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   static record DetailSql(String cols, String fq, String fk, String ob) {}
 
   static PagedQuery buildDetailQuery(
-      DetailSql q, Long batchId, Object cursor, int pageSize, int partitionCount, int partitionNo) {
+      DetailSql q, Long batchId, Object cursor, int pageSize, ExportKeysetRange range) {
     String cols = q.cols();
     String fq = q.fq();
     String fk = q.fk();
@@ -166,12 +165,21 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
             .append(" = ?");
     List<Object> args = new ArrayList<>();
     args.add(batchId);
-    if (partitionCount > 1) {
+    if (range != null && range.active()) {
+      sql.append(" AND ")
+          .append(ob)
+          .append(" >= ?")
+          .append(" AND ")
+          .append(ob)
+          .append(range.includeUpper() ? " <= ?" : " < ?");
+      args.add(range.loN());
+      args.add(range.hiN());
+    } else if (range != null && range.partitionCount() > 1) {
       sql.append(" AND ((hashtext(").append(ob).append("::text) % ?) + ?) % ? = ?");
-      args.add(partitionCount);
-      args.add(partitionCount);
-      args.add(partitionCount);
-      args.add(partitionNo - 1);
+      args.add(range.partitionCount());
+      args.add(range.partitionCount());
+      args.add(range.partitionCount());
+      args.add(range.partitionNo() - 1);
     }
     if (cursor != null) {
       sql.append(" AND ").append(ob).append(" > ?");
@@ -180,5 +188,41 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     sql.append(" ORDER BY ").append(ob).append(" ASC LIMIT ?");
     args.add(pageSize);
     return new PagedQuery(sql.toString(), args.toArray());
+  }
+
+  // 兼容旧签名:转调新重载。
+  static PagedQuery buildDetailQuery(
+      DetailSql q, Long batchId, Object cursor, int pageSize, int partitionCount, int partitionNo) {
+    return buildDetailQuery(
+        q, batchId, cursor, pageSize, ExportKeysetRange.inactiveFor(partitionCount, partitionNo));
+  }
+
+  /** 物理表游标列 [min,max];非数值列 → 元素 null(planner 退 hashtext)。复用只读 RLS tx。 */
+  private java.math.BigDecimal[] minMax(JdbcMappedExportSpec spec, Long batchId) {
+    String fq =
+        JdbcMappedSqlValidator.quotePg(spec.schema())
+            + "."
+            + JdbcMappedSqlValidator.quotePg(spec.detailTable());
+    String ob = JdbcMappedSqlValidator.quotePg(spec.detailOrderByColumn());
+    String fk = JdbcMappedSqlValidator.quotePg(spec.detailFkColumn());
+    String sql =
+        "SELECT min(" + ob + ") lo, max(" + ob + ") hi FROM " + fq + " WHERE " + fk + " = ?";
+    Map<String, Object> row =
+        txTemplate.execute(
+            status -> {
+              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+              return jdbcTemplate.queryForMap(sql, batchId);
+            });
+    return new java.math.BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
+  }
+
+  private static java.math.BigDecimal toBig(Object v) {
+    if (v instanceof java.math.BigDecimal b) {
+      return b;
+    }
+    if (v instanceof Number n) {
+      return new java.math.BigDecimal(n.toString());
+    }
+    return null;
   }
 }

@@ -43,6 +43,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   /** Phase A RLS:read 路径 tx 包 SET LOCAL,触发 biz.* USING 过滤(防跨租户读)。 */
   private final org.springframework.transaction.support.TransactionTemplate txTemplate;
 
+  private final ExportKeysetRangePlanner keysetRangePlanner = new ExportKeysetRangePlanner();
+
   public SqlTemplateExportDataPlugin(
       @Qualifier("exportBusinessDataSource") DataSource businessDataSource,
       ObjectMapper objectMapper,
@@ -113,19 +115,19 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       runExplainCheck(baseSql, baseParams, context);
     }
 
-    String sql =
-        buildPagedSql(
-            baseSql,
-            spec.cursorColumn(),
-            cursor != null,
-            context.partitionCount(),
-            context.partitionNo());
+    ExportKeysetRange keysetRange =
+        keysetRangePlanner.resolve(context, () -> minMax(baseSql, spec.cursorColumn(), baseParams));
+    String sql = buildPagedSql(baseSql, spec.cursorColumn(), cursor != null, keysetRange);
 
     Map<String, Object> params = new LinkedHashMap<>(baseParams);
     if (cursor != null) {
       params.put("__cursor", cursor);
     }
     params.put("__limit", limit);
+    if (keysetRange.active()) {
+      params.put("__loN", keysetRange.loN());
+      params.put("__hiN", keysetRange.hiN());
+    }
 
     final String finalSql = sql;
     final Map<String, Object> finalParams = params;
@@ -211,16 +213,24 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
    * @return 分页 SQL 字符串
    */
   static String buildPagedSql(
-      String baseSql, String cursorColumn, boolean hasCursor, int partitionCount, int partitionNo) {
+      String baseSql, String cursorColumn, boolean hasCursor, ExportKeysetRange range) {
     // R2-P2-4 二层防御：之前手动 `"` 拼接 cursorColumn 依赖上游 requireIdentifier 校验。
     // 改为统一走 quotePg（同样调 requireIdentifier 但出于此函数自管），即使未来调用绕过 spec.parse 也安全。
     String cursorIdent = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
     StringBuilder where = new StringBuilder();
-    if (partitionCount > 1) {
+    if (range != null && range.active()) {
+      where.append("WHERE base.%s >= :__loN%n".formatted(cursorIdent));
+      where.append(
+          "AND base.%s %s :__hiN%n".formatted(cursorIdent, range.includeUpper() ? "<=" : "<"));
+    } else if (range != null && range.partitionCount() > 1) {
       where.append(
           "WHERE ((hashtext(base.%s::text) %% %d) + %d) %% %d = %d%n"
               .formatted(
-                  cursorIdent, partitionCount, partitionCount, partitionCount, partitionNo - 1));
+                  cursorIdent,
+                  range.partitionCount(),
+                  range.partitionCount(),
+                  range.partitionCount(),
+                  range.partitionNo() - 1));
     }
     if (hasCursor) {
       where
@@ -237,5 +247,40 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     LIMIT :__limit
     """
         .formatted(baseSql, where, cursorIdent);
+  }
+
+  /** 兼容旧签名:转调新重载（inactive → 退回 hashtext 分片谓词）。 */
+  static String buildPagedSql(
+      String baseSql, String cursorColumn, boolean hasCursor, int partitionCount, int partitionNo) {
+    return buildPagedSql(
+        baseSql,
+        cursorColumn,
+        hasCursor,
+        ExportKeysetRange.inactiveFor(partitionCount, partitionNo));
+  }
+
+  /** 算游标列 [min,max];非数值列 → 元素 null(planner 据此退 hashtext)。复用只读 RLS tx。 */
+  private java.math.BigDecimal[] minMax(
+      String baseSql, String cursorColumn, Map<String, Object> baseParams) {
+    String cur = com.example.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
+    String mmSql =
+        "SELECT min(%s) AS lo, max(%s) AS hi FROM (%s) base".formatted(cur, cur, baseSql);
+    Map<String, Object> row =
+        txTemplate.execute(
+            status -> {
+              RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+              return jdbc.queryForMap(mmSql, baseParams);
+            });
+    return new java.math.BigDecimal[] {toBig(row.get("lo")), toBig(row.get("hi"))};
+  }
+
+  private static java.math.BigDecimal toBig(Object v) {
+    if (v instanceof java.math.BigDecimal b) {
+      return b;
+    }
+    if (v instanceof Number n) {
+      return new java.math.BigDecimal(n.toString());
+    }
+    return null; // 非数值游标列 → 退 hashtext
   }
 }
