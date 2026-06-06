@@ -105,7 +105,7 @@ class DryRunGuardConventionTest {
           Pattern.compile("\\.batchInsert\\("),
           Pattern.compile("jdbcTemplate\\.(update|batchUpdate|execute)\\("),
           Pattern.compile("kafkaTemplate\\.send\\("),
-          Pattern.compile("minioClient\\.(putObject|removeObject|copyObject)\\("),
+          Pattern.compile("s3Client\\.(putObject|removeObject|copyObject)\\("),
           Pattern.compile("\\.putObject\\("),
           Pattern.compile("HttpClient.*\\.send\\("),
           Pattern.compile("restTemplate\\.(postFor|put|exchange|delete)\\("),
@@ -168,7 +168,7 @@ class DryRunGuardConventionTest {
                             + " — 既然登记为 READ_ONLY_OR_LOCAL 就不应再加 guard；"
                             + "要么删 guard，要么迁到 SIDE_EFFECTING_GUARDED");
                   }
-                  // READ_ONLY plugin 偷偷长出 jdbc/mybatis/http/minio/kafka 写调用 = dry-run 边界静默裂开。
+                  // READ_ONLY plugin 偷偷长出 jdbc/mybatis/http/objectStore/kafka 写调用 = dry-run 边界静默裂开。
                   // 文件头加 "// dry-run-allow-internal: <reason>" 才允许豁免(staging 中间态读写场景)。
                   if (inReadOnly && !usesGuard && !content.contains(SUSPICIOUS_ALLOW_MARKER)) {
                     SUSPICIOUS_WRITE_SYMBOLS.stream()
@@ -181,7 +181,7 @@ class DryRunGuardConventionTest {
                                         + " — 命中疑似写调用 ["
                                         + pattern.pattern()
                                         + "],登记为 READ_ONLY_OR_LOCAL 但出现"
-                                        + " jdbc/mybatis/http/minio/kafka 写 API。三选一:(1) 迁到"
+                                        + " jdbc/mybatis/http/objectStore/kafka 写 API。三选一:(1) 迁到"
                                         + " SIDE_EFFECTING_GUARDED + 加 DryRunGuard;(2) 文件头加 `// "
                                         + SUSPICIOUS_ALLOW_MARKER
                                         + ": <staging 表写入理由>` 显式豁免;"
@@ -213,7 +213,7 @@ class DryRunGuardConventionTest {
     assertThat(readOnlyButSmellsLikeWrite)
         .as(
             """
-            READ_ONLY_OR_LOCAL plugin 出现 jdbc / mybatis / http / minio / kafka 写 API,
+            READ_ONLY_OR_LOCAL plugin 出现 jdbc / mybatis / http / objectStore / kafka 写 API,
             dry-run 边界可能静默失守。修复见每条 finding 后的「三选一」提示。
             命中:
             %s

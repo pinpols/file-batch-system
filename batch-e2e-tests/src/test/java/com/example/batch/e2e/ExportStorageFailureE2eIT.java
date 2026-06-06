@@ -116,7 +116,7 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
     params.put("templateCode", "EXP-CUSTOMER-JSON");
     params.put("bizDate", "2026-01-15");
     params.put("bizType", "SETTLEMENT");
-    params.put("fileCode", "e2e-export-minio-fail");
+    params.put("fileCode", "e2e-export-objectStore-fail");
 
     launchService.launch(
         new LaunchRequest(
@@ -125,7 +125,7 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
             LocalDate.of(2026, 1, 15),
             TriggerType.API,
             seed.requestId(),
-            "e2e-tr-export-minio-fail",
+            "e2e-tr-export-objectStore-fail",
             params));
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);

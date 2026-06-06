@@ -51,7 +51,7 @@ public class S3GovernanceStorage {
       }
       return objects;
     } catch (Exception exception) {
-      throw new IllegalStateException("failed to list minio objects", exception);
+      throw new IllegalStateException("failed to list objectStore objects", exception);
     }
   }
 

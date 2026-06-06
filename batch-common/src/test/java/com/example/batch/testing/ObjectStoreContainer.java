@@ -17,22 +17,22 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 /** 集成测试使用的轻量 MinIO 测试容器封装。 */
-public final class MinIOContainer extends GenericContainer<MinIOContainer> {
+public final class ObjectStoreContainer extends GenericContainer<ObjectStoreContainer> {
 
   private static final int MINIO_API_PORT = 9000;
   private static final int MINIO_CONSOLE_PORT = 9001;
   private static final DockerImageName IMAGE =
-      DockerImageName.parse("minio/minio:RELEASE.2025-09-07T16-13-09Z");
+      DockerImageName.parse("objectStore/objectStore:RELEASE.2025-09-07T16-13-09Z");
 
   private final String accessKey;
   private final String secretKey;
   private final String defaultBucket;
 
-  public MinIOContainer() {
+  public ObjectStoreContainer() {
     this("minioadmin", "minioadmin123", "batch-test");
   }
 
-  public MinIOContainer(String accessKey, String secretKey, String defaultBucket) {
+  public ObjectStoreContainer(String accessKey, String secretKey, String defaultBucket) {
     super(IMAGE);
     this.accessKey = accessKey;
     this.secretKey = secretKey;

@@ -69,7 +69,7 @@ class ImportIngressScannerTest {
 
     assertThatThrownBy(() -> scanner.scan())
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("failed to scan minio ingress objects");
+        .hasMessageContaining("failed to scan objectStore ingress objects");
 
     verifyNoInteractions(runtimeRepository);
   }

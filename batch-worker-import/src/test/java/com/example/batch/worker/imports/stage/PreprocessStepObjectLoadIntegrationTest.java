@@ -9,7 +9,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.storage.S3ObjectStore;
-import com.example.batch.testing.MinIOContainer;
+import com.example.batch.testing.ObjectStoreContainer;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -42,33 +42,34 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @Tag("integration")
 class PreprocessStepObjectLoadIntegrationTest {
 
-  private static MinIOContainer minio;
+  private static ObjectStoreContainer objectStore;
   private static String bucket;
   private static S3Client client;
   private static S3Presigner presigner;
 
   @BeforeAll
   static void startMinio() {
-    minio = new MinIOContainer();
-    minio.start();
-    bucket = minio.getDefaultBucket();
-    client = minio.client();
+    objectStore = new ObjectStoreContainer();
+    objectStore.start();
+    bucket = objectStore.getDefaultBucket();
+    client = objectStore.client();
     presigner =
         S3Presigner.builder()
-            .endpointOverride(URI.create(minio.getEndpoint()))
+            .endpointOverride(URI.create(objectStore.getEndpoint()))
             .credentialsProvider(
                 StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(minio.getAccessKey(), minio.getSecretKey())))
+                    AwsBasicCredentials.create(
+                        objectStore.getAccessKey(), objectStore.getSecretKey())))
             .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
             .region(Region.US_EAST_1)
             .build();
-    minio.ensureBucketExists(bucket);
+    objectStore.ensureBucketExists(bucket);
   }
 
   @AfterAll
   static void stopMinio() {
-    if (minio != null) {
-      minio.stop();
+    if (objectStore != null) {
+      objectStore.stop();
     }
   }
 

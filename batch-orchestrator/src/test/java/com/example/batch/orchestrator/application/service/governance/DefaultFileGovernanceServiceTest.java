@@ -254,11 +254,11 @@ class DefaultFileGovernanceServiceTest {
     when(fileGovernanceRepository.loadTemplateSecurityForFile("t1", 1L)).thenReturn(Map.of());
     when(s3GovernanceStorage.createPresignedDownloadUrl(
             eq("bucket-a"), eq("path/to/file.csv"), anyInt()))
-        .thenReturn("https://minio/presigned/url");
+        .thenReturn("https://objectStore/presigned/url");
 
     String url = service.presignFileDownload(cmd);
 
-    assertThat(url).isEqualTo("https://minio/presigned/url");
+    assertThat(url).isEqualTo("https://objectStore/presigned/url");
     verify(fileGovernanceRepository).appendAudit(any());
   }
 
@@ -348,12 +348,12 @@ class DefaultFileGovernanceServiceTest {
                 "content_encryption_enabled", true,
                 "download_requires_approval", true));
     when(s3GovernanceStorage.createPresignedDownloadUrl(eq("b"), eq("p"), anyInt()))
-        .thenReturn("https://direct-minio");
+        .thenReturn("https://direct-objectStore");
 
     String url = service.presignFileDownload(cmd);
 
     // bypass 时即使设了 encryption / approval,也走直连 MinIO
-    assertThat(url).isEqualTo("https://direct-minio");
+    assertThat(url).isEqualTo("https://direct-objectStore");
   }
 
   // ── redispatchFile ───────────────────────────────────────────────────────

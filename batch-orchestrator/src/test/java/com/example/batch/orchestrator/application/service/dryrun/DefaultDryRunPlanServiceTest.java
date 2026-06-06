@@ -41,7 +41,7 @@ class DefaultDryRunPlanServiceTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<S3Client> s3ClientProvider = mock(ObjectProvider.class);
     @SuppressWarnings("unchecked")
-    ObjectProvider<S3StorageProperties> minioPropsProvider = mock(ObjectProvider.class);
+    ObjectProvider<S3StorageProperties> s3PropsProvider = mock(ObjectProvider.class);
     service =
         new DefaultDryRunPlanService(
             configCache,
@@ -51,7 +51,7 @@ class DefaultDryRunPlanServiceTest {
             tz,
             jdbcTemplateProvider,
             s3ClientProvider,
-            minioPropsProvider);
+            s3PropsProvider);
   }
 
   @Test

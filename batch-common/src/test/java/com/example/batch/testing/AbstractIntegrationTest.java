@@ -27,7 +27,7 @@ public abstract class AbstractIntegrationTest {
   private static final String KAFKA_IMAGE = "apache/kafka:4.1.2";
   // 版本需与 .env.example REDIS_IMAGE_TAG 保持一致
   private static final String REDIS_IMAGE = "redis:7.4";
-  // MinIO 版本在 MinIOContainer 中维护，需与 .env.example MINIO_IMAGE_TAG 保持一致
+  // MinIO 版本在 ObjectStoreContainer 中维护，需与 .env.example MINIO_IMAGE_TAG 保持一致
 
   private static final String DEFAULT_DB_USER = "batch_user";
   private static final String DEFAULT_DB_PASSWORD = "batch_pass_123";
@@ -62,7 +62,7 @@ public abstract class AbstractIntegrationTest {
       new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));
 
   @SuppressWarnings("resource")
-  private static final MinIOContainer MINIO = new MinIOContainer().withReuse(true);
+  private static final ObjectStoreContainer MINIO = new ObjectStoreContainer().withReuse(true);
 
   @SuppressWarnings("resource")
   private static final GenericContainer<?> REDIS =

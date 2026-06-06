@@ -138,7 +138,7 @@ public class ImportIngressScanner {
       return;
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("scanner", "minio-import");
+    metadata.put("scanner", "objectStore-import");
     metadata.put("doneRequired", scannerProperties.isRequireDoneFile());
     metadata.put("stabilityWindowSeconds", scannerProperties.getStabilityWindowSeconds());
     metadata.put("etag", snapshot.etag());
@@ -360,7 +360,7 @@ public class ImportIngressScanner {
       }
       return snapshots;
     } catch (Exception exception) {
-      throw new IllegalStateException("failed to scan minio ingress objects", exception);
+      throw new IllegalStateException("failed to scan objectStore ingress objects", exception);
     }
   }
 
