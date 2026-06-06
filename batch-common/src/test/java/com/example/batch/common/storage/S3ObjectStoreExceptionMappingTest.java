@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.S3StorageProperties;
+import java.io.IOException;
 import java.io.UncheckedIOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,7 @@ class S3ObjectStoreExceptionMappingTest {
   @Test
   void shouldMapNonS3ExceptionToBaseException() {
     when(s3Client.headObject(any(HeadObjectRequest.class)))
-        .thenThrow(new UncheckedIOException(new java.io.IOException("socket reset")));
+        .thenThrow(new UncheckedIOException(new IOException("socket reset")));
     assertThatThrownBy(() -> store.statSize("bucket", "key"))
         .isInstanceOf(ObjectStoreException.class)
         .isNotInstanceOf(ObjectNotFoundException.class)
