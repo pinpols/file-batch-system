@@ -78,7 +78,7 @@ class Resilience4jSb4CompatSpike {
               throw new RuntimeException("forced");
             });
       } catch (RuntimeException ignored) {
-        // expected
+        // 符合预期
       }
     }
     assertThat(cb.getState())

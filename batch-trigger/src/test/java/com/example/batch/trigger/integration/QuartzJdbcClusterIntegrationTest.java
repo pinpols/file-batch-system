@@ -82,7 +82,7 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
       try {
         scheduler.deleteJob(JobKey.jobKey(jobKeyName, "batch-trigger"));
       } catch (Exception ignored) {
-        // cleanup best-effort
+        // 尽力清理
       }
       jdbcTemplate.update(
           "delete from batch.job_definition where tenant_id = ? and job_code = ?",

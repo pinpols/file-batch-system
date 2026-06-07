@@ -45,15 +45,15 @@ class TaskDispatcherTenantMismatchTest {
     SdkTaskHandler handler = mock(SdkTaskHandler.class);
     dispatcher = new TaskDispatcher(config, Map.of("X", handler), http);
 
-    // arrange: 构造一条 tenantId != config.tenantId 的合法消息
+    // 准备: 构造一条 tenantId != config.tenantId 的合法消息
     TaskDispatchMessage foreign =
         new TaskDispatchMessage(
             42L, "tenant-b", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
 
-    // act
+    // 执行
     dispatcher.onMessage(foreign);
 
-    // assert: 既不 claim 也不调 handler.execute
+    // 断言: 既不 claim 也不调 handler.execute
     verify(http, never()).claim(anyLong(), anyString(), any());
     verify(handler, never()).execute(any());
     // 状态机不受污染

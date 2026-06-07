@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # run-full-regression.sh - CI / staging 统一回归入口
-# Notes:
+# 说明：
 # 1) 默认执行 Maven 默认测试（单元 + *IntegrationTest）和 E2E 套件（*E2eIT）。
 # 2) 可选执行压测 smoke、部署 smoke、升级/回滚验证和巡检。
 # 3) 支持在 `--` 之后透传额外 Maven 参数。

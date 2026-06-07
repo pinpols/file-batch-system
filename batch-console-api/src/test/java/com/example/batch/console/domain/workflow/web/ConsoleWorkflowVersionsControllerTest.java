@@ -62,13 +62,13 @@ class ConsoleWorkflowVersionsControllerTest {
   @Test
   @DisplayName("成功列出:已有 workflow → 返回当前版本一条记录")
   void shouldListCurrentVersion_whenWorkflowExists() throws Exception {
-    // arrange
+    // 准备
     Instant updatedAt = Instant.parse("2026-06-04T03:00:00Z");
     WorkflowDefinitionVersionSummaryResponse summary =
         new WorkflowDefinitionVersionSummaryResponse(3, null, updatedAt, null, Boolean.TRUE);
     when(service.listVersions(eq(42L), eq("ta"))).thenReturn(List.of(summary));
 
-    // act + assert
+    // 执行并断言
     mockMvc
         .perform(get("/api/console/workflow-definitions/42/versions").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -83,13 +83,13 @@ class ConsoleWorkflowVersionsControllerTest {
   @Test
   @DisplayName("降级仍返当前一条:无历史表 follow-up 文档化,list 仍正常返回 1 条")
   void shouldReturnSingleEntryFallback_whenHistoryTableAbsent() throws Exception {
-    // arrange:模拟仅当前版本 = 1 的新 workflow(刚 create 未编辑)
+    // 准备:模拟仅当前版本 = 1 的新 workflow(刚 create 未编辑)
     WorkflowDefinitionVersionSummaryResponse summary =
         new WorkflowDefinitionVersionSummaryResponse(
             1, null, Instant.parse("2026-06-04T01:00:00Z"), null, Boolean.TRUE);
     when(service.listVersions(eq(7L), eq("ta"))).thenReturn(List.of(summary));
 
-    // act + assert
+    // 执行并断言
     mockMvc
         .perform(get("/api/console/workflow-definitions/7/versions").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -114,7 +114,7 @@ class ConsoleWorkflowVersionsControllerTest {
   @Test
   @DisplayName("单版本 detail:存在版本 → 200,不存在版本 → 404 workflow_version.not_found")
   void shouldReturnDetail_whenVersionMatches_andNotFound_whenVersionStale() throws Exception {
-    // arrange:current = 3,GET v3 走通,GET v1 因降级无历史 → 404
+    // 准备:current = 3,GET v3 走通,GET v1 因降级无历史 → 404
     WorkflowDefinitionDetailResponse detail =
         new WorkflowDefinitionDetailResponse(
             42L,
@@ -134,7 +134,7 @@ class ConsoleWorkflowVersionsControllerTest {
         .thenThrow(
             BizException.of(ResultCode.NOT_FOUND, "error.workflow_version.not_found", 42L, 1, 3));
 
-    // act + assert (current version OK)
+    // 执行并断言 (current version OK)
     mockMvc
         .perform(get("/api/console/workflow-definitions/42/versions/3").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -142,7 +142,7 @@ class ConsoleWorkflowVersionsControllerTest {
         .andExpect(jsonPath("$.data.version").value(3))
         .andExpect(jsonPath("$.data.workflowCode").value("wf_ok"));
 
-    // act + assert (stale version → 404)
+    // 执行并断言 (stale version → 404)
     mockMvc
         .perform(get("/api/console/workflow-definitions/42/versions/1").param("tenantId", "ta"))
         .andExpect(status().isNotFound())

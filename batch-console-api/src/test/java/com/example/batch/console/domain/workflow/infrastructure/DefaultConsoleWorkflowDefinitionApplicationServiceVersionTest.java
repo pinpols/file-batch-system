@@ -91,7 +91,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
   @Test
   @DisplayName("fullUpdate 成功 → 历史表追加 1 行(version = oldVersion + 1)")
   void shouldAppendSnapshot_whenFullUpdateSucceeds() {
-    // arrange
+    // 准备
     WorkflowDefinitionEntity def = defEntity(3);
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
     when(lockService.currentHolder(TENANT, DEF_ID))
@@ -103,10 +103,10 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
     when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class)))
         .thenReturn(List.of(edgeEntity("start", "end")));
 
-    // act
+    // 执行
     service.fullUpdate(DEF_ID, fullUpdateBody(3), USER);
 
-    // assert
+    // 断言
     ArgumentCaptor<WorkflowDefinitionVersionInsertParam> captor =
         ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
     verify(versionMapper, times(1)).insertVersionSnapshot(captor.capture());
@@ -124,7 +124,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
   @Test
   @DisplayName("多次 fullUpdate → 历史表追加 N 行(每次 bump version)")
   void shouldAppendMultipleSnapshots_whenFullUpdatedNTimes() {
-    // arrange
+    // 准备
     WorkflowDefinitionEntity def = defEntity(1);
     // 模拟主表 version 在两次调用间从 1 → 2 → 3
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def, defEntity(2));
@@ -137,11 +137,11 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
     when(edgeMapper.selectByQuery(any(WorkflowEdgeQuery.class)))
         .thenReturn(Collections.emptyList());
 
-    // act
+    // 执行
     service.fullUpdate(DEF_ID, fullUpdateBody(1), USER);
     service.fullUpdate(DEF_ID, fullUpdateBody(2), USER);
 
-    // assert
+    // 断言
     ArgumentCaptor<WorkflowDefinitionVersionInsertParam> captor =
         ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
     verify(versionMapper, times(2)).insertVersionSnapshot(captor.capture());
@@ -151,16 +151,16 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
   @Test
   @DisplayName("listVersions 真实读历史表 → 全量返回 + 最新 version current=true")
   void shouldReturnFullList_whenHistoryHasRows() {
-    // arrange — 主表 current = 5,历史表 3 行 (5/4/3)
+    // 准备 — 主表 current = 5,历史表 3 行 (5/4/3)
     WorkflowDefinitionEntity def = defEntity(5);
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
     when(versionMapper.listByDefinitionId(TENANT, DEF_ID))
         .thenReturn(List.of(versionRow(5, "alice"), versionRow(4, "bob"), versionRow(3, "alice")));
 
-    // act
+    // 执行
     List<WorkflowDefinitionVersionSummaryResponse> versions = service.listVersions(DEF_ID, TENANT);
 
-    // assert
+    // 断言
     assertThat(versions).hasSize(3);
     assertThat(versions.get(0).version()).isEqualTo(5);
     assertThat(versions.get(0).current()).isTrue();
@@ -187,7 +187,7 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
   @Test
   @DisplayName("getVersion 历史 version → JSONB 反序列化 → detail 可读")
   void shouldReadHistoricalVersion_whenSnapshotPresent() {
-    // arrange — 主表 current = 5;读 version=3 走快照路径
+    // 准备 — 主表 current = 5;读 version=3 走快照路径
     WorkflowDefinitionEntity def = defEntity(5);
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
     WorkflowDefinitionVersionEntity snap = new WorkflowDefinitionVersionEntity();
@@ -205,10 +205,10 @@ class DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest {
     snap.setSavedAt(Instant.parse("2026-06-01T00:00:00Z"));
     when(versionMapper.findByDefinitionIdAndVersion(TENANT, DEF_ID, 3)).thenReturn(snap);
 
-    // act
+    // 执行
     WorkflowDefinitionDetailResponse detail = service.getVersion(DEF_ID, TENANT, 3);
 
-    // assert
+    // 断言
     assertThat(detail.version()).isEqualTo(3);
     assertThat(detail.workflowName()).isEqualTo("v3-name");
     assertThat(detail.nodes()).hasSize(2);

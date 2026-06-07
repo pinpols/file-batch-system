@@ -140,7 +140,7 @@ class WebhookDeliveryRelayTest {
 
   @Test
   void shouldMarkGiveUpAndIncrementCounterWhenAbsoluteMaxReached() {
-    // attempt=7 → nextAttempt=8 = absoluteMaxAttempts
+    // 当前 attempt=7,下一次 nextAttempt=8,正好达到绝对最大重试次数。
     WebhookDeliveryLogEntity row = exhaustedRow(103L, 7);
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
     when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));

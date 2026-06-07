@@ -187,7 +187,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("用例1 sql_template+keyset: 4 片无重叠且合集恰好等于全量 1000 行")
   void sqlTemplate_keyset_fourPartitions_disjointAndComplete() throws Exception {
-    // arrange: opt-in keyset
+    // 准备: opt-in keyset
     Map<String, Object> templateConfig =
         Map.of(
             "default_query_sql",
@@ -195,11 +195,11 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
             "partition_keyset_range",
             true);
 
-    // act
+    // 执行
     List<Set<Object>> partitions =
         collectAllPartitions(sqlTemplatePlugin, templateConfig, 0L, BATCH_NO);
 
-    // assert
+    // 断言
     assertDisjointAndComplete(partitions, "sql_template+keyset", ROW_COUNT);
   }
 
@@ -210,7 +210,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("用例2 sql_template+keyset: 倾斜空洞下 4 片仍无重叠且合集等于实插 950 行")
   void sqlTemplate_keyset_skewed_disjointAndComplete() throws Exception {
-    // arrange: 同表，batch_no = SKEW（id 有空洞 [400,450]）
+    // 准备: 同表，batch_no = SKEW（id 有空洞 [400,450]）
     Map<String, Object> templateConfig =
         Map.of(
             "default_query_sql",
@@ -219,11 +219,11 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
             "partition_keyset_range",
             true);
 
-    // act
+    // 执行
     List<Set<Object>> partitions =
         collectAllPartitions(sqlTemplatePlugin, templateConfig, 0L, SKEW_BATCH_NO);
 
-    // assert: 允许各片 size 不均，但无重无漏
+    // 断言: 允许各片 size 不均，但无重无漏
     assertDisjointAndComplete(partitions, "sql_template+keyset+skew", SKEW_ROW_COUNT);
   }
 
@@ -234,17 +234,17 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("用例3 sql_template 未 opt-in: 退回 hashtext 路径，4 片合集仍等于全量 1000 行")
   void sqlTemplate_noOptIn_fallbackHashtext_complete() throws Exception {
-    // arrange: 不设 partition_keyset_range（走 hashtext 分片）
+    // 准备: 不设 partition_keyset_range（走 hashtext 分片）
     Map<String, Object> templateConfig =
         Map.of(
             "default_query_sql",
             "SELECT id FROM biz.keyset_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo");
 
-    // act
+    // 执行
     List<Set<Object>> partitions =
         collectAllPartitions(sqlTemplatePlugin, templateConfig, 0L, BATCH_NO);
 
-    // assert: hashtext 路径正确性不变（无重无漏）
+    // 断言: hashtext 路径正确性不变（无重无漏）
     assertDisjointAndComplete(partitions, "sql_template+hashtext", ROW_COUNT);
   }
 
@@ -255,7 +255,7 @@ class ExportKeysetRangeIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("用例4 sql_template+keyset: 单分片翻多页时 min/max 边界缓存进 exportSnapshot 且跨页稳定")
   void sqlTemplate_keyset_boundaryComputedOncePerPartition() throws Exception {
-    // arrange: partitionNo=1，pageSize 小到保证多页（1000 行 / 4 片 ≈ 250 行，PAGE_SIZE=200 → ≥2 页）
+    // 准备: partitionNo=1，pageSize 小到保证多页（1000 行 / 4 片 ≈ 250 行，PAGE_SIZE=200 → ≥2 页）
     Map<String, Object> templateConfig =
         Map.of(
             "default_query_sql",

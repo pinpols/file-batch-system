@@ -53,7 +53,7 @@ public class ExportFileNonEmptyVerifier implements ContentVerifier {
       try {
         return Long.parseLong(s.trim());
       } catch (NumberFormatException ignored) {
-        // fall through
+        // 继续尝试下一种解析方式
       }
     }
     return 0L;

@@ -114,7 +114,7 @@ class SdkAgainstStubOrchestratorE2eIT {
   @Test
   @DisplayName("派单 → SDK echo handler → REPORT 成功路径")
   void sdkRoundTrip_dispatchAndReport() throws Exception {
-    // arrange — 注册 echo handler,启动 SDK 指向 stub HTTP + 真 Kafka
+    // 准备 — 注册 echo handler,启动 SDK 指向 stub HTTP + 真 Kafka
     SdkTaskHandler echo =
         new SdkTaskHandler() {
           @Override
@@ -149,7 +149,7 @@ class SdkAgainstStubOrchestratorE2eIT {
       // 再发派单,否则 auto.offset.reset=latest 会让消息被 skip
       Thread.sleep(3_000);
 
-      // act — 真 Kafka 发派单消息
+      // 执行 — 真 Kafka 发派单消息
       var msg =
           TaskDispatchMessageBuilder.dispatch("r3_6_echo")
               .tenantId(TENANT)
@@ -159,7 +159,7 @@ class SdkAgainstStubOrchestratorE2eIT {
       byte[] body = new ObjectMapper().writeValueAsBytes(msg);
       producer.send(new ProducerRecord<>(TOPIC, String.valueOf(msg.taskId()), body)).get();
 
-      // assert — REPORT 在 30s 内到达 stub,内容正确
+      // 断言 — REPORT 在 30s 内到达 stub,内容正确
       RecordedReport report = stub.awaitReport(424242L, Duration.ofSeconds(30));
       assertThat(report.success()).isTrue();
       assertThat(report.message()).isEqualTo("echoed:hello-r3-6");

@@ -37,7 +37,7 @@ class FeedbackStepTest {
   @Test
   @DisplayName("happy path: 汇总 parsed/validated/loaded 三段计数 + pipelineInstanceId 写 audit")
   void shouldAggregateCountsIntoAudit_whenAllAttributesPresent() {
-    // arrange
+    // 准备
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("tenant-1");
     context.setWorkerId("worker-A");
@@ -49,10 +49,10 @@ class FeedbackStepTest {
     context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "trace-xyz");
     when(runtimeRepository.toLong(any())).thenReturn(1001L);
 
-    // act
+    // 执行
     ImportStageResult result = step.execute(context);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     ArgumentCaptor<FileAuditParam> captor = ArgumentCaptor.forClass(FileAuditParam.class);
     verify(runtimeRepository).appendAudit(captor.capture());

@@ -51,7 +51,7 @@ batch:
       heartbeat-interval-millis: ${BATCH_WORKER_EXPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
       # 消费的派发 Topic（默认值在 batch-defaults.yml）
       topic: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
-      # Kafka consumer group
+      # Kafka consumer group（同类 worker 负载均衡）
       consumer-group-id: ${BATCH_WORKER_EXPORT_CONSUMER_GROUP_ID:batch-worker-export}
       # H-8: 每次导出最大行数，防止无限制查询导致堆内存耗尽；0 表示不限制（不推荐生产使用）
       max-export-rows: ${BATCH_WORKER_EXPORT_MAX_EXPORT_ROWS:500000}
@@ -60,7 +60,7 @@ batch:
         streaming-enabled: ${BATCH_WORKER_EXPORT_STREAMING_ENABLED:true}
         # 分页读取 page-size
         page-size: ${BATCH_WORKER_EXPORT_PAGE_SIZE:1000}
-        # JDBC fetch-size
+        # JDBC fetch-size（游标读取批大小）
         fetch-size: ${BATCH_WORKER_EXPORT_FETCH_SIZE:1000}
         # 业务处理 chunk-size
         chunk-size: ${BATCH_WORKER_EXPORT_CHUNK_SIZE:500}

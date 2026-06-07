@@ -50,18 +50,18 @@ class KafkaTaskConsumerRebalanceTest {
     KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, mockConsumer, new ObjectMapper());
 
-    // arrange — 模拟 backpressure 已激活(consumer 内部 paused=true,新 partition 进来要 re-pause)
+    // 准备 — 模拟 backpressure 已激活(consumer 内部 paused=true,新 partition 进来要 re-pause)
     setPaused(kafka, true);
     TopicPartition tp0 = new TopicPartition("batch.task.dispatch.tx.t0", 0);
     TopicPartition tp1 = new TopicPartition("batch.task.dispatch.tx.t1", 0);
 
-    // act — 模拟 Kafka rebalance 给出新 partition
+    // 执行 — 模拟 Kafka rebalance 给出新 partition
     KafkaTaskConsumer.PauseAwareRebalanceListener listener =
         kafka.new PauseAwareRebalanceListener();
     mockConsumer.assign(List.of(tp0, tp1));
     listener.onPartitionsAssigned(List.of(tp0, tp1));
 
-    // assert — 新 partition 应该被 pause
+    // 断言 — 新 partition 应该被 pause
     assertThat(mockConsumer.paused()).containsExactlyInAnyOrder(tp0, tp1);
   }
 

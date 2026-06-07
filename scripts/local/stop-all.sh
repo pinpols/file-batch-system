@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # stop-all.sh - 停止本地 batch 平台 Java 进程
-# Notes:
+# 说明：
 # 1) 停止顺序：三个 worker -> trigger / console -> orchestrator（与 start-all 对称）。
 # 2) 每阶段 SIGTERM 后等待，再对本阶段残留 kill -9，然后进入下一阶段。
 # 3) PID 文件：TAB 三列或旧版空格两列；读入内存后按阶段消费。

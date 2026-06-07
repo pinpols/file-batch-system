@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # heal-zombie-pipelines.sh - 自愈:把超期 stale 的 pipeline_instance 转 FAILED
-# Notes:
+# 说明：
 # 1) 配合 FileGovernanceProperties.processingDelayMaxAgeSeconds(默认 7 天)使用 —
 #    scheduler 已不再 WARN 这种 zombie, 但行还留在 RUNNING, 需要本脚本主动转终态.
 # 2) 选定 run_status='RUNNING' 且 started_at < now() - maxAgeSeconds 的行,

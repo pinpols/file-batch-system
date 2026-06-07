@@ -39,7 +39,7 @@ public interface SdkIdempotencyStore {
 
     @Override
     public void record(String key, SdkIdempotencyEntity record, long ttlMillis) {
-      // no-op
+      // 无操作
     }
   }
 }

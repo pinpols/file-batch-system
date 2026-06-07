@@ -291,7 +291,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
   /** Redis 实现下窗口由 TTL 自动回收，无需调度器 reconcile。 */
   @Override
   public void reconcileExpiredStates(int slidingWindowHours) {
-    // no-op
+    // 无操作
   }
 
   private static long parseLong(String s) {

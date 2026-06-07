@@ -37,7 +37,7 @@ class ShellTaskExecutorDryRunTest {
 
   @Test
   void shouldShortCircuit_whenDryRun_andNotForkProcessOrCreateWorkdir() {
-    // arrange:用一个绝对不存在的命令,如果真 fork 一定 fail
+    // 准备:用一个绝对不存在的命令,如果真 fork 一定 fail
     TaskContext ctx =
         new TaskContext(
             "t1",
@@ -50,10 +50,10 @@ class ShellTaskExecutorDryRunTest {
                 "env", Map.of("FOO", "secret-value")),
             Map.of("dryRun", true));
 
-    // act
+    // 执行
     TaskResult result = executor.execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())

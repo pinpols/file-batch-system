@@ -33,7 +33,7 @@ class SqlTaskExecutorDryRunTest {
 
   @Test
   void shouldShortCircuit_whenDryRunFromRuntimeAttributes() throws Exception {
-    // arrange
+    // 准备
     TaskContext ctx =
         new TaskContext(
             "t1",
@@ -43,10 +43,10 @@ class SqlTaskExecutorDryRunTest {
             Map.of("sql", "UPDATE t SET x=1; DELETE FROM t WHERE y=2;"),
             Map.of("dryRun", true));
 
-    // act
+    // 执行
     TaskResult result = executor.execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())

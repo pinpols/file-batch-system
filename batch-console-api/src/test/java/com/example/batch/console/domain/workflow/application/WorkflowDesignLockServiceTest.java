@@ -68,15 +68,15 @@ class WorkflowDesignLockServiceTest {
   @Test
   @DisplayName("acquire:SETNX 成功 → 返回 lockedBy + expiresAt = now + 5min")
   void shouldAcquire_whenNotHeld() {
-    // arrange
+    // 准备
     when(valueOps.setIfAbsent(
             eq(EXPECTED_KEY), anyString(), eq(WorkflowDesignLockService.LOCK_TTL)))
         .thenReturn(true);
 
-    // act
+    // 执行
     LockHolder holder = service.acquire(TENANT, DEF_ID, USER_ALICE);
 
-    // assert
+    // 断言
     assertThat(holder.lockedBy()).isEqualTo(USER_ALICE);
     assertThat(holder.expiresAt()).isEqualTo(fixedNow.plus(Duration.ofMinutes(5)));
   }

@@ -57,7 +57,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @Test
   @DisplayName("同 jobCode 多 entry 时按 sourceInstanceId 精确回填,不踩第一条")
   void shouldReconcileBySourceInstanceId_whenMultipleEntriesShareSameJobCode() {
-    // arrange: 两条 entry,同 jobCode,不同 sourceInstanceId
+    // 准备: 两条 entry,同 jobCode,不同 sourceInstanceId
     BatchDayReplayEntryEntity entryA =
         BatchDayReplayEntryEntity.builder()
             .id(101L)
@@ -82,10 +82,10 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     when(entryMapper.selectBySessionAndSourceInstanceId(7L, "t1", 5001L)).thenReturn(entryB);
     when(entryMapper.countBySessionAndStatus(anyLong(), anyString())).thenReturn(0L);
 
-    // act
+    // 执行
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_DUP", 5001L, JOB_SUCCESS);
 
-    // assert: 更新的是 entryB (id=102),不是 entryA (id=101)
+    // 断言: 更新的是 entryB (id=102),不是 entryA (id=101)
     ArgumentCaptor<Long> updatedId = ArgumentCaptor.forClass(Long.class);
     verify(entryMapper)
         .updateStatus(
@@ -98,7 +98,7 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
   @Test
   @DisplayName("rerun 再入(已写过 rerun_instance_id)时按 rerun_instance_id 反查直接命中")
   void shouldReconcileByRerunInstanceId_whenAlreadyWrittenOnFirstPass() {
-    // arrange
+    // 准备
     BatchDayReplayEntryEntity entry =
         BatchDayReplayEntryEntity.builder()
             .id(201L)
@@ -113,10 +113,10 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     when(entryMapper.selectByRerunInstanceId("t1", 7100L)).thenReturn(entry);
     when(entryMapper.countBySessionAndStatus(anyLong(), anyString())).thenReturn(0L);
 
-    // act
+    // 执行
     reconciler.reconcileOnTerminal("t1", 8L, "JOB_R", 7100L, JOB_SUCCESS);
 
-    // assert
+    // 断言
     verify(entryMapper)
         .updateStatus(eq(201L), eq(ENTRY_SUCCEEDED), eq(7100L), any(), any(), any(), any(), any());
     // 不需要 source 兜底也不需要线性扫

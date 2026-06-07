@@ -41,16 +41,16 @@ class LeaseRenewalSchedulerFixedDelayTest {
   @Test
   @DisplayName("start() 必须调 scheduleWithFixedDelay,严禁 scheduleAtFixedRate(防 tick 卡顿追赶式积压)")
   void shouldUseFixedDelay_notFixedRate_onStart() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     ScheduledExecutorService exec = mock(ScheduledExecutorService.class);
     LeaseRenewalScheduler s = new LeaseRenewalScheduler(cfg(), http, dispatcher, exec);
 
-    // act
+    // 执行
     s.start();
 
-    // assert — 调度走的是 fixed-delay,不是 fixed-rate
+    // 断言 — 调度走的是 fixed-delay,不是 fixed-rate
     ArgumentCaptor<Long> initialDelay = ArgumentCaptor.forClass(Long.class);
     ArgumentCaptor<Long> period = ArgumentCaptor.forClass(Long.class);
     verify(exec)

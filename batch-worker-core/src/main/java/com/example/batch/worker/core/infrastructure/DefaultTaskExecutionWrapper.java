@@ -130,7 +130,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
    */
   @PreDestroy
   void shutdownWatchdog() {
-    // no-op: scheduler 由 Spring 容器统一关闭, 这里保留方法便于测试钩子访问
+    // 无操作: scheduler 由 Spring 容器统一关闭, 这里保留方法便于测试钩子访问
   }
 
   @Override

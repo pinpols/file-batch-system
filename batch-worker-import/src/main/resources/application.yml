@@ -56,7 +56,7 @@ batch:
       heartbeat-interval-millis: ${BATCH_WORKER_IMPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
       # 消费的派发 Topic（默认值在 batch-defaults.yml 里统一）
       topic: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
-      # Kafka consumer group（同类 worker 负载均衡）
+      # Kafka consumer group（同类 worker 负载均衡）（同类 worker 负载均衡）
       consumer-group-id: ${BATCH_WORKER_IMPORT_CONSUMER_GROUP_ID:batch-worker-import}
       # C-5/D-4: 入口文件大小限制（MB），超出直接拒绝，防止 OOM；0 表示不限制（不推荐）
       max-payload-size-mb: ${BATCH_WORKER_IMPORT_MAX_PAYLOAD_SIZE_MB:100}
@@ -65,7 +65,7 @@ batch:
         streaming-enabled: ${BATCH_WORKER_IMPORT_STREAMING_ENABLED:true}
         # 分页读取 page-size（与业务 DB/驱动能力相关）
         page-size: ${BATCH_WORKER_IMPORT_PAGE_SIZE:1000}
-        # JDBC fetch-size（驱动层拉取批大小）
+        # JDBC fetch-size（游标读取批大小）（驱动层拉取批大小）
         fetch-size: ${BATCH_WORKER_IMPORT_FETCH_SIZE:1000}
         # 业务处理 chunk-size（每批处理/提交的行数）
         # 2026-06 调优:500→2000。实测 PG 单语句写吞吐 ~160K 行/s 远高于 app 的 ~5500 行/s,

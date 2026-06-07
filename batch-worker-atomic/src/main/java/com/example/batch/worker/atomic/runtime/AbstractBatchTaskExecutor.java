@@ -74,12 +74,12 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
 
   /** 业务输入合法性校验,失败抛 {@link IllegalArgumentException} 让模板方法转 {@link TaskResult#fail}。 默认 no-op。 */
   protected void validate(TaskContext ctx) {
-    // no-op
+    // 无操作
   }
 
   /** 资源 acquire(打开连接 / 占用 lease 等)。默认 no-op;抛异常会被模板方法捕获转 fail。 */
   protected void before(TaskContext ctx) {
-    // no-op
+    // 无操作
   }
 
   /**
@@ -91,11 +91,11 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
 
   /** doExecute 成功完成后调用(异常路径不调)。默认 no-op。 注意:写副作用(如 outbox)应放 doExecute 内事务,不要放这里。 */
   protected void after(TaskContext ctx, TaskResult result) {
-    // no-op
+    // 无操作
   }
 
   /** finally 资源 release(关连接 / 删临时文件 / 释 lease 等)。默认 no-op。 */
   protected void cleanup(TaskContext ctx) {
-    // no-op
+    // 无操作
   }
 }

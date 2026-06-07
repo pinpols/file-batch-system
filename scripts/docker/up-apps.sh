@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # up-apps.sh - 一键启动本地基础依赖 + 应用容器
-# Notes:
+# 说明：
 # 1) 默认使用 .env.local。
 # 2) 默认启动 docker-compose.yml + docker/compose/app.yml 的 apps + replica profile
 #    （read-replica 默认 enabled=true，必须把 postgres-replica 一起拉起来才不会 unhealthy）。

@@ -65,14 +65,14 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("100 行全成功,batchSize=40 → upsert 3 次(40+40+20),success=100,total=100")
   void shouldBatchUpsert_when100RowsBatch40() {
-    // arrange
+    // 准备
     List<List<String>> batches = new ArrayList<>();
     var h = handler(ints(100), 40, (ctx, i) -> "o" + i, batches);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(batches).hasSize(3);
     assertThat(batches.get(0)).hasSize(40);
@@ -85,14 +85,14 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("transform 部分返回 null → 那些行 skipped,success=非null数,total 含 skipped")
   void shouldSkipNullRows_whenTransformReturnsNull() {
-    // arrange — 偶数转换、奇数 skip,共 50 偶 50 奇
+    // 准备 — 偶数转换、奇数 skip,共 50 偶 50 奇
     List<List<String>> batches = new ArrayList<>();
     var h = handler(ints(100), 40, (ctx, i) -> i % 2 == 0 ? "o" + i : null, batches);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("success", 50L).containsEntry("skipped", 50L);
     assertThat(r.output()).containsEntry("total", 100L);
@@ -107,14 +107,14 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("0 行输入 → upsert 不调,success=0")
   void shouldNotUpsert_whenNoInput() {
-    // arrange
+    // 准备
     List<List<String>> batches = new ArrayList<>();
     var h = handler(List.of(), 40, (ctx, i) -> "o" + i, batches);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(batches).isEmpty();
     assertThat(r.output()).containsEntry("success", 0L).containsEntry("total", 0L);
@@ -123,14 +123,14 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("整除 batchSize(80 行 / 40)→ upsert 2 次,无空尾 flush")
   void shouldNotFlushEmptyTail_whenRowsAreMultipleOfBatchSize() {
-    // arrange
+    // 准备
     List<List<String>> batches = new ArrayList<>();
     var h = handler(ints(80), 40, (ctx, i) -> "o" + i, batches);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(batches).hasSize(2);
     assertThat(batches.get(0)).hasSize(40);
@@ -140,7 +140,7 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("selectInput 抛异常 → fail,异常透传")
   void shouldFail_whenSelectInputThrows() {
-    // arrange
+    // 准备
     var h =
         new SdkAbstractProcessHandler<Integer, String>() {
           @Override
@@ -162,10 +162,10 @@ class SdkAbstractProcessHandlerTest {
           protected void upsert(SdkTaskContext ctx, List<String> batch) {}
         };
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("select boom");
     assertThat(r.error()).isInstanceOf(IllegalStateException.class);
@@ -174,7 +174,7 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("transform 抛异常 → fail")
   void shouldFail_whenTransformThrows() {
-    // arrange — 第 3 行抛
+    // 准备 — 第 3 行抛
     List<List<String>> batches = new ArrayList<>();
     var h =
         handler(
@@ -188,10 +188,10 @@ class SdkAbstractProcessHandlerTest {
             },
             batches);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("transform boom");
     assertThat(r.error()).isInstanceOf(RuntimeException.class);
@@ -200,7 +200,7 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("upsert 抛异常 → fail")
   void shouldFail_whenUpsertThrows() {
-    // arrange — batchSize 触发首批 upsert 即抛
+    // 准备 — batchSize 触发首批 upsert 即抛
     var h =
         new SdkAbstractProcessHandler<Integer, String>() {
           @Override
@@ -229,10 +229,10 @@ class SdkAbstractProcessHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("upsert boom");
     assertThat(r.error()).isInstanceOf(IllegalArgumentException.class);
@@ -241,14 +241,14 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("自定义 batchSize() 生效 — 10 行 / batchSize=3 → upsert 4 次(3+3+3+1)")
   void shouldHonorCustomBatchSize() {
-    // arrange
+    // 准备
     List<List<String>> batches = new ArrayList<>();
     var h = handler(ints(10), 3, (ctx, i) -> "o" + i, batches);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(batches).hasSize(4);
     assertThat(batches.get(0)).hasSize(3);
@@ -261,7 +261,7 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("正常处理完 → 输入流 close() 被调用一次(释放 ResultSet)")
   void shouldCloseInputStream_whenProcessingCompletes() {
-    // arrange
+    // 准备
     AtomicInteger closeCalls = new AtomicInteger();
     var h =
         new SdkAbstractProcessHandler<Integer, String>() {
@@ -284,10 +284,10 @@ class SdkAbstractProcessHandlerTest {
           protected void upsert(SdkTaskContext ctx, List<String> batch) {}
         };
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(closeCalls).hasValue(1);
   }
@@ -295,7 +295,7 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("transform 中途抛异常 → 输入流仍 close()(try-with-resources 兜底,不泄露)")
   void shouldCloseInputStream_whenTransformThrowsMidIteration() {
-    // arrange
+    // 准备
     AtomicInteger closeCalls = new AtomicInteger();
     var h =
         new SdkAbstractProcessHandler<Integer, String>() {
@@ -321,10 +321,10 @@ class SdkAbstractProcessHandlerTest {
           protected void upsert(SdkTaskContext ctx, List<String> batch) {}
         };
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(closeCalls).hasValue(1);
   }
@@ -332,7 +332,7 @@ class SdkAbstractProcessHandlerTest {
   @Test
   @DisplayName("不覆盖 batchSize() 时默认为 500")
   void shouldDefaultBatchSizeTo500() {
-    // arrange — 不覆盖 batchSize(),用基类默认
+    // 准备 — 不覆盖 batchSize(),用基类默认
     var h =
         new SdkAbstractProcessHandler<Integer, String>() {
           @Override
@@ -358,7 +358,7 @@ class SdkAbstractProcessHandlerTest {
           }
         };
 
-    // assert
+    // 断言
     assertThat(h.exposedBatchSize()).isEqualTo(500);
   }
 }

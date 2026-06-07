@@ -60,7 +60,7 @@ class RouteToPrimaryAspectTest {
     try {
       aspect.wrap(pjp);
     } catch (RuntimeException ignored) {
-      // expected
+      // 符合预期
     }
 
     assertThat(RoutingHints.isForcePrimary()).isFalse();

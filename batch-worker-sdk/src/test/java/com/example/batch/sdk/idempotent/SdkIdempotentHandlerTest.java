@@ -82,28 +82,28 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("未标 @Idempotent → wrap 原样返回,不包装")
   void shouldReturnDelegate_whenNotAnnotated() {
-    // arrange
+    // 准备
     PlainHandler plain = new PlainHandler();
 
-    // act
+    // 执行
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(plain, new RecordingStore());
 
-    // assert
+    // 断言
     assertThat(wrapped).isSameAs(plain);
   }
 
   @Test
   @DisplayName("未命中 → 执行 + 成功记录;key 由占位符解析")
   void shouldExecuteAndRecord_whenKeyMisses() {
-    // arrange
+    // 准备
     RecordingStore store = new RecordingStore();
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(ctx(Map.of("orderId", "A100")));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.executions).hasValue(1);
     assertThat(store.lastRecordKey).isEqualTo("import:t1:A100");
@@ -112,17 +112,17 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("命中 → 跳过执行,返已记录结果")
   void shouldSkipExecution_whenKeyHits() {
-    // arrange
+    // 准备
     RecordingStore store = new RecordingStore();
     store.map.put(
         "import:t1:A100", new SdkIdempotencyEntity("imported(cached)", Map.of("rows", 99)));
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(ctx(Map.of("orderId", "A100")));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).isEqualTo("imported(cached)");
     assertThat(result.output()).containsEntry("rows", 99);
@@ -133,16 +133,16 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("业务失败 → 不记录(留给重试)")
   void shouldNotRecord_whenBusinessFails() {
-    // arrange
+    // 准备
     RecordingStore store = new RecordingStore();
     AnnotatedHandler handler = new AnnotatedHandler();
     handler.failBusiness = true;
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(ctx(Map.of("orderId", "A100")));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(handler.executions).hasValue(1);
     assertThat(store.lastRecordKey).isNull();
@@ -151,15 +151,15 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("占位符解析不到值 → fail,不执行业务、不查 store")
   void shouldFail_whenKeyPlaceholderUnresolved() {
-    // arrange:缺 orderId
+    // 准备:缺 orderId
     RecordingStore store = new RecordingStore();
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(ctx(Map.of()));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("idempotent key resolution failed");
     assertThat(handler.executions).hasValue(0);
@@ -169,14 +169,14 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("ttlMillis 透传给 store.record")
   void shouldPassTtlToStore() {
-    // arrange
+    // 准备
     RecordingStore store = new RecordingStore();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(new TtlHandler(), store);
 
-    // act
+    // 执行
     wrapped.execute(ctx(Map.of("orderId", "A100")));
 
-    // assert
+    // 断言
     assertThat(store.lastTtl).isEqualTo(60_000L);
   }
 
@@ -196,17 +196,17 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("同 key 第二次跳过执行,不同 key 各执行一次")
   void shouldDedupAcrossCalls() {
-    // arrange
+    // 准备
     RecordingStore store = new RecordingStore();
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
 
-    // act
+    // 执行
     wrapped.execute(ctx(Map.of("orderId", "A100")));
     wrapped.execute(ctx(Map.of("orderId", "A100")));
     wrapped.execute(ctx(Map.of("orderId", "B200")));
 
-    // assert:A100 执行 1 次(第二次命中),B200 执行 1 次 → 共 2
+    // 断言:A100 执行 1 次(第二次命中),B200 执行 1 次 → 共 2
     assertThat(handler.executions).hasValue(2);
   }
 
@@ -224,11 +224,11 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("store.find() 抛异常 → 装饰器不吞,原样透传(由 dispatcher 兜底转 fail report),业务不执行")
   void shouldPropagate_whenStoreFindThrows() {
-    // arrange
+    // 准备
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, new ThrowingStore());
 
-    // act + assert:find 抛的 RuntimeException 直接冒泡(契约:不在装饰器层吞)
+    // 执行并断言:find 抛的 RuntimeException 直接冒泡(契约:不在装饰器层吞)
     assertThatThrownBy(() -> wrapped.execute(ctx(Map.of("orderId", "A100"))))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("store backend down");
@@ -238,15 +238,15 @@ class SdkIdempotentHandlerTest {
   @Test
   @DisplayName("NoOp store → 永不去重,每次都执行")
   void shouldNeverDedup_withNoOpStore() {
-    // arrange
+    // 准备
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, new SdkIdempotencyStore.NoOp());
 
-    // act
+    // 执行
     wrapped.execute(ctx(Map.of("orderId", "A100")));
     wrapped.execute(ctx(Map.of("orderId", "A100")));
 
-    // assert
+    // 断言
     assertThat(handler.executions).hasValue(2);
   }
 }

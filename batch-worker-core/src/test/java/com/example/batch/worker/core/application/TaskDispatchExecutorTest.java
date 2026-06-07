@@ -112,9 +112,9 @@ class TaskDispatchExecutorTest {
   }
 
   private static TaskDispatchMessage sampleMessage() {
-    // P1-2.2 v2 字段:schemaVersion, tenantId, jobInstanceId, jobPartitionId, taskId,
-    //                instanceNo, jobCode, workerType, selectedWorkerId, priorityBand,
-    //                traceId, idempotencyKey, dispatchAt
+    // P1-2.2 v2 字段清单:schemaVersion, tenantId, jobInstanceId, jobPartitionId, taskId,
+    //                    instanceNo, jobCode, workerType, selectedWorkerId, priorityBand,
+    //                    traceId, idempotencyKey, dispatchAt
     return new TaskDispatchMessage(
         "v2",
         "t1",

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # inspect-observability.sh - 服务巡检：健康检查、指标、Kafka lag 和基础设施 exporter 指标
-# Notes:
+# 说明：
 # 1) 检查各服务的 /actuator/health。
 # 2) 检查关键 Prometheus 指标、Redis/Postgres/Kafka/MinIO exporter 指标和 Kafka consumer lag。
 # =========================================================

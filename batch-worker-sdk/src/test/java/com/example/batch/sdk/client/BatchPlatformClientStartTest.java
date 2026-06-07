@@ -71,20 +71,20 @@ class BatchPlatformClientStartTest {
   @Test
   @DisplayName("register 抛 IOException → start() 抛 RuntimeException,后台线程未启动、状态仍未就绪")
   void shouldThrowAndNotStartBackground_whenRegisterFails() throws Exception {
-    // arrange
+    // 准备
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.register(any())).thenThrow(new IOException("orchestrator unreachable"));
     inject(client, "httpClient", http);
 
-    // act + assert:抛 RuntimeException(register 失败让进程非 0 退出,K8s 重启)
+    // 执行并断言:抛 RuntimeException(register 失败让进程非 0 退出,K8s 重启)
     assertThatThrownBy(client::start)
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("worker register failed")
         .hasCauseInstanceOf(IOException.class);
 
-    // assert:无任何后台线程被装配,状态反映未就绪
+    // 断言:无任何后台线程被装配,状态反映未就绪
     assertThat(field(client, "started")).isEqualTo(false);
     assertThat(field(client, "dispatcher")).isNull();
     assertThat(field(client, "kafkaConsumer")).isNull();
@@ -101,12 +101,12 @@ class BatchPlatformClientStartTest {
   @Test
   @DisplayName("已 start 后再 start → 抛 IllegalStateException")
   void shouldThrowIllegalState_whenStartedTwice() throws Exception {
-    // arrange:用反射把 started 置 true 模拟已启动,避免真拉 Kafka
+    // 准备:用反射把 started 置 true 模拟已启动,避免真拉 Kafka
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     inject(client, "started", true);
 
-    // act + assert
+    // 执行并断言
     assertThatThrownBy(client::start)
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("already started");

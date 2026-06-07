@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # run-staging-live-smoke.sh - staging live rollout / rollback smoke wrapper
-# Notes:
+# 说明：
 # 1) 直接复用 run-full-regression.sh 的 deploy smoke + deployment verification。
 # 2) 默认启用 live staging 执行；可通过环境变量显式覆盖。
 # =========================================================

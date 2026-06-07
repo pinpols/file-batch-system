@@ -92,20 +92,20 @@ class StoredProcAtomicHandlerTest {
   @Test
   @DisplayName("正常 CALL + OUT 读取 → outValues + success")
   void shouldReturnOutValues_whenCallSucceeds() throws Exception {
-    // arrange
+    // 准备
     stubGateQueries();
     stubRoleGate(false);
     stubSecDefGate(false);
     stubCall();
     when(callableStatement.getObject(1)).thenReturn(42); // p1 (out at pos 1, no in params)
 
-    // act
+    // 执行
     SdkTaskResult r =
         defaultsHandler(dataSource)
             .execute(
                 ctx(Map.of("procedureName", "batch.refresh", "outParams", List.of("INTEGER"))));
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("procedureName", "batch.refresh");
     @SuppressWarnings("unchecked")

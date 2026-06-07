@@ -17,11 +17,11 @@ class ApprovalTypeRegistrationTest {
 
   @Test
   void shouldDeclareAllKnownApprovalTypes() {
-    // arrange: 当前仓内实际写入 approval_command.approval_type 的全部 code(grep 验证)
+    // 准备: 当前仓内实际写入 approval_command.approval_type 的全部 code(grep 验证)
     String[] knownCodes = {
       "CATCH_UP", "COMPENSATION", "DLQ_REPLAY", "DOWNLOAD", "SELF_SERVICE",
     };
-    // act + assert
+    // 执行并断言
     for (String code : knownCodes) {
       assertThat(ApprovalType.fromCode(code))
           .as("ApprovalType 未声明 code=%s,FE 字典 / DB 字面量校验会漏", code)

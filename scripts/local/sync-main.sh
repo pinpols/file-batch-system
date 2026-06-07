@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # sync-main.sh - 把 origin/main 的更新合并到本地 feature/docker-deploy
-# Notes:
+# 说明：
 # 1) 仅做 git 操作,不触发部署。部署走 scripts/docker/deploy.ps1 或 up-apps.sh。
 # 2) 默认要求当前在 feature/docker-deploy 分支 + 工作树干净。
 # 3) 首次同步若两边无共同祖先(本地是快照仓库),会自动加 --allow-unrelated-histories,
