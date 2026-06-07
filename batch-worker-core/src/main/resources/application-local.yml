@@ -1,9 +1,6 @@
 spring:
   application:
     name: batch-worker-core
-  kafka:
-    bootstrap-servers: localhost:19092
-
 management:
   endpoints:
     web:

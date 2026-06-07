@@ -11,8 +11,6 @@ spring:
     username: batch_user
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
-  kafka:
-    bootstrap-servers: localhost:19092
   data:
     redis:
       host: localhost
@@ -35,10 +33,6 @@ batch:
     auto-create: true
   security:
     bypass-mode: true
-    kms:
-      default-key-ref: DEFAULT_TEST
-      keys:
-        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   orchestrator:
     base-url: http://localhost:18082
   worker:
@@ -59,8 +53,8 @@ batch:
       consumer-group-id: batch-worker-export
       # 同一台 EXPORT worker 承担两种工作流：settlement 导出 (report) + 合规导出 (workflow)
       capability-tags:
-        - report
-        - workflow
+      - report
+      - workflow
       file-processing:
         streaming-enabled: true
         page-size: 1000
@@ -72,9 +66,3 @@ batch:
       username: batch_user
       password: batch_pass_123
       schema: biz
-  storage:
-    s3:
-      endpoint: http://localhost:19000
-      access-key: minioadmin
-      secret-key: minioadmin123
-      bucket: batch-dev
