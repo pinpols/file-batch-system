@@ -128,40 +128,8 @@ public class LoadStep implements ImportStageStep {
             resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
         return markLoaded(context, ckpt.startLineNo());
       }
-      long skipLines = ckpt == null ? 0L : ckpt.startLineNo();
-      long currentLineNo = skipLines;
-      long loadedCount = ckpt == null ? 0L : ckpt.startLineNo();
-      try (BufferedReader reader =
-          Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
-        // 续跑:把上次已处理到的行号 skip 掉(空行也算行,保持与首跑一致的行号语义)
-        for (long i = 0; i < skipLines && reader.readLine() != null; i++) {
-          // skip
-        }
-        List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
-        String line;
-        while ((line = reader.readLine()) != null) {
-          currentLineNo++;
-          if (!Texts.hasText(line)) {
-            continue;
-          }
-          chunk.add(objectMapper.readValue(line, MAP_TYPE));
-          if (chunk.size() >= chunkSize) {
-            int written = flushChunk(plugin, loadCtx, chunk);
-            loadedCount += written;
-            advanceCheckpoint(ckpt, currentLineNo, written);
-            // 流式进度上报(docs/design/pipeline-stage-progress-display.md):totalRowsHint=null
-            // 因为预扫整文件估总行数代价大于收益(百万行+一次 O(n) I/O),FE 退化为只显计数器不显 ETA。
-            PipelineStageProgressSink.publish(loadedCount, null);
-            chunk.clear();
-          }
-        }
-        if (!chunk.isEmpty()) {
-          int written = flushChunk(plugin, loadCtx, chunk);
-          loadedCount += written;
-          advanceCheckpoint(ckpt, currentLineNo, written);
-          PipelineStageProgressSink.publish(loadedCount, null);
-        }
-      }
+      long loadedCount =
+          loadValidatedRecords(validatedRecordsPath, chunkSize, plugin, loadCtx, ckpt);
       if (partitionStageSwapCopy) {
         ((GenericJdbcMappedImportLoadPlugin) plugin).finishPartitionStageSwap(loadCtx);
       }
@@ -192,6 +160,59 @@ public class LoadStep implements ImportStageStep {
           ex.getMessage(),
           objectMapper);
     }
+  }
+
+  private long loadValidatedRecords(
+      Path validatedRecordsPath,
+      int chunkSize,
+      ImportLoadPlugin plugin,
+      ImportLoadContext loadCtx,
+      CheckpointHandle ckpt)
+      throws Exception {
+    long skipLines = ckpt == null ? 0L : ckpt.startLineNo();
+    long currentLineNo = skipLines;
+    long loadedCount = ckpt == null ? 0L : ckpt.startLineNo();
+    try (BufferedReader reader =
+        Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
+      // 续跑:把上次已处理到的行号 skip 掉(空行也算行,保持与首跑一致的行号语义)
+      for (long i = 0; i < skipLines && reader.readLine() != null; i++) {
+        // skip
+      }
+      List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
+      String line;
+      while ((line = reader.readLine()) != null) {
+        currentLineNo++;
+        if (!Texts.hasText(line)) {
+          continue;
+        }
+        chunk.add(objectMapper.readValue(line, MAP_TYPE));
+        if (chunk.size() >= chunkSize) {
+          loadedCount = flushAndAdvance(plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+        }
+      }
+      if (!chunk.isEmpty()) {
+        loadedCount = flushAndAdvance(plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+      }
+    }
+    return loadedCount;
+  }
+
+  private long flushAndAdvance(
+      ImportLoadPlugin plugin,
+      ImportLoadContext loadCtx,
+      CheckpointHandle ckpt,
+      List<Map<String, Object>> chunk,
+      long currentLineNo,
+      long loadedCount)
+      throws Exception {
+    int written = flushChunk(plugin, loadCtx, chunk);
+    long updatedLoadedCount = loadedCount + written;
+    advanceCheckpoint(ckpt, currentLineNo, written);
+    // 流式进度上报(docs/design/pipeline-stage-progress-display.md):totalRowsHint=null
+    // 因为预扫整文件估总行数代价大于收益(百万行+一次 O(n) I/O),FE 退化为只显计数器不显 ETA。
+    PipelineStageProgressSink.publish(updatedLoadedCount, null);
+    chunk.clear();
+    return updatedLoadedCount;
   }
 
   private int flushChunk(
