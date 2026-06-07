@@ -400,7 +400,7 @@ write_report() {
     echo
     echo "- Failure injection/recovery: run separately; this script is the success-path process pressure profile."
     echo "- 1000w default run: explicitly set PROCESS_SOURCE_ROWS=10000000 to avoid accidental large local writes."
-    echo "- COPY staging POC / UNLOGGED temp table: intentionally not implemented until baseline shows staging write is the bottleneck."
+    echo "- Multi-shard process copy: run separately when task/range split planning is enabled."
   } > "$REPORT"
 }
 

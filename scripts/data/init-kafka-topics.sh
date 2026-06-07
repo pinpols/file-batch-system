@@ -5,8 +5,9 @@
 # 1) 等待 Kafka 可用后创建平台需要的 topics。
 # 2) 默认使用 kafka:29092，可通过环境变量覆盖。
 # =========================================================
-#   - topic 列表：batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,
-#                batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter
+#   - topic 列表: batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,
+#                batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,
+#                batch.task.retry,batch.task.dead-letter
 #   - 分区数：默认全部 4；可通过 KAFKA_PARTITIONS_DISPATCH / _RESULT / _RETRY / _DEAD_LETTER 单独覆盖
 #   - 副本因子：1
 #
@@ -25,7 +26,9 @@
 set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
-topics_csv="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1}"
+default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1"
+default_direct_topics="batch.task.dispatch.import.node.import-node-1,batch.task.dispatch.export.node.export-node-1,batch.task.dispatch.process.node.process-node-1,batch.task.dispatch.dispatch.node.dispatch-node-1,batch.task.dispatch.atomic.node.atomic-node-1"
+topics_csv="${KAFKA_TOPICS:-${default_topics},${KAFKA_DIRECT_WORKER_TOPICS:-${default_direct_topics}}}"
 default_partitions="${KAFKA_TOPIC_PARTITIONS:-4}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 
@@ -39,7 +42,7 @@ partitions_dead_letter="${KAFKA_PARTITIONS_DEAD_LETTER:-${default_partitions}}"
 resolve_partitions() {
   topic="$1"
   case "${topic}" in
-    *.dispatch.import|*.dispatch.export|*.dispatch.dispatch)
+    *.dispatch.import|*.dispatch.export|*.dispatch.process|*.dispatch.dispatch|*.dispatch.atomic|*.node.*)
       echo "${partitions_dispatch}" ;;
     *.task.result)
       echo "${partitions_result}" ;;

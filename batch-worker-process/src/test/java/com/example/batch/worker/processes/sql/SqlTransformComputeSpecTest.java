@@ -43,6 +43,7 @@ class SqlTransformComputeSpecTest {
     assertThat(spec.targetSchema()).isEqualTo("biz");
     assertThat(spec.targetTable()).isEqualTo("daily_summary");
     assertThat(spec.writeMode()).isEqualTo(SqlTransformComputeSpec.WriteMode.UPSERT);
+    assertThat(spec.stagingMode()).isEqualTo(SqlTransformComputeSpec.StagingMode.JSONB);
     assertThat(spec.columns())
         .extracting(SqlTransformComputeSpec.ColumnMapping::source)
         .containsExactly("tenant_id", "account_id", "amount");
@@ -243,6 +244,89 @@ class SqlTransformComputeSpecTest {
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
 
     assertThat(spec.maxStagedRows()).isEqualTo(500);
+  }
+
+  @Test
+  void parse_acceptsDirectStagingMode() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src",
+                "targetTable",
+                "summary",
+                "stagingMode",
+                "DIRECT",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id")));
+
+    SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
+
+    assertThat(spec.stagingMode()).isEqualTo(SqlTransformComputeSpec.StagingMode.DIRECT);
+  }
+
+  @Test
+  void parse_rejectsDirectModeWithStagingValidations() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src",
+                "targetTable",
+                "summary",
+                "stagingMode",
+                "DIRECT",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id"),
+                "validations",
+                List.of(
+                    Map.of(
+                        "name",
+                        "staged_rows_present",
+                        "checkSql",
+                        "select count(*) > 0 as pass from batch.process_staging"))));
+
+    assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("validations are not supported")
+        .hasMessageContaining("stagingMode=DIRECT");
+  }
+
+  @Test
+  void parse_rejectsDirectModeWithFailEmptyResultPolicy() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src",
+                "targetTable",
+                "summary",
+                "stagingMode",
+                "DIRECT",
+                "emptyResultPolicy",
+                "FAIL",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "conflictColumns",
+                List.of("tenant_id")));
+
+    assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("emptyResultPolicy must be SUCCESS")
+        .hasMessageContaining("stagingMode=DIRECT");
   }
 
   @Test

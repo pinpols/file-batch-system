@@ -21,6 +21,7 @@ public record SqlTransformComputeSpec(
     String targetSchema,
     String targetTable,
     WriteMode writeMode,
+    StagingMode stagingMode,
     List<ColumnMapping> columns,
     List<String> conflictColumns,
     String watermarkColumn,
@@ -36,6 +37,11 @@ public record SqlTransformComputeSpec(
     INSERT,
     UPSERT,
     INSERT_IGNORE
+  }
+
+  public enum StagingMode {
+    JSONB,
+    DIRECT
   }
 
   public enum EmptyResultPolicy {
@@ -89,6 +95,8 @@ public record SqlTransformComputeSpec(
     String targetTable = required(root, "targetTable", "target_table", "table");
     WriteMode writeMode =
         parseWriteMode(firstNonNull(root.get("writeMode"), root.get("write_mode")));
+    StagingMode stagingMode =
+        parseStagingMode(firstNonNull(root.get("stagingMode"), root.get("staging_mode")));
     List<ColumnMapping> columns = parseColumns(root.get("columns"));
     if (columns.isEmpty()) {
       throw new IllegalArgumentException("sqlTransformCompute.columns is required");
@@ -112,6 +120,7 @@ public record SqlTransformComputeSpec(
             targetSchema,
             targetTable,
             writeMode,
+            stagingMode,
             columns,
             conflictColumns,
             watermarkColumn,
@@ -193,6 +202,18 @@ public record SqlTransformComputeSpec(
     if (Texts.hasText(watermarkColumn)) {
       JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
     }
+    if (stagingMode == StagingMode.DIRECT) {
+      if (!validations.isEmpty()) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute.validations are not supported when stagingMode=DIRECT"
+                + " (DIRECT does not write batch.process_staging)");
+      }
+      if (emptyResultPolicy != EmptyResultPolicy.SUCCESS) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute.emptyResultPolicy must be SUCCESS when stagingMode=DIRECT"
+                + " (DIRECT avoids a pre-count scan)");
+      }
+    }
     Set<String> reserved = new LinkedHashSet<>(RESERVED_PARAMS);
     for (String paramName : params.keySet()) {
       if (reserved.contains(paramName)) {
@@ -259,6 +280,20 @@ public record SqlTransformComputeSpec(
     } catch (IllegalArgumentException ex) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.process.invalid_empty_result_policy", value);
+    }
+  }
+
+  private static StagingMode parseStagingMode(Object raw) {
+    String value = text(raw);
+    if (!Texts.hasText(value)) {
+      return StagingMode.JSONB;
+    }
+    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    try {
+      return StagingMode.valueOf(normalized);
+    } catch (IllegalArgumentException ex) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.process.invalid_staging_mode", value);
     }
   }
 

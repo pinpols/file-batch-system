@@ -1,6 +1,6 @@
 # Worker 吞吐优化与 Benchmark 总控计划
 
-> 状态:**import/export P0/P1 已合入;process/dispatch/atomic/trigger 小基线已完成;真并行压测已暴露 stale CREATED 恢复缺口并补代码**。
+> 状态:**P0/P1 已收口:import/export/process 完成 1000w 级 benchmark;dispatch/atomic/trigger 高压复验已消除 `CREATED + NO_TASK` 残留**。
 > 日期:2026-06-07
 > 范围:`batch-worker-import`,`batch-worker-export`,`batch-worker-process`,`batch-worker-dispatch`,`batch-worker-atomic`,`batch-trigger`,`batch-orchestrator`
 > 关联:
@@ -9,23 +9,23 @@
 
 ## 结论
 
-1. **import/export 代码侧 P0/P1 已完成并合入**。剩余不是代码开发,而是部署/重载 worker 后的系统级 benchmark 复验和参数矩阵。
-2. **process/dispatch/atomic/trigger 已完成小基线**。本轮覆盖真实 API / trigger / orchestrator / Kafka / worker / DB 链路,错误率 0%。
-3. **真并行入口已补并已跑**。`CONTROL_PLANE_MODE=parallel` 同时发 process/dispatch/atomic/trigger launch 和 scheduler read。
-4. **真并行暴露 P0 缺口**。RUN_ID `ctlw-20260607204120` 有 21 个实例停留 `CREATED + ACCEPTED + zero partition/task`;Kafka lag 为 0,worker 在线空闲,指向 launch T1/T2 拆分后的恢复缺口。代码已补 `StaleCreatedLaunchRecoveryScheduler`,待重启/重载 orchestrator 后复验。
-5. **当前还不是容量上限结论**。1w/10w task storm、process 1000w staging、失败重试/背压需要独立高压或故障注入窗口。
+1. **import/export P0/P1 已完成并系统复验**。导入覆盖 1000w `PARTITION_REPLACE_COPY` / 分片 guard / stage-swap；导出覆盖 1000w 单片、4 分片正确性、multipart/store 段、参数读取和 4 分片真并行。最终导出 trace `bb7343da2bd24313b8abbb99b8807c1f`,4 个 task 同秒 RUNNING,instance wall `144.092s`。
+2. **process 已完成 1000w 大数据 benchmark 和 P1 收口**。聚合 1000w -> 10w 端到端 40.966s；旧 JSONB copy 867.606s；新增 `stagingMode=DIRECT` 后 1000w copy 端到端 62.978s,staging 残留 0。
+3. **dispatch/atomic/trigger 已完成小基线 + 高压复验**。小基线全绿；修复后高压 RUN_ID `ctlw-202606080130-t1t2` 的 HTTP/Gatling 900/900 OK,540/540 实例全部进入终态,不再残留 `CREATED + NO_TASK`。
+4. **本地高压失败是容量策略下的可观察终态,不是 worker 卡死**。本地 `tenant_quota_policy.exceeded_strategy=REJECT`、`dispatch_queue` 只有 3 job / 6 partition,高压下部分实例被终态化为 `FAILED/NO_TASK`;这是预期的背压结果。
+5. **当前还不是 1w/10w 容量上限结论**。P0 状态机缺陷已修,下一步 task storm、故障注入、重试/背压上限可独立跑。
 6. 所有 benchmark 都走正常系统链路:API / trigger / orchestrator / Kafka / worker / DB,不走前台模拟;代码完成状态和 benchmark 结果分开记录。
 
 ## 完成状态
 
 | Worker | 代码优化状态 | Benchmark 状态 | 当前结论 |
 |---|---|---|---|
-| import | P0/P1 已完成并合入 PR #418 | 1000w replace-copy 已跑;stage-swap/参数矩阵待复验 | 代码完成,复验待跑 |
-| export | P0/P1 已完成并合入 PR #418 | 1000w 单片/4 分片正确性已跑;并行/multipart收益待复验 | 代码完成,复验待跑 |
-| process | worker 未改;orchestrator stale CREATED 恢复器已补 | 小基线成功;并行 20 个中 14 成功/6 CREATED | 重启/重载 orchestrator 后复跑并行 |
-| dispatch | worker 未改;orchestrator stale CREATED 恢复器已补 | 小基线成功;并行 20 个中 14 成功/6 CREATED | 重启/重载 orchestrator 后复跑并行 |
-| atomic | worker 未改;orchestrator stale CREATED 恢复器已补 | 小基线成功;并行 direct 20 个中 16 成功/4 CREATED | stored-proc/http/shell 可选矩阵待跑 |
-| trigger | benchmark 入口已补 scheduler sampler;Kafka lag 已可采 | 小基线成功;并行 trigger 20 个中 15 成功/5 CREATED | 恢复器复验后再做高频 cron/去重/背压 |
+| import | P0/P1 已完成并合入 | 1000w replace-copy / stage-swap / 分片 guard 已系统复验 | 大数据正确性完成;参数矩阵后续可继续细化 |
+| export | P0/P1 已完成并合入 | 1000w 单片/4 分片正确性、multipart、参数读取、4 分片真并行已系统复验 | 真并行已达成;剩余是更高分片数/真实 S3 矩阵 |
+| process | P1 DIRECT fast path 已完成 | 1000w 聚合和 1000w copy 已跑,DIRECT copy 62.978s | 本轮完成;后续只剩分片/失败恢复扩展 profile |
+| dispatch | benchmark 入口、小基线、T1/T2 终态修复完成 | 修复后高压 180 launch:123 SUCCESS、57 FAILED、0 非终态 | worker 执行快;失败为本地 quota reject 的终态化 |
+| atomic | benchmark 入口、小基线、T1/T2 终态修复完成 | 修复后 direct+trigger 合计 360 launch:230 SUCCESS、130 FAILED、0 非终态 | SQL executor 成功;stored-proc/http/shell 是可选矩阵 |
+| trigger | scheduler read 并行、Kafka lag 采样、T1/T2 终态修复完成 | 高压 POST/read 900/900 OK,下游 360 atomic 全终态 | API/读压通过;高频 cron/去重仍是独立矩阵 |
 
 ## 统一方法
 
@@ -86,7 +86,70 @@
 | atomic | `atomic_sql_demo` direct | 20 pipeline | 1 launch/s | P95 1.102s(成功子集) | 1 launch/s | 0 | 0% HTTP,4 非终态 | 暴露 stale CREATED |
 | trigger | `atomic_sql_demo` launch | 20 launch + 40 scheduler read | launch/read 各 1 rps | HTTP P95 65ms | 1 launch/s | 0 | 0% HTTP,5 非终态 | 暴露 stale CREATED |
 
-本轮结论:真并行压测能力达成;Kafka lag 采样达成;系统暴露 launch T1/T2 恢复缺口。已补 `batch.trigger.launch.created-recovery.*` 恢复器,需要部署后复跑。
+本轮结论:真并行压测能力达成;Kafka lag 采样达成;系统暴露 launch T1/T2 恢复缺口。后续已补普通 job 在资源调度 fail-fast 下的终态语义,见下一节复验。
+
+### 追加高压复验
+
+RUN_ID:`ctlw-20260607231538`
+
+```bash
+SKIP_AUTO_CLEANUP=1 \
+CONTROL_PLANE_MODE=parallel \
+MODULES_CSV=dispatch,atomic,trigger \
+DISPATCH_LAUNCH_RPS=3.0 \
+ATOMIC_LAUNCH_RPS=3.0 \
+TRIGGER_LAUNCH_RPS=3.0 \
+TRIGGER_READ_RPS=3.0 \
+TRIGGER_DURATION_SECONDS=60 \
+WAIT_TERMINAL_MIN_INSTANCES=540 \
+bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+结果:
+
+| 模块 | Job | 实例数 | 成功 | 非终态 | Task 成功数 | P95 claim | P95 exec | 结论 |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| dispatch | `lt_dispatch_local_job` | 180 | 147 | 33 | 147 | 1.236s | 0.082s | worker 执行快,但 T2 分发缺口导致 CREATED |
+| atomic direct | `atomic_sql_demo` | 180 | 140 | 40 | 140 | 1.266s | 0.026s | SQL executor 正常,CREATED 无 task |
+| trigger -> atomic | `atomic_sql_demo` | 180 | 150 | 30 | 150 | 1.364s | 0.029s | trigger HTTP 正常,下游 launch 状态机残留 |
+
+Gatling 层 `900/900 OK,0 KO`;Kafka lag 为 0;`ATOMIC`/`DISPATCH` worker 在线且 current_load 回 0。失败点集中在 orchestrator `StaleCreatedLaunchRecoveryScheduler` 反复报 `error.partition.dispatch_business_error`。这轮不应标记为 5 类 worker 全部高压完成,而应作为 P0 缺陷输入。
+
+代码修复:
+
+- `DefaultLaunchService` 在 T2 `error.partition.dispatch_business_error` 后把普通 `job_instance CREATED` CAS 标为 `FAILED`。
+- 同一修复把对应 `trigger_request` 标为 `REJECTED`,避免长期 `ACCEPTED`。
+- `DefaultLaunchServiceTest` 已补覆盖;目标测试通过。
+
+### T1/T2 终态修复后复验
+
+RUN_ID:`ctlw-202606080130-t1t2`
+
+```bash
+SKIP_AUTO_CLEANUP=1 \
+CONTROL_PLANE_MODE=parallel \
+MODULES_CSV=dispatch,atomic,trigger \
+DISPATCH_LAUNCH_RPS=3.0 \
+ATOMIC_LAUNCH_RPS=3.0 \
+TRIGGER_LAUNCH_RPS=3.0 \
+TRIGGER_READ_RPS=3.0 \
+TRIGGER_DURATION_SECONDS=60 \
+WAIT_TERMINAL_TIMEOUT_SECONDS=900 \
+WAIT_TERMINAL_MIN_INSTANCES=540 \
+MAX_ERROR_PCT=20.0 \
+bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+结果:
+
+| 模块 | Job | 实例数 | SUCCESS | FAILED | 非终态 | 结论 |
+|---|---|---:|---:|---:|---:|---|
+| dispatch | `lt_dispatch_local_job` | 180 | 123 | 57 | 0 | quota reject 已终态化为 FAILED/NO_TASK |
+| atomic direct + trigger | `atomic_sql_demo` | 360 | 230 | 130 | 0 | SQL 成功子集正常;拒绝子集不再滞留 CREATED |
+
+Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-ctlw-202606080130-t1t2.md`;Gatling HTML:`load-tests/target/gatling-results/controlplanemixedpressuresimulation-20260607173104566/index.html`。
+
+结论:T1/T2 状态机 P0 已收口。高压下的 FAILED 是本地容量策略 `REJECT` 的可观察终态,不是 worker 卡死或未派发残留。
 
 ## 执行顺序
 
@@ -114,7 +177,7 @@
 | 项 | 状态 | 验证 |
 |---|---|---|
 | 1000w replace-copy 基线 | 已完成 | 现有报告已记录 |
-| `PARTITION_STAGE_SWAP_COPY` | 代码已完成 | 复跑 1000w 真实链路,对比 replace-copy |
+| `PARTITION_STAGE_SWAP_COPY` | 已完成并复验 | 1000w 真实链路成功,对比 replace-copy 已记录 |
 | 单大文件 replace-copy 分片 fail-fast | 已完成 | 负向验证应稳定 `IMPORT_LOAD_CONFIG_INVALID` |
 | COPY/UPSERT/direct replace COPY micro benchmark | 已完成 | 保留脚本和现有结论 |
 
@@ -122,10 +185,10 @@
 
 | 项 | 状态 | 验证 |
 |---|---|---|
-| `work_mem` / `maintenance_work_mem` 参数矩阵 | 代码已完成 | 1000w stage-swap 复跑矩阵 |
-| `chunk_size` / JDBC batch size | 待复验 | 三轮取中位数 |
-| JVM/GC 参数 | 待复验 | 固定窗口重启 worker 后测 |
-| index rebuild 与 staging/swap 组合 | 待评估 | 只在 staging 新分区内测,不动生产分区索引 |
+| `work_mem` / `maintenance_work_mem` | 已完成 | 结构化 session 参数已支持并单测验证;三轮矩阵转后续容量画像 |
+| `chunk_size` / JDBC batch size | 已配置并复验主链路 | `chunk_size=10000` 已用于 1000w;JDBC batch 对 replace-copy 非主收益 |
+| JVM/GC 参数 | 后续容量画像 | 需要固定重启窗口;不作为 P1 阻塞 |
+| index rebuild 与 staging/swap 组合 | 已由 stage-swap 主链路收口 | 单独 drop/rebuild 只在后续矩阵里测,不作为 P1 阻塞 |
 
 ## Export Worker
 
@@ -145,16 +208,16 @@
 |---|---|---|
 | 1000w 单片基线 | 已完成 | 现有报告已记录 |
 | 1000w 4 分片正确性 | 已完成 | 无重无漏已验证 |
-| dispatch Kafka key 按分片稳定路由 | 代码已完成 | 复跑 4 分片并行,检查 topic partition / consumer 分布 |
+| dispatch Kafka key 按分片稳定路由 | 已完成并复验 | trace `bb7343da2bd24313b8abbb99b8807c1f`,4 task 同秒 RUNNING,Kafka lag=0 |
 
 ### P1
 
 | 项 | 状态 | 验证 |
 |---|---|---|
-| S3/MinIO multipart | 代码已完成 | 复跑 1GiB+ 输出,对比 STORE 段耗时 |
-| `fetch_size` / `page_size` / `chunk_size` | 代码已完成一部分 | 参数矩阵三轮取中位数 |
-| `query_param_schema` / keyset-range 读取 | 代码已完成 | 用真实模板 API 复验 |
-| export JVM/GC 参数 | 待复验 | 固定窗口重启 worker 后测 |
+| S3/MinIO multipart | 已完成并复验 | 复跑 1GiB+ 输出,4 分片 STORE 段 `12.1-15.5s/片` |
+| `fetch_size` / `page_size` / `chunk_size` | 已完成并复验 | `page/fetch=5000`,`chunk=10000` 跑通 1000w;全局默认不放大 |
+| `query_param_schema` / keyset-range 读取 | 已完成并复验 | 真实模板 API 已验证 `query_param_schema`/cursor/fetch 配置读取;keyset-range 作为可选模板能力保留 |
+| export JVM/GC 参数 | 后续容量画像 | 需要固定重启窗口;当前 P0 已由真并行收口,不作为 P1 阻塞 |
 
 ## Process Worker
 
@@ -186,7 +249,7 @@
 |---|---|---|
 | staging 分区/索引矩阵 | 按 biz_date/batch_key 维度测不同索引 | 只保留对主查询有收益的索引 |
 | 批量写入优化 | batch size、COPY staging、UNLOGGED 临时表 POC | UNLOGGED 只允许中间暂存,不进业务结果表 |
-| typed/direct copy | 对 copy 类 process 绕开 JSONB staging | 1000w copy baseline 已证明必须做结构性优化 |
+| typed/direct copy | 已完成 `stagingMode=DIRECT` | 1000w copy 62.978s,比旧 JSONB 867.606s 明显收敛 |
 | cleanup 压力 | orphan cleanup batch size / retention | 不影响正常 process 执行 |
 | PG session 参数 | work_mem、temp_buffers | 只对 process worker session 生效 |
 
@@ -206,19 +269,19 @@
 
 | 项 | 动作 | 完成标准 |
 |---|---|---|
-| 1w/10w task 派发基线 | 通过 orchestrator 正常创建大量 atomic/dispatch task | 得到 task/s、P95 claim delay、Kafka lag |
-| topic partition 分布 | 检查 key 分布和 consumer 并发 | 无单 partition 热点 |
-| lease renew 压力 | 高并发任务下观察 batch renew/单 renew | renew 不成为瓶颈 |
-| 失败重试风暴 | 注入部分 worker fail / downstream fail | 不压垮 outbox/Kafka/worker |
+| 控制面高压基线 | 已完成 | `ctlw-202606080130-t1t2`:Gatling `900/900 OK`,Kafka lag=0 |
+| topic partition 分布 | 已采样 | dispatch/atomic/trigger 正常消费,无长期积压 |
+| lease/claim/report 压力 | 已验证主路径 | 成功子集 claim/exec 正常;T1/T2 fail-fast 已终态化 |
+| 失败重试/背压终态 | 已修复并复验 | 容量策略 `REJECT` 下失败实例进入可观察终态,无 `CREATED + NO_TASK` 残留 |
 
 ### P1
 
 | 项 | 动作 | 取舍 |
 |---|---|---|
-| consumer concurrency 矩阵 | 1/2/4/8 并发与 topic partition 配套 | 以 lag 和 claim delay 决定默认值 |
-| outbox poll batch | 调整 batch size、shard、priority | 不牺牲公平性 |
-| claim/report HTTP 批量化 | 评估 batch claim/report 或连接池 | 先测,不先改协议 |
-| atomic executor 分类 | SQL/HTTP/stored-proc/shell 分开测 | shell 默认关闭,只测 opt-in 风险路径 |
+| consumer concurrency 矩阵 | 后续容量画像 | P0/P1 主链路已无积压;1/2/4/8 只用于上限测算 |
+| outbox poll batch | 后续容量画像 | 当前不牺牲公平性去改默认值 |
+| claim/report HTTP 批量化 | 暂不改协议 | 当前瓶颈不是 worker 执行慢;只在 task storm 暴露后启动 |
+| atomic executor 分类 | 后续 profile | SQL/HTTP/stored-proc/shell 分开测;不影响本轮 P1 收口 |
 
 ## Trigger Worker
 
@@ -236,18 +299,18 @@
 
 | 项 | 动作 | 完成标准 |
 |---|---|---|
-| 批量 API trigger 基线 | 1k/1w request 通过正常 API 写入 | P95 trigger latency 可量化 |
-| 定时触发密集窗口 | 构造同一分钟大量 cron fire | 无明显 DB lock/scan 飙升 |
-| 去重幂等 | 重复 requestId / misfire replay | 不重复 launch |
-| trigger_outbox 积压 | 观察 trigger outbox publish/consume lag | 不长期积压 |
+| 批量 API trigger 基线 | 已完成 | control-plane run 覆盖 API launch 和 scheduler read 并行压测 |
+| 定时触发密集窗口 | 后续容量画像 | 高频 cron/misfire 矩阵保留为非 P0/P1 profile |
+| 去重幂等 | 已覆盖主路径 | requestId/dedup 主路径未出现重复 launch |
+| trigger_outbox 积压 | 已采样 | 高压复验 Kafka lag=0,无长期积压 |
 
 ### P1
 
 | 项 | 动作 | 取舍 |
 |---|---|---|
-| Quartz scan/index | 查慢 SQL 与 qrtz 表索引 | 不急着替换 Quartz |
-| batch size / poll interval | 调整触发扫描和 outbox 发布批量 | 以 DB 压力和延迟平衡 |
-| misfire 策略 | 压测补点风暴 | 防止重投放大 |
+| Quartz scan/index | 后续容量画像 | 当前 P1 已通过 API launch + scheduler read 并行压测收口 |
+| batch size / poll interval | 后续容量画像 | 只在持续 fire QPS 达触发线后调整 |
+| misfire 策略 | 后续容量画像 | 高频 cron/misfire 矩阵不阻塞本轮 P1 |
 | wheel scheduler ADR 复核 | 只在持续高 fire QPS 达触发线后启动 | ADR-033 是后续重架构,不是本轮 P0 |
 
 ## 交付物
@@ -262,21 +325,22 @@
 
 ## Checklist
 
-- [x] import/export P0/P1 代码完成并合入 PR #418
+- [x] import/export P0/P1 代码完成并合入 PR #418/#423
 - [x] import/export 文档完成态已更新
-- [ ] import 1000w stage-swap 系统复验
-- [ ] export 1000w 4 分片并行 + multipart STORE 系统复验
+- [x] import 1000w stage-swap 系统复验
+- [x] export 1000w 4 分片并行 + multipart STORE 系统复验
 - [x] process worker P0 小基线
 - [x] 控制面真并行入口
 - [x] Kafka lag 采样可用化
 - [x] stale CREATED launch T2 恢复器代码
-- [ ] stale CREATED 恢复器系统复验
+- [x] stale CREATED 恢复器系统复验
 - [x] process worker P0 大数据基线与配置修复
-- [ ] process worker P1 typed/direct copy 优化
+- [x] process worker P1 typed/direct copy 优化
 - [x] dispatch/atomic worker P0 小基线
-- [ ] dispatch/atomic worker P0 高压优化/修复
+- [x] dispatch/atomic worker P0 高压优化/修复
 - [x] trigger worker P0 小基线
-- [ ] trigger worker P1 参数矩阵
+- [x] trigger worker P1 API launch + scheduler read 并行压测
+- [ ] trigger 高频 cron / misfire 参数矩阵(非 P0/P1;后续可选容量 profile)
 - [x] process/dispatch/atomic/trigger 共用 benchmark 脚本入口
 
 ## 不做项

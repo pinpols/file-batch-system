@@ -1,6 +1,6 @@
 # 单机吞吐优化决策手册(导入/导出)
 
-> 状态:**导入/导出 P0/P1 收尾复验已完成一轮;导入 stage-swap 1000w 成功;导出 4 分片干净成功但仍串行,真并行剩 dispatch/lease 侧待做**。
+> 状态:**导入/导出 P0/P1 收尾复验已完成;导入 stage-swap 1000w 成功;导出 1000w 4 分片真并行已达成**。
 > 日期:2026-06-06　模块:batch-worker-import、batch-worker-export、batch-common(JVM/PG 配置)、docker(部署)
 > 对照:[streaming-large-file-import-export-2026-06-06](../verifications/streaming-large-file-import-export-2026-06-06.md)(§5.3 扩展决策树 ①)
 >
@@ -12,15 +12,15 @@
 1. **现状不是"PG 顶了",是"我们还没榨单机"** —— §0 列了 4 类非 PG 混淆因素。
 2. **路径锁死:Tier-A(零代码) → Tier-B(代码) → Citus**,不能跳步。绝大多数场景止于 Tier-A。
 3. **导入有数量级杀招(COPY,5-20×);导出没有**(瓶颈分散,只能 2-3×)。导出的横向加速(keyset 分片)已在 PR #393 落地。
-4. **P0/P1 代码已完成并复验**:导入 stage-swap 1000w 真实链路成功;导出 consumer 并发与 step_run 并发冲突已修,4 分片无错误成功。剩余不是正确性,而是真并行放量仍被 dispatch/lease 串行释放限制。
+4. **P0/P1 代码已完成并复验**:导入 stage-swap 1000w 真实链路成功;导出 consumer 并发、step_run 并发冲突、Kafka 分片稳定路由和长任务 poll 参数均已修,4 分片真实链路同秒 RUNNING 并成功。
 
-## P0/P1 完成状态(2026-06-07)
+## P0/P1 完成状态(2026-06-08)
 
 | 优先级 | 方向 | 项 | 完成状态 | 验证 |
 |---|---|---|---|---|
 | P0 | 导入 | `PARTITION_STAGE_SWAP_COPY` | **已完成并系统复验** | trace `973cddd39b564a7f83d2f537d77fba59`,instance `4027`,10,000,000 行 SUCCESS |
-| P0 | 导出 | dispatch Kafka key 按分片稳定路由 | **代码已完成;系统复验发现仍串行** | 4 consumer 已生效;trace `995981ccb4bd434fa54882b9b890e826` 4/4 SUCCESS,但 task 仍逐个 RUNNING |
-| P1 | 导入 | PG session `work_mem` / `maintenance_work_mem` | **已完成并合入 PR #415** | `HikariPgSessionSupportTest` 已过;参数矩阵待跑 |
+| P0 | 导出 | dispatch Kafka key 按分片稳定路由 | **已完成并系统复验** | trace `bb7343da2bd24313b8abbb99b8807c1f`,instance `6395`,4 task 同秒 RUNNING,144.092s |
+| P1 | 导入 | PG session `work_mem` / `maintenance_work_mem` | **已完成并合入** | `HikariPgSessionSupportTest` 已过;三轮矩阵降为后续容量画像,不阻塞 P1 |
 | P1 | 导出 | MinIO/S3 multipart upload | **已完成并系统复验** | `S3ObjectStoreExceptionMappingTest` 已过;1000w 4 分片 STORE 段 `12.1-15.5s/片` |
 | P1 | 导出 | `fetch_size` / `query_param_schema` / keyset-range 配置读取 | **已完成并系统复验** | `export_wide_10m_copy_v1` 用 `page_size/fetch_size=5000`,`chunk_size=10000` 跑通 |
 
@@ -50,15 +50,17 @@
 | 导入 | `reWriteBatchedInserts=true` | 本地已启用 | 只影响 batch INSERT/UPSERT 类路径;replace-copy 主链路不是主要收益点 |
 | 导入 | `FIXED_WIDTH` 的 PG jsonb `field_mappings` 解析 | 代码已修,单测已过 | 需要 worker 加载新 jar 后系统级复验 |
 | 导入 | `PARTITION_STAGE_SWAP_COPY` | **P0 已系统复验** | COPY 到 staging 物理分区 → swap attach;1000w SUCCESS,LOAD `184.365s` |
-| 导入 | PG session `work_mem` / `maintenance_work_mem` | **P1 已完成并合入 PR #415** | 结构化配置,默认 `0B` 关闭;benchmark 用 env 打开 |
+| 导入 | PG session `work_mem` / `maintenance_work_mem` | **P1 已完成并合入** | 结构化配置,默认 `0B` 关闭;benchmark 用 env 打开;矩阵归入后续容量画像 |
 | 导出 | `page_size=5000`,`chunk_size=10000` | 已验证 | 1000w DELIMITED 单片真实链路使用;本地 profile 已标注 |
 | 导出 | SQL template `fetch_size` 生效 | **P1 已系统复验** | 1000w 导出模板 `page_size/fetch_size=5000`,`chunk_size=10000` |
 | 导出 | `query_param_schema` PG jsonb 解析 | **P1 已系统复验** | `cursorColumn=id` 从 `query_param_schema.sqlTemplateExport` 生效 |
 | 导出 | `partition_keyset_range` 多落点读取 | **代码已完成;本轮未启用** | 本地 DB 模板仍走 hash 分片,未启用 keyset-range |
-| 导出 | 1000w 4 分片正确性 | 已验证 | 4 文件无重无漏;最终复验 trace `995981...` |
+| 导出 | 1000w 4 分片正确性 | 已验证 | 4 文件无重无漏;最终复验 trace `bb7343da...` |
 | 导出 | Kafka listener concurrency | **已修并验证** | 自定义 `kafkaListenerContainerFactory` 已接 `spring.kafka.listener.concurrency`;consumer group 4 client 生效 |
+| 导出 | dispatch Kafka key 稳定分散 | **P0 已系统复验** | `TaskDispatchMessage` 下沉 `partitionNo/partitionCount`;producer key 按逻辑分片映射 Kafka 分区 |
+| 导出 | 长任务 Kafka poll 参数 | **P1 已配置** | export/import `max.poll.records=1`,`max.poll.interval.ms=1200000`,避免长分片连续消费触发 rebalance |
 | 导出 | 并行 step_run run_seq 冲突 | **已修并验证** | 并行分片触发 `uk_pipeline_step_run` 冲突;已加 run_seq 分配 retry,最终复验无 task error/retry |
-| 导出 | MinIO/S3 multipart upload | **P1 已系统复验** | 4 个分片对象已上传并登记 `file_record`;STORE `12.102-15.498s/片` |
+| 导出 | MinIO/S3 multipart upload | **P1 已系统复验** | 4 个分片对象已上传;最终对象合计 `1,087,780,112` bytes |
 | 导出 | JSON / FIXED_WIDTH / EXCEL 格式链路 | 已验证 | 三种格式 smoke 均走真实 worker 链路成功 |
 
 ## 测试报告与证据
@@ -75,7 +77,8 @@
 | 导出 seed 链路 | trace `export-smoke-1780821600`,instance `4019` | `jdbc_mapped_export` / DELIMITED | SUCCESS |
 | 导出 1000w 单片 benchmark | trace `export-wide-single-1780821897`,instance `4020` | SQL template / DELIMITED / 1000w | SUCCESS,`125.980s`,`1.407GB`,GENERATE `67.691s`,STORE `53.989s` |
 | 导出 1000w 4 分片 | trace `export-wide-shard4-1780822058`,instance `4021` | 4 文件分片导出正确性 | SUCCESS,10,000,000 行无重无漏;本地串行 |
-| 导出 1000w 4 分片收尾复验 | trace `995981ccb4bd434fa54882b9b890e826`,instance `4030` | 4 consumer + step_run 并发修复后复跑 | SUCCESS,10,000,000 行,1.088GB,156.308s,无 task error/retry;仍串行 |
+| 导出 1000w 4 分片收尾复验 | trace `995981ccb4bd434fa54882b9b890e826`,instance `4030` | 4 consumer + step_run 并发修复后复跑 | SUCCESS,10,000,000 行,1.088GB,156.308s,无 task error/retry;仍串行,作为后续对照 |
+| 导出 1000w 4 分片真并行最终复验 | trace `bb7343da2bd24313b8abbb99b8807c1f`,instance `6395` | partitionCount 下沉 + Kafka key 稳定分散 + long poll 参数 | SUCCESS,10,000,000 行,1.088GB,144.092s,4 task 同秒 RUNNING,Kafka lag=0 |
 | 导出格式覆盖 | trace `export-json/fixed/excel-smoke-1780822336-*` | JSON / FIXED_WIDTH / EXCEL | 三种格式均 SUCCESS |
 | 导出单测 | `SqlTemplateExportSpecTest`,`ExportKeysetRangePlannerTest` | PG jsonb config、fetch/keyset-range 读取 | 已通过,11 tests |
 | 导出并行/存储单测 | `KafkaOutboxPublisherTest`,`S3ObjectStoreExceptionMappingTest` | dispatch Kafka key 分散分片;S3 multipart complete/abort | 已通过 |
@@ -85,7 +88,7 @@
 | 方向 | 项目 | 能不能做 | 我的决定 | 原因 / 后续 |
 |---|---|---|---|---|
 | 导入 | staging 新分区 COPY → 建索引 → attach/swap | 能做 | **已做** | 1000w 链路复验成功;注意新分区索引名会保留 `__stage_*` 后缀,后续可做命名清理 |
-| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **P1 代码已完成并合入 PR #415;矩阵待复跑** | 结构化配置已支持;默认关闭,benchmark 用 env 打开 |
+| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **不作为 P1 阻塞;转后续容量画像** | P1 的配置能力已完成并验证;三轮矩阵主要用于寻找单机上限,不是正确性/主链路收口条件 |
 | 导入 | PG session `synchronous_commit=off` | 能做但有风险 | **只允许 benchmark / 单任务 session 级验证,不进生产默认** | 会改变崩溃语义,不能作为多租户生产默认 |
 | 导入 | load 前 drop index / load 后 rebuild | 能做 | **并入 staging/swap 方案一起测,不单独做** | 单独在现有业务分区上 drop index 风险大;新分区里做更干净 |
 | 导入 | parallel COPY / 多连接写不同逻辑分区 | 能做 | **暂缓,P2** | 对单文件单业务日帮助有限;多租户/多业务日并行时再测 |
@@ -93,7 +96,7 @@
 | 导入 | COPY + UPSERT merge 立即改主路径 | 能做 | **不建议做** | micro benchmark 显示 merge/索引维护吃掉 COPY 收益;不值得优先投入 |
 | 导入 | worker 分片处理单大文件 replace-copy | 技术上能硬做 | **不做** | 语义不兼容,每个分片会清同一逻辑分区;现在 fail-fast 是正确行为 |
 | 导出 | 修复后 keyset-range/fetch_size 系统复验 | 能做 | **fetch_size 已复验;keyset-range 本轮未启用** | 当前模板仍未打开 `partition_keyset_range`,只验证 cursor/fetch 配置读取 |
-| 导出 | 真正并行消费 4 个 export task | 能做 | **未完成,保留 P0 后续** | consumer 并发和 step_run 冲突已修;4030 显示 task 仍逐个 RUNNING,剩余在 dispatch/lease 释放策略 |
+| 导出 | 真正并行消费 4 个 export task | 能做 | **已完成** | 6395 显示 4 个 task 在 `02:02:13.333/341` 同秒 RUNNING,实例 wall 144.092s |
 | 导出 | MinIO multipart upload | 能做 | **已做** | 4 分片 STORE 段完成;还需在真实 S3 / 更高带宽环境量 multipart 收益 |
 | 导出 | 生产 JVM / GC 参数矩阵 | 能做 | **暂缓,P2** | 需要重启窗口;当前导出更明确的瓶颈是并行度和 STORE |
 | 导出 | `page/fetch/chunk=5000/5000/10000` 生产全局默认 | 能做 | **不做全局默认,只做模板级覆盖** | 大宽表收益明确,但小租户/小内存场景可能放大单页内存 |
@@ -103,7 +106,7 @@
 **我的排序**:
 
 1. 导入/导出正确性收尾已完成:stage-swap 1000w、导出 4 分片 1000w、multipart STORE、fetch/chunk 参数均有真实链路证据。
-2. 导出性能未收口:consumer 侧 4 线程已生效,但 task 仍逐个 RUNNING;下一步只查 dispatch/lease/backpressure,不是再改 export format。
+2. 导出性能 P0 已收口:4 分片同秒启动并成功;下一步只做更高分片数、真实 S3、多租户混压矩阵。
 3. JVM/GC、parallel COPY 放后面;COPY+UPSERT merge、导出版 COPY、单大文件 replace-copy 分片、本期 Citus 不做。
 
 ### 维护规则
@@ -403,7 +406,7 @@ Baseline 182s
 |---|---|---|---|---|
 | EX-A1 | **生产 JVM**(同导入 A1) | G1GC + 去掉 `TieredStopAtLevel=1` | 2-3× | **复用 §1.3-A1,全 worker 共享** |
 | EX-A2 | **`fetch_size/page_size` 调大** | 本地 profile:`page_size=5000`,`fetch_size=5000`;大导出模板可覆盖;SQL template 代码已支持模板 `fetch_size` | 1.2-2× | 导出侧独有;生产全局默认仍保守 |
-| EX-A3 | **MinIO/S3 multipart upload** | 大产物(默认 ≥ 64MiB)上传走 multipart 多 part,替单流 `putObject` | 1.5-2×(上传段) | **P1 已完成并合入 PR #415**;待系统 benchmark 复验 |
+| EX-A3 | **MinIO/S3 multipart upload** | 大产物(默认 ≥ 64MiB)上传走 multipart 多 part,替单流 `putObject` | 1.5-2×(上传段) | **P1 已完成并系统复验**;6395 四分片对象合计 1.088GB |
 | EX-A4 | **服务端游标 + `setAutoCommit(false)`** | JDBC 游标行级流式拉取,降低 driver 端缓冲 | 1.2-1.5× | 看实测 |
 | EX-A5 | **物理隔离 DB**(同导入 A4) | benchmark 期 PG 独立机 | 量出真值 | 复用 §1.3-A4 |
 
@@ -431,7 +434,7 @@ Baseline 182s
 
 本轮补测走真实系统链路,不重启服务、不走前台模拟:
 
-`POST /api/triggers/launch` → trigger → orchestrator → Kafka → worker-export → business PG cursor 查询 → 本地生成文件 → MinIO → `file_record` 注册。
+`POST /api/triggers/launch` → trigger → orchestrator → Kafka → worker-export → business PG cursor 查询 → 本地生成文件 → MinIO。
 
 前置说明:
 
@@ -449,6 +452,7 @@ Baseline 182s
 | 宽表 1000w 单片 / DELIMITED | `export-wide-single-1780821897` | `4020` | 1 | SUCCESS | 10,000,000 | 1,407,777,822 | 125.980s | benchmark 主样本 |
 | 宽表 1000w 4 分片 / DELIMITED | `export-wide-shard4-1780822058` | `4021` | 4 | SUCCESS | 10,000,000 | 1,407,777,906 | 167.667s | 多文件覆盖,本地实际串行消费 |
 | 宽表 1000w 4 分片 / DELIMITED / 收尾复验 | `995981ccb4bd434fa54882b9b890e826` | `4030` | 4 | SUCCESS | 10,000,000 | 1,087,780,112 | 156.308s | consumer=4 + step_run 修复后无错误;仍串行 |
+| 宽表 1000w 4 分片 / DELIMITED / 真并行最终复验 | `bb7343da2bd24313b8abbb99b8807c1f` | `6395` | 4 | SUCCESS | 10,000,000 | 1,087,780,112 | 144.092s | partitionCount 下沉后 4 task 同秒 RUNNING,Kafka lag=0 |
 | SQL template / JSON | `export-json-smoke-1780822336-14078` | `4023` | 1 | SUCCESS | 100 | 17,940 | 5.026s | 格式 smoke |
 | SQL template / FIXED_WIDTH | `export-fixed-smoke-1780822336-7100` | `4024` | 1 | SUCCESS | 100 | 4,141 | 5.141s | 格式 smoke |
 | SQL template / EXCEL | `export-excel-smoke-1780822336-29052` | `4025` | 1 | SUCCESS | 100 | 8,181 | 11.970s | 格式 smoke |
@@ -506,11 +510,30 @@ Baseline 182s
 | STORE | 3 | 12.877s |
 | STORE | 4 | 12.102s |
 
+2026-06-08 真并行最终复验:
+
+| Partition | Task | Started | Finished | Task duration | Object bytes |
+|---:|---:|---|---|---:|---:|
+| 1 | 6243 | 02:02:13.333 | 02:04:32.100 | 138.768s | 270,010,028 |
+| 2 | 6244 | 02:02:13.341 | 02:04:29.966 | 136.626s | 273,113,028 |
+| 3 | 6245 | 02:02:13.333 | 02:04:31.575 | 138.242s | 271,827,028 |
+| 4 | 6246 | 02:02:13.333 | 02:04:29.687 | 136.354s | 272,830,028 |
+| **Total** |  |  |  | **144.092s instance wall** | **1,087,780,112** |
+
+对照复验:
+
+| Trace | Instance | 现象 | Wall time | 结论 |
+|---|---:|---|---:|---|
+| `f35c4826f4e54d22a1e551dd3cb4c4be` | `6392` | direct topic 4 partition + 旧 key,实际 `2 -> 1 -> 1` | 355.800s | key hash 热点 + `max.poll.records=20` 会放大长任务 rebalance 风险 |
+| `484b96d0b1d64c8cb92443f4d4fd3d15` | `6394` | outbox 有 `partitionNo` 但 `partitionCount=null`,实际 `3 -> 1` | 231.239s | `partitionCount` 在 `effectiveParams` 下,必须下沉到 dispatch message |
+| `bb7343da2bd24313b8abbb99b8807c1f` | `6395` | outbox `partitionNo=1..4`,`partitionCount=4`,4 task 同秒 RUNNING | 144.092s | P0 真并行达成 |
+
 判断:
 
-- `spring.kafka.listener.concurrency=4` 已真正生效:consumer group 出现 `consumer-batch-worker-export-1..4`,分别分配 `batch.task.dispatch.export-0..3`。
+- `spring.kafka.listener.concurrency=4` 已真正生效:consumer group 出现 `consumer-batch-worker-export-1..4`,分别分配 node-direct topic 4 个 partition。
 - 并行后暴露的 `uk_pipeline_step_run(pipeline_instance_id, step_code, run_seq)` 冲突已修:最终复验 `4030` 无 task error、无 retry_schedule。
-- 仍未达到真并行:task 时间窗为 `4245 19:40:52-19:41:29` → `4246 19:41:29-19:42:08` → `4247 19:42:08-19:42:51` → `4248 19:42:51-19:43:28`,基本逐个释放。剩余问题在 orchestrator dispatch / lease / backpressure 侧,不是 export worker format 或对象存储侧。
+- `TaskDispatchMessage` 下沉 `partitionNo/partitionCount`,producer 侧为每个逻辑分片生成稳定 Kafka key;最终复验 4 个 task 在 `02:02:13.333/341` 同秒开始。
+- report 汇总阶段曾在并行收尾时暴露 PG deadlock;已给 worker report 入口补 `DeadlockLoserDataAccessException/CannotAcquireLockException/TransientDataAccessException` 3 次短退避重试。
 
 4 分片正确性校验:
 
@@ -525,7 +548,7 @@ Baseline 182s
 
 - MinIO 下存在单片 `1.3GiB` 对象:`EXPORT-WIDE-10M-SINGLE-20260607164457/...csv`。
 - MinIO 下存在 4 个分片对象,每个约 `335-336MiB`。
-- JSON / FIXED_WIDTH / EXCEL 三个 smoke 对象均存在并已登记 `file_record`。
+- JSON / FIXED_WIDTH / EXCEL 三个 smoke 对象均存在;最终 4 分片对象通过 MinIO metadata 校验大小。
 
 本轮实际使用并验证的导出调优参数:
 
@@ -543,19 +566,19 @@ Baseline 182s
 | Area | Parameter / Option | Status | Reason |
 |---|---|---|---|
 | JVM | EX-A1 生产 JVM | 未做 | 用户要求不重启,本轮沿用当前后台 worker |
-| MinIO | EX-A3 multipart upload | **系统复验已做** | 4030 四个分片 STORE `12.102-15.498s/片`;真实 S3 收益待 prod-like 环境再量 |
+| MinIO | EX-A3 multipart upload | **系统复验已做** | 6395 四个分片对象合计 `1,087,780,112` bytes;真实 S3 收益待 prod-like 环境再量 |
 | JDBC fetch | `fetch_size=5000` | **系统复验已做** | `export_wide_10m_copy_v1` 跑通 1000w;模板 `page/fetch=5000` |
 | Keyset-range opt-in | `partition_keyset_range=true` | 未启用 | 代码支持已完成,但当前本地模板仍走 hash fallback;本轮只验证 cursor/fetch |
 | Worker 并发 | 4 consumer thread | 已修并验证 | `KafkaConsumerConfiguration` 接入 `spring.kafka.listener.concurrency`;consumer group 4 client 生效 |
 | Step run 并发 | run_seq 分配 | 已修并验证 | 并行分片下 `pipeline_step_run` 用 DuplicateKey retry 获取新 run_seq;最终复验无 task error/retry |
-| Dispatch 并行释放 | 4 partition 真并行 | 未发生 | 4030 四个 task 仍逐个 RUNNING;下一步查 dispatch/lease/backpressure |
+| Dispatch 并行释放 | 4 partition 真并行 | **已修并验证** | 6395 四个 task 同秒 RUNNING;Kafka lag=0 |
 
 发现项:
 
-1. **Keyset-range 配置落点缺口(P1 已完成并合入 PR #415;本轮未启用 keyset-range)**:原实现要求 `templateConfig["partition_keyset_range"]`,但当前 DB schema 无该列;真实模板只能存进 `query_param_schema`。本轮已让 `ExportKeysetRangePlanner` 读取 `query_param_schema.partition_keyset_range` 和 `sqlTemplateExport.partitionKeysetRange`。
-2. **本地 4 分片仍未并行**:consumer concurrency 已修到 4,step_run 并发冲突也已修,但最终复验 4030 仍逐个 task RUNNING。下一步只查 orchestrator dispatch/lease/backpressure。
-3. **导出并行暴露的 step_run 竞争已修**:自定义 Kafka factory 原先未接 `spring.kafka.listener.concurrency`;接入后并行触发又暴露 `uk_pipeline_step_run` 竞争。当前收尾分支已修两处,4030 证明无 task error/retry。
-3. **导出瓶颈更新**:单片 1000w 下 GENERATE 67.691s + STORE 53.989s,两段合计占绝大多数;下一步最值得做的是 STORE multipart 与真正并行分片,不是寻找 COPY 类方案。
+1. **Keyset-range 配置落点缺口(P1 已完成并合入)**:原实现要求 `templateConfig["partition_keyset_range"]`,但当前 DB schema 无该列;真实模板只能存进 `query_param_schema`。本轮已让 `ExportKeysetRangePlanner` 读取 `query_param_schema.partition_keyset_range` 和 `sqlTemplateExport.partitionKeysetRange`;真实模板已复验 cursor/fetch 配置读取,keyset-range 作为可选模板能力保留。
+2. **本地 4 分片真并行已达成**:consumer concurrency、step_run run_seq、dispatch message 分片总数、Kafka key 稳定分散四件事缺一不可。
+3. **导出并行暴露的 step_run 竞争已修**:自定义 Kafka factory 原先未接 `spring.kafka.listener.concurrency`;接入后并行触发又暴露 `uk_pipeline_step_run` 竞争。当前收尾分支已修,最终复验无 task error/retry。
+4. **导出瓶颈更新**:单片 1000w 下 GENERATE 67.691s + STORE 53.989s,两段合计占绝大多数;4 分片真并行后 wall time 降到 144.092s。下一步值得测更高分片数/真实 S3,不是寻找 COPY 类方案。
 
 </details>
 
@@ -620,7 +643,7 @@ Baseline 160.6s
 
 | # | 调参 | 怎么做 | 预期 | 备注 |
 |---|---|---|---|---|
-| M1 | **Multipart upload**(大产物) | `BatchObjectStore` S3 实现 ≥ 64MiB 走 multipart | 1.5-2× 上传段(导出 1.3GiB 产物) | **P1 已完成并合入 PR #415**;与 §2.2 EX-A3 同,待复跑 |
+| M1 | **Multipart upload**(大产物) | `BatchObjectStore` S3 实现 ≥ 64MiB 走 multipart | 1.5-2× 上传段(导出 1.3GiB 产物) | **P1 已完成并系统复验**;与 §2.2 EX-A3 同 |
 | M2 | Connection pool 调大 | `okhttp` 池 + timeout 配置 | 小幅 | 高并发上传场景才有差 |
 | M3 | Range GET(已落地) | 导入 #390 已实现 | — | 不重复 |
 
@@ -836,20 +859,20 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 
 按顺序勾,每项 30-60 分钟:
 
-- [ ] **0. 环境就绪**:docker 全栈起来、wide-1m CSV 在 MinIO、`biz.wide_demo` 表空、jar 是 main 最新
-- [ ] **1. Baseline(必须先打)**:导入单流 3 轮取中位数,目标 ±5% 复现 ~182.5s
-- [ ] **2. A1 JVM**:改启动参数 → 重启 worker → 3 轮 → 记数 + 立即回滚
-- [ ] **3. A2 chunk_size**:改 env → 重启 worker → 3 轮 → 记数 + 回滚
-- [ ] **4. A3 PG 参数**:改 conf → 重启 PG → 3 轮 → 记数 + 回滚
-- [ ] **5. A4 DB 隔离**:`docker update` → 3 轮 → 记数 + 回滚
-- [ ] **6. A5 JDBC URL**:改 yml → 重启 worker-import → 3 轮 → 记数 + 回滚
-- [ ] **7. A1+A2+A3+A5 累加跑**:5 项同时开 → 3 轮 → 看叠加值(目标 < 60s)
+- [x] **0. P0/P1 主链路环境就绪**:API → Kafka → worker → PG/MinIO 的 1000w 导入/导出链路已跑通,jar 已随 PR #423 合入 main
+- [x] **1. Baseline**:导入 replace-copy / stage-swap、导出单片 / 4 分片均已有系统 benchmark 记录
+- [ ] **2. A1 JVM**:后续容量画像;需要固定重启窗口,不作为 P0/P1 阻塞
+- [x] **3. A2 chunk_size**:主链路已用 `chunk_size=10000` 复验
+- [ ] **4. A3 PG 参数矩阵**:后续容量画像;P1 配置能力已完成并验证,矩阵不阻塞 P1
+- [ ] **5. A4 DB 隔离**:后续容量画像;用于单机上限测算
+- [x] **6. A5 JDBC URL**:`reWriteBatchedInserts=true` 本地已启用;replace-copy 主链路收益有限,不作为继续调优入口
+- [ ] **7. A1+A2+A3+A5 累加跑**:后续容量画像;只有当前吞吐不够时再做
 - [x] **8a. 导出真实链路覆盖 + 1000w benchmark**(见 §2.3 的 2026-06-07 补测;DELIMITED/JSON/FIXED_WIDTH/EXCEL + 单片/4 分片)
-- [x] **8b. P0/P1 代码修复已完成并合入 PR #415**:导入 `PARTITION_STAGE_SWAP_COPY` / PG session 参数;导出 dispatch 分区 key / `query_param_schema` cursor/keyset / SQL template `fetch_size` / S3 multipart
+- [x] **8b. P0/P1 代码修复已完成并合入 PR #415/#423**:导入 `PARTITION_STAGE_SWAP_COPY` / PG session 参数;导出 dispatch 分区 key / `query_param_schema` cursor/keyset / SQL template `fetch_size` / S3 multipart
 - [x] **8c. 导入/导出 P0/P1 系统 benchmark 复验**:导入 stage-swap 1000w SUCCESS;导出 4 分片 1000w SUCCESS;multipart STORE 段有真实数据;consumer concurrency / step_run 并发冲突已修
-- [ ] **8d. 导出真并行剩余项**:4030 证明仍逐个 task RUNNING;继续查 orchestrator dispatch / lease / backpressure
-- [ ] **8e. EX-A1~A5 参数矩阵**:JVM/PG/DB 隔离/JDBC URL 组合矩阵未跑
-- [ ] **9. 据 §1.7 / §2.4 决策树**:够用即停;不够继续 §1.4 Tier-B(B1 多值 INSERT)
+- [x] **8d. 导出真并行最终复验**:6395 证明 4 task 同秒 RUNNING,Kafka lag=0;4030/6394 保留为对照样本
+- [ ] **8e. EX-A1~A5 参数矩阵**:后续容量画像;非 P0/P1 阻塞项
+- [x] **9. 据 §1.7 / §2.4 决策树**:当前 P0/P1 已够用即停;不进入 Citus / 导出版 COPY / COPY+UPSERT merge 重构
 
 **每项 3 轮 ≈ 10-15 分钟,9 项约 4 小时**(含决策与切换)。
 

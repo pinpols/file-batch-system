@@ -10,6 +10,7 @@ import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
@@ -157,6 +158,7 @@ public class DefaultLaunchService implements LaunchService {
       // failFast)时,workflow_run 留半态:CREATED + current_node_code 指向"假装在跑"的下游。
       // 此处反向 finalize 为 FAILED,避免运维误判。
       finalizeWorkflowRunOnDispatchFailure(prepared.workflowRun());
+      finalizeJobInstanceOnDispatchBusinessError(request, prepared.jobInstance(), ex);
       throw ex;
     }
 
@@ -165,6 +167,54 @@ public class DefaultLaunchService implements LaunchService {
         request.requestId(),
         BatchStatusConstants.LAUNCHED,
         prepared.jobInstance().getId());
+  }
+
+  private void finalizeJobInstanceOnDispatchBusinessError(
+      LaunchRequest request, JobInstanceEntity jobInstance, RuntimeException exception) {
+    if (!isPartitionDispatchBusinessError(exception)
+        || jobInstance == null
+        || jobInstance.getId() == null) {
+      return;
+    }
+    try {
+      selfProvider.getObject().markJobInstanceFailedDueToDispatch(request, jobInstance);
+    } catch (RuntimeException reverseEx) {
+      SwallowedExceptionLogger.info(
+          DefaultLaunchService.class, "catch:finalizeJobInstanceOnDispatchFailure", reverseEx);
+    }
+  }
+
+  private boolean isPartitionDispatchBusinessError(RuntimeException exception) {
+    Throwable current = exception;
+    while (current != null) {
+      if (current instanceof BizException bizException
+          && "error.partition.dispatch_business_error".equals(bizException.getMessageKey())) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
+  /** T2 fail-fast 后把 job_instance CREATED → FAILED,避免长期停留在无 task 的不可执行状态。 */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markJobInstanceFailedDueToDispatch(
+      LaunchRequest request, JobInstanceEntity jobInstance) {
+    Long expectedVersion = jobInstance.getVersion() == null ? 0L : jobInstance.getVersion();
+    int rows =
+        jobMappers.jobInstanceMapper.updateStatus(
+            jobInstance.getTenantId(),
+            jobInstance.getId(),
+            JobInstanceStatus.FAILED.code(),
+            BatchDateTimeSupport.utcNow(),
+            expectedVersion);
+    if (rows > 0) {
+      jobMappers.triggerRequestMapper.updateAcceptance(
+          request.tenantId(),
+          request.requestId(),
+          BatchStatusConstants.REJECTED,
+          jobInstance.getId());
+    }
   }
 
   /**

@@ -27,10 +27,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * <p>每个测试都通过 prepare → compute → validate → commit → feedback 五个 lifecycle 方法,验证:
  *
  * <ul>
- *   <li>compute 把行写到 batch.process_staging 而不是直接写 target
- *   <li>validate 在 staging 上跑校验,失败时阻断 commit
- *   <li>commit 用 jsonb_populate_record 把 staging 反序列化到 target,带 ON CONFLICT
- *   <li>feedback 清空 staging,水位通过 attributes 传递回 worker(由 worker 上报 orchestrator)
+ *   <li>JSONB 模式:compute 写 batch.process_staging,validate 跑用户 checkSql,commit 用
+ *       jsonb_populate_record 发布,feedback 清 staging
+ *   <li>DIRECT 模式:compute/validate/feedback 不碰 staging,commit 用 INSERT...SELECT 直接发布
+ *   <li>水位通过 attributes 传递回 worker(由 worker 上报 orchestrator)
  * </ul>
  *
  * <p><b>故意不继承 {@code AbstractIntegrationTest}</b>：每个 @BeforeEach 都 {@code DROP SCHEMA biz CASCADE}
@@ -324,6 +324,41 @@ class SqlTransformComputePluginIntegrationTest {
     assertThat(
             jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
         .isZero();
+  }
+
+  @Test
+  void directMode_publishesWithoutJsonbStaging() {
+    ProcessJobContext context = newContextWithSpec();
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put("stagingMode", "DIRECT");
+
+    plugin.prepare(context);
+    ProcessStageResult compute = plugin.compute(context);
+    ProcessStageResult validate = plugin.validate(context);
+    ProcessStageResult commit = plugin.commit(context);
+    ProcessStageResult feedback = plugin.feedback(context);
+
+    assertThat(compute.success()).isTrue();
+    assertThat(validate.success()).isTrue();
+    assertThat(commit.success()).isTrue();
+    assertThat(feedback.success()).isTrue();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from batch.process_staging", Integer.class))
+        .isZero();
+    assertThat(
+            jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
+        .isEqualTo(2);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select total_amount from biz.account_summary where account_id='A'",
+                BigDecimal.class))
+        .isEqualByComparingTo("20.00");
+    assertThat(context.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 2)
+        .containsEntry(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, 2)
+        .containsEntry("processedCount", 2)
+        .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "3");
   }
 
   // ─── 辅助 ────────────────────────────────────────────────────────────────────

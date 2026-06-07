@@ -18,14 +18,14 @@ spring:
       concurrency: ${BATCH_WORKER_IMPORT_KAFKA_CONCURRENCY:4}
       # 注：ack-mode=manual_immediate 已抽到 batch-defaults.yml 统一管理
     consumer:
-      # 每次 poll 拉取上限；Semaphore 背压保证并发不超过 max-concurrent-tasks
-      max-poll-records: ${BATCH_WORKER_IMPORT_KAFKA_MAX_POLL_RECORDS:20}
+      # 长任务 worker 一次 poll 只取一条；否则同一 consumer 批内串行处理多条会超过 max.poll.interval 并触发 rebalance
+      max-poll-records: ${BATCH_WORKER_IMPORT_KAFKA_MAX_POLL_RECORDS:1}
       # Broker 至少积累此字节数才响应 fetch，减少空轮询网络往返
       fetch-min-size: ${BATCH_WORKER_IMPORT_KAFKA_FETCH_MIN_SIZE:1024}
       fetch-max-wait: ${BATCH_WORKER_IMPORT_KAFKA_FETCH_MAX_WAIT:500}
       # 两次 poll 之间允许的最大处理时长；需大于单批 max-poll-records 条任务的最长执行时间
       # P1-10 Kafka 三角硬化：改 300s 与 batch-defaults.yml 三角对齐
-      max-poll-interval-ms: ${BATCH_WORKER_IMPORT_KAFKA_MAX_POLL_INTERVAL_MS:300000}
+      max-poll-interval-ms: ${BATCH_WORKER_IMPORT_KAFKA_MAX_POLL_INTERVAL_MS:1200000}
 
 batch:
   worker:
@@ -155,4 +155,3 @@ batch:
         # ⚠️ 持久性代价:崩溃丢失最后若干已提交事务(无数据损坏);仅因 import 幂等(ON CONFLICT)
         # 可重跑才可接受。仅作用于 import 业务连接池,不影响控制库(状态机强一致)。
         connection-init-sql: ${BATCH_WORKER_IMPORT_BUSINESS_CONNECTION_INIT_SQL:}
-
