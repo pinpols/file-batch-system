@@ -45,6 +45,6 @@ public interface BatchTaskExecutor {
    * <p>默认 no-op(适用于不支持取消的任务,如已发出去的 HTTP 请求)。{@link TaskCapability#cancellable()} 必须跟本方法的实际行为一致。
    */
   default void cancel(String taskInstanceId) {
-    // default no-op
+    // 默认不处理
   }
 }

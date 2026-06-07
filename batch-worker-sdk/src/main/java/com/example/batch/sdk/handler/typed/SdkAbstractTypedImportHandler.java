@@ -57,7 +57,7 @@ public abstract class SdkAbstractTypedImportHandler<I, O, R> extends SdkAbstract
 
   /** 打开数据源(连 SFTP / 下载文件 / 开 stream)。默认 no-op。 */
   protected void openSource(I input, SdkTaskContext ctx) throws Exception {
-    // no-op
+    // 无操作
   }
 
   /**

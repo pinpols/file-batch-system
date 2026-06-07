@@ -46,7 +46,7 @@ class HttpAtomicHandlerTest {
   @Test
   @DisplayName("GET 200 返回 statusCode + responseBody")
   void shouldReturn200Body_whenGet() {
-    // arrange
+    // 准备
     server.createContext(
         "/x",
         ex -> {
@@ -57,10 +57,10 @@ class HttpAtomicHandlerTest {
         });
     HttpAtomicHandler h = new HttpAtomicHandler(allowLoopback());
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx(Map.of("url", "http://127.0.0.1:" + port + "/x")));
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("statusCode", 200);
     assertThat(r.output()).containsEntry("responseBody", "hello");
@@ -70,7 +70,7 @@ class HttpAtomicHandlerTest {
   @Test
   @DisplayName("POST 带 body,server 收到 body")
   void shouldSendBody_whenPost() {
-    // arrange
+    // 准备
     AtomicReference<String> seen = new AtomicReference<>();
     server.createContext(
         "/p",
@@ -86,10 +86,10 @@ class HttpAtomicHandlerTest {
             "method", "post",
             "body", "payload-123");
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx(params));
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(seen.get()).isEqualTo("payload-123");
   }
@@ -148,7 +148,7 @@ class HttpAtomicHandlerTest {
   @Test
   @DisplayName("响应超 maxResponseBytes → responseTruncated=true")
   void shouldTruncate_whenResponseTooLarge() {
-    // arrange
+    // 准备
     server.createContext(
         "/big",
         ex -> {
@@ -160,10 +160,10 @@ class HttpAtomicHandlerTest {
     HttpAtomicConfig cfg = new HttpAtomicConfig("http", false, Set.of(), Set.of(), 5, 4);
     HttpAtomicHandler h = new HttpAtomicHandler(cfg);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx(Map.of("url", "http://127.0.0.1:" + port + "/big")));
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("responseTruncated", true);
     assertThat(r.output()).containsEntry("responseBody", "abcd");
@@ -172,7 +172,7 @@ class HttpAtomicHandlerTest {
   @Test
   @DisplayName("非 2xx(500)仍返回 statusCode,success=true")
   void shouldReturn500_whenServerError() {
-    // arrange
+    // 准备
     server.createContext(
         "/err",
         ex -> {
@@ -183,10 +183,10 @@ class HttpAtomicHandlerTest {
         });
     HttpAtomicHandler h = new HttpAtomicHandler(allowLoopback());
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx(Map.of("url", "http://127.0.0.1:" + port + "/err")));
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("statusCode", 500);
     assertThat(r.output()).containsEntry("responseBody", "boom");
@@ -195,7 +195,7 @@ class HttpAtomicHandlerTest {
   @Test
   @DisplayName("custom headers 透传到 server")
   void shouldForwardHeaders_whenProvided() {
-    // arrange
+    // 准备
     AtomicReference<String> seen = new AtomicReference<>();
     server.createContext(
         "/h",
@@ -211,10 +211,10 @@ class HttpAtomicHandlerTest {
     params.put("url", "http://127.0.0.1:" + port + "/h");
     params.put("headers", headers);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx(params));
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(seen.get()).isEqualTo("v1");
   }

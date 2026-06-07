@@ -21,7 +21,7 @@ class SdkAbstractDispatchHandlerTest {
   @Test
   @DisplayName("5 条全成功 → success=5 failed=0 total=5 整体成功")
   void shouldDispatchAll_whenNoFailure() {
-    // arrange
+    // 准备
     var handler =
         new SdkAbstractDispatchHandler<Integer>() {
           @Override
@@ -45,10 +45,10 @@ class SdkAbstractDispatchHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).isEqualTo("dispatched 5/5");
     // SdkRowResult.toOutput() 零计数项不写(保持 output 精简),failed=0 时不出现

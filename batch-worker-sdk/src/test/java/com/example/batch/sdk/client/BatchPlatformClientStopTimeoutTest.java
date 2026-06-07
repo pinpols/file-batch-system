@@ -97,12 +97,12 @@ class BatchPlatformClientStopTimeoutTest {
     submitSlowTask(dispatcher, started, interrupted, 1_000);
     assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
 
-    // arrange — record stop wall clock
+    // 准备 — record stop wall clock
     long t0 = System.nanoTime();
     dispatcher.stop(Duration.ofMillis(200));
     long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
 
-    // assert:必须很快返回(给 jitter buffer 800ms);超时 WARN 必须含 in-flight id
+    // 断言:必须很快返回(给 jitter buffer 800ms);超时 WARN 必须含 in-flight id
     assertThat(elapsedMs)
         .as("stop should return close to 200ms timeout, not wait full 1s")
         .isLessThan(900L);

@@ -76,14 +76,14 @@ class S3ObjectStoreTest {
 
   @Test
   void shouldRoundTripPutGetStatExistsDelete() throws Exception {
-    // arrange
+    // 准备
     String key = "store/roundtrip.txt";
     byte[] content = "hello object store".getBytes(StandardCharsets.UTF_8);
 
-    // act
+    // 执行
     store.put(bucket, key, new ByteArrayInputStream(content), content.length, "text/plain");
 
-    // assert
+    // 断言
     assertThat(store.exists(bucket, key)).isTrue();
     assertThat(store.statSize(bucket, key)).isEqualTo(content.length);
     try (InputStream in = store.get(bucket, key)) {

@@ -19,7 +19,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("doInvoke 返回值 → execute success + output {result: ...}")
   void shouldWrapReturnValueAsOutput_whenInvokeReturnsValue() {
-    // arrange
+    // 准备
     var handler =
         new SdkAbstractAtomicHandler<String>() {
           @Override
@@ -33,10 +33,10 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).isEqualTo("invoked");
     assertThat(result.output()).containsEntry("result", "hello");
@@ -46,7 +46,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("doInvoke 返回 null → output 空 Map 但 success=true")
   void shouldReturnEmptyOutput_whenInvokeReturnsNull() {
-    // arrange
+    // 准备
     var handler =
         new SdkAbstractAtomicHandler<String>() {
           @Override
@@ -60,10 +60,10 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).isEmpty();
   }
@@ -71,7 +71,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("doInvoke 抛异常 → execute fail + error 透传")
   void shouldFailAndPropagateError_whenInvokeThrows() {
-    // arrange
+    // 准备
     var boom = new IllegalStateException("boom");
     var handler =
         new SdkAbstractAtomicHandler<String>() {
@@ -86,10 +86,10 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.error()).isSameAs(boom);
     assertThat(result.message()).isEqualTo("boom");
@@ -98,7 +98,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("子类覆盖 asOutput → output 用子类映射")
   void shouldUseCustomOutput_whenAsOutputOverridden() {
-    // arrange
+    // 准备
     var handler =
         new SdkAbstractAtomicHandler<Integer>() {
           @Override
@@ -117,10 +117,10 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("count", 42).containsEntry("kind", "custom");
     assertThat(result.output()).doesNotContainKey("result");
@@ -129,7 +129,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("validate 抛异常 → execute fail 且 doInvoke 不被调")
   void shouldFailWithoutInvoking_whenValidateThrows() {
-    // arrange
+    // 准备
     var invoked = new AtomicBoolean(false);
     var validationError = new IllegalArgumentException("bad param");
     var handler =
@@ -151,10 +151,10 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.error()).isSameAs(validationError);
     assertThat(invoked).isFalse();
@@ -163,7 +163,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("cleanup 必跑:doInvoke 抛异常也执行覆盖的 cleanup")
   void shouldRunCleanup_whenInvokeThrows() {
-    // arrange
+    // 准备
     var cleaned = new AtomicBoolean(false);
     var handler =
         new SdkAbstractAtomicHandler<String>() {
@@ -183,10 +183,10 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(cleaned).isTrue();
   }
@@ -194,7 +194,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("cleanup 在成功路径也执行")
   void shouldRunCleanup_whenInvokeSucceeds() {
-    // arrange
+    // 准备
     var cleaned = new AtomicBoolean(false);
     var handler =
         new SdkAbstractAtomicHandler<String>() {
@@ -214,10 +214,10 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(cleaned).isTrue();
   }
@@ -225,7 +225,7 @@ class SdkAbstractAtomicHandlerTest {
   @Test
   @DisplayName("taskType 由具体子类提供")
   void shouldExposeTaskType_fromConcreteSubclass() {
-    // arrange
+    // 准备
     var handler =
         new SdkAbstractAtomicHandler<String>() {
           @Override
@@ -239,7 +239,7 @@ class SdkAbstractAtomicHandlerTest {
           }
         };
 
-    // assert
+    // 断言
     assertThat(handler.taskType()).isEqualTo("tenant_atomic_shell");
   }
 }

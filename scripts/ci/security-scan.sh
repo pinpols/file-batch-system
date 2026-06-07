@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # security-scan.sh - 本地 / CI 安全扫描一键入口
-# Notes:
+# 说明：
 # 1) 先打包 security-scan 独立 Java 模块，再运行其 jar。
 # 2) 该脚本只做编排，不实现扫描逻辑。
 # 3) 脚本参数会透传给 Java 模块，支持 --mode / --root / --target-url 等。

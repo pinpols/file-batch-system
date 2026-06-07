@@ -152,18 +152,18 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("sql_template: 4 片无重叠且合集恰好等于全量 1000 行")
   void sqlTemplate_fourPartitions_disjointAndComplete() throws Exception {
-    // arrange: templateConfig — SELECT id FROM biz.slice_demo WHERE tenant_id=:tenantId AND
+    // 准备: templateConfig — SELECT id FROM biz.slice_demo WHERE tenant_id=:tenantId AND
     // batch_no=:batchNo
     Map<String, Object> templateConfig =
         Map.of(
             "default_query_sql",
             "SELECT id FROM biz.slice_demo WHERE tenant_id = :tenantId AND batch_no = :batchNo");
 
-    // act: 收集各片 id 集合
+    // 执行: 收集各片 id 集合
     List<Set<Object>> partitions =
         collectAllPartitions(sqlTemplatePlugin, templateConfig, 0L /* batchId ignored */);
 
-    // assert: 不重叠 + 全覆盖
+    // 断言: 不重叠 + 全覆盖
     assertDisjointAndComplete(partitions, "sql_template");
   }
 
@@ -174,7 +174,7 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("jdbc_mapped: 4 片无重叠且合集恰好等于全量 1000 行")
   void jdbcMapped_fourPartitions_disjointAndComplete() throws Exception {
-    // arrange: templateConfig — biz.settlement_batch + biz.settlement_detail
+    // 准备: templateConfig — biz.settlement_batch + biz.settlement_detail
     Map<String, Object> jdbcMappedSpec =
         Map.of(
             "schema", "biz",
@@ -189,11 +189,11 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
 
     Map<String, Object> templateConfig = Map.of("jdbc_mapped_export", jdbcMappedSpec);
 
-    // act: 收集各片 id 集合（batchId = BATCH_ID_SEED）
+    // 执行: 收集各片 id 集合（batchId = BATCH_ID_SEED）
     List<Set<Object>> partitions =
         collectAllPartitions(jdbcMappedPlugin, templateConfig, BATCH_ID_SEED);
 
-    // assert: 不重叠 + 全覆盖
+    // 断言: 不重叠 + 全覆盖
     assertDisjointAndComplete(partitions, "jdbc_mapped");
   }
 

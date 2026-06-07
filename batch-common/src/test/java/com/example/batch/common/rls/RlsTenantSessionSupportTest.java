@@ -13,7 +13,7 @@ class RlsTenantSessionSupportTest {
 
   @Test
   void tenantIdPattern_acceptsAsciiAlnumDashUnderscore() {
-    // arrange / act / assert
+    // 准备 / 执行 / 断言
     assertThat(RlsTenantSessionSupport.TENANT_ID_PATTERN.matcher("ta").matches()).isTrue();
     assertThat(RlsTenantSessionSupport.TENANT_ID_PATTERN.matcher("Tenant-01_b").matches()).isTrue();
     assertThat(RlsTenantSessionSupport.TENANT_ID_PATTERN.matcher("a".repeat(64)).matches())

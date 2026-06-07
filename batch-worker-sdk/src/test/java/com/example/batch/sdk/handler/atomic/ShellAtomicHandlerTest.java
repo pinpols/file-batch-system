@@ -48,13 +48,13 @@ class ShellAtomicHandlerTest {
   void shouldRunEchoSuccessfully_whenCommandValid() {
     assumeTrue(exists(ECHO), "/bin/echo 不存在,跳过");
 
-    // arrange
+    // 准备
     var ctx = ctx(Map.of("command", ECHO, "args", List.of("hello")));
 
-    // act
+    // 执行
     SdkTaskResult result = handler().execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("exitCode", 0);
     assertThat((String) result.output().get("stdout")).contains("hello");
@@ -64,10 +64,10 @@ class ShellAtomicHandlerTest {
   @Test
   @DisplayName("缺 command 参数 → fail")
   void shouldFail_whenCommandMissing() {
-    // act
+    // 执行
     SdkTaskResult result = handler().execute(ctx(Map.of("args", List.of("x"))));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("command");
   }
@@ -75,14 +75,14 @@ class ShellAtomicHandlerTest {
   @Test
   @DisplayName("白名单命中外:allowed={/bin/echo} 但 command=/bin/cat → SecurityException → fail")
   void shouldFail_whenCommandNotInAllowlist() {
-    // arrange
+    // 准备
     var config = new ShellAtomicConfig("shell", Set.of(ECHO), 60, 64 * 1024, true);
     var ctx = ctx(Map.of("command", CAT, "args", List.of()));
 
-    // act
+    // 执行
     SdkTaskResult result = new ShellAtomicHandler(config).execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.error()).isInstanceOf(SecurityException.class);
     assertThat(result.message()).contains("allowedCommands");
@@ -93,14 +93,14 @@ class ShellAtomicHandlerTest {
   void shouldPass_whenCommandInAllowlist() {
     assumeTrue(exists(ECHO), "/bin/echo 不存在,跳过");
 
-    // arrange
+    // 准备
     var config = new ShellAtomicConfig("shell", Set.of(ECHO), 60, 64 * 1024, true);
     var ctx = ctx(Map.of("command", ECHO, "args", List.of("ok")));
 
-    // act
+    // 执行
     SdkTaskResult result = new ShellAtomicHandler(config).execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat((String) result.output().get("stdout")).contains("ok");
   }
@@ -111,10 +111,10 @@ class ShellAtomicHandlerTest {
     String falseBin = falseBin();
     assumeTrue(falseBin != null, "/bin/false 与 /usr/bin/false 都不存在,跳过");
 
-    // act
+    // 执行
     SdkTaskResult result = handler().execute(ctx(Map.of("command", falseBin)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("exitCode", 1);
   }
@@ -124,14 +124,14 @@ class ShellAtomicHandlerTest {
   void shouldTreatShellMetacharsAsLiteral_whenNotUsingShell() {
     assumeTrue(exists(ECHO), "/bin/echo 不存在,跳过");
 
-    // arrange — 若走了 sh -c,';' 会断句导致 'rm -rf /' 被执行;不走 shell 则整串是 echo 的字面参数
+    // 准备 — 若走了 sh -c,';' 会断句导致 'rm -rf /' 被执行;不走 shell 则整串是 echo 的字面参数
     var payload = "a;rm -rf /";
     var ctx = ctx(Map.of("command", ECHO, "args", List.of(payload)));
 
-    // act
+    // 执行
     SdkTaskResult result = handler().execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat((String) result.output().get("stdout")).contains(payload);
   }
@@ -141,14 +141,14 @@ class ShellAtomicHandlerTest {
   void shouldFailWithTimeout_whenProcessExceedsLimit() {
     assumeTrue(exists(SLEEP), "/bin/sleep 不存在,跳过");
 
-    // arrange
+    // 准备
     var config = new ShellAtomicConfig("shell", Set.of(), 1, 64 * 1024, true);
     var ctx = ctx(Map.of("command", SLEEP, "args", List.of("10")));
 
-    // act
+    // 执行
     SdkTaskResult result = new ShellAtomicHandler(config).execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).containsIgnoringCase("timeout");
   }
@@ -158,15 +158,15 @@ class ShellAtomicHandlerTest {
   void shouldTruncateStdout_whenOutputExceedsLimit() {
     assumeTrue(exists(ECHO), "/bin/echo 不存在,跳过");
 
-    // arrange — echo 一段长字符串,maxOutputBytes 设极小
+    // 准备 — echo 一段长字符串,maxOutputBytes 设极小
     var longArg = "x".repeat(500);
     var config = new ShellAtomicConfig("shell", Set.of(), 60, 16, true);
     var ctx = ctx(Map.of("command", ECHO, "args", List.of(longArg)));
 
-    // act
+    // 执行
     SdkTaskResult result = new ShellAtomicHandler(config).execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("stdoutTruncated", true);
     assertThat(((String) result.output().get("stdout")).getBytes()).hasSizeLessThanOrEqualTo(16);

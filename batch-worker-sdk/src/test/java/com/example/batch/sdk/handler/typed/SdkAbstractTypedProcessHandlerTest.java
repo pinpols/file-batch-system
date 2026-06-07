@@ -63,13 +63,13 @@ class SdkAbstractTypedProcessHandlerTest {
   @Test
   @DisplayName("transform 返 null 的行 skip,其余分批 upsert,summarize 进 output")
   void shouldSkipNullRowsAndBatchUpsert() {
-    // arrange:25 行,modulo=5 → 0,5,10,15,20 skip(5 行),success=20
+    // 准备:25 行,modulo=5 → 0,5,10,15,20 skip(5 行),success=20
     RecordingTypedProcess handler = new RecordingTypedProcess();
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("rows", 25, "modulo", 5)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("kept", 20L);
     // 20 个 output 行,batchSize=10 → 2 批满 + 收尾(本例 20 整除 → 10,10)
@@ -79,13 +79,13 @@ class SdkAbstractTypedProcessHandlerTest {
   @Test
   @DisplayName("参数不匹配 → fail")
   void shouldFail_whenParametersInvalid() {
-    // arrange
+    // 准备
     RecordingTypedProcess handler = new RecordingTypedProcess();
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("rows", "x", "modulo", 1)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("invalid parameters");
     assertThat(handler.upsertSizes).isEmpty();

@@ -54,32 +54,32 @@ public class FlexibleInstantDeserializer extends StdScalarDeserializer<Instant> 
       try {
         return Instant.ofEpochMilli(Long.parseLong(text));
       } catch (NumberFormatException ignored) {
-        // fall through
+        // 继续尝试下一种解析方式
       }
     }
     // 2) 含 Z / offset 的 ISO
     try {
       return Instant.parse(text);
     } catch (DateTimeParseException ignored) {
-      // fall through
+      // 继续尝试下一种解析方式
     }
     try {
       return OffsetDateTime.parse(text).toInstant();
     } catch (DateTimeParseException ignored) {
-      // fall through
+      // 继续尝试下一种解析方式
     }
     // 3) naive LocalDateTime + 默认时区
     ZoneId zone = timezoneProvider.defaultZone();
     try {
       return LocalDateTime.parse(text).atZone(zone).toInstant();
     } catch (DateTimeParseException ignored) {
-      // fall through
+      // 继续尝试下一种解析方式
     }
     // 4) 仅日期 (YYYY-MM-DD)
     try {
       return LocalDate.parse(text).atStartOfDay(zone).toInstant();
     } catch (DateTimeParseException ignored) {
-      // fall through
+      // 继续尝试下一种解析方式
     }
     return (Instant) ctxt.handleWeirdStringValue(Instant.class, text, "无法解析为 Instant 的字符串");
   }

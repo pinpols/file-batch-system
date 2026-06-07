@@ -71,14 +71,14 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("前 2 次抛匹配异常、第 3 次成功 → 重试后成功,共 3 次调用")
   void shouldRetryAndSucceed_whenMatchingExceptionThenOk() {
-    // arrange
+    // 准备
     FlakyHandler handler = new FlakyHandler(2, new IllegalStateException("transient"));
     SdkTaskHandler wrapped = SdkRetryableHandler.wrap(handler);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).isEqualTo("ok after 3");
     assertThat(handler.calls).hasValue(3);
@@ -87,11 +87,11 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("不匹配异常 → 不重试,原样透传抛出,仅 1 次调用")
   void shouldNotRetryAndRethrow_whenExceptionDoesNotMatch() {
-    // arrange:抛 IllegalArgumentException(不在 value 内)
+    // 准备:抛 IllegalArgumentException(不在 value 内)
     FlakyHandler handler = new FlakyHandler(99, new IllegalArgumentException("nope"));
     SdkTaskHandler wrapped = SdkRetryableHandler.wrap(handler);
 
-    // act + assert
+    // 执行并断言
     assertThatThrownBy(() -> wrapped.execute(CTX))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("nope");
@@ -101,11 +101,11 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("一直抛匹配异常 → 达 maxAttempts 后透传最后异常,调用 maxAttempts 次")
   void shouldExhaustAndRethrow_whenAlwaysMatchingException() {
-    // arrange:maxAttempts=4,全失败
+    // 准备:maxAttempts=4,全失败
     FlakyHandler handler = new FlakyHandler(99, new IllegalStateException("always"));
     SdkTaskHandler wrapped = SdkRetryableHandler.wrap(handler);
 
-    // act + assert
+    // 执行并断言
     assertThatThrownBy(() -> wrapped.execute(CTX)).isInstanceOf(IllegalStateException.class);
     assertThat(handler.calls).hasValue(4);
   }
@@ -141,14 +141,14 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("模板 handler 把异常吞成 fail(error 挂 result)→ 按 result.error() 匹配重试")
   void shouldRetry_whenTemplateReturnsFailWithMatchingError() {
-    // arrange:前 1 次失败,模板 catch 转 fail(error=IllegalStateException)
+    // 准备:前 1 次失败,模板 catch 转 fail(error=IllegalStateException)
     TemplateFlakyHandler handler = new TemplateFlakyHandler(1);
     SdkTaskHandler wrapped = SdkRetryableHandler.wrap(handler);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.calls).hasValue(2);
   }
@@ -177,14 +177,14 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("业务 fail 但 error()==null → isRetryable(null) 为 false,不重试,返该 fail 结果(仅 1 次调用)")
   void shouldNotRetry_whenFailResultHasNullError() {
-    // arrange:fail("msg") 不挂 Throwable
+    // 准备:fail("msg") 不挂 Throwable
     NoErrorFailHandler handler = new NoErrorFailHandler();
     SdkTaskHandler wrapped = SdkRetryableHandler.wrap(handler);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(CTX);
 
-    // assert:failure==null → 不可重试 → 立即返回原 fail 结果,不进重试循环
+    // 断言:failure==null → 不可重试 → 立即返回原 fail 结果,不进重试循环
     assertThat(result.success()).isFalse();
     assertThat(result.message()).isEqualTo("business says no");
     assertThat(handler.calls).hasValue(1);
@@ -193,11 +193,11 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("EXPONENTIAL backoff 的 nextDelay 被 maxDelayMillis 截断(Math.min 封顶)")
   void shouldCapDelay_whenExponentialExceedsMaxDelay() {
-    // arrange:initial=100ms,倍数 2,maxDelay=250ms
+    // 准备:initial=100ms,倍数 2,maxDelay=250ms
     SdkRetryPolicy policy =
         SdkRetryPolicy.exponential(10, Duration.ofMillis(100), Duration.ofMillis(250));
 
-    // act + assert:100 -> 200(<250,不截) -> 400 截到 250 -> 500 仍截到 250
+    // 执行并断言:100 -> 200(<250,不截) -> 400 截到 250 -> 500 仍截到 250
     Duration d1 = policy.nextDelay(Duration.ofMillis(100));
     assertThat(d1).isEqualTo(Duration.ofMillis(200));
     Duration d2 = policy.nextDelay(d1);
@@ -209,14 +209,14 @@ class SdkRetryableHandlerTest {
   @Test
   @DisplayName("模板 handler 一直失败 → 达上限返回最后 fail 结果(不抛,保留 message)")
   void shouldReturnLastFailResult_whenTemplateAlwaysFails() {
-    // arrange:全失败
+    // 准备:全失败
     TemplateFlakyHandler handler = new TemplateFlakyHandler(99);
     SdkTaskHandler wrapped = SdkRetryableHandler.wrap(handler);
 
-    // act
+    // 执行
     SdkTaskResult result = wrapped.execute(CTX);
 
-    // assert:模板把异常吞成 fail result,装饰器达上限后返回该 result(不重新抛)
+    // 断言:模板把异常吞成 fail result,装饰器达上限后返回该 result(不重新抛)
     assertThat(result.success()).isFalse();
     assertThat(handler.calls).hasValue(3);
   }

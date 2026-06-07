@@ -59,12 +59,12 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
 
   /** 业务输入校验,失败抛异常 → 模板转 {@link SdkTaskResult#fail}。默认 no-op。 */
   protected void validate(SdkTaskContext ctx) {
-    // no-op
+    // 无操作
   }
 
   /** 资源 acquire(打开连接 / 占用 lease 等)。默认 no-op;抛异常被模板捕获转 fail。 */
   protected void before(SdkTaskContext ctx) {
-    // no-op
+    // 无操作
   }
 
   /**
@@ -76,11 +76,11 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
 
   /** doExecute 成功完成后调(异常路径不调)。默认 no-op。 */
   protected void after(SdkTaskContext ctx, SdkTaskResult result) {
-    // no-op
+    // 无操作
   }
 
   /** finally 资源 release(关连接 / 删临时文件 / 释 lease)。默认 no-op。 */
   protected void cleanup(SdkTaskContext ctx) {
-    // no-op
+    // 无操作
   }
 }

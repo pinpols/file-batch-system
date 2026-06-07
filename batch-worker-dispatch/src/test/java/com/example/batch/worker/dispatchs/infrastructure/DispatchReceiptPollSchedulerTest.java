@@ -86,7 +86,7 @@ class DispatchReceiptPollSchedulerTest {
             "tenant_id", "t1",
             "channel_code", "CH1",
             "external_request_id", "req-001"
-            // file_id intentionally absent
+            // 有意不放 file_id
             );
     when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
         .thenReturn(List.of(row));
@@ -159,7 +159,7 @@ class DispatchReceiptPollSchedulerTest {
             "external_request_id", "req-123");
     when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
         .thenReturn(List.of(row));
-    // Channel config without receipt_poll_url
+    // channel 配置没有 receipt_poll_url
     when(fileDispatchRepository.loadChannel("t1", "CH1"))
         .thenReturn(
             Map.of(

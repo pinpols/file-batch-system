@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # build-apps.sh - 一键构建本地应用镜像（默认启用 BuildKit）
-# Notes:
+# 说明：
 # 1) 默认使用 .env.local。
 # 2) 默认构建 docker-compose.yml + docker/compose/app.yml 的 apps + replica profile
 #    （console-api depends_on postgres-replica，缺 replica profile 会报 undefined service）。

@@ -57,7 +57,7 @@ class SqlAtomicHandlerTest {
   @Test
   @DisplayName("SELECT → resultSet + rowCount,success")
   void shouldReturnResultSet_whenSelect() throws Exception {
-    // arrange
+    // 准备
     stubRoleGateAllows();
     when(statement.execute(anyString())).thenReturn(true);
     ResultSet rs = mock(ResultSet.class);
@@ -69,11 +69,11 @@ class SqlAtomicHandlerTest {
     when(rs.next()).thenReturn(true, false);
     when(rs.getObject(1)).thenReturn(1);
 
-    // act
+    // 执行
     SdkTaskResult result =
         new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource).execute(ctx("SELECT 1"));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("rowCount", 1).containsEntry("truncated", false);
     @SuppressWarnings("unchecked")
@@ -85,17 +85,17 @@ class SqlAtomicHandlerTest {
   @Test
   @DisplayName("UPDATE(execute 返 false)→ affectedRows,success")
   void shouldReturnAffectedRows_whenUpdate() throws Exception {
-    // arrange
+    // 准备
     stubRoleGateAllows();
     when(statement.execute(anyString())).thenReturn(false);
     when(statement.getUpdateCount()).thenReturn(7);
 
-    // act
+    // 执行
     SdkTaskResult result =
         new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource)
             .execute(ctx("UPDATE t SET x=1"));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("affectedRows", 7L);
   }
@@ -103,11 +103,11 @@ class SqlAtomicHandlerTest {
   @Test
   @DisplayName("缺 sql 参数 → execute fail,message 含 'sql'")
   void shouldFail_whenSqlParamMissing() {
-    // act
+    // 执行
     SdkTaskResult result =
         new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource).execute(ctxNoSql());
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("sql");
   }
@@ -115,7 +115,7 @@ class SqlAtomicHandlerTest {
   @Test
   @DisplayName("forbidOsCapableRole=true 且角色闸命中 → SecurityException → execute fail")
   void shouldFail_whenRoleIsOsCapable() throws Exception {
-    // arrange
+    // 准备
     Statement probe = mock(Statement.class);
     ResultSet probeRs = mock(ResultSet.class);
     when(connection.createStatement()).thenReturn(probe);
@@ -123,11 +123,11 @@ class SqlAtomicHandlerTest {
     when(probeRs.next()).thenReturn(true);
     when(probeRs.getBoolean(1)).thenReturn(true);
 
-    // act
+    // 执行
     SdkTaskResult result =
         new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource).execute(ctx("SELECT 1"));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("OS-capable");
     verify(statement, never()).execute(anyString());
@@ -136,16 +136,16 @@ class SqlAtomicHandlerTest {
   @Test
   @DisplayName("forbidOsCapableRole=false → 跳过角色闸(不查 pg_roles)")
   void shouldSkipRoleGate_whenDisabled() throws Exception {
-    // arrange
+    // 准备
     when(connection.createStatement()).thenReturn(statement);
     when(statement.execute(anyString())).thenReturn(false);
     when(statement.getUpdateCount()).thenReturn(0);
     var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, false);
 
-    // act
+    // 执行
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     verify(connection, times(1)).createStatement();
   }
@@ -153,7 +153,7 @@ class SqlAtomicHandlerTest {
   @Test
   @DisplayName("maxResultRows 截断:超上限 → truncated=true,rowCount=上限")
   void shouldTruncate_whenRowsExceedMax() throws Exception {
-    // arrange
+    // 准备
     stubRoleGateAllows();
     when(statement.execute(anyString())).thenReturn(true);
     ResultSet rs = mock(ResultSet.class);
@@ -166,10 +166,10 @@ class SqlAtomicHandlerTest {
     when(rs.getObject(1)).thenReturn(9);
     var cfg = new SqlAtomicConfig("sql", 30, 2, 50, false, true);
 
-    // act
+    // 执行
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("SELECT * FROM big"));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("rowCount", 2).containsEntry("truncated", true);
   }
@@ -177,16 +177,16 @@ class SqlAtomicHandlerTest {
   @Test
   @DisplayName("setQueryTimeout 按配置被调用")
   void shouldSetQueryTimeout_fromConfig() throws Exception {
-    // arrange
+    // 准备
     stubRoleGateAllows();
     when(statement.execute(anyString())).thenReturn(false);
     when(statement.getUpdateCount()).thenReturn(0);
     var cfg = new SqlAtomicConfig("sql", 45, 10000, 50, false, true);
 
-    // act
+    // 执行
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     verify(statement).setQueryTimeout(45);
   }
