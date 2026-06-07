@@ -6,15 +6,13 @@ spring:
     lazy-initialization: true
   autoconfigure:
     exclude:
-      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
-  kafka:
-    bootstrap-servers: localhost:19092
+    - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+    - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+    - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+    - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+    - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+    - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+    - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user
@@ -48,10 +46,6 @@ management:
 batch:
   security:
     bypass-mode: true
-    kms:
-      default-key-ref: DEFAULT_TEST
-      keys:
-        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   console:
     instance-id: ${BATCH_CONSOLE_INSTANCE_ID:batch-console-api-local}
     security:
@@ -62,9 +56,9 @@ batch:
       default-tenant-id: ""
       allowed-tenants: []
       default-authorities:
-        - ROLE_ADMIN
-        - ROLE_AUDITOR
-        - ROLE_CONFIG_ADMIN
+      - ROLE_ADMIN
+      - ROLE_AUDITOR
+      - ROLE_CONFIG_ADMIN
       # 本地/测试环境关掉单点登录,允许 e2e harness 共享 storageState (BE-ISSUE-3)。
       # 生产由 application.yml 的环境变量 BATCH_CONSOLE_SINGLE_SESSION_ENABLED 控制,默认仍 true。
       single-session-enabled: false
@@ -126,10 +120,10 @@ batch:
       max-prompt-length: 4000
       max-response-length: 3000
       allowed-users:
-        - admin
+      - admin
       allowed-authorities:
-        - ROLE_ADMIN
-        - ROLE_AUDITOR
+      - ROLE_ADMIN
+      - ROLE_AUDITOR
     trigger:
       base-url: http://localhost:18081
     orchestrator:
