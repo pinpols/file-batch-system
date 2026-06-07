@@ -37,7 +37,12 @@ CREATE SCHEMA IF NOT EXISTS batch;
 -- DROP 瞬间把空间还给 OS,磁盘占用封顶在「保留窗口内的暂存量」,根治物理膨胀。
 -- 注:分区键 staged_at 必须进每个唯一约束 → PRIMARY KEY 加入 staged_at
 -- (row_seq BIGSERIAL 已全局唯一,加 staged_at 不削弱唯一性,仅满足分区约束)。
--- 已存在的非分区旧表升级走一次性脚本 migrate-process-staging-to-partitioned.sql。
+-- 已存在的非分区旧表(如 Flyway V75 在 e2e/平台库建的、或历史部署)先 DROP 再重建为分区表:
+-- process_staging 是瞬态 WAP 暂存表(稳态 0 存活行,行写于 COMMIT、清于 FEEDBACK),DROP 无业务
+-- 数据损失;且 PG 无法把非分区表原地转分区,CREATE IF NOT EXISTS 遇非分区旧表会让后续
+-- "CREATE ... PARTITION OF" 报错(非分区表不能加分区)。CASCADE 仅清其自身索引/分区。
+-- ⚠️ 运维勿在有 in-flight PROCESS 任务时跑本脚本(in-flight staging 会丢,任务幂等重跑)。
+DROP TABLE IF EXISTS batch.process_staging CASCADE;
 CREATE TABLE IF NOT EXISTS batch.process_staging (
     batch_key      TEXT        NOT NULL,
     row_seq        BIGSERIAL   NOT NULL,
