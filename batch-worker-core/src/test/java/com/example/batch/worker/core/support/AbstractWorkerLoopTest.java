@@ -24,6 +24,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.support.StaticApplicationContext;
 
 /**
  * AbstractWorkerLoop 单元测试： - ensureStarted() 是幂等的（仅注册一次） - 注册信息从 WorkerConfiguration 正确填充 -
@@ -123,6 +125,16 @@ class AbstractWorkerLoopTest {
     doThrow(new RuntimeException("network error")).when(workerRuntimeFacade).heartbeat(any());
 
     assertThatCode(() -> loop.doHeartbeat()).doesNotThrowAnyException();
+  }
+
+  @Test
+  void doHeartbeat_skipsAfterContextClosed() {
+    loop.onContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+
+    loop.doHeartbeat();
+
+    verify(workerRuntimeFacade, never()).start(any());
+    verify(workerRuntimeFacade, never()).heartbeat(any());
   }
 
   @Test

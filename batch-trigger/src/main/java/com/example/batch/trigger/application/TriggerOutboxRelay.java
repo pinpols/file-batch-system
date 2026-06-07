@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -20,6 +21,7 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -71,6 +73,8 @@ public class TriggerOutboxRelay {
   private final AtomicLong pendingEvents = new AtomicLong();
   private final AtomicLong stalePublishingEvents = new AtomicLong();
   private final AtomicBoolean started = new AtomicBoolean(false);
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
+  private volatile ScheduledFuture<?> scheduledTask;
   private Counter giveUpCounter;
 
   public TriggerOutboxRelay(
@@ -127,8 +131,9 @@ public class TriggerOutboxRelay {
             .tags("result", "fail")
             .publishPercentiles(0.5, 0.95, 0.99)
             .register(meterRegistry);
-    scheduler.scheduleWithFixedDelay(
-        this::poll, Duration.ofMillis(properties.getPollIntervalMillis()));
+    scheduledTask =
+        scheduler.scheduleWithFixedDelay(
+            this::poll, Duration.ofMillis(properties.getPollIntervalMillis()));
     log.info(
         "TriggerOutboxRelay 已启动:poll={}ms batch={} backoff_max={}s",
         properties.getPollIntervalMillis(),
@@ -136,6 +141,18 @@ public class TriggerOutboxRelay {
         MAX_BACKOFF_SECONDS);
     // 启动末尾顺手跑一次运行态审计(原 auditOnReady 监听器合并到这里,串行,无 TOCTOU)
     runStartupAudit();
+  }
+
+  @EventListener(ContextClosedEvent.class)
+  public void stopOnContextClosed(ContextClosedEvent event) {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
+    ScheduledFuture<?> task = scheduledTask;
+    if (task != null) {
+      task.cancel(true);
+    }
+    log.info("TriggerOutboxRelay stopping: cancelled scheduled polling");
   }
 
   private void runStartupAudit() {
@@ -165,10 +182,16 @@ public class TriggerOutboxRelay {
 
   /** 单元测试可直接调用本方法跑一轮(不走自调度循环)。 */
   public void poll() {
+    if (stopping.get()) {
+      return;
+    }
     if (!running.compareAndSet(false, true)) {
       return;
     }
     try {
+      if (stopping.get()) {
+        return;
+      }
       lockingTaskExecutor.executeWithLock(
           (LockingTaskExecutor.Task) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
@@ -178,15 +201,40 @@ public class TriggerOutboxRelay {
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
     } catch (Throwable t) {
+      if (stopping.get() && isRedisStopping(t)) {
+        log.info("TriggerOutboxRelay poll skipped during shutdown: {}", t.getMessage());
+        return;
+      }
       log.error("TriggerOutboxRelay 异常", t);
     } finally {
       running.set(false);
     }
   }
 
+  private static boolean isRedisStopping(Throwable throwable) {
+    Throwable current = throwable;
+    while (current != null) {
+      String message = current.getMessage();
+      if (message != null && message.contains("LettuceConnectionFactory is STOPPING")) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
   private void pollLocked() {
+    if (shouldStopPolling()) {
+      return;
+    }
     resetStalePublishing();
+    if (shouldStopPolling()) {
+      return;
+    }
     sampleBacklog();
+    if (shouldStopPolling()) {
+      return;
+    }
     Instant now = BatchDateTimeSupport.utcNow();
     List<TriggerOutboxEventEntity> batch =
         mapper.selectPending(
@@ -199,6 +247,9 @@ public class TriggerOutboxRelay {
     }
     log.debug("TriggerOutboxRelay 本轮取 {} 条待发", batch.size());
     for (TriggerOutboxEventEntity event : batch) {
+      if (shouldStopPolling()) {
+        return;
+      }
       try {
         publishOne(event);
       } catch (Throwable t) {
@@ -228,6 +279,9 @@ public class TriggerOutboxRelay {
 
   /** R3-P1-3: 主逻辑提取，外层 publishOne 负责耗时记录 */
   private boolean publishOneInternal(TriggerOutboxEventEntity event) {
+    if (shouldStopPolling()) {
+      return false;
+    }
     int claimed =
         mapper.markPublishing(
             event.getId(),
@@ -261,6 +315,9 @@ public class TriggerOutboxRelay {
     String messageKey = event.getTenantId() + ":" + event.getRequestId();
     TriggerEventPublisher.PublishResult result =
         publisher.publish(event.getTopic(), messageKey, envelope, event.getTraceId());
+    if (shouldStopPolling()) {
+      return false;
+    }
     if (result.success()) {
       mapper.markPublished(event.getId(), OutboxPublishStatus.PUBLISHED.code());
       return true;
@@ -295,6 +352,10 @@ public class TriggerOutboxRelay {
           retryAt);
       return false;
     }
+  }
+
+  private boolean shouldStopPolling() {
+    return stopping.get() || Thread.currentThread().isInterrupted();
   }
 
   /** 指数退避:attempt=1→2s, 2→4s, 3→8s, ..., 上限 60s。 */

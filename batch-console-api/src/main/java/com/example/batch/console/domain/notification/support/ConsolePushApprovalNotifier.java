@@ -10,8 +10,11 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,6 +33,7 @@ public class ConsolePushApprovalNotifier {
   private final ConsolePushApprovalNotificationMapper notificationMapper;
   private final ConsolePushSender pushSender;
 
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private ScheduledExecutorService scheduler;
 
   @PostConstruct
@@ -58,22 +62,45 @@ public class ConsolePushApprovalNotifier {
         properties.getApprovalNotify().getBatchSize());
   }
 
+  @EventListener(ContextClosedEvent.class)
+  void stopOnContextClosed(ContextClosedEvent event) {
+    stopScheduler("context-closed");
+  }
+
   @PreDestroy
   void stop() {
+    stopScheduler("pre-destroy");
+  }
+
+  private void stopScheduler(String source) {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
     if (scheduler != null) {
+      log.info("[push] ConsolePushApprovalNotifier stopping: source={}", source);
       scheduler.shutdownNow();
     }
   }
 
   void pollSafely() {
+    if (stopping.get()) {
+      return;
+    }
     try {
       pollOnce();
     } catch (RuntimeException e) {
+      if (stopping.get() && isShutdownNoise(e)) {
+        log.info("[push] approval-notify poll skipped during shutdown: {}", e.getMessage());
+        return;
+      }
       log.error("[push] approval-notify poll failed", e);
     }
   }
 
   void pollOnce() {
+    if (stopping.get()) {
+      return;
+    }
     List<PendingApprovalNotification> pending =
         notificationMapper.findPending(
             properties.getApprovalNotify().getLookbackMinutes(),
@@ -82,6 +109,9 @@ public class ConsolePushApprovalNotifier {
       return;
     }
     for (PendingApprovalNotification p : pending) {
+      if (stopping.get()) {
+        return;
+      }
       ConsolePushApprovalNotificationEntity record = new ConsolePushApprovalNotificationEntity();
       record.setTenantId(p.getTenantId());
       record.setApprovalNo(p.getApprovalNo());
@@ -137,5 +167,20 @@ public class ConsolePushApprovalNotifier {
 
   private static String truncate(String s, int max) {
     return s.length() <= max ? s : s.substring(0, max) + "…";
+  }
+
+  private static boolean isShutdownNoise(Throwable throwable) {
+    Throwable current = throwable;
+    while (current != null) {
+      String message = current.getMessage();
+      if (message != null
+          && (message.contains("has been closed")
+              || message.contains("Connection pool shut down")
+              || message.contains("Interrupted"))) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 }

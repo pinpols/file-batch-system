@@ -1,10 +1,14 @@
 package com.example.batch.trigger.wheel;
 
+import java.util.Map;
+import java.util.Properties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.quartz.autoconfigure.SchedulerFactoryBeanCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
 /**
@@ -32,15 +36,30 @@ public class QuartzPauseWhenWheelEnabledCustomizer {
   private String schedulerImpl;
 
   @Bean
+  @Order(Ordered.LOWEST_PRECEDENCE)
   public SchedulerFactoryBeanCustomizer pauseQuartzWhenWheelEnabled() {
     return (SchedulerFactoryBean factory) -> {
       if ("wheel".equalsIgnoreCase(schedulerImpl)) {
         factory.setAutoStartup(false);
+        factory.setDataSource(null);
+        factory.setTransactionManager(null);
+        factory.setQuartzProperties(wheelModeQuartzProperties());
         log.warn(
             "scheduler-impl=wheel — Quartz Scheduler autoStartup disabled; wheel scheduler is the"
                 + " active fire engine. To revert: set BATCH_TRIGGER_SCHEDULER_IMPL=quartz and"
                 + " restart trigger.");
       }
     };
+  }
+
+  private static Properties wheelModeQuartzProperties() {
+    Properties properties = new Properties();
+    properties.putAll(
+        Map.of(
+            "org.quartz.jobStore.class",
+            "org.quartz.simpl.RAMJobStore",
+            "org.quartz.threadPool.threadCount",
+            "1"));
+    return properties;
   }
 }

@@ -8,6 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -60,11 +62,42 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
         CHANNEL_KEY);
   }
 
+  @EventListener(ContextClosedEvent.class)
+  void stopOnContextClosed(ContextClosedEvent event) {
+    stopContainer("context-closed");
+  }
+
   @PreDestroy
   void shutdown() {
-    running.set(false);
+    stopContainer("pre-destroy");
+  }
+
+  private void stopContainer(String source) {
+    if (!running.compareAndSet(true, false)) {
+      return;
+    }
     if (listenerContainer != null) {
-      listenerContainer.stop();
+      log.info(
+          "console realtime redis pubsub consumer stopping: instanceId={}, source={}",
+          instanceIdProvider.instanceId(),
+          source);
+      try {
+        listenerContainer.stop();
+      } catch (Exception exception) {
+        if (isShutdownNoise(exception)) {
+          log.info(
+              "console realtime pubsub consumer stop skipped during shutdown: instanceId={},"
+                  + " reason={}",
+              instanceIdProvider.instanceId(),
+              exception.getMessage());
+        } else {
+          log.warn(
+              "console realtime pubsub consumer stop failed: instanceId={}, reason={}",
+              instanceIdProvider.instanceId(),
+              exception.getMessage(),
+              exception);
+        }
+      }
       try {
         listenerContainer.destroy();
       } catch (Exception exception) {
@@ -136,11 +169,34 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
   }
 
   private ErrorHandler logErrorHandler() {
-    return throwable ->
-        log.error(
-            "console realtime pubsub listener container failed: channel={}, reason={}",
+    return throwable -> {
+      if (!running.get() && isShutdownNoise(throwable)) {
+        log.info(
+            "console realtime pubsub listener skipped during shutdown: channel={}, reason={}",
             CHANNEL_KEY,
-            throwable.getMessage(),
-            throwable);
+            throwable.getMessage());
+        return;
+      }
+      log.error(
+          "console realtime pubsub listener container failed: channel={}, reason={}",
+          CHANNEL_KEY,
+          throwable.getMessage(),
+          throwable);
+    };
+  }
+
+  private static boolean isShutdownNoise(Throwable throwable) {
+    Throwable current = throwable;
+    while (current != null) {
+      String message = current.getMessage();
+      if (message != null
+          && (message.contains("LettuceConnectionFactory is STOPPING")
+              || message.contains("has been closed")
+              || message.contains("Connection pool shut down"))) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 }

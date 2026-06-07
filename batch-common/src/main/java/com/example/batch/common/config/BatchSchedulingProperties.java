@@ -19,6 +19,15 @@ public class BatchSchedulingProperties {
   private String threadNamePrefix = "batch-scheduler-";
 
   /**
+   * Spring {@code SmartLifecycle} phase for the shared scheduler.
+   *
+   * <p>Spring stops higher phases first. Redis LettuceConnectionFactory defaults to phase 0, so
+   * keeping the scheduler at a high phase makes scheduled tasks stop and drain before Redis
+   * connections are destroyed.
+   */
+  private int phase = 1_073_741_823;
+
+  /**
    * 服务关闭时，共享调度器是否等待正在执行的任务完成。
    *
    * <p>默认 true 避免 archive / outbox / snapshot 类长任务被强杀留下"删一半"状态。配合 {@link #awaitTerminationSeconds}

@@ -23,6 +23,8 @@ import java.util.Optional;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.support.StaticApplicationContext;
 
 class WebhookDeliveryRelayTest {
 
@@ -30,6 +32,7 @@ class WebhookDeliveryRelayTest {
   private ConsoleWebhookSubscriptionMapper subscriptionRepository;
   private WebhookDispatcher dispatcher;
   private SimpleMeterRegistry meterRegistry;
+  private LockingTaskExecutor lockExecutor;
   private WebhookDeliveryRelay relay;
 
   @BeforeEach
@@ -38,7 +41,7 @@ class WebhookDeliveryRelayTest {
     subscriptionRepository = mock(ConsoleWebhookSubscriptionMapper.class);
     dispatcher = mock(WebhookDispatcher.class);
     meterRegistry = new SimpleMeterRegistry();
-    LockingTaskExecutor lockExecutor = mock(LockingTaskExecutor.class);
+    lockExecutor = mock(LockingTaskExecutor.class);
     doAnswer(
             inv -> {
               LockingTaskExecutor.Task t = inv.getArgument(0);
@@ -59,6 +62,31 @@ class WebhookDeliveryRelayTest {
             lockExecutor,
             meterRegistry,
             props);
+  }
+
+  @Test
+  void shouldSkipPollAfterContextClosedWithoutTakingLock() throws Throwable {
+    relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+
+    relay.poll();
+
+    verify(lockExecutor, never()).executeWithLock(any(LockingTaskExecutor.Task.class), any());
+    verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
+  }
+
+  @Test
+  void shouldDowngradeRedisStoppingDuringShutdown() throws Throwable {
+    doAnswer(
+            inv -> {
+              relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+              throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
+            })
+        .when(lockExecutor)
+        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+
+    relay.poll();
+
+    verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
   }
 
   @Test

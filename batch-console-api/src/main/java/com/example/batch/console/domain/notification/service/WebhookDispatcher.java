@@ -25,12 +25,15 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -70,6 +73,7 @@ public class WebhookDispatcher {
   // 5.11: 有界队列 + AbortPolicy(原 CallerRunsPolicy 会反压 Tomcat 请求线程,与 WebhookDeliveryRelay
   //   持久化补偿重叠,放弃即丢:实际是入队前已写 PENDING 日志,被拒任务由 relay 兜底)
   private static final AtomicInteger THREAD_SEQ = new AtomicInteger();
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
 
   private final ExecutorService executor =
       new ThreadPoolExecutor(
@@ -93,8 +97,20 @@ public class WebhookDispatcher {
       String cursor,
       Object data,
       Instant emittedAt) {
+    if (stopping.get()) {
+      log.info(
+          "webhook dispatch skipped during shutdown: tenant={}, eventType={}", tenantId, eventType);
+      return;
+    }
     List<PendingWebhookDelivery> pendingDeliveries =
         persistPendingDeliveries(tenantId, eventType, stream, cursor, data, emittedAt);
+    if (stopping.get()) {
+      log.info(
+          "webhook dispatch persisted but skipped enqueue during shutdown: tenant={}, eventType={}",
+          tenantId,
+          eventType);
+      return;
+    }
     try {
       for (PendingWebhookDelivery pending : pendingDeliveries) {
         executor.submit(() -> deliverPersisted(pending));
@@ -108,8 +124,16 @@ public class WebhookDispatcher {
     }
   }
 
+  @EventListener(ContextClosedEvent.class)
+  public void shutdownOnContextClosed(ContextClosedEvent event) {
+    shutdown();
+  }
+
   @PreDestroy
   public void shutdown() {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
     executor.shutdown();
     try {
       if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {

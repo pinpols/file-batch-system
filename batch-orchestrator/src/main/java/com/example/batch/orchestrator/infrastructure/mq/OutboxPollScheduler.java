@@ -14,6 +14,7 @@ import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignmentPro
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
@@ -277,7 +278,16 @@ public class OutboxPollScheduler {
     if (executor.getScheduledExecutor().isShutdown()) {
       return;
     }
-    executor.schedule(this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(nextDelay));
+    try {
+      executor.schedule(
+          this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(nextDelay));
+    } catch (RejectedExecutionException ex) {
+      if (gracefulShutdown.isDraining() || executor.getScheduledExecutor().isShutdown()) {
+        log.debug("Outbox 下次轮询跳过：调度器正在关闭");
+        return;
+      }
+      throw ex;
+    }
   }
 
   /**
