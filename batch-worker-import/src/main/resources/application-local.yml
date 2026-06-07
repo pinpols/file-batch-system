@@ -61,7 +61,8 @@ batch:
         streaming-enabled: true
         page-size: 1000
         fetch-size: 1000
-        chunk-size: 500
+        # 2026-06 调优:与 application.yml 默认对齐(瓶颈在 app/JDBC 往返+commit 次数,非 PG 写能力)
+        chunk-size: 2000
       skip:
         enabled: false
         threshold-mode: ABSOLUTE
