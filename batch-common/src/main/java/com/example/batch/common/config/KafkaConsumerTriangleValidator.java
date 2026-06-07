@@ -34,7 +34,8 @@ public class KafkaConsumerTriangleValidator {
   @Value("${spring.kafka.consumer.properties.heartbeat.interval.ms:15000}")
   private int heartbeatIntervalMs;
 
-  @Value("${spring.kafka.consumer.properties.max.poll.interval.ms:300000}")
+  @Value(
+      "${spring.kafka.consumer.max-poll-interval-ms:${spring.kafka.consumer.properties.max.poll.interval.ms:300000}}")
   private int maxPollIntervalMs;
 
   @Value(

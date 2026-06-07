@@ -14,7 +14,7 @@ public class SqlTransformComputeSecurityProperties {
   private List<String> allowedSchemas = new ArrayList<>(List.of("biz"));
 
   /** 查询与写入语句超时时间（秒）。 */
-  private int queryTimeoutSeconds = 60;
+  private int queryTimeoutSeconds = 900;
 
   /** 拒绝 {@code SELECT *} / {@code SELECT table.*}，要求配置显式列清单。 */
   private boolean forbidSelectStar = true;

@@ -323,9 +323,13 @@ WHERE tenant_id = 'default-tenant' AND settlement_no LIKE '${RUN_ID}-SET-%';
 DELETE FROM biz.settlement_batch
 WHERE tenant_id = 'default-tenant' AND batch_no = '${RUN_ID}-SETTLEMENT';
 DELETE FROM biz.process_account_summary
-WHERE tenant_id = 'default-tenant' AND account_id LIKE 'LTACCT-%';
+WHERE tenant_id = 'default-tenant'
+  AND (account_id LIKE 'LTACCT-%' OR account_id LIKE '${RUN_ID}-ACCT-%');
+DELETE FROM biz.process_event_copy
+WHERE tenant_id = 'default-tenant' AND account_id LIKE '${RUN_ID}-ACCT-%';
 DELETE FROM biz.process_order_event
-WHERE tenant_id = 'default-tenant' AND event_id BETWEEN 9100000000 AND 9100004999;
+WHERE tenant_id = 'default-tenant'
+  AND (event_id BETWEEN 9100000000 AND 9100004999 OR account_id LIKE '${RUN_ID}-ACCT-%');
 COMMIT;
 SQL
 
