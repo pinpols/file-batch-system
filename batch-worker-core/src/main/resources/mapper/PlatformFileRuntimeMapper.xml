@@ -159,13 +159,28 @@
     </select>
 
     <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        with step_run_lock as (
+            select pg_advisory_xact_lock(
+                hashtextextended(
+                    concat('pipeline_step_run:', #{pipelineInstanceId}, ':', #{stepCode}),
+                    0
+                )
+            )
+        ),
+        next_seq as (
+            select coalesce(max(run_seq), 0) + 1 as run_seq
+            from batch.pipeline_step_run, step_run_lock
+            where pipeline_instance_id = #{pipelineInstanceId}
+              and step_code = #{stepCode}
+        )
         insert into batch.pipeline_step_run (
             pipeline_instance_id, step_code, stage_code, run_seq,
             step_status, input_summary, started_at
-        ) values (
-            #{pipelineInstanceId}, #{stepCode}, #{stageCode}, #{runSeq},
-            #{stepStatus}, #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
         )
+        select
+            #{pipelineInstanceId}, #{stepCode}, #{stageCode}, next_seq.run_seq,
+            #{stepStatus}, #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+        from next_seq
     </insert>
 
     <update id="finishStepRun">
