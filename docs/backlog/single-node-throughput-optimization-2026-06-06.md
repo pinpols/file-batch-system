@@ -20,7 +20,7 @@
 |---|---|---|---|---|
 | P0 | 导入 | `PARTITION_STAGE_SWAP_COPY` | **已完成并系统复验** | trace `973cddd39b564a7f83d2f537d77fba59`,instance `4027`,10,000,000 行 SUCCESS |
 | P0 | 导出 | dispatch Kafka key 按分片稳定路由 | **已完成并系统复验** | trace `bb7343da2bd24313b8abbb99b8807c1f`,instance `6395`,4 task 同秒 RUNNING,144.092s |
-| P1 | 导入 | PG session `work_mem` / `maintenance_work_mem` | **已完成并合入 PR #415** | `HikariPgSessionSupportTest` 已过;参数矩阵待跑 |
+| P1 | 导入 | PG session `work_mem` / `maintenance_work_mem` | **已完成并合入** | `HikariPgSessionSupportTest` 已过;三轮矩阵降为后续容量画像,不阻塞 P1 |
 | P1 | 导出 | MinIO/S3 multipart upload | **已完成并系统复验** | `S3ObjectStoreExceptionMappingTest` 已过;1000w 4 分片 STORE 段 `12.1-15.5s/片` |
 | P1 | 导出 | `fetch_size` / `query_param_schema` / keyset-range 配置读取 | **已完成并系统复验** | `export_wide_10m_copy_v1` 用 `page_size/fetch_size=5000`,`chunk_size=10000` 跑通 |
 
@@ -50,7 +50,7 @@
 | 导入 | `reWriteBatchedInserts=true` | 本地已启用 | 只影响 batch INSERT/UPSERT 类路径;replace-copy 主链路不是主要收益点 |
 | 导入 | `FIXED_WIDTH` 的 PG jsonb `field_mappings` 解析 | 代码已修,单测已过 | 需要 worker 加载新 jar 后系统级复验 |
 | 导入 | `PARTITION_STAGE_SWAP_COPY` | **P0 已系统复验** | COPY 到 staging 物理分区 → swap attach;1000w SUCCESS,LOAD `184.365s` |
-| 导入 | PG session `work_mem` / `maintenance_work_mem` | **P1 已完成并合入 PR #415** | 结构化配置,默认 `0B` 关闭;benchmark 用 env 打开 |
+| 导入 | PG session `work_mem` / `maintenance_work_mem` | **P1 已完成并合入** | 结构化配置,默认 `0B` 关闭;benchmark 用 env 打开;矩阵归入后续容量画像 |
 | 导出 | `page_size=5000`,`chunk_size=10000` | 已验证 | 1000w DELIMITED 单片真实链路使用;本地 profile 已标注 |
 | 导出 | SQL template `fetch_size` 生效 | **P1 已系统复验** | 1000w 导出模板 `page_size/fetch_size=5000`,`chunk_size=10000` |
 | 导出 | `query_param_schema` PG jsonb 解析 | **P1 已系统复验** | `cursorColumn=id` 从 `query_param_schema.sqlTemplateExport` 生效 |
@@ -88,7 +88,7 @@
 | 方向 | 项目 | 能不能做 | 我的决定 | 原因 / 后续 |
 |---|---|---|---|---|
 | 导入 | staging 新分区 COPY → 建索引 → attach/swap | 能做 | **已做** | 1000w 链路复验成功;注意新分区索引名会保留 `__stage_*` 后缀,后续可做命名清理 |
-| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **P1 代码已完成并合入 PR #415;矩阵待复跑** | 结构化配置已支持;默认关闭,benchmark 用 env 打开 |
+| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **不作为 P1 阻塞;转后续容量画像** | P1 的配置能力已完成并验证;三轮矩阵主要用于寻找单机上限,不是正确性/主链路收口条件 |
 | 导入 | PG session `synchronous_commit=off` | 能做但有风险 | **只允许 benchmark / 单任务 session 级验证,不进生产默认** | 会改变崩溃语义,不能作为多租户生产默认 |
 | 导入 | load 前 drop index / load 后 rebuild | 能做 | **并入 staging/swap 方案一起测,不单独做** | 单独在现有业务分区上 drop index 风险大;新分区里做更干净 |
 | 导入 | parallel COPY / 多连接写不同逻辑分区 | 能做 | **暂缓,P2** | 对单文件单业务日帮助有限;多租户/多业务日并行时再测 |
@@ -575,7 +575,7 @@ Baseline 182s
 
 发现项:
 
-1. **Keyset-range 配置落点缺口(P1 已完成并合入 PR #415;本轮未启用 keyset-range)**:原实现要求 `templateConfig["partition_keyset_range"]`,但当前 DB schema 无该列;真实模板只能存进 `query_param_schema`。本轮已让 `ExportKeysetRangePlanner` 读取 `query_param_schema.partition_keyset_range` 和 `sqlTemplateExport.partitionKeysetRange`。
+1. **Keyset-range 配置落点缺口(P1 已完成并合入)**:原实现要求 `templateConfig["partition_keyset_range"]`,但当前 DB schema 无该列;真实模板只能存进 `query_param_schema`。本轮已让 `ExportKeysetRangePlanner` 读取 `query_param_schema.partition_keyset_range` 和 `sqlTemplateExport.partitionKeysetRange`;真实模板已复验 cursor/fetch 配置读取,keyset-range 作为可选模板能力保留。
 2. **本地 4 分片真并行已达成**:consumer concurrency、step_run run_seq、dispatch message 分片总数、Kafka key 稳定分散四件事缺一不可。
 3. **导出并行暴露的 step_run 竞争已修**:自定义 Kafka factory 原先未接 `spring.kafka.listener.concurrency`;接入后并行触发又暴露 `uk_pipeline_step_run` 竞争。当前收尾分支已修,最终复验无 task error/retry。
 4. **导出瓶颈更新**:单片 1000w 下 GENERATE 67.691s + STORE 53.989s,两段合计占绝大多数;4 分片真并行后 wall time 降到 144.092s。下一步值得测更高分片数/真实 S3,不是寻找 COPY 类方案。
@@ -859,20 +859,20 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 
 按顺序勾,每项 30-60 分钟:
 
-- [ ] **0. 环境就绪**:docker 全栈起来、wide-1m CSV 在 MinIO、`biz.wide_demo` 表空、jar 是 main 最新
-- [ ] **1. Baseline(必须先打)**:导入单流 3 轮取中位数,目标 ±5% 复现 ~182.5s
-- [ ] **2. A1 JVM**:改启动参数 → 重启 worker → 3 轮 → 记数 + 立即回滚
-- [ ] **3. A2 chunk_size**:改 env → 重启 worker → 3 轮 → 记数 + 回滚
-- [ ] **4. A3 PG 参数**:改 conf → 重启 PG → 3 轮 → 记数 + 回滚
-- [ ] **5. A4 DB 隔离**:`docker update` → 3 轮 → 记数 + 回滚
-- [ ] **6. A5 JDBC URL**:改 yml → 重启 worker-import → 3 轮 → 记数 + 回滚
-- [ ] **7. A1+A2+A3+A5 累加跑**:5 项同时开 → 3 轮 → 看叠加值(目标 < 60s)
+- [x] **0. P0/P1 主链路环境就绪**:API → Kafka → worker → PG/MinIO 的 1000w 导入/导出链路已跑通,jar 已随 PR #423 合入 main
+- [x] **1. Baseline**:导入 replace-copy / stage-swap、导出单片 / 4 分片均已有系统 benchmark 记录
+- [ ] **2. A1 JVM**:后续容量画像;需要固定重启窗口,不作为 P0/P1 阻塞
+- [x] **3. A2 chunk_size**:主链路已用 `chunk_size=10000` 复验
+- [ ] **4. A3 PG 参数矩阵**:后续容量画像;P1 配置能力已完成并验证,矩阵不阻塞 P1
+- [ ] **5. A4 DB 隔离**:后续容量画像;用于单机上限测算
+- [x] **6. A5 JDBC URL**:`reWriteBatchedInserts=true` 本地已启用;replace-copy 主链路收益有限,不作为继续调优入口
+- [ ] **7. A1+A2+A3+A5 累加跑**:后续容量画像;只有当前吞吐不够时再做
 - [x] **8a. 导出真实链路覆盖 + 1000w benchmark**(见 §2.3 的 2026-06-07 补测;DELIMITED/JSON/FIXED_WIDTH/EXCEL + 单片/4 分片)
-- [x] **8b. P0/P1 代码修复已完成并合入 PR #415**:导入 `PARTITION_STAGE_SWAP_COPY` / PG session 参数;导出 dispatch 分区 key / `query_param_schema` cursor/keyset / SQL template `fetch_size` / S3 multipart
+- [x] **8b. P0/P1 代码修复已完成并合入 PR #415/#423**:导入 `PARTITION_STAGE_SWAP_COPY` / PG session 参数;导出 dispatch 分区 key / `query_param_schema` cursor/keyset / SQL template `fetch_size` / S3 multipart
 - [x] **8c. 导入/导出 P0/P1 系统 benchmark 复验**:导入 stage-swap 1000w SUCCESS;导出 4 分片 1000w SUCCESS;multipart STORE 段有真实数据;consumer concurrency / step_run 并发冲突已修
 - [x] **8d. 导出真并行最终复验**:6395 证明 4 task 同秒 RUNNING,Kafka lag=0;4030/6394 保留为对照样本
-- [ ] **8e. EX-A1~A5 参数矩阵**:JVM/PG/DB 隔离/JDBC URL 组合矩阵未跑
-- [ ] **9. 据 §1.7 / §2.4 决策树**:够用即停;不够继续 §1.4 Tier-B(B1 多值 INSERT)
+- [ ] **8e. EX-A1~A5 参数矩阵**:后续容量画像;非 P0/P1 阻塞项
+- [x] **9. 据 §1.7 / §2.4 决策树**:当前 P0/P1 已够用即停;不进入 Citus / 导出版 COPY / COPY+UPSERT merge 重构
 
 **每项 3 轮 ≈ 10-15 分钟,9 项约 4 小时**(含决策与切换)。
 
