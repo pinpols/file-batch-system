@@ -95,7 +95,9 @@ batch:
           notify-channels:
   datasource:
     business:
-      url: jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified
+      # P1-17 reWriteBatchedInserts=true 与 batch-defaults.yml:275 对齐(Import LOAD batchUpdate 收益最大);
+      # 本地 profile 覆盖 URL 加 stringtype 时勿再丢该参数。
+      url: jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified&reWriteBatchedInserts=true
       username: batch_user
       password: batch_pass_123
       schema: biz
