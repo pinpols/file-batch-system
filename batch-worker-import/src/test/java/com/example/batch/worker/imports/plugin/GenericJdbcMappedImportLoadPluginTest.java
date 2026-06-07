@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.plugin.ImportLoadContext;
+import com.example.batch.worker.imports.jdbc.ImportLoadStrategy;
 import com.example.batch.worker.imports.jdbc.JdbcMappedImportSpec;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,9 @@ class GenericJdbcMappedImportLoadPluginTest {
         List.of("tenant_id", "customer_no"),
         Map.of(),
         defaultRegion,
-        allowedRegions);
+        allowedRegions,
+        ImportLoadStrategy.BATCH_UPSERT,
+        List.of());
   }
 
   @Test

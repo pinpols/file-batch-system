@@ -20,6 +20,7 @@ import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration.FileProcessing;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStageResult;
+import com.example.batch.worker.imports.plugin.GenericJdbcMappedImportLoadPlugin;
 import com.example.batch.worker.imports.plugin.ImportLoadPluginRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
@@ -52,6 +53,7 @@ class LoadStepCheckpointPrecheckTest {
 
   @Mock private PlatformFileRuntimeRepository runtimeRepository;
   @Mock private ImportLoadPlugin plugin;
+  @Mock private GenericJdbcMappedImportLoadPlugin jdbcMappedPlugin;
   @Mock private ProcessingPositionStore positionStore;
 
   private ImportLoadPluginRegistry registry;
@@ -153,6 +155,35 @@ class LoadStepCheckpointPrecheckTest {
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONFIG_INVALID");
     verify(plugin, never()).loadChunk(any(), any());
+  }
+
+  @Test
+  @DisplayName("enabled=true + PARTITION_REPLACE_COPY:拒跑,不清分区不进位点")
+  void enabled_partitionReplaceCopy_rejectsCheckpointResume() throws Exception {
+    checkpointProps.setEnabled(true);
+    when(jdbcMappedPlugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+    when(jdbcMappedPlugin.isPartitionReplaceCopy(any())).thenReturn(true);
+    registry = new ImportLoadPluginRegistry(List.of(jdbcMappedPlugin));
+    loadStep =
+        new LoadStep(
+            registry,
+            runtimeRepository,
+            workerConfig,
+            objectMapper,
+            checkpointProps,
+            positionStore);
+
+    Path validated = writeNdjson(List.of(row("C1")));
+    ImportJobContext ctx = streamingContext(validated);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONFIG_INVALID");
+    verify(jdbcMappedPlugin, never()).preparePartitionReplace(any());
+    verify(jdbcMappedPlugin, never()).loadChunk(any(), any());
+    verify(positionStore, never()).load(any(), org.mockito.ArgumentMatchers.anyLong(), any());
   }
 
   @Test
