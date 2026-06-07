@@ -1,6 +1,6 @@
 # Worker 吞吐优化与 Benchmark 总控计划
 
-> 状态:**import/export P0/P1 已合入;process/dispatch/atomic/trigger benchmark 脚本已补并完成小基线 RUN_ID `ctlw-20260607202126`**。
+> 状态:**import/export P0/P1 已合入;process/dispatch/atomic/trigger 小基线已完成;真并行压测已暴露 stale CREATED 恢复缺口并补代码**。
 > 日期:2026-06-07
 > 范围:`batch-worker-import`,`batch-worker-export`,`batch-worker-process`,`batch-worker-dispatch`,`batch-worker-atomic`,`batch-trigger`,`batch-orchestrator`
 > 关联:
@@ -11,9 +11,10 @@
 
 1. **import/export 代码侧 P0/P1 已完成并合入**。剩余不是代码开发,而是部署/重载 worker 后的系统级 benchmark 复验和参数矩阵。
 2. **process/dispatch/atomic/trigger 已完成小基线**。本轮覆盖真实 API / trigger / orchestrator / Kafka / worker / DB 链路,错误率 0%。
-3. **当前还不是容量上限结论**。1w/10w task storm、process 1000w staging、Kafka lag、失败重试/背压需要独立高压或故障注入窗口。
-4. **真并行状态需要拆开看**。trigger 写压和 scheduler 读压已并行;process/dispatch/atomic 本轮是模块顺序执行、模块内并发 `USERS=2`,跨模块同时加压未做。
-5. 所有 benchmark 都走正常系统链路:API / trigger / orchestrator / Kafka / worker / DB,不走前台模拟;代码完成状态和 benchmark 结果分开记录。
+3. **真并行入口已补并已跑**。`CONTROL_PLANE_MODE=parallel` 同时发 process/dispatch/atomic/trigger launch 和 scheduler read。
+4. **真并行暴露 P0 缺口**。RUN_ID `ctlw-20260607204120` 有 21 个实例停留 `CREATED + ACCEPTED + zero partition/task`;Kafka lag 为 0,worker 在线空闲,指向 launch T1/T2 拆分后的恢复缺口。代码已补 `StaleCreatedLaunchRecoveryScheduler`,待重启/重载 orchestrator 后复验。
+5. **当前还不是容量上限结论**。1w/10w task storm、process 1000w staging、失败重试/背压需要独立高压或故障注入窗口。
+6. 所有 benchmark 都走正常系统链路:API / trigger / orchestrator / Kafka / worker / DB,不走前台模拟;代码完成状态和 benchmark 结果分开记录。
 
 ## 完成状态
 
@@ -21,10 +22,10 @@
 |---|---|---|---|
 | import | P0/P1 已完成并合入 PR #418 | 1000w replace-copy 已跑;stage-swap/参数矩阵待复验 | 代码完成,复验待跑 |
 | export | P0/P1 已完成并合入 PR #418 | 1000w 单片/4 分片正确性已跑;并行/multipart收益待复验 | 代码完成,复验待跑 |
-| process | 暂无 worker 代码改动;benchmark 入口已补 | 小基线已跑:`2/2 SUCCESS`,P95 端到端 0.655s | 大数据 staging/聚合待跑 |
-| dispatch | 暂无 worker 代码改动;benchmark 入口已补 | 小基线已跑:`2/2 SUCCESS`,P95 端到端 2.818s | 1w/10w task storm 待跑 |
-| atomic | 暂无 worker 代码改动;benchmark 入口已补 | SQL executor 小基线已跑:`2/2 SUCCESS`,P95 端到端 3.065s | stored-proc/http/shell 可选矩阵待跑 |
-| trigger | 暂无 worker 代码改动;benchmark 入口已补 scheduler sampler | 30 launch + 60 read 全成功,POST P95 77ms | 高频 cron/去重/背压待跑 |
+| process | worker 未改;orchestrator stale CREATED 恢复器已补 | 小基线成功;并行 20 个中 14 成功/6 CREATED | 重启/重载 orchestrator 后复跑并行 |
+| dispatch | worker 未改;orchestrator stale CREATED 恢复器已补 | 小基线成功;并行 20 个中 14 成功/6 CREATED | 重启/重载 orchestrator 后复跑并行 |
+| atomic | worker 未改;orchestrator stale CREATED 恢复器已补 | 小基线成功;并行 direct 20 个中 16 成功/4 CREATED | stored-proc/http/shell 可选矩阵待跑 |
+| trigger | benchmark 入口已补 scheduler sampler;Kafka lag 已可采 | 小基线成功;并行 trigger 20 个中 15 成功/5 CREATED | 恢复器复验后再做高频 cron/去重/背压 |
 
 ## 统一方法
 
@@ -62,7 +63,7 @@
 |---|---|---|---|
 | `load-tests/scripts/run-worker-load-tests.sh` | import/export/dispatch/process 小基线 | `target/worker-load-report-<RUN_ID>.md` | 历史四类 worker 综合入口 |
 | `load-tests/scripts/run-worker-stress-tests.sh` | import/export/dispatch/process 阶梯加压 | `target/worker-stress-report-<RUN_ID>.md` | `STEPS_CSV=1,2,4,8` |
-| `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger | `target/control-plane-worker-report-<RUN_ID>.md` | 本轮新增;默认不跑 import/export;launch 后用 DB 等终态 |
+| `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger | `target/control-plane-worker-report-<RUN_ID>.md` | 默认顺序小基线;`CONTROL_PLANE_MODE=parallel` 跑真并行 |
 | `load-tests/scripts/sample-scheduler-backlog.sh` | scheduler/backlog SQL 采样 | CSV | trigger 压测时由新脚本并行启动 |
 
 ## 2026-06-07 控制面小基线
@@ -75,6 +76,17 @@
 | trigger | `atomic_sql_demo` launch | 30 launch + 60 scheduler read | launch/read 各 1 rps | POST P95 77ms | 1.03 launch/s | 未采到 | 0% | trigger 读写并行成功 |
 
 详细报告见 `docs/verifications/control-plane-worker-throughput-2026-06-07.md`。
+
+## 2026-06-07 控制面真并行复验
+
+| Worker | 场景 | 数据量 | 并发/分片 | 耗时 | 吞吐 | Kafka lag | 错误率 | 结论 |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| process | `lt_process_sql_job` | 20 pipeline | 1 launch/s | P95 1.269s(成功子集) | 1 launch/s | 0 | 0% HTTP,6 非终态 | 暴露 stale CREATED |
+| dispatch | `lt_dispatch_local_job` | 20 pipeline | 1 launch/s | P95 1.029s(成功子集) | 1 launch/s | 0 | 0% HTTP,6 非终态 | 暴露 stale CREATED |
+| atomic | `atomic_sql_demo` direct | 20 pipeline | 1 launch/s | P95 1.102s(成功子集) | 1 launch/s | 0 | 0% HTTP,4 非终态 | 暴露 stale CREATED |
+| trigger | `atomic_sql_demo` launch | 20 launch + 40 scheduler read | launch/read 各 1 rps | HTTP P95 65ms | 1 launch/s | 0 | 0% HTTP,5 非终态 | 暴露 stale CREATED |
+
+本轮结论:真并行压测能力达成;Kafka lag 采样达成;系统暴露 launch T1/T2 恢复缺口。已补 `batch.trigger.launch.created-recovery.*` 恢复器,需要部署后复跑。
 
 ## 执行顺序
 
@@ -250,9 +262,13 @@
 - [ ] import 1000w stage-swap 系统复验
 - [ ] export 1000w 4 分片并行 + multipart STORE 系统复验
 - [x] process worker P0 小基线
-- [ ] process worker P0 优化/修复
+- [x] 控制面真并行入口
+- [x] Kafka lag 采样可用化
+- [x] stale CREATED launch T2 恢复器代码
+- [ ] stale CREATED 恢复器系统复验
+- [ ] process worker P0 大数据优化/修复
 - [x] dispatch/atomic worker P0 小基线
-- [ ] dispatch/atomic worker P0 优化/修复
+- [ ] dispatch/atomic worker P0 高压优化/修复
 - [x] trigger worker P0 小基线
 - [ ] trigger worker P1 参数矩阵
 - [x] process/dispatch/atomic/trigger 共用 benchmark 脚本入口
