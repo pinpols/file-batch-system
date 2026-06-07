@@ -9,6 +9,7 @@ import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import jakarta.annotation.PreDestroy;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -103,6 +104,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Builder
   private record SftpUploadContext(
+      DispatchCommand command,
       Map<String, Object> channelConfig,
       ConnectionConfig connConfig,
       RemoteTarget remoteTarget,
@@ -145,6 +147,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     SftpUploadContext uploadCtx =
         SftpUploadContext.builder()
+            .command(command)
             .channelConfig(channelConfig)
             .connConfig(connConfig)
             .remoteTarget(remoteTarget)
@@ -236,10 +239,44 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       sftp = (ChannelSftp) session.openChannel("sftp");
       sftp.connect(30_000);
       String remotePath = ctx.remoteTarget().remotePath();
-      try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord())) {
-        sftp.put(in, remotePath, ChannelSftp.OVERWRITE);
+      String tempRemotePath = remotePath + ".tmp-" + UUID.randomUUID();
+      DispatchManifestSupport.PayloadDigest payloadDigest;
+      try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord());
+          DispatchManifestSupport.DigestingInputStream digesting =
+              DispatchManifestSupport.digesting(in)) {
+        sftp.put(digesting, tempRemotePath, ChannelSftp.OVERWRITE);
+        payloadDigest = digesting.finish();
       }
+      sftp.rename(tempRemotePath, remotePath);
       String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
+      DispatchManifestSupport.ManifestPayload manifest = null;
+      if (DispatchManifestSupport.enabled(ctx.channelConfig())) {
+        String manifestRemotePath =
+            remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
+        String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
+        manifest =
+            DispatchManifestSupport.manifestPayload(
+                ctx.command(),
+                evidence,
+                ctx.remoteTarget().remoteName(),
+                ctx.externalRequestId(),
+                ctx.receiptCode(),
+                payloadDigest,
+                manifestRef);
+        sftp.put(
+            new ByteArrayInputStream(manifest.bytes()), manifestRemotePath, ChannelSftp.OVERWRITE);
+      }
+      if (manifest != null) {
+        return new DispatchResult(
+            true,
+            ctx.externalRequestId(),
+            ctx.receiptCode(),
+            ctx.acknowledged(),
+            ctx.pending(),
+            "uploaded via SFTP",
+            evidence,
+            manifest.toRef());
+      }
       return new DispatchResult(
           true,
           ctx.externalRequestId(),

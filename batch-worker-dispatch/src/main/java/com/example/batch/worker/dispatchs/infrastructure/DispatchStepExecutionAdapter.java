@@ -13,6 +13,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.domain.DispatchWorkerType;
+import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import com.example.batch.worker.dispatchs.stage.DispatchStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -119,6 +120,9 @@ public class DispatchStepExecutionAdapter
     putIfPresent(outputs, "receiptCode", attributes.get("receiptCode"));
     putIfPresent(outputs, "receiptStatus", attributes.get("receiptStatus"));
     putIfPresent(outputs, "externalRequestId", attributes.get("externalRequestId"));
+    if (attributes.get("dispatchManifestRef") instanceof DispatchManifestRef manifestRef) {
+      manifestRef.putPipelineOutputs(outputs);
+    }
     if (attributes.get("dispatchPayload") instanceof DispatchPayload dispatchPayload) {
       putIfPresent(outputs, "channelCode", dispatchPayload.channelCode());
     }
