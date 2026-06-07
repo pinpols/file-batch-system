@@ -18,7 +18,8 @@ spring:
     listener:
       concurrency: ${BATCH_WORKER_PROCESS_KAFKA_CONCURRENCY:4}
     consumer:
-      max-poll-records: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_RECORDS:20}
+      # 长任务 worker 一次 poll 只取一条；否则同一 consumer 批内串行处理多条会超过 max.poll.interval 并触发 rebalance
+      max-poll-records: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_RECORDS:1}
       fetch-min-size: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MIN_SIZE:1024}
       fetch-max-wait: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MAX_WAIT:500}
       # PROCESS 任务允许 1000w 级 SQL transform/copy,单条任务可能超过 300s。

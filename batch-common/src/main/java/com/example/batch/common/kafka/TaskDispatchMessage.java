@@ -14,8 +14,9 @@ import java.time.Instant;
  * <p>保留字段分两类:
  *
  * <ul>
- *   <li><b>task key</b>:tenantId / taskId / jobInstanceId / jobPartitionId / instanceNo / jobCode /
- *       traceId / idempotencyKey / dispatchAt — worker CLAIM 必需的定位 + 幂等 + 链路追踪
+ *   <li><b>task key</b>:tenantId / taskId / jobInstanceId / jobPartitionId / partitionNo /
+ *       partitionCount / instanceNo / jobCode / traceId / idempotencyKey / dispatchAt — worker
+ *       CLAIM 必需的定位 + 幂等 + 链路追踪
  *   <li><b>路由元数据</b>:workerType(消费端 accepts 过滤)、selectedWorkerId(direct dispatch topic)、
  *       priorityBand(producer PRIORITY 模式 topic 后缀) — 派发链路必需,不依赖 DB 重读
  * </ul>
@@ -48,4 +49,47 @@ public record TaskDispatchMessage(
      * SDK Phase 2 §2.1:派单时刻确定的调度上下文(bizDate / 前后业务日 / 重试序号 / 触发来源)。 这些是任务的不可变事实,随消息下沉供 SDK handler
      * 直接读取,无需回调平台查。可空(老消息 / 无上下文场景)。
      */
-    SchedulingContext schedulingContext) {}
+    SchedulingContext schedulingContext,
+    /**
+     * 逻辑分片序号(从 1 开始)。仅用于 producer 侧 Kafka key 分散和观测；worker CLAIM 仍以 DB EffectiveTaskConfig
+     * 为准，老消息缺字段时可为空。
+     */
+    Integer partitionNo,
+    /** 本次 job 的逻辑分片总数。与 {@link #partitionNo} 一起用于稳定分散 Kafka 分区。 */
+    Integer partitionCount) {
+
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public TaskDispatchMessage(
+      String schemaVersion,
+      String tenantId,
+      Long jobInstanceId,
+      Long jobPartitionId,
+      Long taskId,
+      String instanceNo,
+      String jobCode,
+      String workerType,
+      String selectedWorkerId,
+      String priorityBand,
+      String traceId,
+      String idempotencyKey,
+      Instant dispatchAt,
+      SchedulingContext schedulingContext) {
+    this(
+        schemaVersion,
+        tenantId,
+        jobInstanceId,
+        jobPartitionId,
+        taskId,
+        instanceNo,
+        jobCode,
+        workerType,
+        selectedWorkerId,
+        priorityBand,
+        traceId,
+        idempotencyKey,
+        dispatchAt,
+        schedulingContext,
+        null,
+        null);
+  }
+}

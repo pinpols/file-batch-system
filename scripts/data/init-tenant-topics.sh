@@ -25,7 +25,7 @@ set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
 tenants_csv="${TENANTS:?TENANTS env required, e.g. TENANTS=bigcorp,acme}"
-worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch}"
+worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
 partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 
