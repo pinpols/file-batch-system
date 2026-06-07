@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,8 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -62,6 +65,7 @@ public class DispatchReceiptPollScheduler {
           .writeTimeout(Duration.ofSeconds(5))
           .callTimeout(Duration.ofSeconds(30))
           .build();
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicLong pollFailures = new AtomicLong();
   private final AtomicLong pollSuccesses = new AtomicLong();
 
@@ -75,11 +79,25 @@ public class DispatchReceiptPollScheduler {
    * R2-P0-4：进程退出前回收 OkHttp 内部资源——dispatcher 的 ExecutorService 是非守护线程，未 shutdown 会让 JVM 等 ~60s（idle
    * keepalive）才真正退出；connectionPool.evictAll 关闭所有空闲连接。
    */
+  @EventListener(ContextClosedEvent.class)
+  void stopOnContextClosed(ContextClosedEvent event) {
+    stopHttpClient("context-closed");
+  }
+
   @PreDestroy
   void shutdown() {
+    stopHttpClient("pre-destroy");
+  }
+
+  private void stopHttpClient(String source) {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
     try {
+      httpClient.dispatcher().cancelAll();
       httpClient.dispatcher().executorService().shutdown();
       httpClient.connectionPool().evictAll();
+      log.info("dispatch receipt poll http client stopped: source={}", source);
     } catch (RuntimeException ex) {
       log.warn("OkHttp shutdown cleanup error: {}", ex.getMessage(), ex);
     }
@@ -88,16 +106,34 @@ public class DispatchReceiptPollScheduler {
   @Scheduled(fixedDelayString = "${batch.worker.dispatch.receipt-poll.interval-millis:60000}")
   @SchedulerLock(name = "dispatch_receipt_poll", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
   public void poll() {
-    if (!properties.isEnabled()) {
+    if (!properties.isEnabled() || stopping.get()) {
       return;
     }
-    List<Map<String, Object>> rows =
-        fileDispatchRepository.listPendingReceiptPolls(
-            properties.getBatchSize(), properties.getPendingMaxAgeSeconds());
+    List<Map<String, Object>> rows;
+    try {
+      rows =
+          fileDispatchRepository.listPendingReceiptPolls(
+              properties.getBatchSize(), properties.getPendingMaxAgeSeconds());
+    } catch (RuntimeException exception) {
+      if (stopping.get()) {
+        log.info("dispatch receipt poll skipped during shutdown: error={}", exception.getMessage());
+        return;
+      }
+      throw exception;
+    }
     for (Map<String, Object> row : rows) {
+      if (stopping.get()) {
+        return;
+      }
       try {
         pollOne(row);
       } catch (Exception exception) {
+        if (stopping.get()) {
+          log.info(
+              "dispatch receipt poll interrupted during shutdown: error={}",
+              exception.getMessage());
+          return;
+        }
         pollFailures.incrementAndGet();
         if (isTransientConnectivityFailure(exception)) {
           // 已知瞬时连通性异常 (上游不可达 / 超时 / DNS) — 仅 message,不打 stack。

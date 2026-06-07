@@ -202,6 +202,18 @@ batch:
   timezone:
     default-zone: ${BATCH_TIMEZONE_DEFAULT_ZONE:Asia/Shanghai}
 
+  # 共享 @Scheduled 调度器。SmartLifecycle 停机顺序按 phase 从高到低停止；
+  # Redis LettuceConnectionFactory 默认 phase=0，因此这里保持高 phase，确保调度任务先停止并 drain，
+  # 再销毁 Redis 连接，避免关闭窗口内任务继续拿 Redis 报连接已关闭。
+  scheduling:
+    pool-size: ${BATCH_SCHEDULING_POOL_SIZE:16}
+    thread-name-prefix: ${BATCH_SCHEDULING_THREAD_NAME_PREFIX:batch-scheduler-}
+    phase: ${BATCH_SCHEDULING_PHASE:1073741823}
+    wait-for-tasks-to-complete-on-shutdown: ${BATCH_SCHEDULING_WAIT_FOR_TASKS_TO_COMPLETE_ON_SHUTDOWN:true}
+    await-termination-seconds: ${BATCH_SCHEDULING_AWAIT_TERMINATION_SECONDS:120}
+    continue-existing-periodic-tasks-after-shutdown: ${BATCH_SCHEDULING_CONTINUE_PERIODIC_AFTER_SHUTDOWN:false}
+    execute-existing-delayed-tasks-after-shutdown: ${BATCH_SCHEDULING_EXECUTE_DELAYED_AFTER_SHUTDOWN:false}
+
   # ShedLock LockProvider(2026-05-28 改默认为 redis,详见 BatchShedLockAutoConfiguration)
   # ── 默认 redis:SETNX 比 PG row UPDATE 快 1 个量级,HA 多节点首选;lettuce 客户端
   #    由 batch-common 共享,所有模块 transitive 引入。

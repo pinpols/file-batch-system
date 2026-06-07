@@ -23,6 +23,7 @@ public class BatchSchedulingAutoConfiguration {
     ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
     scheduler.setPoolSize(Math.max(1, properties.getPoolSize()));
     scheduler.setThreadNamePrefix(properties.getThreadNamePrefix());
+    scheduler.setPhase(properties.getPhase());
     scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
     scheduler.setAwaitTerminationSeconds(Math.max(0, properties.getAwaitTerminationSeconds()));
     scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(

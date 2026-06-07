@@ -1,10 +1,14 @@
 package com.example.batch.trigger.wheel;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.util.Properties;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.boot.quartz.autoconfigure.SchedulerFactoryBeanCustomizer;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -21,9 +25,15 @@ import org.springframework.test.util.ReflectionTestUtils;
  */
 class QuartzPauseWhenWheelEnabledCustomizerTest {
 
+  private QuartzPauseWhenWheelEnabledCustomizer customizer;
+
+  @BeforeEach
+  void setUp() {
+    customizer = new QuartzPauseWhenWheelEnabledCustomizer();
+  }
+
   @Test
   void shouldDisableQuartzAutoStartupWhenSchedulerImplIsWheel() {
-    QuartzPauseWhenWheelEnabledCustomizer customizer = new QuartzPauseWhenWheelEnabledCustomizer();
     ReflectionTestUtils.setField(customizer, "schedulerImpl", "wheel");
     SchedulerFactoryBean factory = mock(SchedulerFactoryBean.class);
 
@@ -31,11 +41,17 @@ class QuartzPauseWhenWheelEnabledCustomizerTest {
     fn.customize(factory);
 
     verify(factory).setAutoStartup(false);
+    verify(factory).setDataSource(null);
+    verify(factory).setTransactionManager(null);
+    ArgumentCaptor<Properties> properties = ArgumentCaptor.forClass(Properties.class);
+    verify(factory).setQuartzProperties(properties.capture());
+    assertThat(properties.getValue())
+        .containsEntry("org.quartz.jobStore.class", "org.quartz.simpl.RAMJobStore")
+        .containsEntry("org.quartz.threadPool.threadCount", "1");
   }
 
   @Test
   void shouldDisableQuartzAutoStartupCaseInsensitiveWHEEL() {
-    QuartzPauseWhenWheelEnabledCustomizer customizer = new QuartzPauseWhenWheelEnabledCustomizer();
     ReflectionTestUtils.setField(customizer, "schedulerImpl", "WHEEL");
     SchedulerFactoryBean factory = mock(SchedulerFactoryBean.class);
 
@@ -47,7 +63,6 @@ class QuartzPauseWhenWheelEnabledCustomizerTest {
   @Test
   void shouldNotTouchQuartzWhenSchedulerImplIsQuartz_rollbackPath() {
     // QZ-rollback-1: 显式切 BATCH_TRIGGER_SCHEDULER_IMPL=quartz,customizer 必须不干预
-    QuartzPauseWhenWheelEnabledCustomizer customizer = new QuartzPauseWhenWheelEnabledCustomizer();
     ReflectionTestUtils.setField(customizer, "schedulerImpl", "quartz");
     SchedulerFactoryBean factory = mock(SchedulerFactoryBean.class);
 
@@ -59,7 +74,6 @@ class QuartzPauseWhenWheelEnabledCustomizerTest {
   @Test
   void shouldNotTouchQuartzWhenSchedulerImplIsUnknown() {
     // 未知值不应误关 Quartz(safer default)
-    QuartzPauseWhenWheelEnabledCustomizer customizer = new QuartzPauseWhenWheelEnabledCustomizer();
     ReflectionTestUtils.setField(customizer, "schedulerImpl", "unknown-scheduler");
     SchedulerFactoryBean factory = mock(SchedulerFactoryBean.class);
 

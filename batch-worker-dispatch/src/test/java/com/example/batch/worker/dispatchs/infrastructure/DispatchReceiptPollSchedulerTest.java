@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.support.StaticApplicationContext;
 
 /** 单元测试：{@link DispatchReceiptPollScheduler#poll()} 的互斥与守卫行为。 */
 class DispatchReceiptPollSchedulerTest {
@@ -50,6 +52,16 @@ class DispatchReceiptPollSchedulerTest {
   void shouldSkipPollingWhenDisabled() {
     properties.setEnabled(false);
 
+    scheduler.poll();
+
+    verify(fileDispatchRepository, never()).listPendingReceiptPolls(anyInt(), anyLong());
+  }
+
+  @Test
+  void shouldSkipPollingAfterContextClosed() {
+    properties.setEnabled(true);
+
+    scheduler.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
     scheduler.poll();
 
     verify(fileDispatchRepository, never()).listPendingReceiptPolls(anyInt(), anyLong());

@@ -19,12 +19,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
@@ -73,7 +76,9 @@ public class WebhookDeliveryRelay {
   private final WebhookRelayProperties properties;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private ScheduledExecutorService executor;
+  private volatile ScheduledFuture<?> scheduledTask;
 
   public WebhookDeliveryRelay(
       ConsoleWebhookDeliveryLogMapper deliveryLogRepository,
@@ -103,11 +108,12 @@ public class WebhookDeliveryRelay {
               t.setDaemon(true);
               return t;
             });
-    executor.scheduleWithFixedDelay(
-        this::poll,
-        properties.getPollIntervalMillis(),
-        properties.getPollIntervalMillis(),
-        TimeUnit.MILLISECONDS);
+    scheduledTask =
+        executor.scheduleWithFixedDelay(
+            this::poll,
+            properties.getPollIntervalMillis(),
+            properties.getPollIntervalMillis(),
+            TimeUnit.MILLISECONDS);
     log.info(
         "WebhookDeliveryRelay 已启动:poll={}ms batch={} absoluteMax={}",
         properties.getPollIntervalMillis(),
@@ -115,11 +121,28 @@ public class WebhookDeliveryRelay {
         properties.getAbsoluteMaxAttempts());
   }
 
+  @EventListener(ContextClosedEvent.class)
+  public void stopOnContextClosed(ContextClosedEvent event) {
+    stopExecutor("context-closed");
+  }
+
   @PreDestroy
   public void stop() {
+    stopExecutor("pre-destroy");
+  }
+
+  private void stopExecutor(String source) {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
+    ScheduledFuture<?> task = scheduledTask;
+    if (task != null) {
+      task.cancel(true);
+    }
     if (executor == null) {
       return;
     }
+    log.info("WebhookDeliveryRelay stopping: source={}", source);
     executor.shutdown();
     try {
       if (!executor.awaitTermination(15, TimeUnit.SECONDS)) {
@@ -136,26 +159,58 @@ public class WebhookDeliveryRelay {
 
   /** 单元测试可直接调用本方法跑一轮(不走自调度循环)。 */
   public void poll() {
+    if (stopping.get()) {
+      return;
+    }
     if (!running.compareAndSet(false, true)) {
       return;
     }
     try {
+      if (stopping.get()) {
+        return;
+      }
       lockingTaskExecutor.executeWithLock(
           (LockingTaskExecutor.Task) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
+      if (stopping.get() && isShutdownNoise(dae)) {
+        log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", dae.getMessage());
+        return;
+      }
       log.warn(
           "WebhookDeliveryRelay DB 瞬时异常,下轮重试: {}",
           dae.getMostSpecificCause() == null
               ? dae.getMessage()
               : dae.getMostSpecificCause().getMessage());
     } catch (Throwable t) {
+      if (stopping.get() && isShutdownNoise(t)) {
+        log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", t.getMessage());
+        return;
+      }
       log.error("WebhookDeliveryRelay 异常", t);
     } finally {
       running.set(false);
     }
   }
 
+  private static boolean isShutdownNoise(Throwable throwable) {
+    Throwable current = throwable;
+    while (current != null) {
+      String message = current.getMessage();
+      if (message != null
+          && (message.contains("LettuceConnectionFactory is STOPPING")
+              || message.contains("has been closed")
+              || message.contains("Connection pool shut down"))) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
   private void pollLocked() {
+    if (stopping.get()) {
+      return;
+    }
     Instant now = BatchDateTimeSupport.utcNow();
     List<WebhookDeliveryLogEntity> batch =
         deliveryLogRepository.findEligibleRetries(now, properties.getBatchSize());
@@ -164,6 +219,9 @@ public class WebhookDeliveryRelay {
     }
     log.debug("WebhookDeliveryRelay 本轮取 {} 条待重投", batch.size());
     for (WebhookDeliveryLogEntity row : batch) {
+      if (stopping.get()) {
+        return;
+      }
       try {
         retryOne(row);
       } catch (Throwable t) {

@@ -11,8 +11,11 @@ import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,6 +39,7 @@ public class ConsolePushJobNotifier {
   private final ConsolePushJobNotificationMapper notificationMapper;
   private final ConsolePushSender pushSender;
 
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private ScheduledExecutorService scheduler;
 
   @PostConstruct
@@ -62,22 +66,45 @@ public class ConsolePushJobNotifier {
         properties.getJobNotify().getBatchSize());
   }
 
+  @EventListener(ContextClosedEvent.class)
+  void stopOnContextClosed(ContextClosedEvent event) {
+    stopScheduler("context-closed");
+  }
+
   @PreDestroy
   void stop() {
+    stopScheduler("pre-destroy");
+  }
+
+  private void stopScheduler(String source) {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
     if (scheduler != null) {
+      log.info("[push] ConsolePushJobNotifier stopping: source={}", source);
       scheduler.shutdownNow();
     }
   }
 
   void pollSafely() {
+    if (stopping.get()) {
+      return;
+    }
     try {
       pollOnce();
     } catch (RuntimeException e) {
+      if (stopping.get() && isShutdownNoise(e)) {
+        log.info("[push] job-notify poll skipped during shutdown: {}", e.getMessage());
+        return;
+      }
       log.error("[push] job-notify poll failed", e);
     }
   }
 
   void pollOnce() {
+    if (stopping.get()) {
+      return;
+    }
     List<PendingJobNotification> pending =
         notificationMapper.findPending(
             properties.getJobNotify().getLookbackMinutes(),
@@ -86,6 +113,9 @@ public class ConsolePushJobNotifier {
       return;
     }
     for (PendingJobNotification p : pending) {
+      if (stopping.get()) {
+        return;
+      }
       ConsolePushJobNotificationEntity record = new ConsolePushJobNotificationEntity();
       record.setTenantId(p.getTenantId());
       record.setJobInstanceId(p.getJobInstanceId());
@@ -118,5 +148,20 @@ public class ConsolePushJobNotifier {
       case "TERMINATED" -> "已终止";
       default -> status;
     };
+  }
+
+  private static boolean isShutdownNoise(Throwable throwable) {
+    Throwable current = throwable;
+    while (current != null) {
+      String message = current.getMessage();
+      if (message != null
+          && (message.contains("has been closed")
+              || message.contains("Connection pool shut down")
+              || message.contains("Interrupted"))) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 }

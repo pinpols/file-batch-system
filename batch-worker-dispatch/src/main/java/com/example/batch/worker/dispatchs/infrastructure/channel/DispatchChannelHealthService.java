@@ -26,11 +26,14 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
@@ -64,6 +67,7 @@ public class DispatchChannelHealthService {
   // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
   private final ObjectProvider<BatchObjectStore> objectStoreProvider;
   private BatchObjectStore objectStore;
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicLong probeSuccessCount = new AtomicLong();
   private final AtomicLong probeFailureCount = new AtomicLong();
   private ExecutorService probeExecutor;
@@ -182,22 +186,29 @@ public class DispatchChannelHealthService {
   }
 
   public void probeConfiguredChannels() {
-    if (!properties.isEnabled()) {
+    if (!properties.isEnabled() || stopping.get()) {
       return;
     }
     List<Map<String, Object>> rows =
         repository.findEnabledProbeChannels(
             properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH);
-    if (rows.isEmpty()) {
+    if (rows.isEmpty() || stopping.get()) {
       return;
     }
     // R-A1-P1：并行提交所有探针任务，单条 5s 超时；调度线程只等总聚合结果，不被任意单条慢节点拖住。
     // 不用 invokeAll(timeout) 整体超时（早完成的探针会浪费窗口），改为每个 Future 各自 get(5s)。
     List<Future<?>> futures = new ArrayList<>(rows.size());
     for (Map<String, Object> row : rows) {
+      if (stopping.get()) {
+        return;
+      }
       futures.add(probeExecutor.submit(() -> probeOneSafely(row)));
     }
     for (int i = 0; i < futures.size(); i++) {
+      if (stopping.get()) {
+        futures.forEach(future -> future.cancel(true));
+        return;
+      }
       Future<?> future = futures.get(i);
       Map<String, Object> row = rows.get(i);
       try {
@@ -221,6 +232,12 @@ public class DispatchChannelHealthService {
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
         future.cancel(true);
+        if (stopping.get()) {
+          log.info(
+              "dispatch channel probe interrupted during shutdown: row={}",
+              SecretMasking.maskSensitiveKeys(row));
+          return;
+        }
         log.warn(
             "dispatch channel probe interrupted: row={}", SecretMasking.maskSensitiveKeys(row));
         return;
@@ -229,9 +246,19 @@ public class DispatchChannelHealthService {
   }
 
   private void probeOneSafely(Map<String, Object> row) {
+    if (stopping.get()) {
+      return;
+    }
     try {
       probeOne(row);
     } catch (Exception exception) {
+      if (stopping.get()) {
+        log.info(
+            "dispatch channel probe skipped during shutdown: error={}, row={}",
+            exception.getMessage(),
+            SecretMasking.maskSensitiveKeys(row));
+        return;
+      }
       probeFailureCount.incrementAndGet();
       // R-4.10：row 可能含 password / api_key 等凭证，脱敏后再打日志
       log.warn(
@@ -244,6 +271,18 @@ public class DispatchChannelHealthService {
 
   @PreDestroy
   void shutdownProbeExecutor() {
+    stopProbeExecutor("pre-destroy");
+  }
+
+  @EventListener(ContextClosedEvent.class)
+  void stopOnContextClosed(ContextClosedEvent event) {
+    stopProbeExecutor("context-closed");
+  }
+
+  private void stopProbeExecutor(String source) {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
     if (probeExecutor == null) {
       return;
     }
@@ -256,9 +295,13 @@ public class DispatchChannelHealthService {
       Thread.currentThread().interrupt();
       probeExecutor.shutdownNow();
     }
+    log.info("dispatch channel probe executor stopped: source={}", source);
   }
 
   public DispatchChannelProbeResult probeOne(Map<String, Object> rawRow) {
+    if (stopping.get()) {
+      return new DispatchChannelProbeResult(false, "probe skipped during shutdown", null);
+    }
     Map<String, Object> channelConfig = mergedConfig(rawRow);
     if (channelConfig.isEmpty()) {
       return new DispatchChannelProbeResult(false, "channel config missing", null);

@@ -36,6 +36,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /** S3 Stage 2: TriggerOutboxRelay 单测,覆盖空批 / 成功 / 失败 / 反序列化错误 / 已被抢占 5 类路径 + 退避函数。 */
@@ -100,6 +102,32 @@ class TriggerOutboxRelayTest {
     verify(mapper).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
     verify(publisher, never()).publish(any(), any(), any(), any());
     verify(mapper, never()).markPublishing(anyLong(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void poll_afterContextClosed_skipsLockAndMapper() throws Throwable {
+    relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+
+    relay.poll();
+
+    verify(lockingTaskExecutor, never())
+        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+    verify(mapper, never()).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
+  }
+
+  @Test
+  void poll_redisStoppingDuringShutdown_isNotBusinessError() throws Throwable {
+    doAnswer(
+            inv -> {
+              relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+              throw new IllegalStateException("LettuceConnectionFactory is STOPPING");
+            })
+        .when(lockingTaskExecutor)
+        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+
+    relay.poll();
+
+    verify(mapper, never()).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
   }
 
   @Test

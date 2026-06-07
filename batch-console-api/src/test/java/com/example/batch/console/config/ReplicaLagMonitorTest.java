@@ -16,6 +16,8 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.support.StaticApplicationContext;
 
 /**
  * 单元测试：{@link ReplicaLagMonitor}.
@@ -111,5 +113,15 @@ class ReplicaLagMonitorTest {
     monitor.sampleReplayLag();
 
     assertThat(monitor.currentLagSeconds()).isEqualTo(0.3);
+  }
+
+  @Test
+  void shouldSkipSamplingAfterContextClosed() throws SQLException {
+    monitor.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
+
+    monitor.sampleReplayLag();
+
+    org.mockito.Mockito.verify(primary, org.mockito.Mockito.never()).getConnection();
+    assertThat(monitor.currentLagSeconds()).isEqualTo(-1.0);
   }
 }
