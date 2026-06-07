@@ -46,6 +46,9 @@ public class KafkaConsumerConfiguration {
   @Value("${spring.kafka.consumer.metadata-max-age-ms:30000}")
   private int metadataMaxAgeMs;
 
+  @Value("${spring.kafka.listener.concurrency:1}")
+  private int listenerConcurrency;
+
   @Bean
   public ProducerFactory<String, String> kafkaProducerFactory() {
     Map<String, Object> properties = new HashMap<>();
@@ -100,6 +103,7 @@ public class KafkaConsumerConfiguration {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(kafkaConsumerFactory);
+    factory.setConcurrency(Math.max(1, listenerConcurrency));
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.getContainerProperties().setObservationEnabled(true);
     factory.getContainerProperties().setObservationRegistry(observationRegistry);

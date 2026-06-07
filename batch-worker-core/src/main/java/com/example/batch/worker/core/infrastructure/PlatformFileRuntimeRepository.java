@@ -278,9 +278,6 @@ public class PlatformFileRuntimeRepository {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {
       return null;
     }
-    Integer nextExecutionSeq =
-        platformFileRuntimeMapper.selectNextStepRunSeq(
-            params(KEY_PIPELINE_INSTANCE_ID, pipelineInstanceId, "stepCode", stepCode));
     Map<String, Object> paramMap =
         params(
             KEY_PIPELINE_INSTANCE_ID,
@@ -289,14 +286,22 @@ public class PlatformFileRuntimeRepository {
             stepCode,
             "stageCode",
             stageCode,
-            "runSeq",
-            nextExecutionSeq == null ? 1 : nextExecutionSeq,
             "stepStatus",
             PipelineRunStatus.RUNNING.name(),
             "inputSummaryJson",
             toJson(inputSummary));
-    platformFileRuntimeMapper.insertStepRun(paramMap);
-    return toLong(paramMap.get(KEY_ID));
+    for (int i = 0; i < 5; i++) {
+      try {
+        platformFileRuntimeMapper.insertStepRun(paramMap);
+        return toLong(paramMap.get(KEY_ID));
+      } catch (DuplicateKeyException e) {
+        paramMap.remove(KEY_ID);
+        if (i == 4) {
+          throw e;
+        }
+      }
+    }
+    return null;
   }
 
   public void finishStepRunSuccess(Long stepRunId, Object outputSummary) {
