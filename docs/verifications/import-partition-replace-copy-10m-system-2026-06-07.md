@@ -1,5 +1,7 @@
 # Import PARTITION_REPLACE_COPY 1000w 系统链路验证（2026-06-07）
 
+吞吐优化主文档：[`single-node-throughput-optimization-2026-06-06.md`](../backlog/single-node-throughput-optimization-2026-06-06.md)。
+
 ## 结论
 
 本次验证走真实系统链路：
@@ -184,6 +186,146 @@ JSON 内联导入也成功：
 | CODEX-JSON-001 | Codex JSON One | PERSONAL |
 | CODEX-JSON-002 | Codex JSON Two | ENTERPRISE |
 
+## 2026-06-07 复验矩阵
+
+复验继续走真实系统链路：
+
+`POST /api/triggers/launch` -> trigger -> orchestrator -> Kafka -> worker-import -> PG。
+
+复验前动作：
+
+- 重新构建并替换 `build/runtime-jars/worker-import.jar`
+- 前台启动 `worker-import`，确认注册到 orchestrator 且 Kafka consumer assigned
+- 清理 `config:default-tenant:job-definition:import_customer_job` Redis 配置缓存，避免 5 分钟 TTL 读到旧 shard 策略
+
+有效复验结果：
+
+| 场景 | requestId | traceId | job_instance | expected_partition_count | 结果 |
+|---|---|---|---:|---:|---|
+| CSV `DELIMITED` inline `BATCH_UPSERT` | `codex-reval-csv-delimited-upsert-1780818625` | `b73c7d72ba864268b9ff83c96aca5dff` | 4011 | 1 | `SUCCESS`，`imported 2 row(s)` |
+| JSON inline `BATCH_UPSERT` | `codex-reval-json-upsert-1780818625` | `0cede710876b4589b41208a6565b2206` | 4012 | 1 | `SUCCESS`，`imported 2 row(s)` |
+| `PARTITION_REPLACE_COPY` + MinIO `storagePath` + 单分区 | `codex-reval-copy-storagepath-single-1780818625` | `17cb6621933942059994c381159866f8` | 4013 | 1 | `SUCCESS`，`imported 12 row(s)` |
+| `PARTITION_REPLACE_COPY` + MinIO `storagePath` + 2 分片 | `codex-reval-copy-shard2-guard-1780818998` | `2e9eff6b5ae3487da02d2638cc4c6054` | 4016 | 2 | `FAILED`，两个分片均 `IMPORT_LOAD_CONFIG_INVALID` |
+
+负向 guard 证据：
+
+```text
+job_instance 4016:
+instance_status=FAILED
+expected_partition_count=2
+success_partition_count=0
+failed_partition_count=2
+current_stage=LOAD
+last_success_stage=VALIDATE
+run_status=FAILED
+lastErrorCode=IMPORT_LOAD_CONFIG_INVALID
+```
+
+两个 `job_task` 均失败在同一配置保护：
+
+```text
+PARTITION_REPLACE_COPY cannot run with partitionCount=2:
+each worker partition would clear the same target partition before COPY,
+which can leave partial data. Use shard_strategy=NONE for this template,
+or split input into independent files with distinct logical partitions.
+```
+
+业务表保护结果：
+
+| 表 / 条件 | rows | distinct_rows |
+|---|---:|---:|
+| `biz.customer_account` where `customer_no like 'CODEX-REVAL-%'` | 4 | 4 |
+| `biz.wide_10m_copy` default-tenant / `2026-06-07` | 12 | 12 |
+
+这说明修复后 `PARTITION_REPLACE_COPY + partitionCount > 1` 不会进入清分区写入；单分区 COPY 已写入的 12 行在负向分片验证后保持不变。
+
+无效尝试（不计入业务结论）：
+
+| traceId | 原因 | 处理 |
+|---|---|---|
+| `440d00b15fd04189afbd00300e71fceb` | orchestrator 配置缓存仍是 `shard_strategy=NONE`，且复用已处理对象路径，实际 `expected_partition_count=1` 并在 PREPROCESS 去重冲突 | 标记为 `CODEX_INVALID_NEGATIVE_SETUP` |
+| `5a5a0514480147c39b8637539bec9922` | 已命中 `expected_partition_count=2`，但请求参数 `sourceType=OBJECT_STORAGE` 不满足 `file_record.source_type` 约束，失败在 RECEIVE，未进入 LOAD guard | 标记为 `CODEX_INVALID_NEGATIVE_SETUP` |
+
+复验结束后环境恢复：
+
+- `batch.job_definition(id=2001).shard_strategy` 已恢复为 `NONE`
+- Redis `config:default-tenant:job-definition:import_customer_job` 已删除，后续会按 DB 当前值回填
+
+## XML / FIXED_WIDTH / Excel multipart 补充覆盖
+
+### XML import
+
+为 `default-tenant` 临时补了 `CODEX_CUSTOMER_XML_TPL`，目标表复用 `biz.customer_account`，通过真实 trigger 链路验证：
+
+| requestId | traceId | job_instance | expected_partition_count | result |
+|---|---|---:|---:|---|
+| `codex-reval-xml-1780819472` | `5516865b0d0645448770f4fb300a3c35` | 4018 | 1 | `SUCCESS`，`imported 2 row(s)` |
+
+落库校验：
+
+| customer_no | customer_name | customer_type |
+|---|---|---|
+| `CODEX-XML-001` | Codex XML One | PERSONAL |
+| `CODEX-XML-002` | Codex XML Two | ENTERPRISE |
+
+### FIXED_WIDTH import
+
+为 `default-tenant` 临时补了 `CODEX_CUSTOMER_FIXED_WIDTH_TPL`，字段布局：
+
+- `customerNo`: start `0`, length `16`
+- `customerName`: start `16`, length `20`
+- `customerType`: start `36`, length `12`
+
+系统链路首次触发：
+
+| requestId | traceId | job_instance | result |
+|---|---|---:|---|
+| `codex-reval-fixed-width-1780819472` | `75054da191244fdab694877bbb96d78c` | 4017 | `FAILED`，`IMPORT_PARSE_FAILED` |
+
+失败原因不是模板缺字段，而是运行时缺陷：`batch.file_template_config.field_mappings` 是 PostgreSQL `jsonb`，worker 运行时拿到的是 PGobject/jsonb 形态；`ParseSupport.templateFieldMappings()` 只处理了 `String/List`，没有像 `query_param_schema` 一样走 `PostgresqlJsonbTexts.tryExtract()`，导致 FIXED_WIDTH parser 读不到 `start/length/target`。
+
+已修复代码：
+
+- `ParseSupport.templateFieldMappings()` 对 `field_mappings` 统一走 `jsonText()`，支持 `String`、PGobject/jsonb 等形态
+- `ParseStepFixedWidthAndXmlTest` 增加 PGobject/jsonb 形态回归用例
+
+验证命令：
+
+```bash
+mvn -pl batch-worker-import -am -Dtest=ParseStepFixedWidthAndXmlTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+结果：`BUILD SUCCESS`，`Tests run: 5, Failures: 0, Errors: 0, Skipped: 0`。
+
+按“不再重启服务”的约束，本次没有把当前运行中的 worker 热换成新 jar 复跑系统级 FIXED_WIDTH；该项需要随下一次正常部署 / worker reload 后用同一 API 请求复验。
+
+### Excel multipart upload
+
+走 console 真实 multipart 接口：
+
+```text
+POST /api/console/config/tenant-package/excel/upload?tenantId=default-tenant
+Content-Type: multipart/form-data
+file=@docs/test-data/test-full-coverage-import-suite/default-tenant-config-package-test.xlsx
+```
+
+认证：`POST /api/console/auth/login` 使用本地 seed 管理员 `admin/admin123`，通过 `batch_console_token` cookie 调用上传。
+
+结果：
+
+| item | value |
+|---|---|
+| HTTP | 200 |
+| code | `SUCCESS` |
+| uploadToken | `15a58db8b7bf44acb46158eb62c613e1` |
+| jobRows | 7 |
+| fileChannelRows | 4 |
+| workflowDefinitionRows | 3 |
+| workflowNodeRows | 13 |
+| workflowEdgeRows | 11 |
+
+这条路径已覆盖 `@RequestParam("file") MultipartFile` 的 console Excel multipart 上传和 11 sheet workbook 解析入口。该 fixture 本身 `fileTemplateRows=0`，所以本次 multipart 验证覆盖的是上传/解析入口，不覆盖新增 FileTemplate 行 apply。
+
 ## 覆盖范围
 
 本轮真实系统验证覆盖：
@@ -199,6 +341,8 @@ JSON 内联导入也成功：
 - `PARTITION_REPLACE_COPY` 单文件 2 分片负向验证
 - 默认 `BATCH_UPSERT` 内联 CSV 小文件导入
 - 默认 `BATCH_UPSERT` 内联 JSON 小文件导入
+- 默认 `BATCH_UPSERT` 内联 XML 小文件导入
+- Console Excel multipart 上传入口
 
 此前 PR 内代码级验证已覆盖：
 
@@ -206,10 +350,9 @@ JSON 内联导入也成功：
 - `GenericJdbcMappedImportLoadPlugin` 的 `PARTITION_REPLACE_COPY` prepare + COPY 路径
 - Testcontainers PostgreSQL 真实落库：替换目标逻辑分区、保留其他分区、NULL/quote/newline CSV 转义
 - `LoadStep` 对 `PARTITION_REPLACE_COPY` 禁止 checkpoint 的 precheck
+- `FIXED_WIDTH field_mappings` 的 PostgreSQL jsonb / PGobject 解析回归
 
-本轮未重新跑的导入分支：
+仍需正常部署后复验：
 
-- XML / FIXED_WIDTH 格式导入
-- Excel multipart 上传链路
-
-原因：当前本地 seed 里只有 `import_customer_v1`、`import_customer_json_v1`、`WIDE_10M_COPY_TPL` 这 3 个 import 模板；没有 XML/FIXED_WIDTH 可触发模板。Excel multipart 是 console 上传配置包链路，不是本轮 worker-import trigger 模板链路。
+- FIXED_WIDTH 系统链路成功态：代码已修、单测已过；当前运行 worker 未热换新 jar，按本轮约束不再重启。
+- Excel 配置包 apply：本次只验证 upload multipart 和 workbook 解析入口；是否 apply 取决于是否要写入当前本地租户配置。
