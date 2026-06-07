@@ -10,7 +10,12 @@
 - **契约**：`batch-common` → `com.example.batch.common.plugin.ImportLoadPlugin`
 - **默认实现**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`（通用 JDBC UPSERT）
 - **通用 JDBC（少写类）**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`
-  - 模板 **`query_param_schema.jdbcMappedImport`**（或 **`jdbc_mapped_import`**）里声明：`schema`、`table`、`tenantColumn`、`columnMappings`（`from`/`to`）、可选 `conflictColumns`（UPSERT）、`systemBindings`（`${traceId}` 等占位符）。  
+  - 模板 **`query_param_schema.jdbcMappedImport`**（或 **`jdbc_mapped_import`**）里声明：`schema`、`table`、`tenantColumn`、`columnMappings`（`from`/`to`）、可选 `conflictColumns`（UPSERT）、`systemBindings`（`${traceId}` 等占位符）。
+  - `loadStrategy` 默认 `BATCH_UPSERT`，保持原 JDBC batch INSERT / UPSERT 语义。高吞吐整分区刷新可显式设为 `PARTITION_REPLACE_COPY`：
+    - LOAD 开始前先按 `replacePartitionColumns` 执行 `DELETE FROM schema.table WHERE ...` 清理一个逻辑分区；如果目标表是 PG 分区表，谓词需覆盖分区键以触发 partition pruning。
+    - 后续 chunk 使用 PostgreSQL `COPY FROM STDIN WITH (FORMAT csv, NULL '\N')` 追加。
+    - `replacePartitionColumns` 只允许引用 `tenantColumn` 或 `systemBindings` 列，确保读取数据行前就能确定清理范围。典型配置为 `["tenant_id","biz_date"]`，其中 `biz_date` 通过 `systemBindings.biz_date="${bizDate}"` 绑定。
+    - 当前实现不和 `batch.worker.checkpoint.enabled=true` 混用；line-based resume 会破坏“先清分区再全量追加”的语义，开启 checkpoint 时会前置拒跑。
   - **schema 白名单**：`batch.worker.import.jdbc-mapped.allowed-schemas`（默认仅 `biz`）。  
   - 标识符仅允许 `[a-z][a-z0-9_]*`，禁止拼接任意 SQL。
 - **路由**（优先级从高到低）：
