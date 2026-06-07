@@ -51,7 +51,7 @@
         <java.version>25</java.version>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <awssdk.version>2.31.78</awssdk.version>
+        <awssdk.version>2.46.5</awssdk.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
