@@ -26,4 +26,36 @@
         WHERE staged_at &lt; now() - make_interval(hours => #{retentionHours})
     </select>
 
+    <!--
+      天级 RANGE 子分区幂等创建。partitionName / fromTs / toTs 全由调度器从日期派生
+      (process_staging_p<YYYYMMDD> / UTC 时间戳),非用户输入 → ${} 插值无注入面。
+      分区边界值是 DDL 字面量,JDBC 占位符不支持,只能 ${} 插值。
+      父表索引由 PG 自动附加到新分区,无需在此重复建索引。
+    -->
+    <update id="createDailyPartition">
+        CREATE TABLE IF NOT EXISTS batch.${partitionName}
+            PARTITION OF batch.process_staging
+            FOR VALUES FROM ('${fromTs}') TO ('${toTs}')
+    </update>
+
+    <!--
+      列出早于 cutoffYmd 的天级子分区,排除 DEFAULT 兜底分区(名为 process_staging_default,不匹配正则)。
+      relname 形如 process_staging_p20260607,截末 8 位日期串按字典序比较(定宽等价数值序)。
+    -->
+    <select id="listExpiredDailyPartitions" resultType="java.lang.String">
+        SELECT c.relname
+        FROM pg_inherits i
+        JOIN pg_class c ON c.oid = i.inhrelid
+        JOIN pg_class p ON p.oid = i.inhparent
+        JOIN pg_namespace n ON n.oid = p.relnamespace
+        WHERE n.nspname = 'batch'
+          AND p.relname = 'process_staging'
+          AND c.relname ~ '^process_staging_p[0-9]{8}$'
+          AND substring(c.relname FROM 'p([0-9]{8})$') &lt; #{cutoffYmd}
+    </select>
+
+    <update id="dropPartition">
+        DROP TABLE IF EXISTS batch.${partitionName}
+    </update>
+
 </mapper>
