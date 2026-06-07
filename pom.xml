@@ -377,7 +377,7 @@
                 <plugin>
                     <groupId>org.jacoco</groupId>
                     <artifactId>jacoco-maven-plugin</artifactId>
-                    <version>0.8.14</version>
+                    <version>0.8.15</version>
                     <executions>
                         <!-- 测试执行前挂载 agent，收集覆盖率数据 -->
                         <execution>
@@ -387,7 +387,7 @@
                             </goals>
                             <configuration>
                                 <!--
-                                    JaCoCo 0.8.14 ASM instrumentation 对 jsqlparser 生成的超大方法
+                                    JaCoCo 0.8.15 ASM instrumentation 对 jsqlparser 生成的超大方法
                                     (CCJSqlParserTokenManager.jjMoveNfa_0) 会抛 MethodTooLargeException,
                                     导致 fork JVM 加载失败、orchestrator IT 大面积连环挂(2026-05-30 真因)。
                                     第三方 lib coverage 本就无收集意义,exclude 它即可。升 0.8.15+ 时复核。
