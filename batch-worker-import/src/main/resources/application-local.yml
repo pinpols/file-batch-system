@@ -92,8 +92,8 @@ batch:
     pg-session:
       business:
         # 导入 benchmark 可打开:
-        # BATCH_PG_BUSINESS_WORK_MEM=64MB
-        # BATCH_PG_BUSINESS_MAINTENANCE_WORK_MEM=512MB
+        # 示例: BATCH_PG_BUSINESS_WORK_MEM=64MB
+        # 示例: BATCH_PG_BUSINESS_MAINTENANCE_WORK_MEM=512MB
         # 默认 0B 表示不改 PG 会话默认,避免生产全局放大内存。
         work-mem: ${BATCH_PG_BUSINESS_WORK_MEM:0B}
         maintenance-work-mem: ${BATCH_PG_BUSINESS_MAINTENANCE_WORK_MEM:0B}

@@ -10,9 +10,9 @@
 # 只使用专用表 biz.import_copy_worth_bench,默认跑完删除。不会读写真实业务表。
 #
 # 用法:
-#   bash scripts/local/import-copy-worth-benchmark.sh
-#   ROWS=200000 BATCH_SIZE=5000 bash scripts/local/import-copy-worth-benchmark.sh
-#   KEEP_BENCH_TABLE=1 bash scripts/local/import-copy-worth-benchmark.sh
+#   示例: bash scripts/local/import-copy-worth-benchmark.sh
+#   示例: ROWS=200000 BATCH_SIZE=5000 bash scripts/local/import-copy-worth-benchmark.sh
+#   示例: KEEP_BENCH_TABLE=1 bash scripts/local/import-copy-worth-benchmark.sh
 set -euo pipefail
 
 ROWS="${ROWS:-100000}"
