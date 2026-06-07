@@ -8,8 +8,11 @@ import com.example.batch.common.plugin.ImportLoadPlugin;
 import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.worker.imports.config.JdbcMappedImportSecurityProperties;
+import com.example.batch.worker.imports.jdbc.ImportLoadStrategy;
 import com.example.batch.worker.imports.jdbc.JdbcMappedImportSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.StringReader;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -18,9 +21,12 @@ import java.util.Map;
 import java.util.Objects;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.postgresql.PGConnection;
+import org.postgresql.copy.CopyManager;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Component;
 
 /**
@@ -83,6 +89,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     final ImportLoadContext loadContext = applyRegion(context, spec);
 
     List<String> insertCols = orderedInsertColumns(spec);
+    if (spec.loadStrategy() == ImportLoadStrategy.PARTITION_REPLACE_COPY) {
+      return copyChunk(loadContext, spec, insertCols, records);
+    }
     String sql = buildSql(spec, insertCols);
     // C-2.7 b / R2-P1-4: 模板未声明 conflict_columns → 纯 INSERT，partition reclaim 重试时已 COMMIT 的 chunk
     // 会再次落入 → 业务表重复行。开发期允许（INFO），但 prod 必须开 strictIdempotency=true（启动期 parse 即拒）。
@@ -133,6 +142,37 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     return n;
   }
 
+  public boolean isPartitionReplaceCopy(ImportLoadContext context) {
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
+    return spec.loadStrategy() == ImportLoadStrategy.PARTITION_REPLACE_COPY;
+  }
+
+  public void preparePartitionReplace(ImportLoadContext context) {
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
+    spec.validateIdentifiers(
+        securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
+    ImportLoadContext loadContext = applyRegion(context, spec);
+    String sql = buildDeleteSql(spec);
+    Object[] args = buildPartitionArgs(spec, loadContext);
+    txTemplate.execute(
+        status -> {
+          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+          int deleted = jdbcTemplate.update(sql, args);
+          if (log.isInfoEnabled()) {
+            log.info(
+                "jdbc-mapped-import partition replace prepared: tenantId={}, template={},"
+                    + " schema={}, table={}, replacePartitionColumns={}, deletedRows={}",
+                loadContext.tenantId(),
+                loadContext.templateCode(),
+                spec.schema(),
+                spec.table(),
+                spec.replacePartitionColumns(),
+                deleted);
+          }
+          return null;
+        });
+  }
+
   private List<String> orderedInsertColumns(JdbcMappedImportSpec spec) {
     List<String> cols = new ArrayList<>();
     cols.add(spec.tenantColumn());
@@ -176,6 +216,27 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return resolveBinding(pattern, context);
     }
     throw new IllegalStateException("no binding for column: " + col);
+  }
+
+  private Object valueForPartitionColumn(
+      String col, JdbcMappedImportSpec spec, ImportLoadContext context) {
+    if (col.equals(spec.tenantColumn())) {
+      return context.tenantId();
+    }
+    String pattern = spec.systemBindings().get(col);
+    if (pattern != null) {
+      return resolveBinding(pattern, context);
+    }
+    throw new IllegalStateException("no partition binding for column: " + col);
+  }
+
+  private Object[] buildPartitionArgs(JdbcMappedImportSpec spec, ImportLoadContext context) {
+    List<String> partitionCols = spec.replacePartitionColumns();
+    Object[] args = new Object[partitionCols.size()];
+    for (int i = 0; i < partitionCols.size(); i++) {
+      args[i] = valueForPartitionColumn(partitionCols.get(i), spec, context);
+    }
+    return args;
   }
 
   /**
@@ -267,5 +328,108 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
     update.setLength(update.length() - 1);
     return insert + " ON CONFLICT (" + conflictPart + ") DO UPDATE SET " + update;
+  }
+
+  private int copyChunk(
+      ImportLoadContext context,
+      JdbcMappedImportSpec spec,
+      List<String> insertCols,
+      List<Map<String, Object>> records) {
+    String copySql = buildCopySql(spec, insertCols);
+    String csv = buildCopyCsv(insertCols, spec, records, context);
+    int n = records.size();
+    txTemplate.execute(
+        status -> {
+          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+          Connection conn = DataSourceUtils.getConnection(businessDataSource);
+          try {
+            CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
+            long copied = copyManager.copyIn(copySql, new StringReader(csv));
+            if (copied != n) {
+              throw new IllegalStateException(
+                  "PostgreSQL COPY row count mismatch: expected=" + n + ", copied=" + copied);
+            }
+            return null;
+          } catch (Exception ex) {
+            throw new IllegalStateException("PostgreSQL COPY failed: " + ex.getMessage(), ex);
+          } finally {
+            DataSourceUtils.releaseConnection(conn, businessDataSource);
+          }
+        });
+    return n;
+  }
+
+  private String buildDeleteSql(JdbcMappedImportSpec spec) {
+    StringBuilder where = new StringBuilder();
+    for (String c : spec.replacePartitionColumns()) {
+      where.append(JdbcMappedSqlValidator.quotePg(c)).append("=? AND ");
+    }
+    where.setLength(where.length() - " AND ".length());
+    return "DELETE FROM " + tableName(spec) + " WHERE " + where;
+  }
+
+  private String buildCopySql(JdbcMappedImportSpec spec, List<String> insertCols) {
+    StringBuilder colPart = new StringBuilder();
+    for (String c : insertCols) {
+      colPart.append(JdbcMappedSqlValidator.quotePg(c)).append(',');
+    }
+    colPart.setLength(colPart.length() - 1);
+    return "COPY "
+        + tableName(spec)
+        + " ("
+        + colPart
+        + ") FROM STDIN WITH (FORMAT csv, NULL '\\N')";
+  }
+
+  private String tableName(JdbcMappedImportSpec spec) {
+    return JdbcMappedSqlValidator.quotePg(spec.schema())
+        + "."
+        + JdbcMappedSqlValidator.quotePg(spec.table());
+  }
+
+  private String buildCopyCsv(
+      List<String> insertCols,
+      JdbcMappedImportSpec spec,
+      List<Map<String, Object>> records,
+      ImportLoadContext context) {
+    StringBuilder sb = new StringBuilder(Math.max(1024, records.size() * insertCols.size() * 16));
+    for (Map<String, Object> row : records) {
+      for (int i = 0; i < insertCols.size(); i++) {
+        if (i > 0) {
+          sb.append(',');
+        }
+        appendCsvValue(sb, valueForColumn(insertCols.get(i), spec, row, context));
+      }
+      sb.append('\n');
+    }
+    return sb.toString();
+  }
+
+  private static void appendCsvValue(StringBuilder sb, Object value) {
+    if (value == null) {
+      sb.append("\\N");
+      return;
+    }
+    String text = String.valueOf(value);
+    boolean quote =
+        text.equals("\\N")
+            || text.indexOf(',') >= 0
+            || text.indexOf('"') >= 0
+            || text.indexOf('\n') >= 0
+            || text.indexOf('\r') >= 0;
+    if (!quote) {
+      sb.append(text);
+      return;
+    }
+    sb.append('"');
+    for (int i = 0; i < text.length(); i++) {
+      char ch = text.charAt(i);
+      if (ch == '"') {
+        sb.append("\"\"");
+      } else {
+        sb.append(ch);
+      }
+    }
+    sb.append('"');
   }
 }

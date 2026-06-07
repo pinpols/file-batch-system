@@ -26,8 +26,20 @@ public record JdbcMappedImportSpec(
     List<String> conflictColumns,
     Map<String, String> systemBindings,
     String defaultRegion,
-    List<String> allowedRegions) {
+    List<String> allowedRegions,
+    ImportLoadStrategy loadStrategy,
+    List<String> replacePartitionColumns) {
   public record ColumnMapping(String from, String to) {}
+
+  public JdbcMappedImportSpec {
+    columnMappings = columnMappings == null ? List.of() : List.copyOf(columnMappings);
+    conflictColumns = conflictColumns == null ? List.of() : List.copyOf(conflictColumns);
+    systemBindings = systemBindings == null ? Map.of() : new LinkedHashMap<>(systemBindings);
+    allowedRegions = allowedRegions == null ? List.of() : List.copyOf(allowedRegions);
+    loadStrategy = loadStrategy == null ? ImportLoadStrategy.BATCH_UPSERT : loadStrategy;
+    replacePartitionColumns =
+        replacePartitionColumns == null ? List.of() : List.copyOf(replacePartitionColumns);
+  }
 
   public static JdbcMappedImportSpec parse(
       Map<String, Object> templateConfig, ObjectMapper objectMapper) {
@@ -50,8 +62,22 @@ public record JdbcMappedImportSpec(
     Object dr = root.get("defaultRegion");
     String defaultRegion = dr == null ? null : String.valueOf(dr).trim();
     List<String> allowedRegions = parseStringList(root.get("allowedRegions"));
+    ImportLoadStrategy loadStrategy = ImportLoadStrategy.parse(root.get("loadStrategy"));
+    List<String> replacePartitionColumns = parseStringList(root.get("replacePartitionColumns"));
+    if (replacePartitionColumns.isEmpty()) {
+      replacePartitionColumns = parseStringList(root.get("partitionReplaceColumns"));
+    }
     return new JdbcMappedImportSpec(
-        schema, table, tenantColumn, mappings, conflicts, system, defaultRegion, allowedRegions);
+        schema,
+        table,
+        tenantColumn,
+        mappings,
+        conflicts,
+        system,
+        defaultRegion,
+        allowedRegions,
+        loadStrategy,
+        replacePartitionColumns);
   }
 
   private static String required(Map<String, Object> root, String key) {
@@ -162,7 +188,9 @@ public record JdbcMappedImportSpec(
    */
   public void validateIdentifiers(Collection<String> allowedSchemas, boolean strictIdempotency) {
     validateIdentifiers(allowedSchemas);
-    if (strictIdempotency && (conflictColumns == null || conflictColumns.isEmpty())) {
+    if (strictIdempotency
+        && loadStrategy == ImportLoadStrategy.BATCH_UPSERT
+        && (conflictColumns == null || conflictColumns.isEmpty())) {
       throw new WorkerConfigException(
           "jdbc-mapped-import template missing conflictColumns under strictIdempotency: "
               + "schema="
@@ -192,6 +220,32 @@ public record JdbcMappedImportSpec(
     for (String dbCol : systemBindings.keySet()) {
       JdbcMappedSqlValidator.requireIdentifier(dbCol, "systemBinding column");
       allCols.add(dbCol);
+    }
+    if (loadStrategy == ImportLoadStrategy.PARTITION_REPLACE_COPY) {
+      validatePartitionReplaceColumns(allCols);
+    }
+  }
+
+  private void validatePartitionReplaceColumns(Set<String> allCols) {
+    if (replacePartitionColumns == null || replacePartitionColumns.isEmpty()) {
+      throw new WorkerConfigException(
+          "jdbc_mapped_import.replacePartitionColumns is required for PARTITION_REPLACE_COPY");
+    }
+    Set<String> contextResolvableCols = new LinkedHashSet<>();
+    contextResolvableCols.add(tenantColumn);
+    contextResolvableCols.addAll(systemBindings.keySet());
+    for (String c : replacePartitionColumns) {
+      JdbcMappedSqlValidator.requireIdentifier(c, "replacePartitionColumn");
+      if (!allCols.contains(c)) {
+        throw new WorkerConfigException(
+            "replacePartitionColumns must appear in tenant/mappings/systemBindings: " + c);
+      }
+      if (!contextResolvableCols.contains(c)) {
+        throw new WorkerConfigException(
+            "replacePartitionColumns must be resolvable before reading rows: "
+                + c
+                + " (use tenantColumn or systemBindings)");
+      }
     }
   }
 }

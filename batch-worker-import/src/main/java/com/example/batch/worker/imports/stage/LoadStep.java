@@ -19,6 +19,7 @@ import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
+import com.example.batch.worker.imports.plugin.GenericJdbcMappedImportLoadPlugin;
 import com.example.batch.worker.imports.plugin.ImportLoadPluginRegistry;
 import com.example.batch.worker.imports.stage.support.ImportStageSupport;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -104,10 +105,16 @@ public class LoadStep implements ImportStageStep {
               : context.getFileId();
       ImportLoadPlugin plugin =
           importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
-      // ADR-038 R3-3:续跑开关开时,plugin 必须自报幂等能力(NONE/UNKNOWN 拒跑)。跨库无 1PC,
-      // 崩溃窗口重做最后一个 chunk 的数据安全完全靠 plugin 幂等兜底。
-      requireIdempotentPluginIfCheckpointEnabled(plugin);
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
+      boolean partitionReplaceCopy = isPartitionReplaceCopy(plugin, loadCtx);
+      if (partitionReplaceCopy) {
+        requireCheckpointDisabledForPartitionReplace(plugin);
+        ((GenericJdbcMappedImportLoadPlugin) plugin).preparePartitionReplace(loadCtx);
+      } else {
+        // ADR-038 R3-3:续跑开关开时,plugin 必须自报幂等能力(NONE/UNKNOWN 拒跑)。跨库无 1PC,
+        // 崩溃窗口重做最后一个 chunk 的数据安全完全靠 plugin 幂等兜底。
+        requireIdempotentPluginIfCheckpointEnabled(plugin);
+      }
       int chunkSize = resolveChunkSize(context);
 
       // ADR-038 P2:续跑位点。开关关闭或 pipeline_instance_id 缺失时退化为今天的行为(从 0 跑、不写位点)。
@@ -214,6 +221,23 @@ public class LoadStep implements ImportStageStep {
             + "请让 plugin override idempotencyCapability() 返回 IDEMPOTENT_BY_UNIQUE_CONSTRAINT/"
             + "IDEMPOTENT_BY_PLUGIN_LOGIC,或关闭续跑开关。"
             + "详见 docs/runbook/platform-worker-checkpoint-howto.md §前置校验。");
+  }
+
+  private boolean isPartitionReplaceCopy(ImportLoadPlugin plugin, ImportLoadContext loadCtx) {
+    return plugin instanceof GenericJdbcMappedImportLoadPlugin jdbcPlugin
+        && jdbcPlugin.isPartitionReplaceCopy(loadCtx);
+  }
+
+  private void requireCheckpointDisabledForPartitionReplace(ImportLoadPlugin plugin) {
+    if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
+      return;
+    }
+    throw new WorkerConfigException(
+        "PARTITION_REPLACE_COPY cannot run with batch.worker.checkpoint.enabled=true for plugin "
+            + plugin.id()
+            + ": partition replace clears the target partition once before COPY chunks, so"
+            + " line-based checkpoint resume would expose partial reload semantics. Disable"
+            + " checkpoint for this template or use BATCH_UPSERT.");
   }
 
   // ADR-038 P2 续跑位点辅助 ─────────────────────────────────────────────────────

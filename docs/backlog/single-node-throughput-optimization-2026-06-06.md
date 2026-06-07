@@ -79,6 +79,7 @@
 |---|---|---|---|---|
 | B1 | **多值 INSERT**(COPY 轻量替代) | LoadStep:单条 SQL `INSERT INTO ... VALUES (...),(...),(...)` 一次 1000-5000 行;UPSERT 仍走 `ON CONFLICT DO UPDATE` | **3-5×** | 改 LoadStep;UPSERT 语义、skip-on-error、RLS `SET LOCAL`、ADR-038 续跑 checkpoint 全保住;参数数量受 JDBC 限制(>32767 占位符要拆) |
 | B2 | **真 COPY(终极)** | LoadStep:`COPY ... FROM STDIN` 灌**临时表** → `INSERT INTO target SELECT ... FROM tmp ON CONFLICT DO UPDATE`(两步法) | **5-20×** | 比 B1 重一倍;同样要保住 UPSERT/skip/RLS/checkpoint;PG JDBC `CopyManager` API |
+| B2a | **整逻辑分区 replace + direct COPY** | `jdbcMappedImport.loadStrategy=PARTITION_REPLACE_COPY`:先按 `replacePartitionColumns` 清理 tenant/bizDate 等逻辑分区,再 `COPY FROM STDIN` 追加 | **适合全量分区刷新** | 只覆盖“本次文件就是该逻辑分区完整快照”的模板;不做 UPSERT merge;不与 line-based checkpoint 混用;分区表上要求清理谓词覆盖分区键 |
 
 > **B 之前先做完 A**。B1 是中间档,拿 COPY 一大半好处、代价小;**做完 A 仍不够再上 B1,B1 仍不够再上 B2**。
 
