@@ -166,9 +166,24 @@ ATOMIC_JOBS_CSV=atomic_sql_demo,atomic_stored_proc_demo,atomic_http_demo \
 
 - `USERS=1|4|8`：process/dispatch/atomic 端到端并发
 - `TRIGGER_LAUNCH_RPS=5.0`、`TRIGGER_DURATION_SECONDS=120`：trigger 写压
+- `CONTROL_PLANE_MODE=parallel`：process / dispatch / atomic / trigger 在同一 Gatling run 内同时发压
+- `PROCESS_LAUNCH_RPS=1.0`、`DISPATCH_LAUNCH_RPS=1.0`、`ATOMIC_LAUNCH_RPS=1.0`：并行模式下三类 worker 的 launch 速率
 - `SCHEDULING_CONSOLE_READS=true`：调度压测时额外打 console 读接口，默认关闭
 - `MODULES_CSV=process,dispatch`：只跑部分模块
 - `SKIP_AUTO_CLEANUP=1`：保留现场数据和报告引用
+
+真并行小基线示例：
+
+```bash
+CONTROL_PLANE_MODE=parallel \
+MODULES_CSV=process,dispatch,atomic,trigger \
+PROCESS_LAUNCH_RPS=1.0 DISPATCH_LAUNCH_RPS=1.0 ATOMIC_LAUNCH_RPS=1.0 \
+TRIGGER_LAUNCH_RPS=1.0 TRIGGER_READ_RPS=1.0 TRIGGER_DURATION_SECONDS=30 \
+SKIP_AUTO_CLEANUP=1 \
+  bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+Kafka lag 默认优先通过 `batch-kafka` 容器内 `/opt/kafka/bin/kafka-consumer-groups.sh` 采样；可用 `KAFKA_LAG_GROUP_REGEX` 收窄 consumer group。
 
 ### CLAIM → REPORT 清单
 

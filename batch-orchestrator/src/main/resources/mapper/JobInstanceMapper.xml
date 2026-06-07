@@ -231,6 +231,38 @@
         limit #{limit}
     </select>
 
+    <select id="selectStaleCreatedLaunchCandidates" resultMap="JobInstanceResultMap">
+        select ji.*
+        from batch.job_instance ji
+        join batch.trigger_request tr
+          on tr.id = ji.trigger_request_id
+         and tr.tenant_id = ji.tenant_id
+        join batch.job_definition jd
+          on jd.id = ji.job_definition_id
+         and jd.tenant_id = ji.tenant_id
+        where ji.instance_status = 'CREATED'
+          and tr.request_status = 'ACCEPTED'
+          and ji.created_at &lt; #{olderThan}
+          and coalesce(jd.job_type, '') &lt;&gt; 'WORKFLOW'
+          and not exists (
+              select 1
+              from batch.job_partition jp
+              where jp.job_instance_id = ji.id
+          )
+          and not exists (
+              select 1
+              from batch.job_task jt
+              where jt.job_instance_id = ji.id
+          )
+          and not exists (
+              select 1
+              from batch.workflow_run wr
+              where wr.related_job_instance_id = ji.id
+          )
+        order by ji.id asc
+        limit #{limit}
+    </select>
+
     <select id="selectSlaViolationCandidates" resultMap="JobInstanceResultMap">
         <!--
           tenant_id 加入 ORDER BY 首列:scheduler 是全局扫(ShedLock 单节点),

@@ -90,6 +90,14 @@ batch:
     worker-cache:
       enabled: ${BATCH_SCHEDULER_WORKER_CACHE_ENABLED:true}
       ttl-millis: ${BATCH_SCHEDULER_WORKER_CACHE_TTL_MILLIS:5000}
+  trigger:
+    launch:
+      created-recovery:
+        # 保守恢复 launch T1 已提交但 T2 未派发的 CREATED 实例
+        enabled: ${BATCH_TRIGGER_LAUNCH_CREATED_RECOVERY_ENABLED:true}
+        poll-interval-millis: ${BATCH_TRIGGER_LAUNCH_CREATED_RECOVERY_POLL_INTERVAL_MS:60000}
+        min-age-seconds: ${BATCH_TRIGGER_LAUNCH_CREATED_RECOVERY_MIN_AGE_SECONDS:60}
+        batch-size: ${BATCH_TRIGGER_LAUNCH_CREATED_RECOVERY_BATCH_SIZE:50}
   outbox:
     # Outbox 拉取批大小（单次处理条数）
     batch-size: ${BATCH_OUTBOX_BATCH_SIZE:100}
