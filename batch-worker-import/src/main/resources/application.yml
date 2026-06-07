@@ -68,7 +68,12 @@ batch:
         # JDBC fetch-size（驱动层拉取批大小）
         fetch-size: ${BATCH_WORKER_IMPORT_FETCH_SIZE:1000}
         # 业务处理 chunk-size（每批处理/提交的行数）
-        chunk-size: ${BATCH_WORKER_IMPORT_CHUNK_SIZE:500}
+        # 2026-06 调优:500→2000。实测 PG 单语句写吞吐 ~160K 行/s 远高于 app 的 ~5500 行/s,
+        # 瓶颈在 app/JDBC 层(每批往返 + commit 次数),非 PG 写能力。加大 chunk → 减少 commit 次数
+        # + 减少 JDBC 往返(reWriteBatchedInserts 把每批重写成多值 INSERT,pgjdbc 自动按 65535
+        # 参数上限拆分,超宽表安全)。chunk 越大重试粒度越粗(ADR-038 续跑 checkpoint per chunk),
+        # 2000 是吞吐/重试粒度的折中。
+        chunk-size: ${BATCH_WORKER_IMPORT_CHUNK_SIZE:2000}
       jdbc-mapped:
         # 允许访问的业务 schema 白名单（防止误写/越权）
         allowed-schemas:
@@ -144,4 +149,10 @@ batch:
         # import worker business pool（以 DB 写入/校验为主）
         maximum-pool-size: ${BATCH_WORKER_IMPORT_BUSINESS_DB_MAX_POOL_SIZE:15}
         minimum-idle: ${BATCH_WORKER_IMPORT_BUSINESS_DB_MIN_IDLE:3}
+        # 可选写吞吐旋钮(默认空=不改持久性姿态)。设
+        # BATCH_WORKER_IMPORT_BUSINESS_CONNECTION_INIT_SQL="SET synchronous_commit=off"
+        # 可在 import 业务连接关闭同步提交 → app 多次小批 commit 场景提升吞吐。
+        # ⚠️ 持久性代价:崩溃丢失最后若干已提交事务(无数据损坏);仅因 import 幂等(ON CONFLICT)
+        # 可重跑才可接受。仅作用于 import 业务连接池,不影响控制库(状态机强一致)。
+        connection-init-sql: ${BATCH_WORKER_IMPORT_BUSINESS_CONNECTION_INIT_SQL:}
 
