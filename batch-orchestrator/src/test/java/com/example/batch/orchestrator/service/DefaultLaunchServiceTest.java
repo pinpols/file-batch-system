@@ -1,9 +1,12 @@
 package com.example.batch.orchestrator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,9 +14,13 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchTimezoneProperties;
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
@@ -459,6 +466,76 @@ class DefaultLaunchServiceTest {
     assertThat(saved.dayStatus()).isEqualTo("IN_FLIGHT");
     assertThat(saved.catchupCount()).isEqualTo(1);
     assertThat(saved.lateCount()).isEqualTo(0);
+  }
+
+  @Test
+  void shouldMarkPreparedJobFailedWhenDispatchBusinessErrorOccursAfterT1() {
+    LaunchRequest request =
+        new LaunchRequest(
+            "t1",
+            "IMPORT_JOB",
+            LocalDate.of(2026, 3, 27),
+            TriggerType.API,
+            "req-dispatch-reject",
+            "trace-dispatch-reject",
+            Map.of());
+    TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+    triggerRequest.setId(104L);
+    triggerRequest.setDedupKey("dedup-dispatch-reject");
+    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    WorkflowDefinitionEntity workflowDefinition =
+        new WorkflowDefinitionEntity(204L, "t1", "WF", "wf", "FLOW", 1, true);
+    LaunchValidationService.LaunchLoadResult loaded =
+        new LaunchValidationService.LaunchLoadResult(
+            triggerRequest, jobDefinition, workflowDefinition, null);
+    BusinessCalendarEntity calendar =
+        new BusinessCalendarEntity(
+            5L,
+            "t1",
+            "BIZ_CAL",
+            "biz",
+            "Asia/Shanghai",
+            "SKIP",
+            "AUTO",
+            30,
+            LocalTime.of(6, 0),
+            30,
+            120,
+            true);
+
+    when(launchValidationService.load(request)).thenReturn(loaded);
+    when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL")).thenReturn(calendar);
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "BIZ_CAL", request.bizDate()))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+    doAnswer(
+            invocation -> {
+              JobInstanceEntity entity = invocation.getArgument(0);
+              entity.setId(501L);
+              entity.setVersion(0L);
+              return 1;
+            })
+        .when(jobInstanceMapper)
+        .insert(any());
+    when(jobInstanceMapper.updateStatus(
+            eq("t1"), eq(501L), eq(JobInstanceStatus.FAILED.code()), any(), eq(0L)))
+        .thenReturn(1);
+    doThrow(
+            BizException.of(
+                ResultCode.BUSINESS_ERROR,
+                "error.partition.dispatch_business_error",
+                "tenant quota exceeded"))
+        .when(partitionDispatchService)
+        .dispatch(any());
+
+    assertThatThrownBy(() -> service.launch(request))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.partition.dispatch_business_error");
+
+    verify(jobInstanceMapper)
+        .updateStatus(eq("t1"), eq(501L), eq(JobInstanceStatus.FAILED.code()), any(), eq(0L));
+    verify(triggerRequestMapper)
+        .updateAcceptance("t1", "req-dispatch-reject", BatchStatusConstants.REJECTED, 501L);
   }
 
   private JobDefinitionEntity jobDefinition(String calendarCode) {

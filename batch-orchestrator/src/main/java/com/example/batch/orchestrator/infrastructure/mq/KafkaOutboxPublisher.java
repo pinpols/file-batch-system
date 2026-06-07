@@ -16,6 +16,7 @@ import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import org.apache.kafka.common.utils.Utils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -222,6 +224,10 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     if (message == null) {
       return event.getEventKey();
     }
+    String plannedPartitionKey = plannedPartitionKafkaKey(message);
+    if (plannedPartitionKey != null) {
+      return plannedPartitionKey;
+    }
     if (message.jobPartitionId() != null) {
       return message.tenantId()
           + ":"
@@ -241,6 +247,40 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
           + message.taskId();
     }
     return event.getEventKey();
+  }
+
+  private static String plannedPartitionKafkaKey(TaskDispatchMessage message) {
+    Integer partitionNo = message.partitionNo();
+    Integer partitionCount = message.partitionCount();
+    if (partitionNo == null || partitionCount == null || partitionNo <= 0 || partitionCount <= 1) {
+      return null;
+    }
+    int targetPartition = Math.floorMod(partitionNo - 1, partitionCount);
+    String base =
+        message.tenantId()
+            + ":"
+            + message.jobCode()
+            + ":"
+            + message.instanceNo()
+            + ":part:"
+            + partitionNo
+            + "of"
+            + partitionCount;
+    for (int salt = 0; salt < 1024; salt++) {
+      String candidate = base + ":k" + salt;
+      if (partitionFor(candidate, partitionCount) == targetPartition) {
+        return candidate;
+      }
+    }
+    return base;
+  }
+
+  static int partitionFor(String key, int partitionCount) {
+    if (partitionCount <= 0) {
+      return 0;
+    }
+    byte[] bytes = key == null ? new byte[0] : key.getBytes(StandardCharsets.UTF_8);
+    return Utils.toPositive(Utils.murmur2(bytes)) % partitionCount;
   }
 
   // #5-2: 敏感字段关键词，delivery log 中的 payload 需对这些字段脱敏

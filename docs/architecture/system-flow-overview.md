@@ -768,10 +768,10 @@ flowchart LR
 | Stage | 关键动作 | 输入 | 输出 |
 |---|---|---|---|
 | PREPARE | 校验 sqlTransformCompute spec / target 表存在性 / schema allowlist；生成 `batchKey`；删除本 batchKey 历史 staging | `step_params.sqlTransformCompute` + `payload.bizDate` | `attributes.batchKey` |
-| COMPUTE | 用 `processBusinessDataSource` 跑 `sourceSql`，逐行 `jsonb_build_object` 写入 `batch.process_staging`（按 batchKey 隔离）。或走自定义 `ProcessComputePlugin.compute()` | sourceSql + 命名参数（`:tenantId / :bizDate / :highWaterMarkIn`） | staging 行数 + `attributes.stagedCount` |
-| VALIDATE | 按 `validations[].checkSql` 跑用户校验（典型：`SELECT bool_and(...) AS pass, ... AS message`）；任何一条 `pass=false` 即失败 | staging 行 + checkSql | pass/fail（fail → 跳过 COMMIT） |
-| COMMIT | `INSERT INTO target SELECT jsonb_populate_record(...) FROM staging WHERE batch_key=?` 一句原子发布；按 `writeMode` 走 INSERT / UPSERT / INSERT_IGNORE | staging | target 表写入 + `attributes.publishedCount` |
-| FEEDBACK | `DELETE FROM staging WHERE batch_key=?` 清场；从插件 / 配置写 `highWaterMarkOut` 到 attributes（orchestrator 在 success 路径下回写 `job_instance`） | publishedCount + watermark column | `high_water_mark_out` |
+| COMPUTE | 默认 JSONB 模式用 `processBusinessDataSource` 跑 `sourceSql`，逐行 `jsonb_build_object` 写入 `batch.process_staging`（按 batchKey 隔离）；`stagingMode=DIRECT` 只登记快路径元信息。或走自定义 `ProcessComputePlugin.compute()` | sourceSql + 命名参数（`:tenantId / :bizDate / :highWaterMarkIn`） | staging 行数 / DIRECT 模式标记 |
+| VALIDATE | JSONB 模式按 `validations[].checkSql` 跑用户校验（典型：`SELECT bool_and(...) AS pass, ... AS message`）；`DIRECT` 模式不支持 staging validations | staging 行 + checkSql | pass/fail（fail → 跳过 COMMIT） |
+| COMMIT | JSONB 模式 `INSERT INTO target SELECT jsonb_populate_record(...) FROM staging WHERE batch_key=?` 一句原子发布；`DIRECT` 模式 `INSERT INTO target SELECT ... FROM (sourceSql) base` 直接发布；按 `writeMode` 走 INSERT / UPSERT / INSERT_IGNORE | staging 或 sourceSql | target 表写入 + `attributes.publishedCount` |
+| FEEDBACK | JSONB 模式 `DELETE FROM staging WHERE batch_key=?` 清场；`DIRECT` 模式跳过 staging 清理；从插件 / 配置写 `highWaterMarkOut` 到 attributes（orchestrator 在 success 路径下回写 `job_instance`） | publishedCount + watermark column | `high_water_mark_out` |
 
 > **失败语义差异（与 IMPORT/EXPORT/DISPATCH 对比）**：
 > - VALIDATE 失败：staging **保留**（不清），target 不变 → forensics 友好；下次 PREPARE 同 batchKey 才会清
@@ -1315,7 +1315,7 @@ ctx.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, maxUpdateTime.t
 
 PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类 worker,定位"系统内部数据加工"(聚合 / 清洗 / 状态推进)。落地依据:[`docs/design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5。
 
-不是简单"跑一段 SQL",而是 **WAP+bookends**(Write-Audit-Publish + 前后置)模式:**先写 staging,后审核,再原子 publish**。与 dbt build / Iceberg branch / Netflix Atlas 的成熟数据平台一致,避免脏数据落到生产 target 表。
+不是简单"跑一段 SQL"。默认 JSONB 模式是 **WAP+bookends**(Write-Audit-Publish + 前后置):**先写 staging,后审核,再原子 publish**。与 dbt build / Iceberg branch / Netflix Atlas 的成熟数据平台一致,避免脏数据落到生产 target 表。`stagingMode=DIRECT` 是给无 staging audit 需求的大吞吐 copy 场景的显式快路径,以 `INSERT ... SELECT ... ON CONFLICT` 直接发布。
 
 ### 7.9.2 一张图看完整回路
 
@@ -1323,10 +1323,10 @@ PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类 worker,定位"系统内部
 flowchart LR
   CFG[("pipeline_step_definition<br/>step_params.sqlTransformCompute<br/>(sourceSql/targetTable/columns/<br/>conflictColumns/validations/watermark)")]:::store
   PR[PREPARE<br/>spec.parse + jsqlparser AST<br/>identifier + schema allowlist<br/>查 information_schema.tables]:::stage
-  CO["COMPUTE (Write)<br/>跑源 SELECT<br/>逐行 jsonb_build_object<br/>写 staging"]:::stage
-  VL["VALIDATE (Audit)<br/>row_count_positive 默认<br/>+ user validations checkSql"]:::stage
-  CM["COMMIT (Publish)<br/>jsonb_populate_record<br/>反序列化 staging<br/>原子 INSERT...ON CONFLICT"]:::stage
-  FB[FEEDBACK<br/>DELETE staging WHERE batch_key<br/>highWaterMarkOut 透传]:::stage
+  CO["COMPUTE (Write)<br/>JSONB:写 staging<br/>DIRECT:登记快路径"]:::stage
+  VL["VALIDATE (Audit)<br/>JSONB:user validations checkSql<br/>DIRECT:跳过 staging 校验"]:::stage
+  CM["COMMIT (Publish)<br/>JSONB:jsonb_populate_record<br/>DIRECT:INSERT...SELECT<br/>ON CONFLICT"]:::stage
+  FB[FEEDBACK<br/>JSONB:DELETE staging<br/>DIRECT:跳过 staging 清理<br/>highWaterMarkOut 透传]:::stage
   STG[("batch.process_staging<br/>(batch_key, payload jsonb,<br/>tenant_id, target_*, staged_at)")]:::store
   TGT[("biz.target_table<br/>(业务目标表)")]:::store
   JI[("job_instance.high_water_mark_out<br/>(orchestrator 回写)")]:::store
@@ -1335,11 +1335,12 @@ flowchart LR
   CFG ==>|"读 spec"| PR
   PR ==>|"生成 batchKey<br/>缓存 spec 到 context"| CO
   CO ==>|"SELECT FROM 源"| SRC
-  CO ==>|"INSERT staging<br/>(JSONB 序列化)"| STG
+  CO ==>|"JSONB:INSERT staging<br/>(JSONB 序列化)"| STG
   CO ==>|"max(watermarkColumn)<br/>= highWaterMarkOut"| FB
   VL ==>|"SELECT staging<br/>WHERE batch_key=:bk"| STG
-  CM ==>|"INSERT FROM staging<br/>+ jsonb_populate_record<br/>+ ON CONFLICT"| TGT
-  FB ==>|"DELETE staging<br/>WHERE batch_key=:bk"| STG
+  CM ==>|"JSONB:INSERT FROM staging<br/>+ jsonb_populate_record<br/>+ ON CONFLICT"| TGT
+  CM ==>|"DIRECT:INSERT...SELECT<br/>FROM sourceSql<br/>+ ON CONFLICT"| TGT
+  FB ==>|"JSONB:DELETE staging<br/>WHERE batch_key=:bk"| STG
   FB ==>|"worker report → orchestrator<br/>UPDATE job_instance"| JI
 
   PR --> CO --> VL --> CM --> FB
@@ -1352,8 +1353,8 @@ flowchart LR
 
 - **target 表干净**:VALIDATE 失败时 COMMIT 不跑,target 完全不变;失败本批数据留在 staging 供运维复盘
 - **batchKey 唯一性**:PREPARE 阶段生成 `process-<taskId>-<traceId>`,5 个 stage 共享;不同 task 不同 batchKey,staging 行天然隔离
-- **原子 publish**:COMMIT 是单 SQL `INSERT ... SELECT FROM staging ... ON CONFLICT DO UPDATE`,不存在"写一半"——PG 单语句要么全成要么全失败
-- **staging 不堆积**:成功路径 FEEDBACK 必清(`DELETE WHERE batch_key`);失败路径 staging 保留供 forensics,直到下次 PREPARE 同 batchKey 才清(实际由 retry 触发的新 task 是新 batchKey,旧 batchKey 需运维按 staged_at 清理)
+- **原子 publish**:JSONB 模式 COMMIT 是单 SQL `INSERT ... SELECT FROM staging ... ON CONFLICT DO UPDATE`;DIRECT 模式是单 SQL `INSERT ... SELECT FROM sourceSql ... ON CONFLICT ...`,不存在"写一半"——PG 单语句要么全成要么全失败
+- **staging 不堆积**:JSONB 成功路径 FEEDBACK 必清(`DELETE WHERE batch_key`);失败路径 staging 保留供 forensics,直到下次 PREPARE 同 batchKey 才清(实际由 retry 触发的新 task 是新 batchKey,旧 batchKey 需运维按 staged_at 清理)。DIRECT 模式不写 staging。
 - **plugin opt-in**:`ProcessComputePlugin` 5 个 lifecycle 方法都有默认 no-op,自定义插件只重写 `compute()` 也合法,框架仍跑全 5 stage
 
 ### 7.9.4 关键代码位
@@ -1362,8 +1363,8 @@ flowchart LR
 |---|---|
 | `batch-worker-process/.../stage/DefaultProcessStageExecutor.java` | 5 段循环 + plugin 解析(扫 step_definition 找 COMPUTE step impl_code 缓存到 context) |
 | `batch-worker-process/.../stage/ProcessComputePlugin.java` | 5 lifecycle 接口 (prepare/compute/validate/commit/feedback,默认 no-op) |
-| `batch-worker-process/.../sql/SqlTransformComputePlugin.java` | 内置插件:解析 spec / 写 staging / 跑 validations / `jsonb_populate_record` 发布 / 清 staging |
-| `batch-worker-process/.../sql/SqlTransformComputeSpec.java` | step_params 解析 + identifier 校验 + `validations` 列表 |
+| `batch-worker-process/.../sql/SqlTransformComputePlugin.java` | 内置插件:解析 spec / JSONB staging 或 DIRECT 发布 / 跑 validations / `jsonb_populate_record` 或 `INSERT...SELECT` 发布 / 清 staging |
+| `batch-worker-process/.../sql/SqlTransformComputeSpec.java` | step_params 解析 + identifier 校验 + `stagingMode` + `validations` 列表 |
 | `batch-worker-process/.../sql/SqlTransformComputeSqlValidator.java` | jsqlparser AST 校验 + SELECT-only + schema allowlist + `validateUserCheckSelect`(给 VALIDATE 用,跳过 schema allowlist) |
 | `db/migration/V75__add_process_staging_table.sql` | 共享 `batch.process_staging` 表(JSONB payload + batch_key/staged_at 索引) |
 

@@ -153,7 +153,9 @@ stop_module() {
   local port
   port="$(port_for "$name")"
   local pids
-  pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
+  # Only stop the listener. Plain `lsof -ti tcp:$port` also returns clients
+  # connected to this port, which can kill dependent workers during restart.
+  pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
   if [ -n "$pids" ]; then
     echo "  停止 ${name}（端口 ${port}，pid=${pids}）"
     # shellcheck disable=SC2086

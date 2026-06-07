@@ -105,7 +105,9 @@ public class TaskDispatchOutboxService {
             traceId,
             idempotencyKey,
             BatchDateTimeSupport.utcNow(),
-            buildSchedulingContext(jobInstance));
+            buildSchedulingContext(jobInstance),
+            partition == null ? null : partition.getPartitionNo(),
+            resolvePartitionCount(jobInstance));
 
     // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
     // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
@@ -150,6 +152,75 @@ public class TaskDispatchOutboxService {
         jobInstance.getTriggerType(),
         null,
         null);
+  }
+
+  private Integer resolvePartitionCount(JobInstanceEntity jobInstance) {
+    if (jobInstance == null) {
+      return null;
+    }
+    Integer expected = jobInstance.getExpectedPartitionCount();
+    if (expected != null && expected > 0) {
+      return expected;
+    }
+    Map<String, Object> params = parsePayloadMap(jobInstance.getParamsSnapshot());
+    return firstPositiveInt(
+        params.get("partitionCount"),
+        params.get("estimatedPartitionCount"),
+        params.get("staticPartitionCount"),
+        params.get("shardCount"),
+        params.get("partitions"),
+        nestedValue(params, "effectiveParams", "partitionCount"),
+        nestedValue(params, "requestParams", "partitionCount"),
+        nestedValue(params, "defaultParams", "partitionCount"),
+        nestedValue(params, "effectiveParams", "estimatedPartitionCount"),
+        nestedValue(params, "requestParams", "estimatedPartitionCount"),
+        nestedValue(params, "effectiveParams", "staticPartitionCount"),
+        nestedValue(params, "requestParams", "staticPartitionCount"),
+        nestedValue(params, "effectiveParams", "shardCount"),
+        nestedValue(params, "requestParams", "shardCount"),
+        nestedValue(params, "effectiveParams", "partitions"),
+        nestedValue(params, "requestParams", "partitions"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private Object nestedValue(Map<String, Object> params, String objectKey, String valueKey) {
+    if (params == null || objectKey == null || valueKey == null) {
+      return null;
+    }
+    Object nested = params.get(objectKey);
+    if (nested instanceof Map<?, ?> nestedMap) {
+      return ((Map<String, Object>) nestedMap).get(valueKey);
+    }
+    return null;
+  }
+
+  private Integer firstPositiveInt(Object... values) {
+    if (values == null) {
+      return null;
+    }
+    for (Object value : values) {
+      Integer parsed = parsePositiveInt(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  private Integer parsePositiveInt(Object value) {
+    if (value instanceof Number number) {
+      int parsed = number.intValue();
+      return parsed > 0 ? parsed : null;
+    }
+    if (value instanceof String text && !text.isBlank()) {
+      try {
+        int parsed = Integer.parseInt(text.trim());
+        return parsed > 0 ? parsed : null;
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   /**

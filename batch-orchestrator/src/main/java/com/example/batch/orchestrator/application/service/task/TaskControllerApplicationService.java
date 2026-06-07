@@ -25,6 +25,11 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -61,6 +66,14 @@ public class TaskControllerApplicationService {
     return taskExecutionService.loadEffectiveConfig(request.tenantId(), taskId);
   }
 
+  @Retryable(
+      retryFor = {
+        DeadlockLoserDataAccessException.class,
+        CannotAcquireLockException.class,
+        TransientDataAccessException.class
+      },
+      maxAttempts = 3,
+      backoff = @Backoff(delay = 50, multiplier = 2.0))
   public void report(Long taskId, TaskExecutionReportDto request) {
     String errorCode =
         resolveFailureField(request.getErrorCode(), request.getCode(), request.isSuccess());

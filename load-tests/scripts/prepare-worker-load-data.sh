@@ -333,6 +333,7 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
     'targetSchema', 'biz',
     'targetTable', 'process_event_copy',
     'writeMode', 'UPSERT',
+    'stagingMode', 'DIRECT',
     'columns', jsonb_build_array(
       jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
       jsonb_build_object('source', 'event_id', 'target', 'event_id'),
@@ -342,13 +343,6 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
       jsonb_build_object('source', 'high_water_mark', 'target', 'high_water_mark')
     ),
     'conflictColumns', jsonb_build_array('tenant_id', 'event_id'),
-    'validations', jsonb_build_array(
-      jsonb_build_object(
-        'name', 'staged_rows_present',
-        'checkSql', 'select count(*) > 0 as pass, ''expected staged rows'' as message from batch.process_staging where batch_key = :batchKey'
-      )
-    ),
-    'emptyResultPolicy', 'FAIL',
     'maxStagedRows', ${PROCESS_COPY_MAX_STAGED_ROWS}
   )),
   1200, 'NONE', 0, true, now(), now() FROM pd
