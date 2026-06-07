@@ -21,9 +21,11 @@ spring:
       max-poll-records: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_RECORDS:20}
       fetch-min-size: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MIN_SIZE:1024}
       fetch-max-wait: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MAX_WAIT:500}
-      # P1-10 Kafka 三角硬化：max.poll.interval.ms 改 300s 与 batch-defaults.yml 一致；
-      # session.timeout.ms / heartbeat.interval.ms / partition.assignment.strategy 走 batch-defaults.yml
-      max-poll-interval-ms: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_INTERVAL_MS:300000}
+      # PROCESS 任务允许 1000w 级 SQL transform/copy,单条任务可能超过 300s。
+      # max.poll.interval.ms 必须大于任务长事务耗时,否则 Kafka 会重平衡并重投同一 task。
+      max-poll-interval-ms: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_INTERVAL_MS:1200000}
+      properties:
+        max.poll.interval.ms: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_INTERVAL_MS:1200000}
 
 batch:
   worker:
@@ -48,7 +50,9 @@ batch:
         allowed-schemas:
           - biz
         forbid-select-star: true
-        query-timeout-seconds: ${BATCH_WORKER_PROCESS_SQL_TRANSFORM_TIMEOUT_SECONDS:60}
+        # PROCESS 是批量 SQL 加工路径,1000w 级 staging copy 会超过 60s。
+        # 仍可用 BATCH_WORKER_PROCESS_SQL_TRANSFORM_TIMEOUT_SECONDS 在租户环境收紧。
+        query-timeout-seconds: ${BATCH_WORKER_PROCESS_SQL_TRANSFORM_TIMEOUT_SECONDS:900}
 
   datasource:
     hikari:
@@ -60,4 +64,3 @@ batch:
         maximum-pool-size: ${BATCH_WORKER_PROCESS_BUSINESS_DB_MAX_POOL_SIZE:20}
         minimum-idle: ${BATCH_WORKER_PROCESS_BUSINESS_DB_MIN_IDLE:5}
         leak-detection-threshold: ${BATCH_WORKER_PROCESS_BUSINESS_DB_LEAK_DETECTION_THRESHOLD_MS:60000}
-

@@ -8,7 +8,9 @@ import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentReso
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
+import com.jcraft.jsch.SftpException;
 import jakarta.annotation.PreDestroy;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -103,6 +105,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Builder
   private record SftpUploadContext(
+      DispatchCommand command,
       Map<String, Object> channelConfig,
       ConnectionConfig connConfig,
       RemoteTarget remoteTarget,
@@ -145,6 +148,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     SftpUploadContext uploadCtx =
         SftpUploadContext.builder()
+            .command(command)
             .channelConfig(channelConfig)
             .connConfig(connConfig)
             .remoteTarget(remoteTarget)
@@ -194,6 +198,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   private DispatchResult uploadViaSftp(SftpUploadContext ctx) {
     Session session = null;
     ChannelSftp sftp = null;
+    String tempRemotePath = null;
+    String manifestTempRemotePath = null;
     try {
       JSch jsch = new JSch();
       // S-1.2 a: 生产 profile 强制 StrictHostKeyChecking=yes，不允许渠道配置翻盘；
@@ -236,10 +242,50 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       sftp = (ChannelSftp) session.openChannel("sftp");
       sftp.connect(30_000);
       String remotePath = ctx.remoteTarget().remotePath();
-      try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord())) {
-        sftp.put(in, remotePath, ChannelSftp.OVERWRITE);
+      tempRemotePath = remotePath + ".tmp-" + UUID.randomUUID();
+      DispatchManifestSupport.PayloadDigest payloadDigest;
+      try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord());
+          DispatchManifestSupport.DigestingInputStream digesting =
+              DispatchManifestSupport.digesting(in)) {
+        sftp.put(digesting, tempRemotePath, ChannelSftp.OVERWRITE);
+        payloadDigest = digesting.finish();
       }
+      publishRemoteFile(sftp, tempRemotePath, remotePath);
+      tempRemotePath = null;
       String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
+      DispatchManifestSupport.ManifestPayload manifest = null;
+      if (DispatchManifestSupport.enabled(ctx.channelConfig())) {
+        String manifestRemotePath =
+            remotePath + DispatchManifestSupport.suffix(ctx.channelConfig());
+        manifestTempRemotePath = manifestRemotePath + ".tmp-" + UUID.randomUUID();
+        String manifestRef = "sftp://" + ctx.connConfig().host() + manifestRemotePath;
+        manifest =
+            DispatchManifestSupport.manifestPayload(
+                ctx.command(),
+                evidence,
+                ctx.remoteTarget().remoteName(),
+                ctx.externalRequestId(),
+                ctx.receiptCode(),
+                payloadDigest,
+                manifestRef);
+        sftp.put(
+            new ByteArrayInputStream(manifest.bytes()),
+            manifestTempRemotePath,
+            ChannelSftp.OVERWRITE);
+        publishRemoteFile(sftp, manifestTempRemotePath, manifestRemotePath);
+        manifestTempRemotePath = null;
+      }
+      if (manifest != null) {
+        return new DispatchResult(
+            true,
+            ctx.externalRequestId(),
+            ctx.receiptCode(),
+            ctx.acknowledged(),
+            ctx.pending(),
+            "uploaded via SFTP",
+            evidence,
+            manifest.toRef());
+      }
       return new DispatchResult(
           true,
           ctx.externalRequestId(),
@@ -249,6 +295,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
           "uploaded via SFTP",
           evidence);
     } catch (Exception ex) {
+      cleanupRemoteTemp(sftp, manifestTempRemotePath);
+      cleanupRemoteTemp(sftp, tempRemotePath);
       SwallowedExceptionLogger.warn(SftpDispatchChannelAdapter.class, "catch:Exception", ex);
 
       return new DispatchResult(
@@ -260,6 +308,43 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       // 主路径立即返回不阻塞下一个 dispatch。
       disconnectWithTimeout(sftp, "sftp-channel", ctx.connConfig().host());
       disconnectWithTimeout(session, "sftp-session", ctx.connConfig().host());
+    }
+  }
+
+  static void publishRemoteFile(ChannelSftp sftp, String tempRemotePath, String remotePath)
+      throws SftpException {
+    try {
+      sftp.rename(tempRemotePath, remotePath);
+    } catch (SftpException firstFailure) {
+      if (!remoteExists(sftp, tempRemotePath) || !remoteExists(sftp, remotePath)) {
+        throw firstFailure;
+      }
+      removeRemoteIfExists(sftp, remotePath);
+      sftp.rename(tempRemotePath, remotePath);
+    }
+  }
+
+  private static void cleanupRemoteTemp(ChannelSftp sftp, String remotePath) {
+    if (sftp == null || !Texts.hasText(remotePath)) {
+      return;
+    }
+    removeRemoteIfExists(sftp, remotePath);
+  }
+
+  private static void removeRemoteIfExists(ChannelSftp sftp, String remotePath) {
+    try {
+      sftp.rm(remotePath);
+    } catch (Exception ignored) {
+      SwallowedExceptionLogger.info(SftpDispatchChannelAdapter.class, "catch:Exception", ignored);
+    }
+  }
+
+  private static boolean remoteExists(ChannelSftp sftp, String remotePath) {
+    try {
+      sftp.stat(remotePath);
+      return true;
+    } catch (Exception ignored) {
+      return false;
     }
   }
 

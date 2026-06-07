@@ -185,6 +185,45 @@ SKIP_AUTO_CLEANUP=1 \
 
 Kafka lag 默认优先通过 `batch-kafka` 容器内 `/opt/kafka/bin/kafka-consumer-groups.sh` 采样；可用 `KAFKA_LAG_GROUP_REGEX` 收窄 consumer group。
 
+### Process Worker 1000w 专项压测
+
+Process worker 大数据压测使用独立脚本,走正常系统链路:
+
+```bash
+cd ..
+SKIP_AUTO_CLEANUP=1 \
+PROCESS_SOURCE_ROWS=10000000 \
+PROCESS_ACCOUNT_COUNT=100000 \
+PROCESS_SCENARIOS=aggregate,copy \
+PROCESS_USERS=1 \
+WAIT_TERMINAL_TIMEOUT_SECONDS=3600 \
+bash load-tests/scripts/run-process-worker-benchmark.sh
+```
+
+脚本会准备两类 process job:
+
+- `lt_process_sql_job`:1000w source rows 聚合到 `biz.process_account_summary`,用于测计算/聚合吞吐。
+- `lt_process_copy_job`:1000w source rows 直通写到 `biz.process_event_copy`,用于测 staging 写入、JSONB 反序列化发布和 cleanup 压力。
+
+本地大数据 run 前确认 worker 配置:
+
+- `BATCH_WORKER_PROCESS_SQL_TRANSFORM_TIMEOUT_SECONDS` 默认 900s。
+- `BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_INTERVAL_MS` 默认 1200000ms。
+- 若历史 Kafka 消息会干扰,可给 worker 临时设置 `BATCH_WORKER_PROCESS_CONSUMER_GROUP_ID=batch-worker-process-bench-<ts>` 和 `SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET=latest`。
+
+报告输出:
+
+- `load-tests/target/process-worker-report-<RUN_ID>.md`
+- `load-tests/target/process-worker-logs/<RUN_ID>/`
+
+清理:
+
+```bash
+RUN_ID=<report里的RUN_ID> bash load-tests/scripts/cleanup-worker-load-data.sh
+```
+
+当前 1000w baseline 结论见 `docs/verifications/process-worker-throughput-2026-06-07.md`:aggregate 路径可用,copy 路径功能成功但耗时过长,后续应优先做 typed staging/direct insert-select/分片 copy,不要继续只调 timeout。
+
 ### CLAIM → REPORT 清单
 
 `WorkerTaskLifecycleSimulation` 会真实调用 `/internal/tasks/{taskId}/claim` 与 `/report` 并推进状态，只能用于隔离任务。CSV 例子：

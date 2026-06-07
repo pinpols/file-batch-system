@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # build-apps.sh - 本地联调应用模块单独构建入口
-# Notes:
+# 说明：
 # 1) 仅打包六个 Java 应用模块，不启动 Docker、不启动本地进程。
 # 2) 默认执行 Maven package -DskipTests，供 start-all.sh / 手工联调复用。
 # 3) 默认增量构建（不 clean），Maven 自身会基于 mtime 决定是否重编；
@@ -40,6 +40,13 @@ fi
 # 对 batch-common:tests 的依赖解析失败。
 # -T 2C：M 系列多核机器加倍 thread/core，实测 -16%
 # -Dflatten.skip=true：local 不 install/deploy，跳过 flatten 插件
+MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch batch-worker-atomic)
+NAMES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic)
+
+for module in "${MODULES[@]}"; do
+  find "$ROOT/$module/target" -maxdepth 1 -name "${module}-*-exec.jar" -delete 2>/dev/null || true
+done
+
 "$MVN" -q -DskipTests \
   -Dcyclonedx.skip=true \
   -Dlicense.skip=true \
@@ -49,19 +56,13 @@ fi
   -am ${_CLEAN_GOAL} package -T 2C
 
 echo "==> 复制可执行 jar 到 build/runtime-jars/..."
-MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch batch-worker-atomic)
-NAMES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic)
 for i in "${!MODULES[@]}"; do
   module="${MODULES[$i]}"
   name="${NAMES[$i]}"
   jar="$(find "$ROOT/$module/target" -maxdepth 1 -name "${module}-*-exec.jar" 2>/dev/null \
           | grep -Ev 'sources|javadoc' | head -1 || true)"
   if [[ -z "$jar" || ! -f "$jar" ]]; then
-    jar="$(find "$ROOT/$module/target" -maxdepth 1 -name "${module}-*.jar" 2>/dev/null \
-            | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1 || true)"
-  fi
-  if [[ -z "$jar" || ! -f "$jar" ]]; then
-    echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar" >&2
+    echo "ERROR: 未找到可执行 exec jar: $module/target/${module}-*-exec.jar" >&2
     exit 1
   fi
   _bytes="$(wc -c <"$jar" | awk '{print $1}')"

@@ -170,12 +170,15 @@
 
 ### P0
 
-| 项 | 动作 | 完成标准 |
+| 项 | 状态 | 结果 |
 |---|---|---|
-| process 1000w 基线 | 用真实 process job 生成 1000w 输入和 staging 输出 | 得到 compute/commit/feedback 分段耗时 |
-| staging 写入压力 | 统计 `process_staging` 写入 rows/s、WAL、索引代价 | 明确瓶颈在 SQL compute 还是 staging 写 |
-| 分区表健康 | 检查现有 `process_staging` 分区、索引、cleanup | 无明显单表膨胀和慢查询 |
-| 幂等重跑 | 同一 batch_key 重跑、失败中途恢复 | 不重复产出、不污染 result_version |
+| process 1000w 聚合基线 | 已完成 | `lt_process_sql_job`:1000w -> 10w,端到端 40.966s |
+| process 1000w copy 基线 | 已完成,性能不达标 | `lt_process_copy_job`:1000w -> 1000w,端到端 867.606s |
+| staging 写入压力 | 已定位 | JSONB staging COMPUTE 440.191s,COMMIT 348.704s,WAL 增约 19GB |
+| Kafka 长任务稳定性 | 已修配置 | process `max.poll.interval.ms` 默认 1200000ms,避免长任务 rebalance 重投 |
+| SQL timeout | 已修配置 | process SQL transform 默认 900s,local profile 同步可配置 |
+| 分区表健康 | 已观察 | 本轮 staging live rows 结束为 0,但 copy cleanup 44.577s,后续需优化大 batch cleanup |
+| 幂等重跑 | 小基线已覆盖 | 大数据失败恢复/中途恢复另开 failure profile |
 
 ### P1
 
@@ -183,6 +186,7 @@
 |---|---|---|
 | staging 分区/索引矩阵 | 按 biz_date/batch_key 维度测不同索引 | 只保留对主查询有收益的索引 |
 | 批量写入优化 | batch size、COPY staging、UNLOGGED 临时表 POC | UNLOGGED 只允许中间暂存,不进业务结果表 |
+| typed/direct copy | 对 copy 类 process 绕开 JSONB staging | 1000w copy baseline 已证明必须做结构性优化 |
 | cleanup 压力 | orphan cleanup batch size / retention | 不影响正常 process 执行 |
 | PG session 参数 | work_mem、temp_buffers | 只对 process worker session 生效 |
 
@@ -253,6 +257,7 @@
 | 总控计划 | 本文档 | 所有 worker 的计划和状态 |
 | import/export 详细报告 | `docs/backlog/single-node-throughput-optimization-2026-06-06.md` | 已有,继续维护 |
 | 控制面 worker 小基线报告 | `docs/verifications/control-plane-worker-throughput-2026-06-07.md` | process/dispatch/atomic/trigger 本轮统一报告 |
+| process worker 大数据报告 | `docs/verifications/process-worker-throughput-2026-06-07.md` | 1000w aggregate/copy 结果与瓶颈结论 |
 | 控制面压测入口 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger 共用入口 |
 
 ## Checklist
@@ -266,7 +271,8 @@
 - [x] Kafka lag 采样可用化
 - [x] stale CREATED launch T2 恢复器代码
 - [ ] stale CREATED 恢复器系统复验
-- [ ] process worker P0 大数据优化/修复
+- [x] process worker P0 大数据基线与配置修复
+- [ ] process worker P1 typed/direct copy 优化
 - [x] dispatch/atomic worker P0 小基线
 - [ ] dispatch/atomic worker P0 高压优化/修复
 - [x] trigger worker P0 小基线
