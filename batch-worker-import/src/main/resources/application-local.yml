@@ -11,8 +11,6 @@ spring:
     username: batch_user
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
-  kafka:
-    bootstrap-servers: localhost:19092
   data:
     redis:
       host: localhost
@@ -32,10 +30,6 @@ batch:
     auto-create: true
   security:
     bypass-mode: true
-    kms:
-      default-key-ref: DEFAULT_TEST
-      keys:
-        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   orchestrator:
     base-url: http://localhost:18082
   worker:
@@ -56,7 +50,7 @@ batch:
       consumer-group-id: batch-worker-import
       # worker_registry.capability_tags；让 selector 能匹配带 resource_tag 的 queue（见 DefaultWorkerSelector）
       capability-tags:
-        - ingest
+      - ingest
       file-processing:
         streaming-enabled: true
         page-size: 1000

@@ -11,8 +11,6 @@ spring:
     username: batch_user
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
-  kafka:
-    bootstrap-servers: localhost:19092
   data:
     redis:
       host: localhost
@@ -31,10 +29,6 @@ batch:
     auto-create: true
   security:
     bypass-mode: true
-    kms:
-      default-key-ref: DEFAULT_TEST
-      keys:
-        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   orchestrator:
     base-url: http://localhost:18082
   worker:
@@ -55,11 +49,11 @@ batch:
       consumer-group-id: batch-worker-process
       # worker_registry.capability_tags；让 selector 能匹配带 resource_tag 的 queue（见 DefaultWorkerSelector）
       capability-tags:
-        - process
+      - process
       sql-transform:
         # 业务库 schema 白名单(允许 sqlTransformCompute 读写的 schema);staging 表始终允许
         allowed-schemas:
-          - biz
+        - biz
         # 禁 SELECT *,要求显式列清单
         forbid-select-star: true
         # 单条 SQL 超时秒
@@ -70,11 +64,3 @@ batch:
       username: batch_user
       password: batch_pass_123
       schema: biz
-  storage:
-    s3:
-      # PROCESS worker 不直接读写 MinIO,但 batch-common S3AutoConfiguration 仍会装配
-      # S3Client bean 并要求 access/secret 非空,这里给本地占位值即可。
-      endpoint: http://localhost:19000
-      access-key: minioadmin
-      secret-key: minioadmin123
-      bucket: batch-dev

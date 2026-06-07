@@ -69,6 +69,25 @@ class ConfigDriftGuardTest {
           "batch.mq.topics.task-retry",
           "batch.mq.topics.dead-letter");
 
+  /**
+   * 已收口到单点的键：这些键必须只从 {@code batch-defaults.yml}（值经 {@code ${ENV:default}} 解析） + {@code .env} / helm
+   * secret 注入，**禁止**在任何模块的 application-local.yml 里重复声明（避免凭据/基础设施配置扩散到各模块）。
+   *
+   * <p>与 {@link #OWNED_KEYS} 的区别：OWNED_KEYS 守护 application.yml + 非 local profile；本集合专门守护
+   * application-local.yml（OWNED_KEYS 豁免它）。开发者本机若确需不同值，应改 {@code .env} 的对应 ENV 变量，而非在 local-yml
+   * 写死——保持"单点"。
+   *
+   * <p>历史扩散背景：S3 凭据曾散在 import/console（trigger 缺凭据启动崩溃，见 PR #409）；KMS/kafka 曾在 7-8 个模块各抄一份。
+   */
+  private static final Set<String> CONSOLIDATED_LOCAL_KEYS =
+      Set.of(
+          "spring.kafka.bootstrap-servers",
+          "batch.security.kms.default-key-ref",
+          "batch.storage.s3.endpoint",
+          "batch.storage.s3.access-key",
+          "batch.storage.s3.secret-key",
+          "batch.storage.s3.bucket");
+
   private static Path repoRoot() {
     Path here = Paths.get("").toAbsolutePath();
     // 测试可能从 batch-common 子目录或仓库根目录运行;定位到含 batch-common + batch-orchestrator 的根
@@ -135,6 +154,43 @@ class ConfigDriftGuardTest {
         .as(
             "服务模块不应复刻基线 OWNED_KEYS（详见 ADR-029；包含 application-<profile>.yml）；"
                 + "如确需 overlay 请把 key 从 OWNED_KEYS 移除并在 ADR-029 记录原因")
+        .isEmpty();
+  }
+
+  @Test
+  void localProfileDoesNotReintroduceConsolidatedKeys() throws IOException {
+    Path root = repoRoot();
+    Map<String, String> scatter = new LinkedHashMap<>();
+    for (String module :
+        List.of(
+            "batch-trigger",
+            "batch-orchestrator",
+            "batch-worker-core",
+            "batch-worker-import",
+            "batch-worker-export",
+            "batch-worker-process",
+            "batch-worker-dispatch",
+            "batch-worker-atomic",
+            "batch-console-api")) {
+      Path localYml = root.resolve(module).resolve("src/main/resources/application-local.yml");
+      if (!Files.exists(localYml)) {
+        continue;
+      }
+      Map<String, Object> flat = flatten(loadYaml(localYml));
+      for (String key : flat.keySet()) {
+        boolean hit =
+            CONSOLIDATED_LOCAL_KEYS.contains(key)
+                || key.startsWith("batch.security.kms.")
+                || key.startsWith("batch.storage.s3.");
+        if (hit) {
+          scatter.put(module + "::application-local.yml::" + key, String.valueOf(flat.get(key)));
+        }
+      }
+    }
+    assertThat(scatter)
+        .as(
+            "application-local.yml 不应重复声明已收口到单点的键（kafka bootstrap / KMS / S3 凭据）；"
+                + "本机如需不同值请改 .env 的对应 ENV 变量，不要在 local-yml 写死（见 CONSOLIDATED_LOCAL_KEYS 注释）")
         .isEmpty();
   }
 

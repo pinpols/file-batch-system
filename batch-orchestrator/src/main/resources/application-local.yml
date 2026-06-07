@@ -18,8 +18,6 @@ spring:
       # 本地联调：降低启动时连接创建数，减少与其他模块抢连接
       minimum-idle: 2
       maximum-pool-size: 10
-  kafka:
-    bootstrap-servers: localhost:19092
   data:
     redis:
       # 宿主机裸 jar 联调：须连 compose 映射端口；勿依赖 BATCH_REDIS_HOST=valkey（主机 DNS 常指向错误 IP）
@@ -32,8 +30,8 @@ spring:
     locations: classpath:db/migration
     default-schema: batch
     schemas:
-      - batch
-      - quartz
+    - batch
+    - quartz
     baseline-on-migrate: true
     # baseline-version 固定为 1：仅表示「V1（建 schema）已由 Docker init 等预置」，勿改成当前最新迁移号（V34/V35…）。
     baseline-version: 1
@@ -58,10 +56,6 @@ batch:
     auto-create: true
   security:
     bypass-mode: true
-    kms:
-      default-key-ref: DEFAULT_TEST
-      keys:
-        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   outbox:
     batch-size: 100
     poll-interval-millis: 5000
@@ -126,12 +120,6 @@ batch:
     access:
       enabled: true
       presign-expiry-seconds: 600
-  storage:
-    s3:
-      endpoint: http://localhost:19000
-      access-key: minioadmin
-      secret-key: minioadmin123
-      bucket: batch-dev
   mq:
     topics:
       import-dispatch: batch.task.dispatch.import
