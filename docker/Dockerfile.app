@@ -13,7 +13,7 @@
 # 自包含,不需要 host 端 mvn(适配 Portainer 这类直接跑 `docker compose build` 的 GitOps 工具)。
 
 # ───── Stage 1: 共享 builder(全模块一次性 build)─────
-FROM maven:3-eclipse-temurin-25 AS builder
+FROM maven:3-eclipse-temurin-26 AS builder
 
 WORKDIR /workspace
 
