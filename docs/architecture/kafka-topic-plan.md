@@ -13,7 +13,7 @@
 
 ## Key 设计
 
-- Dispatch topics: `tenantId:jobCode:instanceNo:partitionId`
+- Dispatch topics: `tenantId:jobCode:instanceNo:jobPartitionId`
 - Result topics: `tenantId:jobCode:instanceNo:taskId`
 - Retry topics: `tenantId:jobCode:instanceNo:partitionId:attemptNo`
 - Dead-letter topics: `tenantId:jobCode:instanceNo:partitionId:taskId`

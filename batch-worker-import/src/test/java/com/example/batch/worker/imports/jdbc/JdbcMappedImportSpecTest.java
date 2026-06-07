@@ -99,6 +99,39 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  void shouldParsePartitionStageSwapCopyStrategy() {
+    JdbcMappedImportSpec spec =
+        JdbcMappedImportSpec.parse(
+            Map.of(
+                "jdbc_mapped_import",
+                Map.of(
+                    "schema",
+                    "biz",
+                    "table",
+                    "customer_account",
+                    "tenantColumn",
+                    "tenant_id",
+                    "columnMappings",
+                    List.of(Map.of("from", "customerNo", "to", "customer_no")),
+                    "systemBindings",
+                    Map.of("biz_date", "${bizDate}"),
+                    "loadStrategy",
+                    "PARTITION_STAGE_SWAP_COPY",
+                    "replacePartitionColumns",
+                    List.of("tenant_id", "biz_date"),
+                    "stageSwap",
+                    Map.of(
+                        "partitionTable",
+                        "customer_account_20260607",
+                        "attachClause",
+                        "FOR VALUES FROM ('2026-06-07') TO ('2026-06-08')"))),
+            objectMapper);
+
+    assertThat(spec.loadStrategy()).isEqualTo(ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY);
+    assertThat(spec.stageSwap().partitionTable()).isEqualTo("customer_account_20260607");
+  }
+
+  @Test
   void strictIdempotencyAllowsPartitionReplaceCopyWithoutConflictColumns() {
     JdbcMappedImportSpec spec =
         partitionReplaceSpec(List.of("tenant_id", "biz_date"), Map.of("biz_date", "${bizDate}"));
@@ -136,6 +169,7 @@ class JdbcMappedImportSpecTest {
         null,
         List.of(),
         ImportLoadStrategy.PARTITION_REPLACE_COPY,
-        replaceColumns);
+        replaceColumns,
+        null);
   }
 }

@@ -102,8 +102,9 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
         targetTopic = topic;
       }
       String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
+      String kafkaKey = dispatchKafkaKey(event, dispatchMessage);
       return kafkaTemplate
-          .send(targetTopic, event.getEventKey(), event.getPayloadJson())
+          .send(targetTopic, kafkaKey, event.getPayloadJson())
           .toCompletableFuture()
           .handleAsync(
               (result, ex) -> {
@@ -215,6 +216,31 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       return BatchTopics.VERIFIER_FAILURE_V1;
     }
     return null;
+  }
+
+  static String dispatchKafkaKey(OutboxEventEntity event, TaskDispatchMessage message) {
+    if (message == null) {
+      return event.getEventKey();
+    }
+    if (message.jobPartitionId() != null) {
+      return message.tenantId()
+          + ":"
+          + message.jobCode()
+          + ":"
+          + message.instanceNo()
+          + ":"
+          + message.jobPartitionId();
+    }
+    if (message.taskId() != null) {
+      return message.tenantId()
+          + ":"
+          + message.jobCode()
+          + ":"
+          + message.instanceNo()
+          + ":task:"
+          + message.taskId();
+    }
+    return event.getEventKey();
   }
 
   // #5-2: 敏感字段关键词，delivery log 中的 payload 需对这些字段脱敏

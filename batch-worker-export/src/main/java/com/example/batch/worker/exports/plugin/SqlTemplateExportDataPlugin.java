@@ -4,6 +4,7 @@ import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.common.rls.RlsTenantSessionSupport;
 import com.example.batch.common.utils.Texts;
+import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
 import com.example.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import com.example.batch.worker.exports.sql.SqlTemplateExportSpec;
 import com.example.batch.worker.exports.sql.SqlTemplateExportSqlValidator;
@@ -39,6 +40,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   private final ObjectMapper objectMapper;
   private final SqlTemplateExportSecurityProperties security;
   private final SqlTemplateExportSqlValidator sqlValidator;
+  private final ExportWorkerConfiguration workerConfiguration;
 
   /** Phase A RLS:read 路径 tx 包 SET LOCAL,触发 biz.* USING 过滤(防跨租户读)。 */
   private final org.springframework.transaction.support.TransactionTemplate txTemplate;
@@ -48,7 +50,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   public SqlTemplateExportDataPlugin(
       @Qualifier("exportBusinessDataSource") DataSource businessDataSource,
       ObjectMapper objectMapper,
-      SqlTemplateExportSecurityProperties security) {
+      SqlTemplateExportSecurityProperties security,
+      ExportWorkerConfiguration workerConfiguration) {
     this.businessDataSource = businessDataSource;
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
     template.setQueryTimeout(
@@ -56,6 +59,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     this.jdbc = new NamedParameterJdbcTemplate(template);
     this.objectMapper = objectMapper;
     this.security = security;
+    this.workerConfiguration = workerConfiguration;
     this.sqlValidator = new SqlTemplateExportSqlValidator(security);
     this.txTemplate =
         new org.springframework.transaction.support.TransactionTemplate(
@@ -131,11 +135,12 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
     final String finalSql = sql;
     final Map<String, Object> finalParams = params;
+    final NamedParameterJdbcTemplate pageJdbc = namedJdbc(resolveFetchSize(context));
     List<Map<String, Object>> rows =
         txTemplate.execute(
             status -> {
               RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-              return jdbc.queryForList(finalSql, finalParams);
+              return pageJdbc.queryForList(finalSql, finalParams);
             });
     if (rows == null || rows.isEmpty()) {
       return DetailPage.empty();
@@ -152,6 +157,47 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   private static Object regionFromSnapshot(ExportDataContext context) {
     Map<String, Object> snap = context.exportSnapshot();
     return snap == null ? null : snap.get("region");
+  }
+
+  private NamedParameterJdbcTemplate namedJdbc(int fetchSize) {
+    JdbcTemplate template = new JdbcTemplate(businessDataSource);
+    template.setQueryTimeout(
+        Math.max(1, security == null ? 30 : security.getQueryTimeoutSeconds()));
+    template.setFetchSize(fetchSize);
+    return new NamedParameterJdbcTemplate(template);
+  }
+
+  private int resolveFetchSize(ExportDataContext context) {
+    int fallback = workerConfiguration == null ? 1000 : workerConfiguration.fetchSize();
+    Map<String, Object> tc = context == null ? Map.of() : context.templateConfig();
+    Object raw = tc == null ? null : firstNonNull(tc.get("fetch_size"), tc.get("fetchSize"));
+    Integer configured = positiveInt(raw);
+    return configured == null ? Math.max(1, fallback) : configured;
+  }
+
+  private static Object firstNonNull(Object... values) {
+    for (Object value : values) {
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private static Integer positiveInt(Object value) {
+    if (value instanceof Number n) {
+      int candidate = n.intValue();
+      return candidate > 0 ? candidate : null;
+    }
+    if (value != null && Texts.hasText(String.valueOf(value))) {
+      try {
+        int candidate = Integer.parseInt(String.valueOf(value).trim());
+        return candidate > 0 ? candidate : null;
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   private void runExplainCheck(

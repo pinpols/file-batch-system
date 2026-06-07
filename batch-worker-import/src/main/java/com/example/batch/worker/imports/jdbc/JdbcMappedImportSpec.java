@@ -28,8 +28,11 @@ public record JdbcMappedImportSpec(
     String defaultRegion,
     List<String> allowedRegions,
     ImportLoadStrategy loadStrategy,
-    List<String> replacePartitionColumns) {
+    List<String> replacePartitionColumns,
+    StageSwap stageSwap) {
   public record ColumnMapping(String from, String to) {}
+
+  public record StageSwap(String partitionTable, String attachClause) {}
 
   public JdbcMappedImportSpec {
     columnMappings = columnMappings == null ? List.of() : List.copyOf(columnMappings);
@@ -67,6 +70,7 @@ public record JdbcMappedImportSpec(
     if (replacePartitionColumns.isEmpty()) {
       replacePartitionColumns = parseStringList(root.get("partitionReplaceColumns"));
     }
+    StageSwap stageSwap = parseStageSwap(root.get("stageSwap"));
     return new JdbcMappedImportSpec(
         schema,
         table,
@@ -77,7 +81,8 @@ public record JdbcMappedImportSpec(
         defaultRegion,
         allowedRegions,
         loadStrategy,
-        replacePartitionColumns);
+        replacePartitionColumns,
+        stageSwap);
   }
 
   private static String required(Map<String, Object> root, String key) {
@@ -182,6 +187,20 @@ public record JdbcMappedImportSpec(
     return out;
   }
 
+  private static StageSwap parseStageSwap(Object raw) {
+    if (!(raw instanceof Map<?, ?> m)) {
+      return null;
+    }
+    Object partitionTable = m.get("partitionTable");
+    Object attachClause = m.get("attachClause");
+    if (partitionTable == null && attachClause == null) {
+      return null;
+    }
+    return new StageSwap(
+        partitionTable == null ? null : String.valueOf(partitionTable).trim(),
+        attachClause == null ? null : String.valueOf(attachClause).trim());
+  }
+
   /**
    * A-3.5 严格幂等模式入口：strictIdempotency=true 时 conflictColumns 必须非空， 否则 {@code parse +
    * validateIdentifiers} 阶段直接拒绝加载模板。
@@ -221,8 +240,12 @@ public record JdbcMappedImportSpec(
       JdbcMappedSqlValidator.requireIdentifier(dbCol, "systemBinding column");
       allCols.add(dbCol);
     }
-    if (loadStrategy == ImportLoadStrategy.PARTITION_REPLACE_COPY) {
+    if (loadStrategy == ImportLoadStrategy.PARTITION_REPLACE_COPY
+        || loadStrategy == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
       validatePartitionReplaceColumns(allCols);
+    }
+    if (loadStrategy == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
+      validateStageSwap();
     }
   }
 
@@ -246,6 +269,26 @@ public record JdbcMappedImportSpec(
                 + c
                 + " (use tenantColumn or systemBindings)");
       }
+    }
+  }
+
+  private void validateStageSwap() {
+    if (stageSwap == null) {
+      throw new WorkerConfigException(
+          "jdbc_mapped_import.stageSwap is required for PARTITION_STAGE_SWAP_COPY");
+    }
+    JdbcMappedSqlValidator.requireIdentifier(
+        stageSwap.partitionTable(), "stageSwap.partitionTable");
+    String clause = stageSwap.attachClause();
+    if (!Texts.hasText(clause)) {
+      throw new WorkerConfigException(
+          "jdbc_mapped_import.stageSwap.attachClause is required for PARTITION_STAGE_SWAP_COPY");
+    }
+    String upper = clause.trim().toUpperCase();
+    if (!upper.startsWith("FOR VALUES ") || clause.contains(";") || clause.contains("--")) {
+      throw new WorkerConfigException(
+          "jdbc_mapped_import.stageSwap.attachClause must start with FOR VALUES and must not"
+              + " contain statement separators");
     }
   }
 }

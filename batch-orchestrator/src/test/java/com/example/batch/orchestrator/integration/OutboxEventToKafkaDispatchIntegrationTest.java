@@ -86,6 +86,7 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
 
     // 验证消息已发送到 Kafka topic（TENANT 路由模式：base + ".t1" 后缀）
     String tenantTopic = BatchTopics.TASK_DISPATCH_IMPORT + ".t1";
+    String dispatchKafkaKey = "t1:IT_OUTBOX_DISPATCH:it-dispatch-001:1";
     try (KafkaConsumer<String, String> consumer =
         buildConsumer("dispatch-it-" + System.nanoTime())) {
       consumer.subscribe(List.of(tenantTopic));
@@ -97,13 +98,13 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
                 boolean found = false;
                 for (ConsumerRecord<String, String> record : records) {
-                  if (idempotencyKey.equals(record.key())) {
+                  if (dispatchKafkaKey.equals(record.key())) {
                     found = true;
                     break;
                   }
                 }
                 assertThat(found)
-                    .as("message with key %s should be on topic %s", idempotencyKey, tenantTopic)
+                    .as("message with key %s should be on topic %s", dispatchKafkaKey, tenantTopic)
                     .isTrue();
               });
     }

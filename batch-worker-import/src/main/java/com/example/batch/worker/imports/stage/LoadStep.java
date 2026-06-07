@@ -107,7 +107,9 @@ public class LoadStep implements ImportStageStep {
           importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
       boolean partitionReplaceCopy = isPartitionReplaceCopy(plugin, loadCtx);
+      boolean partitionStageSwapCopy = isPartitionStageSwapCopy(plugin, loadCtx);
       if (partitionReplaceCopy) {
+        requireSinglePartitionForPartitionReplace(context);
         requireCheckpointDisabledForPartitionReplace(plugin);
         ((GenericJdbcMappedImportLoadPlugin) plugin).preparePartitionReplace(loadCtx);
       } else {
@@ -126,39 +128,10 @@ public class LoadStep implements ImportStageStep {
             resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
         return markLoaded(context, ckpt.startLineNo());
       }
-      long skipLines = ckpt == null ? 0L : ckpt.startLineNo();
-      long currentLineNo = skipLines;
-      long loadedCount = ckpt == null ? 0L : ckpt.startLineNo();
-      try (BufferedReader reader =
-          Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
-        // 续跑:把上次已处理到的行号 skip 掉(空行也算行,保持与首跑一致的行号语义)
-        for (long i = 0; i < skipLines && reader.readLine() != null; i++) {
-          // skip
-        }
-        List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
-        String line;
-        while ((line = reader.readLine()) != null) {
-          currentLineNo++;
-          if (!Texts.hasText(line)) {
-            continue;
-          }
-          chunk.add(objectMapper.readValue(line, MAP_TYPE));
-          if (chunk.size() >= chunkSize) {
-            int written = flushChunk(plugin, loadCtx, chunk);
-            loadedCount += written;
-            advanceCheckpoint(ckpt, currentLineNo, written);
-            // 流式进度上报(docs/design/pipeline-stage-progress-display.md):totalRowsHint=null
-            // 因为预扫整文件估总行数代价大于收益(百万行+一次 O(n) I/O),FE 退化为只显计数器不显 ETA。
-            PipelineStageProgressSink.publish(loadedCount, null);
-            chunk.clear();
-          }
-        }
-        if (!chunk.isEmpty()) {
-          int written = flushChunk(plugin, loadCtx, chunk);
-          loadedCount += written;
-          advanceCheckpoint(ckpt, currentLineNo, written);
-          PipelineStageProgressSink.publish(loadedCount, null);
-        }
+      long loadedCount =
+          loadValidatedRecords(validatedRecordsPath, chunkSize, plugin, loadCtx, ckpt);
+      if (partitionStageSwapCopy) {
+        ((GenericJdbcMappedImportLoadPlugin) plugin).finishPartitionStageSwap(loadCtx);
       }
       completeCheckpoint(ckpt);
       commit(context, importPayload, loadedCount);
@@ -187,6 +160,59 @@ public class LoadStep implements ImportStageStep {
           ex.getMessage(),
           objectMapper);
     }
+  }
+
+  private long loadValidatedRecords(
+      Path validatedRecordsPath,
+      int chunkSize,
+      ImportLoadPlugin plugin,
+      ImportLoadContext loadCtx,
+      CheckpointHandle ckpt)
+      throws Exception {
+    long skipLines = ckpt == null ? 0L : ckpt.startLineNo();
+    long currentLineNo = skipLines;
+    long loadedCount = ckpt == null ? 0L : ckpt.startLineNo();
+    try (BufferedReader reader =
+        Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
+      // 续跑:把上次已处理到的行号 skip 掉(空行也算行,保持与首跑一致的行号语义)
+      for (long i = 0; i < skipLines && reader.readLine() != null; i++) {
+        // skip
+      }
+      List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
+      String line;
+      while ((line = reader.readLine()) != null) {
+        currentLineNo++;
+        if (!Texts.hasText(line)) {
+          continue;
+        }
+        chunk.add(objectMapper.readValue(line, MAP_TYPE));
+        if (chunk.size() >= chunkSize) {
+          loadedCount = flushAndAdvance(plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+        }
+      }
+      if (!chunk.isEmpty()) {
+        loadedCount = flushAndAdvance(plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+      }
+    }
+    return loadedCount;
+  }
+
+  private long flushAndAdvance(
+      ImportLoadPlugin plugin,
+      ImportLoadContext loadCtx,
+      CheckpointHandle ckpt,
+      List<Map<String, Object>> chunk,
+      long currentLineNo,
+      long loadedCount)
+      throws Exception {
+    int written = flushChunk(plugin, loadCtx, chunk);
+    long updatedLoadedCount = loadedCount + written;
+    advanceCheckpoint(ckpt, currentLineNo, written);
+    // 流式进度上报(docs/design/pipeline-stage-progress-display.md):totalRowsHint=null
+    // 因为预扫整文件估总行数代价大于收益(百万行+一次 O(n) I/O),FE 退化为只显计数器不显 ETA。
+    PipelineStageProgressSink.publish(updatedLoadedCount, null);
+    chunk.clear();
+    return updatedLoadedCount;
   }
 
   private int flushChunk(
@@ -228,6 +254,11 @@ public class LoadStep implements ImportStageStep {
         && jdbcPlugin.isPartitionReplaceCopy(loadCtx);
   }
 
+  private boolean isPartitionStageSwapCopy(ImportLoadPlugin plugin, ImportLoadContext loadCtx) {
+    return plugin instanceof GenericJdbcMappedImportLoadPlugin jdbcPlugin
+        && jdbcPlugin.isPartitionStageSwapCopy(loadCtx);
+  }
+
   private void requireCheckpointDisabledForPartitionReplace(ImportLoadPlugin plugin) {
     if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
       return;
@@ -238,6 +269,20 @@ public class LoadStep implements ImportStageStep {
             + ": partition replace clears the target partition once before COPY chunks, so"
             + " line-based checkpoint resume would expose partial reload semantics. Disable"
             + " checkpoint for this template or use BATCH_UPSERT.");
+  }
+
+  private void requireSinglePartitionForPartitionReplace(ImportJobContext context) {
+    long partitionCount =
+        numberValue(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    if (partitionCount <= 1L) {
+      return;
+    }
+    throw new WorkerConfigException(
+        "PARTITION_REPLACE_COPY cannot run with partitionCount="
+            + partitionCount
+            + ": each worker partition would clear the same target partition before COPY, which can"
+            + " leave partial data. Use shard_strategy=NONE for this template, or split input into"
+            + " independent files with distinct logical partitions.");
   }
 
   // ADR-038 P2 续跑位点辅助 ─────────────────────────────────────────────────────

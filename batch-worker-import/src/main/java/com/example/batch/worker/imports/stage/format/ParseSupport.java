@@ -44,7 +44,8 @@ public class ParseSupport {
       return null;
     }
     Object fm = map.get("field_mappings");
-    if (fm instanceof String text && Texts.hasText(text)) {
+    String text = jsonText(fm);
+    if (Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, new TypeReference<List<Object>>() {});
       } catch (Exception ignored) {

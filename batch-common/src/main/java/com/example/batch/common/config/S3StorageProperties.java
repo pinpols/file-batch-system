@@ -38,4 +38,13 @@ public class S3StorageProperties {
 
   /** 写入请求超时（ms）。同上语义。 */
   private long writeTimeoutMs = 30000L;
+
+  /** 大对象上传是否启用 multipart。 */
+  private boolean multipartEnabled = true;
+
+  /** 文件大小达到该阈值后使用 multipart。默认 64MiB。 */
+  private long multipartThresholdBytes = 64L * 1024 * 1024;
+
+  /** multipart 单 part 大小。S3 要求非最后 part 至少 5MiB，默认 16MiB。 */
+  private int multipartPartSizeBytes = 16 * 1024 * 1024;
 }

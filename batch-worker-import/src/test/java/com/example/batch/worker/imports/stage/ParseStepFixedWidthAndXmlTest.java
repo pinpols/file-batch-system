@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.postgresql.util.PGobject;
 
 /**
  * V5-P2-8 验证：ParseStep 在 FIXED_WIDTH / XML 两种文件格式上的解析正确性。 之前只覆盖 CSV / JSON，对应 parser 真实代码却存在
@@ -107,6 +108,33 @@ class ParseStepFixedWidthAndXmlTest {
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes().get("totalCount")).isEqualTo(2L);
     assertNdjsonRecordCount(context, 2);
+  }
+
+  /** PG jsonb 读取时 field_mappings 可能是 PGobject；运行时必须和 String/List 一样解析。 */
+  @Test
+  void shouldParseFixedWidth_whenFieldMappingsIsPgJsonbObject() throws Exception {
+    String fixed = "C00004Dana                ACTIVE  \n";
+    PGobject fieldMappings = new PGobject();
+    fieldMappings.setType("jsonb");
+    fieldMappings.setValue(
+        "["
+            + "{\"target\":\"customerNo\",\"start\":0,\"length\":6},"
+            + "{\"target\":\"customerName\",\"start\":6,\"length\":20},"
+            + "{\"target\":\"status\",\"start\":26,\"length\":8}"
+            + "]");
+
+    Map<String, Object> templateConfig =
+        Map.of(
+            "field_mappings", fieldMappings, "record_length", 34, "jdbc_mapped_import", Map.of());
+
+    ImportJobContext context = buildContext(fixed, "FIXED_WIDTH", templateConfig);
+
+    ImportStageResult result = parseStep.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes().get("totalCount")).isEqualTo(1L);
+    assertNdjsonRecordCount(context, 1);
+    assertNdjsonContains(context, "C00004", "Dana", "ACTIVE");
   }
 
   // ── XML ────────────────────────────────────────────────────────────────────
