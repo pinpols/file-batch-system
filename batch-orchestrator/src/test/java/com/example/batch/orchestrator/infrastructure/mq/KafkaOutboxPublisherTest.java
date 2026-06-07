@@ -82,6 +82,20 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
+  void dispatchTopicUsesPartitionKafkaKeyInsteadOfOutboxEventKey() {
+    batchMqTopicsProperties.setExportDispatch("batch.task.dispatch.export");
+    OutboxEventEntity event = dispatchEvent("EXPORT", "outbox-dedup-key");
+    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    CompletableFuture<Boolean> publishFuture = publisher.publish(event);
+
+    assertThat(publishFuture).isCompletedWithValue(true);
+    verify(kafkaTemplate)
+        .send(eq("batch.task.dispatch.export"), eq("t1:IT_JOB:it-instance-001:1"), anyString());
+  }
+
+  @Test
   void shouldRecordFailedDeliveryWhenFallbackTopicSendFails() {
     batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
     outboxProperties.setDefaultTopic(BatchTopics.OUTBOX_EVENT);

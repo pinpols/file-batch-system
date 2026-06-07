@@ -107,6 +107,7 @@ public class LoadStep implements ImportStageStep {
           importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
       boolean partitionReplaceCopy = isPartitionReplaceCopy(plugin, loadCtx);
+      boolean partitionStageSwapCopy = isPartitionStageSwapCopy(plugin, loadCtx);
       if (partitionReplaceCopy) {
         requireSinglePartitionForPartitionReplace(context);
         requireCheckpointDisabledForPartitionReplace(plugin);
@@ -160,6 +161,9 @@ public class LoadStep implements ImportStageStep {
           advanceCheckpoint(ckpt, currentLineNo, written);
           PipelineStageProgressSink.publish(loadedCount, null);
         }
+      }
+      if (partitionStageSwapCopy) {
+        ((GenericJdbcMappedImportLoadPlugin) plugin).finishPartitionStageSwap(loadCtx);
       }
       completeCheckpoint(ckpt);
       commit(context, importPayload, loadedCount);
@@ -227,6 +231,11 @@ public class LoadStep implements ImportStageStep {
   private boolean isPartitionReplaceCopy(ImportLoadPlugin plugin, ImportLoadContext loadCtx) {
     return plugin instanceof GenericJdbcMappedImportLoadPlugin jdbcPlugin
         && jdbcPlugin.isPartitionReplaceCopy(loadCtx);
+  }
+
+  private boolean isPartitionStageSwapCopy(ImportLoadPlugin plugin, ImportLoadContext loadCtx) {
+    return plugin instanceof GenericJdbcMappedImportLoadPlugin jdbcPlugin
+        && jdbcPlugin.isPartitionStageSwapCopy(loadCtx);
   }
 
   private void requireCheckpointDisabledForPartitionReplace(ImportLoadPlugin plugin) {

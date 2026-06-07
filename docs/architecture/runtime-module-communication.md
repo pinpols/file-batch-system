@@ -137,5 +137,5 @@ flowchart LR
 - task report / claim / renew：`batch-orchestrator` 的 `DefaultTaskExecutionService`
 - retry / dead-letter / replay：`batch-orchestrator` 的 `DefaultRetryGovernanceService`
 - orchestrator 出 Kafka：`TaskDispatchOutboxService` + `KafkaOutboxPublisher`
-- export 写对象存储：`batch-worker-export` 的 `MinioExportStorage`
+- export 写对象存储：`batch-worker-export` 的 `S3ExportStorage` → `batch-common` 的 `BatchObjectStore`
 - console 查询平台表：`batch-console-api/src/main/resources/mapper/*.xml`

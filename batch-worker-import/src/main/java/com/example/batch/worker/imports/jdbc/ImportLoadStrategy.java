@@ -5,7 +5,8 @@ import com.example.batch.common.exception.WorkerConfigException;
 /** jdbc_mapped_import 的落库策略。默认保持原 batch INSERT/UPSERT 行为。 */
 public enum ImportLoadStrategy {
   BATCH_UPSERT,
-  PARTITION_REPLACE_COPY;
+  PARTITION_REPLACE_COPY,
+  PARTITION_STAGE_SWAP_COPY;
 
   public static ImportLoadStrategy parse(Object raw) {
     if (raw == null) {

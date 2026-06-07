@@ -39,11 +39,14 @@
 | 导入 | `shard_strategy=NONE` + 分片 fail-fast | 已修并验证负向 | 单大文件 replace-copy 不允许 worker 分片,避免每个分片清同一逻辑分区 |
 | 导入 | `reWriteBatchedInserts=true` | 本地已启用 | 只影响 batch INSERT/UPSERT 类路径;replace-copy 主链路不是主要收益点 |
 | 导入 | `FIXED_WIDTH` 的 PG jsonb `field_mappings` 解析 | 代码已修,单测已过 | 需要 worker 加载新 jar 后系统级复验 |
+| 导入 | `PARTITION_STAGE_SWAP_COPY` | 代码已实现,IT 已过 | COPY 到 staging 物理分区 → swap attach;1000w 系统 benchmark 待部署复验 |
+| 导入 | PG session `work_mem` / `maintenance_work_mem` | 代码已实现,单测已过 | 结构化配置,默认 `0B` 关闭;benchmark 用 env 打开 |
 | 导出 | `page_size=5000`,`chunk_size=10000` | 已验证 | 1000w DELIMITED 单片真实链路使用;本地 profile 已标注 |
 | 导出 | SQL template `fetch_size` 生效 | 代码已修,待部署复验 | 模板/worker 配置会传入分页查询的 `NamedParameterJdbcTemplate` |
 | 导出 | `query_param_schema` PG jsonb 解析 | 代码已修,待部署复验 | cursorColumn/keyset 配置可从 PG jsonb 正确读取 |
 | 导出 | `partition_keyset_range` 多落点读取 | 代码已修,待部署复验 | 支持顶层、`query_param_schema.partition_keyset_range`、`sqlTemplateExport.partitionKeysetRange` |
-| 导出 | 1000w 4 分片正确性 | 已验证 | 4 文件无重无漏;但本地实际串行,性能未放大 |
+| 导出 | 1000w 4 分片正确性 | 已验证 | 4 文件无重无漏;本轮已改 dispatch Kafka key + topic 分区脚本,并行性能待系统复验 |
+| 导出 | MinIO/S3 multipart upload | 代码已实现,单测已过 | `BatchObjectStore` S3 实现按阈值走 multipart;大产物 STORE 待系统 benchmark 复验 |
 | 导出 | JSON / FIXED_WIDTH / EXCEL 格式链路 | 已验证 | 三种格式 smoke 均走真实 worker 链路成功 |
 
 ## 测试报告与证据
@@ -54,27 +57,30 @@
 | 导入 1000w 端到端报告 | [import-partition-replace-copy-10m-system-2026-06-07](../verifications/import-partition-replace-copy-10m-system-2026-06-07.md) | API 触发 → Kafka → worker-import → MinIO → PG 分区表 | trace `ed8dda76e86944c683e67898bd7521cc`,instance `4006`,10,000,000 行 SUCCESS |
 | 导入分片负向 | trace `be1d46...`,`2e9eff...` | 单大文件 + `PARTITION_REPLACE_COPY` + `partitionCount=2` | 旧行为半量;修复后 `IMPORT_LOAD_CONFIG_INVALID` fail-fast |
 | 导入单测 | `ParseStepFixedWidthAndXmlTest` | FIXED_WIDTH/XML 解析与 PG jsonb field mapping | 已通过;系统级待 worker 新 jar 复验 |
+| 导入 staging/swap IT | `GenericJdbcMappedImportLoadPluginCopyIntegrationTest` | `PARTITION_STAGE_SWAP_COPY` staging COPY + physical partition swap | 已通过,PostgreSQL Testcontainers |
+| PG session 单测 | `HikariPgSessionSupportTest` | `work_mem` / `maintenance_work_mem` 结构化 SET SQL | 已通过 |
 | 导出 seed 链路 | trace `export-smoke-1780821600`,instance `4019` | `jdbc_mapped_export` / DELIMITED | SUCCESS |
 | 导出 1000w 单片 benchmark | trace `export-wide-single-1780821897`,instance `4020` | SQL template / DELIMITED / 1000w | SUCCESS,`125.980s`,`1.407GB`,GENERATE `67.691s`,STORE `53.989s` |
 | 导出 1000w 4 分片 | trace `export-wide-shard4-1780822058`,instance `4021` | 4 文件分片导出正确性 | SUCCESS,10,000,000 行无重无漏;本地串行 |
 | 导出格式覆盖 | trace `export-json/fixed/excel-smoke-1780822336-*` | JSON / FIXED_WIDTH / EXCEL | 三种格式均 SUCCESS |
 | 导出单测 | `SqlTemplateExportSpecTest`,`ExportKeysetRangePlannerTest` | PG jsonb config、fetch/keyset-range 读取 | 已通过,11 tests |
+| 导出并行/存储单测 | `KafkaOutboxPublisherTest`,`S3ObjectStoreExceptionMappingTest` | dispatch Kafka key 分散分片;S3 multipart complete/abort | 已通过 |
 
 ## 未做 / 舍弃清单
 
 | 方向 | 项目 | 能不能做 | 我的决定 | 原因 / 后续 |
 |---|---|---|---|---|
-| 导入 | staging 新分区 COPY → 建索引 → attach/swap | 能做 | **建议做,导入下一轮 P0** | 这是让 COPY 真正吃满的主路径,且适配“按业务日整分区刷新”的批量模型 |
-| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **建议做,P1** | 不改变持久可靠性,适合作为 staging/swap benchmark 变量 |
+| 导入 | staging 新分区 COPY → 建索引 → attach/swap | 能做 | **代码已做,系统 benchmark 待复验** | 新增 `PARTITION_STAGE_SWAP_COPY`;已过 PostgreSQL IT,待 1000w 链路复跑 |
+| 导入 | PG session 参数矩阵:`work_mem` / `maintenance_work_mem` | 能做 | **代码已做,矩阵待复跑** | 结构化配置已支持;默认关闭,benchmark 用 env 打开 |
 | 导入 | PG session `synchronous_commit=off` | 能做但有风险 | **只允许 benchmark / 单任务 session 级验证,不进生产默认** | 会改变崩溃语义,不能作为多租户生产默认 |
 | 导入 | load 前 drop index / load 后 rebuild | 能做 | **并入 staging/swap 方案一起测,不单独做** | 单独在现有业务分区上 drop index 风险大;新分区里做更干净 |
 | 导入 | parallel COPY / 多连接写不同逻辑分区 | 能做 | **暂缓,P2** | 对单文件单业务日帮助有限;多租户/多业务日并行时再测 |
 | 导入 | JVM/GC/heap/JIT 矩阵 | 能做 | **暂缓,P2** | 需要重启和固定窗口;收益不如 staging/swap 明确 |
 | 导入 | COPY + UPSERT merge 立即改主路径 | 能做 | **不建议做** | micro benchmark 显示 merge/索引维护吃掉 COPY 收益;不值得优先投入 |
 | 导入 | worker 分片处理单大文件 replace-copy | 技术上能硬做 | **不做** | 语义不兼容,每个分片会清同一逻辑分区;现在 fail-fast 是正确行为 |
-| 导出 | 修复后 keyset-range/fetch_size 系统复验 | 能做 | **建议做,导出下一轮 P0** | 代码已修,只差 worker 加载新 jar 后用同一 API 复验 |
-| 导出 | 真正并行消费 4 个 export task | 能做 | **建议做,P0** | 正确性已证明,性能没放大是本地串行消费;应查 topic partition/key/concurrency |
-| 导出 | MinIO multipart upload | 能做 | **建议做,P1** | STORE 已占 `53.989s`;但最好等 `BatchObjectStore` 抽象合并后改,避免重复重构 |
+| 导出 | 修复后 keyset-range/fetch_size 系统复验 | 能做 | **代码已做,系统复验待跑** | 代码已修,需要 worker 加载新 jar 后用同一 API 复验 |
+| 导出 | 真正并行消费 4 个 export task | 能做 | **代码已做基础修复,系统复验待跑** | dispatch Kafka key 改为 partition 维度,topic 脚本会扩容到 4 分区 |
+| 导出 | MinIO multipart upload | 能做 | **代码已做,系统 benchmark 待复验** | `BatchObjectStore` 抽象已合并,现在在 S3 实现层完成 multipart |
 | 导出 | 生产 JVM / GC 参数矩阵 | 能做 | **暂缓,P2** | 需要重启窗口;当前导出更明确的瓶颈是并行度和 STORE |
 | 导出 | `page/fetch/chunk=5000/5000/10000` 生产全局默认 | 能做 | **不做全局默认,只做模板级覆盖** | 大宽表收益明确,但小租户/小内存场景可能放大单页内存 |
 | 导出 | 导出版 COPY | 理论能做 | **不做** | 输出要经过业务格式器/Excel/校验和/MinIO,没有导入 COPY 那种收益 |
@@ -82,10 +88,9 @@
 
 **我的排序**:
 
-1. 导出先做 `keyset-range/fetch_size` 部署复验 + 4 task 真并行,因为正确性已过,只差把性能放大跑出来。
-2. 导入先做 staging 新分区 COPY → 建索引 → attach/swap,这是 replace-copy 的自然升级版。
-3. MinIO multipart 排第三,等存储抽象合并后做,避免在旧 `MinioClient` 路径上返工。
-4. JVM/GC、parallel COPY、PG session 扩展参数放后面;COPY+UPSERT merge、导出版 COPY、单大文件 replace-copy 分片、本期 Citus 不做。
+1. P0/P1 代码侧已完成:导出 key/fetch/keyset/multipart、导入 stage-swap、PG session work_mem。
+2. 下一步只剩系统级复验:部署/重载 worker 后复跑导出 1000w 单片/4 分片、导入 1000w stage-swap。
+3. JVM/GC、parallel COPY 放后面;COPY+UPSERT merge、导出版 COPY、单大文件 replace-copy 分片、本期 Citus 不做。
 
 ### 维护规则
 
@@ -384,7 +389,7 @@ Baseline 182s
 |---|---|---|---|---|
 | EX-A1 | **生产 JVM**(同导入 A1) | G1GC + 去掉 `TieredStopAtLevel=1` | 2-3× | **复用 §1.3-A1,全 worker 共享** |
 | EX-A2 | **`fetch_size/page_size` 调大** | 本地 profile:`page_size=5000`,`fetch_size=5000`;大导出模板可覆盖;SQL template 代码已支持模板 `fetch_size` | 1.2-2× | 导出侧独有;生产全局默认仍保守 |
-| EX-A3 | **MinIO multipart upload** | 大产物(≥ 100MB)上传走 multipart 多 part 并发,替单流 `putObject` | 1.5-2×(上传段) | 改 `MinioExportStorage` 一处;**注意:与并行 session 的 storage 抽象(`BatchObjectStore`)合并后再做,避免冲突** |
+| EX-A3 | **MinIO/S3 multipart upload** | 大产物(默认 ≥ 64MiB)上传走 multipart 多 part,替单流 `putObject` | 1.5-2×(上传段) | 已在 `BatchObjectStore` 的 S3 实现层完成;待系统 benchmark 复验 |
 | EX-A4 | **服务端游标 + `setAutoCommit(false)`** | JDBC 游标行级流式拉取,降低 driver 端缓冲 | 1.2-1.5× | 看实测 |
 | EX-A5 | **物理隔离 DB**(同导入 A4) | benchmark 期 PG 独立机 | 量出真值 | 复用 §1.3-A4 |
 
@@ -494,7 +499,7 @@ Baseline 182s
 | Area | Parameter / Option | Status | Reason |
 |---|---|---|---|
 | JVM | EX-A1 生产 JVM | 未做 | 用户要求不重启,本轮沿用当前后台 worker |
-| MinIO | EX-A3 multipart upload | 未做 | 当前 STORE 仍是单段上传;STORE 已占 53.989s,仍值得后续做 |
+| MinIO | EX-A3 multipart upload | 代码已做待复验 | `S3ObjectStore` 按阈值走 multipart;STORE 真实收益待 1000w 导出复跑 |
 | JDBC fetch | `fetch_size=5000` | 已修待部署复验 | `sql_template_export` 已按模板/worker 配置创建带 fetchSize 的分页查询 |
 | Keyset-range opt-in | `partition_keyset_range=true` | 已修待部署复验 | planner 已支持顶层、`query_param_schema.partition_keyset_range`、`sqlTemplateExport.partitionKeysetRange` |
 | Worker 并发 | 4 partition 并行 | 未发生 | 日志显示同一 `export-task-consumer-0-C-1` 顺序处理 task 4227-4230;本地 4 分片比单片慢 |
@@ -562,14 +567,13 @@ Baseline 160.6s
 | R2 | pipelining(批量幂等键写入) | 仅在 IdempotencyInterceptor 高并发热点出现时考虑 | 小幅 | YAGNI,无实测信号不做 |
 | R3 | ShedLock provider 回退 | 已有 `BATCH_SHEDLOCK_PROVIDER=jdbc` 开关 | — | 不优化,只确认回退路径可用 |
 
-### 3.3 MinIO / S3(存储抽象合并后做)
+### 3.3 MinIO / S3
 
-> ⚠️ **阻塞**:并行 session 正在落地 `BatchObjectStore` 抽象(`feature/be-storage-abstraction-design`)。
-> 任何 MinIO 优化**等抽象合并入 main 后**再做,避免在裸 `MinioClient` 上改,合并时全部冲突。
+> `BatchObjectStore` 抽象已合入;大对象优化统一在 S3 实现层做,避免 worker 各自直连 SDK。
 
 | # | 调参 | 怎么做 | 预期 | 备注 |
 |---|---|---|---|---|
-| M1 | **Multipart upload**(大产物) | 导出 `MinioExportStorage` ≥ 64MB 走 multipart | 1.5-2× 上传段(导出 813MB 产物) | 等抽象合;与 §2.2 EX-A3 同 |
+| M1 | **Multipart upload**(大产物) | `BatchObjectStore` S3 实现 ≥ 64MiB 走 multipart | 1.5-2× 上传段(导出 1.3GiB 产物) | 代码已做;与 §2.2 EX-A3 同,待复跑 |
 | M2 | Connection pool 调大 | `okhttp` 池 + timeout 配置 | 小幅 | 高并发上传场景才有差 |
 | M3 | Range GET(已落地) | 导入 #390 已实现 | — | 不重复 |
 
@@ -795,7 +799,7 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 - [ ] **7. A1+A2+A3+A5 累加跑**:5 项同时开 → 3 轮 → 看叠加值(目标 < 60s)
 - [x] **8a. 导出真实链路覆盖 + 1000w benchmark**(见 §2.3 的 2026-06-07 补测;DELIMITED/JSON/FIXED_WIDTH/EXCEL + 单片/4 分片)
 - [x] **8b. 导出参数/配置 bug 修复**:`query_param_schema` cursor/keyset + SQL template `fetch_size` 已修,待部署复验
-- [ ] **8c. 导出版同样跑一遍 EX-A1~A5 矩阵**(差异点见 §2.2;本轮未重启,未做 JVM/multipart/fetch 矩阵)
+- [ ] **8c. 导出版同样跑一遍 EX-A1~A5 矩阵**(差异点见 §2.2;multipart/fetch/keyset 代码已做,仍需部署后复验;JVM 矩阵未做)
 - [ ] **9. 据 §1.7 / §2.4 决策树**:够用即停;不够继续 §1.4 Tier-B(B1 多值 INSERT)
 
 **每项 3 轮 ≈ 10-15 分钟,9 项约 4 小时**(含决策与切换)。
@@ -830,7 +834,7 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 - `batch-worker-export/.../plugin/ExportKeysetRangePlanner.java`(`query_param_schema` keyset-range opt-in)
 - `batch-worker-export/.../sql/SqlTemplateExportSpec.java`(PG jsonb `query_param_schema` 解析 cursorColumn)
 - `batch-worker-export/.../plugin/GenericJdbcMappedExportDataPlugin.java`(jdbc_mapped keyset/hash 分片)
-- `batch-worker-export/.../infrastructure/MinioExportStorage.java`(EX-A3 multipart;等存储抽象)
+- `batch-common/.../storage/S3ObjectStore.java`(EX-A3 multipart;所有 S3/MinIO 调用共用)
 - `batch-worker-export/src/main/resources/application-local.yml`(本地 benchmark 推荐 page/fetch/chunk)
 - `batch-worker-export/src/main/resources/application.yml`(生产保守默认;大导出建议模板级覆盖)
 

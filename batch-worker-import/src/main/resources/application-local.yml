@@ -89,6 +89,14 @@ batch:
           notify-manual: true
           notify-channels:
   datasource:
+    pg-session:
+      business:
+        # 导入 benchmark 可打开:
+        # BATCH_PG_BUSINESS_WORK_MEM=64MB
+        # BATCH_PG_BUSINESS_MAINTENANCE_WORK_MEM=512MB
+        # 默认 0B 表示不改 PG 会话默认,避免生产全局放大内存。
+        work-mem: ${BATCH_PG_BUSINESS_WORK_MEM:0B}
+        maintenance-work-mem: ${BATCH_PG_BUSINESS_MAINTENANCE_WORK_MEM:0B}
     business:
       # P1-17 reWriteBatchedInserts=true 与 batch-defaults.yml:275 对齐(Import LOAD batchUpdate 收益最大);
       # 本地 profile 覆盖 URL 加 stringtype 时勿再丢该参数。

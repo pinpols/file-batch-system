@@ -26,7 +26,7 @@ set -eu
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
 tenants_csv="${TENANTS:?TENANTS env required, e.g. TENANTS=bigcorp,acme}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch}"
-partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-3}}"
+partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 
 # 与 BatchTopicResolver.safe(): [^a-zA-Z0-9._-] -> _
@@ -39,6 +39,38 @@ until /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${bootstrap_server}" --
   sleep 2
 done
 
+topic_partitions() {
+  topic="$1"
+  /opt/kafka/bin/kafka-topics.sh \
+    --bootstrap-server "${bootstrap_server}" \
+    --describe \
+    --topic "${topic}" 2>/dev/null \
+    | awk -F'PartitionCount: ' 'NF > 1 { split($2, a, " "); print a[1]; exit }'
+}
+
+ensure_topic() {
+  topic="$1"
+  current="$(topic_partitions "${topic}")"
+  if [ -z "${current}" ]; then
+    /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server "${bootstrap_server}" \
+      --create \
+      --if-not-exists \
+      --topic "${topic}" \
+      --partitions "${partitions}" \
+      --replication-factor "${replication_factor}"
+    return
+  fi
+  if [ "${current}" -lt "${partitions}" ]; then
+    echo "Increasing ${topic} partitions ${current} -> ${partitions}"
+    /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server "${bootstrap_server}" \
+      --alter \
+      --topic "${topic}" \
+      --partitions "${partitions}"
+  fi
+}
+
 old_ifs=$IFS
 for raw_tenant in $(IFS=','; echo $tenants_csv); do
   tenant="$(sanitize "$(echo "${raw_tenant}" | tr -d '[:space:]')")"
@@ -48,13 +80,7 @@ for raw_tenant in $(IFS=','; echo $tenants_csv); do
     [ -n "${wt}" ] || continue
     topic="batch.task.dispatch.${wt}.${tenant}"
     echo "Creating ${topic} (partitions=${partitions}, rf=${replication_factor})"
-    /opt/kafka/bin/kafka-topics.sh \
-      --bootstrap-server "${bootstrap_server}" \
-      --create \
-      --if-not-exists \
-      --topic "${topic}" \
-      --partitions "${partitions}" \
-      --replication-factor "${replication_factor}"
+    ensure_topic "${topic}"
   done
 done
 IFS=$old_ifs

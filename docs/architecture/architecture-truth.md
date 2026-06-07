@@ -189,9 +189,9 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 | Topic | 生产者 | 消费者 | Key 格式 |
 |-------|-------|-------|---------|
-| batch.task.dispatch.import | Orchestrator Outbox | ImportWorker | tenantId:jobCode:instanceNo:partitionId |
-| batch.task.dispatch.export | Orchestrator Outbox | ExportWorker | tenantId:jobCode:instanceNo:partitionId |
-| batch.task.dispatch.dispatch | Orchestrator Outbox | DispatchWorker | tenantId:jobCode:instanceNo:partitionId |
+| batch.task.dispatch.import | Orchestrator Outbox | ImportWorker | tenantId:jobCode:instanceNo:jobPartitionId |
+| batch.task.dispatch.export | Orchestrator Outbox | ExportWorker | tenantId:jobCode:instanceNo:jobPartitionId |
+| batch.task.dispatch.dispatch | Orchestrator Outbox | DispatchWorker | tenantId:jobCode:instanceNo:jobPartitionId |
 | batch.task.result | Worker（REPORT） | Orchestrator | tenantId:jobCode:instanceNo:taskId |
 | batch.task.retry | Orchestrator Retry Scheduler | Worker | tenantId:jobCode:instanceNo:partitionId:attemptNo |
 | batch.task.dead-letter | RetryGovernanceService | DLQ Consumer | tenantId:jobCode:instanceNo:partitionId:taskId |

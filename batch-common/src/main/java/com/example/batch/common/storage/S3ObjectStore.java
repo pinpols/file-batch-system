@@ -10,7 +10,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -20,6 +26,8 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
@@ -41,9 +49,15 @@ public class S3ObjectStore implements BatchObjectStore {
   public void put(String bucket, String key, InputStream in, long size, String contentType) {
     ensureBucket(bucket);
     try {
+      if (shouldMultipart(size)) {
+        putMultipart(bucket, key, in, size, contentType);
+        return;
+      }
       s3Client.putObject(
           PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
           RequestBody.fromInputStream(in, size));
+    } catch (ObjectStoreException ex) {
+      throw ex;
     } catch (Exception ex) {
       throw mapException("put", bucket, key, ex);
     }
@@ -166,6 +180,84 @@ public class S3ObjectStore implements BatchObjectStore {
   private void ensureBucket(String bucket) {
     S3BucketSupport.ensureBucket(
         s3Client, bucket, log, COMPONENT_NAME, properties.isAutoCreateBucket());
+  }
+
+  private boolean shouldMultipart(long size) {
+    return properties.isMultipartEnabled()
+        && size >= Math.max(properties.getMultipartThresholdBytes(), minPartSize())
+        && properties.getMultipartPartSizeBytes() >= minPartSize();
+  }
+
+  private void putMultipart(
+      String bucket, String key, InputStream in, long size, String contentType) {
+    CreateMultipartUploadResponse created =
+        s3Client.createMultipartUpload(
+            CreateMultipartUploadRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentType(contentType)
+                .build());
+    String uploadId = created.uploadId();
+    List<CompletedPart> completedParts = new ArrayList<>();
+    long remaining = size;
+    int partNumber = 1;
+    int partSize = Math.max(properties.getMultipartPartSizeBytes(), minPartSize());
+    try {
+      while (remaining > 0) {
+        int len = (int) Math.min(partSize, remaining);
+        byte[] bytes = in.readNBytes(len);
+        if (bytes.length != len) {
+          throw new ObjectStoreException(
+              "s3 multipart upload input ended early: bucket=%s, key=%s, expected=%d, actual=%d"
+                  .formatted(bucket, key, len, bytes.length));
+        }
+        UploadPartResponse uploaded =
+            s3Client.uploadPart(
+                UploadPartRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .uploadId(uploadId)
+                    .partNumber(partNumber)
+                    .contentLength((long) bytes.length)
+                    .build(),
+                RequestBody.fromBytes(bytes));
+        completedParts.add(
+            CompletedPart.builder().partNumber(partNumber).eTag(uploaded.eTag()).build());
+        remaining -= bytes.length;
+        partNumber++;
+      }
+      s3Client.completeMultipartUpload(
+          CompleteMultipartUploadRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .uploadId(uploadId)
+              .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
+              .build());
+    } catch (Exception ex) {
+      abortMultipart(bucket, key, uploadId);
+      if (ex instanceof ObjectStoreException ose) {
+        throw ose;
+      }
+      throw mapException("putMultipart", bucket, key, ex);
+    }
+  }
+
+  private void abortMultipart(String bucket, String key, String uploadId) {
+    try {
+      s3Client.abortMultipartUpload(
+          AbortMultipartUploadRequest.builder().bucket(bucket).key(key).uploadId(uploadId).build());
+    } catch (Exception abortEx) {
+      log.warn(
+          "s3 multipart abort failed: bucket={}, key={}, uploadId={}",
+          bucket,
+          key,
+          uploadId,
+          abortEx);
+    }
+  }
+
+  private static int minPartSize() {
+    return 5 * 1024 * 1024;
   }
 
   private ObjectStoreException mapException(

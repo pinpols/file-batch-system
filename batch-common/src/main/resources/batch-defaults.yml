@@ -261,6 +261,10 @@ batch:
       region: ${BATCH_S3_REGION:}
       # 是否自动建桶。自建 MinIO 默认 true;托管云 bucket 预建、凭据无 CreateBucket 权限 → 设 false
       auto-create-bucket: ${BATCH_S3_AUTO_CREATE_BUCKET:true}
+      # 大对象上传走 multipart，降低单连接 STORE 时间；小对象仍走普通 putObject。
+      multipart-enabled: ${BATCH_S3_MULTIPART_ENABLED:true}
+      multipart-threshold-bytes: ${BATCH_S3_MULTIPART_THRESHOLD_BYTES:67108864}
+      multipart-part-size-bytes: ${BATCH_S3_MULTIPART_PART_SIZE_BYTES:16777216}
 
   # Orchestrator API 地址（trigger + 所有 worker 模块使用）
   orchestrator:
@@ -281,6 +285,9 @@ batch:
         statement-timeout: ${BATCH_PG_BUSINESS_STATEMENT_TIMEOUT:30m}
         # 10m: PROCESS 5-stage WAP COMMIT 步骤可能跑长事务, 比 5m 更宽容 (export 单 task 几分钟仍足够)
         idle-in-transaction-timeout: ${BATCH_PG_BUSINESS_IDLE_IN_TX_TIMEOUT:10m}
+        # benchmark 可打开；生产不设默认,避免放大全局内存占用。
+        work-mem: ${BATCH_PG_BUSINESS_WORK_MEM:0B}
+        maintenance-work-mem: ${BATCH_PG_BUSINESS_MAINTENANCE_WORK_MEM:0B}
     business:
       # 业务库 JDBC URL（worker 侧使用）
       # P1-17 reWriteBatchedInserts=true: Import LOAD batchUpdate 链路收益最大

@@ -62,7 +62,23 @@ public final class HikariPgSessionSupport {
           .append(timeouts.getIdleInTransactionTimeout().toMillis())
           .append("; ");
     }
+    if (timeouts.getWorkMem() != null && timeouts.getWorkMem().toBytes() > 0L) {
+      sb.append("SET work_mem TO '")
+          .append(toPgMemory(timeouts.getWorkMem().toBytes()))
+          .append("'; ");
+    }
+    if (timeouts.getMaintenanceWorkMem() != null
+        && timeouts.getMaintenanceWorkMem().toBytes() > 0L) {
+      sb.append("SET maintenance_work_mem TO '")
+          .append(toPgMemory(timeouts.getMaintenanceWorkMem().toBytes()))
+          .append("'; ");
+    }
     return sb.toString().trim();
+  }
+
+  private static String toPgMemory(long bytes) {
+    long kib = Math.max(1L, bytes / 1024L);
+    return kib + "kB";
   }
 
   static String truncate(String value, int maxLen) {
