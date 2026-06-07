@@ -19,6 +19,7 @@
 - `scripts/ci/check-console-openapi-paths.py`：Console OpenAPI 与 `Console*Controller` 路由一致性检查（CI 与本地均可运行，详见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/local/run-tests.sh --e2e`：本地运行 E2E 测试（`batch-e2e-tests`）
 - `scripts/local/health-check-infra.sh`：基建健康检查(PG primary/replica / Kafka / Redis / MinIO),协议层探测 + env-var 驱动,本机 / staging / CI 通用。`make dev-health` 是别名
+- `scripts/local/import-copy-worth-benchmark.sh`：IMPORT LOAD 写入微基准,判断 PG COPY 是否值得进入代码改造
 - `scripts/ops/inspect-all.sh`：本地巡检总入口
 
 ## 使用建议
