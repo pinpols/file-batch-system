@@ -94,6 +94,35 @@
 
 ### 1.6 Benchmark 计划 + 决策树
 
+#### 2026-06-07 补测: COPY 是否值得立即上
+
+新增脚本:`scripts/local/import-copy-worth-benchmark.sh`。它不跑完整 pipeline,只用专用表
+`biz.import_copy_worth_bench` 对比三条 LOAD 写入路径:
+
+- 当前近似路径:PG JDBC `PreparedStatement.batchUpdate` + `INSERT ... ON CONFLICT DO UPDATE`
+  (`reWriteBatchedInserts=true`)
+- COPY 路径:`CopyManager.copyIn` 到临时表,再 `INSERT ... SELECT ... ON CONFLICT DO UPDATE` merge 到目标表
+- 分区整批替换近似路径:`TRUNCATE` 专用目标表后 `CopyManager.copyIn` 直接追加,模拟"整分区清理后重灌"
+
+本地结果(2026-06-07,当前调优已包含 `chunk-size=2000`、业务库 JDBC URL
+`reWriteBatchedInserts=true`):
+
+| rows | batch size | batch UPSERT | COPY stage | merge | COPY+merge total | direct replace COPY | speedup(direct) |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100,000 | 2,000 | 3.885s / 25,739 rows/s | 1.050s | 1.096s | 2.146s / 46,596 rows/s | 未测 | - |
+| 300,000 | 5,000 | 9.418s / 31,853 rows/s | 2.607s | 5.569s | 8.176s / 36,694 rows/s | 未测 | - |
+| 300,000 | 5,000 | 7.506s / 39,969 rows/s | 4.419s | 3.933s | 8.352s / 35,920 rows/s | 4.992s / 60,098 rows/s | **1.50×** |
+
+**结论**:在当前必须保留 UPSERT/幂等语义的主路径上,COPY 不值得立即上。COPY 本身很快,但为了支持
+`ON CONFLICT`,仍要先 COPY 到临时表再 merge;merge 阶段继续维护唯一索引并执行冲突处理,吃掉了大部分收益。
+当前优先级应保持:先跑完整端到端 Tier-A baseline;若 A1/A2/A5 后仍不达 `<60s`,先考虑 B1 多值 INSERT 或更细的
+LOAD 阶段 profile,不要直接跳 B2 COPY。
+
+**分区整批替换语义另算**:如果业务是"按 tenant/bizDate 分区整批重灌",即先清理目标分区再追加,可以绕开
+`ON CONFLICT`。本地 direct COPY 对 30 万宽表约 **1.50×**;方向成立,但在"已有主键索引的分区上直接 COPY"时仍要维护索引,
+不是 10× 杀招。要让 COPY 真正吃满,需要进一步测更强形态:新建空 staging/新分区 → COPY → 建索引 → attach/swap,
+用分区级 replace 保证幂等与原子可见。
+
 #### 通过门槛(pre-defined,不能事后调)
 
 | 阶段 | 跑什么 | 目标值 | 不达标后续 |
@@ -364,6 +393,14 @@ url: jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified&reW
 **生效**:重启 worker-import。**预期**:1.5-2×。**风险**:零(PG JDBC 原生支持)。
 
 ### 4.3 三轮取中位数 bash 模板
+
+COPY 是否值得上的微基准脚本已落地:
+
+```bash
+ROWS=300000 BATCH_SIZE=5000 bash scripts/local/import-copy-worth-benchmark.sh
+```
+
+完整 pipeline 的三轮取中位数仍按下方模板跑。
 
 每项改完跑这个,自动 3 轮 + 取中位数:
 

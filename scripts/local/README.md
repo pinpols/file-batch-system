@@ -16,6 +16,8 @@
 （macOS 闲置数小时会回收 JVM；docker-compose 模式不需要本脚本，靠 docker
 自带 `restart: unless-stopped` 兜底）
 - `build-apps.sh`：Maven 打包六个应用模块（-DskipTests）
+- `import-copy-worth-benchmark.sh`：IMPORT LOAD 写入微基准,对比当前 JDBC batch UPSERT 与
+  `COPY -> temp table -> merge` 路径,用于判断是否值得实现 COPY。
 - `run-tests.sh`：**本地一键测试入口**（推荐）
   - 默认：单元 + 集成（跳过 E2E）
   - `--unit`：仅单元测试，秒级，无容器
