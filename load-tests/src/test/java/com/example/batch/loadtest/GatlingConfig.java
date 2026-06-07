@@ -95,6 +95,10 @@ public final class GatlingConfig {
     public static final double SCHEDULING_READ_RPS =
             Double.parseDouble(System.getProperty("scheduling.read.rps", "5.0"));
 
+    /** Whether scheduling/backlog pressure should also call console read endpoints. */
+    public static final boolean SCHEDULING_CONSOLE_READS_ENABLED =
+            Boolean.parseBoolean(System.getProperty("scheduling.console.reads", "false"));
+
     /** CSV file for synthetic worker lifecycle pressure: taskId,tenantId,workerId. */
     public static final String TASK_LIFECYCLE_CSV =
             System.getProperty("task.lifecycle.csv", "target/task-lifecycle-tasks.csv");

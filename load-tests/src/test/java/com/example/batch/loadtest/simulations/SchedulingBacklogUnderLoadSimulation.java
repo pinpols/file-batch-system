@@ -59,10 +59,14 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
               "jobCode": "%s",
               "bizDate": "%s",
               "triggerType": "API",
-              "params": {}
+              "params": %s
             }
             """
-          .formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
+          .formatted(
+              GatlingConfig.TENANT_ID,
+              GatlingConfig.JOB_CODE,
+              GatlingConfig.BIZ_DATE,
+              GatlingConfig.LAUNCH_PARAMS_JSON);
 
   private final ChainBuilder launch =
       feed(launchFeeder)
@@ -76,7 +80,7 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
                   .body(StringBody(launchBody))
                   .check(status().in(200, 201)));
 
-  private final ChainBuilder backlogReads =
+  private final ChainBuilder internalBacklogReads =
       exec(
               http("GET /internal/scheduler/snapshot")
                   .get(GatlingConfig.ORCHESTRATOR_BASE_URL + "/internal/scheduler/snapshot")
@@ -89,47 +93,56 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
                   .header("X-Internal-Secret", GatlingConfig.INTERNAL_SECRET)
                   .queryParam("tenantId", GatlingConfig.TENANT_ID)
                   .queryParam("limit", "20")
-                  .check(status().is(200)))
-          .exec(
-              http("GET /api/console/scheduler/status")
-                  .get("/api/console/scheduler/status")
-                  .check(status().is(200)))
-          .exec(
-              http("GET /api/console/ops/triggers")
-                  .get("/api/console/ops/triggers")
-                  .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                  .check(status().is(200)))
-          .exec(
-              http("GET /api/console/queries/partitions WAITING")
-                  .get("/api/console/queries/partitions")
-                  .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                  .queryParam("partitionStatus", "WAITING")
-                  .queryParam("pageNo", "1")
-                  .queryParam("pageSize", "50")
-                  .check(status().is(200)))
-          .exec(
-              http("GET /api/console/queries/partitions READY")
-                  .get("/api/console/queries/partitions")
-                  .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                  .queryParam("partitionStatus", "READY")
-                  .queryParam("pageNo", "1")
-                  .queryParam("pageSize", "50")
-                  .check(status().is(200)))
-          .exec(
-              http("GET /api/console/queries/retries WAITING")
-                  .get("/api/console/queries/retries")
-                  .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                  .queryParam("retryStatus", "WAITING")
-                  .queryParam("pageNo", "1")
-                  .queryParam("pageSize", "50")
-                  .check(status().is(200)))
-          .exec(
-              http("GET /api/console/queries/catch-up-approvals")
-                  .get("/api/console/queries/catch-up-approvals")
-                  .queryParam("tenantId", GatlingConfig.TENANT_ID)
-                  .queryParam("pageNo", "1")
-                  .queryParam("pageSize", "50")
                   .check(status().is(200)));
+
+  private final ChainBuilder consoleReads =
+      GatlingConfig.SCHEDULING_CONSOLE_READS_ENABLED
+          ? exec(
+                  http("GET /api/console/scheduler/status")
+                      .get("/api/console/scheduler/status")
+                      .check(status().is(200)))
+              .exec(
+                  http("GET /api/console/ops/triggers")
+                      .get("/api/console/ops/triggers")
+                      .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                      .check(status().is(200)))
+              .exec(
+                  http("GET /api/console/queries/partitions WAITING")
+                      .get("/api/console/queries/partitions")
+                      .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                      .queryParam("partitionStatus", "WAITING")
+                      .queryParam("pageNo", "1")
+                      .queryParam("pageSize", "50")
+                      .check(status().is(200)))
+              .exec(
+                  http("GET /api/console/queries/partitions READY")
+                      .get("/api/console/queries/partitions")
+                      .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                      .queryParam("partitionStatus", "READY")
+                      .queryParam("pageNo", "1")
+                      .queryParam("pageSize", "50")
+                      .check(status().is(200)))
+              .exec(
+                  http("GET /api/console/queries/retries WAITING")
+                      .get("/api/console/queries/retries")
+                      .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                      .queryParam("retryStatus", "WAITING")
+                      .queryParam("pageNo", "1")
+                      .queryParam("pageSize", "50")
+                      .check(status().is(200)))
+              .exec(
+                  http("GET /api/console/queries/catch-up-approvals")
+                      .get("/api/console/queries/catch-up-approvals")
+                      .queryParam("tenantId", GatlingConfig.TENANT_ID)
+                      .queryParam("pageNo", "1")
+                      .queryParam("pageSize", "50")
+                      .check(status().is(200)))
+          : exec(session -> session);
+
+  private final ChainBuilder backlogReads =
+      internalBacklogReads
+          .exec(
+              consoleReads);
 
   private final ScenarioBuilder launchScenario =
       scenario("Scheduling write pressure").exec(launch);
@@ -156,10 +169,6 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
                 .percentile(95)
                 .lt(GatlingConfig.WRITE_P95_MS),
             details("GET /internal/scheduler/snapshot")
-                .responseTime()
-                .percentile(99)
-                .lt(GatlingConfig.READ_P99_MS),
-            details("GET /api/console/queries/partitions WAITING")
                 .responseTime()
                 .percentile(99)
                 .lt(GatlingConfig.READ_P99_MS),

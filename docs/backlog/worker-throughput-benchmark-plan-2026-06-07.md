@@ -1,6 +1,6 @@
 # Worker 吞吐优化与 Benchmark 总控计划
 
-> 状态:**计划已建立;import/export P0/P1 代码已完成并合入 PR #415;其余 worker 待按本计划执行**。
+> 状态:**import/export P0/P1 已合入;process/dispatch/atomic/trigger benchmark 脚本已补并完成小基线 RUN_ID `ctlw-20260607202126`**。
 > 日期:2026-06-07
 > 范围:`batch-worker-import`,`batch-worker-export`,`batch-worker-process`,`batch-worker-dispatch`,`batch-worker-atomic`,`batch-trigger`,`batch-orchestrator`
 > 关联:
@@ -9,22 +9,22 @@
 
 ## 结论
 
-1. **import/export 代码侧 P0/P1 已完成**。剩余不是代码开发,而是部署/重载 worker 后的系统级 benchmark 复验和参数矩阵。
-2. **process 是下一优先级**。它最可能卡在 PG staging 写入、聚合 SQL、表膨胀和幂等重跑。
-3. **dispatch/atomic 第二优先级**。重点不是文件吞吐,而是任务派发速率、Kafka lag、claim/lease/report 延迟、失败重试背压。
-4. **trigger 最后做**。它看触发延迟、批量触发吞吐、去重幂等、Quartz/DB 扫描压力。
+1. **import/export 代码侧 P0/P1 已完成并合入**。剩余不是代码开发,而是部署/重载 worker 后的系统级 benchmark 复验和参数矩阵。
+2. **process/dispatch/atomic/trigger 已完成小基线**。本轮覆盖真实 API / trigger / orchestrator / Kafka / worker / DB 链路,错误率 0%。
+3. **当前还不是容量上限结论**。1w/10w task storm、process 1000w staging、Kafka lag、失败重试/背压需要独立高压或故障注入窗口。
+4. **真并行状态需要拆开看**。trigger 写压和 scheduler 读压已并行;process/dispatch/atomic 本轮是模块顺序执行、模块内并发 `USERS=2`,跨模块同时加压未做。
 5. 所有 benchmark 都走正常系统链路:API / trigger / orchestrator / Kafka / worker / DB,不走前台模拟;代码完成状态和 benchmark 结果分开记录。
 
 ## 完成状态
 
 | Worker | 代码优化状态 | Benchmark 状态 | 当前结论 |
 |---|---|---|---|
-| import | P0/P1 已完成并合入 PR #415 | 1000w replace-copy 已跑;stage-swap/参数矩阵待复验 | 代码完成,复验待跑 |
-| export | P0/P1 已完成并合入 PR #415 | 1000w 单片/4 分片正确性已跑;并行/multipart收益待复验 | 代码完成,复验待跑 |
-| process | 待做 | 待建基线 | 下一阶段 P0 |
-| dispatch | 待做 | 待建基线 | process 后启动 |
-| atomic | 待做 | 待建基线 | 与 dispatch 同批 |
-| trigger | 待做 | 待建基线 | 最后启动 |
+| import | P0/P1 已完成并合入 PR #418 | 1000w replace-copy 已跑;stage-swap/参数矩阵待复验 | 代码完成,复验待跑 |
+| export | P0/P1 已完成并合入 PR #418 | 1000w 单片/4 分片正确性已跑;并行/multipart收益待复验 | 代码完成,复验待跑 |
+| process | 暂无 worker 代码改动;benchmark 入口已补 | 小基线已跑:`2/2 SUCCESS`,P95 端到端 0.655s | 大数据 staging/聚合待跑 |
+| dispatch | 暂无 worker 代码改动;benchmark 入口已补 | 小基线已跑:`2/2 SUCCESS`,P95 端到端 2.818s | 1w/10w task storm 待跑 |
+| atomic | 暂无 worker 代码改动;benchmark 入口已补 | SQL executor 小基线已跑:`2/2 SUCCESS`,P95 端到端 3.065s | stored-proc/http/shell 可选矩阵待跑 |
+| trigger | 暂无 worker 代码改动;benchmark 入口已补 scheduler sampler | 30 launch + 60 read 全成功,POST P95 77ms | 高频 cron/去重/背压待跑 |
 
 ## 统一方法
 
@@ -55,6 +55,26 @@
 | Kafka lag | consumer group lag,topic partition 分布 |
 | 错误率 | task status、DLQ、`event_outbox_retry`,`event_delivery_log` |
 | 文件大小/对象存储 | `file_record.file_size`,MinIO object metadata,STORE stage 耗时 |
+
+### 当前脚本入口
+
+| 脚本 | 覆盖 | 输出 | 说明 |
+|---|---|---|---|
+| `load-tests/scripts/run-worker-load-tests.sh` | import/export/dispatch/process 小基线 | `target/worker-load-report-<RUN_ID>.md` | 历史四类 worker 综合入口 |
+| `load-tests/scripts/run-worker-stress-tests.sh` | import/export/dispatch/process 阶梯加压 | `target/worker-stress-report-<RUN_ID>.md` | `STEPS_CSV=1,2,4,8` |
+| `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger | `target/control-plane-worker-report-<RUN_ID>.md` | 本轮新增;默认不跑 import/export;launch 后用 DB 等终态 |
+| `load-tests/scripts/sample-scheduler-backlog.sh` | scheduler/backlog SQL 采样 | CSV | trigger 压测时由新脚本并行启动 |
+
+## 2026-06-07 控制面小基线
+
+| Worker | 场景 | 数据量 | 并发/分片 | 耗时 | 吞吐 | Kafka lag | 错误率 | 结论 |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| process | `lt_process_sql_job` | 2 pipeline,每个 5000 row seed | `USERS=2` | P95 0.655s | 小基线,不作为上限 | 未采到 | 0% | 链路成功 |
+| dispatch | `lt_dispatch_local_job` | 2 pipeline | `USERS=2` | P95 2.818s | 小基线,不作为上限 | 未采到 | 0% | 链路成功 |
+| atomic | `atomic_sql_demo` direct | 2 pipeline | `USERS=2` | P95 3.065s | 小基线,不作为上限 | 未采到 | 0% | SQL executor 成功 |
+| trigger | `atomic_sql_demo` launch | 30 launch + 60 scheduler read | launch/read 各 1 rps | POST P95 77ms | 1.03 launch/s | 未采到 | 0% | trigger 读写并行成功 |
+
+详细报告见 `docs/verifications/control-plane-worker-throughput-2026-06-07.md`。
 
 ## 执行顺序
 
@@ -220,22 +240,22 @@
 |---|---|---|
 | 总控计划 | 本文档 | 所有 worker 的计划和状态 |
 | import/export 详细报告 | `docs/backlog/single-node-throughput-optimization-2026-06-06.md` | 已有,继续维护 |
-| process benchmark 报告 | `docs/verifications/process-worker-throughput-YYYY-MM-DD.md` | 跑完 P0 后新增 |
-| dispatch/atomic benchmark 报告 | `docs/verifications/dispatch-atomic-throughput-YYYY-MM-DD.md` | 跑完 P0 后新增 |
-| trigger benchmark 报告 | `docs/verifications/trigger-throughput-YYYY-MM-DD.md` | 跑完 P0 后新增 |
+| 控制面 worker 小基线报告 | `docs/verifications/control-plane-worker-throughput-2026-06-07.md` | process/dispatch/atomic/trigger 本轮统一报告 |
+| 控制面压测入口 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger 共用入口 |
 
 ## Checklist
 
-- [x] import/export P0/P1 代码完成并合入 PR #415
+- [x] import/export P0/P1 代码完成并合入 PR #418
 - [x] import/export 文档完成态已更新
 - [ ] import 1000w stage-swap 系统复验
 - [ ] export 1000w 4 分片并行 + multipart STORE 系统复验
-- [ ] process worker P0 baseline
+- [x] process worker P0 小基线
 - [ ] process worker P0 优化/修复
-- [ ] dispatch/atomic worker P0 baseline
+- [x] dispatch/atomic worker P0 小基线
 - [ ] dispatch/atomic worker P0 优化/修复
-- [ ] trigger worker P0 baseline
+- [x] trigger worker P0 小基线
 - [ ] trigger worker P1 参数矩阵
+- [x] process/dispatch/atomic/trigger 共用 benchmark 脚本入口
 
 ## 不做项
 
@@ -246,3 +266,5 @@
 | 只看单测当性能结论 | 不做 | 单测只能证明代码路径,不能证明吞吐收益 |
 | 全局调大 page/fetch/chunk 默认值 | 暂不做 | 可能伤害小租户/小内存场景,先模板级或 benchmark profile |
 | trigger 立即替换 Quartz | 不做 | 需达到 ADR-033 触发线后再启动 |
+| atomic shell 默认压测 | 不做 | shell executor 默认关闭,本地安全基线不打开 |
+| remote SFTP/NAS/EMAIL/OSS 默认压测 | 不做 | 需要外部依赖或故障注入环境,放到可选矩阵 |

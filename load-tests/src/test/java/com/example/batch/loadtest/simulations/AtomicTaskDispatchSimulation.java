@@ -56,9 +56,13 @@ public class AtomicTaskDispatchSimulation extends Simulation {
               "jobCode": "%s",
               "bizDate": "%s",
               "triggerType": "API",
-              "params": {}
+              "params": %s
             }
-            """.formatted(GatlingConfig.TENANT_ID, SPI_JOB_CODE, GatlingConfig.BIZ_DATE);
+            """.formatted(
+                    GatlingConfig.TENANT_ID,
+                    SPI_JOB_CODE,
+                    GatlingConfig.BIZ_DATE,
+                    GatlingConfig.LAUNCH_PARAMS_JSON);
 
     private final ChainBuilder launchSpiTask = feed(feeder)
             .exec(

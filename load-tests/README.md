@@ -136,6 +136,40 @@ STEPS_CSV=1,2,4,8,16 IMPORT_PROFILE=medium \
 
 `prepare-worker-load-data.sh` 生成的 IMPORT / EXPORT / PROCESS payload 内置 `#{traceId}` 占位符，Gatling 会为每个虚拟用户替换成唯一值，避免并发下重复文件名、重复 customerNo、重复 process batchKey 影响结论。
 
+### Process / Dispatch / Atomic / Trigger 控制面压测
+
+导入/导出收口后，其他 worker 默认用独立脚本跑，避免每轮夹带 IMPORT/EXPORT：
+
+```bash
+cd ..
+USERS=4 MODULES_CSV=process,dispatch,atomic,trigger \
+  bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+脚本会：
+
+- 复用 `prepare-worker-load-data.sh` 准备 PROCESS / DISPATCH 数据
+- 通过 `LaunchPipelineCompletionSimulation` 只发 launch，随后用 DB 等终态，跑 `lt_process_sql_job`、`lt_dispatch_local_job`、`atomic_sql_demo`
+- 通过 `SchedulingBacklogUnderLoadSimulation` 跑 trigger launch 压力，并并行采样 scheduler backlog
+- 输出 `target/control-plane-worker-report-<RUN_ID>.md`
+- 默认自动清理本轮 job/task/outbox/trigger/file/process seed；排查现场可设 `SKIP_AUTO_CLEANUP=1`
+- 默认不登录 console；只有 `PIPELINE_MAX_POLLS>0` 或 `SCHEDULING_CONSOLE_READS=true` 时才需要 console token
+
+默认 atomic 只跑 `atomic_sql_demo`。shell 执行器默认关闭；stored-proc/http 需要本地过程或出口 endpoint 就绪，可显式打开：
+
+```bash
+ATOMIC_JOBS_CSV=atomic_sql_demo,atomic_stored_proc_demo,atomic_http_demo \
+  bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+常用参数：
+
+- `USERS=1|4|8`：process/dispatch/atomic 端到端并发
+- `TRIGGER_LAUNCH_RPS=5.0`、`TRIGGER_DURATION_SECONDS=120`：trigger 写压
+- `SCHEDULING_CONSOLE_READS=true`：调度压测时额外打 console 读接口，默认关闭
+- `MODULES_CSV=process,dispatch`：只跑部分模块
+- `SKIP_AUTO_CLEANUP=1`：保留现场数据和报告引用
+
 ### CLAIM → REPORT 清单
 
 `WorkerTaskLifecycleSimulation` 会真实调用 `/internal/tasks/{taskId}/claim` 与 `/report` 并推进状态，只能用于隔离任务。CSV 例子：
