@@ -6,6 +6,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
+import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.Map;
 
@@ -59,6 +60,10 @@ final class DispatchInvocationSupport {
     context.getAttributes().put("externalRequestId", dispatchResult.externalRequestId());
     context.getAttributes().put("receiptCode", dispatchResult.receiptCode());
     context.getAttributes().put("receiptStatus", receiptStatusOf(dispatchResult));
+    DispatchManifestRef manifestRef = dispatchResult.manifestRef();
+    if (manifestRef != null) {
+      manifestRef.putAttributes(context.getAttributes());
+    }
   }
 
   /** 投递成功时统一 markSent；返回受影响行数（≤0 表示无对应 dispatch 记录，调用方需当作失败处理）。 */

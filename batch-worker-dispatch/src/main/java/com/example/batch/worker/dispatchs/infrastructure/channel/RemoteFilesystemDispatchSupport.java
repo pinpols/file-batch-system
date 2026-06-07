@@ -16,6 +16,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -138,11 +139,43 @@ final class RemoteFilesystemDispatchSupport {
       String remoteName =
           resolveRemoteFileName(channelConfig, command.fileRecord(), "nas_remote_file_name");
       Path target = directory.resolve(remoteName);
-      try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
-        copyWithTimeout(in, target);
+      Path tempTarget = directory.resolve(remoteName + ".tmp-" + UUID.randomUUID());
+      DispatchManifestSupport.PayloadDigest payloadDigest;
+      try {
+        try (InputStream in = contentResolver.openInputStream(command.fileRecord());
+            DispatchManifestSupport.DigestingInputStream digesting =
+                DispatchManifestSupport.digesting(in)) {
+          copyWithTimeout(digesting, tempTarget);
+          payloadDigest = digesting.finish();
+        }
+        movePublishedFile(tempTarget, target);
+      } finally {
+        Files.deleteIfExists(tempTarget);
+      }
+      DispatchManifestSupport.ManifestPayload manifest = null;
+      if (DispatchManifestSupport.enabled(channelConfig)) {
+        Path manifestPath =
+            directory.resolve(remoteName + DispatchManifestSupport.suffix(channelConfig));
+        Path manifestTempPath =
+            directory.resolve(manifestPath.getFileName() + ".tmp-" + UUID.randomUUID());
+        manifest =
+            DispatchManifestSupport.manifestPayload(
+                command,
+                target.toString(),
+                remoteName,
+                externalRequestId,
+                receiptCode,
+                payloadDigest,
+                manifestPath.toString());
+        try {
+          Files.write(manifestTempPath, manifest.bytes());
+          movePublishedFile(manifestTempPath, manifestPath);
+        } finally {
+          Files.deleteIfExists(manifestTempPath);
+        }
       }
       return finishResult(
-          command, externalRequestId, receiptCode, "uploaded via NAS", target.toString());
+          command, externalRequestId, receiptCode, "uploaded via NAS", target.toString(), manifest);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
@@ -232,14 +265,32 @@ final class RemoteFilesystemDispatchSupport {
       try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
         payload = in.readAllBytes();
       }
+      DispatchManifestSupport.PayloadDigest payloadDigest = DispatchManifestSupport.digest(payload);
       objectStore.put(
           bucket, objectName, new ByteArrayInputStream(payload), payload.length, contentType);
+      String evidence = "oss://" + bucket + PATH_SEP + objectName;
+      DispatchManifestSupport.ManifestPayload manifest = null;
+      if (DispatchManifestSupport.enabled(channelConfig)) {
+        String manifestName = objectName + DispatchManifestSupport.suffix(channelConfig);
+        String manifestRef = "oss://" + bucket + PATH_SEP + manifestName;
+        manifest =
+            DispatchManifestSupport.manifestPayload(
+                command,
+                evidence,
+                remoteName,
+                externalRequestId,
+                receiptCode,
+                payloadDigest,
+                manifestRef);
+        objectStore.put(
+            bucket,
+            manifestName,
+            new ByteArrayInputStream(manifest.bytes()),
+            manifest.sizeBytes(),
+            DispatchManifestSupport.CONTENT_TYPE);
+      }
       return finishResult(
-          command,
-          externalRequestId,
-          receiptCode,
-          "uploaded via OSS",
-          "oss://" + bucket + PATH_SEP + objectName);
+          command, externalRequestId, receiptCode, "uploaded via OSS", evidence, manifest);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
@@ -428,15 +479,36 @@ final class RemoteFilesystemDispatchSupport {
       String externalRequestId,
       String receiptCode,
       String message,
-      String evidence) {
+      String evidence,
+      DispatchManifestSupport.ManifestPayload manifest) {
     Map<String, Object> channelConfig = command.channelConfig();
     String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
     boolean acknowledged =
         "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
     boolean pending =
         "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
+    if (manifest == null) {
+      return new DispatchResult(
+          true, externalRequestId, receiptCode, acknowledged, pending, message, evidence);
+    }
     return new DispatchResult(
-        true, externalRequestId, receiptCode, acknowledged, pending, message, evidence);
+        true,
+        externalRequestId,
+        receiptCode,
+        acknowledged,
+        pending,
+        message,
+        evidence,
+        manifest.toRef());
+  }
+
+  private static void movePublishedFile(Path tempTarget, Path target) throws IOException {
+    try {
+      Files.move(
+          tempTarget, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    } catch (AtomicMoveNotSupportedException ignored) {
+      Files.move(tempTarget, target, StandardCopyOption.REPLACE_EXISTING);
+    }
   }
 
   private static String resolveExternalRequestId(DispatchCommand command) {
