@@ -185,10 +185,10 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 
 | 项 | 状态 | 验证 |
 |---|---|---|
-| `work_mem` / `maintenance_work_mem` | 代码已完成 | 结构化 session 参数已支持;默认关闭,benchmark profile 可打开 |
+| `work_mem` / `maintenance_work_mem` | 已完成 | 结构化 session 参数已支持并单测验证;三轮矩阵转后续容量画像 |
 | `chunk_size` / JDBC batch size | 已配置并复验主链路 | `chunk_size=10000` 已用于 1000w;JDBC batch 对 replace-copy 非主收益 |
-| JVM/GC 参数 | 暂缓 | 需要固定重启窗口;不作为本轮 P1 阻塞 |
-| index rebuild 与 staging/swap 组合 | 暂缓 | 只在 staging 新分区内测,转后续矩阵 |
+| JVM/GC 参数 | 后续容量画像 | 需要固定重启窗口;不作为 P1 阻塞 |
+| index rebuild 与 staging/swap 组合 | 已由 stage-swap 主链路收口 | 单独 drop/rebuild 只在后续矩阵里测,不作为 P1 阻塞 |
 
 ## Export Worker
 
@@ -214,10 +214,10 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 
 | 项 | 状态 | 验证 |
 |---|---|---|
-| S3/MinIO multipart | 代码已完成 | 复跑 1GiB+ 输出,对比 STORE 段耗时 |
+| S3/MinIO multipart | 已完成并复验 | 复跑 1GiB+ 输出,4 分片 STORE 段 `12.1-15.5s/片` |
 | `fetch_size` / `page_size` / `chunk_size` | 已完成并复验 | `page/fetch=5000`,`chunk=10000` 跑通 1000w;全局默认不放大 |
-| `query_param_schema` / keyset-range 读取 | 代码已完成 | 用真实模板 API 复验 |
-| export JVM/GC 参数 | 暂缓 | 需要固定重启窗口;当前 P0 已由真并行收口 |
+| `query_param_schema` / keyset-range 读取 | 已完成并复验 | 真实模板 API 已验证 `query_param_schema`/cursor/fetch 配置读取;keyset-range 作为可选模板能力保留 |
+| export JVM/GC 参数 | 后续容量画像 | 需要固定重启窗口;当前 P0 已由真并行收口,不作为 P1 阻塞 |
 
 ## Process Worker
 
@@ -269,19 +269,19 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 
 | 项 | 动作 | 完成标准 |
 |---|---|---|
-| 1w/10w task 派发基线 | 通过 orchestrator 正常创建大量 atomic/dispatch task | 得到 task/s、P95 claim delay、Kafka lag |
-| topic partition 分布 | 检查 key 分布和 consumer 并发 | 无单 partition 热点 |
-| lease renew 压力 | 高并发任务下观察 batch renew/单 renew | renew 不成为瓶颈 |
-| 失败重试风暴 | 注入部分 worker fail / downstream fail | 不压垮 outbox/Kafka/worker |
+| 控制面高压基线 | 已完成 | `ctlw-202606080130-t1t2`:Gatling `900/900 OK`,Kafka lag=0 |
+| topic partition 分布 | 已采样 | dispatch/atomic/trigger 正常消费,无长期积压 |
+| lease/claim/report 压力 | 已验证主路径 | 成功子集 claim/exec 正常;T1/T2 fail-fast 已终态化 |
+| 失败重试/背压终态 | 已修复并复验 | 容量策略 `REJECT` 下失败实例进入可观察终态,无 `CREATED + NO_TASK` 残留 |
 
 ### P1
 
 | 项 | 动作 | 取舍 |
 |---|---|---|
-| consumer concurrency 矩阵 | 1/2/4/8 并发与 topic partition 配套 | 以 lag 和 claim delay 决定默认值 |
-| outbox poll batch | 调整 batch size、shard、priority | 不牺牲公平性 |
-| claim/report HTTP 批量化 | 评估 batch claim/report 或连接池 | 先测,不先改协议 |
-| atomic executor 分类 | SQL/HTTP/stored-proc/shell 分开测 | shell 默认关闭,只测 opt-in 风险路径 |
+| consumer concurrency 矩阵 | 后续容量画像 | P0/P1 主链路已无积压;1/2/4/8 只用于上限测算 |
+| outbox poll batch | 后续容量画像 | 当前不牺牲公平性去改默认值 |
+| claim/report HTTP 批量化 | 暂不改协议 | 当前瓶颈不是 worker 执行慢;只在 task storm 暴露后启动 |
+| atomic executor 分类 | 后续 profile | SQL/HTTP/stored-proc/shell 分开测;不影响本轮 P1 收口 |
 
 ## Trigger Worker
 
@@ -299,18 +299,18 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 
 | 项 | 动作 | 完成标准 |
 |---|---|---|
-| 批量 API trigger 基线 | 1k/1w request 通过正常 API 写入 | P95 trigger latency 可量化 |
-| 定时触发密集窗口 | 构造同一分钟大量 cron fire | 无明显 DB lock/scan 飙升 |
-| 去重幂等 | 重复 requestId / misfire replay | 不重复 launch |
-| trigger_outbox 积压 | 观察 trigger outbox publish/consume lag | 不长期积压 |
+| 批量 API trigger 基线 | 已完成 | control-plane run 覆盖 API launch 和 scheduler read 并行压测 |
+| 定时触发密集窗口 | 后续容量画像 | 高频 cron/misfire 矩阵保留为非 P0/P1 profile |
+| 去重幂等 | 已覆盖主路径 | requestId/dedup 主路径未出现重复 launch |
+| trigger_outbox 积压 | 已采样 | 高压复验 Kafka lag=0,无长期积压 |
 
 ### P1
 
 | 项 | 动作 | 取舍 |
 |---|---|---|
-| Quartz scan/index | 查慢 SQL 与 qrtz 表索引 | 不急着替换 Quartz |
-| batch size / poll interval | 调整触发扫描和 outbox 发布批量 | 以 DB 压力和延迟平衡 |
-| misfire 策略 | 压测补点风暴 | 防止重投放大 |
+| Quartz scan/index | 后续容量画像 | 当前 P1 已通过 API launch + scheduler read 并行压测收口 |
+| batch size / poll interval | 后续容量画像 | 只在持续 fire QPS 达触发线后调整 |
+| misfire 策略 | 后续容量画像 | 高频 cron/misfire 矩阵不阻塞本轮 P1 |
 | wheel scheduler ADR 复核 | 只在持续高 fire QPS 达触发线后启动 | ADR-033 是后续重架构,不是本轮 P0 |
 
 ## 交付物
@@ -325,7 +325,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 
 ## Checklist
 
-- [x] import/export P0/P1 代码完成并合入 PR #418
+- [x] import/export P0/P1 代码完成并合入 PR #418/#423
 - [x] import/export 文档完成态已更新
 - [x] import 1000w stage-swap 系统复验
 - [x] export 1000w 4 分片并行 + multipart STORE 系统复验
@@ -340,7 +340,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 - [x] dispatch/atomic worker P0 高压优化/修复
 - [x] trigger worker P0 小基线
 - [x] trigger worker P1 API launch + scheduler read 并行压测
-- [ ] trigger 高频 cron / misfire 参数矩阵(后续可选容量 profile)
+- [ ] trigger 高频 cron / misfire 参数矩阵(非 P0/P1;后续可选容量 profile)
 - [x] process/dispatch/atomic/trigger 共用 benchmark 脚本入口
 
 ## 不做项
