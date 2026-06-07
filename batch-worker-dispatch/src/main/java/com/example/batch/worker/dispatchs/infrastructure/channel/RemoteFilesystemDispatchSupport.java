@@ -156,6 +156,8 @@ final class RemoteFilesystemDispatchSupport {
       if (DispatchManifestSupport.enabled(channelConfig)) {
         Path manifestPath =
             directory.resolve(remoteName + DispatchManifestSupport.suffix(channelConfig));
+        Path manifestTempPath =
+            directory.resolve(manifestPath.getFileName() + ".tmp-" + UUID.randomUUID());
         manifest =
             DispatchManifestSupport.manifestPayload(
                 command,
@@ -165,7 +167,12 @@ final class RemoteFilesystemDispatchSupport {
                 receiptCode,
                 payloadDigest,
                 manifestPath.toString());
-        Files.write(manifestPath, manifest.bytes());
+        try {
+          Files.write(manifestTempPath, manifest.bytes());
+          movePublishedFile(manifestTempPath, manifestPath);
+        } finally {
+          Files.deleteIfExists(manifestTempPath);
+        }
       }
       return finishResult(
           command, externalRequestId, receiptCode, "uploaded via NAS", target.toString(), manifest);

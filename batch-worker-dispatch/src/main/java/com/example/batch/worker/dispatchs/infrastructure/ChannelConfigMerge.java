@@ -34,6 +34,8 @@ public final class ChannelConfigMerge {
       Set.of(
           // ── 通用 ──
           "target_endpoint",
+          "dispatch_manifest_enabled",
+          "dispatch_manifest_suffix",
           // ── SFTP ──
           "sftp_host",
           "sftp_port",
