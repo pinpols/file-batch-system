@@ -4,10 +4,18 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
 
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT_DIR/.env.local}"
+if [[ -f "$COMPOSE_ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$COMPOSE_ENV_FILE"
+  set +a
+fi
+
 TRIGGER_BASE_URL="${TRIGGER_BASE_URL:-http://localhost:18081}"
 CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-http://localhost:18080}"
 ORCHESTRATOR_BASE_URL="${ORCHESTRATOR_BASE_URL:-http://localhost:18082}"
-INTERNAL_SECRET="${INTERNAL_SECRET:-internal-secret}"
+INTERNAL_SECRET="${INTERNAL_SECRET:-${BATCH_INTERNAL_SECRET:-internal-secret}}"
 BIZ_DATE="${BIZ_DATE:-2026-05-05}"
 IMPORT_PROFILE="${IMPORT_PROFILE:-medium}"
 USERS_PER_WORKER="${USERS_PER_WORKER:-3}"
@@ -59,12 +67,15 @@ case "$IMPORT_PROFILE" in
   *) echo "IMPORT_PROFILE must be small, medium, or large" >&2; exit 2 ;;
 esac
 
-TOKEN="$(
-  curl -fsS -X POST "$CONSOLE_BASE_URL/api/console/auth/login" \
+LOGIN_RESPONSE="$(
+  curl -i -fsS -X POST "$CONSOLE_BASE_URL/api/console/auth/login" \
     -H 'Content-Type: application/json' \
     -d '{"username":"admin","password":"admin123"}' \
-  | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p'
 )"
+TOKEN="$(printf '%s\n' "$LOGIN_RESPONSE" | tr -d '\r' | sed -n 's/^Set-Cookie: batch_console_token=\([^;]*\).*/\1/p' | head -1)"
+if [[ -z "$TOKEN" ]]; then
+  TOKEN="$(printf '%s\n' "$LOGIN_RESPONSE" | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' | head -1)"
+fi
 
 if [[ -z "$TOKEN" ]]; then
   echo "Failed to acquire console token" >&2
