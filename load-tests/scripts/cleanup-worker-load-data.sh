@@ -26,7 +26,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -42,7 +42,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -55,7 +55,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -68,7 +68,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -84,7 +84,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -100,7 +100,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -113,7 +113,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -126,7 +126,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -139,7 +139,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -155,7 +155,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -186,7 +186,38 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
+    AND (
+      trace_id LIKE '${RUN_ID}%'
+      OR params_snapshot::text LIKE '%${RUN_ID}%'
+      OR batch_no = '${RUN_ID}-SETTLEMENT'
+    )
+),
+jp AS (
+  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
+),
+jt AS (
+  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
+),
+oe AS (
+  SELECT id
+  FROM batch.outbox_event
+  WHERE tenant_id = 'default-tenant'
+    AND (
+      (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
+      OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
+      OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
+    )
+)
+DELETE FROM batch.event_delivery_log
+WHERE tenant_id = 'default-tenant'
+  AND outbox_event_id IN (SELECT id FROM oe);
+
+WITH ji AS (
+  SELECT id
+  FROM batch.job_instance
+  WHERE tenant_id = 'default-tenant'
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -211,7 +242,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -236,7 +267,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -265,7 +296,7 @@ WITH ji AS (
   SELECT id
   FROM batch.job_instance
   WHERE tenant_id = 'default-tenant'
-    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+    AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
     AND (
       trace_id LIKE '${RUN_ID}%'
       OR params_snapshot::text LIKE '%${RUN_ID}%'
@@ -278,7 +309,7 @@ WHERE related_job_instance_id IN (SELECT id FROM ji);
 
 DELETE FROM batch.job_instance
 WHERE tenant_id = 'default-tenant'
-  AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job')
+  AND job_code IN ('import_customer_job', 'export_settlement_job', 'lt_dispatch_local_job', 'lt_process_sql_job', 'atomic_sql_demo')
   AND (
     trace_id LIKE '${RUN_ID}%'
     OR params_snapshot::text LIKE '%${RUN_ID}%'

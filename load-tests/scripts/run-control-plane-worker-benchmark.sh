@@ -54,6 +54,7 @@ RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
+CLEANUP_ONLY="${CLEANUP_ONLY:-0}"
 on_exit_cleanup() {
   local rc=$?
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
@@ -107,6 +108,30 @@ oe AS (
     )
 )
 DELETE FROM batch.event_outbox_retry
+WHERE tenant_id = 'default-tenant'
+  AND outbox_event_id IN (SELECT id FROM oe);
+
+WITH ji AS (
+  SELECT id FROM batch.job_instance
+  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
+),
+jt AS (
+  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
+),
+jp AS (
+  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
+),
+oe AS (
+  SELECT id
+  FROM batch.outbox_event
+  WHERE tenant_id = 'default-tenant'
+    AND (
+      (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
+      OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
+      OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
+    )
+)
+DELETE FROM batch.event_delivery_log
 WHERE tenant_id = 'default-tenant'
   AND outbox_event_id IN (SELECT id FROM oe);
 
@@ -249,7 +274,6 @@ WHERE tenant_id = 'default-tenant'
     request_id LIKE '%${RUN_ID}%'
     OR dedup_key LIKE '%${RUN_ID}%'
     OR trace_id LIKE '%${RUN_ID}%'
-    OR request_payload::text LIKE '%${RUN_ID}%'
   );
 COMMIT;
 SQL
@@ -669,6 +693,14 @@ write_report() {
 }
 
 require_tooling
+if [[ "$CLEANUP_ONLY" == "1" ]]; then
+  trap - EXIT
+  "$LOAD_DIR/scripts/cleanup-worker-load-data.sh"
+  cleanup_atomic_trigger
+  echo "Cleaned control-plane worker benchmark data for RUN_ID=${RUN_ID}"
+  exit 0
+fi
+
 "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
 # shellcheck disable=SC1090
 source "$LOAD_DIR/target/worker-load-data/run.env"

@@ -35,10 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>PREPARE:解析 spec、jsqlparser AST 校验、identifier 校验、目标表存在性校验
- *   <li>COMPUTE:执行源 SELECT,把每行序列化为 JSONB 写入 {@code batch.process_staging}
- *   <li>VALIDATE:跑默认 row_count_positive + 用户配置的 validations
- *   <li>COMMIT:用 {@code jsonb_populate_record} 把 staging 反序列化为目标表行,原子写入(单 SQL ON CONFLICT)
- *   <li>FEEDBACK:清理 staging、推进水位
+ *   <li>COMPUTE:默认 JSONB 模式执行源 SELECT,把每行写入 {@code batch.process_staging};DIRECT 模式只登记快路径元信息
+ *   <li>VALIDATE:JSONB 模式跑默认 row_count_positive + 用户配置 validations;DIRECT 模式跳过 staging 校验
+ *   <li>COMMIT:JSONB 模式用 {@code jsonb_populate_record} 发布 staging;DIRECT 模式用 {@code INSERT ...
+ *       SELECT} 直接写目标表
+ *   <li>FEEDBACK:JSONB 模式清理 staging、推进水位;DIRECT 模式只推进水位
  * </ul>
  */
 @Slf4j
@@ -122,6 +123,18 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     String batchKey = requireBatchKey(context);
     // buildSqlParams 已经注入 batchKey / targetSchema / targetTable,这里不再重复 put。
     Map<String, Object> params = buildSqlParams(context, spec);
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
+      context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 0);
+      context.getAttributes().put("processedCount", 0);
+      context.getAttributes().put("processStagingMode", spec.stagingMode().name());
+      log.info(
+          "sqlTransformCompute direct fast path prepared: tenantId={}, batchKey={}, target={}.{}",
+          context.getTenantId(),
+          batchKey,
+          spec.targetSchema(),
+          spec.targetTable());
+      return ProcessStageResult.success(ProcessStage.COMPUTE);
+    }
 
     // Pre-DELETE:吃掉同 (batchKey, tenantId, targetSchema, targetTable) 上一轮 crash-mid-flow
     // 留下的 staging 行。稳定 batchKey 重跑路径(ProcessStepExecutionAdapter:74-77 由 payload 显式
@@ -221,6 +234,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   public ProcessStageResult validate(ProcessJobContext context) {
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
+      return ProcessStageResult.success(ProcessStage.VALIDATE);
+    }
     int stagedRows =
         toIntegerOrZero(context.getAttributes().get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
     if (stagedRows == 0) {
@@ -287,6 +303,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
+      return commitDirect(context, spec);
+    }
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(PARAM_BATCH_KEY, batchKey);
     params.put(PARAM_TENANT_ID, context.getTenantId());
@@ -315,6 +334,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   public ProcessStageResult feedback(ProcessJobContext context) {
     String batchKey = requireBatchKey(context);
     SqlTransformComputeSpec spec = parsedSpec(context);
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
+      log.info(
+          "sqlTransformCompute direct fast path feedback skipped staging cleanup: tenantId={},"
+              + " batchKey={}",
+          context.getTenantId(),
+          batchKey);
+      return ProcessStageResult.success(ProcessStage.FEEDBACK);
+    }
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(PARAM_BATCH_KEY, batchKey);
     params.put(PARAM_TENANT_ID, context.getTenantId());
@@ -503,19 +530,6 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
   /** COMMIT 用 jsonb_populate_record 反序列化到目标表行类型,单 SQL ON CONFLICT 原子上线。 */
   static String buildPublishSql(SqlTransformComputeSpec spec) {
-    String target =
-        JdbcMappedSqlValidator.quotePg(spec.targetSchema())
-            + "."
-            + JdbcMappedSqlValidator.quotePg(spec.targetTable());
-    String columnList =
-        spec.columns().stream()
-            .map(SqlTransformComputeSpec.ColumnMapping::target)
-            .map(JdbcMappedSqlValidator::quotePg)
-            .collect(Collectors.joining(", "));
-    String selectColumns =
-        spec.columns().stream()
-            .map(column -> "(rec)." + JdbcMappedSqlValidator.quotePg(column.target()))
-            .collect(Collectors.joining(", "));
     String sql =
         """
         INSERT INTO %s (%s)
@@ -529,7 +543,108 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
               AND target_table = :targetTable
         ) staged
         """
-            .formatted(target, columnList, selectColumns, target, STAGING_TABLE);
+            .formatted(
+                targetName(spec),
+                targetColumnList(spec),
+                jsonbRecordSelectColumns(spec),
+                targetName(spec),
+                STAGING_TABLE);
+    return appendConflictClause(sql, spec);
+  }
+
+  /** DIRECT fast path:绕开 JSONB staging,直接把 sourceSql 结果写入目标表。 */
+  static String buildDirectPublishSql(SqlTransformComputeSpec spec) {
+    String sql =
+        """
+        INSERT INTO %s (%s)
+        SELECT %s
+        FROM (
+        %s
+        ) base
+        """
+            .formatted(
+                targetName(spec),
+                targetColumnList(spec),
+                directSourceSelectColumns(spec),
+                spec.sourceSql());
+    return appendConflictClause(sql, spec);
+  }
+
+  /**
+   * DIRECT fast path 带水位回传的发布 SQL。使用 INSERT/UPSERT RETURNING 读取已发布行水位,避免为了 highWaterMark 再全表扫一遍
+   * source。
+   */
+  static String buildDirectPublishMetricsSql(SqlTransformComputeSpec spec) {
+    String watermarkColumn = JdbcMappedSqlValidator.quotePg(spec.watermarkColumn());
+    return """
+    WITH published AS (
+    %s
+    RETURNING %s AS high_water_mark
+    )
+    SELECT count(*) AS published_rows, max(high_water_mark) AS high_water_mark
+    FROM published
+    """
+        .formatted(buildDirectPublishSql(spec), watermarkColumn);
+  }
+
+  private ProcessStageResult commitDirect(ProcessJobContext context, SqlTransformComputeSpec spec) {
+    Map<String, Object> params = buildSqlParams(context, spec);
+    int publishedRows;
+    if (Texts.hasText(spec.watermarkColumn())) {
+      Map<String, Object> result = jdbc.queryForMap(buildDirectPublishMetricsSql(spec), params);
+      publishedRows = toIntegerOrZero(result.get("published_rows"));
+      Object highWaterMarkOut = result.get("high_water_mark");
+      if (highWaterMarkOut != null) {
+        context
+            .getAttributes()
+            .put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, String.valueOf(highWaterMarkOut));
+      }
+    } else {
+      publishedRows = jdbc.update(buildDirectPublishSql(spec), params);
+    }
+    context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, publishedRows);
+    context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, publishedRows);
+    context.getAttributes().put("processedCount", publishedRows);
+    metrics.recordCommitPublishedRows(context.getTenantId(), publishedRows);
+    log.info(
+        "sqlTransformCompute direct published: tenantId={}, batchKey={}, target={}.{},"
+            + " publishedRows={}",
+        context.getTenantId(),
+        context.getBatchKey(),
+        spec.targetSchema(),
+        spec.targetTable(),
+        publishedRows);
+    return ProcessStageResult.success(ProcessStage.COMMIT);
+  }
+
+  private static String targetName(SqlTransformComputeSpec spec) {
+    String target =
+        JdbcMappedSqlValidator.quotePg(spec.targetSchema())
+            + "."
+            + JdbcMappedSqlValidator.quotePg(spec.targetTable());
+    return target;
+  }
+
+  private static String targetColumnList(SqlTransformComputeSpec spec) {
+    return spec.columns().stream()
+        .map(SqlTransformComputeSpec.ColumnMapping::target)
+        .map(JdbcMappedSqlValidator::quotePg)
+        .collect(Collectors.joining(", "));
+  }
+
+  private static String jsonbRecordSelectColumns(SqlTransformComputeSpec spec) {
+    return spec.columns().stream()
+        .map(column -> "(rec)." + JdbcMappedSqlValidator.quotePg(column.target()))
+        .collect(Collectors.joining(", "));
+  }
+
+  private static String directSourceSelectColumns(SqlTransformComputeSpec spec) {
+    return spec.columns().stream()
+        .map(column -> "base." + JdbcMappedSqlValidator.quotePg(column.source()))
+        .collect(Collectors.joining(", "));
+  }
+
+  private static String appendConflictClause(String sql, SqlTransformComputeSpec spec) {
     // PROCESS at-least-once 安全:所有 writeMode 都需要 ON CONFLICT 子句,SqlTransformComputeSpec
     // 已在 parse 期保证 conflictColumns 非空。INSERT / INSERT_IGNORE 共用 DO NOTHING 语义,
     // UPSERT 走 DO UPDATE SET。这样 commit-后-report-丢的重发不会双写 target。

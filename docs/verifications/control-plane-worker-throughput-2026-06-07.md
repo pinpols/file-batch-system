@@ -2,16 +2,18 @@
 
 > 范围:process / dispatch / atomic / trigger
 > RUN_ID:`ctlw-20260607202126`
-> 结论级别:小基线已跑通,不是容量上限报告
+> 结论级别:小基线已跑通;T1/T2 终态修复后高压复验全终态,不是容量上限报告
 
 ## 结论
 
 1. process、dispatch、atomic、trigger 四类控制面 worker 已补独立 benchmark 入口,默认不再夹带 import/export。
 2. 本轮走正常系统链路:trigger API -> orchestrator -> Kafka -> worker -> DB。没有走前台模拟。
 3. 小基线全部成功,错误率 0%。process/dispatch/atomic 各 2 个直接 pipeline 任务成功;trigger 30 次 launch 成功,并同步压内部 scheduler snapshot/history 读接口。
-4. trigger 读写已经并行执行。process/dispatch/atomic 本轮是按模块顺序跑,模块内部并发为 `USERS=2`;跨模块同时加压还没有做。
+4. trigger 读写已经并行执行;跨模块真并行入口已补并已跑。
 5. Kafka lag 未采到,原因是本地 `batch-kafka` 容器里没有 `kafka-consumer-groups` 命令;脚本已降级为 best-effort,不再导致 benchmark 失败。
-6. 追加并行复验 RUN_ID `ctlw-20260607204120`:跨模块真并行入口已达成,Kafka lag 已采到;但暴露 `CREATED + ACCEPTED + zero partition/task` 滞留缺口。代码侧已补保守恢复器,系统级复验需重启/重载 orchestrator 后再跑。
+6. 追加并行复验 RUN_ID `ctlw-20260607204120`:跨模块真并行入口已达成,Kafka lag 已采到;但暴露 `CREATED + ACCEPTED + zero partition/task` 滞留缺口。
+7. 高压复验 RUN_ID `ctlw-20260607231538`:Gatling 900/900 OK,worker 成功子集 claim/exec 都快,但仍有 103/540 个实例停留 `CREATED + NO_TASK`。结论:这不是 worker 执行瓶颈,而是 launch T1/T2 分发 fail-fast 后实例未终态化的 P0 状态机缺陷。
+8. T1/T2 修复后复验 RUN_ID `ctlw-202606080130-t1t2`:Gatling 900/900 OK,540/540 实例全部终态,不再残留 `CREATED + NO_TASK`。本地 quota reject 被可观察地终态化为 `FAILED/NO_TASK`。
 
 ## 本轮做了什么
 
@@ -26,7 +28,9 @@
 | `.env.local` 内部密钥读取 | 已完成 | 默认从 `BATCH_INTERNAL_SECRET` 取值 |
 | Kafka lag 采样 | 已完成 | 改为优先使用 `batch-kafka:/opt/kafka/bin/kafka-consumer-groups.sh` |
 | 跨模块真并行入口 | 已完成 | `CONTROL_PLANE_MODE=parallel` 使用 `ControlPlaneMixedPressureSimulation` |
-| stale CREATED 恢复器 | 已完成代码 | 只恢复非 workflow、CREATED、零 partition/task、trigger_request ACCEPTED 的实例 |
+| stale CREATED 恢复器 / T1-T2 终态化 | 已完成并复验 | 普通 job 分发 fail-fast 后转 `FAILED`,trigger_request 转 `REJECTED`;高压复验无 CREATED 残留 |
+| cleanup-only 与 outbox 清理 | 已完成 | `CLEANUP_ONLY=1` 可只清理;补删 `event_delivery_log` 避免 outbox FK 阻塞 |
+| 本地 restart 只杀监听进程 | 已完成 | `lsof` 加 `-sTCP:LISTEN`,避免重启 orchestrator 时误杀连接中的 worker |
 
 ## 执行命令
 
@@ -86,6 +90,96 @@ Gatling 同一时间窗口内完成 5 个场景:process launch、dispatch launch
 - 暴露缺口:21 个实例停留 `CREATED`,对应 trigger_request 仍为 `ACCEPTED`,且无 partition/task/outbox。该状态符合 launch T1 提交、T2 未完成的恢复缺口。
 - 已补代码:新增 `StaleCreatedLaunchRecoveryScheduler`,通过 `batch.trigger.launch.created-recovery.*` 控制。当前运行进程未热加载,需重启/重载 orchestrator 后复验。
 
+## 追加高压复验
+
+RUN_ID:`ctlw-20260607231538`
+
+```bash
+SKIP_AUTO_CLEANUP=1 \
+CONTROL_PLANE_MODE=parallel \
+MODULES_CSV=dispatch,atomic,trigger \
+DISPATCH_LAUNCH_RPS=3.0 \
+ATOMIC_LAUNCH_RPS=3.0 \
+TRIGGER_LAUNCH_RPS=3.0 \
+TRIGGER_READ_RPS=3.0 \
+TRIGGER_DURATION_SECONDS=60 \
+WAIT_TERMINAL_TIMEOUT_SECONDS=900 \
+WAIT_TERMINAL_MIN_INSTANCES=540 \
+MAX_ERROR_PCT=20.0 \
+bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+HTTP/Gatling 结果:
+
+- `POST /api/triggers/launch` 与 scheduler read 合计 900/900 OK,0 KO。
+- Gatling 全局 mean 17ms,P95 28ms,P99 121ms。
+- 报告目录:`load-tests/target/gatling-results/controlplanemixedpressuresimulation-20260607151550000/index.html`。
+
+实例最终观测:
+
+| 模块 | Job | 实例数 | 成功 | 非终态 | Task 成功数 | P95 claim | P95 exec |
+|---|---|---:|---:|---:|---:|---:|---:|
+| dispatch | `lt_dispatch_local_job` | 180 | 147 | 33 | 147 | 1.236s | 0.082s |
+| atomic direct | `atomic_sql_demo` | 180 | 140 | 40 | 140 | 1.266s | 0.026s |
+| trigger -> atomic | `atomic_sql_demo` | 180 | 150 | 30 | 150 | 1.364s | 0.029s |
+
+Worker 状态:
+
+| Worker group | Worker | 状态 | 当前负载 | 最大并发 |
+|---|---|---|---:|---:|
+| ATOMIC | `atomic-node-1` | ONLINE | 0 | 10 |
+| DISPATCH | `dispatch-node-1` | ONLINE | 0 | 10 |
+
+关键判断:
+
+- Kafka lag 为 0,worker 在线且 current_load 回落 0。
+- 成功子集的 claim P95 约 1.2-1.4s,执行 P95 小于 100ms;worker 执行不是瓶颈。
+- 非终态实例全部是 `CREATED + NO_TASK`,没有进入 worker。
+- orchestrator 恢复日志反复出现 `StaleCreatedLaunchRecoveryScheduler ... error=error.partition.dispatch_business_error`。
+- 本地容量策略为 `tenant_quota_policy.exceeded_strategy=REJECT`,且 `dispatch_queue` 只有 3 job / 6 partition。高压下 T2 分发 fail-fast 后,T1 已提交的 `job_instance=CREATED` 没有转成可观察终态;恢复器继续走同一调度路径,会反复撞 fail-fast。
+
+结论:dispatch / atomic / trigger 的小基线和 HTTP 压测通过,但高压端到端不能标记完成。下一步应修 orchestrator launch T1/T2 在 `dispatch_business_error` 下的终态语义:要么实例立即 `FAILED/WAITING` 可观测,要么进入可重试队列,不能长期停在 `CREATED + NO_TASK`。
+
+代码修复:
+
+- `DefaultLaunchService` 在 T2 `error.partition.dispatch_business_error` 后把普通 `job_instance CREATED` CAS 标为 `FAILED`。
+- 同时把对应 `trigger_request` 标为 `REJECTED`,避免继续停在 `ACCEPTED`。
+- 单测:`mvn -pl batch-orchestrator -am -Dtest=DefaultLaunchServiceTest -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false test` 通过。
+
+## T1/T2 修复后高压复验
+
+RUN_ID:`ctlw-202606080130-t1t2`
+
+```bash
+SKIP_AUTO_CLEANUP=1 \
+CONTROL_PLANE_MODE=parallel \
+MODULES_CSV=dispatch,atomic,trigger \
+DISPATCH_LAUNCH_RPS=3.0 \
+ATOMIC_LAUNCH_RPS=3.0 \
+TRIGGER_LAUNCH_RPS=3.0 \
+TRIGGER_READ_RPS=3.0 \
+TRIGGER_DURATION_SECONDS=60 \
+WAIT_TERMINAL_TIMEOUT_SECONDS=900 \
+WAIT_TERMINAL_MIN_INSTANCES=540 \
+MAX_ERROR_PCT=20.0 \
+bash load-tests/scripts/run-control-plane-worker-benchmark.sh
+```
+
+HTTP/Gatling 结果:
+
+- `POST /api/triggers/launch` 与 scheduler read 合计 900/900 OK,0 KO。
+- 报告:`load-tests/target/control-plane-worker-report-ctlw-202606080130-t1t2.md`。
+- Gatling HTML:`load-tests/target/gatling-results/controlplanemixedpressuresimulation-20260607173104566/index.html`。
+
+实例最终观测:
+
+| 模块 | Job | 实例数 | SUCCESS | FAILED | 非终态 | 结论 |
+|---|---|---:|---:|---:|---:|---|
+| dispatch | `lt_dispatch_local_job` | 180 | 123 | 57 | 0 | quota reject 已终态化为 FAILED/NO_TASK |
+| atomic direct + trigger | `atomic_sql_demo` | 360 | 230 | 130 | 0 | 成功子集正常;拒绝子集不再滞留 CREATED |
+
+结论:T1/T2 状态机 P0 已收口。高压下 FAILED 是本地容量策略 `tenant_quota_policy.exceeded_strategy=REJECT` 的可观察终态,不是 worker 卡死或 Kafka 积压。
+
 ## Task 延迟
 
 | 模块 | Task type | 任务数 | 成功 | 失败 | 平均 claim 秒 | P95 claim 秒 | 平均执行秒 | P95 执行秒 |
@@ -117,13 +211,13 @@ Gatling 同一时间窗口内完成 5 个场景:process launch、dispatch launch
 
 | 项 | 是否能做 | 本轮不做原因 | 下一步 |
 |---|---|---|---|
-| 1w/10w task storm | 能做 | 小基线先验证链路和指标口径 | 提高 `USERS` / `TRIGGER_LAUNCH_RPS`,分 1k -> 1w -> 10w 阶梯跑 |
+| 1w/10w task storm | 能做 | T1/T2 终态语义已修;需要单独容量窗口 | 分 1k -> 1w -> 10w 阶梯跑,记录 quota 策略和 worker 扩容配置 |
 | process 1000w staging/聚合 | 能做 | 需要准备更大业务输入和 PG 资源窗口 | 单独跑 process 大数据脚本,采 `pg_stat_statements`/WAL/IO |
 | dispatch remote SFTP/NAS/EMAIL/OSS | 能做 | 依赖外部服务或本地 mock endpoint | 放到可选矩阵,不进安全默认压测 |
 | atomic stored-proc/http/shell | 部分能做 | SQL executor 是默认安全路径;shell 默认关闭 | stored-proc/http 补本地 fixture 后跑;shell 只 opt-in |
 | Kafka lag | 已做 | 已使用容器内 `/opt/kafka/bin/kafka-consumer-groups.sh` | 后续高压继续记录 before/after |
 | 失败重试/背压/lease renew 压力 | 能做 | 需要故障注入,不能和成功基线混跑 | 单独建 failure profile |
-| 跨模块真并行 | 已做 | 已新增单 simulation 并跑出 `ctlw-20260607204120` | 修复 CREATED 恢复后复跑确认全部终态 |
+| 跨模块真并行 | 已做 | 已新增单 simulation 并跑出 `ctlw-20260607204120`,`ctlw-20260607231538`,`ctlw-202606080130-t1t2` | 已确认全部终态;后续做更大 task storm |
 
 ## 产物
 
@@ -137,7 +231,8 @@ Gatling 同一时间窗口内完成 5 个场景:process launch、dispatch launch
 | Gatling atomic | `load-tests/target/gatling-results/launchpipelinecompletionsimulation-20260607122206340/index.html` |
 | Gatling trigger | `load-tests/target/gatling-results/schedulingbacklogunderloadsimulation-20260607122220823/index.html` |
 | Gatling mixed parallel | `load-tests/target/gatling-results/controlplanemixedpressuresimulation-20260607124132651/index.html` |
+| Gatling high pressure | `load-tests/target/gatling-results/controlplanemixedpressuresimulation-20260607151550000/index.html` |
 
 ## 当前判断
 
-这轮没有暴露 process/dispatch/atomic/trigger 的功能性失败;P95 claim 延迟主要来自调度/worker 领取周期,不是 task 执行本身。后续优化应先做高并发阶梯压测和 Kafka/DB 采样,再决定是否调 worker 并发、outbox poll batch、claim/report 批量化或 process staging 写入策略。
+这轮没有暴露 worker 执行慢的问题;P95 claim 延迟和执行耗时都可接受。真正阻断高压端到端的是 orchestrator launch T1/T2 在资源调度 fail-fast 下留下 `CREATED + NO_TASK`;该 P0 已由 `ctlw-202606080130-t1t2` 复验收口。后续优化顺序转为 1w/10w task storm、故障注入、重试/背压和 worker 参数矩阵。

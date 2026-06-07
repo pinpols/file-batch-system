@@ -17,6 +17,8 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -96,6 +98,20 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
+  void partitionedDispatchKeyMapsLogicalPartitionsAcrossKafkaPartitions() {
+    Set<Integer> kafkaPartitions = new HashSet<>();
+    for (int partitionNo = 1; partitionNo <= 4; partitionNo++) {
+      String key =
+          KafkaOutboxPublisher.dispatchKafkaKey(
+              dispatchEvent("EXPORT", "outbox-dedup-key-" + partitionNo),
+              partitionedMessage(partitionNo, 4));
+      kafkaPartitions.add(KafkaOutboxPublisher.partitionFor(key, 4));
+    }
+
+    assertThat(kafkaPartitions).containsExactlyInAnyOrder(0, 1, 2, 3);
+  }
+
+  @Test
   void shouldRecordFailedDeliveryWhenFallbackTopicSendFails() {
     batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
     outboxProperties.setDefaultTopic(BatchTopics.OUTBOX_EVENT);
@@ -171,5 +187,26 @@ class KafkaOutboxPublisherTest {
     event.setNextPublishAt(BatchDateTimeSupport.utcNow());
     event.setTraceId("trace-fallback");
     return event;
+  }
+
+  private static com.example.batch.common.kafka.TaskDispatchMessage partitionedMessage(
+      int partitionNo, int partitionCount) {
+    return new com.example.batch.common.kafka.TaskDispatchMessage(
+        "v2",
+        "t1",
+        1L,
+        (long) partitionNo,
+        100L + partitionNo,
+        "it-instance-001",
+        "IT_JOB",
+        "EXPORT",
+        "export-node-1",
+        "NORMAL",
+        "trace-it-test",
+        "idem-" + partitionNo,
+        BatchDateTimeSupport.utcNow(),
+        null,
+        partitionNo,
+        partitionCount);
   }
 }
