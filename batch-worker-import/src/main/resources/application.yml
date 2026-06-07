@@ -150,7 +150,7 @@ batch:
         maximum-pool-size: ${BATCH_WORKER_IMPORT_BUSINESS_DB_MAX_POOL_SIZE:15}
         minimum-idle: ${BATCH_WORKER_IMPORT_BUSINESS_DB_MIN_IDLE:3}
         # 可选写吞吐旋钮(默认空=不改持久性姿态)。设
-        # BATCH_WORKER_IMPORT_BUSINESS_CONNECTION_INIT_SQL="SET synchronous_commit=off"
+        # 示例: BATCH_WORKER_IMPORT_BUSINESS_CONNECTION_INIT_SQL="SET synchronous_commit=off"
         # 可在 import 业务连接关闭同步提交 → app 多次小批 commit 场景提升吞吐。
         # ⚠️ 持久性代价:崩溃丢失最后若干已提交事务(无数据损坏);仅因 import 幂等(ON CONFLICT)
         # 可重跑才可接受。仅作用于 import 业务连接池,不影响控制库(状态机强一致)。
