@@ -10,6 +10,8 @@ public interface TriggerRequestMapper {
 
   int insert(TriggerRequestEntity entity);
 
+  TriggerRequestEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
   TriggerRequestEntity selectByTenantAndRequestId(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 

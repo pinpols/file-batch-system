@@ -107,10 +107,14 @@ check_hikari() {
 
 # 3) Kafka lag(本地用 docker exec kafka-consumer-groups,简化:汇总最大 lag)
 check_kafka_lag() {
-  local lag
-  lag="$(docker exec -i $(docker ps --format '{{.Names}}' | grep -E 'kafka$|kafka-1' | head -1) \
-        kafka-consumer-groups --bootstrap-server localhost:9092 --describe --all-groups 2>/dev/null \
-        | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}')"
+  local lag kafka_container
+  kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
+  [[ -n "$kafka_container" ]] || return
+  lag="$(
+    docker exec -i "$kafka_container" /opt/kafka/bin/kafka-consumer-groups.sh \
+      --bootstrap-server "${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}" --describe --all-groups 2>/dev/null \
+      | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
+  )"
   if [[ -z "$lag" ]]; then return; fi
   if (( lag > KAFKA_LAG_THRESHOLD )); then
     if (( kafka_breach_since == 0 )); then kafka_breach_since=$(date +%s); fi

@@ -17,6 +17,13 @@
         <result column="dry_run" property="dryRun"/>
     </resultMap>
 
+    <select id="selectById" resultMap="TriggerRequestResultMap">
+        select *
+        from batch.trigger_request
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
     <select id="selectByTenantAndRequestId" resultMap="TriggerRequestResultMap">
         select *
         from batch.trigger_request

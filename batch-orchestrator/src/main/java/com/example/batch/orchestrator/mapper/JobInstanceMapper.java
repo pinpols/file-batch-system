@@ -65,6 +65,13 @@ public interface JobInstanceMapper {
    */
   List<JobInstanceEntity> selectTimedOutCandidates(@Param("limit") int limit);
 
+  /**
+   * 选 launch T1 已提交但 T2 从未完成的非 workflow 实例。仅包含 CREATED、零 partition、零 task、trigger_request 仍
+   * ACCEPTED 的实例,供保守恢复调度器重驱 T2。
+   */
+  List<JobInstanceEntity> selectStaleCreatedLaunchCandidates(
+      @Param("olderThan") Instant olderThan, @Param("limit") int limit);
+
   int markSlaAlerted(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
