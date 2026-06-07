@@ -266,3 +266,16 @@ CREATE TABLE IF NOT EXISTS biz.process_account_summary (
     high_water_mark  BIGINT         NOT NULL,
     PRIMARY KEY (tenant_id, account_id, biz_date)
 );
+
+-- PROCESS load-test target for one-source-row -> one-staging-row pressure.
+-- Unlike process_account_summary, this table keeps cardinality equal to source rows
+-- so benchmark can measure staging write and publish throughput separately from aggregation.
+CREATE TABLE IF NOT EXISTS biz.process_event_copy (
+    tenant_id        VARCHAR(32)    NOT NULL,
+    event_id         BIGINT         NOT NULL,
+    account_id       VARCHAR(32)    NOT NULL,
+    biz_date         DATE           NOT NULL,
+    amount           NUMERIC(18, 2) NOT NULL,
+    high_water_mark  BIGINT         NOT NULL,
+    PRIMARY KEY (tenant_id, event_id)
+);

@@ -6,6 +6,12 @@ LOAD_DIR="$ROOT_DIR/load-tests"
 OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data}"
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
 BIZ_DATE="${BIZ_DATE:-2026-05-05}"
+PROCESS_SOURCE_ROWS="${PROCESS_SOURCE_ROWS:-5000}"
+PROCESS_ACCOUNT_COUNT="${PROCESS_ACCOUNT_COUNT:-500}"
+PROCESS_EVENT_ID_START="${PROCESS_EVENT_ID_START:-$(($(date +%s) * 10000000))}"
+PROCESS_ACCOUNT_WIDTH="${PROCESS_ACCOUNT_WIDTH:-$(n=$((PROCESS_ACCOUNT_COUNT - 1)); digits=${#n}; if [[ "$digits" -lt 4 ]]; then echo 4; else echo "$digits"; fi)}"
+PROCESS_AGG_MAX_STAGED_ROWS="${PROCESS_AGG_MAX_STAGED_ROWS:-$((PROCESS_ACCOUNT_COUNT + 1000))}"
+PROCESS_COPY_MAX_STAGED_ROWS="${PROCESS_COPY_MAX_STAGED_ROWS:-$((PROCESS_SOURCE_ROWS + 1000))}"
 
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-15432}"
@@ -83,7 +89,15 @@ cat > "$OUT_DIR/process.params.json" <<JSON
 {
   "bizDate": "${BIZ_DATE}",
   "batchKey": "#{traceId}-${RUN_ID}-process",
-  "metadata": {"runId": "${RUN_ID}", "expectedRows": 5000}
+  "metadata": {"runId": "${RUN_ID}", "expectedRows": ${PROCESS_SOURCE_ROWS}, "expectedOutputRows": ${PROCESS_ACCOUNT_COUNT}, "benchmarkModule": "process-aggregate"}
+}
+JSON
+
+cat > "$OUT_DIR/process-copy.params.json" <<JSON
+{
+  "bizDate": "${BIZ_DATE}",
+  "batchKey": "#{traceId}-${RUN_ID}-process-copy",
+  "metadata": {"runId": "${RUN_ID}", "expectedRows": ${PROCESS_SOURCE_ROWS}, "expectedOutputRows": ${PROCESS_SOURCE_ROWS}, "benchmarkModule": "process-copy"}
 }
 JSON
 
@@ -150,17 +164,36 @@ ON CONFLICT (tenant_id, settlement_no) DO UPDATE SET
   settlement_status = 'READY',
   updated_at = now();
 
+CREATE TABLE IF NOT EXISTS biz.process_event_copy (
+    tenant_id        VARCHAR(32)    NOT NULL,
+    event_id         BIGINT         NOT NULL,
+    account_id       VARCHAR(32)    NOT NULL,
+    biz_date         DATE           NOT NULL,
+    amount           NUMERIC(18, 2) NOT NULL,
+    high_water_mark  BIGINT         NOT NULL,
+    PRIMARY KEY (tenant_id, event_id)
+);
+
+DELETE FROM biz.process_event_copy
+WHERE tenant_id = 'default-tenant'
+  AND account_id LIKE '${RUN_ID}-ACCT-%';
+
+DELETE FROM biz.process_account_summary
+WHERE tenant_id = 'default-tenant'
+  AND account_id LIKE '${RUN_ID}-ACCT-%';
+
 DELETE FROM biz.process_order_event
-WHERE tenant_id = 'default-tenant' AND event_id BETWEEN 9100000000 AND 9100004999;
+WHERE tenant_id = 'default-tenant'
+  AND account_id LIKE '${RUN_ID}-ACCT-%';
 
 INSERT INTO biz.process_order_event (tenant_id, account_id, biz_date, event_id, amount)
 SELECT
   'default-tenant',
-  'LTACCT-' || lpad((gs % 500)::text, 4, '0'),
+  '${RUN_ID}-ACCT-' || lpad((gs % ${PROCESS_ACCOUNT_COUNT})::text, ${PROCESS_ACCOUNT_WIDTH}, '0'),
   DATE '${BIZ_DATE}',
-  9100000000 + gs,
+  ${PROCESS_EVENT_ID_START} + gs,
   (gs % 100 + 1)::numeric
-FROM generate_series(0, 4999) gs;
+FROM generate_series(0, ${PROCESS_SOURCE_ROWS} - 1) gs;
 
 COMMIT;
 SQL
@@ -183,10 +216,14 @@ INSERT INTO batch.job_definition (
    'MANUAL', 'Asia/Shanghai', 5, 'dispatch_queue', 'DISPATCH',
    'default-calendar', 'always_open', 'API', false, 'NONE',
    'NONE', 0, 600, true, 1, 'local dispatch load test job', 'load-test', 'load-test', now(), now()),
-  ('default-tenant', 'lt_process_sql_job', 'Load Test Process SQL', 'PROCESS', 'LOAD_TEST',
+  ('default-tenant', 'lt_process_sql_job', 'Load Test Process SQL Aggregate', 'PROCESS', 'LOAD_TEST',
    'MANUAL', 'Asia/Shanghai', 5, 'process_queue', 'PROCESS',
    'default-calendar', 'always_open', 'API', false, 'NONE',
-   'NONE', 0, 900, true, 1, 'sql transform process load test job', 'load-test', 'load-test', now(), now())
+   'NONE', 0, 900, true, 1, 'sql aggregate process load test job', 'load-test', 'load-test', now(), now()),
+  ('default-tenant', 'lt_process_copy_job', 'Load Test Process Staging Copy', 'PROCESS', 'LOAD_TEST',
+   'MANUAL', 'Asia/Shanghai', 5, 'process_queue', 'PROCESS',
+   'default-calendar', 'always_open', 'API', false, 'NONE',
+   'NONE', 0, 1800, true, 1, 'one source row to one staging row process load test job', 'load-test', 'load-test', now(), now())
 ON CONFLICT (tenant_id, job_code) DO UPDATE SET
   enabled = true,
   window_code = EXCLUDED.window_code,
@@ -197,7 +234,7 @@ ON CONFLICT (tenant_id, job_code) DO UPDATE SET
 DELETE FROM batch.pipeline_step_definition
 WHERE pipeline_definition_id IN (
   SELECT id FROM batch.pipeline_definition
-  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_sql_job'
+  WHERE tenant_id = 'default-tenant' AND job_code IN ('lt_process_sql_job', 'lt_process_copy_job')
 );
 
 INSERT INTO batch.pipeline_definition (
@@ -230,7 +267,7 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
   'sqlTransformCompute',
   jsonb_build_object('sqlTransformCompute', jsonb_build_object(
     'sourceSql',
-    'select tenant_id, account_id, biz_date, sum(amount) as total_amount, max(event_id) as high_water_mark from biz.process_order_event where tenant_id = :tenantId and biz_date = :bizDate::date and event_id between 9100000000 and 9100004999 group by tenant_id, account_id, biz_date',
+    'select tenant_id, account_id, biz_date, sum(amount) as total_amount, max(event_id) as high_water_mark from biz.process_order_event where tenant_id = :tenantId and biz_date = :bizDate::date and account_id like ''${RUN_ID}-ACCT-%'' group by tenant_id, account_id, biz_date',
     'targetSchema', 'biz',
     'targetTable', 'process_account_summary',
     'writeMode', 'UPSERT',
@@ -249,7 +286,7 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
       )
     ),
     'emptyResultPolicy', 'FAIL',
-    'maxStagedRows', 10000
+    'maxStagedRows', ${PROCESS_AGG_MAX_STAGED_ROWS}
   )),
   600, 'NONE', 0, true, now(), now() FROM pd
 UNION ALL
@@ -258,6 +295,69 @@ SELECT id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
 UNION ALL
 SELECT id, 'PROCESS_COMMIT', 'Commit', 'COMMIT', 4,
   'PROCESS_COMMIT', '{}'::jsonb, 300, 'NONE', 0, true, now(), now() FROM pd
+UNION ALL
+SELECT id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
+  'PROCESS_FEEDBACK', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd;
+
+INSERT INTO batch.pipeline_definition (
+    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
+    version, enabled, description, created_at, updated_at
+)
+SELECT
+    'default-tenant', 'lt_process_copy_job', 'Load Test Process Staging Copy Pipeline',
+    'PROCESS', 'LOAD_TEST', 'PROCESS', 1, true, 'load test one row to one staging row pipeline', now(), now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_copy_job'
+);
+
+WITH pd AS (
+  SELECT id FROM batch.pipeline_definition
+  WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_copy_job'
+  ORDER BY id DESC
+  LIMIT 1
+)
+INSERT INTO batch.pipeline_step_definition (
+  pipeline_definition_id, step_code, step_name, stage_code, step_order,
+  impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
+  enabled, created_at, updated_at
+)
+SELECT id, 'PROCESS_PREPARE', 'Prepare', 'PREPARE', 1,
+  'PROCESS_PREPARE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd
+UNION ALL
+SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
+  'sqlTransformCompute',
+  jsonb_build_object('sqlTransformCompute', jsonb_build_object(
+    'sourceSql',
+    'select tenant_id, event_id, account_id, biz_date, amount, event_id as high_water_mark from biz.process_order_event where tenant_id = :tenantId and biz_date = :bizDate::date and account_id like ''${RUN_ID}-ACCT-%''',
+    'targetSchema', 'biz',
+    'targetTable', 'process_event_copy',
+    'writeMode', 'UPSERT',
+    'columns', jsonb_build_array(
+      jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
+      jsonb_build_object('source', 'event_id', 'target', 'event_id'),
+      jsonb_build_object('source', 'account_id', 'target', 'account_id'),
+      jsonb_build_object('source', 'biz_date', 'target', 'biz_date'),
+      jsonb_build_object('source', 'amount', 'target', 'amount'),
+      jsonb_build_object('source', 'high_water_mark', 'target', 'high_water_mark')
+    ),
+    'conflictColumns', jsonb_build_array('tenant_id', 'event_id'),
+    'validations', jsonb_build_array(
+      jsonb_build_object(
+        'name', 'staged_rows_present',
+        'checkSql', 'select count(*) > 0 as pass, ''expected staged rows'' as message from batch.process_staging where batch_key = :batchKey'
+      )
+    ),
+    'emptyResultPolicy', 'FAIL',
+    'maxStagedRows', ${PROCESS_COPY_MAX_STAGED_ROWS}
+  )),
+  1200, 'NONE', 0, true, now(), now() FROM pd
+UNION ALL
+SELECT id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
+  'PROCESS_VALIDATE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd
+UNION ALL
+SELECT id, 'PROCESS_COMMIT', 'Commit', 'COMMIT', 4,
+  'PROCESS_COMMIT', '{}'::jsonb, 900, 'NONE', 0, true, now(), now() FROM pd
 UNION ALL
 SELECT id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
   'PROCESS_FEEDBACK', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd;
@@ -316,6 +416,13 @@ IMPORT_LARGE_PARAMS=${OUT_DIR}/import-large.params.json
 EXPORT_PARAMS=${OUT_DIR}/export.params.json
 DISPATCH_PARAMS=${OUT_DIR}/dispatch.params.json
 PROCESS_PARAMS=${OUT_DIR}/process.params.json
+PROCESS_COPY_PARAMS=${OUT_DIR}/process-copy.params.json
+PROCESS_SOURCE_ROWS=${PROCESS_SOURCE_ROWS}
+PROCESS_ACCOUNT_COUNT=${PROCESS_ACCOUNT_COUNT}
+PROCESS_ACCOUNT_WIDTH=${PROCESS_ACCOUNT_WIDTH}
+PROCESS_EVENT_ID_START=${PROCESS_EVENT_ID_START}
+PROCESS_AGG_MAX_STAGED_ROWS=${PROCESS_AGG_MAX_STAGED_ROWS}
+PROCESS_COPY_MAX_STAGED_ROWS=${PROCESS_COPY_MAX_STAGED_ROWS}
 ENV
 
 echo "Prepared worker load-test data"

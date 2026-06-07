@@ -11,6 +11,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
+import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -120,6 +121,10 @@ public class DeliverDispatchStep implements DispatchStageStep {
     fileMetadata.put("channelCode", dispatchPayload.channelCode());
     if (dispatchResult.externalRequestId() != null) {
       fileMetadata.put("externalRequestId", dispatchResult.externalRequestId());
+    }
+    DispatchManifestRef manifestRef = dispatchResult.manifestRef();
+    if (manifestRef != null) {
+      manifestRef.putFileMetadata(fileMetadata);
     }
     runtimeRepository.updateFileStatus(fileId, "DISPATCHING", fileMetadata);
     if (!dispatchResult.success()) {

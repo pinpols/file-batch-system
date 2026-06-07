@@ -176,11 +176,17 @@ build_module() {
   else
     _MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
   fi
+  find "$mod/target" -maxdepth 1 -name "${mod}-*-exec.jar" -delete 2>/dev/null || true
   "$_MVN" -pl "$mod" -am clean package -DskipTests -q
-  jar="$(find "$mod/target" -maxdepth 1 -name "${mod}-*-exec.jar" 2>/dev/null | head -1)"
-  if [[ -z "$jar" ]]; then
-    jar="$(find "$mod/target" -maxdepth 1 -name "${mod}-*.jar" 2>/dev/null \
-            | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1)"
+  jar="$(find "$mod/target" -maxdepth 1 -name "${mod}-*-exec.jar" 2>/dev/null | head -1 || true)"
+  if [[ -z "$jar" || ! -f "$jar" ]]; then
+    echo "ERROR: 未找到可执行 exec jar: $mod/target/${mod}-*-exec.jar" >&2
+    exit 1
+  fi
+  _bytes="$(wc -c <"$jar" | awk '{print $1}')"
+  if [[ "${_bytes:-0}" -lt 4096 ]]; then
+    echo "ERROR: $jar 仅 ${_bytes} 字节，疑似损坏（正常 exec jar 至少数 MB）。" >&2
+    exit 1
   fi
   cp "$jar" "$RUNTIME_JAR_DIR/$name.jar"
   echo "  构建完成 → build/runtime-jars/$name.jar"

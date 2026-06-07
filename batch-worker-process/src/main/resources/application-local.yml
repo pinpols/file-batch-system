@@ -46,7 +46,7 @@ batch:
       tenant-id: default-tenant
       heartbeat-interval-millis: 15000
       topic: batch.task.dispatch.process
-      consumer-group-id: batch-worker-process
+      consumer-group-id: ${BATCH_WORKER_PROCESS_CONSUMER_GROUP_ID:batch-worker-process}
       # worker_registry.capability_tags；让 selector 能匹配带 resource_tag 的 queue（见 DefaultWorkerSelector）
       capability-tags:
       - process
@@ -56,8 +56,9 @@ batch:
         - biz
         # 禁 SELECT *,要求显式列清单
         forbid-select-star: true
-        # 单条 SQL 超时秒
-        query-timeout-seconds: 60
+        # PROCESS 本地压测会覆盖 1000w 级 staging copy,默认放宽到 900s。
+        # 如需恢复短超时,显式设置 BATCH_WORKER_PROCESS_SQL_TRANSFORM_TIMEOUT_SECONDS。
+        query-timeout-seconds: ${BATCH_WORKER_PROCESS_SQL_TRANSFORM_TIMEOUT_SECONDS:900}
   datasource:
     business:
       url: jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified
