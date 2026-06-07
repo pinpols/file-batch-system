@@ -57,9 +57,11 @@ batch:
       - workflow
       file-processing:
         streaming-enabled: true
-        page-size: 1000
-        fetch-size: 1000
-        chunk-size: 500
+        # 2026-06 导出 benchmark 本地推荐值:1000w DELIMITED 单片实测 GENERATE 67.691s。
+        # 生产默认仍由 application.yml 保守控制；大导出模板可用 file_template_config 覆盖。
+        page-size: 5000
+        fetch-size: 5000
+        chunk-size: 10000
   datasource:
     business:
       url: jdbc:postgresql://localhost:15432/batch_business

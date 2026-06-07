@@ -7,7 +7,7 @@
 # =========================================================
 #   - topic 列表: batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,
 #                batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter
-#   - 分区数：默认全部 3；可通过 KAFKA_PARTITIONS_DISPATCH / _RESULT / _RETRY / _DEAD_LETTER 单独覆盖
+#   - 分区数：默认全部 4；可通过 KAFKA_PARTITIONS_DISPATCH / _RESULT / _RETRY / _DEAD_LETTER 单独覆盖
 #   - replication factor: 1
 #
 # 使用方法：
@@ -26,7 +26,7 @@ set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
 topics_csv="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1}"
-default_partitions="${KAFKA_TOPIC_PARTITIONS:-3}"
+default_partitions="${KAFKA_TOPIC_PARTITIONS:-4}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 
 # 各 topic 类型分区数（未设置则回退到 default_partitions）
@@ -57,6 +57,39 @@ until /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${bootstrap_server}" --
   sleep 2
 done
 
+topic_partitions() {
+  topic="$1"
+  /opt/kafka/bin/kafka-topics.sh \
+    --bootstrap-server "${bootstrap_server}" \
+    --describe \
+    --topic "${topic}" 2>/dev/null \
+    | awk -F'PartitionCount: ' 'NF > 1 { split($2, a, " "); print a[1]; exit }'
+}
+
+ensure_topic() {
+  topic="$1"
+  partitions="$2"
+  current="$(topic_partitions "${topic}")"
+  if [ -z "${current}" ]; then
+    /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server "${bootstrap_server}" \
+      --create \
+      --if-not-exists \
+      --topic "${topic}" \
+      --partitions "${partitions}" \
+      --replication-factor "${replication_factor}"
+    return
+  fi
+  if [ "${current}" -lt "${partitions}" ]; then
+    echo "Increasing ${topic} partitions ${current} -> ${partitions}"
+    /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server "${bootstrap_server}" \
+      --alter \
+      --topic "${topic}" \
+      --partitions "${partitions}"
+  fi
+}
+
 old_ifs=$IFS
 IFS=','
 for raw_topic in $topics_csv; do
@@ -65,13 +98,7 @@ for raw_topic in $topics_csv; do
 
   partitions="$(resolve_partitions "${topic}")"
 
-  /opt/kafka/bin/kafka-topics.sh \
-    --bootstrap-server "${bootstrap_server}" \
-    --create \
-    --if-not-exists \
-    --topic "${topic}" \
-    --partitions "${partitions}" \
-    --replication-factor "${replication_factor}"
+  ensure_topic "${topic}" "${partitions}"
 done
 IFS=$old_ifs
 

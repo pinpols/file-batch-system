@@ -3,6 +3,7 @@ package com.example.batch.worker.exports.sql;
 import com.example.batch.common.exception.WorkerConfigException;
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.utils.PostgresqlJsonbTexts;
 import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -109,7 +110,8 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
       m.forEach((k, v) -> out.put(String.valueOf(k), v));
       return out;
     }
-    if (raw instanceof String text && Texts.hasText(text)) {
+    String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
+    if (Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {

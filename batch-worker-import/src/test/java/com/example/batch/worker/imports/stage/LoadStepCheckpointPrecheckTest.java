@@ -187,6 +187,34 @@ class LoadStepCheckpointPrecheckTest {
   }
 
   @Test
+  @DisplayName("PARTITION_REPLACE_COPY + partitionCount>1:拒跑,避免多个分片互相清同一目标分区")
+  void partitionReplaceCopy_multipleWorkerPartitions_rejects() throws Exception {
+    checkpointProps.setEnabled(false);
+    when(jdbcMappedPlugin.id()).thenReturn(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
+    when(jdbcMappedPlugin.isPartitionReplaceCopy(any())).thenReturn(true);
+    registry = new ImportLoadPluginRegistry(List.of(jdbcMappedPlugin));
+    loadStep =
+        new LoadStep(
+            registry,
+            runtimeRepository,
+            workerConfig,
+            objectMapper,
+            checkpointProps,
+            positionStore);
+
+    Path validated = writeNdjson(List.of(row("C1")));
+    ImportJobContext ctx = streamingContext(validated);
+    ctx.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+
+    ImportStageResult result = loadStep.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_LOAD_CONFIG_INVALID");
+    verify(jdbcMappedPlugin, never()).preparePartitionReplace(any());
+    verify(jdbcMappedPlugin, never()).loadChunk(any(), any());
+  }
+
+  @Test
   @DisplayName("enabled=false:不校验,UNKNOWN/NONE plugin 也能跑(不进续跑路径)")
   void disabled_anyCapability_passes() throws Exception {
     checkpointProps.setEnabled(false);

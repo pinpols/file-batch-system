@@ -8,7 +8,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.postgresql.util.PGobject;
 
 class ExportKeysetRangePlannerTest {
 
@@ -69,6 +71,45 @@ class ExportKeysetRangePlannerTest {
     ExportDataContext ctx = context(1, 4, false);
     ExportKeysetRange r = planner.resolve(ctx, minMax("0", "100"));
     assertThat(r.active()).isFalse();
+  }
+
+  @Test
+  void resolve_optedInFromQueryParamSchema_active() {
+    Map<String, Object> tc = Map.of("query_param_schema", Map.of("partition_keyset_range", true));
+    ExportDataContext ctx =
+        new ExportDataContext("t1", "job", "batch", "tpl", tc, new LinkedHashMap<>(), 2, 4);
+
+    ExportKeysetRange r = planner.resolve(ctx, minMax("0", "100"));
+
+    assertThat(r.active()).isTrue();
+    assertThat(r.loN()).isEqualByComparingTo("25");
+    assertThat(r.hiN()).isEqualByComparingTo("50");
+  }
+
+  @Test
+  void resolve_optedInFromPostgresJsonbNestedSqlTemplate_active() {
+    PGobject queryParamSchema = new PGobject();
+    Assertions.assertDoesNotThrow(
+        () -> {
+          queryParamSchema.setType("jsonb");
+          queryParamSchema.setValue("{\"sqlTemplateExport\":{\"partitionKeysetRange\":true}}");
+        });
+    ExportDataContext ctx =
+        new ExportDataContext(
+            "t1",
+            "job",
+            "batch",
+            "tpl",
+            Map.of("query_param_schema", queryParamSchema),
+            new LinkedHashMap<>(),
+            3,
+            4);
+
+    ExportKeysetRange r = planner.resolve(ctx, minMax("0", "100"));
+
+    assertThat(r.active()).isTrue();
+    assertThat(r.loN()).isEqualByComparingTo("50");
+    assertThat(r.hiN()).isEqualByComparingTo("75");
   }
 
   @Test

@@ -285,6 +285,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     executionContext.put(
         "jobCode", task.getJobCode() == null ? task.getTaskType() : task.getJobCode());
     executionContext.put("businessKey", task.getBusinessKey() == null ? "" : task.getBusinessKey());
+    if (task.getBizDate() != null) {
+      executionContext.put("bizDate", task.getBizDate().toString());
+    }
     executionContext.put(
         PipelineRuntimeKeys.TRACE_ID, task.getTraceId() == null ? "" : task.getTraceId());
     executionContext.put(PipelineRuntimeKeys.JOB_INSTANCE_ID, task.getJobInstanceId());

@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.domain;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.Data;
 
 /**
@@ -22,6 +23,9 @@ public class PulledTask {
   private Integer taskSeq;
   private String idempotencyKey;
   private String payload;
+
+  /** 派发时刻确定的业务日，来自 {@code TaskDispatchMessage.schedulingContext}。 */
+  private LocalDate bizDate;
 
   /**
    * 增量执行模式(ExecutionMode.INCREMENTAL)的水位起点,从 TaskDispatchMessage 透传过来。 Worker 业务逻辑可通过 {@code

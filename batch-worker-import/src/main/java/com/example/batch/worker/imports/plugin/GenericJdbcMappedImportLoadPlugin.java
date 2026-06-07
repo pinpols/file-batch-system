@@ -92,6 +92,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     if (spec.loadStrategy() == ImportLoadStrategy.PARTITION_REPLACE_COPY) {
       return copyChunk(loadContext, spec, insertCols, records);
     }
+    if (spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
+      return copyChunk(loadContext, spec, insertCols, records, stagingTableName(loadContext, spec));
+    }
     String sql = buildSql(spec, insertCols);
     // C-2.7 b / R2-P1-4: 模板未声明 conflict_columns → 纯 INSERT，partition reclaim 重试时已 COMMIT 的 chunk
     // 会再次落入 → 业务表重复行。开发期允许（INFO），但 prod 必须开 strictIdempotency=true（启动期 parse 即拒）。
@@ -144,7 +147,13 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
   public boolean isPartitionReplaceCopy(ImportLoadContext context) {
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
-    return spec.loadStrategy() == ImportLoadStrategy.PARTITION_REPLACE_COPY;
+    return spec.loadStrategy() == ImportLoadStrategy.PARTITION_REPLACE_COPY
+        || spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY;
+  }
+
+  public boolean isPartitionStageSwapCopy(ImportLoadContext context) {
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
+    return spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY;
   }
 
   public void preparePartitionReplace(ImportLoadContext context) {
@@ -157,7 +166,13 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     txTemplate.execute(
         status -> {
           RlsTenantSessionSupport.applyIfPresent(businessDataSource);
-          int deleted = jdbcTemplate.update(sql, args);
+          int deleted =
+              spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY
+                  ? 0
+                  : jdbcTemplate.update(sql, args);
+          if (spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY) {
+            prepareStageSwapTable(loadContext, spec);
+          }
           if (log.isInfoEnabled()) {
             log.info(
                 "jdbc-mapped-import partition replace prepared: tenantId={}, template={},"
@@ -169,6 +184,35 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
                 spec.replacePartitionColumns(),
                 deleted);
           }
+          return null;
+        });
+  }
+
+  public void finishPartitionStageSwap(ImportLoadContext context) {
+    JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
+    spec.validateIdentifiers(
+        securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
+    ImportLoadContext loadContext = applyRegion(context, spec);
+    String parent = tableName(spec);
+    String partition = qualifiedTableName(spec.schema(), spec.stageSwap().partitionTable());
+    String staging = stagingTableName(loadContext, spec);
+    txTemplate.execute(
+        status -> {
+          RlsTenantSessionSupport.applyIfPresent(businessDataSource);
+          jdbcTemplate.execute("ALTER TABLE " + parent + " DETACH PARTITION " + partition);
+          jdbcTemplate.execute("DROP TABLE " + partition);
+          jdbcTemplate.execute(
+              "ALTER TABLE "
+                  + staging
+                  + " RENAME TO "
+                  + JdbcMappedSqlValidator.quotePg(spec.stageSwap().partitionTable()));
+          jdbcTemplate.execute(
+              "ALTER TABLE "
+                  + parent
+                  + " ATTACH PARTITION "
+                  + partition
+                  + " "
+                  + spec.stageSwap().attachClause());
           return null;
         });
   }
@@ -335,7 +379,16 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       JdbcMappedImportSpec spec,
       List<String> insertCols,
       List<Map<String, Object>> records) {
-    String copySql = buildCopySql(spec, insertCols);
+    return copyChunk(context, spec, insertCols, records, tableName(spec));
+  }
+
+  private int copyChunk(
+      ImportLoadContext context,
+      JdbcMappedImportSpec spec,
+      List<String> insertCols,
+      List<Map<String, Object>> records,
+      String destinationTable) {
+    String copySql = buildCopySql(destinationTable, insertCols);
     String csv = buildCopyCsv(insertCols, spec, records, context);
     int n = records.size();
     txTemplate.execute(
@@ -368,23 +421,45 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     return "DELETE FROM " + tableName(spec) + " WHERE " + where;
   }
 
-  private String buildCopySql(JdbcMappedImportSpec spec, List<String> insertCols) {
+  private void prepareStageSwapTable(ImportLoadContext context, JdbcMappedImportSpec spec) {
+    String staging = stagingTableName(context, spec);
+    jdbcTemplate.execute("DROP TABLE IF EXISTS " + staging);
+    jdbcTemplate.execute(
+        "CREATE TABLE " + staging + " (LIKE " + tableName(spec) + " INCLUDING ALL)");
+  }
+
+  private String buildCopySql(String destinationTable, List<String> insertCols) {
     StringBuilder colPart = new StringBuilder();
     for (String c : insertCols) {
       colPart.append(JdbcMappedSqlValidator.quotePg(c)).append(',');
     }
     colPart.setLength(colPart.length() - 1);
     return "COPY "
-        + tableName(spec)
+        + destinationTable
         + " ("
         + colPart
         + ") FROM STDIN WITH (FORMAT csv, NULL '\\N')";
   }
 
   private String tableName(JdbcMappedImportSpec spec) {
-    return JdbcMappedSqlValidator.quotePg(spec.schema())
-        + "."
-        + JdbcMappedSqlValidator.quotePg(spec.table());
+    return qualifiedTableName(spec.schema(), spec.table());
+  }
+
+  private String stagingTableName(ImportLoadContext context, JdbcMappedImportSpec spec) {
+    String suffix =
+        Integer.toHexString(
+            Objects.hash(
+                context.tenantId(),
+                context.traceId(),
+                context.batchNo(),
+                context.bizDate(),
+                context.templateCode()));
+    return qualifiedTableName(
+        spec.schema(), spec.stageSwap().partitionTable() + "__stage_" + suffix);
+  }
+
+  private String qualifiedTableName(String schema, String table) {
+    return JdbcMappedSqlValidator.quotePg(schema) + "." + JdbcMappedSqlValidator.quotePg(table);
   }
 
   private String buildCopyCsv(

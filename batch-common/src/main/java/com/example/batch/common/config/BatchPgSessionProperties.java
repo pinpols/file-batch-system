@@ -3,6 +3,7 @@ package com.example.batch.common.config;
 import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
 
 /**
  * 全模块共用的 PostgreSQL 会话治理：JDBC {@code ApplicationName} + 连接级 {@code SET}（由 Hikari {@code
@@ -57,5 +58,11 @@ public class BatchPgSessionProperties {
 
     /** 事务开启后空闲上限；{@link Duration#ZERO} 映射为关闭该超时。 */
     private Duration idleInTransactionTimeout = Duration.ofSeconds(60);
+
+    /** PostgreSQL work_mem；null 表示不改会话默认。 */
+    private DataSize workMem;
+
+    /** PostgreSQL maintenance_work_mem；null 表示不改会话默认。 */
+    private DataSize maintenanceWorkMem;
   }
 }

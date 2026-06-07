@@ -42,7 +42,8 @@ class GenericJdbcMappedImportLoadPluginTest {
         defaultRegion,
         allowedRegions,
         ImportLoadStrategy.BATCH_UPSERT,
-        List.of());
+        List.of(),
+        null);
   }
 
   @Test

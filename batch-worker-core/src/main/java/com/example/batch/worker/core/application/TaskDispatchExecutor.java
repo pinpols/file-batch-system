@@ -45,6 +45,9 @@ public class TaskDispatchExecutor {
     task.setIdempotencyKey(message.idempotencyKey());
     task.setJobInstanceId(message.jobInstanceId());
     task.setJobPartitionId(message.jobPartitionId());
+    if (message.schedulingContext() != null) {
+      task.setBizDate(message.schedulingContext().bizDate());
+    }
     // 业务字段:从 CLAIM 返回的 effective config 读(确保管理员改完 retry/payload 立即生效)
     task.setTaskType(effective.taskType());
     task.setBusinessKey(effective.businessKey());

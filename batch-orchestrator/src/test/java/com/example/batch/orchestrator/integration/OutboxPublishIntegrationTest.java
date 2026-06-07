@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 集成测试：OutboxEventEntity → KafkaOutboxPublisher → Kafka topic + EventDeliveryLog。
@@ -51,6 +52,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   @Autowired private OutboxEventMapper outboxEventMapper;
 
   @Autowired private EventDeliveryLogMapper eventDeliveryLogMapper;
+
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   static {
     // KRaft Apache Kafka 4.x 默认 auto.create.topics.enable=false。topic 必须在 Spring context 加载前
@@ -86,6 +89,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() throws Exception {
     OutboxEventEntity event = pendingEvent("CUSTOM_EVENT_TYPE", "AGG_TYPE", "key-fallback-001");
     outboxEventMapper.insert(event);
+    reloadGeneratedId(event);
     boolean published = outboxPublisher.publish(event).get();
     assertThat(published).isTrue();
 
@@ -122,6 +126,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   void shouldPublishImportDispatchEventToImportTopicAndPersistDeliveryLog() throws Exception {
     OutboxEventEntity event = pendingEvent("IMPORT", "JOB_PARTITION", "key-import-001");
     outboxEventMapper.insert(event);
+    reloadGeneratedId(event);
 
     boolean published = outboxPublisher.publish(event).get();
 
@@ -142,7 +147,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
       ConsumerRecord<String, String> matched = null;
       for (ConsumerRecord<String, String> record : records) {
-        if ("key-import-001".equals(record.key())) {
+        if ("t1:IT_JOB:it-instance-001:1".equals(record.key())) {
           matched = record;
           break;
         }
@@ -158,6 +163,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   void shouldPublishExportDispatchEventToExportTopicAndPersistDeliveryLog() throws Exception {
     OutboxEventEntity event = pendingEvent("EXPORT", "JOB_PARTITION", "key-export-001");
     outboxEventMapper.insert(event);
+    reloadGeneratedId(event);
 
     boolean published = outboxPublisher.publish(event).get();
 
@@ -178,7 +184,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
       ConsumerRecord<String, String> matched = null;
       for (ConsumerRecord<String, String> record : records) {
-        if ("key-export-001".equals(record.key())) {
+        if ("t1:IT_JOB:it-instance-001:1".equals(record.key())) {
           matched = record;
           break;
         }
@@ -191,6 +197,16 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   }
 
   // --- helpers ---
+
+  private void reloadGeneratedId(OutboxEventEntity event) {
+    Long id =
+        jdbcTemplate.queryForObject(
+            "select id from batch.outbox_event where tenant_id = ? and event_key = ?",
+            Long.class,
+            event.getTenantId(),
+            event.getEventKey());
+    event.setId(id);
+  }
 
   private static OutboxEventEntity pendingEvent(
       String eventType, String aggregateType, String eventKey) {
