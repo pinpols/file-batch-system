@@ -87,7 +87,7 @@ jobs:
 
       - name: Detect code changes
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           # PR base 判 diff;非 PR 事件(merge_group / push)无 base,filter 视为 changed=true
           # (即 code=true / docs-only=false),保证安全 — 兜底跑 unit。
