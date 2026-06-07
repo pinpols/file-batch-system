@@ -9,10 +9,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.dto.EffectiveTaskConfig;
+import com.example.batch.common.kafka.SchedulingContext;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -91,6 +93,7 @@ class TaskDispatchExecutorTest {
     assertThat(task.getIdempotencyKey()).isEqualTo("msg-idem");
     assertThat(task.getJobInstanceId()).isEqualTo(100L);
     assertThat(task.getJobPartitionId()).isEqualTo(200L);
+    assertThat(task.getBizDate()).isEqualTo(LocalDate.parse("2026-05-01"));
     // 业务字段全部从 effective config 读(message v2 已无这些字段)
     assertThat(task.getTaskType()).isEqualTo("FRESH_TYPE");
     assertThat(task.getBusinessKey()).isEqualTo("fresh-biz");
@@ -126,6 +129,14 @@ class TaskDispatchExecutorTest {
         "msg-trace",
         "msg-idem",
         Instant.parse("2026-04-27T12:00:00Z"),
-        null);
+        new SchedulingContext(
+            LocalDate.parse("2026-05-01"),
+            LocalDate.parse("2026-04-30"),
+            LocalDate.parse("2026-05-04"),
+            false,
+            1,
+            "API",
+            null,
+            null));
   }
 }

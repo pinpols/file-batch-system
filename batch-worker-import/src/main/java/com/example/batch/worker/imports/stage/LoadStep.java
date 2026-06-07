@@ -108,6 +108,7 @@ public class LoadStep implements ImportStageStep {
       ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
       boolean partitionReplaceCopy = isPartitionReplaceCopy(plugin, loadCtx);
       if (partitionReplaceCopy) {
+        requireSinglePartitionForPartitionReplace(context);
         requireCheckpointDisabledForPartitionReplace(plugin);
         ((GenericJdbcMappedImportLoadPlugin) plugin).preparePartitionReplace(loadCtx);
       } else {
@@ -238,6 +239,20 @@ public class LoadStep implements ImportStageStep {
             + ": partition replace clears the target partition once before COPY chunks, so"
             + " line-based checkpoint resume would expose partial reload semantics. Disable"
             + " checkpoint for this template or use BATCH_UPSERT.");
+  }
+
+  private void requireSinglePartitionForPartitionReplace(ImportJobContext context) {
+    long partitionCount =
+        numberValue(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    if (partitionCount <= 1L) {
+      return;
+    }
+    throw new WorkerConfigException(
+        "PARTITION_REPLACE_COPY cannot run with partitionCount="
+            + partitionCount
+            + ": each worker partition would clear the same target partition before COPY, which can"
+            + " leave partial data. Use shard_strategy=NONE for this template, or split input into"
+            + " independent files with distinct logical partitions.");
   }
 
   // ADR-038 P2 续跑位点辅助 ─────────────────────────────────────────────────────
