@@ -28,4 +28,17 @@ public class ProcessStagingCleanupProperties {
 
   /** 单次 tick 最多删多少行(防大表全表删除阻塞业务库)。 */
   private int batchSize = 5000;
+
+  /**
+   * 分区保留天数。{@code process_staging} 按 {@code staged_at} 天级 RANGE 分区,早于 {@code now() - retentionDays}
+   * 天的整个日分区被 DROP(瞬间还空间给 OS,根治堆膨胀)。staging 行本就短命(COMPUTE 写、FEEDBACK 清),3 天足够覆盖卡死的孤儿 run;
+   * 调大仅增加磁盘占用上限。**0 或负数 = 关闭分区 DROP**(仅保留 orphan DELETE,用于不希望自动 DROP 分区的环境)。
+   */
+  private int retentionDays = 3;
+
+  /**
+   * 预建未来日分区天数。每次 tick 确保 [今天, 今天+preCreateDays] 的日分区都存在,避免写入落到 default 兜底分区。 默认 2 天冗余,容忍调度抖动 /
+   * worker 短暂离线。
+   */
+  private int preCreateDays = 2;
 }
