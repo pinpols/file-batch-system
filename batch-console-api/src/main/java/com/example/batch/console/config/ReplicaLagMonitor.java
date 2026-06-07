@@ -11,11 +11,14 @@ import java.sql.SQLException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 
 /**
  * Replica WAL replay lag 监控器：定时在 primary 上查 {@code pg_stat_replication.replay_lag}， 暴露 Prometheus
@@ -54,6 +57,7 @@ public class ReplicaLagMonitor {
   private final DataSource primary;
   private final AtomicReference<Double> latestLagSeconds = new AtomicReference<>(-1.0);
   private final AtomicReference<Integer> latestReplicaCount = new AtomicReference<>(-1);
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private ScheduledExecutorService scheduler;
 
   /** lag-aware quarantine 触发器(可选注入,不存在时只采集 metric 不触发 quarantine)。 */
@@ -107,14 +111,30 @@ public class ReplicaLagMonitor {
         initialDelayMillis);
   }
 
+  @EventListener(ContextClosedEvent.class)
+  void stopOnContextClosed(ContextClosedEvent event) {
+    stopScheduler("context-closed");
+  }
+
   @PreDestroy
   void stop() {
+    stopScheduler("pre-destroy");
+  }
+
+  private void stopScheduler(String source) {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
     if (scheduler != null) {
+      log.info("replica lag monitor stopping: source={}", source);
       scheduler.shutdownNow();
     }
   }
 
   void sampleReplayLag() {
+    if (stopping.get()) {
+      return;
+    }
     try (Connection conn = primary.getConnection();
         PreparedStatement ps = conn.prepareStatement(LAG_QUERY);
         ResultSet rs = ps.executeQuery()) {
@@ -148,10 +168,18 @@ public class ReplicaLagMonitor {
         log.debug("replica WAL replay lag: {}s (replicas={})", lag, replicas);
       }
     } catch (SQLException ex) {
+      if (stopping.get() && isShutdownNoise(ex)) {
+        log.info("replica WAL replay lag sample skipped during shutdown: {}", ex.getMessage());
+        return;
+      }
       latestLagSeconds.set(-1.0);
       latestReplicaCount.set(-1);
       log.warn("failed to sample replica WAL replay lag: {}", ex.getMessage());
     } catch (RuntimeException ex) {
+      if (stopping.get() && isShutdownNoise(ex)) {
+        log.info("replica WAL replay lag sample skipped during shutdown: {}", ex.getMessage());
+        return;
+      }
       latestLagSeconds.set(-1.0);
       latestReplicaCount.set(-1);
       log.warn("unexpected error sampling replica lag: {}", ex.getMessage(), ex);
@@ -162,5 +190,20 @@ public class ReplicaLagMonitor {
   double currentLagSeconds() {
     Double v = latestLagSeconds.get();
     return v == null ? -1.0 : v;
+  }
+
+  private static boolean isShutdownNoise(Throwable throwable) {
+    Throwable current = throwable;
+    while (current != null) {
+      String message = current.getMessage();
+      if (message != null
+          && (message.contains("has been closed")
+              || message.contains("Connection pool shut down")
+              || message.contains("Interrupted"))) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 }

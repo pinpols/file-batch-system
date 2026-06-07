@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 
 /**
@@ -44,6 +45,7 @@ public abstract class AbstractWorkerLoop {
   private final WorkerRuntimeFacade workerRuntimeFacade;
   private final BatchDateTimeSupport dateTimeSupport;
   private final AtomicBoolean started = new AtomicBoolean(false);
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private volatile WorkerRegistration registration;
 
   @Value("${batch.worker.registry.fail-fast-on-startup:true}")
@@ -85,6 +87,9 @@ public abstract class AbstractWorkerLoop {
    * <p>把 {@code @Scheduled} 放在子类，是为了避免在抽象层硬编码配置 key（各 worker 的心跳间隔配置可能不同）。
    */
   protected void doHeartbeat() {
+    if (stopping.get()) {
+      return;
+    }
     WorkerRegistration current;
     try {
       current = ensureStarted();
@@ -96,6 +101,9 @@ public abstract class AbstractWorkerLoop {
       return;
     }
     try {
+      if (stopping.get()) {
+        return;
+      }
       workerRuntimeFacade.heartbeat(current.getWorkerId());
     } catch (Exception ex) {
       log.warn(
@@ -142,6 +150,7 @@ public abstract class AbstractWorkerLoop {
 
   @PreDestroy
   public void shutdown() {
+    stopping.set(true);
     if (registration != null) {
       try {
         workerRuntimeFacade.shutdown(registration.getWorkerId());
@@ -153,6 +162,11 @@ public abstract class AbstractWorkerLoop {
             ex.getClass().getSimpleName());
       }
     }
+  }
+
+  @EventListener(ContextClosedEvent.class)
+  public void onContextClosed(ContextClosedEvent event) {
+    stopping.set(true);
   }
 
   private String buildWorkerId(WorkerConfiguration cfg) {

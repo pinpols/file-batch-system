@@ -30,8 +30,11 @@ public class QuartzTriggerConfiguration {
     ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("trigger-outbox-relay-");
-    scheduler.setWaitForTasksToCompleteOnShutdown(true);
+    scheduler.setPhase(properties.getSchedulerPhase());
+    scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
     scheduler.setAwaitTerminationSeconds(Math.max(0, properties.getShutdownAwaitSeconds()));
+    scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+    scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
     scheduler.setRemoveOnCancelPolicy(true);
     return scheduler;
   }
