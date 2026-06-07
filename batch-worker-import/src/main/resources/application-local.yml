@@ -102,9 +102,6 @@ batch:
       username: batch_user
       password: batch_pass_123
       schema: biz
-  storage:
-    s3:
-      endpoint: http://localhost:19000
-      access-key: minioadmin
-      secret-key: minioadmin123
-      bucket: batch-dev
+  # 对象存储配置统一走 batch-defaults.yml 的 batch.storage.s3.*（endpoint/access-key/bucket
+  # 本地默认已对齐 minio:19000/minioadmin/batch-dev），secret-key 从 .env 的
+  # BATCH_S3_SECRET_KEY 单点注入，不在各模块 application-local.yml 重复配置（避免扩散）。
