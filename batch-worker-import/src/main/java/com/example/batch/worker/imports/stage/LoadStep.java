@@ -174,9 +174,9 @@ public class LoadStep implements ImportStageStep {
     long loadedCount = ckpt == null ? 0L : ckpt.startLineNo();
     try (BufferedReader reader =
         Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
-      // 续跑:把上次已处理到的行号 skip 掉(空行也算行,保持与首跑一致的行号语义)
+      // 续跑:跳过上次已处理到的行号(空行也算行,保持与首跑一致的行号语义)
       for (long i = 0; i < skipLines && reader.readLine() != null; i++) {
-        // skip
+        // 空循环体:只消费需要跳过的行
       }
       List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
       String line;

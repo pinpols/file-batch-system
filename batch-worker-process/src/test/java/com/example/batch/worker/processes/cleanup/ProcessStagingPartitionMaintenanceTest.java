@@ -47,7 +47,7 @@ class ProcessStagingPartitionMaintenanceTest {
     // 执行
     cleaner.maintainPartitions();
 
-    // 断言: today + 2 future = 3 个分区
+    // 断言:今天 + 未来 2 天 = 3 个分区
     verify(mapper, times(3)).createDailyPartition(anyString(), anyString(), anyString());
     verify(mapper).listExpiredDailyPartitions(anyString());
   }
@@ -79,7 +79,7 @@ class ProcessStagingPartitionMaintenanceTest {
     // 执行
     cleaner.maintainPartitions();
 
-    // 断言: 不查、不 DROP 任何分区
+    // 断言:不查、不 DROP 任何分区
     verify(mapper, never()).listExpiredDailyPartitions(anyString());
     verify(mapper, never()).dropPartition(anyString());
   }
