@@ -265,7 +265,7 @@ class TriggerAsyncLaunchE2eIT extends AbstractIntegrationTest {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // helpers
+  // 辅助方法
   // ───────────────────────────────────────────────────────────────────────────
 
   private TriggerLaunchRequest buildRequest(String tenantId, String jobCode) {

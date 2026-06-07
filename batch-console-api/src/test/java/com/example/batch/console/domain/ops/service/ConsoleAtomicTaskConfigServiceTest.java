@@ -54,17 +54,17 @@ class ConsoleAtomicTaskConfigServiceTest {
 
   @Test
   void shouldCreateSqlConfig_whenParametersMatchSchema() {
-    // arrange
+    // 准备
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("sql", "select 1");
     params.put("statementTimeoutSeconds", 30);
     when(mapper.insertAtomicTaskConfig(any())).thenAnswer(assignIdAndReturn(42L));
     when(mapper.selectByTenantAndId(TENANT, 42L)).thenReturn(fixtureEntity(42L, "sql", "daily"));
 
-    // act
+    // 执行
     AtomicTaskConfigEntity created = service.create(TENANT, "sql", "daily", params, "alice");
 
-    // assert
+    // 断言
     assertThat(created.getId()).isEqualTo(42L);
     assertThat(created.getTaskType()).isEqualTo("sql");
     verify(mapper).insertAtomicTaskConfig(any(AtomicTaskConfigCreateParam.class));

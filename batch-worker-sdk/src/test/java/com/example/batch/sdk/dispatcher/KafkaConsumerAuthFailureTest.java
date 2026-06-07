@@ -60,7 +60,7 @@ class KafkaConsumerAuthFailureTest {
     KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper());
 
-    // act + assert:run() 抛 BatchSdkClientException(stage=KAFKA_AUTH),SASL fail-fast
+    // 执行并断言:run() 抛 BatchSdkClientException(stage=KAFKA_AUTH),SASL fail-fast
     assertThatThrownBy(kafka::run)
         .isInstanceOf(BatchSdkClientException.class)
         .hasMessageContaining("SASL auth failed")

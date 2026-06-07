@@ -66,14 +66,14 @@ class SdkAbstractTypedImportHandlerTest {
   @Test
   @DisplayName("强类型入参反序列化 + 100 行 batchSize=30 → loadBatch 4 次,summarize 进 output")
   void shouldParseInputAndChunkBatches_whenRowsExceedBatchSize() {
-    // arrange
+    // 准备
     RecordingTypedImport handler = new RecordingTypedImport(30);
 
-    // act
+    // 执行
     SdkTaskResult result =
         handler.execute(ctxWith(Map.of("sourcePath", "/data/in.csv", "rows", 100)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.seen.sourcePath()).isEqualTo("/data/in.csv");
     assertThat(handler.loadBatchSizes).containsExactly(30, 30, 30, 10);
@@ -84,7 +84,7 @@ class SdkAbstractTypedImportHandlerTest {
   @Test
   @DisplayName("summarize 返 null → 走计数器 output")
   void shouldFallBackToCountsOutput_whenSummarizeNull() {
-    // arrange
+    // 准备
     RecordingTypedImport handler =
         new RecordingTypedImport(50) {
           @Override
@@ -93,10 +93,10 @@ class SdkAbstractTypedImportHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("sourcePath", "/x", "rows", 10)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.output()).containsEntry("success", 10L).containsEntry("total", 10L);
   }
@@ -104,13 +104,13 @@ class SdkAbstractTypedImportHandlerTest {
   @Test
   @DisplayName("参数结构不匹配 → fail,不进 readRows")
   void shouldFail_whenParametersInvalid() {
-    // arrange
+    // 准备
     RecordingTypedImport handler = new RecordingTypedImport(30);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("rows", "not-a-number")));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("invalid parameters for taskType=tenant_typed_import");
     assertThat(handler.seen).isNull();
@@ -120,7 +120,7 @@ class SdkAbstractTypedImportHandlerTest {
   @Test
   @DisplayName("loadBatch 抛异常 → fail 且行流仍 close()")
   void shouldFailAndCloseStream_whenLoadBatchThrows() {
-    // arrange
+    // 准备
     RecordingTypedImport handler =
         new RecordingTypedImport(30) {
           @Override
@@ -129,10 +129,10 @@ class SdkAbstractTypedImportHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("sourcePath", "/x", "rows", 100)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(handler.closeCalls).isEqualTo(1);
   }

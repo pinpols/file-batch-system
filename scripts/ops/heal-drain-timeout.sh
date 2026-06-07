@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # heal-drain-timeout.sh - 自愈：对排空超时的 Worker 执行 force-offline
-# Notes:
+# 说明：
 # 1) 找出 DRAINING 且超时的 worker。
 # 2) 调用控制台 force-offline API 交给 Orchestrator 接管。
 # =========================================================

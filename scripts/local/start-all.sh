@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================s s
 # start-all.sh - 一键启动本地联调环境
-# Notes:
+# 说明：
 # 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及六个 Java 模块。
 # 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。

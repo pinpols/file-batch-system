@@ -64,7 +64,7 @@ batch:
       heartbeat-interval-millis: ${BATCH_WORKER_DISPATCH_HEARTBEAT_INTERVAL_MILLIS:15000}
       # 消费的派发 Topic（默认值在 batch-defaults.yml）
       topic: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
-      # Kafka consumer group
+      # Kafka consumer group（同类 worker 负载均衡）
       consumer-group-id: ${BATCH_WORKER_DISPATCH_CONSUMER_GROUP_ID:batch-worker-dispatch}
       circuit-breaker:
         # 断路器：连续失败达到阈值后进入冷却，防止雪崩

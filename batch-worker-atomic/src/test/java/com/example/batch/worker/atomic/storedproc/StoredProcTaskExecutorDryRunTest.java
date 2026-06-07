@@ -35,7 +35,7 @@ class StoredProcTaskExecutorDryRunTest {
 
   @Test
   void shouldShortCircuit_whenDryRun_andNotOpenConnection() throws Exception {
-    // arrange
+    // 准备
     TaskContext ctx =
         new TaskContext(
             "t1",
@@ -48,10 +48,10 @@ class StoredProcTaskExecutorDryRunTest {
                 "outParams", List.of("INTEGER", "VARCHAR")),
             Map.of("dryRun", true));
 
-    // act
+    // 执行
     TaskResult result = executor.execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())

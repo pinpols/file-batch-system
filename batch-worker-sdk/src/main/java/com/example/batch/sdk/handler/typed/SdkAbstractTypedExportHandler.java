@@ -33,7 +33,7 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R> extends SdkAbstract
 
   /** 打开输出端(创建文件 / 开 S3 multipart / 开 writer)。默认 no-op。 */
   protected void openSink(I input, SdkTaskContext ctx) throws Exception {
-    // no-op
+    // 无操作
   }
 
   /** 构造查询(从强类型入参拼 SQL / 过滤条件)。 */

@@ -1,7 +1,7 @@
 #!/bin/sh
 # =========================================================
 # init-kafka-topics.sh - 初始化本地 / 容器 Kafka topics
-# Notes:
+# 说明：
 # 1) 等待 Kafka 可用后创建平台需要的 topics。
 # 2) 默认使用 kafka:29092，可通过环境变量覆盖。
 # =========================================================
@@ -9,7 +9,7 @@
 #                batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,
 #                batch.task.retry,batch.task.dead-letter
 #   - 分区数：默认全部 4；可通过 KAFKA_PARTITIONS_DISPATCH / _RESULT / _RETRY / _DEAD_LETTER 单独覆盖
-#   - replication factor: 1
+#   - 副本因子：1
 #
 # 使用方法：
 #   KAFKA_BOOTSTRAP_SERVER=localhost:19092 \

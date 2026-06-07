@@ -41,12 +41,12 @@ class ThrottledLoggerTest {
     when(delegate.isWarnEnabled()).thenReturn(true);
     ThrottledLogger t = ThrottledLogger.create(delegate, Duration.ofSeconds(60));
 
-    // arrange + act:连续 5 次同 key,只有首条放行
+    // 准备并执行:连续 5 次同 key,只有首条放行
     for (int i = 0; i < 5; i++) {
       t.warn("k1", "warn {}", i);
     }
 
-    // assert
+    // 断言
     verify(delegate, times(1)).warn(any(String.class), any(Object[].class));
   }
 

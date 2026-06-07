@@ -54,7 +54,7 @@ class HttpTaskExecutorDryRunTest {
 
   @Test
   void shouldShortCircuit_whenDryRun_andNotSendHttpRequest() {
-    // arrange
+    // 准备
     String url = "http://127.0.0.1:" + serverPort + "/secret-endpoint";
     TaskContext ctx =
         new TaskContext(
@@ -73,10 +73,10 @@ class HttpTaskExecutorDryRunTest {
                 "payload-with-pii"),
             Map.of("dryRun", true));
 
-    // act
+    // 执行
     TaskResult result = executor.execute(ctx);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())

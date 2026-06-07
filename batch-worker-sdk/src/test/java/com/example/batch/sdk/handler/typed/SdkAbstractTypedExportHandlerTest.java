@@ -53,13 +53,13 @@ class SdkAbstractTypedExportHandlerTest {
   @Test
   @DisplayName("强类型入参 → buildQuery 用其字段,逐行写出,计数器 output 兜底")
   void shouldExportRows_whenInputParsed() {
-    // arrange
+    // 准备
     RecordingTypedExport handler = new RecordingTypedExport();
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("table", "orders", "rows", 5)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.querySeen).isEqualTo("SELECT * FROM orders");
     assertThat(handler.written).hasSize(5);
@@ -70,7 +70,7 @@ class SdkAbstractTypedExportHandlerTest {
   @Test
   @DisplayName("writeOut 返显式结果 → 覆盖默认 output")
   void shouldUseExplicitWriteOutResult_whenProvided() {
-    // arrange
+    // 准备
     RecordingTypedExport handler =
         new RecordingTypedExport() {
           @Override
@@ -80,10 +80,10 @@ class SdkAbstractTypedExportHandlerTest {
           }
         };
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("table", "orders", "rows", 3)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(result.message()).isEqualTo("uploaded");
     assertThat(result.output()).containsEntry("uri", "s3://bucket/orders");
@@ -92,13 +92,13 @@ class SdkAbstractTypedExportHandlerTest {
   @Test
   @DisplayName("参数不匹配 → fail")
   void shouldFail_whenParametersInvalid() {
-    // arrange
+    // 准备
     RecordingTypedExport handler = new RecordingTypedExport();
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("rows", "x")));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("invalid parameters");
   }

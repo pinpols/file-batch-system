@@ -58,7 +58,7 @@ class AtomicRuntimeStatusServiceTest {
 
   @Test
   void shouldCaptureAllFourExecutorStatuses_underNormalProdConfiguration() throws Exception {
-    // arrange:prod profile,http 未显式配置 → enforceAllowlistSource = prod-default
+    // 准备:prod profile,http 未显式配置 → enforceAllowlistSource = prod-default
     env.setActiveProfiles("prod");
 
     ShellExecutorProperties shell = new ShellExecutorProperties();
@@ -89,10 +89,10 @@ class AtomicRuntimeStatusServiceTest {
     when(md.getDatabaseProductName()).thenReturn("PostgreSQL");
     when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
 
-    // act
+    // 执行
     AtomicRuntimeStatus status = newService().snapshot();
 
-    // assert
+    // 断言
     assertThat(status.workerCode()).isEqualTo("atomic-node-1");
     assertThat(status.shell().enabled()).isTrue();
     assertThat(status.shell().commandWhitelistSize()).isEqualTo(2);

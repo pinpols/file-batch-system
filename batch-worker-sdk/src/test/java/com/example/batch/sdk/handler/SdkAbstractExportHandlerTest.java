@@ -109,14 +109,14 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("50 行 → formatRow 调 50 次,writeOut 返回的 result 生效,success=50")
   void exports50Rows_whenWriteOutReturnsResult() {
-    // arrange
+    // 准备
     SdkTaskResult custom = SdkTaskResult.ok("done", Map.of("uri", "s3://b/out.csv"));
     ProbeExportHandler h = ProbeExportHandler.ofRows(rows(50), custom);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(h.formatted).hasSize(50);
     assertThat(r.success()).isTrue();
     assertThat(r.message()).isEqualTo("done");
@@ -127,13 +127,13 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("writeOut 返回 null → 框架兜底 ok(\"exported 50 rows\") + counts output")
   void fallsBackToDefaultResult_whenWriteOutReturnsNull() {
-    // arrange
+    // 准备
     ProbeExportHandler h = ProbeExportHandler.ofRows(rows(50), null);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(r.message()).isEqualTo("exported 50 rows");
     assertThat(r.output()).containsEntry("success", 50L).containsEntry("total", 50L);
@@ -142,13 +142,13 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("0 行 → formatRow 不调,success=0,writeOut 仍调")
   void exportsZeroRows_whenNoRows() {
-    // arrange
+    // 准备
     ProbeExportHandler h = ProbeExportHandler.ofRows(rows(0), null);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(h.formatted).isEmpty();
     assertThat(h.writeOutCalled).isTrue();
     assertThat(r.success()).isTrue();
@@ -159,28 +159,28 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("buildQuery 结果透传给 streamRows")
   void passesBuildQueryResultToStreamRows() {
-    // arrange
+    // 准备
     ProbeExportHandler h = ProbeExportHandler.ofRows(rows(3), null);
 
-    // act
+    // 执行
     h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(h.seenQuery.get()).isEqualTo("SELECT * FROM t");
   }
 
   @Test
   @DisplayName("streamRows 抛异常 → fail")
   void fails_whenStreamRowsThrows() {
-    // arrange
+    // 准备
     ProbeExportHandler h =
         new ProbeExportHandler(
             rows(5), "q", null, null, new IllegalStateException("stream boom"), null, null);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("stream boom");
     assertThat(h.formatted).isEmpty();
@@ -189,15 +189,15 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("formatRow 抛异常 → fail")
   void fails_whenFormatRowThrows() {
-    // arrange
+    // 准备
     ProbeExportHandler h =
         new ProbeExportHandler(
             rows(5), "q", null, null, null, new IllegalStateException("format boom"), null);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("format boom");
     assertThat(h.writeOutCalled).isFalse();
@@ -206,13 +206,13 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("正常导完 → 行流 close() 被调用一次(释放 ResultSet)")
   void closesRowStream_whenExportCompletes() {
-    // arrange
+    // 准备
     ProbeExportHandler h = ProbeExportHandler.ofRows(rows(50), null);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(r.success()).isTrue();
     assertThat(h.streamCloseCalls).hasValue(1);
   }
@@ -220,15 +220,15 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("formatRow 中途抛异常 → 行流仍 close()(try-with-resources 兜底,不泄露)")
   void closesRowStream_whenFormatRowThrowsMidIteration() {
-    // arrange
+    // 准备
     ProbeExportHandler h =
         new ProbeExportHandler(
             rows(5), "q", null, null, null, new IllegalStateException("format boom"), null);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(h.streamCloseCalls).hasValue(1);
   }
@@ -236,15 +236,15 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("writeOut 抛异常 → fail")
   void fails_whenWriteOutThrows() {
-    // arrange
+    // 准备
     ProbeExportHandler h =
         new ProbeExportHandler(
             rows(5), "q", null, null, null, null, new IllegalStateException("writeout boom"));
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("writeout boom");
     assertThat(h.formatted).hasSize(5);
@@ -253,15 +253,15 @@ class SdkAbstractExportHandlerTest {
   @Test
   @DisplayName("openSink 抛异常 → 后续都不调,fail")
   void fails_whenOpenSinkThrows() {
-    // arrange
+    // 准备
     ProbeExportHandler h =
         new ProbeExportHandler(
             rows(5), "q", null, new IllegalStateException("sink boom"), null, null, null);
 
-    // act
+    // 执行
     SdkTaskResult r = h.execute(ctx());
 
-    // assert
+    // 断言
     assertThat(r.success()).isFalse();
     assertThat(r.message()).isEqualTo("sink boom");
     assertThat(h.seenQuery.get()).isNull();

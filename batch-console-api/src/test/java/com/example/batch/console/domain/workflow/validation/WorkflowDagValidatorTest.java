@@ -43,13 +43,13 @@ class WorkflowDagValidatorTest {
   @Test
   @DisplayName("成功:START → JOB → END 三节点链路 + JOB 引用合法")
   void shouldPass_whenMinimalValidDag() {
-    // arrange
+    // 准备
     WorkflowDefinitionSaveRequest req = baseRequest();
     req.setNodes(
         Arrays.asList(node("start", "START"), jobNode("j1", "job_code_1"), node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "j1"), edge("j1", "end")));
 
-    // act + assert
+    // 执行并断言
     assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
     verify(pipelineDefinitionMapper, never()).countByJobCode(anyString(), anyString());
   }

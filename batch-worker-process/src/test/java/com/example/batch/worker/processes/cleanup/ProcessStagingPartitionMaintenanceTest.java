@@ -39,15 +39,15 @@ class ProcessStagingPartitionMaintenanceTest {
   @Test
   @DisplayName("预建今天 + preCreateDays 天的日分区")
   void shouldPreCreateTodayAndFutureDays() {
-    // arrange
+    // 准备
     properties.setPreCreateDays(2);
     properties.setRetentionDays(3);
     when(mapper.listExpiredDailyPartitions(anyString())).thenReturn(List.of());
 
-    // act
+    // 执行
     cleaner.maintainPartitions();
 
-    // assert: today + 2 future = 3 个分区
+    // 断言: today + 2 future = 3 个分区
     verify(mapper, times(3)).createDailyPartition(anyString(), anyString(), anyString());
     verify(mapper).listExpiredDailyPartitions(anyString());
   }
@@ -55,16 +55,16 @@ class ProcessStagingPartitionMaintenanceTest {
   @Test
   @DisplayName("DROP 所有过期日分区")
   void shouldDropExpiredPartitions() {
-    // arrange
+    // 准备
     properties.setPreCreateDays(0);
     properties.setRetentionDays(3);
     when(mapper.listExpiredDailyPartitions(anyString()))
         .thenReturn(List.of("process_staging_p20260101", "process_staging_p20260102"));
 
-    // act
+    // 执行
     cleaner.maintainPartitions();
 
-    // assert
+    // 断言
     verify(mapper).dropPartition("process_staging_p20260101");
     verify(mapper).dropPartition("process_staging_p20260102");
   }
@@ -72,14 +72,14 @@ class ProcessStagingPartitionMaintenanceTest {
   @Test
   @DisplayName("retentionDays<=0 关闭自动 DROP")
   void shouldSkipDropWhenRetentionDisabled() {
-    // arrange
+    // 准备
     properties.setPreCreateDays(0);
     properties.setRetentionDays(0);
 
-    // act
+    // 执行
     cleaner.maintainPartitions();
 
-    // assert: 不查、不 DROP 任何分区
+    // 断言: 不查、不 DROP 任何分区
     verify(mapper, never()).listExpiredDailyPartitions(anyString());
     verify(mapper, never()).dropPartition(anyString());
   }
@@ -87,17 +87,17 @@ class ProcessStagingPartitionMaintenanceTest {
   @Test
   @DisplayName("日分区名 + UTC 整天边界格式正确")
   void shouldCreatePartitionWithUtcDayBounds() {
-    // arrange
+    // 准备
     properties.setPreCreateDays(0);
     properties.setRetentionDays(0);
     ArgumentCaptor<String> name = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<String> from = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
 
-    // act
+    // 执行
     cleaner.maintainPartitions();
 
-    // assert
+    // 断言
     verify(mapper).createDailyPartition(name.capture(), from.capture(), to.capture());
     assertThat(name.getValue()).matches("process_staging_p\\d{8}");
     assertThat(from.getValue()).matches("\\d{4}-\\d{2}-\\d{2} 00:00:00\\+00");

@@ -55,13 +55,13 @@ class SdkAbstractTypedDispatchHandlerTest {
   @Test
   @DisplayName("强类型入参 → 逐条推送,奇数失败计 failed 不中断整批")
   void shouldDispatchAndCountFailures_whenSomeItemsFail() {
-    // arrange:6 条 → 0,2,4 成功(3),1,3,5 失败(3)
+    // 准备:6 条 → 0,2,4 成功(3),1,3,5 失败(3)
     RecordingTypedDispatch handler = new RecordingTypedDispatch();
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("count", 6)));
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.pushed).containsExactly(0, 2, 4);
     assertThat(result.output()).containsEntry("success", 3L).containsEntry("failed", 3L);
@@ -70,13 +70,13 @@ class SdkAbstractTypedDispatchHandlerTest {
   @Test
   @DisplayName("参数不匹配 → fail")
   void shouldFail_whenParametersInvalid() {
-    // arrange
+    // 准备
     RecordingTypedDispatch handler = new RecordingTypedDispatch();
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(ctxWith(Map.of("count", "x")));
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("invalid parameters");
   }

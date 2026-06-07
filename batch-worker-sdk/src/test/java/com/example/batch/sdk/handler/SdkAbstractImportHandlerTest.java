@@ -94,13 +94,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("100 行 batchSize=30 → loadBatch 调 4 次 (30+30+30+10),success=100")
   void shouldChunkIntoBatches_whenRowsExceedBatchSize() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = RecordingImportHandler.of(rows(100), 30);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.loadBatchSizes).containsExactly(30, 30, 30, 10);
     assertThat(result.output()).containsEntry("success", 100L).containsEntry("total", 100L);
@@ -109,13 +109,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("0 行 → loadBatch 不调,success=0")
   void shouldNotLoad_whenNoRows() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = RecordingImportHandler.of(List.of(), 30);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.loadBatchSizes).isEmpty();
     assertThat(result.output()).containsEntry("success", 0L).containsEntry("total", 0L);
@@ -124,13 +124,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("readRows 抛异常 → execute fail")
   void shouldFail_whenReadRowsThrows() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = new RecordingImportHandler(rows(10), 30, false, true, false);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(handler.loadBatchSizes).isEmpty();
     assertThat(handler.openCalls).hasValue(1);
@@ -139,13 +139,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("loadBatch 抛异常 → execute fail")
   void shouldFail_whenLoadBatchThrows() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = new RecordingImportHandler(rows(10), 30, false, false, true);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(handler.loadBatchSizes).isEmpty();
   }
@@ -153,13 +153,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("行数整除 batchSize (60 行 batchSize=30) → loadBatch 2 次,无空 flush")
   void shouldNotEmptyFlush_whenRowsDivisibleByBatchSize() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = RecordingImportHandler.of(rows(60), 30);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.loadBatchSizes).containsExactly(30, 30);
     assertThat(result.output()).containsEntry("success", 60L);
@@ -168,13 +168,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("openSource 抛异常 → readRows/loadBatch 都不调,fail")
   void shouldFail_whenOpenSourceThrows() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = new RecordingImportHandler(rows(10), 30, true, false, false);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(handler.readCalls).hasValue(0);
     assertThat(handler.loadBatchSizes).isEmpty();
@@ -183,13 +183,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("正常读完 → 行流 close() 被调用一次(释放 ResultSet/InputStream)")
   void shouldCloseRowStream_whenIterationCompletes() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = RecordingImportHandler.of(rows(100), 30);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.streamCloseCalls).hasValue(1);
   }
@@ -197,13 +197,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("loadBatch 中途抛异常 → 行流仍 close()(try-with-resources 兜底,不泄露)")
   void shouldCloseRowStream_whenLoadBatchThrowsMidIteration() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = new RecordingImportHandler(rows(100), 30, false, false, true);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isFalse();
     assertThat(handler.streamCloseCalls).hasValue(1);
   }
@@ -211,13 +211,13 @@ class SdkAbstractImportHandlerTest {
   @Test
   @DisplayName("自定义 batchSize() 覆盖生效 — 50 行 batchSize=10 → 5 批")
   void shouldRespectCustomBatchSize_whenOverridden() {
-    // arrange
+    // 准备
     RecordingImportHandler handler = RecordingImportHandler.of(rows(50), 10);
 
-    // act
+    // 执行
     SdkTaskResult result = handler.execute(CTX);
 
-    // assert
+    // 断言
     assertThat(result.success()).isTrue();
     assertThat(handler.loadBatchSizes).containsExactly(10, 10, 10, 10, 10);
     assertThat(result.output()).containsEntry("success", 50L).containsEntry("total", 50L);

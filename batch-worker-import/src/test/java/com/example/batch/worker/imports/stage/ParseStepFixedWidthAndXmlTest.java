@@ -40,13 +40,13 @@ class ParseStepFixedWidthAndXmlTest {
     parseStep = new ParseStep(new ObjectMapper(), runtimeRepository, recordGovernanceService);
   }
 
-  // ── FIXED_WIDTH ────────────────────────────────────────────────────────────
+  // ── 定长格式 FIXED_WIDTH ───────────────────────────────────────────────────
 
-  /** 3 字段 fixed-width: customerNo(6) + customerName(20) + status(8)，trim 后落盘。 */
+  /** 3 字段定长格式: customerNo(6) + customerName(20) + status(8)，trim 后落盘。 */
   @Test
   void shouldParseFixedWidth_threeFieldRecords() {
     String fixed =
-        // customerNo  | customerName         | status
+        // 字段布局:customerNo | customerName | status
         "C00001Alice               ACTIVE  \n"
             + "C00002Bob                 INACTIVE\n"
             + "C00003Charlie             ACTIVE  \n";
@@ -75,7 +75,7 @@ class ParseStepFixedWidthAndXmlTest {
     assertNdjsonContains(context, "C00003", "Charlie", "ACTIVE");
   }
 
-  /** header_rows + footer_rows 跳过头尾。 */
+  /** header_rows + footer_rows 用于跳过头尾。 */
   @Test
   void shouldParseFixedWidth_skippingHeaderAndFooter() {
     String fixed =
@@ -139,7 +139,7 @@ class ParseStepFixedWidthAndXmlTest {
 
   // ── XML ────────────────────────────────────────────────────────────────────
 
-  /** 标准 records envelope: &lt;records&gt;&lt;record&gt;...&lt;/record&gt;...&lt;/records&gt; */
+  /** 标准 records 包裹结构: &lt;records&gt;&lt;record&gt;...&lt;/record&gt;...&lt;/records&gt; */
   @Test
   void shouldParseXml_recordElementChildren() {
     String xml =
@@ -186,12 +186,12 @@ class ParseStepFixedWidthAndXmlTest {
 
     ImportStageResult result = parseStep.execute(context);
 
-    // XmlFormatParser 抛出 + ParseStep 捕获 → 失败结果（不要崩进程，要 friendly fail）
+    // XmlFormatParser 抛出 + ParseStep 捕获 → 返回失败结果（不要崩进程，要友好失败）
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
   }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+  // ── 辅助方法 ───────────────────────────────────────────────────────────────
 
   private ImportJobContext buildContext(
       String rawPayload, String fileFormatType, Map<String, Object> templateConfig) {

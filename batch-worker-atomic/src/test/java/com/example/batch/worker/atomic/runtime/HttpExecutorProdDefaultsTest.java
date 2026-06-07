@@ -48,21 +48,21 @@ class HttpExecutorProdDefaultsTest {
 
   @Test
   void shouldFlipEnforceAllowlistToTrue_whenProdAndNotExplicitlyConfigured() {
-    // arrange:prod + 用户未在 env/yaml 显式给 enforce-allowlist
+    // 准备:prod + 用户未在 env/yaml 显式给 enforce-allowlist
     HttpExecutorProperties props = new HttpExecutorProperties();
     assertThat(props.isEnforceAllowlist()).isFalse(); // 出厂默认 false
     when(httpProvider.getIfAvailable()).thenReturn(props);
 
-    // act
+    // 执行
     newDefaults().applyProdDefaults();
 
-    // assert:被翻成 true
+    // 断言:被翻成 true
     assertThat(props.isEnforceAllowlist()).isTrue();
   }
 
   @Test
   void shouldKeepExplicitFalse_whenUserExplicitlyDisabled() {
-    // arrange:用户显式配 false(罕见,但合法 — 由 production guard 在白名单也为空时拒绝)
+    // 准备:用户显式配 false(罕见,但合法 — 由 production guard 在白名单也为空时拒绝)
     env.setProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST, "false");
     HttpExecutorProperties props = new HttpExecutorProperties();
     when(httpProvider.getIfAvailable()).thenReturn(props);

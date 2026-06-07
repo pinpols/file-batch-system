@@ -248,32 +248,32 @@ class TaskDispatcherAutoWrapTest {
   @Test
   @DisplayName("仅 @RetryOn:4 参 dispatcher 构造后,匹配异常会重试到成功")
   void shouldRetry_whenRetryOnHandlerThrowsTransient() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     RetryOnlyHandler handler = new RetryOnlyHandler(2); // 前 2 次抛,第 3 次成功
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
-    // act
+    // 执行
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert
+    // 断言
     assertThat(handler.executions.get()).isEqualTo(3);
   }
 
   @Test
   @DisplayName("仅 @Idempotent + store:同 key 第二次命中缓存,handler 不再执行")
   void shouldHitCache_whenSameKeyDispatchedTwice() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     IdempotentOnlyHandler handler = new IdempotentOnlyHandler();
     RecordingStore store = new RecordingStore();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
 
-    // act
+    // 执行
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert
+    // 断言
     assertThat(handler.executions.get()).isEqualTo(1);
     assertThat(store.recordCalls.get()).isEqualTo(1);
     assertThat(store.findCalls.get()).isEqualTo(2);
@@ -282,25 +282,25 @@ class TaskDispatcherAutoWrapTest {
   @Test
   @DisplayName("同时标两注解(idempotent 外/retry 内):单次重试到成功 + 记一次幂等;再次同 key 命中、不重试")
   void shouldRetryThenIdempotent_whenBothAnnotated() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     BothHandler handler = new BothHandler();
     handler.failuresBeforeSuccess = 1; // 第一次执行内:1 次瞬时失败 + 1 次成功
     RecordingStore store = new RecordingStore();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
 
-    // act — 第一次:retry 内层吃掉瞬时异常,成功后 idempotent 外层 record
+    // 执行 — 第一次:retry 内层吃掉瞬时异常,成功后 idempotent 外层 record
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert (a) + (b)
+    // 断言 (a) + (b)
     assertThat(handler.executions.get()).isEqualTo(2); // 1 失败 + 1 成功
     assertThat(store.recordCalls.get()).isEqualTo(1);
 
-    // act — 第二次同 key:idempotent 命中,handler 不再被调,也不进 retry
+    // 执行 — 第二次同 key:idempotent 命中,handler 不再被调,也不进 retry
     handler.failuresBeforeSuccess = 99; // 若再被调用必失败 → 证明根本没调
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert (c)
+    // 断言 (c)
     assertThat(handler.executions.get()).isEqualTo(2); // 没增加
     assertThat(store.recordCalls.get()).isEqualTo(1); // 没再记
     assertThat(store.findCalls.get()).isEqualTo(2);
@@ -309,11 +309,11 @@ class TaskDispatcherAutoWrapTest {
   @Test
   @DisplayName("@Idempotent 但 store=null(3 参构造器)→ 构造期抛 IllegalStateException,消息含 taskType")
   void shouldFailFast_whenIdempotentHandlerButNoStore() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     Map<String, SdkTaskHandler> handlers = Map.of("tt", new IdempotentOnlyHandler());
 
-    // act + assert
+    // 执行并断言
     assertThatThrownBy(() -> new TaskDispatcher(config, handlers, http))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("tt")
@@ -323,39 +323,39 @@ class TaskDispatcherAutoWrapTest {
   @Test
   @DisplayName("无注解 handler → 原样,不包装,行为不变")
   void shouldNotWrap_whenNoAnnotation() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     PlainHandler handler = new PlainHandler();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
-    // act
+    // 执行
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert
+    // 断言
     assertThat(handler.executions.get()).isEqualTo(1);
   }
 
   @Test
   @DisplayName("两注解 + 重试耗尽仍 fail → idempotent 外层不 record;同 key 再来仍会重新执行")
   void shouldNotRecordIdempotent_whenRetryExhaustsAndFails() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AlwaysFailingBothHandler handler = new AlwaysFailingBothHandler();
     RecordingStore store = new RecordingStore();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, store);
 
-    // act — retry 内层把 3 次都吃掉仍失败,idempotent 外层拿到失败结果(success=false)
+    // 执行 — retry 内层把 3 次都吃掉仍失败,idempotent 外层拿到失败结果(success=false)
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert:执行了 maxAttempts=3 次,失败 → 未记录(留给平台重派 / 重试)
+    // 断言:执行了 maxAttempts=3 次,失败 → 未记录(留给平台重派 / 重试)
     assertThat(handler.executions.get()).isEqualTo(3);
     assertThat(store.recordCalls.get()).isZero();
     assertThat(store.findCalls.get()).isEqualTo(1);
 
-    // act — 同 key 再来:因上轮没记录,find 未命中,会重新进 retry 再跑 3 次
+    // 执行 — 同 key 再来:因上轮没记录,find 未命中,会重新进 retry 再跑 3 次
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert
+    // 断言
     assertThat(handler.executions.get()).isEqualTo(6); // 又跑 3 次
     assertThat(store.recordCalls.get()).isZero();
     assertThat(store.findCalls.get()).isEqualTo(2);
@@ -364,18 +364,18 @@ class TaskDispatcherAutoWrapTest {
   @Test
   @DisplayName("auto-wrap 后 taskType / descriptor / cancel 透传到原始 handler(装饰器不丢元数据)")
   void shouldDelegateMetadataMethods_whenWrapped() {
-    // arrange:按 TaskDispatcher.decorate 同样的顺序(retry 内 / idempotent 外)织入两层装饰器
+    // 准备:按 TaskDispatcher.decorate 同样的顺序(retry 内 / idempotent 外)织入两层装饰器
     MetadataHandler original = new MetadataHandler();
     SdkTaskHandler retryWrapped = SdkRetryableHandler.wrapAround(original, original);
     SdkTaskHandler wrapped =
         SdkIdempotentHandler.wrapAround(original, retryWrapped, new RecordingStore());
 
-    // assert:不是原始实例(已被两层装饰),但元数据方法全透传
+    // 断言:不是原始实例(已被两层装饰),但元数据方法全透传
     assertThat(wrapped).isNotSameAs(original);
     assertThat(wrapped.taskType()).isEqualTo("meta_type");
     assertThat(wrapped.descriptor()).isSameAs(original.descriptor);
 
-    // act + assert:cancel 透传到底层原始 handler
+    // 执行并断言:cancel 透传到底层原始 handler
     wrapped.cancel("ti-77");
     assertThat(original.cancelCalls.get()).isEqualTo(1);
     assertThat(original.lastCancelArg).isEqualTo("ti-77");
@@ -384,15 +384,15 @@ class TaskDispatcherAutoWrapTest {
   @Test
   @DisplayName("retryOn 不匹配的异常透传,不重试(IOException 不在 value 列表)")
   void shouldNotRetry_whenExceptionTypeMismatch() {
-    // arrange
+    // 准备
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     MismatchHandler handler = new MismatchHandler();
     dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http, null);
 
-    // act — dispatcher 兜底把异常转 fail report,不抛出
+    // 执行 — dispatcher 兜底把异常转 fail report,不抛出
     dispatcher.processInWorkerThread(msg("tt", Map.of("orderId", "o1")));
 
-    // assert
+    // 断言
     assertThat(handler.executions.get()).isEqualTo(1);
   }
 }

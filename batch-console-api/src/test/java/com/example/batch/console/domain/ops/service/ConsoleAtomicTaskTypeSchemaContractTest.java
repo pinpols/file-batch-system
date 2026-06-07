@@ -73,7 +73,7 @@ class ConsoleAtomicTaskTypeSchemaContractTest {
   @ParameterizedTest(name = "[{index}] {0} executor PARAM_* 常量与 CATALOG parameters 必须完全一致")
   @MethodSource("taskTypes")
   void parameterNamesMatchExecutorParamConstants(String taskType) throws Exception {
-    // arrange
+    // 准备
     AtomicTaskTypeSchema schema = locateSchema(taskType);
     Set<String> catalogParams =
         schema.parameters().stream()
@@ -82,11 +82,11 @@ class ConsoleAtomicTaskTypeSchemaContractTest {
     Class<?> executorClass = Class.forName(CONTRACTS.get(taskType).executorFqcn());
     Set<String> executorParams = collectParamConstantValues(executorClass);
 
-    // act
+    // 执行
     Set<String> missingInCatalog = difference(executorParams, catalogParams);
     Set<String> staleInCatalog = difference(catalogParams, executorParams);
 
-    // assert —— 失败信息要让人一眼看到要改哪两个文件
+    // 断言 —— 失败信息要让人一眼看到要改哪两个文件
     assertThat(missingInCatalog)
         .as(
             "[漂移] %s executor 声明了 PARAM_* 常量 %s,但"
@@ -105,7 +105,7 @@ class ConsoleAtomicTaskTypeSchemaContractTest {
   @ParameterizedTest(name = "[{index}] {0} executor SecurityGate.field 必须存在于 ExecutorProperties")
   @MethodSource("taskTypes")
   void securityGateFieldsExistOnExecutorProperties(String taskType) throws Exception {
-    // arrange
+    // 准备
     AtomicTaskTypeSchema schema = locateSchema(taskType);
     Set<String> catalogGates =
         schema.securityGates().stream()
@@ -114,10 +114,10 @@ class ConsoleAtomicTaskTypeSchemaContractTest {
     Class<?> propsClass = Class.forName(CONTRACTS.get(taskType).propertiesFqcn());
     Set<String> propsFieldNames = collectInstanceFieldNames(propsClass);
 
-    // act —— 仅检 catalog 是否引到不存在的 props 字段;Properties 字段是上集(允许有非 security 的字段)
+    // 执行 —— 仅检 catalog 是否引到不存在的 props 字段;Properties 字段是上集(允许有非 security 的字段)
     Set<String> staleInCatalog = difference(catalogGates, propsFieldNames);
 
-    // assert
+    // 断言
     assertThat(staleInCatalog)
         .as(
             "[漂移] ConsoleAtomicTaskTypeSchemaService.CATALOG.securityGates 提到 %s 字段 %s,但 %s 不存在该字段。"

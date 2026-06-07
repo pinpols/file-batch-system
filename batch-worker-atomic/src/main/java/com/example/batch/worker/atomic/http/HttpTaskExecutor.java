@@ -374,7 +374,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
     switch (type) {
       case "none" -> {
-        // no-op
+        // 无操作
       }
       case "basic" -> {
         String user = Objects.toString(auth.get("username"), "");

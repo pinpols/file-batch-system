@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =========================================================
 # up.sh - 一键启动本地观测栈
-# Notes:
+# 说明：
 # 1) 默认使用 .env.local。
 # 2) 只启动 docker/compose/observability.yml 的 observability profile。
 # 3) 业务容器请先通过 scripts/docker/up-apps.sh 或 scripts/local/start-all.sh 启动。
