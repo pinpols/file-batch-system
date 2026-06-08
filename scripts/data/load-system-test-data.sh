@@ -21,17 +21,19 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PLATFORM_DB="${BATCH_PLATFORM_DB_NAME:-batch_platform}"
-BUSINESS_DB="${BATCH_BUSINESS_DB_NAME:-batch_business}"
-PG_USER="${BATCH_PLATFORM_DB_USERNAME:-batch_user}"
-PG_HOST="${BATCH_PLATFORM_DB_HOST:-localhost}"
-PG_PORT="${BATCH_PLATFORM_DB_PORT:-15432}"
-PG_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT_DIR/scripts/lib/env-common.sh"
+PLATFORM_DB="${BATCH_PLATFORM_DB_NAME:-$PLATFORM_DB}"
+BUSINESS_DB="${BATCH_BUSINESS_DB_NAME:-$BUSINESS_DB}"
+PG_USER="${BATCH_PLATFORM_DB_USERNAME:-$PGUSER}"
+PG_HOST="${BATCH_PLATFORM_DB_HOST:-$PGHOST}"
+PG_PORT="${BATCH_PLATFORM_DB_PORT:-$PGPORT}"
+PG_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-$PGPASSWORD}"
 MINIO_ALIAS="${BATCH_S3_ALIAS:-local}"
-MINIO_ENDPOINT="${BATCH_S3_ENDPOINT:-http://localhost:19000}"
-MINIO_ACCESS_KEY="${BATCH_S3_ACCESS_KEY:-minioadmin}"
-MINIO_SECRET_KEY="${BATCH_S3_SECRET_KEY:-minioadmin123}"
-MINIO_BUCKET="${BATCH_S3_BUCKET:-batch-dev}"
+MINIO_ENDPOINT="${BATCH_S3_ENDPOINT}"
+MINIO_ACCESS_KEY="${BATCH_S3_ACCESS_KEY}"
+MINIO_SECRET_KEY="${BATCH_S3_SECRET_KEY}"
+MINIO_BUCKET="${BATCH_S3_BUCKET}"
 
 export PGPASSWORD="${PG_PASSWORD}"
 
@@ -47,6 +49,7 @@ psql_business() {
 # business_seed 里 INSERT 前要求 biz.* 表已建，必须先跑 create_biz_tables.sql，否则报 relation not found。
 SEED_DIR="${ROOT_DIR}/scripts/db/test-seed"
 BIZ_DDL="${ROOT_DIR}/scripts/db/business/create_biz_tables.sql"
+SQL_DIR="${ROOT_DIR}/scripts/data/sql"
 
 echo "Creating business DDL (biz.customer_account / settlement_batch / settlement_detail)..."
 psql_business -f "${BIZ_DDL}"
@@ -67,35 +70,7 @@ psql_business -f "${SEED_DIR}/business_edge_cases.sql"
 # (Detail: Key (id)=(4006/4007) already exists)。
 # 统一在所有 seed 加载完成后再跑一次，覆盖 batch schema 全部 *_id_seq。
 echo "Aligning batch.*_id_seq with max(id) (seed 用 hardcoded id 后必须同步序列)..."
-psql_platform -c "
-DO \$\$
-DECLARE
-    rec RECORD;
-    seq_name text;
-BEGIN
-    FOR rec IN
-        SELECT c.relname AS tbl
-        FROM pg_class c
-        JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = 'batch' AND c.relkind = 'r'
-    LOOP
-        -- pg_get_serial_sequence 对不存在的列会抛 undefined_column(例如 shedlock 表 PK 是 name 不是 id)。
-        -- 先查 information_schema 确认 id 列存在,再去拿 sequence,避免整段 DO inline 被拒。
-        IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'batch' AND table_name = rec.tbl AND column_name = 'id'
-        ) THEN
-            CONTINUE;
-        END IF;
-        seq_name := pg_get_serial_sequence('batch.' || rec.tbl, 'id');
-        IF seq_name IS NOT NULL THEN
-            EXECUTE format(
-                'SELECT setval(%L, COALESCE((SELECT MAX(id) FROM batch.%I), 1), true)',
-                seq_name, rec.tbl);
-        END IF;
-    END LOOP;
-END \$\$;
-"
+psql_platform -f "${SQL_DIR}/align-batch-id-sequences.sql"
 
 # seed 注入了大量 in-progress runtime 行（job_instance/partition/task/step_instance/workflow_run
 # 处于 RUNNING/READY/WAITING/CREATED/RETRYING）。这些行的存在会让真实 launch 撞两类冲突：
@@ -105,25 +80,7 @@ END \$\$;
 # seed 的设计意图是「展示运行中的样例数据给前端看」，但跑真实任务时这些行会阻塞链路。
 # 加载完成后强制把所有非终态 runtime 行收尾到 TERMINATED，保留行数据但释放约束。
 echo "Closing seed-injected in-progress runtime rows to TERMINATED (避免 CLAIM/quota 冲突)..."
-psql_platform -c "
-UPDATE batch.job_instance SET instance_status='TERMINATED', finished_at=COALESCE(finished_at, now())
-  WHERE instance_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
-UPDATE batch.job_partition SET partition_status='TERMINATED', finished_at=COALESCE(finished_at, now())
-  WHERE partition_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
-UPDATE batch.job_task SET task_status='TERMINATED', finished_at=COALESCE(finished_at, now())
-  WHERE task_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
-UPDATE batch.job_step_instance SET step_status='TERMINATED', finished_at=COALESCE(finished_at, now())
-  WHERE step_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
-UPDATE batch.pipeline_instance SET run_status='TERMINATED', finished_at=COALESCE(finished_at, now())
-  WHERE run_status IN ('CREATED','RUNNING','COMPENSATING');
-UPDATE batch.workflow_run SET run_status='TERMINATED', finished_at=COALESCE(finished_at, now())
-  WHERE run_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
--- workflow_node_run.node_status 的 CHECK 约束(ck_workflow_node_run_status)只允许
--- READY/RUNNING/SUCCESS/FAILED/SKIPPED,不接受 TERMINATED(其它 batch.* 表的命名)。
--- 用 FAILED 收尾"未跑完"的 in-progress 节点行,与上下游收尾语义对齐。
-UPDATE batch.workflow_node_run SET node_status='FAILED', finished_at=COALESCE(finished_at, now())
-  WHERE node_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
-"
+psql_platform -f "${SQL_DIR}/close-seed-runtime-rows.sql"
 
 if command -v mc >/dev/null 2>&1; then
   echo "Seeding MinIO objects..."

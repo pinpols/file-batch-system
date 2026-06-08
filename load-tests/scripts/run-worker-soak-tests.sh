@@ -27,6 +27,8 @@ set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
+# shellcheck source=env.sh
+source "$LOAD_DIR/scripts/env.sh"
 LOCAL_SCRIPTS="$ROOT_DIR/scripts/local"
 SOAK_LOG_DIR="$ROOT_DIR/logs/soak"
 mkdir -p "$SOAK_LOG_DIR"
@@ -130,8 +132,6 @@ fi
 
 # === 流量发生器:简单循环触发 4 类 job,按百分比抽样 ===
 # 出于 dry-run 友好性,这里用轻量 curl/psql 触发,而不是 Gatling(避免 24h 跑 mvn JVM)
-TRIGGER_BASE_URL="${TRIGGER_BASE_URL:-http://localhost:18081}"
-INTERNAL_SECRET="${INTERNAL_SECRET:-internal-secret}"
 BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
 
 # 4 类 job code(与 run-worker-stress-tests.sh 对齐)
@@ -193,7 +193,7 @@ while (( $(date +%s) < END_TS )); do
       -X POST "$TRIGGER_BASE_URL/internal/trigger/fire" \
       -H "Content-Type: application/json" \
       -H "X-Internal-Secret: $INTERNAL_SECRET" \
-      -d "{\"tenantId\":\"default-tenant\",\"jobCode\":\"$job\",\"bizDate\":\"$BIZ_DATE\",\"params\":{\"soakRunId\":\"$SOAK_RUN_ID\"}}" \
+      -d "{\"tenantId\":\"$LOAD_TEST_TENANT_ID\",\"jobCode\":\"$job\",\"bizDate\":\"$BIZ_DATE\",\"params\":{\"soakRunId\":\"$SOAK_RUN_ID\"}}" \
       2>>"$TRAFFIC_LOG"; then
     ERRORS=$(( ERRORS + 1 ))
   fi

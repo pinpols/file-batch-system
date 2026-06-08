@@ -22,6 +22,7 @@ public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
   private String message;
   private String resultSummary;
   private String errorCode;
+  private String failureClass;
 
   /**
    * i18n message key (来自 BizException.of)。Worker 侧 BizException 命中 i18n key 时填入, orchestrator 持久化到

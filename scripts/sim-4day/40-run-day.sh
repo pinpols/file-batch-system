@@ -5,12 +5,15 @@
 #   bash 40-run-day.sh 2026-06-06            # 全 10 租户,默认 300 行/导入
 #   ROWS=1000 bash 40-run-day.sh 2026-06-07  # 每导入 1000 行
 set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 BD="${1:?need bizDate YYYY-MM-DD}"; shift || true
 ROWS="${ROWS:-${1:-300}}"; [[ "${1:-}" =~ ^[0-9]+$ ]] && shift || true
 TENANTS=("$@"); [ ${#TENANTS[@]} -eq 0 ] && TENANTS=(ta tb tc t04 t05 t06 t07 t08 t09 t10)
 BDC="${BD//-/}"   # yyyymmdd
-TRG="${TRIGGER_BASE:-http://localhost:18081}"
-SECRET="${BATCH_INTERNAL_SECRET:-batch-platform-internal-secret-2026}"
+TRG="${TRIGGER_BASE_URL}"
+SECRET="${BATCH_INTERNAL_SECRET}"
 
 # archetype: retail(ta-like) / bank(tb-like) / risk(tc-like)
 arche() { case "$1" in ta|t04|t07|t10) echo retail;; tb|t05|t08) echo bank;; tc|t06|t09) echo risk;; *) echo retail;; esac; }
@@ -34,7 +37,7 @@ import_content() { # tenant tpl header rowgen
 # DISPATCH 需绑定一个已生成文件 + 渠道:取该租户最新 GENERATED 文件分发(自然形成 export→dispatch 链)。
 dispatch_latest() { # tenant job channelCode
   local t="$1" job="$2" ch="$3" fid
-  fid=$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc \
+  fid=$(docker exec -i batch-postgres-primary psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc \
     "select id from batch.file_record where tenant_id='$t' and file_status='GENERATED' order by id desc limit 1" 2>/dev/null)
   if [ -n "$fid" ]; then launch "$t" "$job" "$BD" "{\"fileId\":$fid,\"channelCode\":\"$ch\"}"; else printf '_'; return 0; fi
 }

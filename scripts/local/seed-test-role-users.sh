@@ -31,7 +31,11 @@
 # =============================================================
 set -euo pipefail
 
-CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-http://localhost:18080}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+
+CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-$CONSOLE_BASE}"
 ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
 TENANT_TX="${TENANT_TX:-tx}"

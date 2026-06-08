@@ -21,5 +21,5 @@ public class ConsoleAtomicWorkerClientProperties {
   private boolean enabled = true;
 
   /** atomic worker 的 base URL(含 scheme + host + port),用于拼接 {@code /actuator/atomicruntime}。 */
-  private String baseUrl = "http://localhost:18087";
+  private String baseUrl;
 }

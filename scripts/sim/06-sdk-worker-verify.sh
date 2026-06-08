@@ -19,10 +19,14 @@
 #   PHASE2_DISPATCH=1 ...   # 额外尝试 dispatch-execute 腿(需 pipeline fixtures,best-effort)
 set -uo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$REPO_ROOT/scripts/lib/env-common.sh"
+
 # ---- 配置(均可 env 覆盖)----
-CONSOLE="${CONSOLE_BASE:-http://localhost:18080}"
-ORCH="${ORCH_BASE:-http://localhost:18082}"
-KAFKA="${KAFKA_BOOTSTRAP:-localhost:19092}"
+CONSOLE="${CONSOLE_BASE_URL}"
+ORCH="${ORCHESTRATOR_BASE_URL}"
+KAFKA="${KAFKA_BOOTSTRAP:-$KAFKA_HOST_BOOTSTRAP}"
 TENANT="${TENANT:-ta}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASS="${ADMIN_PASS:-admin123}"
@@ -30,10 +34,9 @@ WORKER_CODE="${WORKER_CODE:-sdk-verify-worker}"
 # 每轮唯一 key 名(避免软删后名仍占用导致 CONFLICT);旧 sdk-verify* key 开头尽力清理
 KEY_NAME="${KEY_NAME:-sdk-verify-$(date +%s)}"
 KEY_PREFIX_PURGE="sdk-verify"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 JAR="$REPO_ROOT/examples/sample-tenant-worker/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-PSQL=(docker exec "$PG_CONTAINER" psql -U batch_user -d batch_platform -tAc)
+PSQL=(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc)
 REG_TIMEOUT="${REG_TIMEOUT:-45}"
 # sample-tenant-worker 注册的 7 个 taskType(对应 5 基类 + echo/sleep)
 EXPECTED_TASKTYPES="echo sleep sample_import_echo sample_export_echo sample_process_echo sample_dispatch_echo sample_atomic_echo"

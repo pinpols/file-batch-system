@@ -10,6 +10,8 @@ Patches applied to ta/tb/tc-tenant-config-package-test.xlsx:
      - rename node_code NODE_START/NODE_END -> START/END if present
      - if missing, append START (node_type=START) + END (node_type=END)
      - workflow_edge wired START -> first JOB node, last JOB node -> END
+  4. job_definition.execution_mode required by current Console package validator.
+     Add column when absent and fill FULL for every job row.
 """
 from __future__ import annotations
 
@@ -79,6 +81,26 @@ def patch_schedule_expr(ws) -> int:
         new = linux5_to_quartz6(cell.value)
         if new is not None:
             cell.value = new
+            fixed += 1
+    return fixed
+
+
+def ensure_execution_mode(ws) -> int:
+    headers = [c.value for c in ws[1]]
+    if "execution_mode" in headers:
+        col = headers.index("execution_mode") + 1
+    else:
+        col = len(headers) + 1
+        ws.cell(row=1, column=col).value = "execution_mode"
+    fixed = 0
+    for row in range(2, ws.max_row + 1):
+        tenant = ws.cell(row=row, column=1).value
+        job_code = ws.cell(row=row, column=2).value
+        if tenant in (None, "") and job_code in (None, ""):
+            continue
+        cell = ws.cell(row=row, column=col)
+        if cell.value in (None, ""):
+            cell.value = "FULL"
             fixed += 1
     return fixed
 
@@ -272,7 +294,9 @@ def process(path: Path) -> dict:
     wb = load_workbook(path)
     result = {"file": path.name, "before_bytes": before}
     if "job_definition" in wb.sheetnames:
-        result["schedule_expr_fixed"] = patch_schedule_expr(wb["job_definition"])
+        ws = wb["job_definition"]
+        result["schedule_expr_fixed"] = patch_schedule_expr(ws)
+        result["execution_mode_fixed"] = ensure_execution_mode(ws)
     if "file_channel_config" in wb.sheetnames:
         result["sftp_keys_renamed"] = patch_channel_config_json(wb["file_channel_config"])
     nodes_touched, edges_added = ensure_workflow_boundary_nodes(wb)
@@ -291,15 +315,21 @@ def verify(path: Path) -> dict:
         ws = wb["job_definition"]
         headers = [c.value for c in ws[1]]
         col = headers.index("schedule_expr")
+        em_col = headers.index("execution_mode") if "execution_mode" in headers else -1
         bad = []
+        missing_execution_mode = 0
         for row in ws.iter_rows(min_row=2, values_only=True):
             v = row[col]
             if v is None or str(v).strip() == "":
-                continue
-            n = len(str(v).split())
-            if n not in (6, 7):
-                bad.append(v)
+                pass
+            else:
+                n = len(str(v).split())
+                if n not in (6, 7):
+                    bad.append(v)
+            if em_col < 0 or row[em_col] in (None, ""):
+                missing_execution_mode += 1
         out["non_quartz_schedule_count"] = len(bad)
+        out["missing_execution_mode_count"] = missing_execution_mode
     if "file_channel_config" in wb.sheetnames:
         ws = wb["file_channel_config"]
         headers = [c.value for c in ws[1]]

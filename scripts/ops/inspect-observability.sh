@@ -12,9 +12,13 @@
 
 set -euo pipefail
 
-BASE_URLS="${BATCH_OBSERVABILITY_BASE_URLS:-http://localhost:18080,http://localhost:18081,http://localhost:18082}"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+
+BASE_URLS="${BATCH_OBSERVABILITY_BASE_URLS:-$CONSOLE_BASE_URL,$TRIGGER_BASE_URL,$ORCHESTRATOR_BASE_URL}"
 REQUIRED_METRICS="${BATCH_OBSERVABILITY_REQUIRED_METRICS:-batch_alert_events_total,batch_job_sla_violation_count,batch_dispatch_deliveries_total,batch_dispatch_circuits_open,http_server_requests_seconds_count}"
-KAFKA_BOOTSTRAP_SERVERS="${BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS:-${BATCH_KAFKA_BOOTSTRAP_SERVERS:-}}"
+KAFKA_BOOTSTRAP_SERVERS="${BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS:-${BATCH_KAFKA_BOOTSTRAP_SERVERS:-$KAFKA_HOST_BOOTSTRAP}}"
 KAFKA_GROUPS="${BATCH_OBSERVABILITY_KAFKA_GROUPS:-batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic}"
 KAFKA_BIN_DIR="${BATCH_OBSERVABILITY_KAFKA_BIN_DIR:-}"
 KAFKA_LAG_THRESHOLD="${BATCH_OBSERVABILITY_KAFKA_LAG_THRESHOLD:-1000}"

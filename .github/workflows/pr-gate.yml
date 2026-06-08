@@ -142,6 +142,10 @@ jobs:
         # 拦 BE 加 controller 端点但漏更 docs/api/console-api.openapi.yaml 的漂移。
         run: python3 scripts/ci/check-console-openapi-paths.py
 
+      - name: Verify SQL/config placement boundaries
+        shell: bash
+        run: bash scripts/ci/check-sql-config-boundaries.sh
+
       - name: PMD + Spotless + dependency boundary
         shell: bash
         # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire

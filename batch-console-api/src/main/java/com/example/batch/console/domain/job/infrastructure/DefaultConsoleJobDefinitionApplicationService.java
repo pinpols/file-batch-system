@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.job.infrastructure;
 
+import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.CodeNormalizer;
@@ -81,7 +82,10 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setBizType(request.getBizType());
     entity.setScheduleType(request.getScheduleType());
     entity.setScheduleExpr(request.getScheduleExpr());
-    entity.setTimezone(request.getTimezone() == null ? "Asia/Shanghai" : request.getTimezone());
+    entity.setTimezone(
+        request.getTimezone() == null
+            ? CommonConstants.DEFAULT_TIMEZONE_ID
+            : request.getTimezone());
     entity.setTriggerMode(
         request.getTriggerMode() == null ? "SCHEDULED" : request.getTriggerMode());
     entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(request.getWorkerGroup()));

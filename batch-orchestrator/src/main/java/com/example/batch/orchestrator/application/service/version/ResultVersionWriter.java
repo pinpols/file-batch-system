@@ -17,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ADR-017 §决策 §实施分阶段 Stage 2 — 结果版本写入入口。
@@ -63,6 +65,7 @@ public class ResultVersionWriter {
    * <p>非成功类终态（FAILED / CANCELLED / TERMINATED）以及 instance 缺关键字段（jobCode / bizDate）一律 skip ——
    * 不抛异常，避免污染状态机主链。
    */
+  @Transactional(propagation = Propagation.MANDATORY)
   public void writeOnTerminal(JobInstanceEntity instance, Map<String, Object> outputs) {
     if (instance == null
         || instance.getId() == null
@@ -75,6 +78,8 @@ public class ResultVersionWriter {
     }
     String tenantId = instance.getTenantId();
     String businessKey = buildBusinessKey(instance);
+
+    resultVersionMapper.lockBusinessKey(tenantId, businessKey);
 
     // 幂等：同一 job_instance 只允许落 1 行 result_version（重复 report 不重复创建）
     ResultVersionEntity existing =

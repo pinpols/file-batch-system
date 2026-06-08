@@ -1,5 +1,6 @@
 package com.example.batch.console.support.naming;
 
+import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import java.util.List;
@@ -36,14 +37,13 @@ public class ReservedPrefixGuard {
       List.of("e2e-", "qa-", "dev-", "local-", "test-", "_internal-");
 
   /** 完全保留的 tenant_id — 系统占用,任何环境都不可重名。 */
-  public static final List<String> RESERVED_TENANT_IDS = List.of("system", "default", "admin");
+  public static final List<String> RESERVED_TENANT_IDS = CommonConstants.RESERVED_TENANT_IDS;
 
   /**
    * 非 prod 环境 dev fixture 白名单 —— 团队手测 / 部分 e2e 长期复用,允许无 test prefix 直接创建。 增删需评审(参考
    * scripts/db/wipe-non-system-tenants.sql `:keep` 同步)。
    */
-  public static final List<String> DEV_FIXTURE_TENANT_IDS =
-      List.of("ta", "tb", "tc", "tx", "default-tenant");
+  public static final List<String> DEV_FIXTURE_TENANT_IDS = CommonConstants.DEV_FIXTURE_TENANT_IDS;
 
   /** 资源 code 保留前缀 — 防止业务方误用系统级标识。 */
   public static final List<String> RESERVED_CODE_PREFIXES = List.of("SYSTEM_", "INTERNAL_", "_");

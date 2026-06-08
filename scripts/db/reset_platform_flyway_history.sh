@@ -5,14 +5,10 @@ set -euo pipefail
 # 默认连接与 batch-orchestrator application-local.yml 一致；可通过环境变量覆盖。
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 SQL="${ROOT}/scripts/db/reset_platform_flyway_history.sql"
-
-: "${PGHOST:=localhost}"
-: "${PGPORT:=15432}"
-: "${PGDATABASE:=batch_platform}"
-: "${PGUSER:=batch_user}"
-: "${PGPASSWORD:=batch_pass_123}"
-export PGPASSWORD
+PGDATABASE="${PGDATABASE:-$PLATFORM_DB}"
 
 if [[ ! -f "${SQL}" ]]; then
   echo "missing ${SQL}" >&2

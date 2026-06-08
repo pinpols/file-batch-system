@@ -147,6 +147,12 @@ public class ImportRecordGovernanceService {
     return skippedCount <= Math.max(0, skipProperties.maxSkipCount());
   }
 
+  public void markThresholdExceeded(ImportJobContext context) {
+    if (context != null) {
+      context.getAttributes().put("skipThresholdExceeded", true);
+    }
+  }
+
   public void finalizeErrorOutput(ImportJobContext context) {
     List<ImportBadRecordEntity> badRecords = badRecords(context);
     if (badRecords.isEmpty()) {

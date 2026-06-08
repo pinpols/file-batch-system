@@ -863,7 +863,7 @@ ps -p $(jps -l | grep worker-import | awk '{print $1}') -o rss= | awk '{printf "
 - [x] **1. Baseline**:导入 replace-copy / stage-swap、导出单片 / 4 分片均已有系统 benchmark 记录
 - [ ] **2. A1 JVM**:后续容量画像;需要固定重启窗口,不作为 P0/P1 阻塞
 - [x] **3. A2 chunk_size**:主链路已用 `chunk_size=10000` 复验
-- [ ] **4. A3 PG 参数矩阵**:后续容量画像;P1 配置能力已完成并验证,矩阵不阻塞 P1
+- [x] **4. A3 PG 参数矩阵(微基准)**:`pg-param-matrix-20260608142440` 已完成 5 组 x 3 次;1000w 系统级/JVM 累加矩阵仍属后续容量画像
 - [ ] **5. A4 DB 隔离**:后续容量画像;用于单机上限测算
 - [x] **6. A5 JDBC URL**:`reWriteBatchedInserts=true` 本地已启用;replace-copy 主链路收益有限,不作为继续调优入口
 - [ ] **7. A1+A2+A3+A5 累加跑**:后续容量画像;只有当前吞吐不够时再做

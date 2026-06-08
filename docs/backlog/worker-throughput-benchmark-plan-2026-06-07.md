@@ -6,6 +6,7 @@
 > 关联:
 > - [single-node-throughput-optimization-2026-06-06](./single-node-throughput-optimization-2026-06-06.md)
 > - [citus-introduction-plan-2026-06-06](./citus-introduction-plan-2026-06-06.md)
+> - [pre-production-capacity-optimization-plan-2026-06-08](./pre-production-capacity-optimization-plan-2026-06-08.md)
 
 ## 结论
 
@@ -15,6 +16,154 @@
 4. **本地高压失败是容量策略下的可观察终态,不是 worker 卡死**。本地 `tenant_quota_policy.exceeded_strategy=REJECT`、`dispatch_queue` 只有 3 job / 6 partition,高压下部分实例被终态化为 `FAILED/NO_TASK`;这是预期的背压结果。
 5. **当前还不是 1w/10w 容量上限结论**。P0 状态机缺陷已修,下一步 task storm、故障注入、重试/背压上限可独立跑。
 6. 所有 benchmark 都走正常系统链路:API / trigger / orchestrator / Kafka / worker / DB,不走前台模拟;代码完成状态和 benchmark 结果分开记录。
+
+## 覆盖口径
+
+本轮可以判断为 **5 类 worker 的 P0/P1 性能优化和主链路验证已收口**。这里的 5 类按执行域合并统计:
+
+| 类别 | 覆盖的 worker | 本轮完成口径 |
+|---|---|---|
+| import | `batch-worker-import` | 1000w 级导入、replace-copy、stage-swap、分片 guard 和关键参数能力 |
+| export | `batch-worker-export` | 1000w 级导出、4 分片真并行、multipart/store、fetch/chunk 参数读取 |
+| process | `batch-worker-process` | 1000w aggregate/copy、SQL timeout / Kafka poll 配置、`DIRECT` fast path |
+| dispatch / atomic | `batch-worker-dispatch`,`batch-worker-atomic` | 控制面小基线、高压复验、T1/T2 失败终态化、Kafka lag=0 |
+| trigger | `batch-trigger` | API launch + scheduler read 并行压测、下游触发链路终态复验 |
+
+但这 **不等于 worker 内部所有场景已经全量测完**。未覆盖或不作为本轮 P0/P1 阻塞的矩阵如下:
+
+| 方向 | 未全量覆盖项 | 决策 |
+|---|---|---|
+| import | JVM 生产参数、PG WAL/checkpoint、`work_mem` / `maintenance_work_mem`、chunk/batch size 多组合 | 后续容量画像;当前主链路和配置能力已收口 |
+| export | 更高分片数、真实 S3、多租户混压、不同格式大文件矩阵 | 后续容量画像;当前 4 分片真并行和 1GiB+ multipart 已收口 |
+| process | 大数据失败恢复、幂等重跑、中途失败恢复、staging 分片/索引矩阵 | 后续 failure / capacity profile;当前 DIRECT 主收益已验证 |
+| dispatch / atomic | 故障注入、失败重试风暴、下游异常、lease renew 极限、atomic executor 分类矩阵 | 后续稳定性 profile;当前高压下无 `CREATED + NO_TASK` 残留 |
+| trigger | 高频 cron、misfire 补点风暴、Quartz scan/index 矩阵、1w/10w task storm | 后续容量上限 profile;当前 API launch + scheduler read P1 已收口 |
+
+因此后续沟通统一用两个口径:
+
+- **P0/P1 收口**:已完成,可作为本轮 worker 性能优化交付结论。
+- **全场景矩阵**:未完成,按容量画像 / failure profile / 真实外部依赖 profile 继续排期。
+
+## 业务场景 / 逻辑分支覆盖口径
+
+本轮不是业务全分支验收。已覆盖的是每类 worker 的主业务链路和 P0/P1 高风险分支;未覆盖的是低频格式、外部依赖、失败恢复和组合矩阵。后续不能把“P0/P1 性能收口”等同于“业务逻辑分支全覆盖”。
+
+| Worker | 已系统覆盖的业务分支 | 只做了单测 / 小基线的分支 | 未系统覆盖的业务分支 |
+|---|---|---|---|
+| import | 大文件对象导入、1000w `PARTITION_REPLACE_COPY`、1000w `PARTITION_STAGE_SWAP_COPY`、单大文件分片 fail-fast、DELIMITED 主路径、XML/FIXED_WIDTH 成功态、XML/FIXED_WIDTH 解析失败、字段校验失败、APPEND、UPSERT 重跑幂等、LOAD failure、分区 COPY 正向和多分片 guard、bad-record skip 阈值内/超阈值 | PG jsonb `field_mappings`、PG session 参数生成 | Excel multipart 配置包上传不属于 worker-import trigger 链路;checkpoint 崩溃续跑需 fault-injection profile |
+| export | DELIMITED 1000w 单片、DELIMITED 1000w 4 分片正确性、4 分片真并行、MinIO multipart、JSON/FIXED_WIDTH/EXCEL 系统级小矩阵、bad SQL 失败态、keyset-range 4/8 分片小矩阵、requestId replay 幂等、多租户小混压 | `query_param_schema` / cursor / fetch 配置读取单测与模板复验 | 真实 S3、外部存储故障、不同格式的大文件矩阵、multipart abort/retry、导出失败恢复/重试/幂等 |
+| process | SQL aggregate 1000w -> 10w、SQL copy 1000w、`stagingMode=DIRECT` fast path、SQL timeout / Kafka poll 配置、JSONB staging 小矩阵、DIRECT 小矩阵、validation failure、empty result SUCCESS、稳定 batchKey 幂等重跑、残留 staging 恢复、4 分片 SQL 参数小矩阵 | spec 校验、DIRECT 限制条件 | RUNNING cancel 当前返回 409、shell/SQL cooperative timeout 组合、staging 分区/索引矩阵、不同 process plugin 类型 |
+| dispatch | local dispatch 小基线、高压下任务派发/claim/report 主路径、T1/T2 失败终态化、HTTP 成功分支、HTTP 500 retry/no-retry 补偿语义、no-retry `FAILED/COMPENSATED` 自动脚本、LOCAL/NAS/SFTP sidecar manifest | channel config merge、remote path 规则 | EMAIL/OSS 真实外部依赖端到端、断点重试、幂等投递、失败重试风暴 |
+| atomic | SQL atomic direct 主路径、shell 成功、stored-proc 真实 PG 成功、小基线、高压下终态化、shell/sql/stored-proc 终态自动脚本、HTTP 非 loopback 真成功、SQL timeout 分类、task cancel 信号 | HTTP executor dry-run/安全闸单测 | shell cancel 不终止子进程、lease renew 极限、取消/超时/重试组合 |
+| trigger | API launch、scheduler read 并行压测、trigger -> orchestrator -> worker 下游终态、requestId 去重系统级小矩阵、30/60 请求 API storm 收敛、scheduler 定时触发、misfire pending、replay approve | dedup 主路径观察 | pending->catch-up 自动关联缺设计修复；高频 cron、Quartz scan/index 压力、1w/10w task storm |
+
+结论:
+
+- **业务主路径**:本轮已覆盖到可以支撑 P0/P1 性能结论。
+- **业务全分支**:没有完成;需要另开业务场景覆盖矩阵,按 worker 类型逐条补系统级用例。
+
+## 本地模拟真实上下游业务矩阵计划
+
+目标:在现有 `scripts/sim`、`scripts/sim-4day`、`load-tests`、`batch-e2e-tests` 基础上,扩展一轮本地模拟真实上下游的 worker 业务场景系统级验证。该计划不重造一套环境,优先复用已有 SFTP、MockServer、MinIO、PG、Kafka、多租户 ta/tb/tc fixture。
+
+### 模拟边界
+
+| 外部/上下游 | 本地模拟方式 | 能证明什么 | 不能证明什么 |
+|---|---|---|---|
+| SFTP | `scripts/sim/compose.yml` 的 SFTP 容器 | 入站/出站文件、权限路径、断点/失败分支 | 真实客户 SFTP 网络抖动、权限策略差异 |
+| HTTP 下游 | MockServer stub | 2xx/4xx/5xx/timeout、幂等投递、重试语义 | 真实第三方 SLA、限流策略、证书链问题 |
+| 对象存储 | MinIO | 大对象上传/下载、multipart、对象元数据 | 真实 S3 区域、IAM、跨公网延迟 |
+| DB | 本地 PostgreSQL | 业务表、stored-proc、事务/锁/回滚语义 | 生产规格、真实 WAL/IO/HA 行为 |
+| Kafka / Redis | 本地 docker compose | topic/consumer/lag/lease/背压主语义 | 生产多 broker、跨 AZ、真实 broker 故障 |
+| 邮件 / OSS / NAS | 本地 stub 或 local path | 协议适配、失败/重试路径 | 真实供应商行为和网络条件 |
+
+### 阶段计划
+
+| 阶段 | 目标 | 主要动作 | 输出 |
+|---|---|---|---|
+| 0. 盘点与固化矩阵 | 避免重复造轮子 | 汇总 `scripts/sim`、`scripts/sim-4day`、`load-tests`、`batch-e2e-tests` 已有覆盖;形成 worker × 业务分支矩阵 | 更新本文档覆盖表 |
+| 1. 复跑现有 sim 基线 | 证明现有模拟器基础不坏 | 跑 `01-init-biz.sh`、`02-start-sim.sh`、`03-import-tenants.sh`、`04-seed-source-data.sh`、`05-load.sh`、`06-verify.sh`、`07-atomic-load.sh` | 现有 sim 覆盖报告 |
+| 2. Import 补齐 | 补 worker-import 业务分支 | 已完成 XML/FIXED_WIDTH、validation error、APPEND、UPSERT、LOAD failure、分区 COPY 正/负、bad-record skip 阈值；checkpoint 崩溃续跑需 fault injection | import 业务分支结果表 |
+| 3. Export 补齐 | 补 worker-export 格式/存储/分片分支 | 已完成 DELIMITED/JSON/FIXED_WIDTH/EXCEL、单片/4/8 分片、keyset-range、bad SQL、requestId replay、多租户小混压；multipart abort/retry 和真实 S3 待故障注入 | export 业务分支结果表 |
+| 4. Process 补齐 | 补 worker-process 计算/恢复分支 | 已完成 SQL aggregate、JSONB staging、`DIRECT`、validation、`emptyResultPolicy`、幂等重跑、staging cleanup、4 分片 process；RUNNING cancel/timeout 语义待设计修复 | process 业务分支结果表 |
+| 5. Dispatch/Atomic 外部依赖模拟 | 补外部下游成功/失败/超时 | 已完成 Dispatch HTTP 成功/500 retry/no-retry/补偿、LOCAL/NAS/SFTP sidecar，Atomic SQL/stored-proc/shell/HTTP 真成功/timeout/cancel signal；EMAIL/OSS 和 cancel kill 待 profile/修复 | dispatch/atomic 业务分支结果表 |
+| 6. Trigger 补齐 | 补调度类业务分支 | 已完成 API launch、requestId/dedup、30/60 storm、scheduler fire、misfire pending、replay approve；pending->catch-up 自动关联和高频 cron 待修/压测 | trigger 业务分支结果表 |
+| 7. 统一自动化入口 | 降低复跑成本 | `load-tests/scripts/run-worker-business-scenario-matrix.sh` 默认 smoke 已覆盖 `2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c`;Stage 2d 需 skip profile 显式运行 | 一键 smoke/full |
+| 8. 文档沉淀 | 形成验收口径 | 新增 `docs/verifications/worker-business-scenario-matrix-2026-06-08.md` 并回填本文档 | 最终业务矩阵报告 |
+
+### 建议自动化入口
+
+新增脚本:
+
+```bash
+load-tests/scripts/run-worker-business-scenario-matrix.sh
+```
+
+建议参数:
+
+| 参数 | 示例 | 说明 |
+|---|---|---|
+| `MODULES` | `import,export,process,dispatch,atomic,trigger` | 指定要跑的 worker 集合 |
+| `PROFILE` | `smoke` / `full` / `failure` | smoke 跑主分支;full 跑业务矩阵;failure 跑故障/超时/重试 |
+| `TENANTS` | `ta,tb,tc` | sim 多租户集合 |
+| `KEEP_DATA` | `1` | 保留数据便于排障 |
+| `RUN_ID` | `biz-sim-20260608-001` | 报告和日志关联 id |
+
+建议输出:
+
+```text
+load-tests/target/worker-business-scenario-report-<RUN_ID>.md
+```
+
+报告字段:
+
+| 字段 | 说明 |
+|---|---|
+| worker | import/export/process/dispatch/atomic/trigger |
+| scenario | 业务场景名 |
+| upstream/downstream | 模拟的上下游依赖 |
+| trigger path | API / cron / replay / direct |
+| expected terminal | SUCCESS / FAILED / REJECTED / DLQ |
+| actual terminal | 实际终态 |
+| evidence | job_instance、job_task、file_record、MinIO/SFTP/MockServer 证据 |
+| limitation | 本地模拟限制 |
+
+### 优先级与周期
+
+| 优先级 | 内容 | 预计 |
+|---|---|---|
+| P0 | 复跑现有 sim 基线 + import/export/process 主业务分支补齐 | 已完成 |
+| P1 | dispatch/atomic 外部 mock failure + trigger cron/misfire smoke | 已完成本地 smoke；容量/故障注入另排 |
+| P2 | full 业务矩阵、1k task storm、真实外部依赖替身扩展 | 后续容量画像 / 外部依赖 profile |
+
+结论:这轮可以在本地做“模拟真实上下游”的系统级业务覆盖,但结论必须标注为本地模拟环境;真实 S3/邮件网关/客户 SFTP/NAS/第三方 HTTP SLA 仍需生产相似环境单独验收。
+
+### 阶段 0 资产盘点(已确认可复用)
+
+| 资产 | 路径 | 已有能力 | 可直接支撑的阶段 |
+|---|---|---|---|
+| 多租户业务模拟器 | `scripts/sim/` | ta/tb/tc 三租户;SFTP inbound;MockServer HTTP 下游;MinIO outbound;IMPORT/EXPORT/DISPATCH/WORKFLOW 触发与对账 | 阶段 1、2、3、5 |
+| sim 容器编排 | `scripts/sim/compose.yml` | SFTP + MockServer,与主 compose 同 network | 阶段 1、5 |
+| sim fixture 配置包 | `docs/test-data/test-full-coverage-import-suite/{ta,tb,tc}-tenant-config-package-test.xlsx` | 三租户 job/template/channel/workflow 配置 | 阶段 1、2、3、5 |
+| sim 触发入口 | `scripts/sim/05-load.sh` | IMPORT 内联 CSV、EXPORT、DISPATCH、WORKFLOW 批量触发 | 阶段 1、2、3、5 |
+| sim 对账入口 | `scripts/sim/06-verify.sh` | biz 表、MinIO、MockServer/SFTP 产物对账 | 阶段 1、8 |
+| atomic sim 入口 | `scripts/sim/07-atomic-load.sh` | SQL / shell / stored-proc / HTTP 四类 atomic demo launch | 阶段 5 |
+| 4 日/10 租户批量模拟 | `scripts/sim-4day/` | 10 租户、4 bizDate、IMPORT→EXPORT→DISPATCH→WORKFLOW、递增数据和大文件登记 | 阶段 3、6、容量画像 |
+| 控制面压测入口 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger 小基线和并行压测;Kafka lag 采样 | 阶段 4、5、6 |
+| worker stress 入口 | `load-tests/scripts/run-worker-stress-tests.sh` | import/export/dispatch/process 阶梯加压 | 阶段 2、3、4 |
+| process 大数据入口 | `load-tests/scripts/run-process-worker-benchmark.sh` | aggregate/copy/idempotency 数据准备、运行和报告 | 阶段 4 |
+| e2e 失败/恢复资产 | `batch-e2e-tests/src/test/java/com/example/batch/e2e/*Failure*`,`*Replay*`,`*Drain*`,`*RestartRecovery*` | failure pipeline、DLQ replay、worker drain、process restart recovery 等场景 | 阶段 4、5、6 |
+
+### 阶段 0 初步缺口
+
+| 缺口 | 需要补的内容 | 对应阶段 |
+|---|---|---|
+| 统一业务矩阵入口 | 已完成；默认 smoke 覆盖 `2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c` | 阶段 7 |
+| Import XML/FIXED_WIDTH 系统级链路 | 已完成；剩 checkpoint 崩溃续跑需 fault injection | 阶段 2 |
+| Export 格式矩阵 | 已完成小规模 DELIMITED/JSON/FIXED_WIDTH/EXCEL + 4/8 分片；真实 S3/multipart abort 待故障注入 | 阶段 3 |
+| Process failure profile | 已完成 validation/empty/幂等/staging cleanup/分片；RUNNING cancel/timeout 语义待修 | 阶段 4 |
+| Dispatch/Atomic mock failure | 已完成 HTTP 4xx/5xx/no-retry、SFTP/NAS/local sidecar、Atomic HTTP/timeout/cancel signal | 阶段 5 |
+| Trigger cron/misfire | 已完成 scheduled fire/misfire pending/replay approve；pending->catch-up 自动关联待修 | 阶段 6 |
 
 ## 完成状态
 
@@ -300,7 +449,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 | 项 | 动作 | 完成标准 |
 |---|---|---|
 | 批量 API trigger 基线 | 已完成 | control-plane run 覆盖 API launch 和 scheduler read 并行压测 |
-| 定时触发密集窗口 | 后续容量画像 | 高频 cron/misfire 矩阵保留为非 P0/P1 profile |
+| 定时触发密集窗口 | smoke 已完成；容量画像后续 | Stage 6c 已覆盖 scheduled fire；高频 cron/misfire 矩阵保留为容量 profile |
 | 去重幂等 | 已覆盖主路径 | requestId/dedup 主路径未出现重复 launch |
 | trigger_outbox 积压 | 已采样 | 高压复验 Kafka lag=0,无长期积压 |
 
@@ -310,7 +459,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 |---|---|---|
 | Quartz scan/index | 后续容量画像 | 当前 P1 已通过 API launch + scheduler read 并行压测收口 |
 | batch size / poll interval | 后续容量画像 | 只在持续 fire QPS 达触发线后调整 |
-| misfire 策略 | 后续容量画像 | 高频 cron/misfire 矩阵不阻塞本轮 P1 |
+| misfire 策略 | smoke 已完成；设计缺口另修 | Stage 6c 已覆盖 pending；pending->catch-up 自动关联缺口不阻塞本轮 P1 |
 | wheel scheduler ADR 复核 | 只在持续高 fire QPS 达触发线后启动 | ADR-033 是后续重架构,不是本轮 P0 |
 
 ## 交付物
@@ -322,6 +471,8 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 | 控制面 worker 小基线报告 | `docs/verifications/control-plane-worker-throughput-2026-06-07.md` | process/dispatch/atomic/trigger 本轮统一报告 |
 | process worker 大数据报告 | `docs/verifications/process-worker-throughput-2026-06-07.md` | 1000w aggregate/copy 结果与瓶颈结论 |
 | 控制面压测入口 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | process/dispatch/atomic/trigger 共用入口 |
+| Worker 业务场景矩阵报告 | `docs/verifications/worker-business-scenario-matrix-2026-06-08.md` | 本地真实上下游 sim Stage 1 + Stage 2/2b/2c/2d import + Stage 3/3b/3c export + Stage 4/4b/4c process + Stage 5/5c dispatch/atomic + Stage 6/6c trigger 结果 |
+| Worker 业务场景矩阵入口 | `load-tests/scripts/run-worker-business-scenario-matrix.sh` | 默认 smoke 串行复跑 Stage `2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c`;Stage 2d 需 skip profile 显式运行 |
 
 ## Checklist
 
@@ -340,7 +491,19 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 - [x] dispatch/atomic worker P0 高压优化/修复
 - [x] trigger worker P0 小基线
 - [x] trigger worker P1 API launch + scheduler read 并行压测
-- [ ] trigger 高频 cron / misfire 参数矩阵(非 P0/P1;后续可选容量 profile)
+- [x] 本地真实上下游 sim Stage 1(import/export/dispatch/workflow)业务场景验证
+- [x] 本地真实上下游 sim Stage 2 import XML/FIXED_WIDTH 成功态、解析失败、字段校验失败
+- [x] 本地真实上下游 sim Stage 3 export JSON/FIXED_WIDTH/EXCEL 成功态、bad SQL 失败态
+- [x] 本地真实上下游 sim Stage 4 process JSONB/DIRECT/validation fail/empty success
+- [x] 本地真实上下游 sim Stage 5 atomic SQL/shell/stored-proc 成功、dispatch HTTP 500 retry/no-retry 补偿语义
+- [x] 本地真实上下游 sim Stage 6 trigger requestId 去重
+- [x] 本地真实上下游 sim Stage 2b import UPSERT/LOAD failure/partition guard
+- [x] 本地真实上下游 sim Stage 3b export keyset-range 4 分片
+- [x] 本地真实上下游 sim Stage 4b process 幂等重跑/staging 恢复
+- [x] 本地真实上下游 sim Stage 5b dispatch no-retry 补偿 + atomic 终态脚本
+- [x] 本地真实上下游 sim Stage 6b trigger 30 请求 storm
+- [x] 本地真实上下游 sim Stage 7 统一入口 smoke 扩展到 Stage 2/2b/3/3b/4/4b/5/6
+- [x] trigger 高频 cron / misfire / outbox 本地专项(Stage 6d,`sim-trigger-stage6d-20260608141724`);亚分钟连续 cron fire 仍不作为当前 wheel 放行能力
 - [x] process/dispatch/atomic/trigger 共用 benchmark 脚本入口
 
 ## 不做项

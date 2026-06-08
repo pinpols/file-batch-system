@@ -12,14 +12,20 @@
 # 用法:
 #   示例: bash scripts/local/import-copy-worth-benchmark.sh
 #   示例: ROWS=200000 BATCH_SIZE=5000 bash scripts/local/import-copy-worth-benchmark.sh
+#   示例: EXTRA_INDEXES=3 bash scripts/local/import-copy-worth-benchmark.sh
 #   示例: KEEP_BENCH_TABLE=1 bash scripts/local/import-copy-worth-benchmark.sh
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+
 ROWS="${ROWS:-100000}"
 BATCH_SIZE="${BATCH_SIZE:-2000}"
-DB_URL="${DB_URL:-jdbc:postgresql://localhost:15432/batch_business?reWriteBatchedInserts=true}"
-DB_USER="${DB_USER:-batch_user}"
-DB_PASSWORD="${DB_PASSWORD:-batch_pass_123}"
+EXTRA_INDEXES="${EXTRA_INDEXES:-0}"
+DB_URL="${DB_URL:-jdbc:postgresql://${PGHOST}:${PGPORT}/${BUSINESS_DB}?reWriteBatchedInserts=true}"
+DB_USER="${DB_USER:-$PGUSER}"
+DB_PASSWORD="${DB_PASSWORD:-$PGPASSWORD}"
 KEEP_BENCH_TABLE="${KEEP_BENCH_TABLE:-0}"
 
 PG_JAR="$(find "${HOME}/.m2/repository/org/postgresql/postgresql" -name 'postgresql-*.jar' | sort | tail -1)"
@@ -52,6 +58,7 @@ public class ImportCopyWorthBenchmark {
   public static void main(String[] args) throws Exception {
     int rows = Integer.parseInt(System.getenv().getOrDefault("ROWS", "100000"));
     int batchSize = Integer.parseInt(System.getenv().getOrDefault("BATCH_SIZE", "2000"));
+    int extraIndexes = Integer.parseInt(System.getenv().getOrDefault("EXTRA_INDEXES", "0"));
     boolean keepTable = "1".equals(System.getenv().getOrDefault("KEEP_BENCH_TABLE", "0"));
     String url = System.getenv("DB_URL");
     String user = System.getenv("DB_USER");
@@ -59,7 +66,7 @@ public class ImportCopyWorthBenchmark {
 
     try (Connection conn = DriverManager.getConnection(url, user, password)) {
       conn.setAutoCommit(false);
-      setup(conn);
+      setup(conn, extraIndexes);
 
       Result batch = runBatchUpsert(conn, rows, batchSize);
       Result copy = runCopyThenMerge(conn, rows);
@@ -67,7 +74,7 @@ public class ImportCopyWorthBenchmark {
 
       double speedup = batch.totalSeconds / copy.totalSeconds;
       double replaceSpeedup = batch.totalSeconds / replace.totalSeconds;
-      System.out.printf(Locale.ROOT, "rows=%d batchSize=%d%n", rows, batchSize);
+      System.out.printf(Locale.ROOT, "rows=%d batchSize=%d extraIndexes=%d%n", rows, batchSize, extraIndexes);
       System.out.printf(Locale.ROOT, "batch_upsert_total=%.3fs throughput=%.0f rows/s%n",
           batch.totalSeconds, rows / batch.totalSeconds);
       System.out.printf(Locale.ROOT, "copy_stage=%.3fs merge=%.3fs copy_total=%.3fs throughput=%.0f rows/s%n",
@@ -89,7 +96,7 @@ public class ImportCopyWorthBenchmark {
     }
   }
 
-  private static void setup(Connection conn) throws Exception {
+  private static void setup(Connection conn, int extraIndexes) throws Exception {
     try (Statement st = conn.createStatement()) {
       st.execute("create schema if not exists biz");
       st.execute("drop table if exists " + TARGET);
@@ -105,6 +112,18 @@ public class ImportCopyWorthBenchmark {
             primary key (tenant_id, row_key)
           )
           """.formatted(TARGET));
+      if (extraIndexes >= 1) {
+        st.execute("create index import_copy_worth_bench_c01_idx on " + TARGET + " (c01)");
+      }
+      if (extraIndexes >= 2) {
+        st.execute("create index import_copy_worth_bench_c02_n01_idx on " + TARGET + " (c02, n01)");
+      }
+      if (extraIndexes >= 3) {
+        st.execute("create index import_copy_worth_bench_c03_c04_idx on " + TARGET + " (c03, c04)");
+      }
+      if (extraIndexes > 3) {
+        throw new IllegalArgumentException("EXTRA_INDEXES supports 0..3");
+      }
     }
     conn.commit();
   }

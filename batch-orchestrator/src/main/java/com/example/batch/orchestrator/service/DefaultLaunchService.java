@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.service;
 import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.enums.FailureClass;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.TriggerType;
@@ -11,6 +12,7 @@ import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
@@ -20,9 +22,12 @@ import com.example.batch.orchestrator.application.service.task.OrchestratorJobMa
 import com.example.batch.orchestrator.application.service.task.PartitionDispatchService;
 import com.example.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.application.service.workflow.WorkflowDagService;
+import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import com.example.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import com.example.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import io.micrometer.observation.annotation.Observed;
 import java.sql.SQLException;
@@ -65,6 +70,7 @@ public class DefaultLaunchService implements LaunchService {
   private final LaunchBatchDayService launchBatchDayService;
   private final BatchDayGateService batchDayGateService;
   private final LaunchParamResolver launchParamResolver;
+  private final JobExecutionLogMapper jobExecutionLogMapper;
   private final ObjectProvider<DefaultLaunchService> selfProvider;
 
   @Override
@@ -171,50 +177,90 @@ public class DefaultLaunchService implements LaunchService {
 
   private void finalizeJobInstanceOnDispatchBusinessError(
       LaunchRequest request, JobInstanceEntity jobInstance, RuntimeException exception) {
-    if (!isPartitionDispatchBusinessError(exception)
-        || jobInstance == null
-        || jobInstance.getId() == null) {
+    BizException dispatchFailure = findPartitionDispatchBusinessError(exception);
+    if (dispatchFailure == null || jobInstance == null || jobInstance.getId() == null) {
       return;
     }
     try {
-      selfProvider.getObject().markJobInstanceFailedDueToDispatch(request, jobInstance);
+      selfProvider
+          .getObject()
+          .markJobInstanceFailedDueToDispatch(request, jobInstance, dispatchFailure);
     } catch (RuntimeException reverseEx) {
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:finalizeJobInstanceOnDispatchFailure", reverseEx);
     }
   }
 
-  private boolean isPartitionDispatchBusinessError(RuntimeException exception) {
+  private BizException findPartitionDispatchBusinessError(RuntimeException exception) {
     Throwable current = exception;
     while (current != null) {
       if (current instanceof BizException bizException
           && "error.partition.dispatch_business_error".equals(bizException.getMessageKey())) {
-        return true;
+        return bizException;
       }
       current = current.getCause();
     }
-    return false;
+    return null;
   }
 
   /** T2 fail-fast 后把 job_instance CREATED → FAILED,避免长期停留在无 task 的不可执行状态。 */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markJobInstanceFailedDueToDispatch(
-      LaunchRequest request, JobInstanceEntity jobInstance) {
+      LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
     Long expectedVersion = jobInstance.getVersion() == null ? 0L : jobInstance.getVersion();
+    Instant now = BatchDateTimeSupport.utcNow();
     int rows =
-        jobMappers.jobInstanceMapper.updateStatus(
-            jobInstance.getTenantId(),
-            jobInstance.getId(),
-            JobInstanceStatus.FAILED.code(),
-            BatchDateTimeSupport.utcNow(),
-            expectedVersion);
+        jobMappers.jobInstanceMapper.updateProgress(
+            UpdateInstanceProgressParam.builder()
+                .tenantId(jobInstance.getTenantId())
+                .id(jobInstance.getId())
+                .instanceStatus(JobInstanceStatus.FAILED.code())
+                .successPartitionCount(0)
+                .failedPartitionCount(0)
+                .resultSummary(buildDispatchRejectSummary(dispatchFailure))
+                .finishedAt(now)
+                .expectedVersion(expectedVersion)
+                .failureClass(FailureClass.BUSINESS_RULE.code())
+                .build());
     if (rows > 0) {
       jobMappers.triggerRequestMapper.updateAcceptance(
           request.tenantId(),
           request.requestId(),
           BatchStatusConstants.REJECTED,
           jobInstance.getId());
+      appendDispatchRejectedAudit(jobInstance, dispatchFailure);
     }
+  }
+
+  private String buildDispatchRejectSummary(BizException dispatchFailure) {
+    Map<String, Object> summary = new LinkedHashMap<>();
+    summary.put("errorCode", "DISPATCH_REJECTED");
+    summary.put("messageKey", dispatchFailure.getMessageKey());
+    summary.put("reason", firstMessageArg(dispatchFailure));
+    summary.put("source", "partition_dispatch");
+    return JsonUtils.toJson(summary);
+  }
+
+  private String firstMessageArg(BizException dispatchFailure) {
+    Object[] args = dispatchFailure.getMessageArgs();
+    if (args == null || args.length == 0 || args[0] == null) {
+      return dispatchFailure.getMessage();
+    }
+    return String.valueOf(args[0]);
+  }
+
+  private void appendDispatchRejectedAudit(
+      JobInstanceEntity jobInstance, BizException dispatchFailure) {
+    JobExecutionLogEntity logEntity = new JobExecutionLogEntity();
+    logEntity.setTenantId(jobInstance.getTenantId());
+    logEntity.setJobInstanceId(jobInstance.getId());
+    logEntity.setLogLevel("WARN");
+    logEntity.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
+    logEntity.setTraceId(jobInstance.getTraceId());
+    logEntity.setMessage("JOB_INSTANCE_DISPATCH_REJECTED");
+    logEntity.setDetailRef("job_instance.dispatch_rejected");
+    logEntity.setExtraJson(buildDispatchRejectSummary(dispatchFailure));
+    jobExecutionLogMapper.insert(logEntity);
   }
 
   /**

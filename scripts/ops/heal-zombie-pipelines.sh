@@ -30,25 +30,21 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=env.sh
+source "$ROOT/scripts/ops/env.sh"
+
 # ── configuration ─────────────────────────────────────────────────────────────
 DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 MAX_AGE="${BATCH_HEAL_ZOMBIE_MAX_AGE_SECONDS:-604800}"
 TENANT="${BATCH_HEAL_ZOMBIE_TENANT:-}"
 
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PGDATABASE="${PGDATABASE:-batch_platform}"
-export PGPASSWORD
-
-PSQL="psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -X -A -t -F '|'"
-
-# ── tenant filter ─────────────────────────────────────────────────────────────
-TENANT_FILTER=""
-if [ -n "$TENANT" ]; then
-  TENANT_FILTER="AND tenant_id = '$TENANT'"
-fi
+psql_file() {
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+       -X -A -t -F '|' -v ON_ERROR_STOP=1 \
+       -v max_age_seconds="$MAX_AGE" \
+       -v tenant="$TENANT" "$@"
+}
 
 # ── inspect ───────────────────────────────────────────────────────────────────
 echo "==> heal-zombie-pipelines.sh"
@@ -58,21 +54,11 @@ echo "    TENANT   = ${TENANT:-<all>}"
 echo "    PG       = ${PGHOST}:${PGPORT}/${PGDATABASE} (user=${PGUSER})"
 echo
 
-ZOMBIES_SQL="
-  SELECT id, tenant_id, job_code, pipeline_type, started_at,
-         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at))::BIGINT AS age_s
-    FROM batch.pipeline_instance
-   WHERE run_status = 'RUNNING'
-     AND started_at IS NOT NULL
-     AND started_at < CURRENT_TIMESTAMP - (${MAX_AGE} * INTERVAL '1 second')
-     ${TENANT_FILTER}
-   ORDER BY started_at ASC;"
-
 echo "==> 待处置 zombie pipeline_instance 列表:"
 echo "    id|tenant_id|job_code|pipeline_type|started_at|age_seconds"
-eval $PSQL -c \"$ZOMBIES_SQL\" | sed 's/^/    /'
+psql_file -f "$OPS_SQL_DIR/heal-zombie-pipelines-list.sql" | sed 's/^/    /'
 
-COUNT=$(eval $PSQL -c \"SELECT COUNT\(*\) FROM batch.pipeline_instance WHERE run_status = \'RUNNING\' AND started_at IS NOT NULL AND started_at \< CURRENT_TIMESTAMP - \(${MAX_AGE} \* INTERVAL \'1 second\'\) ${TENANT_FILTER}\;\")
+COUNT=$(psql_file -f "$OPS_SQL_DIR/heal-zombie-pipelines-count.sql")
 COUNT=$(echo "$COUNT" | tr -d '[:space:]')
 echo
 echo "==> 共 $COUNT 行 zombie 待处置"
@@ -89,18 +75,7 @@ if [ "$DRY_RUN" = "true" ]; then
   exit 0
 fi
 
-UPDATE_SQL="
-  UPDATE batch.pipeline_instance
-     SET run_status   = 'FAILED',
-         finished_at  = CURRENT_TIMESTAMP,
-         updated_at   = CURRENT_TIMESTAMP
-   WHERE run_status = 'RUNNING'
-     AND started_at IS NOT NULL
-     AND started_at < CURRENT_TIMESTAMP - (${MAX_AGE} * INTERVAL '1 second')
-     ${TENANT_FILTER}
-   RETURNING id;"
-
 echo
 echo "==> 执行 UPDATE → FAILED..."
-UPDATED=$(eval $PSQL -c \"$UPDATE_SQL\" | wc -l | tr -d '[:space:]')
+UPDATED=$(psql_file -f "$OPS_SQL_DIR/heal-zombie-pipelines-update.sql" | wc -l | tr -d '[:space:]')
 echo "✓ 已转 FAILED: $UPDATED 行"

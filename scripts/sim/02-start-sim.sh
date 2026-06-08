@@ -12,8 +12,8 @@ echo "==> docker compose up sftp + mockserver(network: batch-network)"
 docker compose --env-file "$ENV_FILE" \
   -f docker-compose.yml -f scripts/sim/compose.yml up -d sftp mockserver
 
-echo "==> 等 healthy(30s)..."
-for c in sftp mockserver; do
+echo "==> 等 healthy/ready(30s)..."
+for c in sftp; do
   healthy=0
   for i in $(seq 1 30); do
     status=$(docker inspect "$c" --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
@@ -28,9 +28,22 @@ done
 
 echo "==> 验证 endpoint 联通"
 docker exec sftp /bin/sh -c "ls -d /home/ta/inbound /home/tb/inbound /home/tc/inbound" 2>&1 | head
-# mockserver 镜像没有 curl,从 host 探(端口已发布)。
+# mockserver 镜像的 healthcheck 依赖 /bin/sh,当前镜像没有 shell,会误报 unhealthy。
+# 这里以 host 端口真实 HTTP readiness 为准。
 sm_port="${MOCKSERVER_HOST_PORT:-11080}"
-code=$(curl -s --max-time 30 --connect-timeout 5 -o /dev/null -w "%{http_code}" -X PUT "http://localhost:${sm_port}/mockserver/status" 2>&1)
+code=""
+for i in $(seq 1 30); do
+  code=$(curl -s --max-time 5 --connect-timeout 2 -o /dev/null -w "%{http_code}" -X PUT "http://localhost:${sm_port}/mockserver/status" 2>/dev/null || true)
+  if [[ "$code" == "200" ]]; then
+    echo "  ✓ mockserver HTTP ready"
+    break
+  fi
+  sleep 1
+done
+if [[ "$code" != "200" ]]; then
+  echo "  ✗ mockserver 30s 未 ready(last HTTP=$code)" >&2
+  exit 1
+fi
 echo "  mockserver status: HTTP $code"
 stubs=$(curl -s --max-time 30 --connect-timeout 5 -X PUT "http://localhost:${sm_port}/mockserver/retrieve?type=ACTIVE_EXPECTATIONS&format=JSON" 2>/dev/null \
   | python3 -c "import json,sys;print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)

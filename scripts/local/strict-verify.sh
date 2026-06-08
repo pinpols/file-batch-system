@@ -41,10 +41,15 @@ for arg in "$@"; do
   esac
 done
 
-CONSOLE_PORT="${CONSOLE_PORT:-18080}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+
+CONSOLE_PORT="${CONSOLE_PORT:-$CONSOLE_API_PORT}"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-PG_USER="${PG_USER:-batch_user}"
-PG_DB="${PG_DB:-batch_platform}"
+PG_USER="${PG_USER:-$PGUSER}"
+PG_DB="${PG_DB:-$PLATFORM_DB}"
+VERIFY_TENANT_ID="${VERIFY_TENANT_ID:-$BATCH_DEFAULT_TENANT_ID}"
 BASE="http://localhost:${CONSOLE_PORT}"
 
 # CI 模式关闭 ANSI 颜色(避免 GitHub Actions 日志里 ^[[32m 噪音);本地保留高亮
@@ -287,7 +292,7 @@ hdr "5. cursor token 损坏安全降级"
 # 直接构造坏 token,期望返 200(filter 链鉴权失败 401 也算 — 至少没 500)
 bad=$(curl -s --max-time 30 --connect-timeout 5 -o /tmp/bad.body -w "%{http_code}" -G \
   --data-urlencode "cursor=garbage-not-base64-!@#$%" \
-  --data-urlencode "tenantId=default-tenant" \
+  --data-urlencode "tenantId=${VERIFY_TENANT_ID}" \
   "$BASE/api/console/queries/instances")
 case "$bad" in
   500|502|503)
