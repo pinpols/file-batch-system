@@ -14,6 +14,7 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileArrivalGrou
 import com.example.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileDispatchRecordResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileErrorRecordResponse;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
@@ -84,6 +85,9 @@ public interface ConsoleQueryApplicationService {
   /** 查询文件流水线步骤运行记录。 */
   PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
       FilePipelineStepQueryRequest request);
+
+  /** 查询单个 pipeline instance 的 step 行级进度。 */
+  ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId);
 
   /** 查询文件派发记录。 */
   PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(

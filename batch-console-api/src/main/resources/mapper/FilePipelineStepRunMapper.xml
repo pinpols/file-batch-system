@@ -1,6 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.console.domain.file.mapper.FilePipelineStepRunMapper">
+    <select id="selectTenantIdByPipelineInstanceId" resultType="string">
+        select tenant_id
+        from batch.pipeline_instance
+        where id = #{pipelineInstanceId}
+    </select>
+
+    <select id="selectProgressByPipelineInstance" resultType="map">
+        select
+            s.id as step_id,
+            s.pipeline_instance_id,
+            s.step_code,
+            s.stage_code,
+            pr.processed_count as rows_processed,
+            null::bigint as total_rows_hint,
+            pr.updated_at as last_heartbeat_at
+        from batch.pipeline_step_run s
+        join batch.pipeline_instance p on p.id = s.pipeline_instance_id
+        left join batch.pipeline_progress pr
+          on pr.tenant_id = p.tenant_id
+         and pr.pipeline_instance_id = s.pipeline_instance_id
+         and pr.stage = s.stage_code
+        where p.tenant_id = #{tenantId}
+          and s.pipeline_instance_id = #{pipelineInstanceId}
+        order by s.run_seq asc, s.id asc
+    </select>
+
     <select id="selectByQuery" resultType="map">
         select
             s.id,

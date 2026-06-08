@@ -15,6 +15,7 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileArrivalGrou
 import com.example.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileDispatchRecordResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileErrorRecordResponse;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
@@ -169,6 +170,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
       FilePipelineStepQueryRequest request) {
     return fileQueryService.filePipelineSteps(request);
+  }
+
+  @Override
+  public ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId) {
+    return fileQueryService.pipelineProgress(pipelineInstanceId);
   }
 
   @Override

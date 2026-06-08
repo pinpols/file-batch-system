@@ -3199,23 +3199,16 @@ paths:
   /api/console/queries/pipeline-progress:
     get:
       tags: [Queries]
-      summary: 2026-06-03 拉取一组 worker 当前的 pipeline stage 行级进度(仅 IMPORT LOAD 流式 stage 在跑时有值)
+      summary: 按 pipelineInstanceId 拉取当前 pipeline step 行级进度
       operationId: queryPipelineProgress
       parameters:
-        - name: tenantId
+        - name: pipelineInstanceId
           in: query
           required: true
-          schema: { type: string }
-        - name: workerCodes
-          in: query
-          required: true
-          description: 逗号分隔的 workerCode 列表(Spring 自动按 comma split)
-          schema:
-            type: array
-            items: { type: string }
+          schema: { type: integer, format: int64 }
       responses:
         '200':
-          description: Pipeline progress list(仅含有进度的 worker;无进度 / 已过期 5min 不出现)
+          description: Pipeline step progress snapshot
           content:
             application/json:
               schema:
@@ -3224,14 +3217,21 @@ paths:
                   code: { type: string }
                   message: { type: string }
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        workerCode: { type: string }
-                        rowsProcessed: { type: integer, format: int64, nullable: true }
-                        totalRowsHint: { type: integer, format: int64, nullable: true }
-                        heartbeatAt: { type: string, format: date-time }
+                    type: object
+                    properties:
+                      pipelineInstanceId: { type: integer, format: int64 }
+                      steps:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            stepId: { type: integer, format: int64 }
+                            pipelineInstanceId: { type: integer, format: int64 }
+                            stepCode: { type: string }
+                            stageCode: { type: string }
+                            rowsProcessed: { type: integer, format: int64, nullable: true }
+                            totalRowsHint: { type: integer, format: int64, nullable: true }
+                            lastHeartbeatAt: { type: integer, format: int64, nullable: true }
   /api/console/queries/alerts:
     get:
       tags: [Queries]
