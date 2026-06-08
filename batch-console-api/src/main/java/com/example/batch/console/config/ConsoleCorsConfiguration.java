@@ -50,7 +50,8 @@ public class ConsoleCorsConfiguration {
             HttpHeaders.ACCEPT,
             "X-Tenant-Id",
             "X-Idempotency-Key",
-            "X-Request-Id"));
+            "X-Request-Id",
+            "X-XSRF-TOKEN"));
     cfg.setExposedHeaders(List.of("X-Request-Id", "X-Trace-Id"));
     cfg.setAllowCredentials(true); // HttpOnly cookie 必需
     cfg.setMaxAge(3600L); // preflight 缓存 1h

@@ -21,9 +21,13 @@
 | `streaming-enabled` | `true` | `BATCH_WORKER_IMPORT_STREAMING_ENABLED` / `BATCH_WORKER_EXPORT_STREAMING_ENABLED` |
 | `page-size` | `1000` | `BATCH_WORKER_IMPORT_PAGE_SIZE` / `BATCH_WORKER_EXPORT_PAGE_SIZE` |
 | `fetch-size` | `1000` | `BATCH_WORKER_IMPORT_FETCH_SIZE` / `BATCH_WORKER_EXPORT_FETCH_SIZE` |
-| `chunk-size` | `500` | `BATCH_WORKER_IMPORT_CHUNK_SIZE` / `BATCH_WORKER_EXPORT_CHUNK_SIZE` |
+| Import `chunk-size` | `2000` | `BATCH_WORKER_IMPORT_CHUNK_SIZE` |
+| Import `max-chunk-size` | `10000` | `BATCH_WORKER_IMPORT_MAX_CHUNK_SIZE` |
+| Import `jdbc-mapped.strict-idempotency` | `true` | `BATCH_WORKER_IMPORT_JDBC_MAPPED_STRICT_IDEMPOTENCY` |
+| Export `chunk-size` | `500` | `BATCH_WORKER_EXPORT_CHUNK_SIZE` |
 
-模板若配置 `chunk_size`，导入 `LoadStep` / 导出 `GenerateStep` 会优先使用模板值。
+模板若配置 `chunk_size`，导入 `LoadStep` / 导出 `GenerateStep` 会优先使用模板值；导入侧受
+`max-chunk-size` 上限约束，避免 COPY / 宽表场景在 JVM 内构造过大的单 chunk 缓冲。
 
 ## Orchestrator 摘录
 

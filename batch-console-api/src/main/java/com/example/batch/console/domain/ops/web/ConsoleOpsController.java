@@ -10,7 +10,6 @@ import com.example.batch.console.domain.ops.web.response.ConsoleOutboxCleanupRes
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxStatsResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import com.example.batch.console.support.web.Idempotent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -40,19 +39,12 @@ public class ConsoleOpsController {
   private final ConsoleOutboxOpsApplicationService outboxOpsService;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleKafkaLagQueryService kafkaLagQueryService;
-  private final ConsoleQueryCacheService cacheService;
 
   /** 租户运维摘要（Redis 缓存 10s，避免多用户同时刷导致 DB 重复聚合）。 */
   @GetMapping("/summary")
   public CommonResponse<ConsoleOpsSummaryResponse> summary(
       @RequestParam @NotBlank String tenantId) {
-    ConsoleOpsSummaryResponse result =
-        cacheService.getOrLoad(
-            "dashboard:" + tenantId + ":summary",
-            ConsoleQueryCacheService.DASHBOARD_TTL,
-            ConsoleOpsSummaryResponse.class,
-            () -> opsApplicationService.summary(tenantId));
-    return responseFactory.success(result);
+    return responseFactory.success(opsApplicationService.summary(tenantId));
   }
 
   /** Kafka consumer group 积压查询。 */

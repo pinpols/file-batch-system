@@ -7,6 +7,8 @@ import com.example.batch.console.domain.job.mapper.JobInstanceMapper;
 import com.example.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,19 +30,36 @@ public class ConsoleClusterDiagnosticService {
   private final ConsoleClusterDiagnosticMapper diagnosticMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
   private final JobInstanceMapper jobInstanceMapper;
+  private final ConsoleQueryCacheService cacheService;
 
   public Map<String, Object> diagnose(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "diagnostic:" + resolved + ":all",
+        ConsoleQueryCacheService.DIAGNOSTIC_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadDiagnose(resolved));
+  }
+
+  private Map<String, Object> loadDiagnose(String resolved) {
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("shedLock", shedLockStatus(resolved));
-    result.put("workers", workerConsistency(resolved));
-    result.put("outbox", outboxHealth(resolved));
-    result.put("terminalChildren", terminalChildrenHealth(resolved));
+    result.put("shedLock", loadShedLockStatus(resolved));
+    result.put("workers", loadWorkerConsistency(resolved));
+    result.put("outbox", loadOutboxHealth(resolved));
+    result.put("terminalChildren", loadTerminalChildrenHealth(resolved));
     return result;
   }
 
   public Map<String, Object> shedLockStatus(String tenantId) {
-    tenantGuard.resolveTenant(tenantId);
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "diagnostic:" + resolved + ":shedlock",
+        ConsoleQueryCacheService.DIAGNOSTIC_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadShedLockStatus(resolved));
+  }
+
+  private Map<String, Object> loadShedLockStatus(String resolved) {
     List<Map<String, Object>> locks =
         diagnosticMapper.shedlockAll().stream()
             .map(
@@ -63,6 +82,14 @@ public class ConsoleClusterDiagnosticService {
 
   public Map<String, Object> workerConsistency(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "diagnostic:" + resolved + ":workers",
+        ConsoleQueryCacheService.DIAGNOSTIC_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadWorkerConsistency(resolved));
+  }
+
+  private Map<String, Object> loadWorkerConsistency(String resolved) {
     long online = workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.ONLINE.code());
     long draining =
         workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.DRAINING.code());
@@ -98,6 +125,14 @@ public class ConsoleClusterDiagnosticService {
 
   public Map<String, Object> outboxHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "diagnostic:" + resolved + ":outbox",
+        ConsoleQueryCacheService.DIAGNOSTIC_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadOutboxHealth(resolved));
+  }
+
+  private Map<String, Object> loadOutboxHealth(String resolved) {
     List<Map<String, Object>> stats =
         diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
             .map(
@@ -132,6 +167,14 @@ public class ConsoleClusterDiagnosticService {
 
   public Map<String, Object> terminalChildrenHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "diagnostic:" + resolved + ":terminal-children",
+        ConsoleQueryCacheService.DIAGNOSTIC_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadTerminalChildrenHealth(resolved));
+  }
+
+  private Map<String, Object> loadTerminalChildrenHealth(String resolved) {
     long terminalInstancesWithActiveChildren =
         valueOrZero(diagnosticMapper.countTerminalInstancesWithActiveChildren(resolved));
     Map<String, Object> result = new LinkedHashMap<>();

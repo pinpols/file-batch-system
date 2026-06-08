@@ -2,6 +2,7 @@ package com.example.batch.console.support.cache;
 
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.time.Duration;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,12 @@ public class ConsoleQueryCacheService {
   /** Dashboard 汇总。 */
   public static final Duration DASHBOARD_TTL = Duration.ofSeconds(10);
 
+  /** 诊断页聚合。 */
+  public static final Duration DIAGNOSTIC_TTL = Duration.ofSeconds(10);
+
+  /** Kafka lag 查询。 */
+  public static final Duration KAFKA_LAG_TTL = Duration.ofSeconds(10);
+
   /** 调度快照。 */
   public static final Duration SNAPSHOT_TTL = Duration.ofSeconds(30);
 
@@ -68,6 +75,32 @@ public class ConsoleQueryCacheService {
    * @param loader 缓存未命中时的数据加载器
    */
   public <T> T getOrLoad(String cacheKey, Duration ttl, Class<T> resultType, Supplier<T> loader) {
+    String fullKey = PREFIX + cacheKey;
+    try {
+      String cached = redisTemplate.opsForValue().get(fullKey);
+      if (Texts.hasText(cached)) {
+        return JsonUtils.fromJson(cached, resultType);
+      }
+    } catch (Exception e) {
+      log.debug("cache read failed, falling back to db: key={}", fullKey, e);
+    }
+    T result = loader.get();
+    try {
+      if (result != null) {
+        redisTemplate.opsForValue().set(fullKey, JsonUtils.toJson(result), ttl);
+      }
+    } catch (Exception e) {
+      log.debug("cache write failed: key={}", fullKey, e);
+    }
+    return result;
+  }
+
+  /**
+   * 查询缓存的泛型版本：用于 {@code List<Foo>} / {@code Map<String, Foo>} 等参数化返回值，避免命中缓存后 退化成 {@code
+   * List<LinkedHashMap>}。
+   */
+  public <T> T getOrLoad(
+      String cacheKey, Duration ttl, TypeReference<T> resultType, Supplier<T> loader) {
     String fullKey = PREFIX + cacheKey;
     try {
       String cached = redisTemplate.opsForValue().get(fullKey);

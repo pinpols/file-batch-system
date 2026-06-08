@@ -11,6 +11,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,15 +28,34 @@ import org.springframework.stereotype.Component;
 public class TaskExecutionPool {
 
   private final WorkerExecutionTimeoutProperties properties;
+  private final Environment environment;
   private ExecutorService delegate;
 
-  public TaskExecutionPool(WorkerExecutionTimeoutProperties properties) {
+  public TaskExecutionPool(WorkerExecutionTimeoutProperties properties, Environment environment) {
     this.properties = properties;
+    this.environment = environment;
   }
 
   @PostConstruct
   void start() {
     int size = Math.max(1, properties.getPoolSize());
+    if (environment != null) {
+      int maxConcurrentTasks =
+          environment.getProperty("batch.worker.max-concurrent-tasks", Integer.class, 8);
+      if (maxConcurrentTasks <= 0) {
+        throw new IllegalStateException(
+            "batch.worker.max-concurrent-tasks must be positive, got " + maxConcurrentTasks);
+      }
+      if (size < maxConcurrentTasks) {
+        throw new IllegalStateException(
+            "batch.worker.execution.pool-size must be >= batch.worker.max-concurrent-tasks"
+                + " (poolSize="
+                + size
+                + ", maxConcurrentTasks="
+                + maxConcurrentTasks
+                + ")");
+      }
+    }
     AtomicLong threadIndex = new AtomicLong();
     this.delegate =
         Executors.newFixedThreadPool(

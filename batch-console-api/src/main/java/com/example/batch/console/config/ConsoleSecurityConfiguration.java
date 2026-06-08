@@ -1,5 +1,6 @@
 package com.example.batch.console.config;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.domain.rbac.support.ConsoleAuthenticationFilter;
@@ -9,6 +10,11 @@ import com.example.batch.console.domain.rbac.support.ConsoleSecurityResponseWrit
 import com.example.batch.console.support.maintenance.MaintenanceModeFilter;
 import com.example.batch.console.support.ratelimit.ConsoleRateLimitFilter;
 import com.example.batch.console.support.ratelimit.SlidingWindowRateLimiter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +27,11 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
 @EnableMethodSecurity
@@ -29,6 +39,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 public class ConsoleSecurityConfiguration {
 
   private final ConsoleSecurityProperties properties;
+  private final BatchSecurityProperties batchSecurityProperties;
 
   @Bean
   public ConsoleRateLimitFilter consoleRateLimitFilter(
@@ -48,9 +59,27 @@ public class ConsoleSecurityConfiguration {
       ConsoleSecurityHeadersWriter securityHeadersWriter,
       CorsConfigurationSource consoleCorsConfigurationSource)
       throws Exception {
-    return http.cors(cors -> cors.configurationSource(consoleCorsConfigurationSource))
-        .csrf(AbstractHttpConfigurer::disable)
-        .sessionManagement(
+    http.cors(cors -> cors.configurationSource(consoleCorsConfigurationSource));
+    if (batchSecurityProperties.isBypassMode()) {
+      http.csrf(AbstractHttpConfigurer::disable);
+    } else {
+      // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
+      // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
+      http.csrf(
+          csrf ->
+              csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                  .ignoringRequestMatchers(
+                      "/actuator/**",
+                      "/api/console/auth/login",
+                      "/api/console/auth/logout",
+                      "/api/console/auth/public-key",
+                      "/api/console/auth/token",
+                      "/api/console/push/vapid-public-key",
+                      "/api/console/files/fs-download",
+                      "/console-login.html",
+                      "/favicon.ico"));
+    }
+    return http.sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .headers(headers -> headers.addHeaderWriter(securityHeadersWriter))
         // R6 P0-3：禁用 Spring Security HTTP Basic。
@@ -99,6 +128,7 @@ public class ConsoleSecurityConfiguration {
                     .authenticated())
         // Auth 先建立 SecurityContext，MaintenanceModeFilter 才能识别 ROLE_ADMIN 旁路；
         // rate limit 仍放在维护拦截之后，维护期被挡请求不消耗限流窗口。
+        .addFilterAfter(new CsrfCookieMaterializeFilter(), CsrfFilter.class)
         .addFilterBefore(consoleAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
         .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
@@ -122,5 +152,19 @@ public class ConsoleSecurityConfiguration {
             HttpStatus.FORBIDDEN,
             ResultCode.FORBIDDEN,
             CommonErrorMessages.ACCESS_DENIED);
+  }
+
+  /** Spring Security 6 默认延迟生成 CSRF token;SPA 需要在首次 GET 时拿到 XSRF-TOKEN cookie。 */
+  private static final class CsrfCookieMaterializeFilter extends OncePerRequestFilter {
+    @Override
+    protected void doFilterInternal(
+        HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        throws ServletException, IOException {
+      CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+      if (csrfToken != null) {
+        csrfToken.getToken();
+      }
+      filterChain.doFilter(request, response);
+    }
   }
 }

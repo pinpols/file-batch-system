@@ -1,6 +1,8 @@
 package com.example.batch.console.domain.ops.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -12,8 +14,11 @@ import com.example.batch.console.domain.observability.view.cluster.DeliveryStatu
 import com.example.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import com.example.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +28,7 @@ class ConsoleClusterDiagnosticServiceTest {
   private ConsoleClusterDiagnosticMapper diagnosticMapper;
   private WorkerRegistryMapper workerRegistryMapper;
   private JobInstanceMapper jobInstanceMapper;
+  private ConsoleQueryCacheService cacheService;
   private ConsoleClusterDiagnosticService service;
 
   @BeforeEach
@@ -31,9 +37,17 @@ class ConsoleClusterDiagnosticServiceTest {
     diagnosticMapper = mock(ConsoleClusterDiagnosticMapper.class);
     workerRegistryMapper = mock(WorkerRegistryMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
+    cacheService = passThroughCache();
     service =
         new ConsoleClusterDiagnosticService(
-            tenantGuard, diagnosticMapper, workerRegistryMapper, jobInstanceMapper);
+            tenantGuard, diagnosticMapper, workerRegistryMapper, jobInstanceMapper, cacheService);
+  }
+
+  private static ConsoleQueryCacheService passThroughCache() {
+    ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
+    when(cache.getOrLoad(anyString(), any(), any(TypeReference.class), any()))
+        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
+    return cache;
   }
 
   @Test

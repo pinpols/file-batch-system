@@ -8,6 +8,7 @@ import com.example.batch.console.domain.ops.web.response.ConsoleOutboxCleanupRes
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxStatsResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -28,12 +29,18 @@ public class DefaultConsoleOutboxOpsApplicationService
   private final ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final ConsoleOrchestratorProxyService orchestratorProxy;
+  private final ConsoleQueryCacheService cacheService;
 
   @Override
   public ConsoleOutboxStatsResponse stats(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return new ConsoleOutboxStatsResponse(
-        resolved, consoleOutboxEventReadMapper.statsByStatus(resolved));
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":outbox-stats",
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        ConsoleOutboxStatsResponse.class,
+        () ->
+            new ConsoleOutboxStatsResponse(
+                resolved, consoleOutboxEventReadMapper.statsByStatus(resolved)));
   }
 
   @Override
@@ -43,6 +50,7 @@ public class DefaultConsoleOutboxOpsApplicationService
     int pub = result.getOrDefault("published", 0);
     int giveUp = result.getOrDefault("giveUp", 0);
     domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-cleanup");
+    cacheService.evictDashboard(resolved);
     return new ConsoleOutboxCleanupResponse(resolved, retainDays, pub, giveUp);
   }
 
@@ -53,6 +61,7 @@ public class DefaultConsoleOutboxOpsApplicationService
     int reset = result.getOrDefault("reset", 0);
     domainEventPublisher.publishChanged(resolved, "outbox-retries", "outbox-republish");
     domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-republish");
+    cacheService.evictDashboard(resolved);
     return new ConsoleOutboxRepublishResponse(resolved, ids.size(), reset);
   }
 }

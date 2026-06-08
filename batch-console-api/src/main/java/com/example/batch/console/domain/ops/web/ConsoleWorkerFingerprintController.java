@@ -1,10 +1,9 @@
 package com.example.batch.console.domain.ops.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.domain.ops.mapper.WorkerFingerprintMapper;
+import com.example.batch.console.domain.ops.service.ConsoleWorkerFingerprintQueryService;
 import com.example.batch.console.domain.ops.web.response.WorkerFingerprintResponse;
 import com.example.batch.console.domain.ops.web.response.WorkerFingerprintSummaryResponse;
-import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -30,8 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleWorkerFingerprintController {
 
-  private final WorkerFingerprintMapper mapper;
-  private final ConsoleTenantGuard tenantGuard;
+  private final ConsoleWorkerFingerprintQueryService queryService;
   private final ConsoleResponseFactory responseFactory;
 
   /**
@@ -41,12 +39,7 @@ public class ConsoleWorkerFingerprintController {
   @GetMapping
   public CommonResponse<List<WorkerFingerprintResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    List<WorkerFingerprintResponse> data =
-        mapper.selectFingerprintsByTenant(resolved).stream()
-            .map(WorkerFingerprintResponse::from)
-            .toList();
-    return responseFactory.success(data);
+    return responseFactory.success(queryService.list(tenantId));
   }
 
   /**
@@ -56,11 +49,6 @@ public class ConsoleWorkerFingerprintController {
   @GetMapping("/summary")
   public CommonResponse<List<WorkerFingerprintSummaryResponse>> summary(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    List<WorkerFingerprintSummaryResponse> data =
-        mapper.selectFingerprintSummaryByTenant(resolved).stream()
-            .map(WorkerFingerprintSummaryResponse::from)
-            .toList();
-    return responseFactory.success(data);
+    return responseFactory.success(queryService.summary(tenantId));
   }
 }

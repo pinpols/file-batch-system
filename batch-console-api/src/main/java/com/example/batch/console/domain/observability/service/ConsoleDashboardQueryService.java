@@ -4,6 +4,8 @@ import com.example.batch.console.domain.observability.mapper.ConsoleDashboardQue
 import com.example.batch.console.domain.observability.view.dashboard.SlaStatsView;
 import com.example.batch.console.domain.observability.view.dashboard.StatusCountView;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,15 +25,27 @@ public class ConsoleDashboardQueryService {
 
   private final ConsoleDashboardQueryMapper repository;
   private final ConsoleTenantGuard tenantGuard;
+  private final ConsoleQueryCacheService cacheService;
 
   public ConsoleDashboardQueryService(
-      ConsoleDashboardQueryMapper repository, ConsoleTenantGuard tenantGuard) {
+      ConsoleDashboardQueryMapper repository,
+      ConsoleTenantGuard tenantGuard,
+      ConsoleQueryCacheService cacheService) {
     this.repository = repository;
     this.tenantGuard = tenantGuard;
+    this.cacheService = cacheService;
   }
 
   public Map<String, Object> jobStats(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":job-stats:" + days,
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadJobStats(resolved, days));
+  }
+
+  private Map<String, Object> loadJobStats(String resolved, int days) {
     Map<String, Object> result = new LinkedHashMap<>();
     Map<String, Long> byStatus = new LinkedHashMap<>();
     long total = 0L;
@@ -59,6 +73,14 @@ public class ConsoleDashboardQueryService {
 
   public Map<String, Object> triggerStats(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":trigger-stats:" + days,
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadTriggerStats(resolved, days));
+  }
+
+  private Map<String, Object> loadTriggerStats(String resolved, int days) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put(
         "byTriggerType",
@@ -87,6 +109,14 @@ public class ConsoleDashboardQueryService {
 
   public Map<String, Object> workerLoad(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":worker-load",
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadWorkerLoad(resolved));
+  }
+
+  private Map<String, Object> loadWorkerLoad(String resolved) {
     Map<String, Object> result = new LinkedHashMap<>();
     // 以下三个聚合查询的分组列（status / workerGroup / workerCode）DB 侧允许 null，
     // 但 Map.of(...) 禁止 null value —— 用 LinkedHashMap 容错 + UNKNOWN 占位。
@@ -131,6 +161,14 @@ public class ConsoleDashboardQueryService {
 
   public Map<String, Object> alertTrend(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":alert-trend:" + days,
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadAlertTrend(resolved, days));
+  }
+
+  private Map<String, Object> loadAlertTrend(String resolved, int days) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put(
         "bySeverity",
@@ -188,6 +226,14 @@ public class ConsoleDashboardQueryService {
 
   public Map<String, Object> tenantUsage(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":tenant-usage:" + days,
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadTenantUsage(resolved, days));
+  }
+
+  private Map<String, Object> loadTenantUsage(String resolved, int days) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("tenantId", resolved);
     result.put("jobDefinitions", nullToZero(repository.countJobDefinitions(resolved)));
@@ -207,6 +253,14 @@ public class ConsoleDashboardQueryService {
 
   public Map<String, Object> slaReport(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":sla-report:" + days,
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadSlaReport(resolved, days));
+  }
+
+  private Map<String, Object> loadSlaReport(String resolved, int days) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("tenantId", resolved);
     result.put("periodDays", days);
@@ -234,6 +288,14 @@ public class ConsoleDashboardQueryService {
 
   public Map<String, Object> slaCompliance(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolved + ":sla-compliance:" + days,
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        new TypeReference<Map<String, Object>>() {},
+        () -> loadSlaCompliance(resolved, days));
+  }
+
+  private Map<String, Object> loadSlaCompliance(String resolved, int days) {
     Map<String, Object> result = new LinkedHashMap<>();
     SlaStatsView stats = repository.slaStats(resolved, days);
     result.put("breached", stats == null || stats.breached() == null ? 0L : stats.breached());

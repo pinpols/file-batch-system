@@ -7,6 +7,7 @@
 | batch-console-api | 跨实例 SSE 事件广播 | Redis Pub/Sub |
 | batch-console-api | SSE 断线补偿回放缓冲 | Redis List + TTL |
 | batch-console-api | 控制台单会话版本控制 | Redis String + TTL |
+| batch-console-api | 控制台高频查询缓存 | Redis JSON String + TTL |
 | batch-orchestrator | 集群级租户速率限制 | Redis String(`INCR` + `EXPIRE`) |
 | batch-orchestrator | Outbox 发布熔断共享状态 | Redis Hash + Lua |
 | batch-orchestrator | ShedLock 集群锁 | Redis String(`SET NX PX`) |
@@ -20,6 +21,11 @@
 | `batch:console:realtime` | 控制台 realtime Pub/Sub 频道 | 所有 `console-api` 实例都订阅 |
 | `batch:console:realtime:buffer:{tenantId}:{stream}` | tenant + stream 维度 replay buffer | 默认 `20_000` 条，TTL `24h` |
 | `batch:console:auth:session:{tenantId}:{username}` | 控制台登录单会话版本号 | 结合 JWT `sessionVersion` 校验 |
+| `console:cache:dashboard:{tenantId}:*` | 控制台 dashboard / outbox 统计缓存 | 默认 TTL `10s` |
+| `console:cache:diagnostic:{tenantId}:*` | 控制台集群诊断缓存 | 默认 TTL `10s` |
+| `console:cache:kafka-lag:{groupId|all}` | Kafka lag 查询缓存 | 默认 TTL `10s` |
+| `console:cache:snapshot:{tenantId}:history:{limit}` | 调度快照历史缓存 | 默认 TTL `30s` |
+| `console:cache:workers:{tenantId}:*` | Worker 自托管 / 指纹只读缓存 | 默认 TTL `10s` |
 | `ratelimit:{tenantId}:{action}:{windowStartEpochSecond}` | 固定窗口速率限制 | 60s 窗口 |
 | `circuit:outbox_publish` | Outbox 熔断状态 | fields: `failedPolls/openUntilMs` |
 | `shedlock:{environment}:{name}` | ShedLock 分布式锁 | value 为随机 token |
@@ -153,6 +159,42 @@ TTL:   batch.console.security.session-state-ttl
 
 - `batch-console-api/.../ConsoleSessionRegistry.java`
 - `batch-console-api/.../ConsoleJwtService.java`
+
+### 8. 控制台高频查询缓存
+
+`ConsoleQueryCacheService` 统一承接控制台读热点缓存，Redis 不可用时 fail-open 到原查询链路。
+
+当前已接入：
+
+- `/api/console/ops/summary`
+- `/api/console/dashboard/{job-stats,trigger-stats,worker-load,alert-trend,sla-compliance,sla-report,tenant-usage}`
+- `/api/console/ops/outbox/stats`
+- `/api/console/ops/kafka-lag`
+- `/api/console/ops/cluster-diagnostic/**`
+- `/api/console/scheduler/snapshot`
+- `/api/console/scheduler/snapshot/history`
+- `/api/console/my-workers/**`
+- `/api/console/workers/fingerprints/**`
+
+默认 TTL：
+
+- dashboard / outbox stats / Kafka lag / cluster diagnostic / worker 指纹：`10s`
+- scheduler snapshot / history：`30s`
+- meta enums：`30m`
+- meta options：`5m`
+
+写操作主动失效：
+
+- 配置变更：清理 meta options / orchestrator config cache。
+- Outbox cleanup / republish：清理对应租户 `dashboard:{tenantId}:*` 缓存。
+
+实现文件：
+
+- `batch-console-api/.../support/cache/ConsoleQueryCacheService.java`
+- `batch-console-api/.../domain/observability/web/ConsoleDashboardController.java`
+- `batch-console-api/.../domain/ops/web/ConsoleOpsController.java`
+- `batch-console-api/.../domain/ops/web/ConsoleClusterDiagnosticController.java`
+- `batch-console-api/.../domain/job/web/ConsoleSchedulerSnapshotController.java`
 
 ## Redis 监控设计
 

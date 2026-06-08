@@ -1,6 +1,10 @@
 package com.example.batch.console.domain.ops.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.JobInstanceStatus;
@@ -13,32 +17,27 @@ import com.example.batch.console.domain.ops.mapper.OutboxRetryLogMapper;
 import com.example.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import com.example.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith(MockitoExtension.class)
 class DefaultConsoleOpsApplicationServiceTest {
-
-  @Mock private ConsoleTenantGuard tenantGuard;
-
-  @Mock private ApprovalCommandMapper approvalCommandMapper;
-
-  @Mock private JobInstanceMapper jobInstanceMapper;
-
-  @Mock private WorkerRegistryMapper workerRegistryMapper;
-
-  @Mock private OutboxRetryLogMapper outboxRetryLogMapper;
-
-  @Mock private OutboxDeliveryLogMapper outboxDeliveryLogMapper;
-
-  @Mock private AlertEventMapper alertEventMapper;
 
   @Test
   void shouldAggregateOpsSummaryByTenant() {
+    ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+    ApprovalCommandMapper approvalCommandMapper = mock(ApprovalCommandMapper.class);
+    JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
+    WorkerRegistryMapper workerRegistryMapper = mock(WorkerRegistryMapper.class);
+    OutboxRetryLogMapper outboxRetryLogMapper = mock(OutboxRetryLogMapper.class);
+    OutboxDeliveryLogMapper outboxDeliveryLogMapper = mock(OutboxDeliveryLogMapper.class);
+    AlertEventMapper alertEventMapper = mock(AlertEventMapper.class);
+    ConsoleQueryCacheService cacheService = mock(ConsoleQueryCacheService.class);
+
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(cacheService.getOrLoad(anyString(), any(), eq(ConsoleOpsSummaryResponse.class), any()))
+        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
     when(approvalCommandMapper.countByStatus("tenant-a", "PENDING")).thenReturn(4L);
     when(alertEventMapper.countByStatus("tenant-a", "OPEN")).thenReturn(6L);
     when(alertEventMapper.countBySeverityAndStatus("tenant-a", "CRITICAL", "OPEN")).thenReturn(2L);
@@ -77,7 +76,8 @@ class DefaultConsoleOpsApplicationServiceTest {
             workerRegistryMapper,
             outboxRetryLogMapper,
             outboxDeliveryLogMapper,
-            alertEventMapper);
+            alertEventMapper,
+            cacheService);
 
     ConsoleOpsSummaryResponse response = service.summary("tenant-a");
 

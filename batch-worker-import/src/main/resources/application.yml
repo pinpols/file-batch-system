@@ -74,10 +74,14 @@ batch:
         # 参数上限拆分,超宽表安全)。chunk 越大重试粒度越粗(ADR-038 续跑 checkpoint per chunk),
         # 2000 是吞吐/重试粒度的折中。
         chunk-size: ${BATCH_WORKER_IMPORT_CHUNK_SIZE:2000}
+        # 模板 chunk_size 上限。COPY 路径当前仍会在 JVM 内构造单 chunk CSV,宽表/大文本列必须限峰值。
+        max-chunk-size: ${BATCH_WORKER_IMPORT_MAX_CHUNK_SIZE:10000}
       jdbc-mapped:
         # 允许访问的业务 schema 白名单（防止误写/越权）
         allowed-schemas:
           - biz
+        # 生产默认强制 jdbc_mapped_import 模板声明 conflict_columns,保证 checkpoint/lease 重跑不双写。
+        strict-idempotency: ${BATCH_WORKER_IMPORT_JDBC_MAPPED_STRICT_IDEMPOTENCY:true}
       skip:
         # 跳过策略：允许在可控范围内“跳过错误继续跑”，提高批处理鲁棒性
         enabled: ${BATCH_WORKER_IMPORT_SKIP_ENABLED:false}

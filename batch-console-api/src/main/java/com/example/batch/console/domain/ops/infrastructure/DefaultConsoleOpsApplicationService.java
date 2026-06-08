@@ -11,6 +11,7 @@ import com.example.batch.console.domain.ops.mapper.OutboxRetryLogMapper;
 import com.example.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import com.example.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,11 +36,20 @@ public class DefaultConsoleOpsApplicationService implements ConsoleOpsApplicatio
   private final OutboxRetryLogMapper outboxRetryLogMapper;
   private final OutboxDeliveryLogMapper outboxDeliveryLogMapper;
   private final AlertEventMapper alertEventMapper;
+  private final ConsoleQueryCacheService cacheService;
 
   /** 按租户聚合运维摘要指标。 */
   @Override
   public ConsoleOpsSummaryResponse summary(String tenantId) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "dashboard:" + resolvedTenantId + ":summary",
+        ConsoleQueryCacheService.DASHBOARD_TTL,
+        ConsoleOpsSummaryResponse.class,
+        () -> loadSummary(resolvedTenantId));
+  }
+
+  private ConsoleOpsSummaryResponse loadSummary(String resolvedTenantId) {
     OpsSummaryMetrics metrics =
         new OpsSummaryMetrics(
             approvalCommandMapper.countByStatus(resolvedTenantId, "PENDING"),
