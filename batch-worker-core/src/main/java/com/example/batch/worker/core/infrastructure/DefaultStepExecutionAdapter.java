@@ -48,6 +48,8 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
   /** payload 里携带执行器子类型的字段名(SPI 协议)。 */
   private static final String PARAM_TASK_TYPE = "taskType";
 
+  private static final String OUTPUT_ERROR_CODE = "error_code";
+
   /**
    * executionContext 里原始 payload(JSON 字符串)的键,见 {@code
    * DefaultTaskExecutionWrapper#buildExecutionContext}。
@@ -120,6 +122,12 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     if (result.success()) {
       return StepExecutionResponse.successResponse();
     }
-    return new StepExecutionResponse(false, "TASK_FAILED", result.message());
+    String code = "TASK_FAILED";
+    Map<String, Object> output = result.output();
+    Object reportedCode = output == null ? null : output.get(OUTPUT_ERROR_CODE);
+    if (reportedCode instanceof String text && !text.isBlank()) {
+      code = text.trim();
+    }
+    return new StepExecutionResponse(false, code, result.message());
   }
 }

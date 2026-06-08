@@ -3,8 +3,7 @@
 # run-worker-business-scenario-matrix.sh
 #
 # 本地真实上下游 worker 业务场景矩阵统一入口。
-# 默认只运行已稳定的小矩阵 Stage 2/3/4；Stage 1 基线、Stage 5 故障分支、
-# Stage 6 trigger 去重需显式选择。
+# 默认运行已稳定的小矩阵 Stage 2/2b/2c/3/3b/3c/4/4b/4c/5/5c/6/6c；Stage 1 基线需显式选择。
 # =========================================================
 set -euo pipefail
 
@@ -21,17 +20,20 @@ usage() {
   cat <<'USAGE'
 Usage:
   PROFILE=smoke bash load-tests/scripts/run-worker-business-scenario-matrix.sh
-  STAGES=2,3,4 bash load-tests/scripts/run-worker-business-scenario-matrix.sh
+  STAGES=2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c bash load-tests/scripts/run-worker-business-scenario-matrix.sh
   STAGES=1,2,3,4 bash load-tests/scripts/run-worker-business-scenario-matrix.sh
 
 Profiles:
-  smoke  Stage 2/3/4: import/export/process 小矩阵
+  smoke  Stage 2/2b/2c/3/3b/3c/4/4b/4c/5/5c/6/6c: worker 业务小矩阵
   stage1 Stage 1: sim 主链路 baseline
-  full   Stage 1/2/3/4; Stage 5/6 暂不默认纳入
+  full   Stage 1 + smoke
 
 Notes:
-  Stage 5 含外部失败 / retry / SSRF 安全闸语义，后续沉淀为 failure profile。
-  Stage 6 trigger 去重为单条手工矩阵，保留在报告中，不默认重复触发。
+  Stage 2d 需要 worker-import 以 skip profile 启动:
+    BATCH_WORKER_IMPORT_SKIP_ENABLED=true
+    BATCH_WORKER_IMPORT_SKIP_THRESHOLD_MODE=ABSOLUTE
+    BATCH_WORKER_IMPORT_SKIP_MAX_SKIP_COUNT=1
+  Atomic HTTP 真成功通过 Stage 5c 使用非 loopback endpoint 覆盖。
 USAGE
 }
 
@@ -42,13 +44,13 @@ fi
 
 case "$PROFILE" in
   smoke)
-    DEFAULT_STAGES="2,3,4"
+    DEFAULT_STAGES="2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c"
     ;;
   stage1)
     DEFAULT_STAGES="1"
     ;;
   full)
-    DEFAULT_STAGES="1,2,3,4"
+    DEFAULT_STAGES="1,2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c"
     ;;
   *)
     echo "unknown PROFILE=$PROFILE" >&2
@@ -103,25 +105,44 @@ for stage in "${STAGE_LIST[@]}"; do
     2)
       RUN_ID="import-stage2-$RUN_ID" run_stage 2 "import XML/FIXED_WIDTH" bash scripts/sim/08-import-stage2.sh
       ;;
+    2b)
+      RUN_ID="import-stage2b-$RUN_ID" run_stage 2b "import UPSERT/LOAD failure/partition guard" bash scripts/sim/11-import-stage2b.sh
+      ;;
+    2c)
+      RUN_ID="import-stage2c-$RUN_ID" run_stage 2c "import APPEND/UPSERT/partition replace matrix" bash scripts/sim/17-import-stage2c.sh
+      ;;
+    2d)
+      RUN_ID="import-stage2d-$RUN_ID" run_stage 2d "import bad-record skip threshold" bash scripts/sim/23-import-stage2d.sh
+      ;;
     3)
       RUN_ID="export-stage3-$RUN_ID" run_stage 3 "export JSON/FIXED_WIDTH/EXCEL" bash scripts/sim/09-export-stage3.sh
+      ;;
+    3b)
+      RUN_ID="export-stage3b-$RUN_ID" run_stage 3b "export keyset 4-shard" bash scripts/sim/12-export-stage3b.sh
+      ;;
+    3c)
+      RUN_ID="export-stage3c-$RUN_ID" run_stage 3c "export 8-shard/dedup/multi-tenant" bash scripts/sim/18-export-stage3c.sh
       ;;
     4)
       RUN_ID="process-stage4-$RUN_ID" run_stage 4 "process JSONB/DIRECT/validation/empty" bash scripts/sim/10-process-stage4.sh
       ;;
+    4b)
+      RUN_ID="process-stage4b-$RUN_ID" run_stage 4b "process idempotent rerun/recovery" bash scripts/sim/13-process-stage4b.sh
+      ;;
+    4c)
+      RUN_ID="process-stage4c-$RUN_ID" run_stage 4c "process sharded/cancel semantics" bash scripts/sim/19-process-stage4c.sh
+      ;;
     5)
-      echo "Stage 5 is intentionally not automated yet: failure profile is still being formalized." | tee -a "$log"
-      echo >> "$summary"
-      echo "## Stage 5 - skipped" >> "$summary"
-      echo "- status: SKIPPED" >> "$summary"
-      echo "- reason: 外部失败 / retry / SSRF 安全闸语义需单独 failure profile，不纳入默认 smoke" >> "$summary"
+      RUN_ID="dispatch-atomic-stage5b-$RUN_ID" run_stage 5 "dispatch failure + atomic success" bash -c 'bash scripts/sim/14-dispatch-stage5b.sh && bash scripts/sim/16-atomic-stage5b.sh'
+      ;;
+    5c)
+      RUN_ID="dispatch-atomic-stage5c-$RUN_ID" run_stage 5c "dispatch channels + atomic http/timeout/cancel" bash -c 'bash scripts/sim/20-dispatch-stage5c.sh && bash scripts/sim/21-atomic-stage5c.sh'
       ;;
     6)
-      echo "Stage 6 trigger dedup is documented as a manual one-shot matrix." | tee -a "$log"
-      echo >> "$summary"
-      echo "## Stage 6 - skipped" >> "$summary"
-      echo "- status: SKIPPED" >> "$summary"
-      echo "- reason: 当前为手工 one-shot 去重验证，后续再沉淀脚本" >> "$summary"
+      RUN_ID="trigger-stage6b-$RUN_ID" run_stage 6 "trigger dedup/storm" bash scripts/sim/15-trigger-stage6b.sh
+      ;;
+    6c)
+      RUN_ID="trigger-stage6c-$RUN_ID" run_stage 6c "trigger schedule/misfire/replay/storm" bash scripts/sim/22-trigger-stage6c.sh
       ;;
     *)
       echo "unknown stage: $stage" >&2

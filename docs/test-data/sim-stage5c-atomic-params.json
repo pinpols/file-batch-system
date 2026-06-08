@@ -1,0 +1,19 @@
+{
+  "httpSuccess": {
+    "taskType": "http",
+    "url": "https://example.com",
+    "method": "GET",
+    "expectStatus": 200,
+    "timeoutSeconds": 10
+  },
+  "sqlTimeout": {
+    "taskType": "sql",
+    "sql": "SELECT pg_sleep(5);",
+    "statementTimeoutSeconds": 1
+  },
+  "shellCancel": {
+    "taskType": "shell",
+    "command": "/bin/sleep",
+    "args": ["20"]
+  }
+}

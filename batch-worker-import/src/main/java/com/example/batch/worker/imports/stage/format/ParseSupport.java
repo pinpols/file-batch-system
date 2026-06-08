@@ -205,6 +205,10 @@ public class ParseSupport {
     return recordGovernanceService.withinThreshold(context);
   }
 
+  public void markThresholdExceeded(ImportJobContext context) {
+    recordGovernanceService.markThresholdExceeded(context);
+  }
+
   public long numberValue(Object value) {
     if (value instanceof Number number) {
       return number.longValue();

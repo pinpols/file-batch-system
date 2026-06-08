@@ -339,6 +339,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (!success) {
       report.setErrorCode(response.code());
       report.setErrorMessage(response.message());
+      report.setFailureClass(resolveFailureClass(response.code()));
       // i18n 跨进程透传:plugin 用 StepExecutionResponse.failure(BizException, mapper)
       // 时,key/args 会一直传到 orchestrator 持久化。第三方异常 / literal 失败时为 null,orchestrator 仅用 message。
       report.setErrorKey(response.errorKey());
@@ -378,6 +379,17 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       }
     }
     return report;
+  }
+
+  private String resolveFailureClass(String errorCode) {
+    if (errorCode == null || errorCode.isBlank()) {
+      return null;
+    }
+    return switch (errorCode) {
+      case TIMEOUT_ERROR_CODE, "TIMEOUT" -> "TIMEOUT";
+      case "CONFIG_INVALID", "SECURITY_REJECTED", "NO_EXECUTOR", "EXECUTOR_FAILURE" -> "CONFIG";
+      default -> null;
+    };
   }
 
   @SuppressWarnings("unchecked")
