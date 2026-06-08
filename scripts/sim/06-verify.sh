@@ -90,11 +90,17 @@ done
 
 hdr "EXPORT 产物(MinIO $BUCKET 各 tenant outbound)"
 for prefix in "outbound/TA_EXPORT_REPORT" "outbound/TB_EXPORT_STATEMENT" "outbound/TC_EXPORT_RISK_ALERT"; do
-  cnt=$(docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null | grep -cv "\.keep$" 2>/dev/null | tr -dc '0-9')
+  cnt=$(docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null \
+        | grep -v '/$' \
+        | grep -vc '\.keep$' \
+        | tr -dc '0-9')
   cnt="${cnt:-0}"
   if [[ "$cnt" -gt 0 ]]; then
     ok "$prefix" "$cnt 文件"
-    docker exec "$MINIO" mc ls "local/$BUCKET/$prefix" 2>/dev/null | grep -v "\.keep" | head -3 | sed 's/^/      /'
+    docker exec "$MINIO" mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null \
+      | grep -v '/$' \
+      | grep -v '\.keep$' \
+      | head -3 | sed 's/^/      /'
   else
     note "$prefix" "0 文件(EXPORT 可能未跑)"
   fi
@@ -114,7 +120,7 @@ for path in "/tb/callback" "/tb/ingest" "/tc/ingest"; do
 done
 
 hdr "WORKFLOW + 全局 job_instance 状态"
-psql_q batch_platform "select status, count(*) from batch.job_instance where create_time > now() - interval '10 min' group by status" | head -10 | sed 's/^/    /'
+psql_q batch_platform "select instance_status, count(*) from batch.job_instance where created_at > now() - interval '10 min' group by instance_status order by instance_status" | head -10 | sed 's/^/    /'
 
 hdr "Outbox 积压检查(健康度)"
 backlog=$(psql_q batch_platform "select count(*) from batch.outbox_event where publish_status in ('NEW','FAILED')" 2>/dev/null | tr -dc '0-9')

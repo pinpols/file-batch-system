@@ -75,6 +75,24 @@ class WorkerTaskLeaseRenewerTest {
 
     verify(client, times(3))
         .renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null)));
+    verify(registry, times(3)).markLost("100");
+    assertThat(renewer.isRenewCircuitOpen()).isFalse();
+    assertThat(meter.find("batch.worker.lease.circuit.open.total").counter()).isNull();
+  }
+
+  @Test
+  void shouldOpenCircuitOnlyWhenRenewBatchThrowsTransportFailure() {
+    ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
+    when(registry.snapshot()).thenReturn(List.of(lease));
+    when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
+        .thenThrow(new RuntimeException("connect refused"));
+
+    renewer.renewActiveTaskLeases();
+
+    assertThat(renewer.isRenewCircuitOpen()).isTrue();
+    assertThat(meter.find("batch.worker.lease.circuit.open.total").counter().count())
+        .isEqualTo(1.0);
+    verify(registry, never()).markLost(anyString());
   }
 
   @Test

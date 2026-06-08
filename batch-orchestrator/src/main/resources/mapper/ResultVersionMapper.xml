@@ -75,6 +75,13 @@
         )
     </insert>
 
+    <select id="lockBusinessKey" resultType="java.lang.Integer">
+        select 1
+        from (
+            select pg_advisory_xact_lock(hashtext(#{tenantId}), hashtext(#{businessKey}))
+        ) guard
+    </select>
+
     <select id="selectByJobInstanceId" resultMap="ResultVersionResultMap">
         select *
         from batch.result_version

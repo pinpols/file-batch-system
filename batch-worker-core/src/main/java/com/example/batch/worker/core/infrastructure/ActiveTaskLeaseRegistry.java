@@ -34,8 +34,13 @@ public class ActiveTaskLeaseRegistry {
 
   private final Map<String, ActiveTaskLease> activeTaskLeases = new ConcurrentHashMap<>();
 
+  // 已完成业务执行、正在上报结果的 taskId。仍保留在 activeTaskLeases 中供优雅停机 drain 等待，
+  // 但不再进入 renew snapshot，避免“任务已完成后续租旧快照”误报为 lease lost。
+  private final Set<String> completingLeases = ConcurrentHashMap.newKeySet();
+
   // P1-2: 已被 orchestrator REJECT 续租的 taskId（lease 已被驱逐，应中止当前执行，避免双执行）。
-  // 由 WorkerTaskLeaseRenewer 在 DB CAS 返回 false 时调用 markLost。execute() report 前检查 isLost。
+  // 由 WorkerTaskLeaseRenewer 在 DB CAS 返回 false 时调用 markLost。execute() report 前调用
+  // markCompletingUnlessLost。
   // 注意：网络异常 / orchestrator 5xx 不算 lost（transient），不写入此集合。
   private final Set<String> lostLeases = ConcurrentHashMap.newKeySet();
 
@@ -79,6 +84,8 @@ public class ActiveTaskLeaseRegistry {
     }
     shutdownLock.writeLock().lock();
     try {
+      completingLeases.remove(taskId);
+      lostLeases.remove(taskId);
       activeTaskLeases.put(
           taskId, new ActiveTaskLease(taskId, tenantId, workerId, partitionInvocationId));
     } finally {
@@ -96,6 +103,7 @@ public class ActiveTaskLeaseRegistry {
     } finally {
       shutdownLock.writeLock().unlock();
     }
+    completingLeases.remove(taskId);
     lostLeases.remove(taskId);
     // P1: 同步派发 listener，让外围 per-taskId 累加结构（如 consecutiveFailures）立即清理；
     // 任一 listener 异常不影响其它订阅者与 drain 通知逻辑。
@@ -128,13 +136,46 @@ public class ActiveTaskLeaseRegistry {
     if (taskId == null) {
       return;
     }
-    if (activeTaskLeases.containsKey(taskId)) {
-      lostLeases.add(taskId);
+    shutdownLock.writeLock().lock();
+    try {
+      if (activeTaskLeases.containsKey(taskId) && !completingLeases.contains(taskId)) {
+        lostLeases.add(taskId);
+      }
+    } finally {
+      shutdownLock.writeLock().unlock();
     }
   }
 
   public boolean isLost(String taskId) {
     return taskId != null && lostLeases.contains(taskId);
+  }
+
+  /**
+   * 进入结果上报阶段。
+   *
+   * <p>该方法和 {@link #markLost(String)} 共用写锁，保证“续租拒绝标 lost”和“任务完成准备 report”有确定顺序：
+   *
+   * <ul>
+   *   <li>lost 先发生：返回 false，wrapper 放弃 report。
+   *   <li>completion 先发生：后续旧 renew 快照的拒绝不会再把任务标 lost。
+   * </ul>
+   *
+   * <p>completing lease 仍留在 activeTaskLeases 中，所以优雅停机会继续等待 report 完成后的 {@link #remove(String)}。
+   */
+  public boolean markCompletingUnlessLost(String taskId) {
+    if (taskId == null) {
+      return false;
+    }
+    shutdownLock.writeLock().lock();
+    try {
+      if (!activeTaskLeases.containsKey(taskId) || lostLeases.contains(taskId)) {
+        return false;
+      }
+      completingLeases.add(taskId);
+      return true;
+    } finally {
+      shutdownLock.writeLock().unlock();
+    }
   }
 
   /**
@@ -145,7 +186,9 @@ public class ActiveTaskLeaseRegistry {
   public Collection<ActiveTaskLease> snapshot() {
     shutdownLock.readLock().lock();
     try {
-      return List.copyOf(activeTaskLeases.values());
+      return activeTaskLeases.values().stream()
+          .filter(lease -> !completingLeases.contains(lease.getTaskId()))
+          .toList();
     } finally {
       shutdownLock.readLock().unlock();
     }

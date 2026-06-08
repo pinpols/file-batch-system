@@ -40,6 +40,37 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  void completingLeaseShouldBeExcludedFromRenewSnapshotButStillBlockDrain() {
+    registry.register("task-1", "tenant-A", "worker-1");
+
+    boolean marked = registry.markCompletingUnlessLost("task-1");
+
+    assertThat(marked).isTrue();
+    assertThat(registry.snapshot()).isEmpty();
+    assertThat(registry.size()).isEqualTo(1);
+    assertThat(registry.awaitDrain(Duration.ofMillis(50))).isFalse();
+  }
+
+  @Test
+  void markLostShouldNotOverrideCompletingLease() {
+    registry.register("task-1", "tenant-A", "worker-1");
+
+    assertThat(registry.markCompletingUnlessLost("task-1")).isTrue();
+    registry.markLost("task-1");
+
+    assertThat(registry.isLost("task-1")).isFalse();
+  }
+
+  @Test
+  void markCompletingShouldFailWhenLeaseAlreadyLost() {
+    registry.register("task-1", "tenant-A", "worker-1");
+    registry.markLost("task-1");
+
+    assertThat(registry.markCompletingUnlessLost("task-1")).isFalse();
+    assertThat(registry.isLost("task-1")).isTrue();
+  }
+
+  @Test
   void shouldIgnoreRegisterWithNullArguments() {
     registry.register(null, "tenant-A", "worker-1");
     registry.register("task-1", null, "worker-1");

@@ -72,6 +72,7 @@ class ResultVersionWriterTest {
     assertThat(inserted.payloadStorage()).isEqualTo("INLINE_JSON");
     assertThat(inserted.payloadJson()).contains("recordCount").contains("42");
     assertThat(inserted.promotionPolicy()).isEqualTo("AUTO_LATEST");
+    verify(mapper).lockBusinessKey("t1", "job:DAILY_PNL:2026-05-04");
     verify(mapper).supersedePriorEffective(eq("t1"), eq("job:DAILY_PNL:2026-05-04"), any());
   }
 
@@ -111,6 +112,7 @@ class ResultVersionWriterTest {
     assertThat(captor.getValue().status()).isEqualTo("PENDING");
     assertThat(captor.getValue().effectiveAt()).isNull();
     assertThat(captor.getValue().promotionPolicy()).isEqualTo("MANUAL_APPROVAL");
+    verify(mapper).lockBusinessKey("t1", "job:DAILY_PNL:2026-05-04");
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
   }
 
@@ -142,6 +144,7 @@ class ResultVersionWriterTest {
 
     writer.writeOnTerminal(instance, Map.of("k", "v"));
 
+    verify(mapper).lockBusinessKey("t1", "job:JOB_A:2026-05-04");
     verify(mapper, never()).insert(any());
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
   }
@@ -154,6 +157,7 @@ class ResultVersionWriterTest {
     writer.writeOnTerminal(instance, Map.of("k", "v"));
 
     verify(mapper, never()).insert(any());
+    verify(mapper, never()).lockBusinessKey(anyString(), anyString());
     verify(mapper, never()).selectByJobInstanceId(anyString(), anyLong());
   }
 
@@ -201,6 +205,7 @@ class ResultVersionWriterTest {
     assertThat(captor.getValue().status()).isEqualTo("DRY_RUN");
     assertThat(captor.getValue().effectiveAt()).isNull();
     assertThat(captor.getValue().versionNo()).isEqualTo(4);
+    verify(mapper).lockBusinessKey("t1", "job:DAILY_PNL:2026-05-04");
     verify(mapper, never()).supersedePriorEffective(anyString(), anyString(), any());
   }
 

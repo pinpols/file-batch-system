@@ -23,6 +23,14 @@ public interface ResultVersionMapper {
   /** 新增一行 result_version。返回写入行数。 */
   int insert(ResultVersionEntity record);
 
+  /**
+   * 对同一 (tenant_id, business_key) 的版本写入加事务级锁。
+   *
+   * <p>该锁只在当前数据库事务内有效,用于串行化 selectMaxVersionNo / supersede / insert 组合,避免并发 AUTO_LATEST 同时写
+   * EFFECTIVE 时撞 partial unique index。
+   */
+  int lockBusinessKey(@Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
+
   /** 按 job_instance_id 反查；同一实例最多 1 行（写入幂等保护）。 */
   ResultVersionEntity selectByJobInstanceId(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
