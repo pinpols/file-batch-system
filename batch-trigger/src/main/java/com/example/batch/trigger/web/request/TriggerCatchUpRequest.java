@@ -7,6 +7,7 @@ import lombok.Data;
 public class TriggerCatchUpRequest {
 
   @NotBlank private String tenantId;
-  @NotBlank private String requestId;
+  private String requestId;
+  private Long pendingId;
   private String reason;
 }

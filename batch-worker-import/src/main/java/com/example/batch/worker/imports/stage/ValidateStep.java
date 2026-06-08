@@ -312,8 +312,9 @@ public class ValidateStep implements ImportStageStep {
     context.getAttributes().put("validatedCount", validatedCount);
     context.getAttributes().put("qualityChecks", session.appliedChecks());
     context.getAttributes().put("customerPayloadCount", loadedCandidateCount);
-    runtimeRepository.updateFileStatus(
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+    ImportStageSupport.updateFileStatusRecoverAware(
+        runtimeRepository,
+        context,
         "VALIDATED",
         Map.of(
             "validatedCount", validatedCount,

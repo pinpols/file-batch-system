@@ -26,7 +26,7 @@ public interface TaskExecutionClient {
    * single {@link #renewLease}; on batch transport failure implementations should fall back to
    * per-task {@link #renewLease}.
    */
-  Map<Long, Boolean> renewLeasesBatch(List<TaskLeaseRenewItem> items);
+  Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items);
 
   void report(TaskExecutionReport report);
 }

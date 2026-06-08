@@ -5,14 +5,12 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
-import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.config.WheelSchedulerProperties;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
-import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.service.TriggerService;
 import com.example.batch.trigger.support.TriggerDescriptor;
@@ -42,7 +40,6 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.task.TaskRejectedException;
-import org.springframework.dao.DuplicateKeyException; // 仍用于 misfire pending 写入幂等
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
@@ -81,7 +78,6 @@ public class HashedWheelTriggerScheduler {
 
   private final WheelSchedulerProperties props;
   private final TriggerRuntimeStateMapper stateMapper;
-  private final TriggerMisfirePendingMapper misfirePendingMapper;
   private final TriggerService triggerService;
   private final TriggerDefinitionLoader definitionLoader;
   private final CronExpressionAdapter cronAdapter;
@@ -410,21 +406,14 @@ public class HashedWheelTriggerScheduler {
             "MISFIRE_CATCH_UP");
       }
       case MANUAL_APPROVAL -> {
-        // 落 trigger_misfire_pending 表,等运维 console 审批
-        try {
-          TriggerMisfirePendingEntity pending = new TriggerMisfirePendingEntity();
-          pending.setTriggerRuntimeStateId(state.getId());
-          pending.setTenantId(state.getTenantId());
-          pending.setJobCode(state.getJobCode());
-          pending.setScheduledFireTime(scheduledFireTime);
-          misfirePendingMapper.insertPending(pending);
-        } catch (DuplicateKeyException dup) {
-          // 已有相同 (state_id, scheduledFireTime) 待审,幂等跳过
-          log.info(
-              "misfire pending already exists, skip insert: job={} scheduledFireTime={}",
-              state.getJobCode(),
-              scheduledFireTime);
-        }
+        triggerService.createPendingCatchUp(
+            new ScheduledTriggerCommand(
+                descriptor,
+                scheduledFireTime,
+                TriggerType.CATCH_UP,
+                IdGenerator.newBusinessNo("wheel"),
+                IdGenerator.newTraceId(),
+                state.getId()));
         advanceNextFireTime(state, scheduledFireTime, "MISFIRE_PENDING", 1);
       }
     }

@@ -370,8 +370,9 @@ public class LoadStep implements ImportStageStep {
     Map<String, Object> attrs = context.getAttributes();
     attrs.put(KEY_LOADED_COUNT, loadedCount);
     attrs.put(KEY_SUCCESS_COUNT, numberValue(attrs.get(KEY_SUCCESS_COUNT)) + loadedCount);
-    runtimeRepository.updateFileStatus(
-        runtimeRepository.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID)),
+    ImportStageSupport.updateFileStatusRecoverAware(
+        runtimeRepository,
+        context,
         "LOADED",
         Map.of(
             KEY_LOADED_COUNT,
@@ -447,8 +448,9 @@ public class LoadStep implements ImportStageStep {
   }
 
   private ImportStageResult markLoaded(ImportJobContext context, long loadedCount) {
-    runtimeRepository.updateFileStatus(
-        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+    ImportStageSupport.updateFileStatusRecoverAware(
+        runtimeRepository,
+        context,
         "LOADED",
         Map.of(
             KEY_LOADED_COUNT,

@@ -155,8 +155,9 @@ public class ParseStep implements ImportStageStep {
             "skip threshold exceeded",
             ERROR_OBJECT_MAPPER);
       }
-      runtimeRepository.updateFileStatus(
-          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+      ImportStageSupport.updateFileStatusRecoverAware(
+          runtimeRepository,
+          context,
           "PARSED",
           Map.of(
               KEY_PARSED_COUNT,

@@ -255,8 +255,10 @@ class TaskControllerTest {
 
   @Test
   void shouldReturn200WithPerTaskResultsForRenewBatch() throws Exception {
-    when(taskExecutionService.renewTaskLease("t1", 7L, "w1", null)).thenReturn(true);
-    when(taskExecutionService.renewTaskLease("t1", 8L, "w1", null)).thenReturn(false);
+    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
+        .thenReturn(new TaskHeartbeatResult(true, false));
+    when(taskExecutionService.recordHeartbeat("t1", 8L, "w1", null, null))
+        .thenReturn(new TaskHeartbeatResult(false, false));
 
     mockMvc
         .perform(
@@ -277,7 +279,7 @@ class TaskControllerTest {
         .andExpect(jsonPath("$.results[1].taskId").value(8))
         .andExpect(jsonPath("$.results[1].renewed").value(false));
 
-    verify(taskExecutionService).renewTaskLease("t1", 7L, "w1", null);
-    verify(taskExecutionService).renewTaskLease("t1", 8L, "w1", null);
+    verify(taskExecutionService).recordHeartbeat("t1", 7L, "w1", null, null);
+    verify(taskExecutionService).recordHeartbeat("t1", 8L, "w1", null, null);
   }
 }

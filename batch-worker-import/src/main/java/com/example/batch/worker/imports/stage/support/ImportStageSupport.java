@@ -1,8 +1,11 @@
 package com.example.batch.worker.imports.stage.support;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import java.nio.file.Files;
@@ -96,5 +99,40 @@ public final class ImportStageSupport {
     return Files.createTempFile(
         BatchFileConstants.validatedStagePrefix(fileId, workerId),
         BatchFileConstants.NDJSON_SUFFIX);
+  }
+
+  /**
+   * RECOVER 重放会重新经过 PREPROCESS/PARSE/VALIDATE 来重建本地临时文件，但平台 file_record 可能已推进到 LOADING
+   * 甚至更后。此时不能把状态回退到 PARSING/PARSED/VALIDATED；对这类状态冲突按幂等恢复处理。NORMAL 模式仍保持严格状态机。
+   */
+  public static void updateFileStatusRecoverAware(
+      PlatformFileRuntimeRepository runtimeRepository,
+      ImportJobContext context,
+      String targetStatus,
+      Map<String, Object> metadata) {
+    Long fileId =
+        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    try {
+      runtimeRepository.updateFileStatus(fileId, targetStatus, metadata);
+    } catch (BizException exception) {
+      if (!isRecoverMode(context) || exception.getCode() != ResultCode.STATE_CONFLICT) {
+        throw exception;
+      }
+      log.info(
+          "skip file status rollback during import recover: tenantId={}, fileId={},"
+              + " targetStatus={}, cause={}",
+          context.getTenantId(),
+          fileId,
+          targetStatus,
+          exception.getMessage());
+    }
+  }
+
+  public static boolean isRecoverMode(ImportJobContext context) {
+    if (context == null) {
+      return false;
+    }
+    Object runMode = context.getAttributes().get(PipelineRuntimeKeys.RUN_MODE);
+    return runMode != null && "RECOVER".equalsIgnoreCase(String.valueOf(runMode));
   }
 }

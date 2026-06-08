@@ -257,6 +257,16 @@
           and cancel_requested = false
     </update>
 
+    <update id="requestCancelByInstance">
+        update batch.job_task
+        set cancel_requested = true,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+          and task_status = 'RUNNING'
+          and cancel_requested = false
+    </update>
+
     <update id="closeNonTerminalTasksForTerminalInstance">
         update batch.job_task
         set task_status = #{targetTaskStatus},

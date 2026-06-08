@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -31,11 +32,26 @@ public class InstanceManagementApplicationService {
 
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
+  private final JobTaskMapper jobTaskMapper;
   private final JobInstanceTerminalStatusApplicationService
       jobInstanceTerminalStatusApplicationService;
 
   public Map<String, Object> cancel(String tenantId, Long id) {
-    return transition(tenantId, id, CANCELLABLE, "CANCELLED");
+    JobInstanceEntity instance =
+        Guard.requireFound(jobInstanceMapper.selectById(tenantId, id), "job instance not found");
+    if ("RUNNING".equals(instance.getInstanceStatus())) {
+      int requested = jobTaskMapper.requestCancelByInstance(tenantId, id);
+      return Map.of(
+          "id",
+          id,
+          "instanceNo",
+          instance.getInstanceNo(),
+          "status",
+          "CANCEL_REQUESTED",
+          "cancelRequestedTasks",
+          requested);
+    }
+    return transition(instance, tenantId, id, CANCELLABLE, "CANCELLED");
   }
 
   public Map<String, Object> terminate(String tenantId, Long id) {
@@ -84,6 +100,15 @@ public class InstanceManagementApplicationService {
       String tenantId, Long id, Set<String> allowedFrom, String targetStatus) {
     JobInstanceEntity instance =
         Guard.requireFound(jobInstanceMapper.selectById(tenantId, id), "job instance not found");
+    return transition(instance, tenantId, id, allowedFrom, targetStatus);
+  }
+
+  private Map<String, Object> transition(
+      JobInstanceEntity instance,
+      String tenantId,
+      Long id,
+      Set<String> allowedFrom,
+      String targetStatus) {
     if (!allowedFrom.contains(instance.getInstanceStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,

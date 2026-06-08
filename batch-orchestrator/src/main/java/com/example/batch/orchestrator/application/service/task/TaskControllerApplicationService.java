@@ -144,18 +144,22 @@ public class TaskControllerApplicationService {
   }
 
   /**
-   * ADR-016: batch renew — one HTTP roundtrip for many tasks; per-item outcome without throwing
-   * (MVP loops existing {@link TaskExecutionService#renewTaskLease}).
+   * ADR-016: batch renew — one HTTP roundtrip for many tasks; per-item outcome without throwing.
+   *
+   * <p>ORCH-P4-1: batch renew also returns {@code cancelRequested}; worker-core uses it to
+   * interrupt long-running tasks instead of waiting for lease timeout.
    */
   public TaskLeaseRenewBatchResponse renewBatch(TaskLeaseRenewBatchRequest request) {
     List<TaskLeaseRenewItemPayload> items =
         request == null || request.items() == null ? List.of() : request.items();
     List<TaskLeaseRenewResultPayload> results = new ArrayList<>(items.size());
     for (TaskLeaseRenewItemPayload item : items) {
-      boolean renewed =
-          taskExecutionService.renewTaskLease(
-              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
-      results.add(new TaskLeaseRenewResultPayload(item.taskId(), renewed));
+      TaskAssignmentService.TaskHeartbeatResult result =
+          taskExecutionService.recordHeartbeat(
+              item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId(), null);
+      results.add(
+          new TaskLeaseRenewResultPayload(
+              item.taskId(), result.leaseRenewed(), result.cancelRequested()));
     }
     return new TaskLeaseRenewBatchResponse(results);
   }

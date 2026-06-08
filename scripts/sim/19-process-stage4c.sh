@@ -214,8 +214,11 @@ print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if not summary.startswith("4|4|16|296.00|16|16|"):
     print("❌ Process Stage4c sharded assertion failed", flush=True)
     sys.exit(1)
-if cancel_http not in ("200", "409"):
+if cancel_http != "200":
     print("❌ Process Stage4c cancel API assertion failed", flush=True)
+    sys.exit(1)
+if not cancel_status.startswith("FAILED|FAILED|FAILED"):
+    print("❌ Process Stage4c cancel interrupt assertion failed", flush=True)
     sys.exit(1)
 
 print(f"\n==> Stage 4c process scenario PASS: batchNo={BATCH} startTs={START_TS}", flush=True)

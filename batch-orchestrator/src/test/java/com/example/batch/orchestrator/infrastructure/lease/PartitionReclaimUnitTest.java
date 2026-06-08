@@ -22,6 +22,7 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ class PartitionReclaimUnitTest {
 
   private JobPartitionMapper jobPartitionMapper;
   private JobTaskMapper jobTaskMapper;
+  private JobStepInstanceMapper jobStepInstanceMapper;
   private JobInstanceMapper jobInstanceMapper;
   private TaskDispatchOutboxService outboxService;
   private PartitionReclaimUnit unit;
@@ -46,6 +48,7 @@ class PartitionReclaimUnitTest {
   void setUp() {
     jobPartitionMapper = mock(JobPartitionMapper.class);
     jobTaskMapper = mock(JobTaskMapper.class);
+    jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     outboxService = mock(TaskDispatchOutboxService.class);
 
@@ -57,7 +60,12 @@ class PartitionReclaimUnitTest {
 
     unit =
         new PartitionReclaimUnit(
-            jobPartitionMapper, jobTaskMapper, jobInstanceMapper, outboxService, governance);
+            jobPartitionMapper,
+            jobTaskMapper,
+            jobStepInstanceMapper,
+            jobInstanceMapper,
+            outboxService,
+            governance);
   }
 
   @Test
@@ -121,6 +129,8 @@ class PartitionReclaimUnitTest {
     when(jobPartitionMapper.resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 5L))
         .thenReturn(1);
     when(jobTaskMapper.resetForRetry("t1", 100L, TaskStatus.READY.code(), 7L)).thenReturn(1);
+    when(jobStepInstanceMapper.resetForRetryByJobTaskId("t1", 100L, 0, TaskStatus.READY.code()))
+        .thenReturn(1);
 
     unit.reclaim(partition);
 
