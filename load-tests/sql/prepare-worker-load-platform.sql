@@ -49,6 +49,9 @@ WITH pd AS (
   WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_sql_job'
   ORDER BY id DESC
   LIMIT 1
+),
+p AS (
+  SELECT left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-' AS account_prefix
 )
 INSERT INTO batch.pipeline_step_definition (
   pipeline_definition_id, step_code, step_name, stage_code, step_order,
@@ -63,7 +66,7 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
   jsonb_build_object('sqlTransformCompute', jsonb_build_object(
     'sourceSql',
     'select tenant_id, account_id, biz_date, sum(amount) as total_amount, max(event_id) as high_water_mark from biz.process_order_event where tenant_id = :tenantId and biz_date = :bizDate::date and account_id like '''
-      || :'run_id' || '-ACCT-%'' group by tenant_id, account_id, biz_date',
+      || p.account_prefix || '%'' group by tenant_id, account_id, biz_date',
     'targetSchema', 'biz',
     'targetTable', 'process_account_summary',
     'writeMode', 'UPSERT',
@@ -84,7 +87,7 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
     'emptyResultPolicy', 'FAIL',
     'maxStagedRows', :process_agg_max_staged_rows::bigint
   )),
-  600, 'NONE', 0, true, now(), now() FROM pd
+  600, 'NONE', 0, true, now(), now() FROM pd CROSS JOIN p
 UNION ALL
 SELECT id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
   'PROCESS_VALIDATE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd
@@ -112,6 +115,9 @@ WITH pd AS (
   WHERE tenant_id = 'default-tenant' AND job_code = 'lt_process_copy_job'
   ORDER BY id DESC
   LIMIT 1
+),
+p AS (
+  SELECT left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-' AS account_prefix
 )
 INSERT INTO batch.pipeline_step_definition (
   pipeline_definition_id, step_code, step_name, stage_code, step_order,
@@ -126,7 +132,7 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
   jsonb_build_object('sqlTransformCompute', jsonb_build_object(
     'sourceSql',
     'select tenant_id, event_id, account_id, biz_date, amount, event_id as high_water_mark from biz.process_order_event where tenant_id = :tenantId and biz_date = :bizDate::date and account_id like '''
-      || :'run_id' || '-ACCT-%''',
+      || p.account_prefix || '%''',
     'targetSchema', 'biz',
     'targetTable', 'process_event_copy',
     'writeMode', 'UPSERT',
@@ -142,7 +148,7 @@ SELECT id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
     'conflictColumns', jsonb_build_array('tenant_id', 'event_id'),
     'maxStagedRows', :process_copy_max_staged_rows::bigint
   )),
-  1200, 'NONE', 0, true, now(), now() FROM pd
+  1200, 'NONE', 0, true, now(), now() FROM pd CROSS JOIN p
 UNION ALL
 SELECT id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
   'PROCESS_VALIDATE', '{}'::jsonb, 120, 'NONE', 0, true, now(), now() FROM pd

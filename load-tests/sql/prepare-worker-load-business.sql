@@ -64,20 +64,22 @@ CREATE TABLE IF NOT EXISTS biz.process_event_copy (
 
 DELETE FROM biz.process_event_copy
 WHERE tenant_id = 'default-tenant'
-  AND account_id LIKE :'run_id' || '-ACCT-%';
+  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%';
 
 DELETE FROM biz.process_account_summary
 WHERE tenant_id = 'default-tenant'
-  AND account_id LIKE :'run_id' || '-ACCT-%';
+  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%';
 
 DELETE FROM biz.process_order_event
 WHERE tenant_id = 'default-tenant'
-  AND account_id LIKE :'run_id' || '-ACCT-%';
+  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%';
 
 INSERT INTO biz.process_order_event (tenant_id, account_id, biz_date, event_id, amount)
 SELECT
   'default-tenant',
-  :'run_id' || '-ACCT-' || lpad((gs % :process_account_count::bigint)::text, :process_account_width::integer, '0'),
+  left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16)
+    || '-ACCT-'
+    || lpad((gs % :process_account_count::bigint)::text, :process_account_width::integer, '0'),
   :'biz_date'::date,
   :process_event_id_start::bigint + gs,
   (gs % 100 + 1)::numeric
