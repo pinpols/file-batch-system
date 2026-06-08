@@ -54,7 +54,7 @@ class DefaultTaskExecutionWrapperTest {
     timeoutProperties.setDefaultTimeoutSeconds(60L);
     timeoutProperties.setMaxTimeoutSeconds(120L);
     timeoutProperties.setCancelGraceSeconds(2L);
-    executionPool = new TaskExecutionPool(timeoutProperties);
+    executionPool = new TaskExecutionPool(timeoutProperties, null);
     executionPool.start();
     registry = new SimpleMeterRegistry();
     @SuppressWarnings("unchecked")

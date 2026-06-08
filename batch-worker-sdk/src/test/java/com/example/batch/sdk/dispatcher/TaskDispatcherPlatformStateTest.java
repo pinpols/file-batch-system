@@ -98,9 +98,12 @@ class TaskDispatcherPlatformStateTest {
 
     dispatcher.applyPlatformDirective(
         new HeartbeatDirective("PAUSED", null, false, List.of(), null));
-    dispatcher.onMessage(new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
+    TaskDispatcher.DispatchDecision decision =
+        dispatcher.onMessage(
+            new TaskDispatchMessage(99L, "tx", "j", "tt", "ti", Map.of(), Map.of()));
 
     // PAUSED → 不 claim、不进 handler
+    assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
     verify(http, never()).claim(anyLong(), anyString(), any());
     assertThat(seen.get()).isNull();
   }

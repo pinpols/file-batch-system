@@ -801,6 +801,40 @@ paths:
             text/event-stream:
               schema:
                 $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/stream/pipeline-progress/events:
+    get:
+      tags: [Streams]
+      summary: Subscribe to pipeline progress dirty events
+      description: |
+        Emits low-frequency `pipeline-progress-dirty` named SSE events. The event payload only identifies the
+        dirty pipeline instance; clients must fetch `/api/console/queries/pipeline-progress?pipelineInstanceId=...`
+        for the current snapshot.
+      operationId: streamPipelineProgressEvents
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE dirty event stream for pipeline progress changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
   /api/console/workflow-runs/events:
     get:
       tags: [WorkflowRuns]

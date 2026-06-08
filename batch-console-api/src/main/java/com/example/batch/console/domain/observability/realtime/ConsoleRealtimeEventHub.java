@@ -203,13 +203,17 @@ public class ConsoleRealtimeEventHub {
       if (log.isDebugEnabled()) {
         log.debug(
             "Console realtime SSE send failed: tenantId={}, stream={}, eventType={}",
-            subscription.tenantId,
-            subscription.stream,
-            eventName,
+            logValue(subscription.tenantId),
+            logValue(subscription.stream),
+            logValue(eventName),
             exception);
       }
       close(subscription);
     }
+  }
+
+  private static String logValue(String value) {
+    return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
   }
 
   private void replay(Subscription subscription) {

@@ -133,13 +133,13 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,loggers
+        include: ${BATCH_ACTUATOR_EXPOSURE:health,info,prometheus}
   endpoint:
     health:
       probes:
         enabled: true
-      # A-4.1: 健康检查显示详情（仅管理端口可见）
-      show-details: always
+      # A-4.1: 健康检查详情默认需授权；生产管理端口仍必须由网络策略/Ingress 隔离
+      show-details: ${BATCH_ACTUATOR_HEALTH_SHOW_DETAILS:when_authorized}
       # readiness 组：下游全就绪才对外服务；include="*" 会自动纳入所有已注册的
       # HealthIndicator（db/redis/kafka/minio 等，按模块 starter 实际 bean 决定）。
       # liveness 只看 livenessState（避免下游抖动反复重启 Pod），K8s readinessProbe 应配

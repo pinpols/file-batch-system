@@ -42,6 +42,9 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
 class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
 
+  private static final String CSRF_TOKEN = "audit-e2e-csrf-token";
+  private static final String TENANT_ID = "t1";
+
   @LocalServerPort private int port;
   @Autowired private JdbcTemplate jdbcTemplate;
 
@@ -70,9 +73,14 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
     webTestClient
         .post()
         .uri("/api/console/alerts/7/close")
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+        .header("X-Console-User", "audit-e2e-admin")
+        .header("X-Console-Roles", "ROLE_ADMIN,ROLE_TENANT_ADMIN")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "alert-close-k1")
+        .header("X-XSRF-TOKEN", CSRF_TOKEN)
+        .cookie("XSRF-TOKEN", CSRF_TOKEN)
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("tenantId", "t1", "reason", "fixed"))
+        .bodyValue(Map.of("tenantId", TENANT_ID, "reason", "fixed"))
         .exchange()
         .expectStatus()
         .isOk();
@@ -109,9 +117,14 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
     webTestClient
         .post()
         .uri("/api/console/alerts/9/close")
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+        .header("X-Console-User", "audit-e2e-admin")
+        .header("X-Console-Roles", "ROLE_ADMIN,ROLE_TENANT_ADMIN")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "alert-close-k2")
+        .header("X-XSRF-TOKEN", CSRF_TOKEN)
+        .cookie("XSRF-TOKEN", CSRF_TOKEN)
         .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue(Map.of("tenantId", "t1", "reason", "fix-after-rcal"))
+        .bodyValue(Map.of("tenantId", TENANT_ID, "reason", "fix-after-rcal"))
         .exchange()
         .expectStatus()
         .isOk();
