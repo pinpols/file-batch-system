@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
@@ -22,6 +24,7 @@ import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.event.TriggerOutboxDomainEventPublisher;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TenantStatusMapper;
+import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.support.TriggerDescriptor;
 import com.example.batch.trigger.web.request.TriggerLaunchRequest;
@@ -41,6 +44,7 @@ class DefaultTriggerServiceTest {
 
   @Mock private LaunchAdapterService launchAdapterService;
   @Mock private TriggerRequestMapper triggerRequestMapper;
+  @Mock private TriggerMisfirePendingMapper triggerMisfirePendingMapper;
   @Mock private TriggerOutboxDomainEventPublisher triggerOutboxPublisher;
   @Mock private BusinessCalendarMapper businessCalendarMapper;
   @Mock private TenantStatusMapper tenantStatusMapper;
@@ -57,6 +61,7 @@ class DefaultTriggerServiceTest {
         new DefaultTriggerService(
             launchAdapterService,
             triggerRequestMapper,
+            triggerMisfirePendingMapper,
             triggerOutboxPublisher,
             businessCalendarMapper,
             tenantStatusMapper,
@@ -138,6 +143,46 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  void shouldApproveMisfirePendingByPendingIdAndLaunchLinkedRequest() {
+    PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
+    command.setTenantId("t1");
+    command.setPendingId(10L);
+    command.setReason("manual approve");
+
+    TriggerMisfirePendingEntity pendingRow = new TriggerMisfirePendingEntity();
+    pendingRow.setId(10L);
+    pendingRow.setTenantId("t1");
+    pendingRow.setStatus("PENDING");
+    pendingRow.setCatchUpRequestId(77L);
+
+    TriggerRequestEntity pendingRequest = new TriggerRequestEntity();
+    pendingRequest.setId(77L);
+    pendingRequest.setTenantId("t1");
+    pendingRequest.setRequestId("req-linked");
+    pendingRequest.setJobCode("EXPORT_JOB");
+    pendingRequest.setBizDate(LocalDate.of(2026, 3, 27));
+    pendingRequest.setTriggerType(TriggerType.CATCH_UP.code());
+    pendingRequest.setRequestStatus("ACCEPTED");
+    pendingRequest.setTraceId("trace-linked");
+    pendingRequest.setDedupKey("dedup-linked");
+
+    when(triggerMisfirePendingMapper.selectById(10L)).thenReturn(pendingRow);
+    when(triggerRequestMapper.selectById(77L)).thenReturn(pendingRequest);
+    when(triggerRequestMapper.updateRequestStatusConditional(
+            "t1", "req-linked", "PROCESSING", "ACCEPTED"))
+        .thenReturn(1);
+
+    LaunchResponse approved = service.approvePendingCatchUp(command);
+
+    assertThat(approved.instanceNo()).isEqualTo("req-linked");
+    assertThat(approved.traceId()).isEqualTo("trace-linked");
+    verify(triggerMisfirePendingMapper).approve(10L, "trigger-api");
+    verify(triggerOutboxPublisher)
+        .publishRaw(eq("t1"), eq("req-linked"), eq("trace-linked"), anyString());
+    verify(triggerRequestMapper).updateRequestStatus("t1", "req-linked", "LAUNCHED");
+  }
+
+  @Test
   void shouldRejectApprovalForNonCatchUpRequest() {
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId("t1");
@@ -184,6 +229,51 @@ class DefaultTriggerServiceTest {
     verify(triggerRequestMapper, never()).insert(any());
     verify(triggerOutboxPublisher, never())
         .publishRaw(anyString(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void createPendingCatchUpShouldLinkMisfirePendingToCatchUpRequest() {
+    ScheduledTriggerCommand command =
+        new ScheduledTriggerCommand(
+            scheduledDescriptor(),
+            Instant.parse("2026-03-28T18:00:00Z"),
+            TriggerType.CATCH_UP,
+            "req-cu",
+            "trace-cu",
+            500L);
+    LaunchRequest launchRequest =
+        new LaunchRequest(
+            "t1",
+            "IMPORT_JOB",
+            LocalDate.of(2026, 3, 28),
+            TriggerType.CATCH_UP,
+            "req-cu",
+            "trace-cu",
+            Map.of("catchUp", true));
+    doAnswer(
+            invocation -> {
+              TriggerRequestEntity entity = invocation.getArgument(0);
+              entity.setId(900L);
+              return 1;
+            })
+        .when(triggerRequestMapper)
+        .insert(any());
+    doAnswer(
+            invocation -> {
+              TriggerMisfirePendingEntity entity = invocation.getArgument(0);
+              entity.setId(901L);
+              return 1;
+            })
+        .when(triggerMisfirePendingMapper)
+        .insertPending(any());
+    when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
+
+    LaunchResponse response = service.createPendingCatchUp(command);
+
+    assertThat(response.instanceNo()).isEqualTo("req-cu");
+    verify(triggerRequestMapper).insert(any());
+    verify(triggerMisfirePendingMapper).insertPending(any());
+    verify(triggerMisfirePendingMapper).linkCatchUpRequest(901L, 900L);
   }
 
   @Test

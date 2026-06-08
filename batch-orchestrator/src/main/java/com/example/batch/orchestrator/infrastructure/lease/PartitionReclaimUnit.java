@@ -13,6 +13,7 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class PartitionReclaimUnit {
 
   private final JobPartitionMapper jobPartitionMapper;
   private final JobTaskMapper jobTaskMapper;
+  private final JobStepInstanceMapper jobStepInstanceMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final BatchOrchestratorGovernanceProperties governance;
@@ -127,6 +129,16 @@ public class PartitionReclaimUnit {
               + ", taskId="
               + task.getId());
     }
+    int resetSteps =
+        jobStepInstanceMapper.resetForRetryByJobTaskId(
+            partition.getTenantId(), task.getId(), 0, TaskStatus.READY.code());
+    if (resetSteps <= 0) {
+      throw new ReclaimRetryableException(
+          "step reset missed, rolling back task/partition reset: partitionId="
+              + partition.getId()
+              + ", taskId="
+              + task.getId());
+    }
 
     // eventKey 包含 partition.version（reset 前读到的值），保证同一 partition 多次 reclaim 写入不同 outbox 行：
     // outbox_event 的 UNIQUE(tenant_id, event_key) 在 ON CONFLICT DO NOTHING 语义下，
@@ -138,9 +150,11 @@ public class PartitionReclaimUnit {
         jobInstance, task, partition, jobInstance.getTraceId(), eventKey, RunMode.RECOVER);
     log.warn(
         "expired partition reclaimed and re-dispatched: tenantId={},"
-            + " partitionId={}, fromVersion={}, leaseWindowSeconds={}",
+            + " partitionId={}, taskId={}, resetSteps={}, fromVersion={}, leaseWindowSeconds={}",
         partition.getTenantId(),
         partition.getId(),
+        task.getId(),
+        resetSteps,
         partition.getVersion(),
         governance.partitionLease().getExpireSeconds());
   }

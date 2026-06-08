@@ -28,6 +28,10 @@ public interface TriggerMisfirePendingMapper {
 
   TriggerMisfirePendingEntity selectById(@Param("id") Long id);
 
+  TriggerMisfirePendingEntity selectByRuntimeStateAndFireTime(
+      @Param("triggerRuntimeStateId") Long triggerRuntimeStateId,
+      @Param("scheduledFireTime") Instant scheduledFireTime);
+
   /** 待审列表(给 console UI 展示用)。 */
   List<TriggerMisfirePendingEntity> selectPendingByTenant(
       @Param("tenantId") String tenantId, @Param("limit") int limit);

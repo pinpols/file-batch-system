@@ -113,16 +113,18 @@ P1/P2 不能诚实标记为全部完成：真实云 S3/OSS、真实 SFTP/NAS 故
 |---|---|---|---|
 | dispatch 500 no-retry 补偿 | `scripts/sim/14-dispatch-stage5b.sh`，`sim-dispatch-stage5b-20260608143154` | PASS，`FAILED|FAILED|FAILED|COMPENSATED` | 覆盖本地 API 500/no-retry，不等于真实下游长时间 timeout/断连。 |
 | dispatch LOCAL/NAS/SFTP manifest | `scripts/sim/20-dispatch-stage5c.sh`，`sim-dispatch-stage5c-20260608143209` | PASS，LOCAL/NAS/SFTP 均 `ACKED:SUCCESS`，SFTP `.chk` 存在 | NAS 是 local profile stub；真实 NAS 权限/断链仍未覆盖。 |
-| atomic HTTP / SQL timeout / shell cancel | `scripts/sim/21-atomic-stage5c.sh`，`sim-stage5c-*` | PASS，HTTP SUCCESS，SQL `TIMEOUT/TIMEOUT`，shell cancel marker=true | shell cancel 当前只标记请求，子进程不保证被抢杀。 |
+| atomic HTTP / SQL timeout / shell cancel | `scripts/sim/21-atomic-stage5c.sh`，`atomic-stage5c-20260608163608` | PASS，HTTP SUCCESS，SQL `TIMEOUT/TIMEOUT`，shell cancel HTTP 200 后 `FAILED/WORKER_EXECUTION_CANCELLED` | 取消/超时/重试组合矩阵仍待扩展。 |
 | export 8 分片 / 三租户 / 幂等重放 | `scripts/sim/18-export-stage3c.sh`，`sim-export-stage3c-20260608143456` | PASS，ta 8/8 分片，三租户 3/3 SUCCESS，dedup 1/1 | 本地 MinIO/S3-compatible，不等于真实云 S3/OSS multipart abort/retry。 |
-| process 分片 / cancel 当前语义 | `scripts/sim/19-process-stage4c.sh`，`sim-process-stage4c-20260608143525` | PASS，4/4 分片 SUCCESS，目标 16 行；RUNNING cancel 返回 409 后任务 SUCCESS | 未覆盖 kill worker、PG 断链、DIRECT copy 中断恢复。 |
+| process 分片 / RUNNING cancel | `scripts/sim/19-process-stage4c.sh`，`process-stage4c-20260608163544` | PASS，4/4 分片 SUCCESS，目标 16 行；RUNNING cancel HTTP 200 后 `FAILED/WORKER_EXECUTION_CANCELLED` | 未覆盖 kill worker、PG 断链、DIRECT copy 中断恢复。 |
+| import checkpoint crash-resume | `scripts/sim/25-import-stage2e-checkpoint-crash.sh`，`import-stage2e-checkpoint-crash-20260608163051` | PASS，kill worker 后同 instance/pipeline 续跑，`markerBeforeKill=350`，最终 `processedFinal=20000 rows=20000` | 只覆盖 worker crash after chunk；PG/Kafka 断链另做故障注入。 |
+| trigger pending auto catch-up | `scripts/sim/24-trigger-stage6d.sh`，`trigger-stage6d-20260608163850` | PASS，misfire pending 自动关联 catch-up request，`pending=185 request=29315 status=LAUNCHED|30302` | 高频 cron/1w storm 仍归容量 profile。 |
 
 ## 仍未完成
 
 | 项 | 状态 | 原因 / 下一步 |
 |---|---|---|
 | 真实 S3 / OSS export | 未完成 | 本地只有 MinIO/S3-compatible；不能冒充生产同类 OSS。下一步需要真实 endpoint、bucket、凭证和 checksum 口径。 |
-| dispatch / atomic 真实外部故障注入 | 部分完成 | 本地 API 500、LOCAL/NAS/SFTP、atomic HTTP/SQL timeout/cancel 已复跑；还缺真实 SFTP/NAS/OSS/HTTP timeout、断连、权限失败、重试/DLQ 组合。 |
-| process failure profile | 未完成 | 还缺 DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/脏数据核对。 |
+| dispatch / atomic 真实外部故障注入 | 部分完成 | 本地 API 500、LOCAL/NAS/SFTP、atomic HTTP/SQL timeout/shell cancel 已复跑；还缺真实 SFTP/NAS/OSS/HTTP timeout、断连、权限失败、重试/DLQ 组合。 |
+| process failure profile | 部分完成 | RUNNING cancel 已完成；还缺 DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/脏数据核对。 |
 | 10w task storm | 未完成 | 1w 已完成；10w 属容量上限画像，应单独窗口跑，避免本机资源噪声误导生产承诺。 |
 | 多租户公平性混压 | 未完成 | 还缺 ta/tb/tc 大小租户并发、quota 公平、RLS 串租和 tenant 维度监控拆分。 |

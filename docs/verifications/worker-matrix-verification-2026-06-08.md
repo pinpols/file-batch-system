@@ -75,16 +75,16 @@
 | 矩阵 | 状态 | 说明 |
 | --- | --- | --- |
 | import JVM/PG/work_mem/chunk/batch 参数矩阵 | 已补 PG 写入矩阵 | `pg-param-matrix-20260608142440` 完成 5 组 x 3 次；JVM 和 chunk/batch 系统级组合仍未做。 |
-| trigger 高频 cron / misfire | 已补本地专项 | `scripts/sim/24-trigger-stage6d.sh` 通过；wheel 模式亚分钟连续 cron fire 仍不作为放行能力。 |
+| trigger 高频 cron / misfire | 已补本地专项 | `scripts/sim/24-trigger-stage6d.sh` 通过；`trigger-stage6d-20260608163850` 复验 pending 自动关联 catch-up request；wheel 模式亚分钟连续 cron fire 仍不作为放行能力。 |
 | 1w / 10w task storm | 部分覆盖 | `preprod-p0-atomic1w-20260608140503` 已跑 1w 全终态；10w 未跑，本机 local 环境不适合作为上线容量承诺。 |
-| process 大数据失败恢复、幂等重跑、中途失败恢复 | 部分覆盖 | 10w aggregate/copy/idempotency 已跑；`sim-process-stage4c-20260608143525` 复跑分片/cancel 当前语义；未做 kill worker、DB 中断、重启恢复。 |
-| dispatch / atomic 故障注入、失败重试风暴、下游异常、lease renew 极限 | 部分覆盖 | `sim-dispatch-stage5b-20260608143154`、`sim-dispatch-stage5c-20260608143209`、`scripts/sim/21-atomic-stage5c.sh` 已复跑本地 500/manifest/timeout/cancel；真实外部 timeout/断连/权限失败和 DLQ 组合未做。 |
+| process 大数据失败恢复、幂等重跑、中途失败恢复 | 部分覆盖 | 10w aggregate/copy/idempotency 已跑；`process-stage4c-20260608163544` 复跑分片和 RUNNING cancel 中断；未做 kill worker、DB 中断、重启恢复。 |
+| dispatch / atomic 故障注入、失败重试风暴、下游异常、lease renew 极限 | 部分覆盖 | `sim-dispatch-stage5b-20260608143154`、`sim-dispatch-stage5c-20260608143209`、`atomic-stage5c-20260608163608` 已复跑本地 500/manifest/timeout/shell cancel 中断；真实外部 timeout/断连/权限失败和 DLQ 组合未做。 |
 | export 更高分片数、真实 S3、多租户混压 | 部分覆盖 | `sim-export-stage3c-20260608143456` 已复跑本地 MinIO/S3-compatible 8 分片、三租户、幂等；真实云 S3/OSS multipart abort/retry 未配置。 |
 
 ## 上线前仍建议补的硬项
 
-1. 建一个可重复的故障注入 harness：kill worker、暂停 Kafka/Redis/PG、模拟下游 5xx/timeout、验证重试和 DLQ。
-2. 单独补 trigger misfire：制造暂停窗口、恢复后校验 replay 数量、幂等去重和 trigger_outbox 积压恢复。
+1. 建一个可重复的故障注入 harness：暂停 Kafka/Redis/PG、模拟下游 5xx/timeout、验证重试和 DLQ；Import worker crash after chunk 已由 Stage 2e 覆盖。
+2. trigger misfire pending 自动关联已补；后续只保留高频 cron、replay 数量上限和 1w storm 容量 profile。
 3. 用真实对象存储跑 export：至少 8/16/32 分片、multipart、跨租户并发、对象校验和。
 4. 做 PG 参数矩阵：重启 PG 后分别测 `work_mem`、`maintenance_work_mem`、checkpoint/WAL 参数，记录中位数而不是单次值。
 5. 如果上线目标包含 1w 全成功，调大配额/并发后重跑 `mx10k608`，不能只满足“全终态”。

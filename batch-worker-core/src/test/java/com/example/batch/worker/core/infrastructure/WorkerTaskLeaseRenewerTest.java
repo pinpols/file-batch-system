@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.worker.core.config.WorkerLeaseProperties;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
+import com.example.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +56,7 @@ class WorkerTaskLeaseRenewerTest {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
-        .thenReturn(Map.of(100L, true));
+        .thenReturn(Map.of(100L, TaskLeaseRenewResult.renewed(100L)));
 
     renewer.renewActiveTaskLeases();
 
@@ -67,7 +68,7 @@ class WorkerTaskLeaseRenewerTest {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
-        .thenReturn(Map.of(100L, false));
+        .thenReturn(Map.of(100L, TaskLeaseRenewResult.rejected(100L)));
 
     renewer.renewActiveTaskLeases();
     renewer.renewActiveTaskLeases();
@@ -78,6 +79,19 @@ class WorkerTaskLeaseRenewerTest {
     verify(registry, times(3)).markLost("100");
     assertThat(renewer.isRenewCircuitOpen()).isFalse();
     assertThat(meter.find("batch.worker.lease.circuit.open.total").counter()).isNull();
+  }
+
+  @Test
+  void shouldRequestLocalCancellationWhenRenewReturnsCancelRequested() {
+    ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
+    when(registry.snapshot()).thenReturn(List.of(lease));
+    when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
+        .thenReturn(Map.of(100L, new TaskLeaseRenewResult(100L, true, true)));
+
+    renewer.renewActiveTaskLeases();
+
+    verify(registry).requestCancellation("100");
+    verify(registry, never()).markLost(anyString());
   }
 
   @Test
@@ -116,7 +130,10 @@ class WorkerTaskLeaseRenewerTest {
             List.of(
                 new TaskLeaseRenewItem("t1", 100L, "w1", null),
                 new TaskLeaseRenewItem("t1", 200L, "w1", null))))
-        .thenReturn(Map.of(100L, false, 200L, true));
+        .thenReturn(
+            Map.of(
+                100L, TaskLeaseRenewResult.rejected(100L),
+                200L, TaskLeaseRenewResult.renewed(200L)));
     renewer.renewActiveTaskLeases();
 
     // fast-retry 应仅打 100，不打 200
@@ -140,7 +157,7 @@ class WorkerTaskLeaseRenewerTest {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
-        .thenReturn(Map.of(100L, false));
+        .thenReturn(Map.of(100L, TaskLeaseRenewResult.rejected(100L)));
 
     renewer.renewActiveTaskLeases(); // 累积失败 1
 
@@ -152,7 +169,7 @@ class WorkerTaskLeaseRenewerTest {
     reset(client);
     when(registry.snapshot()).thenReturn(List.of(lease));
     when(client.renewLeasesBatch(List.of(new TaskLeaseRenewItem("t1", 100L, "w1", null))))
-        .thenReturn(Map.of(100L, true));
+        .thenReturn(Map.of(100L, TaskLeaseRenewResult.renewed(100L)));
     renewer.fastRetryFailedLeases();
     verify(client, never()).renewLease(any(), anyLong(), any(), any());
     verify(client, never()).renewLeasesBatch(anyList());

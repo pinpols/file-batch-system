@@ -159,16 +159,25 @@ misfire_count = wait_int(
     lambda v: v >= 1,
     timeout=90,
 )
-replay_id = BATCH + "-replay"
+pending_link = scalar(
+    "select id || '|' || coalesce(catch_up_request_id::text,'') "
+    "from batch.trigger_misfire_pending "
+    "where tenant_id='ta' and job_code='TA_TRIGGER_STAGE6C_MISFIRE' "
+    f"and status='PENDING' and created_at >= '{START_TS}' "
+    "order by id desc limit 1"
+)
+pending_id, linked_request_id = pending_link.split("|", 1)
+if not linked_request_id:
+    raise RuntimeError(f"misfire pending not linked to catch-up request: pending={pending_id}")
 req = urllib.request.Request(
     f"{BASE}/api/triggers/catch-up/approve",
-    data=json.dumps({"tenantId": "ta", "requestId": replay_id, "reason": "sim-stage6d"}).encode(),
+    data=json.dumps({"tenantId": "ta", "pendingId": int(pending_id), "reason": "sim-stage6d"}).encode(),
     headers={
         "Content-Type": "application/json",
         "X-Tenant-Id": "ta",
         "X-Internal-Secret": SECRET,
-        "Idempotency-Key": replay_id + "-approve",
-        "X-Request-Id": replay_id + "-approve",
+        "Idempotency-Key": linked_request_id + "-approve",
+        "X-Request-Id": linked_request_id + "-approve",
     },
 )
 with urllib.request.urlopen(req, timeout=30) as resp:
@@ -182,12 +191,12 @@ replay_status = ""
 while time.time() < deadline:
     replay_status = scalar(
         "select request_status || '|' || coalesce(related_job_instance_id::text,'') "
-        f"from batch.trigger_request where tenant_id='ta' and request_id='{replay_id}'"
+        f"from batch.trigger_request where tenant_id='ta' and id={linked_request_id}"
     )
     if replay_status.startswith("LAUNCHED|") and replay_status != "LAUNCHED|":
         break
     time.sleep(2)
-print(f"  [replay] {replay_status}", flush=True)
+print(f"  [replay] pending={pending_id} request={linked_request_id} status={replay_status}", flush=True)
 if not replay_status.startswith("LAUNCHED|") or replay_status == "LAUNCHED|":
     raise RuntimeError("catch-up replay did not launch")
 

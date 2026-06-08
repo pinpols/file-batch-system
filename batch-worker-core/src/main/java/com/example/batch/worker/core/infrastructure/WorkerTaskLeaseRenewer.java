@@ -3,6 +3,7 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.worker.core.config.WorkerLeaseProperties;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
+import com.example.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -118,7 +119,7 @@ public class WorkerTaskLeaseRenewer {
               lease.getPartitionInvocationId()));
     }
     recordRenewBatchSizeMetric(batchItems.size());
-    Map<Long, Boolean> results;
+    Map<Long, TaskLeaseRenewResult> results;
     try {
       results = taskExecutionClient.renewLeasesBatch(batchItems);
     } catch (RuntimeException ex) {
@@ -137,10 +138,14 @@ public class WorkerTaskLeaseRenewer {
     int failure = 0;
     for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : leaseList) {
       long taskIdLong = Long.parseLong(activeTaskLease.getTaskId());
-      boolean renewed = results.getOrDefault(taskIdLong, false);
+      TaskLeaseRenewResult result = results.get(taskIdLong);
+      boolean renewed = result != null && result.renewed();
       if (renewed) {
         success++;
         consecutiveFailures.remove(activeTaskLease.getTaskId());
+        if (result.cancelRequested()) {
+          activeTaskLeaseRegistry.requestCancellation(activeTaskLease.getTaskId());
+        }
       } else {
         failure++;
         log.warn(

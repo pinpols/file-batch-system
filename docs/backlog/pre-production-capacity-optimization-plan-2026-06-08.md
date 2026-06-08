@@ -172,7 +172,7 @@ atomic 覆盖：
 
 - dispatch 500 no-retry：`sim-dispatch-stage5b-20260608143154`，`FAILED|FAILED|FAILED|COMPENSATED`。
 - dispatch LOCAL/NAS/SFTP manifest：`sim-dispatch-stage5c-20260608143209`，三通道均 `ACKED:SUCCESS`，SFTP `.chk` 存在。
-- atomic HTTP/SQL timeout/shell cancel：`scripts/sim/21-atomic-stage5c.sh` 通过，SQL timeout 分类为 `TIMEOUT/TIMEOUT`，shell cancel marker=true。
+- atomic HTTP/SQL timeout/shell cancel：`atomic-stage5c-20260608163608` 通过，SQL timeout 分类为 `TIMEOUT/TIMEOUT`，shell cancel HTTP 200 后终态 `FAILED/WORKER_EXECUTION_CANCELLED`。
 - 未完成：真实 SFTP/NAS/OSS/HTTP timeout、断连、权限失败、重试/DLQ 组合。
 
 ### 7. process failure profile
@@ -193,7 +193,7 @@ atomic 覆盖：
 
 状态：**本地 process 分片/cancel 已复跑，fault-injection profile 未完成**。
 
-- `sim-process-stage4c-20260608143525`：4/4 分片 SUCCESS，目标 16 行；RUNNING cancel 当前返回 409，任务最终 SUCCESS。
+- `process-stage4c-20260608163544`：4/4 分片 SUCCESS，目标 16 行；RUNNING cancel HTTP 200 后终态 `FAILED/WORKER_EXECUTION_CANCELLED`。
 - 未完成：DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/脏数据核对。
 
 ## P2 容量画像

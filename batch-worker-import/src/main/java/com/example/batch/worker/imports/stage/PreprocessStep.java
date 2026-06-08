@@ -16,6 +16,7 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
+import com.example.batch.worker.imports.stage.support.ImportStageSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -213,10 +214,8 @@ public class PreprocessStep implements ImportStageStep {
       if (replacementMeta != null) {
         fileMetadata.put("replacementCount", replacementMeta);
       }
-      runtimeRepository.updateFileStatus(
-          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-          "PARSING",
-          fileMetadata);
+      ImportStageSupport.updateFileStatusRecoverAware(
+          runtimeRepository, context, "PARSING", fileMetadata);
       return ImportStageResult.success(stage());
     } catch (ImportPreprocessException ex) {
       SwallowedExceptionLogger.info(PreprocessStep.class, "catch:ImportPreprocessException", ex);
@@ -402,10 +401,8 @@ public class PreprocessStep implements ImportStageStep {
       fileMetadata.put("preprocessFormat", fmt == null ? "" : fmt);
       fileMetadata.put("sourceObject", object);
       fileMetadata.put("sourceBytes", bytes);
-      runtimeRepository.updateFileStatus(
-          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-          "PARSING",
-          fileMetadata);
+      ImportStageSupport.updateFileStatusRecoverAware(
+          runtimeRepository, context, "PARSING", fileMetadata);
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
       if (spool != null) {
@@ -553,10 +550,8 @@ public class PreprocessStep implements ImportStageStep {
       fileMetadata.put("preprocessFormat", fmt == null ? "" : fmt);
       fileMetadata.put("sourceObject", object);
       fileMetadata.put("rangeSlice", partitionNo + "/" + partitionCount);
-      runtimeRepository.updateFileStatus(
-          runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-          "PARSING",
-          fileMetadata);
+      ImportStageSupport.updateFileStatusRecoverAware(
+          runtimeRepository, context, "PARSING", fileMetadata);
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
       if (spool != null) {

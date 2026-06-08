@@ -3,6 +3,7 @@ package com.example.batch.worker.core.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,8 +22,10 @@ import com.example.batch.worker.core.support.TaskExecutionClient;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -290,6 +293,51 @@ class DefaultTaskExecutionWrapperTest {
     assertThat(registry.counter("worker.task.execution.timeout.total").count()).isEqualTo(1.0);
   }
 
+  @Test
+  void shouldReportCancelledWhenRegistryCancellationInterruptsExecution() throws Exception {
+    PulledTask task = sampleTask("1013", "t1", "w1");
+    task.setTimeoutSeconds(30);
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch interrupted = new CountDownLatch(1);
+    AtomicReference<Runnable> cancellationCallback = new AtomicReference<>();
+    doAnswer(
+            invocation -> {
+              cancellationCallback.set(invocation.getArgument(1));
+              return null;
+            })
+        .when(activeTaskLeaseRegistry)
+        .registerCancellationCallback(any(), any());
+    when(activeTaskLeaseRegistry.isCancellationRequested("1013")).thenReturn(true);
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              started.countDown();
+              try {
+                Thread.sleep(30_000);
+              } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                interrupted.countDown();
+              }
+              return StepExecutionResponse.successResponse();
+            });
+
+    CompletableFuture<WorkerExecutionResult> resultFuture =
+        CompletableFuture.supplyAsync(() -> wrapper.execute(task));
+    assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+    Runnable callback = waitForCancellationCallback(cancellationCallback);
+
+    callback.run();
+
+    WorkerExecutionResult result = resultFuture.get(5, TimeUnit.SECONDS);
+    assertThat(interrupted.await(2, TimeUnit.SECONDS)).isTrue();
+    assertThat(result.success()).isFalse();
+    verify(taskExecutionClient)
+        .report(
+            argThat(
+                report ->
+                    DefaultTaskExecutionWrapper.CANCELLED_ERROR_CODE.equals(report.getCode())));
+  }
+
   /** P0-1: clamp — task 配 timeout 超过 maxTimeoutSeconds 必须截断, 防呆配置错误把 worker 卡死 2 小时以上. */
   @Test
   void shouldClampTimeoutToMax() {
@@ -335,5 +383,15 @@ class DefaultTaskExecutionWrapperTest {
     task.setTaskSeq(1);
     task.setIdempotencyKey("idem-" + taskId);
     return task;
+  }
+
+  private static Runnable waitForCancellationCallback(AtomicReference<Runnable> callback)
+      throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+    while (callback.get() == null && System.nanoTime() < deadline) {
+      Thread.sleep(10);
+    }
+    assertThat(callback.get()).isNotNull();
+    return callback.get();
   }
 }

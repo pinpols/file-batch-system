@@ -26,8 +26,8 @@ public record PipelineProgressEntity(
     Long pipelineInstanceId,
     String stage,
     String positionMarker,
-    long processedCount,
-    boolean completed,
+    Long processedCount,
+    Boolean completed,
     OffsetDateTime completedAt,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {}

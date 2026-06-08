@@ -13,6 +13,7 @@ import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
+import com.example.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -126,11 +127,11 @@ public class HttpTaskExecutionClient
   }
 
   @Override
-  public Map<Long, Boolean> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
+  public Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items) {
     if (items == null || items.isEmpty()) {
       return Map.of();
     }
-    Map<Long, Boolean> out = new LinkedHashMap<>();
+    Map<Long, TaskLeaseRenewResult> out = new LinkedHashMap<>();
     for (int i = 0; i < items.size(); i += renewBatchMaxItems) {
       int end = Math.min(i + renewBatchMaxItems, items.size());
       List<TaskLeaseRenewItem> chunk = items.subList(i, end);
@@ -142,7 +143,8 @@ public class HttpTaskExecutionClient
   /**
    * 单 chunk：优先 {@code POST /leases/renew-batch}；404/400、响应缺项/长度不一致、重试耗尽后降级为逐条 {@link #renewLease}。
    */
-  private Map<Long, Boolean> renewBatchChunkHttpOrFallback(List<TaskLeaseRenewItem> chunk) {
+  private Map<Long, TaskLeaseRenewResult> renewBatchChunkHttpOrFallback(
+      List<TaskLeaseRenewItem> chunk) {
     RetryState state =
         RetryState.initial(
             properties.getClaimMaxAttempts(),
@@ -193,7 +195,7 @@ public class HttpTaskExecutionClient
     return fallbackRenewChunk(chunk);
   }
 
-  private Map<Long, Boolean> mapChunkOrFallback(
+  private Map<Long, TaskLeaseRenewResult> mapChunkOrFallback(
       List<TaskLeaseRenewItem> chunk, BatchRenewHttpResponse response) {
     if (response == null
         || response.results() == null
@@ -204,20 +206,23 @@ public class HttpTaskExecutionClient
           response == null || response.results() == null ? null : response.results().size());
       return fallbackRenewChunk(chunk);
     }
-    Map<Long, Boolean> m = new LinkedHashMap<>();
+    Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
     for (int i = 0; i < chunk.size(); i++) {
       BatchRenewHttpResult row = response.results().get(i);
-      m.put(chunk.get(i).taskId(), row != null && row.renewed());
+      Long taskId = chunk.get(i).taskId();
+      boolean renewed = row != null && row.renewed();
+      boolean cancelRequested = row != null && Boolean.TRUE.equals(row.cancelRequested());
+      m.put(taskId, new TaskLeaseRenewResult(taskId, renewed, cancelRequested));
     }
     return m;
   }
 
-  private Map<Long, Boolean> fallbackRenewChunk(List<TaskLeaseRenewItem> chunk) {
-    Map<Long, Boolean> m = new LinkedHashMap<>();
+  private Map<Long, TaskLeaseRenewResult> fallbackRenewChunk(List<TaskLeaseRenewItem> chunk) {
+    Map<Long, TaskLeaseRenewResult> m = new LinkedHashMap<>();
     for (TaskLeaseRenewItem item : chunk) {
       boolean ok =
           renewLease(item.tenantId(), item.taskId(), item.workerId(), item.partitionInvocationId());
-      m.put(item.taskId(), ok);
+      m.put(item.taskId(), new TaskLeaseRenewResult(item.taskId(), ok, false));
     }
     return m;
   }
@@ -522,5 +527,5 @@ public class HttpTaskExecutionClient
 
   private record BatchRenewHttpResponse(List<BatchRenewHttpResult> results) {}
 
-  private record BatchRenewHttpResult(Long taskId, boolean renewed) {}
+  private record BatchRenewHttpResult(Long taskId, boolean renewed, Boolean cancelRequested) {}
 }

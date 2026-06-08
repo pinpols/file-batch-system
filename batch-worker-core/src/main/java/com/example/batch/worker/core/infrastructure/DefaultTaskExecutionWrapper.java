@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -59,6 +60,7 @@ import org.springframework.stereotype.Service;
 public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   static final String TIMEOUT_ERROR_CODE = "WORKER_EXECUTION_TIMEOUT";
+  static final String CANCELLED_ERROR_CODE = "WORKER_EXECUTION_CANCELLED";
 
   private final StepExecutionAdapter stepExecutionAdapter;
   private final TaskExecutionClient taskExecutionClient;
@@ -189,6 +191,17 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       StepExecutionRequest request, PulledTask task, long timeoutSeconds) {
     Future<StepExecutionResponse> future =
         executionPool.submit(() -> stepExecutionAdapter.execute(request));
+    activeTaskLeaseRegistry.registerCancellationCallback(
+        task.getTaskId(),
+        () -> {
+          boolean cancelled = future.cancel(true);
+          log.info(
+              "task cancellation requested by orchestrator: tenantId={}, taskId={},"
+                  + " cancelled={}",
+              task.getTenantId(),
+              task.getTaskId(),
+              cancelled);
+        });
     try {
       return future.get(timeoutSeconds, TimeUnit.SECONDS);
     } catch (TimeoutException ex) {
@@ -209,6 +222,12 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
           "task execution exceeded " + timeoutSeconds + "s and was cancelled by worker",
           null,
           null);
+    } catch (CancellationException ex) {
+      String message =
+          activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())
+              ? "task execution cancelled by orchestrator request"
+              : "task execution cancelled";
+      return new StepExecutionResponse(false, CANCELLED_ERROR_CODE, message, null, null);
     } catch (ExecutionException ex) {
       // 业务异常已在 stepExecutionAdapter 里被包成 StepExecutionResponse.failure 返回, 这里到达说明 adapter 自己抛了
       // RuntimeException (典型: 解析 payload 失败 / 框架 bug). 也按失败上报.

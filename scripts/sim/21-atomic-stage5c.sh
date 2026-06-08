@@ -180,7 +180,7 @@ if len(parts) != 3:
     sys.exit(1)
 http_ok = parts[0] == "SUCCESS"
 timeout_ok = parts[1].startswith("FAILED:TIMEOUT:") or parts[1].startswith("FAILED:WORKER_EXECUTION_TIMEOUT:")
-cancel_marked = parts[2].endswith(":true") and cancel_http == "200"
+cancel_marked = parts[2].startswith("FAILED:FAILED:") and parts[2].endswith(":true") and cancel_http == "200"
 if not http_ok or not timeout_ok or not cancel_marked:
     print("❌ Atomic Stage5c assertion failed", flush=True)
     sys.exit(1)

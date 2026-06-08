@@ -10,6 +10,7 @@ import com.example.batch.worker.core.config.WorkerLeaseProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.reportoutbox.WorkerReportOutboxCoordinator;
 import com.example.batch.worker.core.support.TaskLeaseRenewItem;
+import com.example.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
@@ -202,7 +203,8 @@ class HttpTaskExecutionClientTest {
               .code(200)
               .setHeader("Content-Type", "application/json")
               .body(
-                  "{\"results\":[{\"taskId\":1,\"renewed\":true},{\"taskId\":2,\"renewed\":false}]}")
+                  "{\"results\":[{\"taskId\":1,\"renewed\":true,\"cancelRequested\":true},"
+                      + "{\"taskId\":2,\"renewed\":false}]}")
               .build());
       server.start();
 
@@ -226,9 +228,12 @@ class HttpTaskExecutionClientTest {
           List.of(
               new TaskLeaseRenewItem("t1", 1L, "w1", null),
               new TaskLeaseRenewItem("t1", 2L, "w1", "inv"));
-      Map<Long, Boolean> out = client.renewLeasesBatch(items);
+      Map<Long, TaskLeaseRenewResult> out = client.renewLeasesBatch(items);
 
-      assertThat(out).containsEntry(1L, true).containsEntry(2L, false);
+      assertThat(out.get(1L).renewed()).isTrue();
+      assertThat(out.get(1L).cancelRequested()).isTrue();
+      assertThat(out.get(2L).renewed()).isFalse();
+      assertThat(out.get(2L).cancelRequested()).isFalse();
       assertThat(server.getRequestCount()).isEqualTo(1);
     }
   }

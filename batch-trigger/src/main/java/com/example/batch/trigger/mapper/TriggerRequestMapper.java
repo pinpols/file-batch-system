@@ -9,6 +9,8 @@ public interface TriggerRequestMapper {
 
   List<TriggerRequestEntity> selectByQuery(TriggerRequestQuery query);
 
+  TriggerRequestEntity selectById(@Param("id") Long id);
+
   TriggerRequestEntity selectByTenantAndRequestId(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 

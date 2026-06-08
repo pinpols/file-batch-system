@@ -154,12 +154,19 @@ class WheelMisfireIntegrationTest extends AbstractIntegrationTest {
     TriggerRuntimeStateEntity afterFire = stateMapper.selectByJobDefinitionId(jobDefId);
     assertThat(afterFire.getLastFireStatus()).isEqualTo("MISFIRE_PENDING");
     assertThat(afterFire.getMisfireCount()).isEqualTo(1);
-    // MANUAL_APPROVAL 落 pending 表
+    // MANUAL_APPROVAL 落 pending 表,并自动关联待审批 CATCH_UP trigger_request
     List<TriggerMisfirePendingEntity> pending = pendingMapper.selectPendingByTenant(tenantId, 100);
     assertThat(pending).hasSize(1);
     assertThat(pending.get(0).getJobCode()).isEqualTo(jobCode);
     assertThat(pending.get(0).getStatus()).isEqualTo("PENDING");
     assertThat(pending.get(0).getScheduledFireTime()).isCloseTo(longAgo, within1s());
+    assertThat(pending.get(0).getCatchUpRequestId()).isNotNull();
+    String requestStatus =
+        jdbcTemplate.queryForObject(
+            "select request_status from batch.trigger_request where id = ?",
+            String.class,
+            pending.get(0).getCatchUpRequestId());
+    assertThat(requestStatus).isEqualTo("ACCEPTED");
   }
 
   // ── helpers ─────────────────────────────────────────────
