@@ -27,6 +27,7 @@
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SQL_DIR="$ROOT_DIR/scripts/local/sql"
 [[ -f "$ROOT_DIR/.env.local" ]] && set -a && source "$ROOT_DIR/.env.local" 2>/dev/null && set +a
 [[ -f "$ROOT_DIR/.env" ]] && set -a && source "$ROOT_DIR/.env" 2>/dev/null && set +a
 
@@ -146,9 +147,10 @@ BUNDLE_SHA=$(sha256_file "$BUNDLE_ABS")
 log "  bundle sha256=$BUNDLE_SHA"
 
 # 尝试比对 forensic_export_log(可选,失败仅 warn)
-REGISTERED_SHA=$(psql_platform -tA -c \
-  "SELECT sha256 FROM batch.forensic_export_log WHERE tenant_id='$TENANT_ID' AND export_id='$EXPORT_ID'" \
-  2>/dev/null | tr -d '[:space:]' || true)
+REGISTERED_SHA=$(psql_platform -tA \
+  -v tenant_id="$TENANT_ID" \
+  -v export_id="$EXPORT_ID" \
+  -f "$SQL_DIR/select-forensic-export-sha.sql" 2>/dev/null | tr -d '[:space:]' || true)
 if [[ -n "$REGISTERED_SHA" && "$REGISTERED_SHA" != "$BUNDLE_SHA" ]]; then
   log "  WARN: 本地 platform 库 forensic_export_log.sha256=$REGISTERED_SHA 与文件 sha256 不一致(可能 bundle 来自异机,跳过强校验)"
 elif [[ -n "$REGISTERED_SHA" ]]; then
@@ -168,23 +170,8 @@ log "Step 2/5 创建临时 schema $REPLAY_SCHEMA + 装载 forensic snapshot"
 
 # 用 JSONB 直存,避开 CSV → row schema 映射风险(forensic 实际产物是 JSON);
 # 报告侧通过 jq + SQL 跨 schema 比对(snapshot vs 当前 batch 库 job_instance)。
-psql_business <<SQL || fail "创建临时 schema 失败"
-DROP SCHEMA IF EXISTS $REPLAY_SCHEMA CASCADE;
-CREATE SCHEMA $REPLAY_SCHEMA;
-CREATE TABLE $REPLAY_SCHEMA.forensic_job_instances (
-  instance_no  TEXT PRIMARY KEY,
-  tenant_id    TEXT NOT NULL,
-  job_code     TEXT NOT NULL,
-  biz_date     DATE,
-  snapshot     JSONB NOT NULL
-);
-CREATE INDEX ON $REPLAY_SCHEMA.forensic_job_instances (tenant_id, job_code, biz_date);
-CREATE TABLE $REPLAY_SCHEMA.forensic_day_audits (
-  id        BIGINT,
-  tenant_id TEXT,
-  snapshot  JSONB NOT NULL
-);
-SQL
+psql_business -v replay_schema="$REPLAY_SCHEMA" \
+  -f "$SQL_DIR/create-forensic-replay-schema.sql" || fail "创建临时 schema 失败"
 
 # 把 forensic JSON 灌进 snapshot 表:逐行 jq 拆出 instance_no/job_code/biz_date + 整行 jsonb
 log "  装载 job_instances …"
@@ -194,12 +181,15 @@ jq -c '.[]' "$UNPACKED/job-instances.json" | while IFS= read -r row; do
   bd=$(echo "$row"  | jq -r '.bizDate // .biz_date // empty')
   tid=$(echo "$row" | jq -r '.tenantId // .tenant_id // empty')
   [[ -z "$ino" ]] && continue
-  # NULL 兼容
-  bd_sql="NULL"; [[ -n "$bd" && "$bd" != "null" ]] && bd_sql="'$bd'"
-  esc_row=${row//\'/\'\'}
-  psql_business -c \
-    "INSERT INTO $REPLAY_SCHEMA.forensic_job_instances(instance_no,tenant_id,job_code,biz_date,snapshot) \
-     VALUES ('$ino','$tid','$jc',$bd_sql,'$esc_row'::jsonb) ON CONFLICT (instance_no) DO NOTHING;" \
+  [[ "$bd" == "null" ]] && bd=""
+  psql_business \
+    -v replay_schema="$REPLAY_SCHEMA" \
+    -v instance_no="$ino" \
+    -v tenant_id="$tid" \
+    -v job_code="$jc" \
+    -v biz_date="$bd" \
+    -v snapshot="$row" \
+    -f "$SQL_DIR/insert-forensic-job-instance.sql" \
     >/dev/null || fail "插入 forensic_job_instances 失败 instance_no=$ino"
 done
 
@@ -207,10 +197,13 @@ log "  装载 batch_day_audits …"
 jq -c '.[]' "$UNPACKED/batch-day-operation-audits.json" | while IFS= read -r row; do
   rid=$(echo "$row" | jq -r '.id // empty')
   tid=$(echo "$row" | jq -r '.tenantId // .tenant_id // empty')
-  rid_sql="NULL"; [[ -n "$rid" && "$rid" != "null" ]] && rid_sql="$rid"
-  esc_row=${row//\'/\'\'}
-  psql_business -c \
-    "INSERT INTO $REPLAY_SCHEMA.forensic_day_audits(id,tenant_id,snapshot) VALUES ($rid_sql,'$tid','$esc_row'::jsonb);" \
+  [[ "$rid" == "null" ]] && rid=""
+  psql_business \
+    -v replay_schema="$REPLAY_SCHEMA" \
+    -v audit_id="$rid" \
+    -v tenant_id="$tid" \
+    -v snapshot="$row" \
+    -f "$SQL_DIR/insert-forensic-day-audit.sql" \
     >/dev/null || true
 done
 
@@ -227,9 +220,10 @@ else
   log "Step 3/5 触发 replay(console-api $CONSOLE_BASE)"
 
   # 从 forensic snapshot 取去重的 (jobCode, bizDate) 二元组
-  TRIGGER_PAIRS=$(psql_business -tA -F'|' -c \
-    "SELECT DISTINCT job_code, biz_date FROM $REPLAY_SCHEMA.forensic_job_instances \
-     WHERE tenant_id='$TENANT_ID' AND job_code IS NOT NULL AND biz_date IS NOT NULL ORDER BY 1,2")
+  TRIGGER_PAIRS=$(psql_business -tA -F'|' \
+    -v replay_schema="$REPLAY_SCHEMA" \
+    -v tenant_id="$TENANT_ID" \
+    -f "$SQL_DIR/select-forensic-trigger-pairs.sql")
 
   if [[ -z "$TRIGGER_PAIRS" ]]; then
     log "  WARN: forensic snapshot 无可触发 (jobCode,bizDate) 对,跳过"
@@ -267,10 +261,11 @@ else
     for pair in "${TRIGGERED_INSTANCES[@]:-}"; do
       [[ -z "$pair" ]] && continue
       jc="${pair%|*}"; bd="${pair#*|}"
-      st=$(psql_business -tA -c \
-        "SELECT instance_status FROM batch.job_instance \
-         WHERE tenant_id='$TENANT_ID' AND job_code='$jc' AND biz_date='$bd' \
-         ORDER BY id DESC LIMIT 1" 2>/dev/null | tr -d '[:space:]')
+      st=$(psql_business -tA \
+        -v tenant_id="$TENANT_ID" \
+        -v job_code="$jc" \
+        -v biz_date="$bd" \
+        -f "$SQL_DIR/select-latest-replay-instance-status.sql" 2>/dev/null | tr -d '[:space:]')
       if [[ -z "$st" ]] || ! echo "$st" | grep -qE "^($TERMINAL_RE)$"; then
         pending=$((pending+1))
       fi
@@ -285,17 +280,11 @@ else
 
   # 抽 replay snapshot:每个 (jobCode,bizDate) 取最新一条 batch.job_instance(即 replay 新跑的)
   log "  抽取 replay snapshot → $REPLAY_SNAPSHOT"
-  psql_business -tA -c "SELECT json_agg(t) FROM (
-    SELECT DISTINCT ON (job_code, biz_date)
-      instance_no, tenant_id, job_code, biz_date::TEXT,
-      instance_status,
-      COALESCE(success_partition_count,0) + COALESCE(failed_partition_count,0) AS processed_count,
-      started_at, finished_at,
-      result_summary, params_snapshot
-    FROM batch.job_instance
-    WHERE tenant_id='$TENANT_ID' AND biz_date BETWEEN '$BIZ_FROM' AND '$BIZ_TO'
-    ORDER BY job_code, biz_date, id DESC
-  ) t" > "$REPLAY_SNAPSHOT" 2>/dev/null || echo "[]" > "$REPLAY_SNAPSHOT"
+  psql_business -tA \
+    -v tenant_id="$TENANT_ID" \
+    -v biz_from="$BIZ_FROM" \
+    -v biz_to="$BIZ_TO" \
+    -f "$SQL_DIR/select-replay-snapshot.sql" > "$REPLAY_SNAPSHOT" 2>/dev/null || echo "[]" > "$REPLAY_SNAPSHOT"
 
   # 空结果占位
   [[ -s "$REPLAY_SNAPSHOT" ]] || echo "[]" > "$REPLAY_SNAPSHOT"

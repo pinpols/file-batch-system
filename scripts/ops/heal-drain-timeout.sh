@@ -22,6 +22,9 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-15432}"
@@ -38,9 +41,9 @@ BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 log()  { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 dry()  { log "DRY-RUN: $*"; }
 
-psql_query() {
+psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
-       -tA -c "$1" 2>&1
+       -X -A -t -v ON_ERROR_STOP=1 -v schema="$BATCH_SCHEMA" "$@"
 }
 
 console_post() {
@@ -76,13 +79,7 @@ log "heal-drain-timeout: BATCH_HEAL_DRY_RUN=${BATCH_HEAL_DRY_RUN}"
 log "Querying drain-timeout workers from ${PGHOST}:${PGPORT}/${PGDATABASE}..."
 
 # Fetch: worker_code|tenant_id|drain_deadline_at
-overdue_workers="$(psql_query \
-  "SELECT worker_code || '|' || tenant_id || '|' || drain_deadline_at
-     FROM ${BATCH_SCHEMA}.worker_registry
-    WHERE worker_status = 'DRAINING'
-      AND drain_deadline_at IS NOT NULL
-      AND drain_deadline_at < NOW()
-    ORDER BY drain_deadline_at ASC" 2>/dev/null)" || {
+overdue_workers="$(psql_file -f "$OPS_SQL_DIR/heal-drain-timeout-workers.sql" 2>/dev/null)" || {
   log "ERROR: cannot query worker_registry"
   exit 1
 }

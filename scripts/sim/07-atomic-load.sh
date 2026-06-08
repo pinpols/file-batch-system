@@ -23,6 +23,9 @@ fi
 set -uo pipefail
 
 TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
+if [[ -z "${BATCH_INTERNAL_SECRET:-}" && -f .env.local ]]; then
+  BATCH_INTERNAL_SECRET="$(grep -E '^BATCH_INTERNAL_SECRET=' .env.local | tail -1 | cut -d= -f2- || true)"
+fi
 INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
 ROUNDS="${ROUNDS:-5}"
 ATOMIC_TENANT="${ATOMIC_TENANT:-default-tenant}"

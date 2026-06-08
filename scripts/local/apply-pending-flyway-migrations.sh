@@ -16,14 +16,16 @@ PG="${PG_CONTAINER:-batch-postgres-primary}"
 PG_USER="${PG_USER:-batch_user}"
 PG_DB="${PG_DB:-batch_platform}"
 MIG_DIR="${MIG_DIR:-db/migration}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SQL_DIR="$ROOT_DIR/scripts/local/sql"
 
 [[ -d "$MIG_DIR" ]] || { echo "❌ $MIG_DIR not found"; exit 1; }
-docker exec "$PG" psql -U "$PG_USER" -d "$PG_DB" -c '\q' 2>/dev/null \
+docker exec "$PG" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1 \
   || { echo "❌ PG container $PG 不可达"; exit 1; }
 
 # 已应用版本
-applied=$(docker exec "$PG" psql -U "$PG_USER" -d "$PG_DB" -tAc \
-  "SELECT version FROM batch.flyway_schema_history WHERE success=true ORDER BY installed_rank;" 2>/dev/null | tr '\n' ' ')
+applied=$(docker exec -i "$PG" psql -U "$PG_USER" -d "$PG_DB" -tA -f /dev/stdin \
+  < "$SQL_DIR/select-applied-flyway-versions.sql" 2>/dev/null | tr '\n' ' ')
 
 # 文件遍历
 applied_count=0; skipped_count=0
@@ -36,10 +38,11 @@ for f in $(ls "$MIG_DIR"/V*.sql 2>/dev/null | sort -t V -k 2 -n); do
   fi
   echo "==> 应用 V$ver: $desc"
   if docker exec -i "$PG" psql -U "$PG_USER" -d "$PG_DB" < "$f" > /tmp/mig-V${ver}.log 2>&1; then
-    docker exec "$PG" psql -U "$PG_USER" -d "$PG_DB" -c "
-      INSERT INTO batch.flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, execution_time, success)
-      VALUES ((SELECT COALESCE(MAX(installed_rank),0)+1 FROM batch.flyway_schema_history),
-              '$ver', '$desc', 'SQL', '$(basename $f)', 0, 'batch_user', 0, true);" > /dev/null
+    docker exec -i "$PG" psql -U "$PG_USER" -d "$PG_DB" \
+      -v version="$ver" \
+      -v description="$desc" \
+      -v script="$(basename "$f")" \
+      -f /dev/stdin < "$SQL_DIR/insert-flyway-history.sql" > /dev/null
     echo "    ✅"
     applied_count=$((applied_count + 1))
   else

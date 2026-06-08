@@ -63,5 +63,6 @@
 | `2026-06-02-sdk-atomic-fe-deep-review.md` | SDK + atomic + FE | 三件套综合 |
 | `2026-06-02-java-python-sdk-deep-review.md` | 跨语言对照 | Java 对 Python SDK 一致性审 |
 | `2026-06-02-sdk-fix-execution-plan.md` | SDK 修复 plan | 6-lane 并发修复执行计划(已交付,PR #295-#302) |
+| `sql-config-governance-report-2026-06-08.md` | SQL/配置治理 | shell / Java 中 SQL 与配置混杂专项报告 + 分阶段整改计划 |
 
 新增日期快照时同步在此追加一行;已 fold 进主干或归档的文件移 `archive/analysis/` 并从本表删除。

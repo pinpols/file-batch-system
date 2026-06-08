@@ -99,6 +99,11 @@ psql_q() {
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null
 }
 
+psql_file() {
+  local db="$1"; local file="$2"; shift 2
+  docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$db" -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$file"
+}
+
 # 写入用 — 仅返回 RETURNING 的首行(过滤 "INSERT 0 N" / "DELETE N" 等命令统计)
 psql_w_first() {
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null \
@@ -111,55 +116,8 @@ psql_w_first() {
 # 含 dead_letter_task / retry_schedule（避免删分区后死信仍指向孤儿 partition）
 do_cleanup() {
   local pattern="${1:-$SWEEP_PATTERN}"
-  # 关键 FK: job_instance.trigger_request_id 反向引用 trigger_request
-  # 所以必须先删所有由本 PROBE 关联的 job_instance(双向反查),才能删 trigger_request
-  # 反查 job_instance.id 集合 = 通过 trigger_request_id 联到的(不依赖 related_job_instance_id 是否回填)
-  local probe_instances
-  # 双向反查 job_instance: ① 通过 PROBE trigger_request 联到的(API fire); ② job_code LIKE PROBE
-  # (CRON 自动 fire 的 instance trigger_request.request_id 自动生成不带 PROBE_TAG, 必须按 job_code 兜底)
-  probe_instances=$(psql_q "SELECT string_agg(DISTINCT id::text, ',') FROM batch.job_instance WHERE trigger_request_id IN (SELECT id FROM batch.trigger_request WHERE request_id LIKE '$pattern' OR job_code LIKE '$pattern') OR job_code LIKE '$pattern'")
-  if [[ -n "$probe_instances" ]]; then
-    # 衍生 cascade(子表先删, 父表后删, 走 FK 安全顺序):
-    psql_q "DELETE FROM batch.pipeline_step_run WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.file_dispatch_record WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances)) OR file_id IN (SELECT id FROM batch.file_record WHERE source_ref IN (SELECT instance_no FROM batch.job_instance WHERE id IN ($probe_instances)))" >/dev/null
-    psql_q "DELETE FROM batch.file_record WHERE source_ref IN (SELECT instance_no FROM batch.job_instance WHERE id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.workflow_node_run WHERE workflow_run_id IN (SELECT id FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.job_step_instance WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.dead_letter_task d WHERE d.source_type='JOB_PARTITION' AND EXISTS (SELECT 1 FROM batch.job_partition p WHERE p.id=d.source_id AND p.job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.retry_schedule r WHERE r.related_type='JOB_PARTITION' AND EXISTS (SELECT 1 FROM batch.job_partition p WHERE p.id=r.related_id AND p.job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.retry_schedule r WHERE r.related_type='JOB_TASK' AND EXISTS (SELECT 1 FROM batch.job_task t WHERE t.id=r.related_id AND t.job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.job_task WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.job_partition WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.job_execution_log WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    # event_delivery_log FK 引用 outbox_event,必须先删;否则下面 outbox 删撞 FK
-    psql_q "DELETE FROM batch.event_delivery_log WHERE outbox_event_id IN (SELECT id FROM batch.outbox_event WHERE aggregate_id::text IN (SELECT unnest(string_to_array('$probe_instances', ','))))" >/dev/null
-    psql_q "DELETE FROM batch.outbox_event WHERE aggregate_id::text IN (SELECT unnest(string_to_array('$probe_instances', ',')))" >/dev/null
-    psql_q "DELETE FROM batch.job_instance WHERE id IN ($probe_instances)" >/dev/null
-  fi
-  # 此时 job_instance 的 FK 已断,trigger_request / outbox 安全删除
-  # CRON PROBE job (§9.5) auto-fire 的 trigger_request request_id 自动生成不带 PROBE_TAG,
-  # 必须 OR 按 job_code 兜底,否则 fire 的 SCHEDULED 行漏清
-  # trigger_outbox_event 表无 job_code 列,只走 request_id pattern (CRON fire 直接写 trigger_request 不入 outbox)
-  psql_q "DELETE FROM batch.trigger_outbox_event WHERE request_id LIKE '$pattern'" >/dev/null
-  psql_q "DELETE FROM batch.trigger_request WHERE request_id LIKE '$pattern' OR job_code LIKE '$pattern'" >/dev/null
-  # CRON PROBE 在 trigger_runtime_state 留行,不清会一直 fire 污染下次 run
-  psql_q "DELETE FROM batch.trigger_runtime_state WHERE job_definition_id IN (SELECT id FROM batch.job_definition WHERE job_code LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.workflow_node WHERE node_code='SEEDVAL_PROBE'" >/dev/null
-  psql_q "DELETE FROM batch.pipeline_step_definition WHERE pipeline_definition_id IN (SELECT id FROM batch.pipeline_definition WHERE job_code LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.pipeline_definition WHERE job_code LIKE '$pattern'" >/dev/null
-  # STRICT EXPORT 写的 file_record + 我们 seed 的 settlement_batch 一起清(按 PROBE_TAG batch_no)
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.settlement_batch WHERE batch_no LIKE '$pattern'" >/dev/null 2>&1 || true
-  # STRICT DISPATCH PROBE file_record (按 file_code = PROBE_TAG-file)
-  psql_q "DELETE FROM batch.file_audit_log WHERE file_id IN (SELECT id FROM batch.file_record WHERE file_code LIKE '$pattern' OR source_ref LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.file_dispatch_record WHERE file_id IN (SELECT id FROM batch.file_record WHERE file_code LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.file_record WHERE source_ref LIKE '$pattern' OR file_code LIKE '$pattern'" >/dev/null
-  # IMPORT 写的 biz.customer_account 行(SEEDVAL_C* 前缀, IMPORT 真 SUCCESS 后产生)
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.customer_account WHERE customer_no LIKE 'SEEDVAL_%'" >/dev/null 2>&1 || true
-  # PROBE job_definition (§9.5 CRON 真触发探针等);
-  # V67 trigger_runtime_state ON DELETE CASCADE 自动清
-  psql_q "DELETE FROM batch.job_definition WHERE job_code LIKE '$pattern'" >/dev/null
+  psql_file "$PG_DB" "$ROOT/scripts/local/sql/validate-seed-cleanup-platform.sql" -v pattern="$pattern" >/dev/null
+  psql_file batch_business "$ROOT/scripts/local/sql/validate-seed-cleanup-business.sql" -v pattern="$pattern" >/dev/null 2>&1 || true
 }
 
 # 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留垃圾
@@ -601,67 +559,9 @@ if [[ "$STRICT" == "1" ]]; then
   # seed default-tenant PROCESS job + pipeline steps; COMPUTE step 走 sqlTransformCompute,
   # 写入 biz.customer_account 的 SEEDVAL_* probe 行,可被 do_cleanup 清掉。
   PROBE_PROCESS_JOB="${PROBE_TAG}-process"
-  psql_q "INSERT INTO batch.job_definition (
-      tenant_id, job_code, job_name, job_type, biz_type,
-      schedule_type, timezone, trigger_mode, queue_code, worker_group, window_code,
-      priority, enabled, created_at, updated_at
-    ) VALUES (
-      'default-tenant', '$PROBE_PROCESS_JOB', 'seedval process probe', 'PROCESS', 'TEST',
-      'MANUAL', 'Asia/Shanghai', 'SCHEDULED', 'process_queue', 'PROCESS', 'always_open',
-      5, true, now(), now()
-    ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true" >/dev/null
-  probe_process_pipeline_id=$(psql_w_first "INSERT INTO batch.pipeline_definition (
-      tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-      version, enabled, description, created_at, updated_at
-    ) VALUES (
-      'default-tenant', '$PROBE_PROCESS_JOB', 'seedval process probe pipeline',
-      'PROCESS', 'TEST', 'PROCESS', 1, true, 'seed validation process probe', now(), now()
-    ) RETURNING id")
-  psql_q "INSERT INTO batch.pipeline_step_definition (
-      pipeline_definition_id, step_code, step_name, stage_code, step_order,
-      impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
-      enabled, created_at, updated_at
-    ) VALUES
-      ($probe_process_pipeline_id, 'PROCESS_PREPARE', 'Prepare', 'PREPARE', 1,
-       'PROCESS_PREPARE', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
-       'sqlTransformCompute',
-       jsonb_build_object(
-         'sqlTransformCompute', jsonb_build_object(
-           'sourceSql',
-           'select ' ||
-           quote_literal('default-tenant') || '::text as tenant_id, ' ||
-           quote_literal('SEEDVAL_' || upper(replace('$PROBE_TAG', '-', '_'))) || '::text as customer_no, ' ||
-           quote_literal('Seed Validation Process Probe') || '::text as customer_name, ' ||
-           quote_literal('PERSONAL') || '::text as customer_type, ' ||
-           quote_literal('ACTIVE') || '::text as status',
-           'targetSchema', 'biz',
-           'targetTable', 'customer_account',
-           'writeMode', 'UPSERT',
-           'columns', jsonb_build_array(
-             jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
-             jsonb_build_object('source', 'customer_no', 'target', 'customer_no'),
-             jsonb_build_object('source', 'customer_name', 'target', 'customer_name'),
-             jsonb_build_object('source', 'customer_type', 'target', 'customer_type'),
-             jsonb_build_object('source', 'status', 'target', 'status')
-           ),
-           'conflictColumns', jsonb_build_array('tenant_id', 'customer_no'),
-           'validations', jsonb_build_array(
-             jsonb_build_object(
-               'name', 'staged_one_row',
-               'checkSql', 'select count(*) = 1 as pass, ''expected one staged row'' as message from batch.process_staging where batch_key = :batchKey'
-             )
-           ),
-           'emptyResultPolicy', 'FAIL',
-           'maxStagedRows', 10
-         )
-       ), 600, 'FIXED', 1, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
-       'PROCESS_VALIDATE', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_COMMIT', 'Commit', 'COMMIT', 4,
-       'PROCESS_COMMIT', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
-       'PROCESS_FEEDBACK', '{}'::jsonb, 300, 'NONE', 0, true, now(), now())" >/dev/null
+  psql_file "$PG_DB" "$ROOT/scripts/local/sql/validate-seed-process-fixture.sql" \
+    -v probe_process_job="$PROBE_PROCESS_JOB" \
+    -v probe_tag="$PROBE_TAG" >/dev/null
   assert_fire "PROCESS 严格 (default-tenant, sqlTransformCompute)" "default-tenant" "$PROBE_PROCESS_JOB" \
     "{\"bizDate\":\"$(date +%Y-%m-%d)\",\"batchKey\":\"$PROBE_TAG-batch\"}" success
 else

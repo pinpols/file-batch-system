@@ -29,6 +29,9 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+
 require_tools() {
   for tool in psql curl; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
@@ -58,9 +61,11 @@ BATCH_HEAL_RETRY_SLEEP_MS="${BATCH_HEAL_RETRY_SLEEP_MS:-500}"
 # ── helpers ────────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
-psql_query() {
+psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
-       -tA -c "$1" 2>&1
+       -X -A -t -v ON_ERROR_STOP=1 -v schema="$BATCH_SCHEMA" \
+       -v tenant="$BATCH_HEAL_RETRY_TENANT" \
+       -v partition_status="$BATCH_HEAL_RETRY_PARTITION_STATUS" "$@"
 }
 
 orchestrator_post() {
@@ -86,24 +91,12 @@ sleep_ms() {
   sleep "${secs}"
 }
 
-build_where() {
-  local where="WHERE partition_status = '${BATCH_HEAL_RETRY_PARTITION_STATUS}'"
-  if [[ -n "${BATCH_HEAL_RETRY_TENANT}" ]]; then
-    where="${where} AND tenant_id = '${BATCH_HEAL_RETRY_TENANT}'"
-  fi
-  printf '%s' "${where}"
-}
-
 require_tools
 
-where="$(build_where)"
-
 log "heal-retry-partitions: DRY_RUN=${BATCH_HEAL_RETRY_DRY_RUN}"
-log "Filter: ${where}"
+log "Filter: partition_status=${BATCH_HEAL_RETRY_PARTITION_STATUS} tenant=${BATCH_HEAL_RETRY_TENANT:-<all>}"
 
-total="$(psql_query \
-  "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.job_partition ${where}" \
-  2>/dev/null)" || total=0
+total="$(psql_file -f "$OPS_SQL_DIR/heal-retry-partitions-count.sql" 2>/dev/null)" || total=0
 
 if [[ "${total}" -eq 0 ]]; then
   log "No job_partition match filter — nothing to heal"
@@ -117,13 +110,10 @@ failed=0
 offset=0
 
 while true; do
-  batch="$(psql_query \
-    "SELECT id, tenant_id
-       FROM ${BATCH_SCHEMA}.job_partition
-       ${where}
-       ORDER BY id ASC
-       LIMIT ${BATCH_HEAL_RETRY_BATCH_SIZE} OFFSET ${offset}" \
-    2>/dev/null)" || {
+  batch="$(psql_file \
+      -v batch_size="$BATCH_HEAL_RETRY_BATCH_SIZE" \
+      -v batch_offset="$offset" \
+      -f "$OPS_SQL_DIR/heal-retry-partitions-batch.sql" 2>/dev/null)" || {
       log "ERROR: cannot query job_partition at offset ${offset}"
       break
     }
@@ -171,4 +161,3 @@ elif [[ "${failed}" -gt 0 ]]; then
 else
   log "Heal complete: ${replayed} partition(s) replayed successfully"
 fi
-

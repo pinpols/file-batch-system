@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-15432}"
@@ -40,9 +43,12 @@ ok()   { log "OK:   $*"; }
 warn() { log "WARN: $*"; warnings=$((warnings + 1)); }
 fail() { log "FAIL: $*"; failures=$((failures + 1)); }
 
-psql_query() {
+psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
-       -tA -c "$1" 2>&1
+       -tA -v ON_ERROR_STOP=1 -v schema="$BATCH_SCHEMA" \
+       -v stuck_job_minutes="$STUCK_JOB_MINUTES" \
+       -v outbox_lag_seconds="$OUTBOX_LAG_SECONDS" \
+       -v alert_lookback_minutes="$ALERT_LOOKBACK_MINUTES" "$@"
 }
 
 require_psql() {
@@ -55,7 +61,7 @@ require_psql() {
 # ── 1. connectivity ───────────────────────────────────────────────────────────
 check_connectivity() {
   local result
-  if ! result="$(psql_query "SELECT 1" 2>&1)"; then
+  if ! result="$(psql_file -f "$OPS_SQL_DIR/common-connectivity.sql" 2>&1)"; then
     fail "DB connection failed: ${result}"
     exit 1
   fi
@@ -64,31 +70,29 @@ check_connectivity() {
 
 # ── 2. Flyway migration history ───────────────────────────────────────────────
 check_flyway() {
-  local flyway_table="${BATCH_SCHEMA}.flyway_schema_history"
+  local flyway_scope="schema"
   local failed_count
-  failed_count="$(psql_query \
-    "SELECT COUNT(*) FROM ${flyway_table} WHERE success = false" \
-    2>/dev/null)" || {
-    # Flyway table might be in public schema
-    flyway_table="flyway_schema_history"
-    failed_count="$(psql_query \
-      "SELECT COUNT(*) FROM ${flyway_table} WHERE success = false" \
-      2>/dev/null)" || {
+  failed_count="$(psql_file -f "$OPS_SQL_DIR/inspect-db-flyway-failed-count.sql" 2>/dev/null)" || {
+    flyway_scope="public"
+    failed_count="$(psql_file -f "$OPS_SQL_DIR/inspect-db-flyway-public-failed-count.sql" 2>/dev/null)" || {
       warn "Cannot query flyway_schema_history — skipping Flyway check"
       return
     }
   }
   if [[ "${failed_count}" -gt 0 ]]; then
     fail "Flyway: ${failed_count} failed migration(s) in history"
-    psql_query \
-      "SELECT version, description, installed_on
-         FROM ${flyway_table}
-        WHERE success = false
-        ORDER BY installed_rank DESC
-        LIMIT 5" 2>/dev/null || true
+    if [[ "$flyway_scope" == "public" ]]; then
+      psql_file -f "$OPS_SQL_DIR/inspect-db-flyway-public-failed-list.sql" 2>/dev/null || true
+    else
+      psql_file -f "$OPS_SQL_DIR/inspect-db-flyway-failed-list.sql" 2>/dev/null || true
+    fi
   else
     local total
-    total="$(psql_query "SELECT COUNT(*) FROM ${flyway_table} WHERE success = true" 2>/dev/null)" || total="?"
+    if [[ "$flyway_scope" == "public" ]]; then
+      total="$(psql_file -f "$OPS_SQL_DIR/inspect-db-flyway-public-success-count.sql" 2>/dev/null)" || total="?"
+    else
+      total="$(psql_file -f "$OPS_SQL_DIR/inspect-db-flyway-success-count.sql" 2>/dev/null)" || total="?"
+    fi
     ok "Flyway: ${total} successful migration(s), 0 failed"
   fi
 }
@@ -96,17 +100,9 @@ check_flyway() {
 # ── 3. recent alert events ────────────────────────────────────────────────────
 check_alert_events() {
   local critical warning
-  critical="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.alert_event
-      WHERE severity = 'CRITICAL'
-        AND last_seen_at >= NOW() - INTERVAL '${ALERT_LOOKBACK_MINUTES} minutes'" \
-    2>/dev/null)" || { warn "Cannot query alert_event"; return; }
+  critical="$(psql_file -f "$OPS_SQL_DIR/inspect-db-alert-critical-count.sql" 2>/dev/null)" || { warn "Cannot query alert_event"; return; }
 
-  warning="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.alert_event
-      WHERE severity = 'WARNING'
-        AND last_seen_at >= NOW() - INTERVAL '${ALERT_LOOKBACK_MINUTES} minutes'" \
-    2>/dev/null)" || warning=0
+  warning="$(psql_file -f "$OPS_SQL_DIR/inspect-db-alert-warning-count.sql" 2>/dev/null)" || warning=0
 
   if [[ "${critical}" -gt 0 ]]; then
     fail "Alert events: ${critical} CRITICAL in last ${ALERT_LOOKBACK_MINUTES}m"
@@ -120,21 +116,11 @@ check_alert_events() {
 # ── 4. stuck job instances ────────────────────────────────────────────────────
 check_stuck_jobs() {
   local stuck
-  stuck="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.job_instance
-      WHERE instance_status IN ('RUNNING','PENDING')
-        AND updated_at < NOW() - INTERVAL '${STUCK_JOB_MINUTES} minutes'" \
-    2>/dev/null)" || { warn "Cannot query job_instance"; return; }
+  stuck="$(psql_file -f "$OPS_SQL_DIR/inspect-db-stuck-jobs-count.sql" 2>/dev/null)" || { warn "Cannot query job_instance"; return; }
 
   if [[ "${stuck}" -gt 0 ]]; then
     fail "Stuck jobs: ${stuck} instance(s) in RUNNING/PENDING for >${STUCK_JOB_MINUTES}m"
-    psql_query \
-      "SELECT tenant_id, job_code, instance_no, instance_status, updated_at
-         FROM ${BATCH_SCHEMA}.job_instance
-        WHERE instance_status IN ('RUNNING','PENDING')
-          AND updated_at < NOW() - INTERVAL '${STUCK_JOB_MINUTES} minutes'
-        ORDER BY updated_at ASC
-        LIMIT 10" 2>/dev/null || true
+    psql_file -f "$OPS_SQL_DIR/inspect-db-stuck-jobs-list.sql" 2>/dev/null || true
   else
     ok "Stuck jobs: none (threshold ${STUCK_JOB_MINUTES}m)"
   fi
@@ -143,32 +129,17 @@ check_stuck_jobs() {
 # ── 5. outbox backlog ─────────────────────────────────────────────────────────
 check_outbox_backlog() {
   local pending
-  pending="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.outbox_event
-      WHERE publish_status IN ('NEW','FAILED','PUBLISHING')
-        AND created_at < NOW() - INTERVAL '${OUTBOX_LAG_SECONDS} seconds'" \
-    2>/dev/null)" || { warn "Cannot query outbox_event"; return; }
+  pending="$(psql_file -f "$OPS_SQL_DIR/inspect-db-outbox-backlog-count.sql" 2>/dev/null)" || { warn "Cannot query outbox_event"; return; }
 
   if [[ "${pending}" -gt 0 ]]; then
     fail "Outbox backlog: ${pending} unpublished event(s) older than ${OUTBOX_LAG_SECONDS}s"
-    psql_query \
-      "SELECT event_type, COUNT(*) AS cnt, MIN(created_at) AS oldest
-         FROM ${BATCH_SCHEMA}.outbox_event
-        WHERE publish_status IN ('NEW','FAILED','PUBLISHING')
-          AND created_at < NOW() - INTERVAL '${OUTBOX_LAG_SECONDS} seconds'
-        GROUP BY event_type
-        ORDER BY oldest ASC
-        LIMIT 10" 2>/dev/null || true
+    psql_file -f "$OPS_SQL_DIR/inspect-db-outbox-backlog-list.sql" 2>/dev/null || true
   else
     ok "Outbox backlog: 0 unpublished events older than ${OUTBOX_LAG_SECONDS}s"
   fi
 
   local stale_publishing
-  stale_publishing="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.outbox_event
-      WHERE publish_status = 'PUBLISHING'
-        AND updated_at < NOW() - INTERVAL '${OUTBOX_LAG_SECONDS} seconds'" \
-    2>/dev/null)" || stale_publishing=0
+  stale_publishing="$(psql_file -f "$OPS_SQL_DIR/inspect-db-outbox-stale-publishing-count.sql" 2>/dev/null)" || stale_publishing=0
   if [[ "${stale_publishing}" -gt 0 ]]; then
     fail "Outbox stale publishing: ${stale_publishing} event(s) stuck in PUBLISHING for >${OUTBOX_LAG_SECONDS}s"
   fi
@@ -177,10 +148,7 @@ check_outbox_backlog() {
 # ── 6. dead letter backlog ────────────────────────────────────────────────────
 check_dead_letters() {
   local new_dlq
-  new_dlq="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.dead_letter_task
-      WHERE replay_status = 'NEW'" \
-    2>/dev/null)" || { warn "Cannot query dead_letter_task"; return; }
+  new_dlq="$(psql_file -f "$OPS_SQL_DIR/inspect-db-dead-letter-new-count.sql" 2>/dev/null)" || { warn "Cannot query dead_letter_task"; return; }
 
   if [[ "${new_dlq}" -gt "${DLQ_WARN_COUNT}" ]]; then
     fail "Dead letters: ${new_dlq} tasks with replay_status=NEW (threshold ${DLQ_WARN_COUNT})"
@@ -194,16 +162,9 @@ check_dead_letters() {
 # ── 7. retry schedule backlog ─────────────────────────────────────────────────
 check_retry_backlog() {
   local waiting overdue
-  waiting="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.retry_schedule
-      WHERE retry_status = 'WAITING'" \
-    2>/dev/null)" || { warn "Cannot query retry_schedule"; return; }
+  waiting="$(psql_file -f "$OPS_SQL_DIR/inspect-db-retry-waiting-count.sql" 2>/dev/null)" || { warn "Cannot query retry_schedule"; return; }
 
-  overdue="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.retry_schedule
-      WHERE retry_status = 'WAITING'
-        AND next_retry_at < NOW() - INTERVAL '10 minutes'" \
-    2>/dev/null)" || overdue=0
+  overdue="$(psql_file -f "$OPS_SQL_DIR/inspect-db-retry-overdue-count.sql" 2>/dev/null)" || overdue=0
 
   if [[ "${overdue}" -gt 0 ]]; then
     fail "Retry schedule: ${overdue} overdue WAITING retries (next_retry_at >10m past)"
@@ -217,47 +178,11 @@ check_retry_backlog() {
 # ── 8. terminal job instances with active children ───────────────────────────
 check_terminal_instance_active_children() {
   local inconsistent
-  inconsistent="$(psql_query \
-    "SELECT COUNT(DISTINCT ji.id)
-       FROM ${BATCH_SCHEMA}.job_instance ji
-      WHERE ji.instance_status IN ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')
-        AND (
-          EXISTS (
-            SELECT 1 FROM ${BATCH_SCHEMA}.job_partition p
-             WHERE p.tenant_id = ji.tenant_id
-               AND p.job_instance_id = ji.id
-               AND p.partition_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING')
-          )
-          OR EXISTS (
-            SELECT 1 FROM ${BATCH_SCHEMA}.job_task t
-             WHERE t.tenant_id = ji.tenant_id
-               AND t.job_instance_id = ji.id
-               AND t.task_status IN ('CREATED','READY','RUNNING')
-          )
-        )" 2>/dev/null)" || { warn "Cannot query terminal job child consistency"; return; }
+  inconsistent="$(psql_file -f "$OPS_SQL_DIR/inspect-db-terminal-active-children-count.sql" 2>/dev/null)" || { warn "Cannot query terminal job child consistency"; return; }
 
   if [[ "${inconsistent}" -gt 0 ]]; then
     fail "Terminal consistency: ${inconsistent} terminal job_instance(s) still have active partition/task children"
-    psql_query \
-      "SELECT ji.tenant_id, ji.id, ji.job_code, ji.instance_status, ji.updated_at
-         FROM ${BATCH_SCHEMA}.job_instance ji
-        WHERE ji.instance_status IN ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')
-          AND (
-            EXISTS (
-              SELECT 1 FROM ${BATCH_SCHEMA}.job_partition p
-               WHERE p.tenant_id = ji.tenant_id
-                 AND p.job_instance_id = ji.id
-                 AND p.partition_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING')
-            )
-            OR EXISTS (
-              SELECT 1 FROM ${BATCH_SCHEMA}.job_task t
-               WHERE t.tenant_id = ji.tenant_id
-                 AND t.job_instance_id = ji.id
-                 AND t.task_status IN ('CREATED','READY','RUNNING')
-            )
-          )
-        ORDER BY ji.updated_at ASC
-        LIMIT 10" 2>/dev/null || true
+    psql_file -f "$OPS_SQL_DIR/inspect-db-terminal-active-children-list.sql" 2>/dev/null || true
   else
     ok "Terminal consistency: no terminal job_instance has active partition/task children"
   fi

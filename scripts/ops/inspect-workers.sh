@@ -14,6 +14,9 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-15432}"
@@ -33,9 +36,10 @@ ok()   { log "OK:   $*"; }
 warn() { log "WARN: $*"; warnings=$((warnings + 1)); }
 fail() { log "FAIL: $*"; failures=$((failures + 1)); }
 
-psql_query() {
+psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
-       -tA -c "$1" 2>&1
+       -tA -v ON_ERROR_STOP=1 -v schema="$BATCH_SCHEMA" \
+       -v stale_heartbeat_minutes="$STALE_HEARTBEAT_MINUTES" "$@"
 }
 
 require_psql() {
@@ -47,7 +51,7 @@ require_psql() {
 
 check_connectivity() {
   local result
-  if ! result="$(psql_query "SELECT 1" 2>&1)"; then
+  if ! result="$(psql_file -f "$OPS_SQL_DIR/common-connectivity.sql" 2>&1)"; then
     fail "DB connection failed: ${result}"
     exit 1
   fi
@@ -56,11 +60,7 @@ check_connectivity() {
 # ── 1. worker status summary ──────────────────────────────────────────────────
 check_worker_summary() {
   log "Worker registry summary:"
-  psql_query \
-    "SELECT status, COUNT(*) AS cnt
-       FROM ${BATCH_SCHEMA}.worker_registry
-      GROUP BY status
-      ORDER BY status" 2>/dev/null \
+  psql_file -f "$OPS_SQL_DIR/inspect-workers-summary.sql" 2>/dev/null \
   | while IFS='|' read -r status cnt; do
       log "  ${status:-?}: ${cnt:-0}"
     done
@@ -69,31 +69,18 @@ check_worker_summary() {
 # ── 2. DRAINING workers past deadline ────────────────────────────────────────
 check_drain_timeout() {
   local overdue
-  overdue="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.worker_registry
-      WHERE status = 'DRAINING'
-        AND drain_deadline_at IS NOT NULL
-        AND drain_deadline_at < NOW()" \
-    2>/dev/null)" || { warn "Cannot query worker_registry drain_deadline_at"; return; }
+  overdue="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-drain-timeout-count.sql" 2>/dev/null)" || { warn "Cannot query worker_registry drain_deadline_at"; return; }
 
   if [[ "${overdue}" -gt 0 ]]; then
     fail "Drain timeout: ${overdue} DRAINING worker(s) past drain_deadline_at"
     log "  Affected workers (run heal-drain-timeout.sh to force-offline):"
-    psql_query \
-      "SELECT worker_code, tenant_id, drain_started_at, drain_deadline_at
-         FROM ${BATCH_SCHEMA}.worker_registry
-        WHERE status = 'DRAINING'
-          AND drain_deadline_at IS NOT NULL
-          AND drain_deadline_at < NOW()
-        ORDER BY drain_deadline_at ASC" 2>/dev/null \
+    psql_file -f "$OPS_SQL_DIR/inspect-workers-drain-timeout-list.sql" 2>/dev/null \
     | while IFS='|' read -r code tenant started deadline; do
         log "    worker_code=${code} tenant=${tenant} started=${started} deadline=${deadline}"
       done
   else
     local draining_total
-    draining_total="$(psql_query \
-      "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.worker_registry
-        WHERE status = 'DRAINING'" 2>/dev/null)" || draining_total=0
+    draining_total="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-draining-count.sql" 2>/dev/null)" || draining_total=0
     ok "Drain timeout: 0 overdue (${draining_total} still draining within deadline)"
   fi
 }
@@ -101,23 +88,11 @@ check_drain_timeout() {
 # ── 3. stale heartbeat (ONLINE but silent) ────────────────────────────────────
 check_stale_heartbeat() {
   local stale
-  stale="$(psql_query \
-    "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.worker_registry
-      WHERE status = 'ONLINE'
-        AND (heartbeat_at IS NULL
-          OR heartbeat_at < NOW() - INTERVAL '${STALE_HEARTBEAT_MINUTES} minutes')" \
-    2>/dev/null)" || { warn "Cannot query worker_registry heartbeat_at"; return; }
+  stale="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-stale-heartbeat-count.sql" 2>/dev/null)" || { warn "Cannot query worker_registry heartbeat_at"; return; }
 
   if [[ "${stale}" -gt 0 ]]; then
     fail "Stale heartbeat: ${stale} ONLINE worker(s) silent for >${STALE_HEARTBEAT_MINUTES}m"
-    psql_query \
-      "SELECT worker_code, tenant_id, worker_group, heartbeat_at
-         FROM ${BATCH_SCHEMA}.worker_registry
-        WHERE status = 'ONLINE'
-          AND (heartbeat_at IS NULL
-            OR heartbeat_at < NOW() - INTERVAL '${STALE_HEARTBEAT_MINUTES} minutes')
-        ORDER BY heartbeat_at ASC NULLS FIRST
-        LIMIT 10" 2>/dev/null || true
+    psql_file -f "$OPS_SQL_DIR/inspect-workers-stale-heartbeat-list.sql" 2>/dev/null || true
   else
     ok "Stale heartbeat: all ONLINE workers reported within ${STALE_HEARTBEAT_MINUTES}m"
   fi
@@ -127,31 +102,13 @@ check_stale_heartbeat() {
 check_decommissioned_with_tasks() {
   # Check if task_assignment table exists
   local table_exists
-  table_exists="$(psql_query \
-    "SELECT COUNT(*) FROM information_schema.tables
-      WHERE table_schema = '${BATCH_SCHEMA}'
-        AND table_name = 'task_assignment'" \
-    2>/dev/null)" || table_exists=0
+  table_exists="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-task-assignment-table-exists.sql" 2>/dev/null)" || table_exists=0
 
   local orphaned
   if [[ "${table_exists}" -ge 1 ]]; then
-    orphaned="$(psql_query \
-      "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.task_assignment ta
-         JOIN ${BATCH_SCHEMA}.worker_registry wr
-              ON wr.worker_code = ta.worker_code
-              AND wr.tenant_id  = ta.tenant_id
-        WHERE wr.status = 'DECOMMISSIONED'
-          AND ta.assignment_status IN ('CLAIMED','RUNNING')" \
-      2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via task_assignment"; return; }
+    orphaned="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-decommissioned-assignment-count.sql" 2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via task_assignment"; return; }
   else
-    orphaned="$(psql_query \
-      "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.job_task jt
-         JOIN ${BATCH_SCHEMA}.worker_registry wr
-              ON wr.worker_code = jt.assigned_worker_code
-              AND wr.tenant_id  = jt.tenant_id
-        WHERE wr.status = 'DECOMMISSIONED'
-          AND jt.task_status IN ('RUNNING','READY','CREATED')" \
-      2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via job_task"; return; }
+    orphaned="$(psql_file -f "$OPS_SQL_DIR/inspect-workers-decommissioned-jobtask-count.sql" 2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via job_task"; return; }
   fi
 
   if [[ "${orphaned}" -gt 0 ]]; then

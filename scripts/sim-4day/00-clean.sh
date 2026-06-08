@@ -12,57 +12,22 @@ PGU=batch_user
 MINIO=batch-minio
 MC_ALIAS=local
 BUCKET=batch-dev
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SQL_DIR="$HERE/sql"
 
 psql_plat() { docker exec -i "$PG" psql -U "$PGU" -d batch_platform -v ON_ERROR_STOP=1 "$@"; }
 psql_biz()  { docker exec -i "$PG" psql -U "$PGU" -d batch_business -v ON_ERROR_STOP=1 "$@"; }
 
 echo "==> 0/4 config 基线快照(截断后须不变)"
-CFG_BEFORE=$(psql_plat -tAc "select
-  (select count(*) from batch.tenant)||'/'||
-  (select count(*) from batch.job_definition)||'/'||
-  (select count(*) from batch.pipeline_definition)||'/'||
-  (select count(*) from batch.file_template_config)||'/'||
-  (select count(*) from batch.file_channel_config)||'/'||
-  (select count(*) from batch.workflow_definition)")
+CFG_BEFORE=$(psql_plat -tA -f /dev/stdin < "$SQL_DIR/config-baseline.sql")
 echo "    tenant/job/pipeline/template/channel/workflow = $CFG_BEFORE"
 
 echo "==> 1/4 截断平台运行时表(batch.*,CASCADE)"
-psql_plat <<'SQL'
-TRUNCATE TABLE
-  batch.file_record, batch.file_audit_log, batch.file_error_record,
-  batch.file_dispatch_record, batch.file_channel_health,
-  batch.pipeline_instance, batch.pipeline_step_run, batch.pipeline_progress,
-  batch.job_instance, batch.job_partition, batch.job_task,
-  batch.job_step_instance, batch.job_execution_log,
-  batch.workflow_run, batch.workflow_node_run,
-  batch.outbox_event, batch.event_delivery_log, batch.event_outbox_retry,
-  batch.worker_report_outbox,
-  batch.trigger_outbox_event, batch.trigger_request,
-  batch.trigger_misfire_pending, batch.trigger_runtime_state,
-  batch.batch_day_instance, batch.batch_day_operation_audit,
-  batch.batch_day_replay_entry, batch.batch_day_replay_session,
-  batch.batch_day_waiting_launch,
-  batch.dead_letter_task, batch.retry_schedule,
-  batch.compensation_command, batch.compensation_checkpoint,
-  batch.approval_command, batch.idempotency_record, batch.result_version,
-  batch.alert_event, batch.notification_delivery_log, batch.webhook_delivery_log,
-  batch.console_push_approval_notification, batch.console_push_job_notification,
-  batch.quota_runtime_state, batch.tenant_scheduler_snapshot,
-  batch.data_quality_check, batch.forensic_export_log,
-  batch.console_operation_audit, batch.console_ai_audit_log,
-  batch.process_staging, batch.shedlock
-RESTART IDENTITY CASCADE;
-SQL
+psql_plat -f /dev/stdin < "$SQL_DIR/clean-platform-runtime.sql"
 echo "    平台运行时表已截断"
 
 echo "==> 2/4 截断业务库 biz.* 数据表"
-psql_biz <<'SQL'
-TRUNCATE TABLE
-  biz.customer_account, biz.customer_processed, biz.transaction, biz.risk_score,
-  biz.settlement_batch, biz.settlement_detail, biz.risk_alert,
-  biz.process_order_event, biz.process_account_summary
-RESTART IDENTITY CASCADE;
-SQL
+psql_biz -f /dev/stdin < "$SQL_DIR/clean-business-runtime.sql"
 echo "    biz.* 已截断"
 
 echo "==> 3/4 清 MinIO bucket + 重建 outbound prefix"
@@ -78,14 +43,8 @@ curl -s -X PUT "http://localhost:11080/mockserver/clear?type=LOG" -H 'content-ty
   && echo "    mockserver 日志已清" || echo "    mockserver 未响应(跳过,P4 前会重载 stub)"
 
 echo "==> 校验:config 不变 + 运行时归零"
-CFG_AFTER=$(psql_plat -tAc "select
-  (select count(*) from batch.tenant)||'/'||
-  (select count(*) from batch.job_definition)||'/'||
-  (select count(*) from batch.pipeline_definition)||'/'||
-  (select count(*) from batch.file_template_config)||'/'||
-  (select count(*) from batch.file_channel_config)||'/'||
-  (select count(*) from batch.workflow_definition)")
+CFG_AFTER=$(psql_plat -tA -f /dev/stdin < "$SQL_DIR/config-baseline.sql")
 echo "    config after = $CFG_AFTER"
 [ "$CFG_BEFORE" = "$CFG_AFTER" ] && echo "    ✅ config 保留完好" || { echo "    ❌ config 行数变了!BEFORE=$CFG_BEFORE AFTER=$CFG_AFTER"; exit 1; }
-psql_plat -tAc "select 'runtime残留 file_record='||count(*) from batch.file_record union all select 'pipeline_instance='||count(*) from batch.pipeline_instance union all select 'job_instance='||count(*) from batch.job_instance union all select 'outbox_event='||count(*) from batch.outbox_event union all select 'pipeline_step_run='||count(*) from batch.pipeline_step_run"
+psql_plat -tA -f /dev/stdin < "$SQL_DIR/runtime-residue.sql"
 echo "==> P0 清空完成"

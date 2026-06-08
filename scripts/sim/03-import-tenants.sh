@@ -102,5 +102,5 @@ echo "  ✓ bootstrap OK"
 
 echo
 echo "==> ✅ 导入完成,验证"
-docker exec batch-postgres-primary psql -U batch_user -d batch_platform -c \
-  "select tenant_id, count(*) jobs from batch.job_definition where tenant_id in ('ta','tb','tc') group by tenant_id" 2>&1 | head -10
+docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+  -f /dev/stdin < "$ROOT/docs/test-data/sim-import-tenants-verify.sql" 2>&1 | head -10

@@ -5,10 +5,11 @@
 set -uo pipefail
 START="${1:-2026-06-10}"; BASE="${2:-300}"; WAIT="${WAIT:-120}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+SQL_DIR="$HERE/sql"
 CONSOLE="${CONSOLE_BASE:-http://localhost:18080}"
 CJ=/tmp/console-cookies-42.txt
 TENANTS=(ta tb tc t04 t05 t06 t07 t08 t09 t10)
-PQ(){ docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tA -c "$1" 2>/dev/null; }
+PQF(){ docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tA "$@" -f /dev/stdin 2>/dev/null; }
 nextday(){ python3 -c "import datetime as d;print((d.date.fromisoformat('$1')+d.timedelta(days=$2)).isoformat())"; }
 
 # 日切结算 = CLOSE 的状态转移(day_status→SETTLED + settled_at)。本应走
@@ -16,14 +17,8 @@ nextday(){ python3 -c "import datetime as d;print((d.date.fromisoformat('$1')+d.
 # (BatchDayOperationAuditEntity 是 record,mapper insert 用 useGeneratedKeys keyProperty=id
 #  无 setter → 每次 operate 500)。修复需重建+重启 orchestrator;为不重启,这里直接做等价状态转移。
 close_day(){ # tenant bizDate
-  local t="$1" d="$2" n
-  n=$(PQ "update batch.batch_day_instance
-          set day_status='SETTLED', settled_at=now(), frozen=false,
-              operated_by='sim-4day', operation_reason='manual cutover 日切(direct;operate API 有 audit bug)',
-              operated_at=now(), updated_at=now(), version=version+1
-          where tenant_id='$t' and biz_date='$d'
-            and day_status not in ('SETTLED','SKIPPED','MANUAL_RELEASED','FAILED');
-          select 1")
+  local t="$1" d="$2"
+  PQF -v tenant="$t" -v biz_date="$d" < "$SQL_DIR/close-day.sql" >/dev/null
   printf '.'
 }
 
@@ -38,14 +33,12 @@ for off in 0 1 2 3; do
   echo -n "[3] 日切 CLOSE 10 租户: "
   for t in "${TENANTS[@]}"; do close_day "$t" "$BD"; done; echo
   echo "[4] 该日 batch_day 终态:"
-  PQ "select day_status, count(*), count(settled_at) settled from batch.batch_day_instance where biz_date='$BD' group by day_status order by 1" \
+  PQF -v biz_date="$BD" < "$SQL_DIR/batchday-status-by-day.sql" \
     | awk -F'|' '{printf "    %-16s n=%s settled=%s\n",$1,$2,$3}'
 done
 
 echo; echo "########## 4 天批量日生命周期总览 ##########"
-PQ "select biz_date, day_status, count(*) n, count(settled_at) settled
-    from batch.batch_day_instance where biz_date between '$START' and '$(nextday "$START" 3)'
-    group by biz_date, day_status order by biz_date, day_status" \
+PQF -v start_date="$START" -v end_date="$(nextday "$START" 3)" < "$SQL_DIR/batchday-summary.sql" \
   | awk -F'|' 'BEGIN{printf "  %-12s %-16s %4s %8s\n","bizDate","status","n","settled"}{printf "  %-12s %-16s %4s %8s\n",$1,$2,$3,$4}'
 echo "  (CLOSE 失败详情若有: /tmp/sim42-close-err.log)"
 echo "########## 完。业务数据增量见 bash scripts/sim-4day/50-watch.sh ##########"

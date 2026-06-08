@@ -24,6 +24,9 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-15432}"
@@ -43,9 +46,11 @@ BATCH_HEAL_DLQ_SLEEP_MS="${BATCH_HEAL_DLQ_SLEEP_MS:-500}"
 # ── helpers ───────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
-psql_query() {
+psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
-       -tA -c "$1" 2>&1
+       -X -A -t -v ON_ERROR_STOP=1 -v schema="$BATCH_SCHEMA" \
+       -v tenant="$BATCH_HEAL_DLQ_TENANT" \
+       -v source_type="$BATCH_HEAL_DLQ_SOURCE_TYPE" "$@"
 }
 
 console_post() {
@@ -84,41 +89,20 @@ require_tools() {
   done
 }
 
-# ── build WHERE clause ────────────────────────────────────────────────────────
-build_where() {
-  local where="WHERE replay_status = 'NEW'"
-  if [[ -n "${BATCH_HEAL_DLQ_TENANT}" ]]; then
-    where="${where} AND tenant_id = '${BATCH_HEAL_DLQ_TENANT}'"
-  fi
-  if [[ -n "${BATCH_HEAL_DLQ_SOURCE_TYPE}" ]]; then
-    where="${where} AND source_type = '${BATCH_HEAL_DLQ_SOURCE_TYPE}'"
-  fi
-  printf '%s' "${where}"
-}
-
 # ── main ──────────────────────────────────────────────────────────────────────
 require_tools
 
-where="$(build_where)"
 log "heal-dead-letters: BATCH_HEAL_DRY_RUN=${BATCH_HEAL_DRY_RUN}"
-log "Filter: ${where}"
+log "Filter: tenant=${BATCH_HEAL_DLQ_TENANT:-<all>} source_type=${BATCH_HEAL_DLQ_SOURCE_TYPE:-<all>}"
 
 # Print summary
 log "Dead-letter summary:"
-psql_query \
-  "SELECT tenant_id, source_type, COUNT(*) AS cnt
-     FROM ${BATCH_SCHEMA}.dead_letter_task
-     ${where}
-   GROUP BY tenant_id, source_type
-   ORDER BY cnt DESC
-   LIMIT 20" 2>/dev/null \
+psql_file -f "$OPS_SQL_DIR/heal-dead-letters-summary.sql" 2>/dev/null \
 | while IFS='|' read -r tenant src cnt; do
     log "  tenant=${tenant} source_type=${src} count=${cnt}"
   done
 
-total="$(psql_query \
-  "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.dead_letter_task ${where}" \
-  2>/dev/null)" || total=0
+total="$(psql_file -f "$OPS_SQL_DIR/heal-dead-letters-count.sql" 2>/dev/null)" || total=0
 
 if [[ "${total}" -eq 0 ]]; then
   log "No dead letters with replay_status=NEW — nothing to heal"
@@ -133,13 +117,10 @@ offset=0
 
 while true; do
   # Fetch a batch: id|tenant_id
-  batch="$(psql_query \
-    "SELECT id || '|' || tenant_id
-       FROM ${BATCH_SCHEMA}.dead_letter_task
-       ${where}
-       ORDER BY created_at ASC
-       LIMIT ${BATCH_HEAL_DLQ_BATCH_SIZE} OFFSET ${offset}" \
-    2>/dev/null)" || {
+  batch="$(psql_file \
+      -v batch_size="$BATCH_HEAL_DLQ_BATCH_SIZE" \
+      -v batch_offset="$offset" \
+      -f "$OPS_SQL_DIR/heal-dead-letters-batch.sql" 2>/dev/null)" || {
     log "ERROR: cannot query dead_letter_task at offset ${offset}"
     break
   }
@@ -158,7 +139,7 @@ while true; do
     fi
 
     response=""
-    local idem_key="heal-dlq:${tenant_id}:${dlq_id}:$(date +%s)"
+    idem_key="heal-dlq:${tenant_id}:${dlq_id}:$(date +%s)"
     if response="$(console_post \
           "/internal/dead-letters/${dlq_id}/replay" \
           "{\"tenantId\":\"${tenant_id}\"}"

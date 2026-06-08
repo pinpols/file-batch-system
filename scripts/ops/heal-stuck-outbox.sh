@@ -20,6 +20,9 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-15432}"
@@ -31,15 +34,14 @@ BATCH_SCHEMA="${BATCH_SCHEMA:-batch}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 # 超过此秒数未投递的 outbox 视为卡住
 OUTBOX_STUCK_SECONDS="${BATCH_HEAL_OUTBOX_STUCK_SECONDS:-300}"
-# 重置后将 max_retry_count 设置为此值，触发重新投递
-OUTBOX_RESET_MAX_RETRY="${BATCH_HEAL_OUTBOX_RESET_MAX_RETRY:-3}"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
-psql_exec() {
+psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
-       -tA -c "$1" 2>&1
+       -X -A -t -v ON_ERROR_STOP=1 -v schema="$BATCH_SCHEMA" \
+       -v stuck_seconds="$OUTBOX_STUCK_SECONDS" "$@"
 }
 
 require_tools() {
@@ -56,17 +58,13 @@ log "heal-stuck-outbox: BATCH_HEAL_DRY_RUN=${BATCH_HEAL_DRY_RUN}"
 log "Stuck threshold: ${OUTBOX_STUCK_SECONDS}s"
 
 # Check connectivity
-psql_exec "SELECT 1" >/dev/null || {
+psql_file -f "$OPS_SQL_DIR/common-connectivity.sql" >/dev/null || {
   log "ERROR: DB connection failed"
   exit 1
 }
 
 # Count stuck events
-stuck_count="$(psql_exec \
-  "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.outbox_event
-    WHERE published_at IS NULL
-      AND created_at < NOW() - INTERVAL '${OUTBOX_STUCK_SECONDS} seconds'" \
-  2>/dev/null)" || {
+stuck_count="$(psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-count.sql" 2>/dev/null)" || {
   log "ERROR: cannot query outbox_event"
   exit 1
 }
@@ -78,26 +76,19 @@ fi
 
 log "Found ${stuck_count} stuck outbox event(s)"
 log "Event type breakdown:"
-psql_exec \
-  "SELECT event_type, COUNT(*) AS cnt,
-          MIN(created_at) AS oldest, MAX(retry_count) AS max_retries
-     FROM ${BATCH_SCHEMA}.outbox_event
-    WHERE published_at IS NULL
-      AND created_at < NOW() - INTERVAL '${OUTBOX_STUCK_SECONDS} seconds'
-    GROUP BY event_type
-    ORDER BY cnt DESC" 2>/dev/null \
-| while IFS='|' read -r etype cnt oldest max_retry; do
-    log "  event_type=${etype} count=${cnt} oldest=${oldest} max_retry=${max_retry}"
+psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-breakdown.sql" 2>/dev/null \
+| while IFS='|' read -r etype cnt oldest max_attempt; do
+    log "  event_type=${etype} count=${cnt} oldest=${oldest} max_attempt=${max_attempt}"
   done
 
 if [[ "${BATCH_HEAL_DRY_RUN}" == "true" ]]; then
   log "DRY-RUN: Would reset ${stuck_count} stuck outbox event(s):"
   log "  UPDATE ${BATCH_SCHEMA}.outbox_event"
-  log "     SET retry_count = 0,"
-  log "         max_retry_count = ${OUTBOX_RESET_MAX_RETRY},"
+  log "     SET publish_status = 'FAILED',"
+  log "         next_publish_at = NOW(),"
   log "         updated_at = NOW()"
-  log "   WHERE published_at IS NULL"
-  log "     AND created_at < NOW() - INTERVAL '${OUTBOX_STUCK_SECONDS} seconds'"
+  log "   WHERE publish_status = 'PUBLISHING'"
+  log "     AND updated_at < NOW() - INTERVAL '${OUTBOX_STUCK_SECONDS} seconds'"
   log ""
   log "Set BATCH_HEAL_DRY_RUN=false to execute."
   log "Note: After reset the OutboxPollScheduler will pick up events on its next poll cycle."
@@ -106,20 +97,12 @@ if [[ "${BATCH_HEAL_DRY_RUN}" == "true" ]]; then
 fi
 
 # Execute reset
-updated="$(psql_exec \
-  "UPDATE ${BATCH_SCHEMA}.outbox_event
-      SET retry_count = 0,
-          max_retry_count = ${OUTBOX_RESET_MAX_RETRY},
-          updated_at = NOW()
-    WHERE published_at IS NULL
-      AND created_at < NOW() - INTERVAL '${OUTBOX_STUCK_SECONDS} seconds'
-  RETURNING id" \
-  2>/dev/null | grep -c '^[0-9]')" || updated=0
+updated="$(psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-reset.sql" 2>/dev/null | grep -c '^[0-9]')" || updated=0
 
 log "Reset ${updated} outbox event(s) — OutboxPollScheduler will retry on next poll."
 
 # Attempt DB NOTIFY to wake up the poller immediately
-if psql_exec "NOTIFY outbox_publisher" >/dev/null 2>&1; then
+if psql_file -f "$OPS_SQL_DIR/heal-stuck-outbox-notify.sql" >/dev/null 2>&1; then
   log "Sent NOTIFY outbox_publisher to wake up poll scheduler."
 else
   log "Note: NOTIFY failed or not supported — outbox will be retried on next scheduled poll."
