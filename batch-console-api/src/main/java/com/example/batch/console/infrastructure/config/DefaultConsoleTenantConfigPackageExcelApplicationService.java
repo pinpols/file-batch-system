@@ -531,6 +531,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         entity.setRetryMaxCount(parseInteger(row.get(COL_RETRY_MAX_COUNT)));
         entity.setTimeoutSeconds(parseInteger(row.get(COL_TIMEOUT_SECONDS)));
         entity.setShardStrategy(normalizeEnum(row.get(COL_SHARD_STRATEGY)));
+        entity.setExecutionMode(resolveExecutionMode(row));
+        entity.setWatermarkField(normalize(row.get(COL_WATERMARK_FIELD)));
         entity.setExecutionHandler(normalize(row.get(COL_EXECUTION_HANDLER)));
         entity.setParamSchema(normalize(row.get(COL_PARAM_SCHEMA)));
         entity.setDefaultParams(normalize(row.get(COL_DEFAULT_PARAMS)));
@@ -554,6 +556,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         param.setRetryMaxCount(parseInteger(row.get(COL_RETRY_MAX_COUNT)));
         param.setTimeoutSeconds(parseInteger(row.get(COL_TIMEOUT_SECONDS)));
         param.setShardStrategy(normalizeEnum(row.get(COL_SHARD_STRATEGY)));
+        param.setExecutionMode(resolveExecutionMode(row));
+        param.setWatermarkField(normalize(row.get(COL_WATERMARK_FIELD)));
         param.setEnabled(parseBoolean(row.get(COL_ENABLED), true));
         param.setDescription(normalize(row.get(COL_DESCRIPTION)));
         param.setUpdatedBy(safeOp(ctx.operatorId()));
@@ -562,6 +566,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       }
     }
     return new ApplyStats(inserted, updated);
+  }
+
+  private static String resolveExecutionMode(Map<String, String> row) {
+    String value = normalizeEnum(row.get(COL_EXECUTION_MODE));
+    return Texts.hasText(value) ? value : "FULL";
   }
 
   private ApplyStats applyChannels(List<Map<String, String>> rows, ApplyContext ctx) {

@@ -7,6 +7,7 @@ import static com.example.batch.console.support.excel.SheetValidationHelpers.req
 import static com.example.batch.console.support.excel.SheetValidationHelpers.validateJsonField;
 
 import com.example.batch.common.enums.DictEnum;
+import com.example.batch.common.enums.ExecutionMode;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
@@ -67,6 +68,8 @@ public class ConfigPackageExcelValidator {
   public static final String COL_RETRY_MAX_COUNT = "retry_max_count";
   public static final String COL_TIMEOUT_SECONDS = "timeout_seconds";
   public static final String COL_SHARD_STRATEGY = "shard_strategy";
+  public static final String COL_EXECUTION_MODE = "execution_mode";
+  public static final String COL_WATERMARK_FIELD = "watermark_field";
   public static final String COL_JOB_CODE = "job_code";
   public static final String COL_JOB_NAME = "job_name";
   public static final String COL_JOB_TYPE = "job_type";
@@ -126,6 +129,7 @@ public class ConfigPackageExcelValidator {
   public static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
   public static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
   public static final Set<String> SHARD_STRATEGIES = DictEnum.codes(ShardStrategy.class);
+  public static final Set<String> EXECUTION_MODES = DictEnum.codes(ExecutionMode.class);
   public static final Set<String> CHANNEL_TYPES = DictEnum.codes(FileChannelType.class);
   public static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
   public static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
@@ -428,6 +432,7 @@ public class ConfigPackageExcelValidator {
     optionalEnum(normalizeEnum(row.get(COL_RETRY_POLICY)), "retry_policy", RETRY_POLICIES, ri);
     optionalEnum(
         normalizeEnum(row.get(COL_SHARD_STRATEGY)), "shard_strategy", SHARD_STRATEGIES, ri);
+    optionalEnum(normalizeEnum(row.get(COL_EXECUTION_MODE)), "execution_mode", EXECUTION_MODES, ri);
     validateJsonField(row.get(COL_PARAM_SCHEMA), "param_schema", false, ri);
     if (hasText(jobCode) && !seen.add(tenantId + KEY_SEP_HASH + jobCode)) {
       ri.add("duplicate job_code in excel: " + jobCode);
