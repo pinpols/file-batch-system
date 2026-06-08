@@ -1,7 +1,9 @@
 WITH scoped AS (
-  SELECT *
-  FROM batch.job_instance
-  WHERE params_snapshot::text LIKE '%' || :'run_id' || '%'
+  SELECT DISTINCT ji.*
+  FROM batch.job_instance ji
+  LEFT JOIN batch.trigger_request tr ON tr.related_job_instance_id = ji.id
+  WHERE ji.params_snapshot::text LIKE '%' || :'run_id' || '%'
+     OR tr.request_id LIKE :'run_id' || '%'
 )
 SELECT
   tenant_id,

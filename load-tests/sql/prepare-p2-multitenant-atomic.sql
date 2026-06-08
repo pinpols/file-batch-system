@@ -2,9 +2,9 @@ BEGIN;
 
 INSERT INTO batch.job_definition (
   tenant_id, job_code, job_name, job_type, biz_type,
-  schedule_type, cron_expr, timezone, priority, queue_code, worker_group,
+  schedule_type, schedule_expr, timezone, priority, queue_code, worker_group,
   calendar_code, window_code, trigger_mode, dag_enabled, shard_strategy,
-  retry_policy, retry_max_count, timeout_seconds, param_schema, default_params,
+  retry_policy, retry_max_count, timeout_seconds, execution_handler, param_schema, default_params,
   version, enabled, description, created_by, updated_by, created_at, updated_at
 )
 SELECT
@@ -14,7 +14,7 @@ SELECT
   src.job_type,
   src.biz_type,
   src.schedule_type,
-  src.cron_expr,
+  src.schedule_expr,
   src.timezone,
   src.priority,
   src.queue_code,
@@ -27,6 +27,7 @@ SELECT
   src.retry_policy,
   src.retry_max_count,
   src.timeout_seconds,
+  src.execution_handler,
   src.param_schema,
   src.default_params,
   src.version,
