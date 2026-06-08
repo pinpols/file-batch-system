@@ -741,7 +741,15 @@ public class ConfigPackageExcelWorkbookWriter {
         "excel.job.def.shard_strategy.prompt_box",
         messageSource,
         locale);
-    boolDropdown(sheet, 18, locale);
+    addDropdownValidation(
+        sheet,
+        15,
+        EXECUTION_MODES.toArray(String[]::new),
+        "excel.job.def.execution_mode.prompt_title",
+        "excel.job.def.execution_mode.prompt_box",
+        messageSource,
+        locale);
+    boolDropdown(sheet, 20, locale);
   }
 
   private void applyChannelValidations(Sheet sheet, Locale locale) {
@@ -1030,6 +1038,18 @@ public class ConfigPackageExcelWorkbookWriter {
             COL_SHARD_STRATEGY,
             optionalColumn(
                 "分片策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "STATIC", "DYNAMIC", "AUTO")),
+        Map.entry(
+            COL_EXECUTION_MODE,
+            optionalColumn(
+                "执行模式。INCREMENTAL 需要同时填写 watermark_field。",
+                GUIDE_ENUM,
+                "FULL",
+                "FULL",
+                "INCREMENTAL",
+                "CDC")),
+        Map.entry(
+            COL_WATERMARK_FIELD,
+            optionalColumn("增量水位字段名；execution_mode=INCREMENTAL 时填写。", GUIDE_STR, "updated_at")),
         Map.entry(
             COL_EXECUTION_HANDLER,
             optionalColumn("执行处理器 Bean 名称（新建时设置，更新时忽略）。", GUIDE_STR, "importJobHandler")),

@@ -8468,7 +8468,7 @@ paths:
   /api/console/config/tenant-package/excel/export:
     get:
       tags: [Config]
-      summary: Export current tenant config package as 8-sheet Excel (importable)
+      summary: Export current tenant config package as 11-sheet Excel (importable)
       operationId: exportTenantConfigPackageExcel
       parameters:
         - name: tenantId
@@ -8478,7 +8478,7 @@ paths:
             type: string
       responses:
         '200':
-          description: 8-sheet Excel workbook containing all config data for the tenant
+          description: 11-sheet Excel workbook containing all config data for the tenant
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -8491,7 +8491,7 @@ paths:
       operationId: downloadTenantConfigPackageExcelTemplate
       responses:
         '200':
-          description: Empty Excel template with 8 data sheets
+          description: Empty Excel template with 11 data sheets
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
