@@ -101,7 +101,7 @@ spring:
       repositories:
         enabled: false
       # 命令执行超时（含网络往返），防止慢操作无限阻塞调用方
-      timeout: ${BATCH_REDIS_TIMEOUT:2000ms}
+      timeout: ${BATCH_REDIS_TIMEOUT:10000ms}
       lettuce:
         # 关闭连接后等待挂起命令完成的超时
         shutdown-timeout: ${BATCH_REDIS_SHUTDOWN_TIMEOUT:200ms}
