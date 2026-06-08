@@ -34,6 +34,11 @@ public class ActiveTaskLeaseRegistry {
 
   private final Map<String, ActiveTaskLease> activeTaskLeases = new ConcurrentHashMap<>();
 
+  // 平台取消请求到达后,由 renewer 调用 requestCancellation；wrapper 在 submit future 后
+  // 注册回调。二者可能乱序,所以用 requestedCancellations 暂存先到的取消信号。
+  private final Map<String, Runnable> cancellationCallbacks = new ConcurrentHashMap<>();
+  private final Set<String> requestedCancellations = ConcurrentHashMap.newKeySet();
+
   // 已完成业务执行、正在上报结果的 taskId。仍保留在 activeTaskLeases 中供优雅停机 drain 等待，
   // 但不再进入 renew snapshot，避免“任务已完成后续租旧快照”误报为 lease lost。
   private final Set<String> completingLeases = ConcurrentHashMap.newKeySet();
@@ -86,6 +91,8 @@ public class ActiveTaskLeaseRegistry {
     try {
       completingLeases.remove(taskId);
       lostLeases.remove(taskId);
+      requestedCancellations.remove(taskId);
+      cancellationCallbacks.remove(taskId);
       activeTaskLeases.put(
           taskId, new ActiveTaskLease(taskId, tenantId, workerId, partitionInvocationId));
     } finally {
@@ -105,6 +112,8 @@ public class ActiveTaskLeaseRegistry {
     }
     completingLeases.remove(taskId);
     lostLeases.remove(taskId);
+    requestedCancellations.remove(taskId);
+    cancellationCallbacks.remove(taskId);
     // P1: 同步派发 listener，让外围 per-taskId 累加结构（如 consecutiveFailures）立即清理；
     // 任一 listener 异常不影响其它订阅者与 drain 通知逻辑。
     for (Consumer<String> listener : removalListeners) {
@@ -122,6 +131,49 @@ public class ActiveTaskLeaseRegistry {
     // 仍非空就回到 wait；map 空就退出。多余的唤醒成本可忽略。
     synchronized (drainMonitor) {
       drainMonitor.notifyAll();
+    }
+  }
+
+  /**
+   * 注册运行中任务的取消回调。若取消请求已先到达,注册后立即触发一次。
+   *
+   * <p>回调必须幂等；当前调用方用 {@code Future.cancel(true)}，重复触发只会返回 false。
+   */
+  public void registerCancellationCallback(String taskId, Runnable callback) {
+    if (taskId == null || callback == null) {
+      return;
+    }
+    cancellationCallbacks.put(taskId, callback);
+    if (requestedCancellations.contains(taskId)) {
+      invokeCancellation(taskId, callback);
+    }
+  }
+
+  /** 平台已请求取消 task：触发运行中回调；若回调尚未注册,先暂存。 */
+  public boolean requestCancellation(String taskId) {
+    if (taskId == null) {
+      return false;
+    }
+    if (!activeTaskLeases.containsKey(taskId)) {
+      return false;
+    }
+    requestedCancellations.add(taskId);
+    Runnable callback = cancellationCallbacks.get(taskId);
+    if (callback != null) {
+      invokeCancellation(taskId, callback);
+    }
+    return true;
+  }
+
+  public boolean isCancellationRequested(String taskId) {
+    return taskId != null && requestedCancellations.contains(taskId);
+  }
+
+  private void invokeCancellation(String taskId, Runnable callback) {
+    try {
+      callback.run();
+    } catch (RuntimeException ex) {
+      log.warn("task cancellation callback threw, taskId={}: {}", taskId, ex.getMessage());
     }
   }
 

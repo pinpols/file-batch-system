@@ -258,18 +258,18 @@ class TaskControllerApplicationServiceTest {
     assertThat(service.renewBatch(new TaskLeaseRenewBatchRequest(null)).results()).isEmpty();
     assertThat(service.renewBatch(new TaskLeaseRenewBatchRequest(List.of())).results()).isEmpty();
     verify(taskExecutionService, never())
-        .renewTaskLease(anyString(), anyLong(), anyString(), any());
+        .recordHeartbeat(anyString(), anyLong(), anyString(), any(), any());
   }
 
   @Test
   @DisplayName("renewBatch: 多 item 独立结果,部分成功不影响其他")
   void renewBatch_independent_results() {
-    when(taskExecutionService.renewTaskLease(anyString(), eq(1L), anyString(), any()))
-        .thenReturn(true);
-    when(taskExecutionService.renewTaskLease(anyString(), eq(2L), anyString(), any()))
-        .thenReturn(false);
-    when(taskExecutionService.renewTaskLease(anyString(), eq(3L), anyString(), any()))
-        .thenReturn(true);
+    when(taskExecutionService.recordHeartbeat(anyString(), eq(1L), anyString(), any(), any()))
+        .thenReturn(new TaskAssignmentService.TaskHeartbeatResult(true, false));
+    when(taskExecutionService.recordHeartbeat(anyString(), eq(2L), anyString(), any(), any()))
+        .thenReturn(new TaskAssignmentService.TaskHeartbeatResult(false, false));
+    when(taskExecutionService.recordHeartbeat(anyString(), eq(3L), anyString(), any(), any()))
+        .thenReturn(new TaskAssignmentService.TaskHeartbeatResult(true, true));
 
     TaskLeaseRenewBatchResponse resp =
         service.renewBatch(
@@ -281,8 +281,10 @@ class TaskControllerApplicationServiceTest {
 
     assertThat(resp.results()).hasSize(3);
     assertThat(resp.results().get(0).renewed()).isTrue();
+    assertThat(resp.results().get(0).cancelRequested()).isFalse();
     assertThat(resp.results().get(1).renewed()).isFalse();
     assertThat(resp.results().get(2).renewed()).isTrue();
+    assertThat(resp.results().get(2).cancelRequested()).isTrue();
   }
 
   // ===== fixtures =====

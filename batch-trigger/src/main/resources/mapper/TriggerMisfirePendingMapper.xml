@@ -36,6 +36,13 @@
         select * from batch.trigger_misfire_pending where id = #{id}
     </select>
 
+    <select id="selectByRuntimeStateAndFireTime" resultMap="TriggerMisfirePendingResultMap">
+        select *
+          from batch.trigger_misfire_pending
+         where trigger_runtime_state_id = #{triggerRuntimeStateId}
+           and scheduled_fire_time = #{scheduledFireTime}
+    </select>
+
     <select id="selectPendingByTenant" resultMap="TriggerMisfirePendingResultMap">
         select *
           from batch.trigger_misfire_pending

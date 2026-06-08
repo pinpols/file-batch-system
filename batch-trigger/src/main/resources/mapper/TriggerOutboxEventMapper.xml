@@ -53,7 +53,7 @@
           FROM batch.trigger_outbox_event
          WHERE publish_status IN (#{pendingStatus1}, #{pendingStatus2})
            AND next_publish_at &lt;= #{now}
-         ORDER BY created_at ASC
+         ORDER BY next_publish_at ASC, created_at ASC, id ASC
          LIMIT #{limit}
          FOR UPDATE SKIP LOCKED
     </select>

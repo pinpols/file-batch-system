@@ -7,6 +7,7 @@ public class PendingCatchUpApprovalCommand {
 
   private String tenantId;
   private String requestId;
+  private Long pendingId;
   private String reason;
   private String idempotencyKey;
 }

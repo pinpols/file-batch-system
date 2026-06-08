@@ -20,6 +20,8 @@ Stage 7 已完成：新增统一自动化入口，默认 smoke 已扩展为 Stag
 
 本轮第三批增量已完成：Import 补 APPEND/UPSERT/`PARTITION_REPLACE_COPY` 小矩阵和 bad-record skip 阈值；Export 补 8 分片小规模、多租户混压、requestId replay 幂等；Process 补真正分片 SQL 参数和取消当前语义；Dispatch 补 LOCAL/NAS/SFTP sidecar manifest；Atomic 补非 loopback HTTP 真成功、SQL timeout 分类和 task cancel 信号；Trigger 补 scheduler 定时触发、misfire pending、replay approve 和 60 请求 storm。
 
+本轮第四批收口已完成：Import checkpoint 真实崩溃续跑 fault-injection profile 通过；Trigger `MANUAL_APPROVAL` misfire pending 自动创建/关联 catch-up request 并可直接按 `pendingId` approve；Process RUNNING cancel 与 Atomic shell cancel 均已从“只置标记”修成 worker 侧中断并以取消失败码终态收口。
+
 本轮有效验证 run：
 
 - `RUN_ID`: `bizsim-stage1-20260608111255`
@@ -100,6 +102,13 @@ Stage 7 automation run：
 - Atomic Stage 5c：`sim-atomic-stage5c-20260608134703`，日志 `load-tests/target/atomic-stage5c-20260608134703/atomic-stage5c.log`，断言 `SUCCESS|FAILED:TIMEOUT:TIMEOUT|SUCCESS:SUCCESS:true|cancelHttp=200`
 - Trigger Stage 6c：`sim-trigger-stage6c-20260608133013`，日志 `load-tests/target/trigger-stage6c-20260608133013/trigger-stage6c.log`，断言 `scheduled=1|misfire=1|replay=LAUNCHED|19350|storm=60/60`
 
+第四批收口 run：
+
+- Import Stage 2e checkpoint crash-resume：`import-stage2e-checkpoint-crash-20260608163051`，日志 `load-tests/target/import-stage2e-checkpoint-crash-20260608163051/import-stage2e-checkpoint-crash.log`，断言 `requestId=sim-stage2e-ckpt-7452142|instance=30293|partition=21817|pipeline=12792|markerBeforeKill=350|processedFinal=20000|rows=20000|status=SUCCESS`
+- Process Stage 4c cancel 复验：`process-stage4c-20260608163544`，日志 `load-tests/target/process-stage4c-20260608163544/process-stage4c.log`，断言 `4|4|16|296.00|16|16|FAILED|FAILED|FAILED`，取消任务 `error_code=WORKER_EXECUTION_CANCELLED`
+- Atomic Stage 5c cancel 复验：`atomic-stage5c-20260608163608`，日志 `load-tests/target/atomic-stage5c-20260608163608/atomic-stage5c.log`，断言 `SUCCESS|FAILED:TIMEOUT:TIMEOUT|FAILED:FAILED:true|cancelHttp=200`
+- Trigger Stage 6d auto-link 复验：`trigger-stage6d-20260608163850`，日志 `load-tests/target/trigger-stage6d-20260608163850/trigger-stage6d.log`，断言 `misfire=2|replay=LAUNCHED|30302|storm_terminal=10/10|pending_outbox=0|non_terminal=0`，其中 `pending=185 request=29315` 为自动关联 catch-up request。
+
 ## 覆盖范围
 
 | 场景 | 覆盖结果 | 证据 |
@@ -138,7 +147,7 @@ Stage 7 automation run：
 | PROCESS 稳定 batchKey 幂等重跑 | 通过 | 同 batchKey 两次 `TA_PROCESS_STAGE4_JSONB`，target 保持 2 个业务键并更新到第二轮金额 |
 | PROCESS 残留 staging 恢复 | 通过 | 首跑前预置同 batchKey stale staging，COMPUTE pre-clean 后最终 staging_leftover=0 |
 | PROCESS 分片 SQL 参数 | 通过 | Stage 4c 4 个 partition/task 均 `SUCCESS`，target 16 行，事件/水位对账 16 |
-| PROCESS 运行中取消当前语义 | 已验证并暴露限制 | Stage 4c RUNNING job cancel 返回 409，任务最终 SUCCESS；记录为当前状态机限制 |
+| PROCESS 运行中取消 | 通过 | Stage 4c 复验 RUNNING job cancel HTTP 200，worker 收到 renew `cancelRequested` 后中断，任务终态 `FAILED/WORKER_EXECUTION_CANCELLED` |
 | DISPATCH HTTP 500 失败/补偿 | 通过 | `TB_DISPATCH_SETTLE` 按 `EXPONENTIAL/5` 进入 `RETRYING`；`TB_DISPATCH_STAGE5_FAIL_ONCE` 按 `NONE/0` 进入 `FAILED` |
 | DISPATCH LOCAL sidecar/envelope | 通过 | Stage 5c `tb_stage5c_local` `ACKED/SUCCESS`，本地产物存在 |
 | DISPATCH NAS sidecar/envelope | 通过 | Stage 5c `tb_stage5c_nas` `ACKED/SUCCESS`，local-profile NAS stub + sidecar |
@@ -149,12 +158,12 @@ Stage 7 automation run：
 | ATOMIC HTTP 真请求 | 安全拦截 | 覆盖到 `http://localhost:11080/tb/ingest` 被 SSRF 闸拒绝：`localhost -> 127.0.0.1` |
 | ATOMIC HTTP 非 loopback 真成功 | 通过 | Stage 5c `https://example.com` 真请求 `SUCCESS` |
 | ATOMIC SQL timeout 分类 | 通过 | Stage 5c `pg_sleep(5)` + `statementTimeoutSeconds=1`，`FAILED/TIMEOUT`，`failure_class=TIMEOUT` |
-| ATOMIC task cancel 信号 | 已验证并暴露限制 | Stage 5c task cancel API HTTP 200 且 `cancel_requested=true`，但 shell `/bin/sleep` 仍成功收尾 |
+| ATOMIC shell task cancel | 通过 | Stage 5c 复验 task cancel API HTTP 200，`cancel_requested=true`，shell 任务终态 `FAILED/WORKER_EXECUTION_CANCELLED` |
 | TRIGGER requestId 去重 | 通过 | 同一 requestId 连续 launch 两次，trigger_request=1，job_instance=1 |
 | TRIGGER 小规模 storm | 通过 | `STORM_COUNT=30` + 1 个 dedup 实例全部 `SUCCESS` |
 | TRIGGER scheduler 定时触发 | 通过 | Stage 6c wheel scheduled fire count=1 |
-| TRIGGER misfire pending | 通过 | Stage 6c `MANUAL_APPROVAL` misfire pending count=1 |
-| TRIGGER replay approve | 通过 | Stage 6c seeded `CATCH_UP/ACCEPTED` 请求 approve 后 `LAUNCHED` |
+| TRIGGER misfire pending | 通过 | Stage 6c `MANUAL_APPROVAL` misfire pending count=1；Stage 6d 复验 pending 自动关联 `catch_up_request_id` |
+| TRIGGER replay approve | 通过 | Stage 6d 按 `pendingId` approve 自动创建的 catch-up request 后 `LAUNCHED` |
 | TRIGGER storm 60 | 通过 | Stage 6c 60/60 `SUCCESS` |
 | 统一自动化入口 smoke | 通过 | 默认 stage 列表已扩到 `2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c`；Stage 2d 因需 skip profile 显式运行 |
 
@@ -312,16 +321,21 @@ Stage 6 trigger 去重复核：
 | Atomic/worker 报告缺失败分类 | `TaskExecutionReport` 增加 `failureClass`，`DefaultTaskExecutionWrapper` 将 worker timeout 映射为 `TIMEOUT` |
 | Import skip 超阈值 metadata 未置位 | `ImportRecordGovernanceService.markThresholdExceeded` + Parse/Validate 阈值失败路径补标记，Stage 2d 复验 `skipThresholdExceeded=true` |
 | Dispatch Stage 5c fixture impl_code 大小写不匹配 | fixture 改为 `DISPATCH_*`，Stage 5c LOCAL/NAS/SFTP 复验通过 |
+| Import checkpoint crash-resume 卡 step RUNNING | `PartitionReclaimUnit` 回收时同步 reset `job_step_instance`，并要求 reset 行数 > 0；Stage 2e 复验回收后可重新 claim |
+| Import RECOVER 重放 file_status 回退冲突 | Import stage 状态更新在 `RECOVER` 模式下对已前进状态做幂等跳过；Stage 2e 复验 `processedFinal=20000` |
+| `PipelineProgressEntity` MyBatis record 映射失败 | `processedCount/completed` 改为 boxed 类型匹配 MyBatis 反射构造；Stage 2e LOAD checkpoint 续跑复验通过 |
+| Process/Atomic cancel 只置标记不中断 | worker-core batch renew 返回 `cancelRequested`，active registry 触发 `Future.cancel(true)`；Stage 4c/5c 复验取消终态为 `WORKER_EXECUTION_CANCELLED` |
+| Trigger pending 未自动关联 catch-up request | trigger wheel 写 pending 时同步创建 `trigger_request` 并回填 `catch_up_request_id`；Stage 6d 按 `pendingId` approve 复验通过 |
 
 ## 暴露问题
 
 | 编号 | 问题 | 影响 | 当前证据 | 下一步 |
 |---|---|---|---|---|
-| S4-PROCESS-CANCEL-01 | RUNNING job cancel 当前返回 409，不能把运行中实例直接转 CANCELLED | Process 长任务取消语义不完整 | Stage 4c cancel API 返回 409，task 最终 SUCCESS | 需要明确 job cancel 与 task cancel/worker cooperative cancel 的状态机边界 |
-| S5-ATOMIC-CANCEL-01 | Atomic shell task cancel 只置 `cancel_requested=true`，没有中断 `/bin/sleep` 子进程 | 用户看到 cancel 成功但任务仍可能 SUCCESS | Stage 5c cancel HTTP 200，`cancel_requested=true`，task 最终 SUCCESS | shell executor 需要轮询取消或管理子进程组 |
+| S4-PROCESS-CANCEL-01 | 已关闭：RUNNING job cancel 可请求 worker 中断 | Process 长任务取消不再默默成功 | Stage 4c 复验 cancel HTTP 200，task `FAILED/WORKER_EXECUTION_CANCELLED` | 后续只需补 PG 断链 / kill worker failure profile |
+| S5-ATOMIC-CANCEL-01 | 已关闭：Atomic shell cancel 可中断本地 shell task | 用户不再看到 cancel 后 shell SUCCESS | Stage 5c 复验 cancel HTTP 200，task `FAILED/WORKER_EXECUTION_CANCELLED` | 后续补超时/取消/重试组合矩阵 |
 | S5-ATOMIC-HTTP-01 | Atomic HTTP localhost MockServer 被 SSRF 闸拒绝 | 本地 loopback 不能证明 HTTP 真发送成功 | `host resolves to blocked address: localhost -> 127.0.0.1` | 已用 Stage 5c `https://example.com` 覆盖非 loopback 真成功；localhost 安全闸保持 |
-| S6-TRIGGER-MISFIRE-01 | Wheel `MANUAL_APPROVAL` misfire 只写 `trigger_misfire_pending`，未自动创建/关联 `CATCH_UP` replay request | 控制台从 pending 直接 approve replay 的链路不完整 | Stage 6c pending count=1；replay approve 用 seeded `CATCH_UP/ACCEPTED` 请求单独覆盖 | 后续修 `linkCatchUpRequest` 或 pending->request 创建链路 |
-| S2-IMPORT-CHECKPOINT-01 | Import 真实 checkpoint resume 需要崩溃/重启故障注入，普通 API 不能证明中途位点续跑 | 不能把“配置前置校验”冒充“崩溃续跑” | 本轮未造 worker crash after chunk；只覆盖了 checkpoint 相关代码前置语义 | 需要 fault-injection profile：chunk 后 kill worker、同 instance retry、校验 `pipeline_progress` |
+| S6-TRIGGER-MISFIRE-01 | 已关闭：pending 自动创建并关联 catch-up request | 控制台可从 pending 直接 approve replay | Stage 6d `pending=185 request=29315 status=LAUNCHED|30302` | 高频 cron / 1w storm 仍归容量 profile |
+| S2-IMPORT-CHECKPOINT-01 | 已关闭：真实 checkpoint crash-resume profile 通过 | 已证明 chunk 后 kill worker 可同 instance 续跑 | Stage 2e `markerBeforeKill=350`，最终 `processedFinal=20000 rows=20000 status=SUCCESS` | 后续补 PG/Kafka 断链等更广故障注入 |
 | S7-AUTO-01 | 已关闭：Stage 5/6 已纳入自动化入口 | 默认 smoke 已包含第三批稳定阶段 | `load-tests/scripts/run-worker-business-scenario-matrix.sh` 默认 `2,2b,2c,3,3b,3c,4,4b,4c,5,5c,6,6c`，Stage 2d 需显式 skip profile | 后续只需按环境扩展故障注入 profile |
 
 ## 本轮未覆盖
@@ -329,13 +343,13 @@ Stage 6 trigger 去重复核：
 | 项 | 状态 | 原因 / 下一步 |
 |---|---|---|
 | `TA_DISPATCH_ORDER` HTTP 下游 | 未覆盖 | 当前 fixture 没有 ta 独立 HTTP channel；脚本显式跳过，避免占位 channel 造成假失败 |
-| XML / FIXED_WIDTH import | 已覆盖 Stage 2/2b/2c/2d | 已覆盖成功态、解析失败、字段校验失败、APPEND、UPSERT、LOAD failure、分区 COPY 正/负、bad-record skip 阈值；真实 checkpoint 崩溃续跑仍待 fault injection |
+| XML / FIXED_WIDTH import | 已覆盖 Stage 2/2b/2c/2d/2e | 已覆盖成功态、解析失败、字段校验失败、APPEND、UPSERT、LOAD failure、分区 COPY 正/负、bad-record skip 阈值、checkpoint 真实崩溃续跑 |
 | JSON / FIXED_WIDTH / EXCEL export | 已覆盖 Stage 3/3b/3c | 已覆盖小规模系统链路成功态、bad SQL、keyset-range 4/8 分片、replay 幂等、多租户小混压；真实 S3、multipart abort/retry、导出失败恢复仍待故障注入 |
 | Excel multipart 配置包上传 | 已覆盖配置包链路 | 属于 Console `/tenant-package/excel/upload`，不属于 worker-import trigger；本轮通过 `03-import-tenants.sh` 覆盖 |
-| PROCESS worker 业务场景 | 已覆盖 Stage 4/4b/4c | 已覆盖 JSONB staging、DIRECT、validation failure、empty success、幂等重跑、残留 staging 恢复、分片 process；RUNNING cancel/timeout 仍有语义缺口 |
+| PROCESS worker 业务场景 | 已覆盖 Stage 4/4b/4c | 已覆盖 JSONB staging、DIRECT、validation failure、empty success、幂等重跑、残留 staging 恢复、分片 process、RUNNING cancel 中断 |
 | DISPATCH failure/channel terminal | 已覆盖 Stage 5/5b/5c | HTTP 500 + retry/no-retry/补偿、LOCAL/NAS/SFTP sidecar 已覆盖；EMAIL/OSS 真实远端、失败重试风暴待外部 profile |
 | ATOMIC HTTP 真成功 | 已覆盖 Stage 5c | 非 loopback `https://example.com` 成功；localhost MockServer 仍按 SSRF 安全闸拒绝 |
-| TRIGGER cron/misfire/replay/storm | 已覆盖 Stage 6/6b/6c | API 去重、30/60 storm、scheduled fire、misfire pending、replay approve 已覆盖；pending->catch-up 自动关联缺设计修复，高频 cron/1w storm 待容量 profile |
+| TRIGGER cron/misfire/replay/storm | 已覆盖 Stage 6/6b/6c/6d | API 去重、30/60 storm、scheduled fire、misfire pending、pending->catch-up 自动关联、replay approve 已覆盖；高频 cron/1w storm 待容量 profile |
 | external OSS/NAS/SFTP/EMAIL 真实远端 | 未覆盖 | 本轮使用本地 MinIO/SFTP/MockServer；真实远端放外部依赖矩阵 |
 | DAST application-level | 未覆盖 | 不属于本轮 worker 业务场景 sim |
 
@@ -348,9 +362,9 @@ Stage 6 trigger 去重复核：
 
 ## 下一阶段
 
-1. Import：checkpoint 真实崩溃续跑需 fault-injection profile；Stage 2d 已覆盖 skip 阈值。
+1. Import：checkpoint 真实崩溃续跑已通过 Stage 2e；后续只补 PG/Kafka 断链等更广故障注入。
 2. Export：真实 S3 / multipart abort-retry / 导出失败恢复仍需对象存储故障注入或外部 profile。
-3. Process：RUNNING cancel 和 timeout 语义需补状态机/worker cooperative cancel 设计。
+3. Process：RUNNING cancel 已通过；timeout/PG 断链/kill worker 恢复仍需 failure profile。
 4. Dispatch：EMAIL/OSS 真实远端、失败重试风暴和幂等投递矩阵放外部依赖 profile。
-5. Atomic：shell cancel 需要子进程组管理或 cooperative cancel；HTTP 真成功已用非 loopback 覆盖。
-6. Trigger：misfire pending 到 catch-up request 的自动关联需修；高频 cron/1w storm 放容量 profile。
+5. Atomic：shell cancel 已通过；取消/超时/重试组合矩阵仍待扩展。
+6. Trigger：misfire pending 到 catch-up request 自动关联已通过；高频 cron/1w storm 放容量 profile。

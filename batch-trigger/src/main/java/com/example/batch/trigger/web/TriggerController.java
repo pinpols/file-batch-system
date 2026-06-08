@@ -61,6 +61,7 @@ public class TriggerController {
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId(request.getTenantId());
     command.setRequestId(request.getRequestId());
+    command.setPendingId(request.getPendingId());
     command.setReason(request.getReason());
     command.setIdempotencyKey(idempotencyKey);
     return CommonResponse.success(triggerService.approvePendingCatchUp(command));

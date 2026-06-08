@@ -92,6 +92,14 @@ public interface JobTaskMapper {
   int requestCancel(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   /**
+   * 实例级 RUNNING cancel：将实例下 RUNNING task 批量置 cancel_requested=true。
+   *
+   * @return 实际新标记的 task 数；已标记过的 task 不重复计数。
+   */
+  int requestCancelByInstance(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
+
+  /**
    * ORCH-P4-2：startToClose 超时候选——RUNNING 且 started_at 已超过 task_timeout_seconds 且尚未请求取消。
    *
    * @param limit 单次扫描上限，避免长事务
