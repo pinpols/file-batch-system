@@ -2,7 +2,7 @@
 
 ## 背景
 
-基于当前已有压测结果，系统处于 **P0 已补跑收口，可以进入上线前灰度准备；P1/P2 还没有完成生产外部依赖和容量上限认证** 的状态。
+基于当前已有压测结果，系统处于 **P0 已补跑收口，可以进入上线前灰度准备；P2 已完成本地容量画像但未通过 10w/公平性放行；P1 真实外部依赖仍需要生产同类环境认证** 的状态。
 
 已验证事实：
 
@@ -15,13 +15,10 @@
 当前仍不能声称完成的事项：
 
 - 真实 S3 / OSS / NAS / SFTP / HTTP 下游故障下的容量与恢复能力。
-- 多租户混压下的配额公平性、隔离性和 RLS 串租验证。
-- 10w task storm 容量上限。
+- 多租户混压下的最终一致性已本地验证，但公平性不达标，仍需 tenant fair-share 优化。
+- 10w task storm 已本地执行，当前 local profile 不通过，不能作为容量承诺。
 - 真实云 S3 / OSS 的 export 分片、multipart、checksum 验证。
 - dispatch / atomic 真实外部依赖故障注入。
-- process worker kill / PG 断链恢复 profile。
-- 10w task storm 容量上限。
-- 多租户混压下的配额公平性、隔离性和 RLS 串租验证。
 
 ## 上线门槛
 
@@ -212,6 +209,13 @@ atomic 覆盖：
 - backlog 清空速度。
 - p95 / p99 launch 延迟。
 
+状态：**已完成本地容量画像，10w 不通过**。
+
+- 1w：`preprod-p0-atomic1w-20260608140503`，10000/10000 全终态。
+- 10w：`p2-capacity-20260608171944-10w`，100000 发起请求 OK=41096、KO=58904；DB 可见实例最终 non_terminal=0，但本地 trigger HTTP 接入和 launch backlog 达到上限。
+- 已做优化：新增 `V168__trigger_outbox_pending_order_index.sql` 并调整 trigger outbox pending 查询排序，避免大 backlog 下 pending 查询排序退化。
+- 结论：当前 local profile 不能给 10w 容量承诺；下一轮需要调 trigger/orchestrator consumer 并发、tenant fair-share 和接入层 backpressure 后重跑。
+
 ### 9. 多租户混压
 
 覆盖：
@@ -226,6 +230,14 @@ atomic 覆盖：
 - quota 生效。
 - RLS 无串租。
 - 监控能按 tenant 拆分定位。
+
+状态：**已完成本地画像，最终成功但公平性不达标**。
+
+- RUN_ID：`p2-fairness-trigger-20260608180000`
+- 发起：6000/6000 OK，ta/tb/tc=3600/1200/1200。
+- 最终：6000/6000 LAUNCHED + SUCCESS。
+- 问题：10w storm backlog 后，p2 outbox 全发布到首批实例关联约 8 分钟；ta 明显先完成，tc 明显滞后。
+- 结论：需要 tenant-aware outbox selection / launch consumer 分区并发 / quota fair-share，不能仅靠单机 JVM 参数解决。
 
 ## 推荐执行顺序
 
