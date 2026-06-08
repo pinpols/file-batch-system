@@ -28,8 +28,8 @@ set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SQL_DIR="$ROOT_DIR/scripts/local/sql"
-[[ -f "$ROOT_DIR/.env.local" ]] && set -a && source "$ROOT_DIR/.env.local" 2>/dev/null && set +a
-[[ -f "$ROOT_DIR/.env" ]] && set -a && source "$ROOT_DIR/.env" 2>/dev/null && set +a
+# shellcheck source=../lib/env-common.sh
+source "$ROOT_DIR/scripts/lib/env-common.sh"
 
 # ── 参数解析 ────────────────────────────────────────────────────────
 BUNDLE=""
@@ -65,17 +65,17 @@ if [[ ! -f "$BUNDLE" ]]; then
 fi
 
 # ── 配置 ────────────────────────────────────────────────────────────
-PG_HOST="${PG_PRIMARY_HOST:-localhost}"
-PG_PORT="${PG_PRIMARY_PORT:-${POSTGRES_PORT:-15432}}"
-PG_USER="${POSTGRES_USER:-batch_user}"
-PG_PASSWORD="${POSTGRES_PASSWORD:-batch_pass_123}"
-PG_PLATFORM_DB="${POSTGRES_DB:-batch_platform}"
+PG_HOST="${PG_HOST:-$PGHOST}"
+PG_PORT="${PG_PORT:-$PGPORT}"
+PG_USER="${PG_USER:-$PGUSER}"
+PG_PASSWORD="${PG_PASSWORD:-$PGPASSWORD}"
+PG_PLATFORM_DB="${PG_PLATFORM_DB:-$PLATFORM_DB}"
 # 注意:forensic_export_log + job_instance 都在 platform 库(orchestrator 状态机库),
 # 不在 business 库(worker staging)。临时 replay schema 也建在 platform 库,
 # 这样 SQL 比对可以直接 JOIN batch.job_instance。
 PG_BUSINESS_DB="$PG_PLATFORM_DB"
-CONSOLE_BASE="${CONSOLE_BASE:-http://localhost:${CONSOLE_PORT:-18080}}"
-INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-change-me-please-32-chars}"
+CONSOLE_BASE="${CONSOLE_BASE:-$CONSOLE_BASE_URL}"
+INTERNAL_SECRET="${INTERNAL_SECRET:-$BATCH_INTERNAL_SECRET}"
 WAIT_TIMEOUT_SEC="${REPLAY_WAIT_TIMEOUT_SEC:-300}"
 WAIT_INTERVAL_SEC="${REPLAY_WAIT_INTERVAL_SEC:-3}"
 

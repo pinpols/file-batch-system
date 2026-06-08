@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.ops.infrastructure;
 
+import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import java.util.LinkedHashMap;
@@ -215,8 +216,7 @@ public class ConsoleAdminTestDataCleanupRepository {
   }
 
   /** 永远不删的白名单 —— 跟 scripts/db/wipe-non-system-tenants.sql `:keep` 同步。改这里要同步改 SQL。 */
-  private static final Set<String> PROTECTED_TENANT_IDS =
-      Set.of("system", "default", "default-tenant", "ta", "tb", "tc");
+  private static final Set<String> PROTECTED_TENANT_IDS = CommonConstants.PROTECTED_TENANT_IDS;
 
   /**
    * 按精确 tenantId 列表清理。补刀 prefix 模式清不掉的纯短名残留(td/te/tx 这类)。

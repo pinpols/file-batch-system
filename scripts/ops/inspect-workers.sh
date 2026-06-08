@@ -15,16 +15,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+# shellcheck source=env.sh
+source "$ROOT/scripts/ops/env.sh"
 
 # ── configuration ─────────────────────────────────────────────────────────────
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGDATABASE="${PGDATABASE:-batch_db}"
-PGUSER="${PGUSER:-batch}"
-export PGPASSWORD="${PGPASSWORD:-}"
-
-BATCH_SCHEMA="${BATCH_SCHEMA:-batch}"
 STALE_HEARTBEAT_MINUTES="${BATCH_INSPECT_STALE_HEARTBEAT_MINUTES:-5}"
 
 # ── helpers ───────────────────────────────────────────────────────────────────

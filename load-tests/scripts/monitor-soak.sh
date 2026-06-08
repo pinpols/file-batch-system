@@ -34,7 +34,6 @@ ERROR_RATE_BREACH_SECONDS="${ERROR_RATE_BREACH_SECONDS:-300}"
 DISK_USAGE_THRESHOLD_PCT="${DISK_USAGE_THRESHOLD_PCT:-90}"
 
 # Actuator base(每个模块独立端口),只取 console-api 作主样本
-CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-http://localhost:18080}"
 
 # 各退出条件累计起始时间(0 = 未在违规)
 heap_breach_since=0

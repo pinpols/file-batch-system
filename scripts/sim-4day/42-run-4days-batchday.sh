@@ -3,13 +3,16 @@
 # 时间压缩:不等真实一天,日切手动触发(绕过未来日期的 cutoffTime 时间门)。
 # 用法: bash 42-run-4days-batchday.sh [startDate 2026-06-10] [baseRows 300]
 set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 START="${1:-2026-06-10}"; BASE="${2:-300}"; WAIT="${WAIT:-120}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SQL_DIR="$HERE/sql"
-CONSOLE="${CONSOLE_BASE:-http://localhost:18080}"
+CONSOLE="${CONSOLE_BASE_URL}"
 CJ=/tmp/console-cookies-42.txt
 TENANTS=(ta tb tc t04 t05 t06 t07 t08 t09 t10)
-PQF(){ docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tA "$@" -f /dev/stdin 2>/dev/null; }
+PQF(){ docker exec -i batch-postgres-primary psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tA "$@" -f /dev/stdin 2>/dev/null; }
 nextday(){ python3 -c "import datetime as d;print((d.date.fromisoformat('$1')+d.timedelta(days=$2)).isoformat())"; }
 
 # 日切结算 = CLOSE 的状态转移(day_status→SETTLED + settled_at)。本应走

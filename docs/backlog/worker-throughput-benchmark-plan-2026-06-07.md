@@ -503,7 +503,7 @@ Gatling `900/900 OK,0 KO`;报告:`load-tests/target/control-plane-worker-report-
 - [x] 本地真实上下游 sim Stage 5b dispatch no-retry 补偿 + atomic 终态脚本
 - [x] 本地真实上下游 sim Stage 6b trigger 30 请求 storm
 - [x] 本地真实上下游 sim Stage 7 统一入口 smoke 扩展到 Stage 2/2b/3/3b/4/4b/5/6
-- [ ] trigger 高频 cron / misfire 参数矩阵(非 P0/P1;后续可选容量 profile)
+- [x] trigger 高频 cron / misfire / outbox 本地专项(Stage 6d,`sim-trigger-stage6d-20260608141724`);亚分钟连续 cron fire 仍不作为当前 wheel 放行能力
 - [x] process/dispatch/atomic/trigger 共用 benchmark 脚本入口
 
 ## 不做项

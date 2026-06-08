@@ -21,6 +21,8 @@ unset _DOCKER_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"

@@ -3,20 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
-
-COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT_DIR/.env.local}"
-if [[ -f "$COMPOSE_ENV_FILE" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$COMPOSE_ENV_FILE"
-  set +a
-fi
-
-TRIGGER_BASE_URL="${TRIGGER_BASE_URL:-http://localhost:18081}"
-CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-http://localhost:18080}"
-ORCHESTRATOR_BASE_URL="${ORCHESTRATOR_BASE_URL:-http://localhost:18082}"
-INTERNAL_SECRET="${INTERNAL_SECRET:-${BATCH_INTERNAL_SECRET:-internal-secret}}"
-BIZ_DATE="${BIZ_DATE:-2026-05-05}"
+# shellcheck source=env.sh
+source "$LOAD_DIR/scripts/env.sh"
 IMPORT_PROFILE="${IMPORT_PROFILE:-medium}"
 STEPS_CSV="${STEPS_CSV:-1,2,4,8}"
 RAMP_SECONDS="${RAMP_SECONDS:-5}"
@@ -25,13 +13,6 @@ PIPELINE_POLL_INTERVAL_SEC="${PIPELINE_POLL_INTERVAL_SEC:-2}"
 WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-240}"
 MAX_ERROR_PCT="${MAX_ERROR_PCT:-20.0}"
 
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PLATFORM_DB="${PLATFORM_DB:-batch_platform}"
-BUSINESS_DB="${BUSINESS_DB:-batch_business}"
-export PGPASSWORD
 
 RUN_ID="${RUN_ID:-ltw-stress-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
@@ -101,7 +82,7 @@ run_one() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
-      -DtenantId=default-tenant \
+      -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$job_code" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
@@ -122,7 +103,7 @@ run_one() {
         select count(*) || '|' ||
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and job_code = '${job_code}'
           and params_snapshot::text like '%${RUN_ID}%'
           and params_snapshot::text like '%\"stressUsers\": ${users}%';"
@@ -185,7 +166,7 @@ for users in "${STEPS[@]}"; do
         round(avg(extract(epoch from (ji.finished_at - ji.created_at))) filter (where ji.finished_at is not null)::numeric, 3) as avg_seconds,
         round(percentile_cont(0.95) within group (order by extract(epoch from (ji.finished_at - ji.created_at))) filter (where ji.finished_at is not null)::numeric, 3) as p95_seconds
       from batch.job_instance ji
-      where ji.tenant_id = 'default-tenant'
+      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
         and ji.job_code in ('import_customer_job','export_settlement_job','lt_dispatch_local_job','lt_process_sql_job')
         and ji.params_snapshot::text like '%${RUN_ID}%'
         and ji.params_snapshot::text like '%\"stressUsers\": ${users}%'
@@ -198,7 +179,7 @@ for users in "${STEPS[@]}"; do
       select ji.job_code, jt.task_type, jt.task_status, coalesce(jt.error_code,'') as error_code, count(*) as count
       from batch.job_instance ji
       join batch.job_task jt on jt.job_instance_id = ji.id
-      where ji.tenant_id = 'default-tenant'
+      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
         and ji.params_snapshot::text like '%${RUN_ID}%'
         and ji.params_snapshot::text like '%\"stressUsers\": ${users}%'
       group by ji.job_code, jt.task_type, jt.task_status, jt.error_code

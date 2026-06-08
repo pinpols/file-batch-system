@@ -3,20 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
-
-COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT_DIR/.env.local}"
-if [[ -f "$COMPOSE_ENV_FILE" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$COMPOSE_ENV_FILE"
-  set +a
-fi
-
-TRIGGER_BASE_URL="${TRIGGER_BASE_URL:-http://localhost:18081}"
-CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-http://localhost:18080}"
-ORCHESTRATOR_BASE_URL="${ORCHESTRATOR_BASE_URL:-http://localhost:18082}"
-INTERNAL_SECRET="${INTERNAL_SECRET:-${BATCH_INTERNAL_SECRET:-internal-secret}}"
-BIZ_DATE="${BIZ_DATE:-2026-05-05}"
+# shellcheck source=env.sh
+source "$LOAD_DIR/scripts/env.sh"
 IMPORT_PROFILE="${IMPORT_PROFILE:-medium}"
 USERS_PER_WORKER="${USERS_PER_WORKER:-3}"
 RAMP_SECONDS="${RAMP_SECONDS:-5}"
@@ -25,13 +13,6 @@ PIPELINE_POLL_INTERVAL_SEC="${PIPELINE_POLL_INTERVAL_SEC:-2}"
 MAX_ERROR_PCT="${MAX_ERROR_PCT:-20.0}"
 WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-180}"
 
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PLATFORM_DB="${PLATFORM_DB:-batch_platform}"
-BUSINESS_DB="${BUSINESS_DB:-batch_business}"
-export PGPASSWORD
 
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
@@ -103,7 +84,7 @@ run_one() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
-      -DtenantId=default-tenant \
+      -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$job_code" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
@@ -126,7 +107,7 @@ run_one() {
         select count(*) || '|' ||
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and job_code = '${job_code}'
           and params_snapshot::text like '%${RUN_ID}%';"
     )"
@@ -162,7 +143,7 @@ psql_business() {
   echo "# Worker Load Test Report - ${RUN_ID}"
   echo
   echo "- Time window UTC: ${RUN_STARTED_AT} - ${RUN_FINISHED_AT}"
-  echo "- Tenant: default-tenant"
+  echo "- Tenant: $LOAD_TEST_TENANT_ID"
   echo "- Users per worker: ${USERS_PER_WORKER}, ramp seconds: ${RAMP_SECONDS}"
   echo "- Import profile: ${IMPORT_PROFILE}"
   echo "- Data dir: ${OUT_DIR}"
@@ -175,7 +156,7 @@ psql_business() {
     with scoped as (
       select job_code, instance_status, created_at, finished_at
       from batch.job_instance
-      where tenant_id = 'default-tenant'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}'
         and job_code in ('import_customer_job','export_settlement_job','lt_dispatch_local_job','lt_process_sql_job')
         and params_snapshot::text like '%${RUN_ID}%'
     ),
@@ -200,28 +181,28 @@ psql_business() {
   psql_business -P pager=off -F ' | ' -A -c "
     select 'import_loaded_rows' as metric, count(*)::text as value
     from biz.customer_account
-    where tenant_id = 'default-tenant' and customer_no like '${RUN_ID}-IMP-%'
+    where tenant_id = '${LOAD_TEST_TENANT_ID}' and customer_no like '${RUN_ID}-IMP-%'
     union all
     select 'export_source_rows', count(*)::text
     from biz.settlement_detail
-    where tenant_id = 'default-tenant' and settlement_no like '${RUN_ID}-SET-%'
+    where tenant_id = '${LOAD_TEST_TENANT_ID}' and settlement_no like '${RUN_ID}-SET-%'
     union all
     select 'process_source_rows', count(*)::text
     from biz.process_order_event
-    where tenant_id = 'default-tenant' and account_id like '${RUN_ID}-ACCT-%'
+    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
     union all
     select 'process_target_rows', count(*)::text
     from biz.process_account_summary
-    where tenant_id = 'default-tenant' and account_id like 'LTACCT-%';"
+    where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like 'LTACCT-%';"
   psql_platform -P pager=off -F ' | ' -A -c "
     select 'dispatch_records' as metric, count(*)::text as value
     from batch.file_dispatch_record fdr
     join batch.file_record fr on fr.id = fdr.file_id
-    where fr.tenant_id = 'default-tenant' and fr.metadata_json::text like '%${RUN_ID}%'
+    where fr.tenant_id = '${LOAD_TEST_TENANT_ID}' and fr.metadata_json::text like '%${RUN_ID}%'
     union all
     select 'dispatch_files_dispatched', count(*)::text
     from batch.file_record
-    where tenant_id = 'default-tenant'
+    where tenant_id = '${LOAD_TEST_TENANT_ID}'
       and metadata_json::text like '%${RUN_ID}%'
       and file_status = 'DISPATCHED';"
   echo '```'
@@ -233,7 +214,7 @@ psql_business() {
     select ji.job_code, jt.task_type, jt.task_status, count(*) as count
     from batch.job_instance ji
     join batch.job_task jt on jt.job_instance_id = ji.id
-    where ji.tenant_id = 'default-tenant'
+    where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
       and ji.params_snapshot::text like '%${RUN_ID}%'
       and ji.job_code in ('import_customer_job','export_settlement_job','lt_dispatch_local_job','lt_process_sql_job')
     group by ji.job_code, jt.task_type, jt.task_status

@@ -1,5 +1,6 @@
 package com.example.batch.console.infrastructure.config;
 
+import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Nullables;
@@ -246,7 +247,7 @@ public class TenantConfigInitApplyHandlers {
     entity.setBizType(spec.getBizType());
     entity.setScheduleType(spec.getScheduleType());
     entity.setScheduleExpr(spec.getScheduleExpr());
-    entity.setTimezone(Nullables.coalesce(spec.getTimezone(), "Asia/Shanghai"));
+    entity.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
     entity.setTriggerMode(Nullables.coalesce(spec.getTriggerMode(), "SCHEDULED"));
     entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()));
     entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()));
@@ -626,7 +627,7 @@ public class TenantConfigInitApplyHandlers {
     p.setTenantId(tenantId);
     p.setWindowCode(spec.getWindowCode());
     p.setWindowName(spec.getWindowName());
-    p.setTimezone(Nullables.coalesce(spec.getTimezone(), "Asia/Shanghai"));
+    p.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
     p.setStartTime(spec.getStartTime());
     p.setEndTime(spec.getEndTime());
     p.setEndStrategy(spec.getEndStrategy());
@@ -660,7 +661,7 @@ public class TenantConfigInitApplyHandlers {
     p.setTenantId(tenantId);
     p.setCalendarCode(spec.getCalendarCode());
     p.setCalendarName(spec.getCalendarName());
-    p.setTimezone(Nullables.coalesce(spec.getTimezone(), "Asia/Shanghai"));
+    p.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
     p.setHolidayRollRule(spec.getHolidayRollRule());
     p.setCatchUpPolicy(spec.getCatchUpPolicy());
     p.setCatchUpMaxDays(spec.getCatchUpMaxDays());

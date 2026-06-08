@@ -7,8 +7,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# shellcheck source=scripts/lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 
-CONSOLE_BASE="${CONSOLE_BASE:-http://localhost:18080}"
 FIXTURE_DIR="$ROOT/docs/test-data/test-full-coverage-import-suite"
 
 # console-api bypass-mode=true 时不需要 auth header,否则需要 Cookie

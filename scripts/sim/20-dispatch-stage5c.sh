@@ -16,15 +16,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-export TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
-if [[ -z "${BATCH_INTERNAL_SECRET:-}" && -f .env.local ]]; then
-  BATCH_INTERNAL_SECRET="$(grep -E '^BATCH_INTERNAL_SECRET=' .env.local | tail -1 | cut -d= -f2- || true)"
-fi
-export INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
-export BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
-export BATCH_NO="${BATCH_NO:-sim-dispatch-stage5c-$(date +%Y%m%d%H%M%S)}"
-export RUN_ID="${RUN_ID:-dispatch-stage5c-$(date +%Y%m%d%H%M%S)}"
-export REPORT_DIR="${REPORT_DIR:-load-tests/target/$RUN_ID}"
+SIM_STAGE_NAME="dispatch-stage5c"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
+
 export SFTP_HOST="${SFTP_HOST:-127.0.0.1}"
 export SFTP_PORT="${SFTP_PORT:-12222}"
 export SOURCE_DIR="${SOURCE_DIR:-/tmp/batch/stage5c-source}"

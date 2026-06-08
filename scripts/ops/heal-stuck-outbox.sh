@@ -21,16 +21,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+# shellcheck source=env.sh
+source "$ROOT/scripts/ops/env.sh"
 
 # ── configuration ─────────────────────────────────────────────────────────────
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGDATABASE="${PGDATABASE:-batch_db}"
-PGUSER="${PGUSER:-batch}"
-export PGPASSWORD="${PGPASSWORD:-}"
-
-BATCH_SCHEMA="${BATCH_SCHEMA:-batch}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 # 超过此秒数未投递的 outbox 视为卡住
 OUTBOX_STUCK_SECONDS="${BATCH_HEAL_OUTBOX_STUCK_SECONDS:-300}"

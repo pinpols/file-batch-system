@@ -2,7 +2,7 @@
 
 ## 背景
 
-基于当前已有压测结果，系统处于 **P0/P1 主链路已收口，可以进入上线前灰度准备，但还没有完成生产容量上限认证** 的状态。
+基于当前已有压测结果，系统处于 **P0 已补跑收口，可以进入上线前灰度准备；P1/P2 还没有完成生产外部依赖和容量上限认证** 的状态。
 
 已验证事实：
 
@@ -17,8 +17,11 @@
 - 真实 S3 / OSS / NAS / SFTP / HTTP 下游故障下的容量与恢复能力。
 - 多租户混压下的配额公平性、隔离性和 RLS 串租验证。
 - 10w task storm 容量上限。
-- trigger 高频 cron、misfire 补点风暴和 trigger_outbox 积压恢复。
-- PG WAL / checkpoint / work_mem / JVM 生产参数矩阵。
+- 真实云 S3 / OSS 的 export 分片、multipart、checksum 验证。
+- dispatch / atomic 真实外部依赖故障注入。
+- process worker kill / PG 断链恢复 profile。
+- 10w task storm 容量上限。
+- 多租户混压下的配额公平性、隔离性和 RLS 串租验证。
 
 ## 上线门槛
 
@@ -45,6 +48,8 @@
 - 工作树无未分类关键代码改动。
 - 压测报告能反查到 commit sha。
 
+状态：**已完成**。当前固化提交包括 `5eb564b5e`、`fb3ed3746`、`c22ea859c`。
+
 ### 2. 重跑 process / dispatch / atomic / trigger 混压
 
 目的：确认 lease renew 修复后，高压期间不再误报 `orch likely unreachable`，并确认控制面仍全终态。
@@ -63,6 +68,11 @@
 - 无 `CREATED + NO_TASK`。
 - 无业务拒绝续租触发 `renew circuit OPENED`。
 - 失败必须是明确 `FAILED` / `REJECTED`，不能卡 `RUNNING` / `CREATED`。
+
+状态：**已完成**。
+
+- mixed RUN_ID：`preprod-p0-mixed-20260608140208`，720/720 全终态，`non_terminal=0`，`CREATED + NO_TASK=0`，Kafka lag=0。
+- atomic 1w RUN_ID：`preprod-p0-atomic1w-20260608140503`，10000/10000 全终态，6522 SUCCESS、3478 `BUSINESS_RULE` fail-close，`CREATED + NO_TASK=0`，Kafka lag=0。
 
 ### 3. trigger misfire / cron 风暴专项
 
@@ -83,6 +93,13 @@
 - trigger_outbox 最终清空。
 - workflow / job_instance 全部进入终态。
 
+状态：**已完成本地 wheel 模式专项**。
+
+- 脚本：`scripts/sim/24-trigger-stage6d.sh`
+- 成功批次：`sim-trigger-stage6d-20260608141724`
+- 摘要：cron 首发、暂停期间不新增、恢复后新增、misfire replay、dedup、outbox retry、80 storm 全终态均通过。
+- 限制：本地 wheel 模式下 pause/resume 管理接口为 noop，脚本用 `enabled=false/true + trigger_runtime_state` 模拟停排恢复；亚分钟 cron 连续 fire 不作为当前放行能力。
+
 ### 4. PG 参数矩阵
 
 目的：找到 import/process/export 大数据写入的生产推荐参数。
@@ -102,6 +119,12 @@
 - 记录 wall time、WAL 增量、DB size、CPU/IO、失败率。
 - 输出生产推荐参数和不推荐参数。
 
+状态：**已完成本地 PG 写入微基准矩阵**。
+
+- RUN_ID：`pg-param-matrix-20260608142440`
+- 报告：`load-tests/target/pg-param-matrix-20260608142440/pg-write-parameter-matrix.md`
+- 结论：`work_mem=64MB` / `maintenance_work_mem=256MB` 值得作为 session scoped 候选继续系统级复验；`synchronous_commit=off` 不进生产默认；额外二级索引明显增加 WAL 和写入成本；WAL/checkpoint 放宽需要更大规模再确认。
+
 ## P1 上线增强
 
 ### 5. export 真实对象存储专项
@@ -120,6 +143,8 @@
 - 文件完整性正确。
 - 失败可重试或明确失败。
 - 不产生半成品误成功。
+
+状态：**未完成**。本地 MinIO/S3-compatible 已覆盖过主链路，但真实云 S3/OSS endpoint、checksum、multipart abort/retry 还没有跑，不能标记为生产同类对象存储通过。
 
 ### 6. dispatch / atomic 故障注入
 
@@ -143,6 +168,8 @@ atomic 覆盖：
 - 无重复成功上报。
 - 无卡 `RUNNING`。
 
+状态：**未完成真实外部依赖故障注入**。Stage 5/5c 已覆盖 LOCAL/NAS/SFTP sidecar manifest 和 atomic HTTP/SQL/shell 基本分支，但还缺真实 5xx、timeout、断连、权限失败、重试/DLQ 组合。
+
 ### 7. process failure profile
 
 覆盖：
@@ -158,6 +185,8 @@ atomic 覆盖：
 - 可恢复。
 - 无 staging 残留。
 - 无重复写脏数据。
+
+状态：**未完成 fault-injection profile**。已有 process DIRECT、分片、幂等和 staging 清理验证；还缺 kill worker、DB 临时断开和恢复后脏数据核对。
 
 ## P2 容量画像
 

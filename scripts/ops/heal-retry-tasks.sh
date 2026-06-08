@@ -30,7 +30,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+# shellcheck source=scripts/ops/env.sh
+source "$ROOT/scripts/ops/env.sh"
 
 require_tools() {
   for tool in psql curl; do
@@ -41,15 +42,6 @@ require_tools() {
   done
 }
 
-# ── configuration ─────────────────────────────────────────────────────────────
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGDATABASE="${PGDATABASE:-batch_db}"
-PGUSER="${PGUSER:-batch}"
-export PGPASSWORD="${PGPASSWORD:-}"
-
-BATCH_SCHEMA="${BATCH_SCHEMA:-batch}"
-BATCH_ORCHESTRATOR_URL="${BATCH_ORCHESTRATOR_URL:-http://localhost:8082}"
 BATCH_ORCHESTRATOR_TOKEN="${BATCH_ORCHESTRATOR_TOKEN:-}"
 
 BATCH_HEAL_RETRY_DRY_RUN="${BATCH_HEAL_RETRY_DRY_RUN:-true}"

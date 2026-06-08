@@ -6,7 +6,7 @@
 
 同时，本轮前台输出观察到两个需要单独处理的信号：历史 import 脏任务在 worker 启动后被消费并报格式/约束错误；process/dispatch/atomic 在高压期间出现过 lease renew circuit OPENED。复核后确认，process/dispatch 可按 taskId 和时间戳对上，是任务成功处理后续租 tick 仍拿到旧 active lease 快照导致的正常业务拒绝，不是 orchestrator 短暂不可达；atomic 终端输出被截断，不能逐 taskId 对齐，但同代码路径且压测无非终态，应按同类问题治理。
 
-但这不是“全矩阵已通过”。真实云 S3、多租户混压、PG WAL/checkpoint/work_mem 参数排列、trigger 真实 cron/misfire、dispatch/atomic 故障注入和 lease renew 极限，没有现成 harness 或外部依赖，不能诚实标记为通过。上线前应按下方缺口继续补自动化。
+本轮之后 P0 已继续补齐：mixed 压力复验、atomic 1w storm、trigger misfire/cron/outbox 专项、PG 写入参数矩阵均已形成报告。仍不能声称“全矩阵已通过”的是 P1/P2：真实云 S3、多租户混压、dispatch/atomic 真实外部依赖故障注入、process kill/DB 断链恢复和 10w task storm。
 
 ## 环境
 
@@ -74,9 +74,9 @@
 
 | 矩阵 | 状态 | 说明 |
 | --- | --- | --- |
-| import JVM/PG/work_mem/chunk/batch 参数矩阵 | 部分覆盖 | 本轮仅跑 local JVM 和当前 PG 参数下的 small import stress；未做 JVM、WAL/checkpoint、work_mem、chunk/batch 多组合排列。 |
-| trigger 高频 cron / misfire | 部分覆盖 | 本轮覆盖 trigger launch/read 压力；未覆盖真实 cron 触发器、misfire replay、错过窗口补偿。 |
-| 1w / 10w task storm | 部分覆盖 | 1w atomic storm 已跑；10w 未跑，本机 local 环境不适合作为上线容量结论。 |
+| import JVM/PG/work_mem/chunk/batch 参数矩阵 | 已补 PG 写入矩阵 | `pg-param-matrix-20260608142440` 完成 5 组 x 3 次；JVM 和 chunk/batch 系统级组合仍未做。 |
+| trigger 高频 cron / misfire | 已补本地专项 | `scripts/sim/24-trigger-stage6d.sh` 通过；wheel 模式亚分钟连续 cron fire 仍不作为放行能力。 |
+| 1w / 10w task storm | 部分覆盖 | `preprod-p0-atomic1w-20260608140503` 已跑 1w 全终态；10w 未跑，本机 local 环境不适合作为上线容量承诺。 |
 | process 大数据失败恢复、幂等重跑、中途失败恢复 | 部分覆盖 | 10w aggregate/copy/idempotency 已跑；未做 kill worker、DB 中断、重启恢复等故障注入。 |
 | dispatch / atomic 故障注入、失败重试风暴、下游异常、lease renew 极限 | 未覆盖 | 本轮只跑成功路径和 atomic 高压；没有远端 NAS/OSS/SFTP/HTTP 故障源，也没有 lease renew 饥饿注入。 |
 | export 更高分片数、真实 S3、多租户混压 | 部分覆盖 | 本轮只覆盖 local export 小阶梯；真实 S3 未配置，当前是本地 MinIO/S3-compatible 环境；未做多租户混压。 |

@@ -19,11 +19,6 @@ SOAK_LOG_DIR="${SOAK_LOG_DIR:-$ROOT_DIR/logs/soak}"
 SOAK_RUN_ID="${SOAK_RUN_ID:-soak-unknown}"
 REPORT="$SOAK_LOG_DIR/soak-report-${SOAK_RUN_ID}.md"
 
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PLATFORM_DB="${PLATFORM_DB:-batch_platform}"
 export PGPASSWORD
 
 psql_q() {

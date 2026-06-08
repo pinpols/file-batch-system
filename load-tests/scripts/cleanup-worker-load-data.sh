@@ -3,15 +3,10 @@ set -euo pipefail
 
 RUN_ID="${RUN_ID:?RUN_ID is required, for example RUN_ID=ltw-20260505093000}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOAD_DIR="$ROOT_DIR/load-tests"
+# shellcheck source=env.sh
+source "$LOAD_DIR/scripts/env.sh"
 SQL_DIR="$ROOT_DIR/load-tests/sql"
-
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PLATFORM_DB="${PLATFORM_DB:-batch_platform}"
-BUSINESS_DB="${BUSINESS_DB:-batch_business}"
-export PGPASSWORD
 
 psql_platform() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"

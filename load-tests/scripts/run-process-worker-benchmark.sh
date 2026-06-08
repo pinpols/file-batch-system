@@ -3,20 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
-
-COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT_DIR/.env.local}"
-if [[ -f "$COMPOSE_ENV_FILE" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$COMPOSE_ENV_FILE"
-  set +a
-fi
-
-TRIGGER_BASE_URL="${TRIGGER_BASE_URL:-http://localhost:18081}"
-CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-http://localhost:18080}"
-ORCHESTRATOR_BASE_URL="${ORCHESTRATOR_BASE_URL:-http://localhost:18082}"
-INTERNAL_SECRET="${INTERNAL_SECRET:-${BATCH_INTERNAL_SECRET:-internal-secret}}"
-BIZ_DATE="${BIZ_DATE:-2026-05-05}"
+# shellcheck source=env.sh
+source "$LOAD_DIR/scripts/env.sh"
 
 PROCESS_SCENARIOS="${PROCESS_SCENARIOS:-aggregate,copy,idempotency}"
 PROCESS_SOURCE_ROWS="${PROCESS_SOURCE_ROWS:-5000}"
@@ -32,13 +20,6 @@ KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-process|orchestrato
 KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}"
 KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
 
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PLATFORM_DB="${PLATFORM_DB:-batch_platform}"
-BUSINESS_DB="${BUSINESS_DB:-batch_business}"
-export PGPASSWORD
 
 RUN_ID="${RUN_ID:-prcw-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
@@ -172,7 +153,7 @@ wait_job_terminal() {
         select count(*) || '|' ||
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and job_code = '${job_code}'
           and params_snapshot::text like '%${RUN_ID}%';"
     )"
@@ -201,7 +182,7 @@ run_process_job() {
     psql_platform -Atc "
       select count(*)
       from batch.job_instance
-      where tenant_id = 'default-tenant'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}'
         and job_code = '${job_code}'
         and params_snapshot::text like '%${RUN_ID}%';"
   )"
@@ -216,7 +197,7 @@ run_process_job() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
-      -DtenantId=default-tenant \
+      -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$job_code" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
@@ -267,7 +248,7 @@ write_report() {
              round(avg(extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as avg_seconds,
              round(percentile_cont(0.95) within group (order by extract(epoch from (finished_at - created_at))) filter (where finished_at is not null)::numeric, 3) as p95_seconds
       from batch.job_instance
-      where tenant_id = 'default-tenant'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}'
         and job_code in ('lt_process_sql_job','lt_process_copy_job')
         and params_snapshot::text like '%${RUN_ID}%'
       group by job_code
@@ -287,7 +268,7 @@ write_report() {
       from batch.job_instance ji
       join batch.pipeline_instance pi on pi.related_job_instance_id = ji.id
       join batch.pipeline_step_run psr on psr.pipeline_instance_id = pi.id
-      where ji.tenant_id = 'default-tenant'
+      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
         and ji.job_code in ('lt_process_sql_job','lt_process_copy_job')
         and ji.params_snapshot::text like '%${RUN_ID}%'
       group by ji.job_code, psr.stage_code
@@ -300,23 +281,23 @@ write_report() {
     psql_business -P pager=off -F ' | ' -A -c "
       select 'source_rows' as metric, count(*)::text as value
       from biz.process_order_event
-      where tenant_id = 'default-tenant' and account_id like '${RUN_ID}-ACCT-%'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
       union all
       select 'source_distinct_accounts', count(distinct account_id)::text
       from biz.process_order_event
-      where tenant_id = 'default-tenant' and account_id like '${RUN_ID}-ACCT-%'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
       union all
       select 'aggregate_target_rows', count(*)::text
       from biz.process_account_summary
-      where tenant_id = 'default-tenant' and account_id like '${RUN_ID}-ACCT-%'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
       union all
       select 'copy_target_rows', count(*)::text
       from biz.process_event_copy
-      where tenant_id = 'default-tenant' and account_id like '${RUN_ID}-ACCT-%'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and account_id like '${RUN_ID}-ACCT-%'
       union all
       select 'staging_live_rows', count(*)::text
       from batch.process_staging
-      where tenant_id = 'default-tenant' and batch_key like '%${RUN_ID}%';"
+      where tenant_id = '${LOAD_TEST_TENANT_ID}' and batch_key like '%${RUN_ID}%';"
     echo
     psql_platform -P pager=off -F ' | ' -A -c "
       with stage as (
@@ -326,7 +307,7 @@ write_report() {
         from batch.job_instance ji
         join batch.pipeline_instance pi on pi.related_job_instance_id = ji.id
         join batch.pipeline_step_run psr on psr.pipeline_instance_id = pi.id
-        where ji.tenant_id = 'default-tenant'
+        where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
           and ji.job_code in ('lt_process_sql_job','lt_process_copy_job')
           and ji.params_snapshot::text like '%${RUN_ID}%'
           and psr.stage_code in ('COMPUTE','COMMIT')
@@ -357,7 +338,7 @@ write_report() {
              round(percentile_cont(0.95) within group (order by extract(epoch from (jt.finished_at - jt.started_at))) filter (where jt.finished_at is not null and jt.started_at is not null)::numeric, 3) as p95_exec_s
       from batch.job_instance ji
       join batch.job_task jt on jt.job_instance_id = ji.id
-      where ji.tenant_id = 'default-tenant'
+      where ji.tenant_id = '${LOAD_TEST_TENANT_ID}'
         and ji.job_code in ('lt_process_sql_job','lt_process_copy_job')
         and ji.params_snapshot::text like '%${RUN_ID}%'
       group by ji.job_code, jt.task_status

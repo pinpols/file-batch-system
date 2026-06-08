@@ -31,19 +31,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+# shellcheck source=env.sh
+source "$ROOT/scripts/ops/env.sh"
 
 # ── configuration ─────────────────────────────────────────────────────────────
 DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 MAX_AGE="${BATCH_HEAL_ZOMBIE_MAX_AGE_SECONDS:-604800}"
 TENANT="${BATCH_HEAL_ZOMBIE_TENANT:-}"
-
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PGDATABASE="${PGDATABASE:-batch_platform}"
-export PGPASSWORD
 
 psql_file() {
   psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \

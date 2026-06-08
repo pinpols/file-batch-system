@@ -14,17 +14,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-export TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
-export ORCH_BASE="${ORCH_BASE:-http://localhost:18082}"
-if [[ -z "${BATCH_INTERNAL_SECRET:-}" && -f .env.local ]]; then
-  BATCH_INTERNAL_SECRET="$(grep -E '^BATCH_INTERNAL_SECRET=' .env.local | tail -1 | cut -d= -f2- || true)"
-fi
-export INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
-export BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
-export BATCH_NO="${BATCH_NO:-sim-atomic-stage5c-$(date +%Y%m%d%H%M%S)}"
-export RUN_ID="${RUN_ID:-atomic-stage5c-$(date +%Y%m%d%H%M%S)}"
-export REPORT_DIR="${REPORT_DIR:-load-tests/target/$RUN_ID}"
-mkdir -p "$REPORT_DIR"
+SIM_STAGE_NAME="atomic-stage5c"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
+
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
@@ -36,14 +29,17 @@ ORCH = os.environ["ORCH_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
-TENANT = "default-tenant"
+TENANT = os.environ["BATCH_DEFAULT_TENANT_ID"]
+PG_CONTAINER = os.environ["PG_CONTAINER"]
+PG_USER = os.environ["POSTGRES_USER"]
+PLATFORM_DB = os.environ["PLATFORM_DB"]
 PARAMS_FILE = "docs/test-data/sim-stage5c-atomic-params.json"
 
 with open(PARAMS_FILE, "r", encoding="utf-8") as fh:
     ATOMIC_PARAMS = json.load(fh)
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-P", "pager=off"]
+    args = ["docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PLATFORM_DB, "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]

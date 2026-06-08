@@ -14,16 +14,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-export TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
-if [[ -z "${BATCH_INTERNAL_SECRET:-}" && -f .env.local ]]; then
-  BATCH_INTERNAL_SECRET="$(grep -E '^BATCH_INTERNAL_SECRET=' .env.local | tail -1 | cut -d= -f2- || true)"
-fi
-export INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
-export BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
-export BATCH_NO="${BATCH_NO:-sim-atomic-stage5b-$(date +%Y%m%d%H%M%S)}"
-export RUN_ID="${RUN_ID:-atomic-stage5b-$(date +%Y%m%d%H%M%S)}"
-export REPORT_DIR="${REPORT_DIR:-load-tests/target/$RUN_ID}"
-mkdir -p "$REPORT_DIR"
+SIM_STAGE_NAME="atomic-stage5b"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
@@ -33,6 +26,10 @@ import json, os, subprocess, sys, time, urllib.request
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
+TENANT = os.environ["BATCH_DEFAULT_TENANT_ID"]
+PG_CONTAINER = os.environ["PG_CONTAINER"]
+PG_USER = os.environ["POSTGRES_USER"]
+PLATFORM_DB = os.environ["PLATFORM_DB"]
 JOBS = ["atomic_shell_demo", "atomic_sql_demo", "atomic_stored_proc_demo"]
 request_ids = {}
 
@@ -40,7 +37,7 @@ def launch(job):
     rid = f"sim-stage5b-{job}-{int(time.time()*1000)%100000000}"
     request_ids[job] = rid
     body = {
-        "tenantId": "default-tenant",
+        "tenantId": TENANT,
         "jobCode": job,
         "triggerType": "API",
         "bizDate": BIZ,
@@ -51,7 +48,7 @@ def launch(job):
         data=json.dumps(body).encode(),
         headers={
             "Content-Type": "application/json",
-            "X-Tenant-Id": "default-tenant",
+            "X-Tenant-Id": TENANT,
             "X-Internal-Secret": SECRET,
             "Idempotency-Key": rid,
             "X-Request-Id": rid,
@@ -66,7 +63,7 @@ def launch(job):
             sys.exit(1)
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-P", "pager=off"]
+    args = ["docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PLATFORM_DB, "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -81,7 +78,7 @@ while time.time() < deadline:
     out = psql(
         "select count(*) from batch.trigger_request tr "
         "join batch.job_instance i on i.id=tr.related_job_instance_id "
-        f"where tr.tenant_id='default-tenant' and tr.request_id in ({req_list}) "
+        f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
         "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
         tuples=True,
     )
@@ -97,12 +94,12 @@ status_sql = (
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id=tr.related_job_instance_id "
     "left join batch.job_task t on t.job_instance_id=i.id "
-    f"where tr.tenant_id='default-tenant' and tr.request_id in ({req_list}) "
+    f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
     "order by i.job_code"
 )
 subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", status_sql
+    "docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER,
+    "-d", PLATFORM_DB, "-P", "pager=off", "-c", status_sql
 ], check=False)
 
 out = psql(

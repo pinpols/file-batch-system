@@ -18,16 +18,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OPS_SQL_DIR="$ROOT/scripts/ops/sql"
+# shellcheck source=env.sh
+source "$ROOT/scripts/ops/env.sh"
 
 # ── configuration ─────────────────────────────────────────────────────────────
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGDATABASE="${PGDATABASE:-batch_db}"
-PGUSER="${PGUSER:-batch}"
-export PGPASSWORD="${PGPASSWORD:-}"
-
-BATCH_SCHEMA="${BATCH_SCHEMA:-batch}"
 STUCK_JOB_MINUTES="${BATCH_INSPECT_STUCK_JOB_MINUTES:-60}"
 OUTBOX_LAG_SECONDS="${BATCH_INSPECT_OUTBOX_LAG_SECONDS:-120}"
 DLQ_WARN_COUNT="${BATCH_INSPECT_DLQ_WARN_COUNT:-50}"

@@ -20,12 +20,8 @@
 # =========================================================
 set -uo pipefail
 
-export TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
 export ROWS="${ROUNDS:-5}"               # 每个 import 生成多少数据行
 export ONLY="${ONLY:-}"
-export BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
-export BATCH_NO="${BATCH_NO:-sim-$(date +%Y%m%d%H%M%S)}"
-export INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
 export CLEAN_SIM_OUTPUTS="${CLEAN_SIM_OUTPUTS:-false}"
 export MINIO_BUCKET="${MINIO_BUCKET:-batch-dev}"
 

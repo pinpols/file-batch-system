@@ -1,6 +1,7 @@
 package com.example.batch.console.domain.rbac.service;
 
 import com.example.batch.common.config.BatchProfileSupport;
+import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
@@ -83,7 +84,7 @@ public class ConsoleTenantApplicationService {
    *
    * <p>注:{@code system} 保留(管理员需要切到此租户管理跨租户配置),由 FE 按角色决定是否展示。
    */
-  private static final Set<String> HIDDEN_TENANT_IDS = Set.of("default", "default-tenant");
+  private static final Set<String> HIDDEN_TENANT_IDS = CommonConstants.HIDDEN_TENANT_IDS;
 
   public PageResponse<ConsoleTenantResponse> listTenants(
       String keyword, String status, PageRequest pageRequest) {
