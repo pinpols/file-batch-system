@@ -75,6 +75,9 @@ public record SqlTransformComputeSpec(
           "batchKey",
           "targetSchema",
           "targetTable",
+          "partitionNo",
+          "partitionCount",
+          "partitionKey",
           "bizDate");
 
   private static final String METADATA_PARAM_PREFIX = "metadata_";

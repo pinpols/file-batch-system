@@ -145,6 +145,7 @@ public class ParseStep implements ImportStageStep {
             ERROR_OBJECT_MAPPER);
       }
       if (!support.withinThreshold(context)) {
+        support.markThresholdExceeded(context);
         deleteQuietly(stagingFile);
         return ImportStageResult.failure(
             stage(),

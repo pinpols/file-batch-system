@@ -120,6 +120,7 @@ public class ValidateStep implements ImportStageStep {
           streamResult.validatedCount(),
           streamResult.loadedCandidateCount());
       if (!recordGovernanceService.withinThreshold(context)) {
+        recordGovernanceService.markThresholdExceeded(context);
         deleteQuietly(validatedRecordsPath);
         return ImportStageResult.failure(
             stage(),
@@ -182,6 +183,7 @@ public class ValidateStep implements ImportStageStep {
             objectMapper);
       }
       if (!recordGovernanceService.withinThreshold(context)) {
+        recordGovernanceService.markThresholdExceeded(context);
         return ImportStageResult.failure(
             stage(),
             ERR_SKIP_THRESHOLD_EXCEEDED,
@@ -243,6 +245,7 @@ public class ValidateStep implements ImportStageStep {
                     objectMapper));
           }
           if (!recordGovernanceService.withinThreshold(context)) {
+            recordGovernanceService.markThresholdExceeded(context);
             return new StreamingValidationResult(
                 validatedCount,
                 loadedCandidateCount,
@@ -347,6 +350,7 @@ public class ValidateStep implements ImportStageStep {
               outcome.errorCode(), outcome.errorMessage(), validCount);
         }
         if (!recordGovernanceService.withinThreshold(context)) {
+          recordGovernanceService.markThresholdExceeded(context);
           return ChunkProcessResult.failure(
               ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED, validCount);
         }

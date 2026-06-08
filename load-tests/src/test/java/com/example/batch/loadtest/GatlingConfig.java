@@ -4,32 +4,30 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/**
- * Centralized load-test configuration read from system properties (set via -D flags or
- * Maven profiles).  All simulations pull their parameters from here.
- */
+/** 压测公共配置入口,支持 Maven -D 参数和环境变量两级覆盖。所有 Gatling simulation 都从这里取参数。 */
 public final class GatlingConfig {
 
-    // ── Endpoints ──────────────────────────────────────────────────────────────
+    // ── 服务端点 ──────────────────────────────────────────────────────────────
 
-    /** batch-trigger base URL, e.g. http://localhost:8081 */
+    /** batch-trigger base URL。 */
     public static final String TRIGGER_BASE_URL =
-            System.getProperty("trigger.baseUrl", "http://localhost:8081");
+            systemPropertyOrEnv("trigger.baseUrl", "TRIGGER_BASE_URL", "http://localhost:18081");
 
-    /** batch-console-api base URL, e.g. http://localhost:8080 */
+    /** batch-console-api base URL。 */
     public static final String CONSOLE_BASE_URL =
-            System.getProperty("console.baseUrl", "http://localhost:8080");
+            systemPropertyOrEnv("console.baseUrl", "CONSOLE_BASE_URL", "http://localhost:18080");
 
     /**
-     * batch-orchestrator base URL for {@code /internal/**} probes (default aligns with local
-     * {@code BATCH_ORCHESTRATOR_PORT=18082}).
+     * batch-orchestrator 的 base URL,用于 {@code /internal/**} 探测；默认对齐本地
+     * {@code BATCH_ORCHESTRATOR_PORT=18082}。
      */
     public static final String ORCHESTRATOR_BASE_URL =
-            System.getProperty("orchestrator.baseUrl", "http://localhost:18082");
+            systemPropertyOrEnv(
+                    "orchestrator.baseUrl", "ORCHESTRATOR_BASE_URL", "http://localhost:18082");
 
-    /** Shared secret required by local trigger endpoints. */
+    /** 本地 trigger 端点需要的内部共享密钥。 */
     public static final String INTERNAL_SECRET =
-            System.getProperty("internal.secret", "internal-secret");
+            systemPropertyOrEnv("internal.secret", "BATCH_INTERNAL_SECRET", "internal-secret");
 
     // ── Test data ──────────────────────────────────────────────────────────────
 
@@ -122,6 +120,19 @@ public final class GatlingConfig {
             Double.parseDouble(System.getProperty("slo.maxErrorPct", "1.0"));
 
     private GatlingConfig() {
+    }
+
+    private static String systemPropertyOrEnv(
+            String propertyName, String envName, String defaultValue) {
+        String propertyValue = System.getProperty(propertyName);
+        if (propertyValue != null && !propertyValue.isBlank()) {
+            return propertyValue;
+        }
+        String envValue = System.getenv(envName);
+        if (envValue != null && !envValue.isBlank()) {
+            return envValue;
+        }
+        return defaultValue;
     }
 
     private static String resolveLaunchParamsJson() {

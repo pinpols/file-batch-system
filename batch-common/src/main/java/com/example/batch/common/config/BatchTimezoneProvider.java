@@ -1,5 +1,6 @@
 package com.example.batch.common.config;
 
+import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.utils.Texts;
 import jakarta.annotation.PostConstruct;
 import java.time.DateTimeException;
@@ -24,7 +25,7 @@ import org.springframework.stereotype.Component;
 @EnableConfigurationProperties(BatchTimezoneProperties.class)
 public class BatchTimezoneProvider {
 
-  private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Shanghai");
+  private static final ZoneId FALLBACK_ZONE = ZoneId.of(CommonConstants.DEFAULT_TIMEZONE_ID);
 
   private final ZoneId defaultZone;
   private final String configuredDefaultZone;

@@ -4,8 +4,12 @@
 # Output CSV columns are intentionally flat so they can be pasted into a report or plotted quickly.
 set -euo pipefail
 
-PGURL="${PGURL:-postgresql://batch_user:batch_pass_123@localhost:15432/batch_platform}"
-TENANT_ID="${TENANT_ID:-default-tenant}"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=load-tests/scripts/env.sh
+source "$ROOT/load-tests/scripts/env.sh"
+
+PGURL="${PGURL:-postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PLATFORM_DB}}"
+TENANT_ID="${TENANT_ID:-$LOAD_TEST_TENANT_ID}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-5}"
 DURATION_SECONDS="${DURATION_SECONDS:-300}"
 OUT="${OUT:-target/scheduler-backlog-$(date +%Y%m%d%H%M%S).csv}"

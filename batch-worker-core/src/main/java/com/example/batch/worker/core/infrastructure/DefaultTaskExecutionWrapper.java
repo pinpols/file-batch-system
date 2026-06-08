@@ -155,9 +155,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     try {
       StepExecutionResponse response = runWithTimeout(request, task, timeoutSeconds);
       // P1-2 闸门：若执行过程中 orchestrator 已明确驱逐本 lease（renew DB CAS 返回 false），
-      // 不再 report —— 此时 orchestrator 通常已把任务派给别的 worker，重复 report 会与对方竞争 CAS，
-      // 在 outbox/重试路径制造垃圾流量并潜在影响幂等性。
-      if (activeTaskLeaseRegistry.isLost(task.getTaskId())) {
+      // 不再 report。markCompletingUnlessLost 与 markLost 共用 registry 写锁，避免“业务刚完成、
+      // 旧 renew 快照随后 rejected”把已完成任务误标 lost。
+      if (!activeTaskLeaseRegistry.markCompletingUnlessLost(task.getTaskId())) {
         log.error(
             "task lease lost during execution — aborting report: tenantId={}, taskId={},"
                 + " workerId={}",
@@ -339,6 +339,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (!success) {
       report.setErrorCode(response.code());
       report.setErrorMessage(response.message());
+      report.setFailureClass(resolveFailureClass(response.code()));
       // i18n 跨进程透传:plugin 用 StepExecutionResponse.failure(BizException, mapper)
       // 时,key/args 会一直传到 orchestrator 持久化。第三方异常 / literal 失败时为 null,orchestrator 仅用 message。
       report.setErrorKey(response.errorKey());
@@ -378,6 +379,17 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       }
     }
     return report;
+  }
+
+  private String resolveFailureClass(String errorCode) {
+    if (errorCode == null || errorCode.isBlank()) {
+      return null;
+    }
+    return switch (errorCode) {
+      case TIMEOUT_ERROR_CODE, "TIMEOUT" -> "TIMEOUT";
+      case "CONFIG_INVALID", "SECURITY_REJECTED", "NO_EXECUTOR", "EXECUTOR_FAILURE" -> "CONFIG";
+      default -> null;
+    };
   }
 
   @SuppressWarnings("unchecked")

@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.config;
 
+import com.example.batch.common.constants.CommonConstants;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -83,7 +84,7 @@ public class FileGovernanceProperties {
     private int batchSize = 200;
 
     /** 默认租户（多租户对账时未指定的兜底）。 */
-    private String defaultTenantId = "default-tenant";
+    private String defaultTenantId = CommonConstants.DEFAULT_TENANT_ID;
 
     /** OSS 对象前缀（限定对账范围，空 = 全桶）。 */
     private String prefix = "";

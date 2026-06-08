@@ -52,19 +52,22 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 
-TRIGGER_PORT="${TRIGGER_PORT:-18081}"
-ORCH_PORT="${ORCH_PORT:-18082}"
-CONSOLE_PORT="${CONSOLE_PORT:-18080}"
-INTERNAL_SECRET="${INTERNAL_SECRET:-internal-secret}"
+TRIGGER_PORT="${TRIGGER_PORT:-${TRIGGER_BASE_URL##*:}}"
+ORCH_PORT="${ORCH_PORT:-${ORCHESTRATOR_BASE_URL##*:}}"
+CONSOLE_PORT="${CONSOLE_PORT:-$CONSOLE_API_PORT}"
+INTERNAL_SECRET="${INTERNAL_SECRET:-$BATCH_INTERNAL_SECRET}"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-PG_USER="${PG_USER:-batch_user}"
-PG_DB="${PG_DB:-batch_platform}"
+PG_USER="${PG_USER:-$PGUSER}"
+PG_DB="${PG_DB:-$PLATFORM_DB}"
 AWAIT_TIMEOUT="${AWAIT_TIMEOUT:-30}"
 LOAD_SEED="${LOAD_SEED:-0}"
 ADVANCED="${ADVANCED:-0}"
 PRE_CLEANUP="${PRE_CLEANUP:-1}"   # 1=跑前先全清 seedval-* 历史残留(默认)
 STRICT="${STRICT:-0}"             # 1=§7 用 default-tenant 严格 SUCCESS 验证
+STRICT_TENANT_ID="${STRICT_TENANT_ID:-$BATCH_DEFAULT_TENANT_ID}"
 
 # 探针标识 — 默认带时间戳便于日志区分 run, 但清理走 'seedval-%' 全 sweep 不漏历史
 PROBE_TAG="${PROBE_TAG:-seedval-$(date +%s)}"
@@ -99,6 +102,11 @@ psql_q() {
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null
 }
 
+psql_file() {
+  local db="$1"; local file="$2"; shift 2
+  docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$db" -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$file"
+}
+
 # 写入用 — 仅返回 RETURNING 的首行(过滤 "INSERT 0 N" / "DELETE N" 等命令统计)
 psql_w_first() {
   docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null \
@@ -111,55 +119,8 @@ psql_w_first() {
 # 含 dead_letter_task / retry_schedule（避免删分区后死信仍指向孤儿 partition）
 do_cleanup() {
   local pattern="${1:-$SWEEP_PATTERN}"
-  # 关键 FK: job_instance.trigger_request_id 反向引用 trigger_request
-  # 所以必须先删所有由本 PROBE 关联的 job_instance(双向反查),才能删 trigger_request
-  # 反查 job_instance.id 集合 = 通过 trigger_request_id 联到的(不依赖 related_job_instance_id 是否回填)
-  local probe_instances
-  # 双向反查 job_instance: ① 通过 PROBE trigger_request 联到的(API fire); ② job_code LIKE PROBE
-  # (CRON 自动 fire 的 instance trigger_request.request_id 自动生成不带 PROBE_TAG, 必须按 job_code 兜底)
-  probe_instances=$(psql_q "SELECT string_agg(DISTINCT id::text, ',') FROM batch.job_instance WHERE trigger_request_id IN (SELECT id FROM batch.trigger_request WHERE request_id LIKE '$pattern' OR job_code LIKE '$pattern') OR job_code LIKE '$pattern'")
-  if [[ -n "$probe_instances" ]]; then
-    # 衍生 cascade(子表先删, 父表后删, 走 FK 安全顺序):
-    psql_q "DELETE FROM batch.pipeline_step_run WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.file_dispatch_record WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN ($probe_instances)) OR file_id IN (SELECT id FROM batch.file_record WHERE source_ref IN (SELECT instance_no FROM batch.job_instance WHERE id IN ($probe_instances)))" >/dev/null
-    psql_q "DELETE FROM batch.file_record WHERE source_ref IN (SELECT instance_no FROM batch.job_instance WHERE id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.workflow_node_run WHERE workflow_run_id IN (SELECT id FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.workflow_run WHERE related_job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.job_step_instance WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.dead_letter_task d WHERE d.source_type='JOB_PARTITION' AND EXISTS (SELECT 1 FROM batch.job_partition p WHERE p.id=d.source_id AND p.job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.retry_schedule r WHERE r.related_type='JOB_PARTITION' AND EXISTS (SELECT 1 FROM batch.job_partition p WHERE p.id=r.related_id AND p.job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.retry_schedule r WHERE r.related_type='JOB_TASK' AND EXISTS (SELECT 1 FROM batch.job_task t WHERE t.id=r.related_id AND t.job_instance_id IN ($probe_instances))" >/dev/null
-    psql_q "DELETE FROM batch.job_task WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.job_partition WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    psql_q "DELETE FROM batch.job_execution_log WHERE job_instance_id IN ($probe_instances)" >/dev/null
-    # event_delivery_log FK 引用 outbox_event,必须先删;否则下面 outbox 删撞 FK
-    psql_q "DELETE FROM batch.event_delivery_log WHERE outbox_event_id IN (SELECT id FROM batch.outbox_event WHERE aggregate_id::text IN (SELECT unnest(string_to_array('$probe_instances', ','))))" >/dev/null
-    psql_q "DELETE FROM batch.outbox_event WHERE aggregate_id::text IN (SELECT unnest(string_to_array('$probe_instances', ',')))" >/dev/null
-    psql_q "DELETE FROM batch.job_instance WHERE id IN ($probe_instances)" >/dev/null
-  fi
-  # 此时 job_instance 的 FK 已断,trigger_request / outbox 安全删除
-  # CRON PROBE job (§9.5) auto-fire 的 trigger_request request_id 自动生成不带 PROBE_TAG,
-  # 必须 OR 按 job_code 兜底,否则 fire 的 SCHEDULED 行漏清
-  # trigger_outbox_event 表无 job_code 列,只走 request_id pattern (CRON fire 直接写 trigger_request 不入 outbox)
-  psql_q "DELETE FROM batch.trigger_outbox_event WHERE request_id LIKE '$pattern'" >/dev/null
-  psql_q "DELETE FROM batch.trigger_request WHERE request_id LIKE '$pattern' OR job_code LIKE '$pattern'" >/dev/null
-  # CRON PROBE 在 trigger_runtime_state 留行,不清会一直 fire 污染下次 run
-  psql_q "DELETE FROM batch.trigger_runtime_state WHERE job_definition_id IN (SELECT id FROM batch.job_definition WHERE job_code LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.workflow_node WHERE node_code='SEEDVAL_PROBE'" >/dev/null
-  psql_q "DELETE FROM batch.pipeline_step_definition WHERE pipeline_definition_id IN (SELECT id FROM batch.pipeline_definition WHERE job_code LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.pipeline_definition WHERE job_code LIKE '$pattern'" >/dev/null
-  # STRICT EXPORT 写的 file_record + 我们 seed 的 settlement_batch 一起清(按 PROBE_TAG batch_no)
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.settlement_batch WHERE batch_no LIKE '$pattern'" >/dev/null 2>&1 || true
-  # STRICT DISPATCH PROBE file_record (按 file_code = PROBE_TAG-file)
-  psql_q "DELETE FROM batch.file_audit_log WHERE file_id IN (SELECT id FROM batch.file_record WHERE file_code LIKE '$pattern' OR source_ref LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.file_dispatch_record WHERE file_id IN (SELECT id FROM batch.file_record WHERE file_code LIKE '$pattern')" >/dev/null
-  psql_q "DELETE FROM batch.file_record WHERE source_ref LIKE '$pattern' OR file_code LIKE '$pattern'" >/dev/null
-  # IMPORT 写的 biz.customer_account 行(SEEDVAL_C* 前缀, IMPORT 真 SUCCESS 后产生)
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc "DELETE FROM biz.customer_account WHERE customer_no LIKE 'SEEDVAL_%'" >/dev/null 2>&1 || true
-  # PROBE job_definition (§9.5 CRON 真触发探针等);
-  # V67 trigger_runtime_state ON DELETE CASCADE 自动清
-  psql_q "DELETE FROM batch.job_definition WHERE job_code LIKE '$pattern'" >/dev/null
+  psql_file "$PG_DB" "$ROOT/scripts/local/sql/validate-seed-cleanup-platform.sql" -v pattern="$pattern" >/dev/null
+  psql_file batch_business "$ROOT/scripts/local/sql/validate-seed-cleanup-business.sql" -v pattern="$pattern" >/dev/null 2>&1 || true
 }
 
 # 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留垃圾
@@ -309,7 +270,7 @@ done
 # ---------- 2. 种子数据基线 ----------
 section "2. 种子数据基线"
 
-job_count=$(psql_q "SELECT count(*) FROM batch.job_definition WHERE tenant_id IN ('default-tenant','tenant-finance')")
+job_count=$(psql_q "SELECT count(*) FROM batch.job_definition WHERE tenant_id IN ('$STRICT_TENANT_ID','tenant-finance')")
 if [[ "$job_count" -ge 3 ]]; then
   result pass "job_definition 基线" "$job_count 行(default-tenant + tenant-finance)"
 else
@@ -332,14 +293,14 @@ if [[ -z "$finance_wf_id" ]]; then
   result skip "V84 跨租户隔离" "tenant-finance/finance_recon_flow 不在种子中,跳过"
 else
   # 探针:default-tenant 用同一 wf_def_id + 同一 node_code 应能共存
-  cleanup_sql="DELETE FROM batch.workflow_node WHERE tenant_id='default-tenant' AND workflow_definition_id=$finance_wf_id AND node_code='SEEDVAL_PROBE'"
+  cleanup_sql="DELETE FROM batch.workflow_node WHERE tenant_id='$STRICT_TENANT_ID' AND workflow_definition_id=$finance_wf_id AND node_code='SEEDVAL_PROBE'"
   psql_q "$cleanup_sql" >/dev/null
-  insert1=$(psql_w_first "INSERT INTO batch.workflow_node (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled) VALUES ('default-tenant', $finance_wf_id, 'SEEDVAL_PROBE', 'probe', 'TASK', 99, 'NONE', 0, 0, true) ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING RETURNING tenant_id")
-  insert2=$(psql_w_first "INSERT INTO batch.workflow_node (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled) VALUES ('default-tenant', $finance_wf_id, 'SEEDVAL_PROBE', 'probe', 'TASK', 99, 'NONE', 0, 0, true) ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING RETURNING tenant_id")
-  if [[ "$insert1" == "default-tenant" && -z "$insert2" ]]; then
-    result pass "V84 跨租户可共存 + 同租户唯一" "default-tenant 插入成功,重插被 ON CONFLICT 拦"
+  insert1=$(psql_w_first "INSERT INTO batch.workflow_node (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled) VALUES ('$STRICT_TENANT_ID', $finance_wf_id, 'SEEDVAL_PROBE', 'probe', 'TASK', 99, 'NONE', 0, 0, true) ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING RETURNING tenant_id")
+  insert2=$(psql_w_first "INSERT INTO batch.workflow_node (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled) VALUES ('$STRICT_TENANT_ID', $finance_wf_id, 'SEEDVAL_PROBE', 'probe', 'TASK', 99, 'NONE', 0, 0, true) ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING RETURNING tenant_id")
+  if [[ "$insert1" == "$STRICT_TENANT_ID" && -z "$insert2" ]]; then
+    result pass "V84 跨租户可共存 + 同租户唯一" "$STRICT_TENANT_ID 插入成功,重插被 ON CONFLICT 拦"
   else
-    result fail "V84 隔离行为" "1st=$insert1 2nd=$insert2 (期望 default-tenant + 空)"
+    result fail "V84 隔离行为" "1st=$insert1 2nd=$insert2 (期望 $STRICT_TENANT_ID + 空)"
   fi
   psql_q "$cleanup_sql" >/dev/null
 fi
@@ -349,7 +310,7 @@ section "4. 同步 API: 写 trigger_request + trigger_outbox_event"
 
 REQUEST_ID="${PROBE_TAG}-import-happy"
 http_code=$(http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"default-tenant\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
   "Idempotency-Key: $REQUEST_ID" "X-Request-Id: $REQUEST_ID")
 if [[ "$http_code" == "200" ]]; then
   result pass "fire 同步返回" "HTTP 200"
@@ -359,8 +320,8 @@ else
 fi
 
 # 立刻验 trigger_request + trigger_outbox_event 写入(用 request_id 定位)
-got_req=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='default-tenant' AND request_id='$REQUEST_ID'")
-got_outbox=$(psql_q "SELECT count(*) FROM batch.trigger_outbox_event WHERE tenant_id='default-tenant' AND request_id='$REQUEST_ID'")
+got_req=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
+got_outbox=$(psql_q "SELECT count(*) FROM batch.trigger_outbox_event WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
 if [[ "$got_req" == "1" && "$got_outbox" == "1" ]]; then
   result pass "同事务双写" "trigger_request=1 trigger_outbox_event=1"
 else
@@ -373,7 +334,7 @@ section "5. ADR-010 异步链路: outbox → Kafka → orchestrator → job_inst
 elapsed=0
 launched_id=""
 while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
-  launched_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='default-tenant' AND request_id='$REQUEST_ID' AND request_status='LAUNCHED'")
+  launched_id=$(psql_q "SELECT related_job_instance_id FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID' AND request_status='LAUNCHED'")
   if [[ -n "$launched_id" ]]; then
     break
   fi
@@ -382,11 +343,11 @@ while [[ $elapsed -lt $AWAIT_TIMEOUT ]]; do
 done
 
 if [[ -n "$launched_id" ]]; then
-  outbox_status=$(psql_q "SELECT publish_status FROM batch.trigger_outbox_event WHERE tenant_id='default-tenant' AND request_id='$REQUEST_ID'")
+  outbox_status=$(psql_q "SELECT publish_status FROM batch.trigger_outbox_event WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
   result pass "TriggerOutboxRelay 推 LAUNCHED" "${elapsed}s, job_instance_id=$launched_id, outbox=$outbox_status"
 else
-  outbox_state=$(psql_q "SELECT publish_status||'/attempt='||publish_attempt FROM batch.trigger_outbox_event WHERE tenant_id='default-tenant' AND request_id='$REQUEST_ID'")
-  req_state=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='default-tenant' AND request_id='$REQUEST_ID'")
+  outbox_state=$(psql_q "SELECT publish_status||'/attempt='||publish_attempt FROM batch.trigger_outbox_event WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
+  req_state=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$REQUEST_ID'")
   result fail "TriggerOutboxRelay 推 LAUNCHED" "${AWAIT_TIMEOUT}s 未推到; trigger_request=$req_state outbox=$outbox_state(local profile lazy=true 会卡这一步,docker 应通)"
 fi
 
@@ -395,7 +356,7 @@ section "6. 异常路径"
 
 REQUEST_ID="${PROBE_TAG}-bad-payload"
 http_code=$(http_post "/api/triggers/launch" \
-  '{"tenantId":"default-tenant","triggerType":"API","bizDate":"2026-05-03"}' \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"triggerType\":\"API\",\"bizDate\":\"2026-05-03\"}" \
   "Idempotency-Key: $REQUEST_ID")
 if [[ "$http_code" == "400" ]]; then
   result pass "缺 jobCode → 400" "validation 拒绝"
@@ -409,7 +370,7 @@ http_code=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{h
   -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/launch" \
   -H "Content-Type: application/json" \
   -H "X-Internal-Secret: $INTERNAL_SECRET" \
-  -d '{"tenantId":"default-tenant","jobCode":"import_customer_job","bizDate":"2026-05-03","triggerType":"API"}' 2>/dev/null)
+  -d "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" 2>/dev/null)
 if [[ "$http_code" == "400" ]]; then
   result pass "缺 Idempotency-Key → 400" "MISSING_IDEMPOTENCY_KEY"
 else
@@ -422,7 +383,7 @@ http_code=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{h
   -X POST "http://localhost:${TRIGGER_PORT}/api/triggers/launch" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: ${PROBE_TAG}-no-secret" \
-  -d '{"tenantId":"default-tenant","jobCode":"import_customer_job","bizDate":"2026-05-03","triggerType":"API","params":{"templateCode":"import_customer_json_v1","content":"[]"}}' 2>/dev/null)
+  -d "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_json_v1\",\"content\":\"[]\"}}" 2>/dev/null)
 if [[ "$http_code" == "401" ]]; then
   result pass "缺 X-Internal-Secret → 401" "InternalSecretFilter 拦截"
 elif [[ "$http_code" == "200" ]]; then
@@ -435,13 +396,13 @@ fi
 # 9. 异常: 同 Idempotency-Key 重发(幂等回放)
 DEDUP_REQ_ID="${PROBE_TAG}-dedup"
 http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"default-tenant\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
   "Idempotency-Key: $DEDUP_REQ_ID" "X-Request-Id: $DEDUP_REQ_ID" >/dev/null
 sleep 1
 http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"default-tenant\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"import_customer_job\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\",\"params\":{\"templateCode\":\"import_customer_v1\",\"content\":\"[]\"}}" \
   "Idempotency-Key: $DEDUP_REQ_ID" "X-Request-Id: $DEDUP_REQ_ID" >/dev/null
-dedup_count=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='default-tenant' AND request_id='$DEDUP_REQ_ID'")
+dedup_count=$(psql_q "SELECT count(*) FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$DEDUP_REQ_ID'")
 if [[ "$dedup_count" == "1" ]]; then
   result pass "幂等键重发去重" "2 次 fire 仅 1 行 trigger_request"
 else
@@ -451,13 +412,13 @@ fi
 # 10. 异常: 跨租户 launch(default-tenant 用 tenant-finance 的 jobCode)
 CROSS_REQ_ID="${PROBE_TAG}-cross-tenant"
 http_code=$(http_post "/api/triggers/launch" \
-  "{\"tenantId\":\"default-tenant\",\"jobCode\":\"finance_recon_workflow\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" \
+  "{\"tenantId\":\"$STRICT_TENANT_ID\",\"jobCode\":\"finance_recon_workflow\",\"bizDate\":\"2026-05-03\",\"triggerType\":\"API\"}" \
   "Idempotency-Key: $CROSS_REQ_ID" "X-Request-Id: $CROSS_REQ_ID")
 # trigger 端是 "宽容前端" — HTTP 200 是预期(只写 outbox);orch 消费时按 (tenantId, jobCode)
 # 查 job_definition 找不到会拒绝;trigger_request 应停在 ACCEPTED 不进 LAUNCHED
 if [[ "$http_code" == "200" ]]; then
   sleep 8  # 等 relay + orch 消费
-  cross_status=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='default-tenant' AND request_id='$CROSS_REQ_ID'")
+  cross_status=$(psql_q "SELECT request_status FROM batch.trigger_request WHERE tenant_id='$STRICT_TENANT_ID' AND request_id='$CROSS_REQ_ID'")
   case "$cross_status" in
     REJECTED|FAILED|GIVE_UP|ACCEPTED)
       result pass "跨租户 jobCode → 后端拒绝" "trigger HTTP 200(异步设计) + trigger_request=$cross_status(未推 LAUNCHED)" ;;
@@ -549,7 +510,7 @@ if [[ "$STRICT" == "1" ]]; then
   # 推荐: AWAIT_TIMEOUT=90 给真 SUCCESS 留时间
   section "7. Worker 严格 happy [STRICT=1]: fire → instance 推到 SUCCESS"
 
-  assert_fire "IMPORT 严格 (default-tenant, JSON 不加密)" "default-tenant" "import_customer_job" \
+  assert_fire "IMPORT 严格 ($STRICT_TENANT_ID, JSON 不加密)" "$STRICT_TENANT_ID" "import_customer_job" \
     '{"templateCode":"import_customer_json_v1","content":"[{\"customerNo\":\"SEEDVAL_C001\",\"customerName\":\"smoke probe\",\"customerType\":\"PERSONAL\"}]"}' \
     success
 
@@ -559,16 +520,16 @@ if [[ "$STRICT" == "1" ]]; then
   PROBE_BATCH_NO="${PROBE_TAG}-BATCH"
   PROBE_WF_BATCH_NO="${PROBE_TAG}-WF-BATCH"
   PROBE_BIZDATE=$(date +%Y-%m-%d)
-  # 先 seed 两个 settlement_batch 行供 EXPORT loadBatch 命中(注意 biz 表在 batch_business DB)
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc \
-    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('default-tenant', '$PROBE_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc \
-    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('default-tenant', '$PROBE_WF_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
+  # 先 seed 两个 settlement_batch 行供 EXPORT loadBatch 命中(注意 biz 表在业务库)
+  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
+    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('$STRICT_TENANT_ID', '$PROBE_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
+  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
+    "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('$STRICT_TENANT_ID', '$PROBE_WF_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
 
-  assert_fire "EXPORT 严格 (default-tenant, settlement)" "default-tenant" "export_settlement_job" \
+  assert_fire "EXPORT 严格 ($STRICT_TENANT_ID, settlement)" "$STRICT_TENANT_ID" "export_settlement_job" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
-  assert_fire "WORKFLOW PIPELINE 严格 (default-tenant)" "default-tenant" "wf_probe_pipeline" \
+  assert_fire "WORKFLOW PIPELINE 严格 ($STRICT_TENANT_ID)" "$STRICT_TENANT_ID" "wf_probe_pipeline" \
     "{\"templateCode\":\"export_settlement_v1\",\"batchNo\":\"$PROBE_WF_BATCH_NO\",\"bizDate\":\"$PROBE_BIZDATE\"}" success
 
   # ===== DISPATCH 严格 =====
@@ -581,7 +542,7 @@ if [[ "$STRICT" == "1" ]]; then
       schedule_type, timezone, trigger_mode, queue_code, worker_group, window_code,
       priority, enabled, created_at, updated_at
     ) VALUES (
-      'default-tenant', '$PROBE_DISPATCH_JOB', 'seedval dispatch probe', 'DISPATCH', 'TEST',
+      '$STRICT_TENANT_ID', '$PROBE_DISPATCH_JOB', 'seedval dispatch probe', 'DISPATCH', 'TEST',
       'MANUAL', 'Asia/Shanghai', 'SCHEDULED', 'dispatch_queue', 'DISPATCH', 'always_open',
       5, true, now(), now()
     ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true" >/dev/null
@@ -590,79 +551,21 @@ if [[ "$STRICT" == "1" ]]; then
       file_format_type, charset, file_size_bytes, checksum_type, checksum_value,
       storage_type, storage_path, storage_bucket, file_status, biz_date, source_type, source_ref
     ) VALUES (
-      'default-tenant', '$PROBE_FILE_CODE', 'TEST', 'OUTPUT', '${PROBE_TAG}-probe.txt', '${PROBE_TAG}-probe.txt',
+      '$STRICT_TENANT_ID', '$PROBE_FILE_CODE', 'TEST', 'OUTPUT', '${PROBE_TAG}-probe.txt', '${PROBE_TAG}-probe.txt',
       'JSON', 'UTF-8', 12, 'NONE', 'noop',
       'LOCAL', '/tmp/batch/${PROBE_TAG}-probe.txt', 'batch-dev', 'GENERATED', CURRENT_DATE, 'GENERATED', '$PROBE_TAG'
     ) RETURNING id")
-  assert_fire "DISPATCH 严格 (default-tenant, local channel)" "default-tenant" "$PROBE_DISPATCH_JOB" \
+  assert_fire "DISPATCH 严格 ($STRICT_TENANT_ID, local channel)" "$STRICT_TENANT_ID" "$PROBE_DISPATCH_JOB" \
     "{\"fileId\":\"$probe_file_id\",\"channelCode\":\"local_dispatch\"}" success
 
   # ===== PROCESS 严格 =====
   # seed default-tenant PROCESS job + pipeline steps; COMPUTE step 走 sqlTransformCompute,
   # 写入 biz.customer_account 的 SEEDVAL_* probe 行,可被 do_cleanup 清掉。
   PROBE_PROCESS_JOB="${PROBE_TAG}-process"
-  psql_q "INSERT INTO batch.job_definition (
-      tenant_id, job_code, job_name, job_type, biz_type,
-      schedule_type, timezone, trigger_mode, queue_code, worker_group, window_code,
-      priority, enabled, created_at, updated_at
-    ) VALUES (
-      'default-tenant', '$PROBE_PROCESS_JOB', 'seedval process probe', 'PROCESS', 'TEST',
-      'MANUAL', 'Asia/Shanghai', 'SCHEDULED', 'process_queue', 'PROCESS', 'always_open',
-      5, true, now(), now()
-    ) ON CONFLICT (tenant_id, job_code) DO UPDATE SET enabled=true" >/dev/null
-  probe_process_pipeline_id=$(psql_w_first "INSERT INTO batch.pipeline_definition (
-      tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-      version, enabled, description, created_at, updated_at
-    ) VALUES (
-      'default-tenant', '$PROBE_PROCESS_JOB', 'seedval process probe pipeline',
-      'PROCESS', 'TEST', 'PROCESS', 1, true, 'seed validation process probe', now(), now()
-    ) RETURNING id")
-  psql_q "INSERT INTO batch.pipeline_step_definition (
-      pipeline_definition_id, step_code, step_name, stage_code, step_order,
-      impl_code, step_params, timeout_seconds, retry_policy, retry_max_count,
-      enabled, created_at, updated_at
-    ) VALUES
-      ($probe_process_pipeline_id, 'PROCESS_PREPARE', 'Prepare', 'PREPARE', 1,
-       'PROCESS_PREPARE', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_COMPUTE', 'Compute', 'COMPUTE', 2,
-       'sqlTransformCompute',
-       jsonb_build_object(
-         'sqlTransformCompute', jsonb_build_object(
-           'sourceSql',
-           'select ' ||
-           quote_literal('default-tenant') || '::text as tenant_id, ' ||
-           quote_literal('SEEDVAL_' || upper(replace('$PROBE_TAG', '-', '_'))) || '::text as customer_no, ' ||
-           quote_literal('Seed Validation Process Probe') || '::text as customer_name, ' ||
-           quote_literal('PERSONAL') || '::text as customer_type, ' ||
-           quote_literal('ACTIVE') || '::text as status',
-           'targetSchema', 'biz',
-           'targetTable', 'customer_account',
-           'writeMode', 'UPSERT',
-           'columns', jsonb_build_array(
-             jsonb_build_object('source', 'tenant_id', 'target', 'tenant_id'),
-             jsonb_build_object('source', 'customer_no', 'target', 'customer_no'),
-             jsonb_build_object('source', 'customer_name', 'target', 'customer_name'),
-             jsonb_build_object('source', 'customer_type', 'target', 'customer_type'),
-             jsonb_build_object('source', 'status', 'target', 'status')
-           ),
-           'conflictColumns', jsonb_build_array('tenant_id', 'customer_no'),
-           'validations', jsonb_build_array(
-             jsonb_build_object(
-               'name', 'staged_one_row',
-               'checkSql', 'select count(*) = 1 as pass, ''expected one staged row'' as message from batch.process_staging where batch_key = :batchKey'
-             )
-           ),
-           'emptyResultPolicy', 'FAIL',
-           'maxStagedRows', 10
-         )
-       ), 600, 'FIXED', 1, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_VALIDATE', 'Validate', 'VALIDATE', 3,
-       'PROCESS_VALIDATE', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_COMMIT', 'Commit', 'COMMIT', 4,
-       'PROCESS_COMMIT', '{}'::jsonb, 300, 'NONE', 0, true, now(), now()),
-      ($probe_process_pipeline_id, 'PROCESS_FEEDBACK', 'Feedback', 'FEEDBACK', 5,
-       'PROCESS_FEEDBACK', '{}'::jsonb, 300, 'NONE', 0, true, now(), now())" >/dev/null
-  assert_fire "PROCESS 严格 (default-tenant, sqlTransformCompute)" "default-tenant" "$PROBE_PROCESS_JOB" \
+  psql_file "$PG_DB" "$ROOT/scripts/local/sql/validate-seed-process-fixture.sql" \
+    -v probe_process_job="$PROBE_PROCESS_JOB" \
+    -v probe_tag="$PROBE_TAG" >/dev/null
+  assert_fire "PROCESS 严格 ($STRICT_TENANT_ID, sqlTransformCompute)" "$STRICT_TENANT_ID" "$PROBE_PROCESS_JOB" \
     "{\"bizDate\":\"$(date +%Y-%m-%d)\",\"batchKey\":\"$PROBE_TAG-batch\"}" success
 else
   # ===== 默认: reach_worker 模式 — 覆盖广(7 场景含 4 worker × 4 workflow_type),
@@ -677,8 +580,8 @@ else
   assert_fire "DISPATCH 链路 (tc, local channel)" "tc" "TC_DISPATCH_REVIEW" '{"channelCode":"tc_local_archive"}' reach_worker
   assert_fire "WORKFLOW DAG (ta)" "ta" "TA_WF_SETTLEMENT" '{}' reach_worker
   assert_fire "WORKFLOW PIPELINE (tc)" "tc" "TC_WF_RISK_PIPELINE" '{}' reach_worker
-  assert_fire "WORKFLOW DAG GATEWAY (probe)" "default-tenant" "wf_probe_gateway" '{}' reach_worker
-  assert_fire "WORKFLOW MIXED (probe + ADR-009 DSL)" "default-tenant" "wf_probe_mixed" '{}' reach_worker
+  assert_fire "WORKFLOW DAG GATEWAY (probe)" "$STRICT_TENANT_ID" "wf_probe_gateway" '{}' reach_worker
+  assert_fire "WORKFLOW MIXED (probe + ADR-009 DSL)" "$STRICT_TENANT_ID" "wf_probe_mixed" '{}' reach_worker
 fi
 
 # ---------- 8. 多租户并发隔离实跑 ----------
@@ -788,7 +691,7 @@ if [[ "$ADVANCED" == "1" ]]; then
   #       wheel fire → trigger_request(SCHEDULED) 自增。polling 最多 120s
   # 上限 = 30s reconciler + 60s 下个 cron tick + 缓冲 ≈ 90-120s
   PROBE_FXR_JOB_CODE="${PROBE_TAG}-fxr"
-  PROBE_FXR_TENANT="default-tenant"
+  PROBE_FXR_TENANT="$STRICT_TENANT_ID"
   fxr_def_id=$(psql_q "INSERT INTO batch.job_definition (
       tenant_id, job_code, job_name, job_type, biz_type,
       schedule_type, schedule_expr, timezone, trigger_mode,

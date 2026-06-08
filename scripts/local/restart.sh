@@ -23,6 +23,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
 cd "$ROOT"
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
@@ -32,8 +34,6 @@ if [[ -f "$COMPOSE_ENV_FILE" ]]; then
   source "$COMPOSE_ENV_FILE"
   set +a
 fi
-export BATCH_TIMEZONE_DEFAULT_ZONE="${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}"
-export TZ="$BATCH_TIMEZONE_DEFAULT_ZONE"
 export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
 export LANG="$BATCH_LOCALE"
 export LC_ALL="$BATCH_LOCALE"

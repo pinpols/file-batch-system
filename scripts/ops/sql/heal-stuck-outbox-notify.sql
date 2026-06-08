@@ -1,0 +1,1 @@
+NOTIFY outbox_publisher;

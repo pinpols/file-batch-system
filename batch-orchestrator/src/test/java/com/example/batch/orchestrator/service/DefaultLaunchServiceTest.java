@@ -17,6 +17,7 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.enums.FailureClass;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
@@ -31,8 +32,10 @@ import com.example.batch.orchestrator.application.service.workflow.WorkflowDagSe
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import com.example.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -139,6 +142,7 @@ class DefaultLaunchServiceTest {
             launchBatchDayService,
             batchDayGateService,
             launchParamResolver,
+            jobExecutionLogMapper,
             selfProvider);
     when(selfProvider.getObject()).thenReturn(service);
     when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
@@ -517,9 +521,7 @@ class DefaultLaunchServiceTest {
             })
         .when(jobInstanceMapper)
         .insert(any());
-    when(jobInstanceMapper.updateStatus(
-            eq("t1"), eq(501L), eq(JobInstanceStatus.FAILED.code()), any(), eq(0L)))
-        .thenReturn(1);
+    when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
     doThrow(
             BizException.of(
                 ResultCode.BUSINESS_ERROR,
@@ -532,10 +534,36 @@ class DefaultLaunchServiceTest {
         .isInstanceOf(BizException.class)
         .hasMessage("error.partition.dispatch_business_error");
 
-    verify(jobInstanceMapper)
-        .updateStatus(eq("t1"), eq(501L), eq(JobInstanceStatus.FAILED.code()), any(), eq(0L));
+    ArgumentCaptor<UpdateInstanceProgressParam> progressCaptor =
+        ArgumentCaptor.forClass(UpdateInstanceProgressParam.class);
+    verify(jobInstanceMapper).updateProgress(progressCaptor.capture());
+    UpdateInstanceProgressParam progress = progressCaptor.getValue();
+    assertThat(progress.getTenantId()).isEqualTo("t1");
+    assertThat(progress.getId()).isEqualTo(501L);
+    assertThat(progress.getInstanceStatus()).isEqualTo(JobInstanceStatus.FAILED.code());
+    assertThat(progress.getExpectedVersion()).isZero();
+    assertThat(progress.getFailureClass()).isEqualTo(FailureClass.BUSINESS_RULE.code());
+    assertThat(progress.getResultSummary())
+        .contains("DISPATCH_REJECTED")
+        .contains("error.partition.dispatch_business_error")
+        .contains("tenant quota exceeded");
     verify(triggerRequestMapper)
         .updateAcceptance("t1", "req-dispatch-reject", BatchStatusConstants.REJECTED, 501L);
+
+    ArgumentCaptor<JobExecutionLogEntity> logCaptor =
+        ArgumentCaptor.forClass(JobExecutionLogEntity.class);
+    verify(jobExecutionLogMapper, org.mockito.Mockito.atLeastOnce()).insert(logCaptor.capture());
+    JobExecutionLogEntity log =
+        logCaptor.getAllValues().stream()
+            .filter(item -> "JOB_INSTANCE_DISPATCH_REJECTED".equals(item.getMessage()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(log.getTenantId()).isEqualTo("t1");
+    assertThat(log.getJobInstanceId()).isEqualTo(501L);
+    assertThat(log.getLogLevel()).isEqualTo("WARN");
+    assertThat(log.getMessage()).isEqualTo("JOB_INSTANCE_DISPATCH_REJECTED");
+    assertThat(log.getDetailRef()).isEqualTo("job_instance.dispatch_rejected");
+    assertThat(log.getExtraJson()).contains("tenant quota exceeded");
   }
 
   private JobDefinitionEntity jobDefinition(String calendarCode) {

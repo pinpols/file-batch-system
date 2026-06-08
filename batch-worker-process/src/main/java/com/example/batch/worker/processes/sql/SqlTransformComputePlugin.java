@@ -456,6 +456,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     params.put(PARAM_BATCH_KEY, context.getBatchKey());
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
+    params.put("partitionNo", context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
+    params.put("partitionCount", context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    params.put("partitionKey", context.getAttributes().get(PipelineRuntimeKeys.PARTITION_KEY));
     // 2. 业务级 bizDate + payload.metadata 展开
     if (context.getAttributes().get("processPayload") instanceof ProcessPayload typedPayload) {
       if (Texts.hasText(typedPayload.bizDate())) {

@@ -3,20 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
-
-COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT_DIR/.env.local}"
-if [[ -f "$COMPOSE_ENV_FILE" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$COMPOSE_ENV_FILE"
-  set +a
-fi
-
-TRIGGER_BASE_URL="${TRIGGER_BASE_URL:-http://localhost:18081}"
-CONSOLE_BASE_URL="${CONSOLE_BASE_URL:-http://localhost:18080}"
-ORCHESTRATOR_BASE_URL="${ORCHESTRATOR_BASE_URL:-http://localhost:18082}"
-INTERNAL_SECRET="${INTERNAL_SECRET:-${BATCH_INTERNAL_SECRET:-internal-secret}}"
-BIZ_DATE="${BIZ_DATE:-2026-05-05}"
+# shellcheck source=env.sh
+source "$LOAD_DIR/scripts/env.sh"
 
 MODULES_CSV="${MODULES_CSV:-process,dispatch,atomic,trigger}"
 CONTROL_PLANE_MODE="${CONTROL_PLANE_MODE:-sequential}"
@@ -42,13 +30,6 @@ KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-(process|dispatch|a
 KAFKA_HOST_BOOTSTRAP="${KAFKA_HOST_BOOTSTRAP:-localhost:${KAFKA_HOST_PORT:-19092}}"
 KAFKA_CONTAINER_BOOTSTRAP="${KAFKA_CONTAINER_BOOTSTRAP:-kafka:29092}"
 
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGUSER="${PGUSER:-batch_user}"
-PGPASSWORD="${PGPASSWORD:-batch_pass_123}"
-PLATFORM_DB="${PLATFORM_DB:-batch_platform}"
-BUSINESS_DB="${BUSINESS_DB:-batch_business}"
-export PGPASSWORD
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
@@ -83,200 +64,7 @@ csv_contains() {
 }
 
 cleanup_atomic_trigger() {
-  psql_platform <<SQL
-BEGIN;
-WITH ji AS (
-  SELECT id
-  FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant'
-    AND params_snapshot::text LIKE '%${RUN_ID}%'
-),
-jt AS (
-  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
-),
-jp AS (
-  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
-),
-oe AS (
-  SELECT id
-  FROM batch.outbox_event
-  WHERE tenant_id = 'default-tenant'
-    AND (
-      (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
-      OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
-      OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
-    )
-)
-DELETE FROM batch.event_outbox_retry
-WHERE tenant_id = 'default-tenant'
-  AND outbox_event_id IN (SELECT id FROM oe);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-),
-jt AS (
-  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
-),
-jp AS (
-  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
-),
-oe AS (
-  SELECT id
-  FROM batch.outbox_event
-  WHERE tenant_id = 'default-tenant'
-    AND (
-      (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
-      OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
-      OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
-    )
-)
-DELETE FROM batch.event_delivery_log
-WHERE tenant_id = 'default-tenant'
-  AND outbox_event_id IN (SELECT id FROM oe);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-),
-jt AS (
-  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
-),
-jp AS (
-  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
-)
-DELETE FROM batch.outbox_event
-WHERE tenant_id = 'default-tenant'
-  AND (
-    (aggregate_type = 'JOB_INSTANCE' AND aggregate_id IN (SELECT id FROM ji))
-    OR (aggregate_type = 'JOB_PARTITION' AND aggregate_id IN (SELECT id FROM jp))
-    OR (aggregate_type = 'JOB_TASK' AND aggregate_id IN (SELECT id FROM jt))
-  );
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-),
-jt AS (
-  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
-)
-DELETE FROM batch.job_step_instance WHERE job_task_id IN (SELECT id FROM jt);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.pipeline_step_run
-WHERE pipeline_instance_id IN (
-  SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN (SELECT id FROM ji)
-);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.file_dispatch_record
-WHERE pipeline_instance_id IN (
-  SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN (SELECT id FROM ji)
-);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.pipeline_instance WHERE related_job_instance_id IN (SELECT id FROM ji);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.workflow_run WHERE related_job_instance_id IN (SELECT id FROM ji);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.job_execution_log WHERE job_instance_id IN (SELECT id FROM ji);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.compensation_command WHERE related_job_instance_id IN (SELECT id FROM ji);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-),
-jt AS (
-  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
-),
-jp AS (
-  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
-)
-DELETE FROM batch.dead_letter_task
-WHERE tenant_id = 'default-tenant'
-  AND (
-    (source_type = 'JOB_INSTANCE' AND source_id IN (SELECT id FROM ji))
-    OR (source_type = 'JOB_PARTITION' AND source_id IN (SELECT id FROM jp))
-    OR (source_type = 'JOB_TASK' AND source_id IN (SELECT id FROM jt))
-  );
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-),
-jt AS (
-  SELECT id FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji)
-),
-jp AS (
-  SELECT id FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji)
-)
-DELETE FROM batch.retry_schedule
-WHERE tenant_id = 'default-tenant'
-  AND (
-    (related_type = 'JOB_INSTANCE' AND related_id IN (SELECT id FROM ji))
-    OR (related_type = 'JOB_PARTITION' AND related_id IN (SELECT id FROM jp))
-    OR (related_type = 'JOB_TASK' AND related_id IN (SELECT id FROM jt))
-  );
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.job_task WHERE job_instance_id IN (SELECT id FROM ji);
-
-WITH ji AS (
-  SELECT id FROM batch.job_instance
-  WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-)
-DELETE FROM batch.job_partition WHERE job_instance_id IN (SELECT id FROM ji);
-
-UPDATE batch.trigger_request
-SET related_job_instance_id = NULL
-WHERE tenant_id = 'default-tenant'
-  AND related_job_instance_id IN (
-    SELECT id FROM batch.job_instance
-    WHERE tenant_id = 'default-tenant' AND params_snapshot::text LIKE '%${RUN_ID}%'
-  );
-
-DELETE FROM batch.job_instance
-WHERE tenant_id = 'default-tenant'
-  AND params_snapshot::text LIKE '%${RUN_ID}%';
-
-DELETE FROM batch.trigger_outbox_event
-WHERE tenant_id = 'default-tenant'
-  AND request_id LIKE '%${RUN_ID}%';
-
-DELETE FROM batch.trigger_request
-WHERE tenant_id = 'default-tenant'
-  AND (
-    request_id LIKE '%${RUN_ID}%'
-    OR dedup_key LIKE '%${RUN_ID}%'
-    OR trace_id LIKE '%${RUN_ID}%'
-  );
-COMMIT;
-SQL
+  psql_platform -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql"
 }
 
 require_tooling() {
@@ -334,7 +122,7 @@ wait_run_terminal() {
         select count(*) || '|' ||
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and params_snapshot::text like '%${RUN_ID}%';"
     )"
     total="${counts%%|*}"
@@ -366,7 +154,7 @@ run_pipeline_completion() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
-      -DtenantId=default-tenant \
+      -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$job_code" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
@@ -387,7 +175,7 @@ run_pipeline_completion() {
         select count(*) || '|' ||
                count(*) filter (where instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED'))
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and job_code = '${job_code}'
           and params_snapshot::text like '%${RUN_ID}%';"
     )"
@@ -412,7 +200,7 @@ run_trigger_pressure() {
   echo "==> trigger: job=${TRIGGER_JOB_CODE}, launch_rps=${TRIGGER_LAUNCH_RPS}, duration=${TRIGGER_DURATION_SECONDS}s"
   (
     cd "$LOAD_DIR"
-    TENANT_ID=default-tenant \
+    TENANT_ID="$LOAD_TEST_TENANT_ID" \
     DURATION_SECONDS="$((TRIGGER_DURATION_SECONDS + 30))" \
     INTERVAL_SECONDS=5 \
     OUT="$sample_file" \
@@ -428,7 +216,7 @@ run_trigger_pressure() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
-      -DtenantId=default-tenant \
+      -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DjobCode="$TRIGGER_JOB_CODE" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
@@ -456,7 +244,7 @@ run_mixed_pressure() {
   if csv_contains trigger "$MODULES_CSV"; then
     (
       cd "$LOAD_DIR"
-      TENANT_ID=default-tenant \
+      TENANT_ID="$LOAD_TEST_TENANT_ID" \
       DURATION_SECONDS="$((TRIGGER_DURATION_SECONDS + 30))" \
       INTERVAL_SECONDS=5 \
       OUT="$sample_file" \
@@ -475,7 +263,7 @@ run_mixed_pressure() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
-      -DtenantId=default-tenant \
+      -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DbizDate="$BIZ_DATE" \
       -Dcontrol.modules="$MODULES_CSV" \
       -Dcontrol.process.paramsJsonFile="$PROCESS_PARAMS" \
@@ -536,7 +324,7 @@ write_report() {
           ) as benchmark_module,
           *
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and params_snapshot::text like '%${RUN_ID}%'
       )
       select
@@ -570,7 +358,7 @@ write_report() {
           ) as benchmark_module,
           *
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and params_snapshot::text like '%${RUN_ID}%'
       )
       select
@@ -607,7 +395,7 @@ write_report() {
           ) as benchmark_module,
           *
         from batch.job_instance
-        where tenant_id = 'default-tenant'
+        where tenant_id = '${LOAD_TEST_TENANT_ID}'
           and params_snapshot::text like '%${RUN_ID}%'
       )
       select
@@ -632,7 +420,7 @@ write_report() {
       select worker_group, worker_code, status, current_load, max_concurrent,
              round(extract(epoch from (clock_timestamp() - heartbeat_at))::numeric, 1) as heartbeat_age_s
       from batch.worker_registry
-      where tenant_id = 'default-tenant'
+      where tenant_id = '${LOAD_TEST_TENANT_ID}'
         and worker_group in ('PROCESS','DISPATCH','ATOMIC')
       order by worker_group, worker_code;"
     echo '```'
@@ -658,7 +446,7 @@ write_report() {
       select dispatch_status, count(*) as count
       from batch.file_dispatch_record fdr
       join batch.file_record fr on fr.id = fdr.file_id
-      where fr.tenant_id = 'default-tenant'
+      where fr.tenant_id = '${LOAD_TEST_TENANT_ID}'
         and fr.metadata_json::text like '%${RUN_ID}%'
       group by dispatch_status
       order by dispatch_status;"

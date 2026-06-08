@@ -22,11 +22,15 @@ fi
 # =========================================================
 set -uo pipefail
 
-TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:18081}"
-INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+
+SIM_STAGE_NAME="atomic-load"
+# shellcheck source=env-common.sh
+source "$ROOT/scripts/sim/env-common.sh"
+
 ROUNDS="${ROUNDS:-5}"
-ATOMIC_TENANT="${ATOMIC_TENANT:-default-tenant}"
-BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
+ATOMIC_TENANT="${ATOMIC_TENANT:-$BATCH_DEFAULT_TENANT_ID}"
 ONLY="${ONLY:-}"
 
 # seed 里的 4 个原子任务 demo job(default_params 自带执行器协议,触发无需带 params)

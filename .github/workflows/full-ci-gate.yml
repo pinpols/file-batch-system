@@ -45,6 +45,10 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
+      - name: Verify SQL/config placement boundaries
+        shell: bash
+        run: bash scripts/ci/check-sql-config-boundaries.sh
+
       - name: PMD + Spotless + dependency boundary
         shell: bash
         run: |

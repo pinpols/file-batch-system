@@ -29,6 +29,10 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=scripts/ops/env.sh
+source "$ROOT/scripts/ops/env.sh"
+
 require_tools() {
   for tool in psql curl; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
@@ -38,15 +42,6 @@ require_tools() {
   done
 }
 
-# ── configuration ─────────────────────────────────────────────────────────────
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-15432}"
-PGDATABASE="${PGDATABASE:-batch_db}"
-PGUSER="${PGUSER:-batch}"
-export PGPASSWORD="${PGPASSWORD:-}"
-
-BATCH_SCHEMA="${BATCH_SCHEMA:-batch}"
-BATCH_ORCHESTRATOR_URL="${BATCH_ORCHESTRATOR_URL:-http://localhost:8082}"
 BATCH_ORCHESTRATOR_TOKEN="${BATCH_ORCHESTRATOR_TOKEN:-}"
 
 BATCH_HEAL_RETRY_DRY_RUN="${BATCH_HEAL_RETRY_DRY_RUN:-true}"
@@ -59,9 +54,11 @@ BATCH_HEAL_RETRY_REASON="${BATCH_HEAL_RETRY_REASON:-}"
 # ── helpers ────────────────────────────────────────────────────────────────────
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
 
-psql_query() {
+psql_file() {
   psql -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
-       -tA -c "$1" 2>&1
+       -X -A -t -v ON_ERROR_STOP=1 -v schema="$BATCH_SCHEMA" \
+       -v tenant="$BATCH_HEAL_RETRY_TENANT" \
+       -v task_status="$BATCH_HEAL_RETRY_TASK_STATUS" "$@"
 }
 
 orchestrator_post() {
@@ -87,24 +84,12 @@ sleep_ms() {
   sleep "${secs}"
 }
 
-build_where() {
-  local where="WHERE task_status = '${BATCH_HEAL_RETRY_TASK_STATUS}'"
-  if [[ -n "${BATCH_HEAL_RETRY_TENANT}" ]]; then
-    where="${where} AND tenant_id = '${BATCH_HEAL_RETRY_TENANT}'"
-  fi
-  printf '%s' "${where}"
-}
-
 require_tools
 
-where="$(build_where)"
-
 log "heal-retry-tasks: DRY_RUN=${BATCH_HEAL_RETRY_DRY_RUN}"
-log "Filter: ${where}"
+log "Filter: task_status=${BATCH_HEAL_RETRY_TASK_STATUS} tenant=${BATCH_HEAL_RETRY_TENANT:-<all>}"
 
-total="$(psql_query \
-  "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.job_task ${where}" \
-  2>/dev/null)" || total=0
+total="$(psql_file -f "$OPS_SQL_DIR/heal-retry-tasks-count.sql" 2>/dev/null)" || total=0
 
 if [[ "${total}" -eq 0 ]]; then
   log "No job_task match filter — nothing to heal"
@@ -118,13 +103,10 @@ failed=0
 offset=0
 
 while true; do
-  batch="$(psql_query \
-    "SELECT id, tenant_id
-       FROM ${BATCH_SCHEMA}.job_task
-       ${where}
-       ORDER BY id ASC
-       LIMIT ${BATCH_HEAL_RETRY_BATCH_SIZE} OFFSET ${offset}" \
-    2>/dev/null)" || {
+  batch="$(psql_file \
+      -v batch_size="$BATCH_HEAL_RETRY_BATCH_SIZE" \
+      -v batch_offset="$offset" \
+      -f "$OPS_SQL_DIR/heal-retry-tasks-batch.sql" 2>/dev/null)" || {
       log "ERROR: cannot query job_task at offset ${offset}"
       break
     }
@@ -172,4 +154,3 @@ elif [[ "${failed}" -gt 0 ]]; then
 else
   log "Heal complete: ${replayed} task(s) replayed successfully"
 fi
-

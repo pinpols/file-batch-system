@@ -118,7 +118,21 @@ public class WorkerTaskLeaseRenewer {
               lease.getPartitionInvocationId()));
     }
     recordRenewBatchSizeMetric(batchItems.size());
-    Map<Long, Boolean> results = taskExecutionClient.renewLeasesBatch(batchItems);
+    Map<Long, Boolean> results;
+    try {
+      results = taskExecutionClient.renewLeasesBatch(batchItems);
+    } catch (RuntimeException ex) {
+      log.warn(
+          "task lease renew batch failed: activeLeases={}, error={}",
+          leaseList.size(),
+          ex.getMessage(),
+          ex);
+      for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : leaseList) {
+        trackFailure(activeTaskLease, ex.getClass().getSimpleName());
+      }
+      openCircuit(leaseList.size(), halfOpenInterval);
+      return;
+    }
     int success = 0;
     int failure = 0;
     for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : leaseList) {
@@ -141,22 +155,12 @@ public class WorkerTaskLeaseRenewer {
         trackFailure(activeTaskLease, "rejected");
       }
     }
-    // 熔断状态机: 全失败 → OPEN; 任一成功 (从 OPEN) → CLOSE
-    if (failure == leaseList.size()) {
-      if (circuitOpen.compareAndSet(false, true)) {
-        log.error(
-            "renew circuit OPENED: all {} renewals failed in this tick; orch likely unreachable —"
-                + " skipping subsequent renew attempts until half-open probe ({} ticks)",
-            failure,
-            halfOpenInterval);
-        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-        if (registry != null) {
-          Counter.builder(METRIC_CIRCUIT_OPEN).register(registry).increment();
-        }
-      }
-    } else if (success > 0 && circuitOpen.compareAndSet(true, false)) {
+    // batch 请求能返回结果就说明 orchestrator 可达；即使逐 task 被业务拒绝，也不能保持不可达熔断。
+    if (circuitOpen.compareAndSet(true, false)) {
       log.info(
-          "renew circuit CLOSED: orch reachable again ({} success / {} failure)", success, failure);
+          "renew circuit CLOSED: orchestrator reachable again ({} success / {} rejected)",
+          success,
+          failure);
       ticksSinceOpen.set(0);
     }
   }
@@ -235,6 +239,21 @@ public class WorkerTaskLeaseRenewer {
     return circuitOpen.get();
   }
 
+  private void openCircuit(int failureCount, int halfOpenInterval) {
+    if (circuitOpen.compareAndSet(false, true)) {
+      log.error(
+          "renew circuit OPENED: transport failure while renewing {} active leases; orchestrator"
+              + " likely unreachable — skipping subsequent renew attempts until half-open probe ({}"
+              + " ticks)",
+          failureCount,
+          halfOpenInterval);
+      MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+      if (registry != null) {
+        Counter.builder(METRIC_CIRCUIT_OPEN).register(registry).increment();
+      }
+    }
+  }
+
   private void recordRenewBatchSizeMetric(int size) {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null || size <= 0) {
@@ -262,14 +281,25 @@ public class WorkerTaskLeaseRenewer {
             .computeIfAbsent(lease.getTaskId(), k -> new AtomicInteger())
             .incrementAndGet();
     if (count >= leaseProperties.getConsecutiveFailureAlertThreshold()) {
-      log.error(
-          "task lease renew failed {} times in a row — Orchestrator likely unreachable:"
-              + " tenantId={}, taskId={}, workerId={}, lastReason={}",
-          count,
-          lease.getTenantId(),
-          lease.getTaskId(),
-          lease.getWorkerId(),
-          reason);
+      if ("rejected".equals(reason)) {
+        log.error(
+            "task lease renew rejected {} times in a row: tenantId={}, taskId={}, workerId={},"
+                + " lastReason={}",
+            count,
+            lease.getTenantId(),
+            lease.getTaskId(),
+            lease.getWorkerId(),
+            reason);
+      } else {
+        log.error(
+            "task lease renew failed {} times in a row — Orchestrator likely unreachable:"
+                + " tenantId={}, taskId={}, workerId={}, lastReason={}",
+            count,
+            lease.getTenantId(),
+            lease.getTaskId(),
+            lease.getWorkerId(),
+            reason);
+      }
       MeterRegistry registry = meterRegistryProvider.getIfAvailable();
       if (registry != null) {
         // tenantId 不作 tag(高基数);只保留 reason(低基数,几个固定枚举)

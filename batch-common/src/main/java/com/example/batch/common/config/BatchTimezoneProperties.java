@@ -1,5 +1,6 @@
 package com.example.batch.common.config;
 
+import com.example.batch.common.constants.CommonConstants;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -17,5 +18,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class BatchTimezoneProperties {
 
   /** IANA 时区字符串（如 {@code Asia/Shanghai} / {@code UTC} / {@code America/New_York}）。 */
-  private String defaultZone = "Asia/Shanghai";
+  private String defaultZone = CommonConstants.DEFAULT_TIMEZONE_ID;
 }

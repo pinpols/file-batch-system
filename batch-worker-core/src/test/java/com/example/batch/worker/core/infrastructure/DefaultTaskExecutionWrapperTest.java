@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +45,7 @@ class DefaultTaskExecutionWrapperTest {
     stepExecutionAdapter = mock(StepExecutionAdapter.class);
     taskExecutionClient = mock(TaskExecutionClient.class);
     activeTaskLeaseRegistry = mock(ActiveTaskLeaseRegistry.class);
+    when(activeTaskLeaseRegistry.markCompletingUnlessLost(any())).thenReturn(true);
     timeoutProperties = new WorkerExecutionTimeoutProperties();
     timeoutProperties.setPoolSize(4);
     timeoutProperties.setDefaultTimeoutSeconds(60L);
@@ -135,6 +137,7 @@ class DefaultTaskExecutionWrapperTest {
     assertThat(result.taskId()).isEqualTo("1001");
 
     verify(activeTaskLeaseRegistry).register("1001", "t1", "w1", null);
+    verify(activeTaskLeaseRegistry).markCompletingUnlessLost("1001");
     verify(activeTaskLeaseRegistry).remove("1001");
     verify(taskExecutionClient).report(any(TaskExecutionReport.class));
   }
@@ -158,6 +161,23 @@ class DefaultTaskExecutionWrapperTest {
                         && "ERR_PARSE".equals(report.getErrorCode())
                         && "parse failed".equals(report.getErrorMessage())));
     verify(activeTaskLeaseRegistry).remove("1002");
+  }
+
+  @Test
+  void shouldAbortReportWhenLeaseLostBeforeCompletion() {
+    PulledTask task = sampleTask("1009", "t1", "w1");
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+        .thenReturn(StepExecutionResponse.successResponse());
+    when(activeTaskLeaseRegistry.markCompletingUnlessLost("1009")).thenReturn(false);
+
+    WorkerExecutionResult result = wrapper.execute(task);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("lease lost");
+    verify(activeTaskLeaseRegistry).register("1009", "t1", "w1", null);
+    verify(activeTaskLeaseRegistry).markCompletingUnlessLost("1009");
+    verify(taskExecutionClient, never()).report(any(TaskExecutionReport.class));
+    verify(activeTaskLeaseRegistry).remove("1009");
   }
 
   /**
