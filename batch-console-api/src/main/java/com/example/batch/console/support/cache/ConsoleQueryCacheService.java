@@ -82,7 +82,7 @@ public class ConsoleQueryCacheService {
         return JsonUtils.fromJson(cached, resultType);
       }
     } catch (Exception e) {
-      log.debug("cache read failed, falling back to db: key={}", fullKey, e);
+      log.debug("cache read failed, falling back to db: key={}", logValue(fullKey), e);
     }
     T result = loader.get();
     try {
@@ -90,7 +90,7 @@ public class ConsoleQueryCacheService {
         redisTemplate.opsForValue().set(fullKey, JsonUtils.toJson(result), ttl);
       }
     } catch (Exception e) {
-      log.debug("cache write failed: key={}", fullKey, e);
+      log.debug("cache write failed: key={}", logValue(fullKey), e);
     }
     return result;
   }
@@ -108,7 +108,7 @@ public class ConsoleQueryCacheService {
         return JsonUtils.fromJson(cached, resultType);
       }
     } catch (Exception e) {
-      log.debug("cache read failed, falling back to db: key={}", fullKey, e);
+      log.debug("cache read failed, falling back to db: key={}", logValue(fullKey), e);
     }
     T result = loader.get();
     try {
@@ -116,7 +116,7 @@ public class ConsoleQueryCacheService {
         redisTemplate.opsForValue().set(fullKey, JsonUtils.toJson(result), ttl);
       }
     } catch (Exception e) {
-      log.debug("cache write failed: key={}", fullKey, e);
+      log.debug("cache write failed: key={}", logValue(fullKey), e);
     }
     return result;
   }
@@ -150,5 +150,9 @@ public class ConsoleQueryCacheService {
   /** 清除指定租户的 dashboard 缓存。 */
   public void evictDashboard(String tenantId) {
     evictByPrefix("dashboard:" + tenantId);
+  }
+
+  private static String logValue(String value) {
+    return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
   }
 }

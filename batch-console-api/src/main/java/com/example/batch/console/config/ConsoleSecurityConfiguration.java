@@ -40,6 +40,18 @@ public class ConsoleSecurityConfiguration {
 
   private final ConsoleSecurityProperties properties;
   private final BatchSecurityProperties batchSecurityProperties;
+  private static final String[] CSRF_IGNORED_MATCHERS = {
+    "/actuator/**",
+    "/api/console/auth/login",
+    "/api/console/auth/logout",
+    "/api/console/auth/public-key",
+    "/api/console/auth/token",
+    "/api/console/push/vapid-public-key",
+    "/api/console/files/fs-download",
+    "/console-login.html",
+    "/favicon.ico"
+  };
+  private static final String[] BYPASS_MODE_CSRF_IGNORED_MATCHERS = {"/**"};
 
   @Bean
   public ConsoleRateLimitFilter consoleRateLimitFilter(
@@ -60,25 +72,13 @@ public class ConsoleSecurityConfiguration {
       CorsConfigurationSource consoleCorsConfigurationSource)
       throws Exception {
     http.cors(cors -> cors.configurationSource(consoleCorsConfigurationSource));
-    if (batchSecurityProperties.isBypassMode()) {
-      http.csrf(AbstractHttpConfigurer::disable);
-    } else {
-      // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
-      // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
-      http.csrf(
-          csrf ->
-              csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                  .ignoringRequestMatchers(
-                      "/actuator/**",
-                      "/api/console/auth/login",
-                      "/api/console/auth/logout",
-                      "/api/console/auth/public-key",
-                      "/api/console/auth/token",
-                      "/api/console/push/vapid-public-key",
-                      "/api/console/files/fs-download",
-                      "/console-login.html",
-                      "/favicon.ico"));
-    }
+    // ADR-030 D7:console 主认证是 HttpOnly cookie。cookie 自动随请求发送,所以 mutating API
+    // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
+    // bypass-mode 仅供本地/联调/E2E 使用,这里通过 ignore matcher 放宽,避免禁用 CSRF filter 本身。
+    http.csrf(
+        csrf ->
+            csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .ignoringRequestMatchers(csrfIgnoredMatchers()));
     return http.sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .headers(headers -> headers.addHeaderWriter(securityHeadersWriter))
@@ -133,6 +133,12 @@ public class ConsoleSecurityConfiguration {
         .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
         .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
         .build();
+  }
+
+  private String[] csrfIgnoredMatchers() {
+    return batchSecurityProperties.isBypassMode()
+        ? BYPASS_MODE_CSRF_IGNORED_MATCHERS
+        : CSRF_IGNORED_MATCHERS;
   }
 
   private AuthenticationEntryPoint authenticationEntryPoint(
