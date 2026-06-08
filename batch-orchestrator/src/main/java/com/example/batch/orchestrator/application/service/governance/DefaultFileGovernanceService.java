@@ -15,6 +15,7 @@ import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxServi
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
+import com.example.batch.orchestrator.domain.command.FileUploadSessionCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -24,11 +25,16 @@ import com.example.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +60,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String STATUS_SUCCESS = "SUCCESS";
+  private static final DateTimeFormatter OBJECT_KEY_DATE =
+      DateTimeFormatter.BASIC_ISO_DATE.withZone(ZoneOffset.UTC);
 
   private final FileGovernanceRepository fileGovernanceRepository;
   private final JobTaskMapper jobTaskMapper;
@@ -162,6 +170,110 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             command.traceId(),
             auditDetail));
     return presignedUrl;
+  }
+
+  @Override
+  @Transactional
+  public Map<String, Object> createUploadSession(FileUploadSessionCommand command) {
+    validateUploadSessionCommand(command);
+    Instant now = BatchDateTimeSupport.utcNow();
+    String fileName = safeFileName(command.fileName());
+    String storagePath =
+        "uploads/"
+            + safeKeySegment(command.tenantId())
+            + "/"
+            + OBJECT_KEY_DATE.format(now)
+            + "/"
+            + UUID.randomUUID()
+            + "-"
+            + fileName;
+    String storageBucket = s3GovernanceStorage.defaultBucket();
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("channelCode", command.channelCode());
+    metadata.put("arrivalState", "WAITING_ARRIVAL");
+    metadata.put("uploadMode", "APP_MANAGED");
+    metadata.put("storageBackend", "BatchObjectStore");
+    metadata.put("uploadSessionCreatedAt", now.toString());
+    metadata.put("uploadSessionOperatorId", command.operatorId());
+    Long fileId =
+        fileGovernanceRepository.createReconciledFileRecord(
+            new FileGovernanceRepository.ReconciledFileRecordCommand(
+                new FileGovernanceRepository.FileIdentity(
+                    command.tenantId(), "INPUT", fileName, fileFormatType(fileName)),
+                0L,
+                new FileGovernanceRepository.FileStorage("S3", storagePath, storageBucket),
+                "UPLOAD",
+                "RECEIVED",
+                command.traceId(),
+                metadata));
+    if (fileId == null) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
+          "upload storage path already exists");
+    }
+    fileGovernanceRepository.appendAudit(
+        new FileGovernanceRepository.FileAuditCommand(
+            command.tenantId(),
+            fileId,
+            "UPLOAD_SESSION_CREATED",
+            STATUS_SUCCESS,
+            new FileGovernanceRepository.FileAuditActor(
+                resolveOperatorType(command.operatorId()), command.operatorId()),
+            command.traceId(),
+            metadata));
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("fileId", fileId);
+    response.put("status", "RECEIVED");
+    response.put("uploadMode", "APP_MANAGED");
+    response.put("uploadMethod", "PUT");
+    response.put("contentField", "file");
+    response.put(
+        "uploadUrl",
+        "/api/console/files/" + fileId + "/content?tenantId=" + safeUrlQuery(command.tenantId()));
+    response.put("storageBucket", storageBucket);
+    response.put("storagePath", storagePath);
+    response.put("fileName", fileName);
+    return response;
+  }
+
+  @Override
+  @Transactional
+  public String confirmFileArrival(FileGovernanceCommand command) {
+    validateCommand(command);
+    Map<String, Object> fileRecord =
+        fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
+    if (fileRecord.isEmpty()) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
+    }
+    String storagePath = stringValue(fileRecord.get("storage_path"));
+    if (!Texts.hasText(storagePath)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
+    }
+    String storageBucket = stringValue(fileRecord.get("storage_bucket"));
+    if (!s3GovernanceStorage.objectExists(storageBucket, storagePath)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
+    }
+    long fileSizeBytes = s3GovernanceStorage.objectSize(storageBucket, storagePath);
+    Instant now = BatchDateTimeSupport.utcNow();
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("arrivalConfirmedAt", now.toString());
+    metadata.put("arrivalReason", "MANUAL_FILE_CONFIRM");
+    metadata.put("arrivalConfirmedBy", command.operatorId());
+    metadata.put("uploadedSizeBytes", fileSizeBytes);
+    fileGovernanceRepository.markFileArrivalConfirmed(
+        command.tenantId(), command.fileId(), fileSizeBytes, metadata);
+    fileGovernanceRepository.appendAudit(
+        new FileGovernanceRepository.FileAuditCommand(
+            command.tenantId(),
+            command.fileId(),
+            "CONFIRM_ARRIVAL",
+            STATUS_SUCCESS,
+            new FileGovernanceRepository.FileAuditActor(
+                resolveOperatorType(command.operatorId()), command.operatorId()),
+            command.traceId(),
+            metadata));
+    return "ARRIVAL_CONFIRMED";
   }
 
   /**
@@ -456,6 +568,19 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     }
   }
 
+  private void validateUploadSessionCommand(FileUploadSessionCommand command) {
+    Guard.require(command != null, "file upload session command is required");
+    if (!Texts.hasText(command.tenantId())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
+    }
+    if (!Texts.hasText(command.channelCode())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.channel_code_required");
+    }
+    if (!Texts.hasText(command.fileName())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.name_required");
+    }
+  }
+
   private String resolveOperatorType(String operatorId) {
     return Texts.hasText(operatorId) ? "USER" : "API";
   }
@@ -476,5 +601,44 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       return bool;
     }
     return value != null && Boolean.parseBoolean(String.valueOf(value));
+  }
+
+  private String safeFileName(String fileName) {
+    String cleaned = fileName == null ? "" : fileName.trim();
+    cleaned = cleaned.replace('\\', '/');
+    int lastSlash = cleaned.lastIndexOf('/');
+    if (lastSlash >= 0) {
+      cleaned = cleaned.substring(lastSlash + 1);
+    }
+    cleaned = cleaned.replaceAll("[^A-Za-z0-9._-]", "_");
+    cleaned = cleaned.replaceAll("_+", "_");
+    if (!Texts.hasText(cleaned) || ".".equals(cleaned) || "..".equals(cleaned)) {
+      return "upload.bin";
+    }
+    return cleaned.length() <= 128 ? cleaned : cleaned.substring(cleaned.length() - 128);
+  }
+
+  private String safeKeySegment(String value) {
+    String cleaned = value == null ? "" : value.replaceAll("[^A-Za-z0-9._-]", "_");
+    return Texts.hasText(cleaned) ? cleaned : "tenant";
+  }
+
+  private String safeUrlQuery(String value) {
+    return value == null ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
+  }
+
+  private String fileFormatType(String fileName) {
+    String ext = "";
+    int dot = fileName.lastIndexOf('.');
+    if (dot >= 0 && dot < fileName.length() - 1) {
+      ext = fileName.substring(dot + 1).toLowerCase();
+    }
+    return switch (ext) {
+      case "csv", "txt", "tsv" -> "DELIMITED";
+      case "xlsx", "xls" -> "EXCEL";
+      case "json" -> "JSON";
+      case "xml" -> "XML";
+      default -> "BINARY";
+    };
   }
 }

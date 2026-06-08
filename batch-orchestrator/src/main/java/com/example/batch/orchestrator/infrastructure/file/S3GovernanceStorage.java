@@ -74,6 +74,28 @@ public class S3GovernanceStorage {
     }
   }
 
+  public long objectSize(String bucket, String objectName) {
+    try {
+      String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
+      return objectStore.statSize(targetBucket, objectName);
+    } catch (Exception exception) {
+      throw new IllegalStateException("failed to stat object: " + objectName, exception);
+    }
+  }
+
+  public boolean objectExists(String bucket, String objectName) {
+    try {
+      String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
+      return objectStore.exists(targetBucket, objectName);
+    } catch (Exception exception) {
+      throw new IllegalStateException("failed to check object: " + objectName, exception);
+    }
+  }
+
+  public String defaultBucket() {
+    return properties.getBucket();
+  }
+
   public record StorageObjectView(
       String bucket, String objectName, long size, String etag, Instant lastModified) {}
 }

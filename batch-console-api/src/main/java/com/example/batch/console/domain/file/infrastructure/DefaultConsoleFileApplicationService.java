@@ -1,12 +1,16 @@
 package com.example.batch.console.domain.file.infrastructure;
 
+import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.domain.file.application.ConsoleFileApplicationService;
+import com.example.batch.console.domain.file.mapper.FileRecordMapper;
 import com.example.batch.console.domain.file.web.request.ArchiveFileRequest;
 import com.example.batch.console.domain.file.web.request.DeleteFileRequest;
 import com.example.batch.console.domain.file.web.request.FileArrivalGroupActionRequest;
@@ -19,6 +23,8 @@ import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
+import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,6 +34,7 @@ import lombok.Setter;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 文件治理 BFF：把 console 的文件操作 HTTP 请求转发到 orchestrator {@code /internal/files/**}，承担自由文本清洗与审批门控。
@@ -54,6 +61,9 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
   // P0-2 (ADR audit 2026-05-14): 所有租户参数走 guard 解析，禁止信任 body/query 中的 tenantId；
   // 非全局角色账号若 body tenantId 与 JWT 不一致直接 FORBIDDEN，跨租户操作被拦截。
   private final ConsoleTenantGuard tenantGuard;
+  private final FileRecordMapper fileRecordMapper;
+  private final BatchObjectStore objectStore;
+  private final S3StorageProperties s3StorageProperties;
 
   @Override
   public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
@@ -175,20 +185,66 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.build();
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("tenantId", resolvedTenantId);
+    body.put("channelCode", ConsoleTextSanitizer.safeInput(channelCode, 128));
+    body.put("fileName", ConsoleTextSanitizer.safeInput(fileName, 255));
+    body.put("operatorId", ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64));
+    body.put("traceId", requestMetadata.traceId());
     return restClient
         .post()
         .uri("/internal/files/presign-upload")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(
-            Map.of(
-                "tenantId", resolvedTenantId,
-                "channelCode", channelCode,
-                "fileName", fileName,
-                "operatorId", ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64)))
+        .body(body)
         .retrieve()
         .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+  }
+
+  @Override
+  public ConsoleFileOperationResponse uploadContent(
+      String tenantId, Long fileId, MultipartFile file, String idempotencyKey) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    if (fileId == null) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.id_required");
+    }
+    if (file == null || file.isEmpty()) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.content_required");
+    }
+    Map<String, Object> fileRecord =
+        fileRecordMapper.selectFileRecordById(resolvedTenantId, fileId);
+    if (fileRecord == null || fileRecord.isEmpty()) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
+    }
+    String storageType = stringValue(fileRecord.get("storage_type"));
+    if ("LOCAL".equalsIgnoreCase(storageType)) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
+          "content upload requires object-store backed file record");
+    }
+    String storagePath = stringValue(fileRecord.get("storage_path"));
+    if (!Texts.hasText(storagePath)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
+    }
+    String bucket = stringValue(fileRecord.get("storage_bucket"));
+    if (!Texts.hasText(bucket)) {
+      bucket = s3StorageProperties.getBucket();
+    }
+    String contentType = file.getContentType();
+    if (!Texts.hasText(contentType)) {
+      contentType = stringValue(fileRecord.get("mime_type"));
+    }
+    if (!Texts.hasText(contentType)) {
+      contentType = "application/octet-stream";
+    }
+    try {
+      objectStore.put(bucket, storagePath, file.getInputStream(), file.getSize(), contentType);
+      return new ConsoleFileOperationResponse("UPLOADED");
+    } catch (IOException exception) {
+      throw new IllegalStateException("failed to open upload stream", exception);
+    }
   }
 
   @Override
@@ -294,6 +350,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
     }
+  }
+
+  private String stringValue(Object value) {
+    return value == null ? null : String.valueOf(value);
   }
 
   private String extractTenantId(Object payload) {

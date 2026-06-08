@@ -47,6 +47,8 @@ public interface FileGovernanceMapper {
 
   int updateFileMetadata(Map<String, Object> params);
 
+  int markFileArrivalConfirmed(Map<String, Object> params);
+
   int insertFileAuditLog(Map<String, Object> params);
 
   int markStaleRunningPipelineInstancesFailed(Map<String, Object> params);
