@@ -77,9 +77,9 @@
 | import JVM/PG/work_mem/chunk/batch 参数矩阵 | 已补 PG 写入矩阵 | `pg-param-matrix-20260608142440` 完成 5 组 x 3 次；JVM 和 chunk/batch 系统级组合仍未做。 |
 | trigger 高频 cron / misfire | 已补本地专项 | `scripts/sim/24-trigger-stage6d.sh` 通过；wheel 模式亚分钟连续 cron fire 仍不作为放行能力。 |
 | 1w / 10w task storm | 部分覆盖 | `preprod-p0-atomic1w-20260608140503` 已跑 1w 全终态；10w 未跑，本机 local 环境不适合作为上线容量承诺。 |
-| process 大数据失败恢复、幂等重跑、中途失败恢复 | 部分覆盖 | 10w aggregate/copy/idempotency 已跑；未做 kill worker、DB 中断、重启恢复等故障注入。 |
-| dispatch / atomic 故障注入、失败重试风暴、下游异常、lease renew 极限 | 未覆盖 | 本轮只跑成功路径和 atomic 高压；没有远端 NAS/OSS/SFTP/HTTP 故障源，也没有 lease renew 饥饿注入。 |
-| export 更高分片数、真实 S3、多租户混压 | 部分覆盖 | 本轮只覆盖 local export 小阶梯；真实 S3 未配置，当前是本地 MinIO/S3-compatible 环境；未做多租户混压。 |
+| process 大数据失败恢复、幂等重跑、中途失败恢复 | 部分覆盖 | 10w aggregate/copy/idempotency 已跑；`sim-process-stage4c-20260608143525` 复跑分片/cancel 当前语义；未做 kill worker、DB 中断、重启恢复。 |
+| dispatch / atomic 故障注入、失败重试风暴、下游异常、lease renew 极限 | 部分覆盖 | `sim-dispatch-stage5b-20260608143154`、`sim-dispatch-stage5c-20260608143209`、`scripts/sim/21-atomic-stage5c.sh` 已复跑本地 500/manifest/timeout/cancel；真实外部 timeout/断连/权限失败和 DLQ 组合未做。 |
+| export 更高分片数、真实 S3、多租户混压 | 部分覆盖 | `sim-export-stage3c-20260608143456` 已复跑本地 MinIO/S3-compatible 8 分片、三租户、幂等；真实云 S3/OSS multipart abort/retry 未配置。 |
 
 ## 上线前仍建议补的硬项
 

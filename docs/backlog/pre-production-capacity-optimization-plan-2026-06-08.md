@@ -168,7 +168,12 @@ atomic 覆盖：
 - 无重复成功上报。
 - 无卡 `RUNNING`。
 
-状态：**未完成真实外部依赖故障注入**。Stage 5/5c 已覆盖 LOCAL/NAS/SFTP sidecar manifest 和 atomic HTTP/SQL/shell 基本分支，但还缺真实 5xx、timeout、断连、权限失败、重试/DLQ 组合。
+状态：**本地模拟已复跑，真实外部依赖未完成**。
+
+- dispatch 500 no-retry：`sim-dispatch-stage5b-20260608143154`，`FAILED|FAILED|FAILED|COMPENSATED`。
+- dispatch LOCAL/NAS/SFTP manifest：`sim-dispatch-stage5c-20260608143209`，三通道均 `ACKED:SUCCESS`，SFTP `.chk` 存在。
+- atomic HTTP/SQL timeout/shell cancel：`scripts/sim/21-atomic-stage5c.sh` 通过，SQL timeout 分类为 `TIMEOUT/TIMEOUT`，shell cancel marker=true。
+- 未完成：真实 SFTP/NAS/OSS/HTTP timeout、断连、权限失败、重试/DLQ 组合。
 
 ### 7. process failure profile
 
@@ -186,7 +191,10 @@ atomic 覆盖：
 - 无 staging 残留。
 - 无重复写脏数据。
 
-状态：**未完成 fault-injection profile**。已有 process DIRECT、分片、幂等和 staging 清理验证；还缺 kill worker、DB 临时断开和恢复后脏数据核对。
+状态：**本地 process 分片/cancel 已复跑，fault-injection profile 未完成**。
+
+- `sim-process-stage4c-20260608143525`：4/4 分片 SUCCESS，目标 16 行；RUNNING cancel 当前返回 409，任务最终 SUCCESS。
+- 未完成：DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/脏数据核对。
 
 ## P2 容量画像
 

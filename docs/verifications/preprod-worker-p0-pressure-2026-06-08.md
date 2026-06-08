@@ -107,12 +107,22 @@ P1/P2 不能诚实标记为全部完成：真实云 S3/OSS、真实 SFTP/NAS 故
 - 额外 3 个二级索引使 WAL 中位数从约 303MB 增到约 400MB，写入耗时也变差；大批量导入应尽量减少目标分区二级索引，必要时后建。
 - 矩阵结束后已恢复 PG 参数：`checkpoint_timeout=5min`、`max_wal_size=1GB`。
 
+## P1 本地模拟复跑
+
+| 项 | 批次 / 脚本 | 结果 | 边界 |
+|---|---|---|---|
+| dispatch 500 no-retry 补偿 | `scripts/sim/14-dispatch-stage5b.sh`，`sim-dispatch-stage5b-20260608143154` | PASS，`FAILED|FAILED|FAILED|COMPENSATED` | 覆盖本地 API 500/no-retry，不等于真实下游长时间 timeout/断连。 |
+| dispatch LOCAL/NAS/SFTP manifest | `scripts/sim/20-dispatch-stage5c.sh`，`sim-dispatch-stage5c-20260608143209` | PASS，LOCAL/NAS/SFTP 均 `ACKED:SUCCESS`，SFTP `.chk` 存在 | NAS 是 local profile stub；真实 NAS 权限/断链仍未覆盖。 |
+| atomic HTTP / SQL timeout / shell cancel | `scripts/sim/21-atomic-stage5c.sh`，`sim-stage5c-*` | PASS，HTTP SUCCESS，SQL `TIMEOUT/TIMEOUT`，shell cancel marker=true | shell cancel 当前只标记请求，子进程不保证被抢杀。 |
+| export 8 分片 / 三租户 / 幂等重放 | `scripts/sim/18-export-stage3c.sh`，`sim-export-stage3c-20260608143456` | PASS，ta 8/8 分片，三租户 3/3 SUCCESS，dedup 1/1 | 本地 MinIO/S3-compatible，不等于真实云 S3/OSS multipart abort/retry。 |
+| process 分片 / cancel 当前语义 | `scripts/sim/19-process-stage4c.sh`，`sim-process-stage4c-20260608143525` | PASS，4/4 分片 SUCCESS，目标 16 行；RUNNING cancel 返回 409 后任务 SUCCESS | 未覆盖 kill worker、PG 断链、DIRECT copy 中断恢复。 |
+
 ## 仍未完成
 
 | 项 | 状态 | 原因 / 下一步 |
 |---|---|---|
 | 真实 S3 / OSS export | 未完成 | 本地只有 MinIO/S3-compatible；不能冒充生产同类 OSS。下一步需要真实 endpoint、bucket、凭证和 checksum 口径。 |
-| dispatch / atomic 真实外部故障注入 | 未完成 | 还缺真实 SFTP/NAS/OSS/HTTP 5xx/timeout/权限失败矩阵。可先补本地 MockServer/SFTP/NAS 模拟，但生产放行仍需真实依赖。 |
+| dispatch / atomic 真实外部故障注入 | 部分完成 | 本地 API 500、LOCAL/NAS/SFTP、atomic HTTP/SQL timeout/cancel 已复跑；还缺真实 SFTP/NAS/OSS/HTTP timeout、断连、权限失败、重试/DLQ 组合。 |
 | process failure profile | 未完成 | 还缺 DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/脏数据核对。 |
 | 10w task storm | 未完成 | 1w 已完成；10w 属容量上限画像，应单独窗口跑，避免本机资源噪声误导生产承诺。 |
 | 多租户公平性混压 | 未完成 | 还缺 ta/tb/tc 大小租户并发、quota 公平、RLS 串租和 tenant 维度监控拆分。 |
