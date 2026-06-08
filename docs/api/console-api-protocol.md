@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-06-08 | **补齐本地文件系统后端上传闭环**：`POST /api/console/files/presign-upload` 从“存储直传签名”收口为兼容命名的“应用托管上传会话”，返回 `fileId/uploadUrl/uploadMethod/contentField/storageBucket/storagePath`；新增 `PUT /api/console/files/{fileId}/content?tenantId=` multipart `file` 写入 `BatchObjectStore`，S3 与 filesystem 共用同一逻辑对象路径，不暴露真实磁盘路径；`POST /api/console/files/{fileId}/confirm-arrival` 在 orchestrator 内部先校验对象存在并回写实际 `file_size_bytes`，避免只确认 DB、不确认文件内容。 |
 | 2026-06-07 | **⚠️ Breaking — dry-run L3 探测 backend-neutral 正名**(`POST /api/console/dry-run`):无 path / schema 增删,但 `params` 探测 key 与返回 finding code 改名。① 入参 key `minioBucket` → **`s3Bucket`**(OpenAPI `DryRunRequest.params` 描述同步);② finding code `EXEC_MINIO_BUCKET_INVALID` / `EXEC_MINIO_CLIENT_UNAVAILABLE` / `EXEC_MINIO_BUCKET_OK` / `EXEC_MINIO_BUCKET_MISSING` / `EXEC_MINIO_PROBE_FAILED` → **`EXEC_S3_BUCKET_INVALID` / `EXEC_S3_CLIENT_UNAVAILABLE` / `EXEC_S3_BUCKET_OK` / `EXEC_S3_BUCKET_MISSING` / `EXEC_S3_PROBE_FAILED`**;③ summary key `l3MinioProbed` → **`l3S3Probed`**。动机:对象存储客户端已迁移 AWS SDK v2(#401)、配置面已 `objectStorage.*`(#402),探测契约同步做 backend-neutral(MinIO / AWS S3 / OSS / COS 通用)。**调用方影响**:旧调用方传 `minioBucket` 将不再触发 bucket 探测(静默回退到默认 bucket),按 finding code 分支的 FE 需同步改 `EXEC_S3_*`。**服务端 MinIO 实现不变**(镜像 / compose 服务名保持),仅命名层正名。 |
 | 2026-06-06 | **新增 `GET /api/console/files/fs-download?b&k&e&s`**(对象存储抽象 Phase 2 阶段二):FilesystemObjectStore 后端专用的令牌验证下载端点。S3 后端走存储原生 presign 直发,FS 后端无此能力 → 应用签 HMAC-SHA256 令牌(`<bucket>|<key>|<exp>`,`Base64URL` sig)+ 经此端点代下。**匿名访问 — HMAC 令牌即授权**(常时间 `MessageDigest.isEqual` 比较 + exp 检查),`ConsoleSecurityConfiguration` 加入匿名白名单。`@ConditionalOnProperty(name="batch.storage.backend", havingValue="filesystem")` —— S3 模式不装载,完全无回归。Controller 通过 `BatchObjectStore.get` 取流(加密装饰层透明生效),`StreamingResponseBody` 流式返回。失败:bad/expired token → 401;object not found → 404;key 含 `..` → 400(`FilesystemObjectStore` traversal 校验)。**范围边界**:仅 FS 模式生效,与 S3 presign 互补不冲突;现有 `presign-download`(S3 真签名)端点未变。新增单测 `FilesystemPresignDownloadControllerTest`(有效令牌/篡改/过期/traversal 四 case) |
 | 2026-06-04 | **workflow-dag-designer Polish — 版本历史闭环升级(PR #370 降级 → V167 历史表真实接入)**:把 PR #370 的"降级返当前 1 条 / detail 仅支持 current"路径替换为真实多版本:V167 新建 `batch.workflow_definition_version`(`id` BIGSERIAL / `tenant_id` / `workflow_definition_id` / `workflow_code` / `version` / `workflow_name` / `workflow_type` / `enabled` / `nodes_json` JSONB / `edges_json` JSONB / `saved_by` / `saved_at` / `summary`,UNIQUE `(tenant_id, workflow_definition_id, version)` + idx `(workflow_definition_id, version DESC)`,archive 镜像 + ArchiveSchemaDriftCheck.ARCHIVED_TABLES 登记)。`DefaultConsoleWorkflowDefinitionApplicationService.fullUpdate` 在 `updateAndBumpVersion` 成功后同事务追加快照(`ObjectMapper.writeValueAsString` 序列化 entity list),`saved_by` 取 SecurityContext.username,`summary` 暂留 null(FE 未提交字段)。`listVersions` 走 `WorkflowDefinitionVersionMapper.listByDefinitionId`(version desc + 最新 current),历史表无数据时降级单条 current(兼容 PR #370);`getVersion` 当前 version 走主表,历史 version 走 `findByDefinitionIdAndVersion` + JSONB 反序列化,不存在 → NOT_FOUND。Controller `RBAC` 同步扩展到 `ROLE_ADMIN | ROLE_AUDITOR | ROLE_TENANT_ADMIN | ROLE_TENANT_USER`(read-only)。i18n 新增 `error.workflow.version.not_found` + `error.workflow.version_snapshot.{serialize,deserialize}_failed`(en + zh_CN 1:1)。FE PR #60 版本 diff 页从「当前 vs 空」降级恢复为真实多版本 diff。**范围边界**:不做物理回滚(设计 §2 明确)、不做版本 cleanup / TTL(后续 ArchivePolicy 走)、不暴露 summary 编辑入口(FE follow-up)、不动 FE。新增单测 `DefaultConsoleWorkflowDefinitionApplicationServiceVersionTest`(5 case:fullUpdate 后历史表 1 行 / 多次 fullUpdate N 行 / list 全量返回 current flag / list 降级单条 / detail JSONB 反序列化)|
@@ -883,6 +884,7 @@ Deployment note:
 - `POST /api/console/files/presign-download`
 - `POST /api/console/files/arrival-groups/action`
 - `POST /api/console/files/presign-upload`
+- `PUT /api/console/files/{fileId}/content`
 - `POST /api/console/files/{fileId}/confirm-arrival`
 - `GET /api/console/files/{fileId}/download`
 - `GET /api/console/files/{fileId}/errors/export` — export file error records as CSV (param: `tenantId`, optional `errorStage`)
@@ -1201,7 +1203,8 @@ Request body:
 
 ### File Upload & Arrival Confirmation
 
-- `POST /api/console/files/presign-upload` — get pre-signed upload URL (params: `tenantId`, `channelCode`, `fileName`)
+- `POST /api/console/files/presign-upload` — create an application-managed upload session (params: `tenantId`, `channelCode`, `fileName`)
+- `PUT /api/console/files/{fileId}/content` — upload multipart file content to `BatchObjectStore` (param: `tenantId`, form field: `file`)
 - `POST /api/console/files/{fileId}/confirm-arrival` — confirm file arrival (param: `tenantId`)
 
 ### Archive & Cleanup Policies

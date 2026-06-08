@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Orchestrator Internal API (SDK ↔ Orch protocol)
   version: 1.1.0-SNAPSHOT
-  x-last-updated: "2026-06-02"
+  x-last-updated: "2026-06-09"
   x-changelog:
+    - date: "2026-06-09"
+      summary: "[File Governance] 补充 APP_MANAGED 上传会话与确认到达 internal-only 端点,供 console BFF 走对象存储托管上传。"
     - date: "2026-06-02"
       summary: "[Lane N] 补全 worker drain/force-offline/takeover/warmup/claimed-tasks 与 tasks/cancel 端点;每端点加 401/404/409/5xx error responses;顶层 paths 加 x-protocol-stability 标注(stable / beta / internal-only),作为 BYO SDK 实现门禁;version 跟根 pom revision。"
     - date: "2026-05-31"
@@ -26,6 +28,8 @@ tags:
     description: Worker 注册 / 心跳 / 下线 / 状态管理(`WorkerController`)
   - name: tasks
     description: 任务认领 / 上报 / 续租(`TaskController`)
+  - name: file-governance
+    description: Console BFF 调用的内部文件治理接口(`FileGovernanceController`)
 
 paths:
   # ─── x-protocol-stability 含义 ────────────────────────────────────────────────
@@ -427,6 +431,66 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '5XX': {$ref: '#/components/responses/ServerError'}
 
+  /internal/files/presign-upload:
+    x-protocol-stability: internal-only
+    post:
+      tags: [file-governance]
+      summary: 创建 APP_MANAGED 文件上传会话
+      description: >
+        Console BFF 用该端点创建对象存储托管的 file_record,返回 console 侧 PUT 上传 URL。
+        不是 BYO SDK 协议面。
+      operationId: createFileUploadSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileUploadRequest'
+      responses:
+        '200':
+          description: 上传会话创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadSessionResponse'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/files/{fileId}/confirm-arrival:
+    x-protocol-stability: internal-only
+    post:
+      tags: [file-governance]
+      summary: 确认文件内容已到达对象存储
+      description: >
+        Console BFF 上传内容后调用;orchestrator 校验对象存在、回填 size 与 arrival metadata,
+        并追加文件审计。
+      operationId: confirmFileArrival
+      parameters:
+        - in: path
+          name: fileId
+          required: true
+          schema: {type: integer, format: int64}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileOperationRequest'
+      responses:
+        '200':
+          description: 确认成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileOperationResponse'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
 components:
   responses:
     Unauthorized:
@@ -443,6 +507,12 @@ components:
             $ref: '#/components/schemas/ErrorBody'
     NotFound:
       description: workerCode / taskId 不存在(可能被运维清掉或 lease 失效)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Conflict:
+      description: 状态冲突 / 幂等冲突 / 存储对象状态不满足操作前置条件
       content:
         application/json:
           schema:
@@ -679,6 +749,45 @@ components:
       properties:
         tenantId: {type: string}
       required: [tenantId]
+
+    FileUploadRequest:
+      type: object
+      properties:
+        tenantId: {type: string}
+        channelCode: {type: string}
+        fileName: {type: string}
+        operatorId: {type: string, nullable: true}
+        traceId: {type: string, nullable: true}
+      required: [tenantId, channelCode, fileName]
+
+    FileUploadSessionResponse:
+      type: object
+      properties:
+        fileId: {type: integer, format: int64}
+        status: {type: string, description: "当前返回 RECEIVED"}
+        uploadMode: {type: string, description: "当前返回 APP_MANAGED"}
+        uploadMethod: {type: string, description: "当前返回 PUT"}
+        contentField: {type: string, description: "multipart 字段名,当前为 file"}
+        uploadUrl: {type: string, description: "console-api 相对路径"}
+        storageBucket: {type: string, nullable: true}
+        storagePath: {type: string}
+        fileName: {type: string}
+      required: [fileId, status, uploadMode, uploadMethod, contentField, uploadUrl, storagePath, fileName]
+
+    FileOperationRequest:
+      type: object
+      properties:
+        tenantId: {type: string}
+        operatorId: {type: string, nullable: true}
+        reason: {type: string, nullable: true}
+        traceId: {type: string, nullable: true}
+      required: [tenantId]
+
+    FileOperationResponse:
+      type: object
+      properties:
+        status: {type: string}
+      required: [status]
 
     TaskDispatchMessage:
       type: object

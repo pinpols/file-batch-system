@@ -8,6 +8,7 @@ import com.example.batch.console.domain.file.web.request.RedispatchFileRequest;
 import com.example.batch.console.domain.file.web.response.ConsoleFileOperationResponse;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.util.Map;
+import org.springframework.web.multipart.MultipartFile;
 
 /** 控制台文件治理应用服务：归档、删除、重派、预签名下载及到达组操作。 */
 public interface ConsoleFileApplicationService {
@@ -32,6 +33,10 @@ public interface ConsoleFileApplicationService {
   /** 生成对象存储预签名上传 URL（租户主动上传文件）。 */
   Map<String, Object> presignUpload(
       String tenantId, String channelCode, String fileName, String idempotencyKey);
+
+  /** 上传文件内容到统一对象存储。 */
+  ConsoleFileOperationResponse uploadContent(
+      String tenantId, Long fileId, MultipartFile file, String idempotencyKey);
 
   /** 租户确认文件到达。 */
   ConsoleFileOperationResponse confirmArrival(String tenantId, Long fileId, String idempotencyKey);

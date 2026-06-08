@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.controller;
 import com.example.batch.orchestrator.application.service.governance.FileGovernanceService;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
+import com.example.batch.orchestrator.domain.command.FileUploadSessionCommand;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,25 @@ public class FileGovernanceController {
       @PathVariable Long fileId, @RequestBody FileOperationRequest request) {
     return new FileDownloadResponse(
         fileGovernanceService.presignFileDownload(toCommand(fileId, request)));
+  }
+
+  @PostMapping("/presign-upload")
+  public Map<String, Object> presignUpload(@RequestBody FileUploadRequest request) {
+    return fileGovernanceService.createUploadSession(
+        FileUploadSessionCommand.builder()
+            .tenantId(request.tenantId())
+            .channelCode(request.channelCode())
+            .fileName(request.fileName())
+            .operatorId(request.operatorId())
+            .traceId(request.traceId())
+            .build());
+  }
+
+  @PostMapping("/{fileId}/confirm-arrival")
+  public FileOperationResponse confirmArrival(
+      @PathVariable Long fileId, @RequestBody FileOperationRequest request) {
+    return new FileOperationResponse(
+        fileGovernanceService.confirmFileArrival(toCommand(fileId, request)));
   }
 
   @PostMapping("/{fileId}/redispatch")
@@ -98,6 +118,9 @@ public class FileGovernanceController {
   public record FileOperationResponse(String status) {}
 
   public record FileDownloadResponse(String downloadUrl) {}
+
+  public record FileUploadRequest(
+      String tenantId, String channelCode, String fileName, String operatorId, String traceId) {}
 
   public record ArrivalGroupOperationRequest(
       String tenantId,

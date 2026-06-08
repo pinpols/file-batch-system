@@ -7970,7 +7970,7 @@ paths:
   /api/console/files/presign-upload:
     post:
       tags: [Files]
-      summary: Get pre-signed upload URL
+      summary: Create an application-managed upload session
       operationId: presignUpload
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
@@ -7991,11 +7991,47 @@ paths:
             type: string
       responses:
         '200':
-          description: Pre-signed upload info
+          description: Upload session info
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/files/{fileId}/content:
+    put:
+      tags: [Files]
+      summary: Upload file content to the application-managed object store
+      operationId: uploadFileContent
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
   /api/console/files/{fileId}/confirm-arrival:
     post:
       tags: [Files]
@@ -8020,7 +8056,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
   /api/console/self-service/jobs/rerun-request:
     post:
       tags: [SelfServiceJobs]
