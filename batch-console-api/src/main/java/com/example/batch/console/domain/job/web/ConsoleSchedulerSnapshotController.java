@@ -5,7 +5,6 @@ import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxy
 import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,19 +25,12 @@ public class ConsoleSchedulerSnapshotController {
 
   private final ConsoleOrchestratorProxyService orchestratorProxyService;
   private final ConsoleResponseFactory responseFactory;
-  private final ConsoleQueryCacheService cacheService;
 
   /** 当前调度快照（Redis 缓存 30s，分钟级数据无需实时）。 */
   @GetMapping("/snapshot")
   public CommonResponse<ConsoleSchedulerSnapshotResponse> live(
       @RequestParam("tenantId") String tenantId) {
-    ConsoleSchedulerSnapshotResponse result =
-        cacheService.getOrLoad(
-            "snapshot:" + tenantId,
-            ConsoleQueryCacheService.SNAPSHOT_TTL,
-            ConsoleSchedulerSnapshotResponse.class,
-            () -> orchestratorProxyService.schedulerSnapshot(tenantId));
-    return responseFactory.success(result);
+    return responseFactory.success(orchestratorProxyService.schedulerSnapshot(tenantId));
   }
 
   /** 调度快照历史。 */

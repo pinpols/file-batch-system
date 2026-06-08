@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -180,8 +181,18 @@ public class TaskDispatcher {
     return chain;
   }
 
+  /** dispatcher 对单条派单消息的处理决定,由 Kafka consumer 决定是否提交 offset。 */
+  public enum DispatchDecision {
+    /** 已提交到 executor,offset 可前移。 */
+    SUBMITTED,
+    /** 消息本身不可恢复,跳过并提交 offset,避免 poison message 卡住分区。 */
+    DROP_TERMINAL,
+    /** 当前 worker 暂不应消费该消息,offset 不前移,留待平台恢复或人工处理。 */
+    RETRY_LATER
+  }
+
   /** 收到一条派单消息 — 提交到线程池异步处理(返回快,Kafka consumer 不阻塞)。 */
-  public void onMessage(TaskDispatchMessage msg) {
+  public DispatchDecision onMessage(TaskDispatchMessage msg) {
     if (draining.get() || fatal.get()) {
       // P0 hardening:已发起 stop 或 P1-2 fail-fast 后,不接新消息
       log.info(
@@ -189,7 +200,7 @@ public class TaskDispatcher {
           fatal.get() ? "fatal" : "draining",
           msg == null ? null : msg.taskId(),
           msg == null ? null : msg.jobCode());
-      return;
+      return DispatchDecision.RETRY_LATER;
     }
     if (!platformState.get().acceptsNewTasks()) {
       // Phase 2 §2.4:平台 PAUSED / DRAINING — 拒新任务。正常路径下 KafkaTaskConsumer 已 pause partition
@@ -199,27 +210,34 @@ public class TaskDispatcher {
           "dispatcher platformState={}, skipping new dispatch msg taskId={}",
           platformState.get(),
           msg == null ? null : msg.taskId());
-      return;
+      return DispatchDecision.RETRY_LATER;
     }
     try {
       msg.validate();
     } catch (IllegalArgumentException ex) {
       log.warn("skipping invalid dispatch message: {}", ex.getMessage());
-      return;
+      return DispatchDecision.DROP_TERMINAL;
     }
     // Lane J §J1:租户自检 fail-safe。Kafka topic 模式 `batch.task.dispatch.<tenant>.*` + consumer group
     // + ACL 已隔离;若 consumer group 配置失误或 ACL 漂移导致拿到非本租户消息,这里 ERROR + drop,
     // 不 ack offset 留给后续 redeliver / 人工介入,本进程不处理避免串任务。
     if (!config.getTenantId().equals(msg.tenantId())) {
+      fatal.set(true);
       log.error(
-          "tenant_mismatch_drop: configured={} got={} taskId={} — possible ACL drift or consumer"
-              + " group misconfiguration",
+          "tenant_mismatch_fatal: configured={} got={} taskId={} — possible ACL drift or"
+              + " consumer group misconfiguration; offset will not be committed",
           config.getTenantId(),
           msg.tenantId(),
           msg.taskId());
-      return;
+      return DispatchDecision.RETRY_LATER;
     }
-    executor.execute(() -> processInWorkerThread(msg));
+    try {
+      executor.execute(() -> processInWorkerThread(msg));
+      return DispatchDecision.SUBMITTED;
+    } catch (RejectedExecutionException ex) {
+      log.warn("dispatcher executor rejected taskId={}, will retry later", msg.taskId(), ex);
+      return DispatchDecision.RETRY_LATER;
+    }
   }
 
   /** 单消息处理:claim → execute → report。所有异常都被 catch。 */

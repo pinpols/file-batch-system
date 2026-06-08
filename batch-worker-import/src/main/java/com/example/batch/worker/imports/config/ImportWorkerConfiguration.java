@@ -25,7 +25,8 @@ public record ImportWorkerConfiguration(
 
   private static final int DEFAULT_PAGE_SIZE = 1000;
   private static final int DEFAULT_FETCH_SIZE = 1000;
-  private static final int DEFAULT_CHUNK_SIZE = 500;
+  private static final int DEFAULT_CHUNK_SIZE = 2000;
+  private static final int DEFAULT_MAX_CHUNK_SIZE = 10000;
 
   public boolean streamingEnabled() {
     return fileProcessing != null && fileProcessing.streamingEnabled();
@@ -49,6 +50,17 @@ public record ImportWorkerConfiguration(
         : fileProcessing.chunkSize();
   }
 
+  public int maxChunkSize() {
+    return fileProcessing == null || fileProcessing.maxChunkSize() <= 0
+        ? DEFAULT_MAX_CHUNK_SIZE
+        : fileProcessing.maxChunkSize();
+  }
+
   public record FileProcessing(
-      boolean streamingEnabled, int pageSize, int fetchSize, int chunkSize) {}
+      boolean streamingEnabled, int pageSize, int fetchSize, int chunkSize, int maxChunkSize) {
+
+    public FileProcessing(boolean streamingEnabled, int pageSize, int fetchSize, int chunkSize) {
+      this(streamingEnabled, pageSize, fetchSize, chunkSize, DEFAULT_MAX_CHUNK_SIZE);
+    }
+  }
 }

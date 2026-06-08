@@ -1,5 +1,7 @@
 package com.example.batch.console.domain.ops.service;
 
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,11 +28,20 @@ import org.springframework.stereotype.Service;
 public class ConsoleKafkaLagQueryService {
 
   private final KafkaAdmin kafkaAdmin;
+  private final ConsoleQueryCacheService cacheService;
 
   private static final long TIMEOUT_SECONDS = 10;
 
   /** 列出所有 batch 相关 consumer group 的积压情况。 */
   public List<Map<String, Object>> consumerGroupLags(String groupIdFilter) {
+    return cacheService.getOrLoad(
+        "kafka-lag:" + cacheSegment(groupIdFilter),
+        ConsoleQueryCacheService.KAFKA_LAG_TTL,
+        new TypeReference<List<Map<String, Object>>>() {},
+        () -> loadConsumerGroupLags(groupIdFilter));
+  }
+
+  private List<Map<String, Object>> loadConsumerGroupLags(String groupIdFilter) {
     List<Map<String, Object>> result = new ArrayList<>();
     try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
       var groups = admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -65,6 +76,10 @@ public class ConsoleKafkaLagQueryService {
       result.add(errorEntry);
     }
     return result;
+  }
+
+  private static String cacheSegment(String value) {
+    return value == null || value.isBlank() ? "all" : value;
   }
 
   private Map<String, Object> queryGroupLag(AdminClient admin, String groupId)

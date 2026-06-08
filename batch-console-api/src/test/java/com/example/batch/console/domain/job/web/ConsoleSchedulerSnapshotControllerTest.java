@@ -1,6 +1,5 @@
 package com.example.batch.console.domain.job.web;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -14,7 +13,6 @@ import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
@@ -46,8 +44,7 @@ class ConsoleSchedulerSnapshotControllerTest {
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleSchedulerSnapshotController(
-                    orchestratorProxyService, responseFactory, passThroughCache()))
+                new ConsoleSchedulerSnapshotController(orchestratorProxyService, responseFactory))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
@@ -79,12 +76,5 @@ class ConsoleSchedulerSnapshotControllerTest {
                 .param("limit", "10"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
-  }
-
-  private static ConsoleQueryCacheService passThroughCache() {
-    ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
-    when(cache.getOrLoad(anyString(), any(), any(), any()))
-        .thenAnswer(inv -> ((java.util.function.Supplier<?>) inv.getArgument(3)).get());
-    return cache;
   }
 }

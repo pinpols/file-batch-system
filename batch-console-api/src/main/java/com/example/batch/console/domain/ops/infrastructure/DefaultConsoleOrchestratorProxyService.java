@@ -6,6 +6,8 @@ import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxy
 import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleSchedulerSnapshotResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,6 +34,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final DownstreamFallback downstreamFallback;
+  private final ConsoleQueryCacheService cacheService;
 
   @Override
   public Map<String, Object> instanceAction(Long id, String tenantId, String action) {
@@ -113,6 +116,15 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
 
   @Override
   public ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "snapshot:" + resolved,
+        ConsoleQueryCacheService.SNAPSHOT_TTL,
+        ConsoleSchedulerSnapshotResponse.class,
+        () -> loadSchedulerSnapshot(resolved));
+  }
+
+  private ConsoleSchedulerSnapshotResponse loadSchedulerSnapshot(String resolved) {
     // 强类型响应,FE 不接受空对象 → fail-fast(用 callOrThrow 统一 metrics)。
     return downstreamFallback.callOrThrow(
         SVC,
@@ -125,7 +137,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                     uriBuilder ->
                         uriBuilder
                             .path("/internal/scheduler/snapshot")
-                            .queryParam(PARAM_TENANT_ID, tenantId)
+                            .queryParam(PARAM_TENANT_ID, resolved)
                             .build())
                 .retrieve()
                 .body(ConsoleSchedulerSnapshotResponse.class));
@@ -134,6 +146,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(
       String tenantId, int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return cacheService.getOrLoad(
+        "snapshot:" + resolved + ":history:" + limit,
+        ConsoleQueryCacheService.SNAPSHOT_TTL,
+        new TypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {},
+        () -> loadSchedulerSnapshotHistory(resolved, limit));
+  }
+
+  private List<ConsoleSchedulerSnapshotHistoryResponse> loadSchedulerSnapshotHistory(
+      String resolved, int limit) {
     return downstreamFallback.callOrFallback(
         SVC,
         "scheduler-snapshot-history",
@@ -145,7 +167,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                     uriBuilder ->
                         uriBuilder
                             .path("/internal/scheduler/snapshot/history")
-                            .queryParam(PARAM_TENANT_ID, tenantId)
+                            .queryParam(PARAM_TENANT_ID, resolved)
                             .queryParam("limit", limit)
                             .build())
                 .retrieve()

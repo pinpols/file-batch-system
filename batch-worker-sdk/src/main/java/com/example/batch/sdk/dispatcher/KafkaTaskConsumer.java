@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -32,8 +34,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
  * <p>关键约束:
  *
  * <ul>
- *   <li>**手动 commit**(enable.auto.commit=false):dispatcher 提交到线程池后立刻 commit offset,避免重启时重发 (重发由平台
- *       lease 超时 + idempotency-key 兜底,SDK 这里不重复消费)
+ *   <li>**手动 commit**(enable.auto.commit=false):只有 dispatcher 明确提交到线程池或消息本身是终态坏消息时才 commit
+ *       offset;平台暂停 / 本地 drain / tenant mismatch 不前移 offset,避免 consume-and-drop
  *   <li>{@link BatchPlatformClientConfig#getKafkaTopicPattern()} 支持
  *       wildcard(`batch.task.dispatch.<tenant>.*`)
  *   <li>JSON 反序列化失败 → log ERROR + skip,不死循环
@@ -147,13 +149,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         refreshConsumerLag();
         if (records.isEmpty()) continue;
         for (ConsumerRecord<String, byte[]> rec : records) {
-          handleRecord(rec);
-        }
-        // 同步 commit,确保 dispatcher submit 已成功
-        try {
-          consumer.commitSync();
-        } catch (Exception ex) {
-          log.warn("kafka commitSync failed (will retry next poll): {}", ex.getMessage());
+          if (!handleRecordAndMaybeCommit(rec)) {
+            break;
+          }
         }
       }
     } catch (AuthenticationException authEx) {
@@ -206,7 +204,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   void applyBackpressure() {
     int max = config.getMaxConcurrentTasks();
     int inFlight = dispatcher.inFlightCount();
-    boolean platformPaused = !dispatcher.platformAcceptsNewTasks();
+    boolean platformPaused =
+        !dispatcher.platformAcceptsNewTasks() || dispatcher.isFatal() || dispatcher.isDraining();
     // 容量维度 pause:inFlight 达到上限;resume:inFlight 跌破 max/2(hysteresis 防抖)
     boolean capacityPause = inFlight >= max;
     boolean capacityResumeOk = inFlight < Math.max(1, max / 2);
@@ -259,10 +258,42 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
   }
 
-  private void handleRecord(ConsumerRecord<String, byte[]> rec) {
+  boolean handleRecordAndMaybeCommit(ConsumerRecord<String, byte[]> rec) {
+    TaskDispatcher.DispatchDecision decision = handleRecord(rec);
+    TopicPartition tp = new TopicPartition(rec.topic(), rec.partition());
+    if (decision == TaskDispatcher.DispatchDecision.RETRY_LATER) {
+      try {
+        consumer.seek(tp, rec.offset());
+        consumer.pause(Set.of(tp));
+        paused = true;
+      } catch (Exception ex) {
+        log.warn(
+            "failed to seek/pause retry-later record topic={}, partition={}, offset={}: {}",
+            rec.topic(),
+            rec.partition(),
+            rec.offset(),
+            ex.getMessage());
+      }
+      return false;
+    }
+    try {
+      consumer.commitSync(Map.of(tp, new OffsetAndMetadata(rec.offset() + 1)));
+      return true;
+    } catch (Exception ex) {
+      log.warn(
+          "kafka commitSync failed topic={}, partition={}, offset={} (will retry next poll): {}",
+          rec.topic(),
+          rec.partition(),
+          rec.offset(),
+          ex.getMessage());
+      return false;
+    }
+  }
+
+  TaskDispatcher.DispatchDecision handleRecord(ConsumerRecord<String, byte[]> rec) {
     if (rec.value() == null || rec.value().length == 0) {
       log.warn("empty kafka message at topic={}, offset={}, skipping", rec.topic(), rec.offset());
-      return;
+      return TaskDispatcher.DispatchDecision.DROP_TERMINAL;
     }
     TaskDispatchMessage msg;
     try {
@@ -273,7 +304,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           rec.topic(),
           rec.offset(),
           ex.getMessage());
-      return;
+      return TaskDispatcher.DispatchDecision.DROP_TERMINAL;
     }
     // Phase 0 §2.1:reject 未知 major schema(避免老 SDK 误解平台新 v3 消息)
     if (!msg.isSchemaSupported()) {
@@ -284,9 +315,10 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           rec.topic(),
           rec.offset(),
           msg.taskId());
-      return;
+      return TaskDispatcher.DispatchDecision.DROP_TERMINAL;
     }
-    dispatcher.onMessage(msg);
+    TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(msg);
+    return decision == null ? TaskDispatcher.DispatchDecision.RETRY_LATER : decision;
   }
 
   /** 让 poll loop 退出。WakeupException 在 run() 被捕获 → close consumer。默认 5s join 超时。 */

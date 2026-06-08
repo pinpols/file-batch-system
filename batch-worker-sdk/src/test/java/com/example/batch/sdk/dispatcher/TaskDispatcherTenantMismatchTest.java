@@ -51,13 +51,14 @@ class TaskDispatcherTenantMismatchTest {
             42L, "tenant-b", "job-1", "X", "ti-1", Map.of(), Map.of("traceId", "t-1"));
 
     // 执行
-    dispatcher.onMessage(foreign);
+    TaskDispatcher.DispatchDecision decision = dispatcher.onMessage(foreign);
 
     // 断言: 既不 claim 也不调 handler.execute
+    assertThat(decision).isEqualTo(TaskDispatcher.DispatchDecision.RETRY_LATER);
     verify(http, never()).claim(anyLong(), anyString(), any());
     verify(handler, never()).execute(any());
-    // 状态机不受污染
-    assertThat(dispatcher.isFatal()).isFalse();
+    // tenant mismatch 是 ACL / consumer group 漂移信号:进入 fatal,让 liveness/运维介入,offset 不前移。
+    assertThat(dispatcher.isFatal()).isTrue();
     assertThat(dispatcher.isDraining()).isFalse();
   }
 

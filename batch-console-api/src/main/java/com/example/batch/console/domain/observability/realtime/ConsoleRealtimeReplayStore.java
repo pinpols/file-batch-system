@@ -84,9 +84,9 @@ public class ConsoleRealtimeReplayStore {
       } catch (Exception exception) {
         log.warn(
             "console realtime replay buffer decode failed: tenantId={}, stream={}," + " reason={}",
-            tenantId,
-            stream,
-            exception.getMessage(),
+            logValue(tenantId),
+            logValue(stream),
+            logValue(exception.getMessage()),
             exception);
         realtimeMetrics.recordReplayDecodeFailure(stream);
       }
@@ -116,6 +116,10 @@ public class ConsoleRealtimeReplayStore {
 
   private String bufferKey(String tenantId, String stream) {
     return KEY_PREFIX + tenantId + ":" + stream;
+  }
+
+  private static String logValue(String value) {
+    return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
   }
 
   public record ReplayBatch(List<ConsoleRealtimeStreamEnvelope> events, boolean cursorFound) {}

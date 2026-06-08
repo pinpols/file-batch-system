@@ -1,6 +1,8 @@
 package com.example.batch.console.domain.ops.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,8 +14,10 @@ import com.example.batch.console.domain.ops.web.response.ConsoleOutboxCleanupRes
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxStatsResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +26,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   private ConsoleTenantGuard tenantGuard;
   private ConsoleOutboxEventReadMapper consoleOutboxEventReadMapper;
   private ConsoleOrchestratorProxyService orchestratorProxy;
+  private ConsoleQueryCacheService cacheService;
   private DefaultConsoleOutboxOpsApplicationService service;
 
   @BeforeEach
@@ -29,12 +34,21 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
     tenantGuard = mock(ConsoleTenantGuard.class);
     consoleOutboxEventReadMapper = mock(ConsoleOutboxEventReadMapper.class);
     orchestratorProxy = mock(ConsoleOrchestratorProxyService.class);
+    cacheService = passThroughCache();
     service =
         new DefaultConsoleOutboxOpsApplicationService(
             tenantGuard,
             consoleOutboxEventReadMapper,
             mock(ConsoleRealtimeDomainEventPublisher.class),
-            orchestratorProxy);
+            orchestratorProxy,
+            cacheService);
+  }
+
+  private static ConsoleQueryCacheService passThroughCache() {
+    ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
+    when(cache.getOrLoad(anyString(), any(), any(Class.class), any()))
+        .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
+    return cache;
   }
 
   @Test

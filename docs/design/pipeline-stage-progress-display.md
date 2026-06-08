@@ -119,8 +119,8 @@ Worker step
 |---|---|---|
 | P0 | 公开查询契约改为 `pipelineInstanceId`，OpenAPI / API protocol 对齐 | 已完成 |
 | P0 | FilePipelineObservability 以轮询方式读取 step 进度快照 | 已具备 |
-| P1 | SSE 收到 job / pipeline dirty event 后触发 `loadProgress()` 防抖刷新 | 待做 |
-| P1 | 后端增加或复用低频 `pipeline-progress-dirty` 事件，按 pipeline 节流 | 待做 |
+| P1 | SSE 收到 `pipeline-progress-dirty` 后触发 `loadProgress()` 防抖刷新 | 已做 |
+| P1 | 后端增加低频 `pipeline-progress-dirty` 事件，按 pipeline 节流 | 已做 |
 | P1 | PROCESS copy / aggregate 有稳定行数时接入 `ProgressReporter` | 待做 |
 | P2 | JobInstanceDetail Steps 能通过 job step 映射到 pipeline step 后展示进度列 | 待做 |
 | P2 | 增加前端单测：无 total、stale、终态、SSE 断开降级 | 待做 |

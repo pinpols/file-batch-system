@@ -1,6 +1,5 @@
 package com.example.batch.console.domain.ops.web;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -15,7 +14,6 @@ import com.example.batch.console.domain.ops.application.ConsoleOutboxOpsApplicat
 import com.example.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.domain.ops.web.response.ConsoleOpsSummaryResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.support.cache.ConsoleQueryCacheService;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,11 +49,7 @@ class ConsoleOpsControllerTest {
     mockMvc =
         MockMvcBuilders.standaloneSetup(
                 new ConsoleOpsController(
-                    opsApplicationService,
-                    outboxOpsService,
-                    responseFactory,
-                    kafkaLagQueryService,
-                    passThroughCache()))
+                    opsApplicationService, outboxOpsService, responseFactory, kafkaLagQueryService))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
@@ -75,12 +69,5 @@ class ConsoleOpsControllerTest {
         .andExpect(jsonPath("$.data.pendingApprovals").value(1))
         .andExpect(jsonPath("$.data.openAlerts").value(2))
         .andExpect(jsonPath("$.data.criticalAlerts").value(3));
-  }
-
-  private static ConsoleQueryCacheService passThroughCache() {
-    ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
-    when(cache.getOrLoad(anyString(), any(), any(), any()))
-        .thenAnswer(inv -> ((java.util.function.Supplier<?>) inv.getArgument(3)).get());
-    return cache;
   }
 }

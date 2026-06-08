@@ -52,23 +52,29 @@ public final class ImportStageSupport {
   }
 
   /**
-   * 从 template_config.chunk_size 解析,缺省回退到 {@link ImportWorkerConfiguration#chunkSize()};任何路径都保证 ≥
-   * 1。
+   * 从 template_config.chunk_size 解析,缺省回退到 {@link ImportWorkerConfiguration#chunkSize()};任何路径都保证 ≥ 1
+   * 且不超过 {@link ImportWorkerConfiguration#maxChunkSize()}。
    */
   public static int resolveChunkSize(ImportJobContext context, ImportWorkerConfiguration config) {
     int fallback = config == null ? 500 : config.chunkSize();
+    int max = config == null ? 10000 : Math.max(1, config.maxChunkSize());
+    int chunkSize = fallback;
     Object templateConfigObject =
         context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object value = templateConfig.get("chunk_size");
       if (value instanceof Number number) {
-        return Math.max(1, number.intValue());
-      }
-      if (value != null && Texts.hasText(String.valueOf(value))) {
-        return Math.max(1, Integer.parseInt(String.valueOf(value)));
+        chunkSize = number.intValue();
+      } else if (value != null && Texts.hasText(String.valueOf(value))) {
+        chunkSize = Integer.parseInt(String.valueOf(value));
       }
     }
-    return Math.max(1, fallback);
+    chunkSize = Math.max(1, chunkSize);
+    if (chunkSize > max) {
+      throw new IllegalArgumentException(
+          "import chunk_size exceeds maxChunkSize: chunkSize=" + chunkSize + ", max=" + max);
+    }
+    return chunkSize;
   }
 
   /** 尽力删除暂存文件,失败时 warn,绝不向上抛出(任何调用点都不希望因清理失败影响主流程)。 */
