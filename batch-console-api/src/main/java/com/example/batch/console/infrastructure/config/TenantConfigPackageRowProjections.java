@@ -8,6 +8,7 @@ import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelV
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EDGE_TYPE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_ENABLED;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EXECUTION_HANDLER;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EXECUTION_MODE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_FROM_NODE_CODE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_JOB_CODE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_JOB_NAME;
@@ -30,6 +31,7 @@ import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelV
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TIMEOUT_SECONDS;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TO_NODE_CODE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_VERSION;
+import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WATERMARK_FIELD;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WINDOW_CODE;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKER_GROUP;
 import static com.example.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
@@ -88,6 +90,8 @@ public class TenantConfigPackageRowProjections {
               m.put(COL_RETRY_MAX_COUNT, e.getRetryMaxCount());
               m.put(COL_TIMEOUT_SECONDS, e.getTimeoutSeconds());
               m.put(COL_SHARD_STRATEGY, e.getShardStrategy());
+              m.put(COL_EXECUTION_MODE, e.getExecutionMode());
+              m.put(COL_WATERMARK_FIELD, e.getWatermarkField());
               m.put(COL_EXECUTION_HANDLER, e.getExecutionHandler());
               m.put(COL_PARAM_SCHEMA, e.getParamSchema());
               m.put(COL_DEFAULT_PARAMS, e.getDefaultParams());
