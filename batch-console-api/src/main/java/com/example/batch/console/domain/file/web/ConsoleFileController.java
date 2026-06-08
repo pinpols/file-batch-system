@@ -20,11 +20,13 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 控制台文件治理 REST：归档、删除、重派、预签名下载、到达组操作（需幂等键）。
@@ -98,6 +100,17 @@ public class ConsoleFileController {
       @RequestParam("fileName") String fileName) {
     return responseFactory.success(
         applicationService.presignUpload(tenantId, channelCode, fileName, idempotencyKey));
+  }
+
+  /** 上传文件内容。S3 与本地文件系统都经 BatchObjectStore 写入，不暴露真实存储路径。 */
+  @PutMapping("/{fileId}/content")
+  public CommonResponse<ConsoleFileOperationResponse> uploadContent(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @PathVariable Long fileId,
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("file") MultipartFile file) {
+    return responseFactory.success(
+        applicationService.uploadContent(tenantId, fileId, file, idempotencyKey));
   }
 
   /** 租户确认文件已到达。 */

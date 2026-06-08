@@ -280,6 +280,15 @@
           and id = #{fileId}
     </update>
 
+    <update id="markFileArrivalConfirmed">
+        update batch.file_record
+        set file_size_bytes = #{fileSizeBytes},
+            metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{fileId}
+    </update>
+
     <insert id="insertFileAuditLog">
         insert into batch.file_audit_log (
             tenant_id, file_id, operation_type, operation_result,

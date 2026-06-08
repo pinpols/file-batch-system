@@ -401,6 +401,23 @@ public class FileGovernanceRepository {
         params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, "metadataJson", toJson(metadata)));
   }
 
+  public void markFileArrivalConfirmed(
+      String tenantId, Long fileId, long fileSizeBytes, Object metadata) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
+      return;
+    }
+    fileGovernanceMapper.markFileArrivalConfirmed(
+        params(
+            KEY_TENANT_ID,
+            tenantId,
+            KEY_FILE_ID,
+            fileId,
+            "fileSizeBytes",
+            Math.max(fileSizeBytes, 0L),
+            "metadataJson",
+            toJson(metadata)));
+  }
+
   public void appendAudit(FileAuditCommand command) {
     if (command == null
         || !Texts.hasText(command.tenantId())

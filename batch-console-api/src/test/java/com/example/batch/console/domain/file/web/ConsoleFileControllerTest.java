@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +22,7 @@ import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -105,5 +107,28 @@ class ConsoleFileControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.approvalNo").value("appr-001"));
+  }
+
+  @Test
+  void shouldUploadContentAndReturnCommonResponseOnSuccess() throws Exception {
+    when(applicationService.uploadContent(anyString(), any(), any(), anyString()))
+        .thenReturn(new ConsoleFileOperationResponse("UPLOADED"));
+    MockMultipartFile file =
+        new MockMultipartFile("file", "a.csv", "text/csv", "id,name\n1,A\n".getBytes());
+
+    mockMvc
+        .perform(
+            multipart("/api/console/files/{fileId}/content", 1L)
+                .file(file)
+                .param("tenantId", "t1")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-003")
+                .with(
+                    request -> {
+                      request.setMethod("PUT");
+                      return request;
+                    }))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.status").value("UPLOADED"));
   }
 }

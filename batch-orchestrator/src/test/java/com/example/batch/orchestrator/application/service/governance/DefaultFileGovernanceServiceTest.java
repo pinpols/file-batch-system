@@ -20,6 +20,7 @@ import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxServi
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
+import com.example.batch.orchestrator.domain.command.FileUploadSessionCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -593,6 +594,65 @@ class DefaultFileGovernanceServiceTest {
     assertThat(state).isEqualTo("WAITING_ARRIVAL");
     // 没有崩,审计写一次即可
     verify(fileGovernanceRepository).appendAudit(any());
+  }
+
+  @Test
+  void shouldCreateUploadSessionAsObjectStoreBackedRecord() {
+    when(s3GovernanceStorage.defaultBucket()).thenReturn("bucket-a");
+    when(fileGovernanceRepository.createReconciledFileRecord(any())).thenReturn(42L);
+    FileUploadSessionCommand command =
+        FileUploadSessionCommand.builder()
+            .tenantId("t1")
+            .channelCode("ch-1")
+            .fileName("../中文 order.csv")
+            .operatorId("op")
+            .traceId("trace")
+            .build();
+
+    Map<String, Object> response = service.createUploadSession(command);
+
+    assertThat(response.get("fileId")).isEqualTo(42L);
+    assertThat(response.get("uploadMode")).isEqualTo("APP_MANAGED");
+    assertThat(response.get("uploadMethod")).isEqualTo("PUT");
+    assertThat(response.get("uploadUrl")).isEqualTo("/api/console/files/42/content?tenantId=t1");
+    ArgumentCaptor<FileGovernanceRepository.ReconciledFileRecordCommand> captor =
+        ArgumentCaptor.forClass(FileGovernanceRepository.ReconciledFileRecordCommand.class);
+    verify(fileGovernanceRepository).createReconciledFileRecord(captor.capture());
+    assertThat(captor.getValue().storage().storageType()).isEqualTo("S3");
+    assertThat(captor.getValue().storage().storageBucket()).isEqualTo("bucket-a");
+    assertThat(captor.getValue().storage().storagePath()).startsWith("uploads/t1/");
+    assertThat(captor.getValue().storage().storagePath()).doesNotContain("..");
+    verify(fileGovernanceRepository).appendAudit(any());
+  }
+
+  @Test
+  void shouldConfirmFileArrivalAfterObjectExists() {
+    FileGovernanceCommand cmd = baseCommand().build();
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L))
+        .thenReturn(Map.of("storage_bucket", "bucket-a", "storage_path", "uploads/t1/a.csv"));
+    when(s3GovernanceStorage.objectExists("bucket-a", "uploads/t1/a.csv")).thenReturn(true);
+    when(s3GovernanceStorage.objectSize("bucket-a", "uploads/t1/a.csv")).thenReturn(123L);
+
+    String result = service.confirmFileArrival(cmd);
+
+    assertThat(result).isEqualTo("ARRIVAL_CONFIRMED");
+    verify(fileGovernanceRepository).markFileArrivalConfirmed(eq("t1"), eq(1L), eq(123L), any());
+    verify(fileGovernanceRepository).appendAudit(any());
+  }
+
+  @Test
+  void shouldRejectConfirmArrivalWhenContentMissing() {
+    FileGovernanceCommand cmd = baseCommand().build();
+    when(fileGovernanceRepository.loadFileRecord("t1", 1L))
+        .thenReturn(Map.of("storage_bucket", "bucket-a", "storage_path", "uploads/t1/a.csv"));
+    when(s3GovernanceStorage.objectExists("bucket-a", "uploads/t1/a.csv")).thenReturn(false);
+
+    assertThatThrownBy(() -> service.confirmFileArrival(cmd))
+        .isInstanceOf(BizException.class)
+        .extracting(e -> ((BizException) e).getCode())
+        .isEqualTo(ResultCode.NOT_FOUND);
+    verify(fileGovernanceRepository, never())
+        .markFileArrivalConfirmed(any(), any(), anyLong(), any());
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────
