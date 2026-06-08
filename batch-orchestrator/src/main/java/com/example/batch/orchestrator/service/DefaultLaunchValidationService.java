@@ -42,10 +42,11 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     validate(request);
 
     TriggerRequestEntity triggerRequest =
-        Guard.requireFound(
-            triggerRequestMapper.selectByTenantAndRequestId(
-                request.tenantId(), request.requestId()),
-            "trigger request not found");
+        triggerRequestMapper.selectByTenantAndRequestId(request.tenantId(), request.requestId());
+    if (triggerRequest == null) {
+      throw BizException.of(
+          ResultCode.NOT_FOUND, "error.trigger.request_not_found", request.requestId());
+    }
 
     JobDefinitionEntity jobDefinition =
         configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());

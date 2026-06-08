@@ -108,7 +108,10 @@ class DefaultLaunchValidationServiceTest {
     LaunchRequest req = validRequest();
     when(triggerRequestMapper.selectByTenantAndRequestId(eq("ta"), eq("req-001"))).thenReturn(null);
 
-    assertThatThrownBy(() -> service.load(req)).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.load(req))
+        .isInstanceOf(BizException.class)
+        .extracting("messageKey")
+        .isEqualTo("error.trigger.request_not_found");
     verify(triggerRequestMapper, never())
         .updateAcceptance(anyString(), anyString(), anyString(), any());
   }

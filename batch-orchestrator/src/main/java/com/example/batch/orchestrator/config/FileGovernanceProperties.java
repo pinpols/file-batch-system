@@ -51,6 +51,15 @@ public class FileGovernanceProperties {
      */
     private long processingDelayMaxAgeSeconds = 604800L;
 
+    /**
+     * RUNNING pipeline 自动终态化阈值（秒）。超过该时间仍未结束的 pipeline 视为 worker 崩溃 / 测试残留 / 不可恢复卡单，由治理扫描置为
+     * FAILED，避免长期重复告警。默认 12 小时；生产若允许更长单任务，应显式调大。
+     */
+    private long staleRunningFailSeconds = 43200L;
+
+    /** 单次 stale sweep 最多处理多少条，避免一次更新过多历史脏数据。 */
+    private int staleSweepBatchSize = 100;
+
     /** 单次扫描采样数，平衡精度与开销。 */
     private int sampleSize = 20;
   }

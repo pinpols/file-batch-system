@@ -138,6 +138,7 @@ public class ConsoleOpsQueryService {
                 request.getDeliveryStatus(),
                 request.getEventType(),
                 request.getEventKey(),
+                request.getTraceId(),
                 pageRequest));
     long total =
         opsMappers.outboxDeliveryLogMapper.countByQuery(
@@ -145,6 +146,7 @@ public class ConsoleOpsQueryService {
             request.getDeliveryStatus(),
             request.getEventType(),
             request.getEventKey(),
+            request.getTraceId(),
             pageRequest);
     return page(pageRequest, total, rows, this::toOutboxDeliveryResponse);
   }
@@ -291,6 +293,7 @@ public class ConsoleOpsQueryService {
             request.getSeverity(),
             request.getStatus(),
             request.getAlertType(),
+            request.getTraceId(),
             pageRequest,
             decodeCursorId(request.getCursor()));
     List<AlertEventEntity> rows = opsMappers.alertEventMapper.selectByQuery(query);
@@ -385,6 +388,7 @@ public class ConsoleOpsQueryService {
         stringValue(row, "tenant_id"),
         stringValue(row, "event_type"),
         stringValue(row, "event_key"),
+        stringValue(row, "trace_id"),
         stringValue(row, "delivery_status"),
         stringValue(row, "target_topic"),
         intValue(row, "delivery_attempt"),

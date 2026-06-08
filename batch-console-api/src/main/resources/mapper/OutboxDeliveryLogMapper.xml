@@ -14,6 +14,9 @@
         <if test="eventKey != null and eventKey != ''">
             and event_key = #{eventKey}
         </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
         order by id desc
         <if test="pageRequest != null">
             limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
@@ -32,6 +35,9 @@
         </if>
         <if test="eventKey != null and eventKey != ''">
             and event_key = #{eventKey}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
         </if>
     </select>
 

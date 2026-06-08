@@ -18,6 +18,7 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileArrivalGrou
 import com.example.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileDispatchRecordResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileErrorRecordResponse;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
@@ -49,6 +50,7 @@ import com.example.batch.console.domain.ops.web.response.ConsoleAuditLogResponse
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -105,13 +107,26 @@ public class ConsoleQueryController {
   private final ConsoleTenantGuard tenantGuard;
 
   /**
-   * 2026-06-03 GET /pipeline-progress — 拉取一组 worker 当前的 pipeline stage 行级进度。
+   * GET /pipeline-progress?pipelineInstanceId=... — 拉取单个 pipeline instance 的 step 行级进度。
+   *
+   * <p>这是 FilePipelineObservability 前端使用的正式契约，返回 {@code {pipelineInstanceId, steps}}。
+   */
+  @GetMapping(value = "/pipeline-progress", params = "pipelineInstanceId")
+  public CommonResponse<ConsoleFilePipelineProgressResponse> pipelineProgress(
+      @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
+    return responseFactory.success(applicationService.pipelineProgress(pipelineInstanceId));
+  }
+
+  /**
+   * 2026-06-03 GET /pipeline-progress?tenantId&workerCodes — 拉取一组 worker 当前的 pipeline stage 行级进度。
    *
    * <p>仅 IMPORT LOAD 流式 stage 在跑时有值;其他 stage / 空闲 worker 不出现在结果列表。详见 {@code
    * docs/design/pipeline-stage-progress-display.md}。
    */
-  @GetMapping("/pipeline-progress")
-  public CommonResponse<List<Map<String, Object>>> pipelineProgress(
+  @GetMapping(
+      value = "/pipeline-progress",
+      params = {"tenantId", "workerCodes"})
+  public CommonResponse<List<Map<String, Object>>> workerPipelineProgress(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("workerCodes") List<String> workerCodes) {
     return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
@@ -139,6 +154,13 @@ public class ConsoleQueryController {
   public CommonResponse<PageResponse<ConsoleAuditLogResponse>> executionLogs(
       @Valid @ModelAttribute AuditLogQueryRequest request) {
     return responseFactory.success(applicationService.executionLogs(request));
+  }
+
+  /** GET /trace-snapshot — 按 traceId 聚合查询排障快照。 */
+  @GetMapping("/trace-snapshot")
+  public CommonResponse<ConsoleTraceSnapshotResponse> traceSnapshot(
+      @RequestParam("tenantId") String tenantId, @RequestParam("traceId") String traceId) {
+    return responseFactory.success(applicationService.traceSnapshot(tenantId, traceId));
   }
 
   /** GET /alerts — 告警事件列表。 */

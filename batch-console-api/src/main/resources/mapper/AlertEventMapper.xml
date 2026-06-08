@@ -41,6 +41,9 @@
         <if test="alertType != null and alertType != ''">
             and alert_type = #{alertType}
         </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
         <if test="cursorId != null">
             and id &lt; #{cursorId}
         </if>
@@ -68,6 +71,9 @@
         </if>
         <if test="alertType != null and alertType != ''">
             and alert_type = #{alertType}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
         </if>
     </select>
 

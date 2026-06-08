@@ -15,6 +15,7 @@ public interface OutboxDeliveryLogMapper {
       @Param("deliveryStatus") String deliveryStatus,
       @Param("eventType") String eventType,
       @Param("eventKey") String eventKey,
+      @Param("traceId") String traceId,
       @Param("pageRequest") PageRequest pageRequest);
 
   long countByStatus(

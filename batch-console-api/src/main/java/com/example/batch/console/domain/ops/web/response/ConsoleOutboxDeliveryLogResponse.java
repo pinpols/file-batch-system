@@ -7,6 +7,7 @@ public record ConsoleOutboxDeliveryLogResponse(
     String tenantId,
     String eventType,
     String eventKey,
+    String traceId,
     String deliveryStatus,
     String targetTopic,
     Integer deliveryAttempt,

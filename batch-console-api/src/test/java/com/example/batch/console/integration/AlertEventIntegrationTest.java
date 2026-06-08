@@ -35,6 +35,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
                 null,
                 null,
                 null,
+                null,
                 new PageRequest(1, 10),
                 null));
 
