@@ -92,7 +92,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           // Worker WorkerConfigException → 模板/参数配置缺字段, 等多久也不自愈
           "IMPORT_LOAD_CONFIG_INVALID",
           "EXPORT_GENERATE_CONFIG_INVALID",
-          "STEP_NOT_FOUND");
+          "STEP_NOT_FOUND",
+          // 同一 payload / SQL 在相同 statement_timeout 下重放不会自愈；自动重试只会形成风暴。
+          "TIMEOUT",
+          "WORKER_EXECUTION_TIMEOUT");
 
   private final RetryScheduleMapper retryScheduleMapper;
   private final DeadLetterTaskMapper deadLetterTaskMapper;

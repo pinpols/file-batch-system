@@ -17,4 +17,7 @@ public class OutboxDeliveryLogQueryRequest extends PageQueryRequest {
 
   @Size(max = 512, message = "eventKey too long (max 512)")
   private String eventKey;
+
+  @Size(max = 128, message = "traceId too long (max 128)")
+  private String traceId;
 }

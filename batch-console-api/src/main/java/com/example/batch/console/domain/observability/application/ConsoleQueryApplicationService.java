@@ -44,6 +44,7 @@ import com.example.batch.console.domain.ops.web.response.ConsoleAuditLogResponse
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
 import com.example.batch.console.domain.workflow.web.query.WorkflowEdgeQueryRequest;
@@ -75,6 +76,9 @@ public interface ConsoleQueryApplicationService {
 
   /** 按条件分页查询执行日志（审计日志别名）。 */
   PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request);
+
+  /** 按 traceId 聚合查询排障快照。 */
+  ConsoleTraceSnapshotResponse traceSnapshot(String tenantId, String traceId);
 
   /** 查询文件链路（文件记录链）列表。 */
   PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request);

@@ -74,6 +74,7 @@ public class FileGovernanceScheduler {
       return;
     }
     String tenantId = properties.getReconcile().getDefaultTenantId();
+    sweepStaleRunningPipelines(tenantId);
     Map<String, Object> metrics =
         metricsCacheService.compute(
             tenantId,
@@ -111,6 +112,39 @@ public class FileGovernanceScheduler {
           processingCount,
           processingMax,
           samples);
+    }
+  }
+
+  private void sweepStaleRunningPipelines(String tenantId) {
+    long staleSeconds = properties.getLatency().getStaleRunningFailSeconds();
+    int limit = properties.getLatency().getStaleSweepBatchSize();
+    if (staleSeconds <= 0 || limit <= 0) {
+      return;
+    }
+    try {
+      int failedPipelines =
+          fileGovernanceRepository.markStaleRunningPipelineInstancesFailed(
+              tenantId, staleSeconds, limit);
+      if (failedPipelines <= 0) {
+        return;
+      }
+      int failedSteps =
+          fileGovernanceRepository.markRunningPipelineStepsFailedForInstances(
+              tenantId, staleSeconds);
+      log.warn(
+          "stale running pipeline sweep finalized records: tenantId={}, staleSeconds={},"
+              + " failedPipelines={}, failedSteps={}",
+          tenantId,
+          staleSeconds,
+          failedPipelines,
+          failedSteps);
+    } catch (Exception exception) {
+      log.warn(
+          "stale running pipeline sweep failed: tenantId={}, staleSeconds={}, error={}",
+          tenantId,
+          staleSeconds,
+          exception.getMessage(),
+          exception);
     }
   }
 

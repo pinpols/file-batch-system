@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class FileGovernanceRepository {
 
   // ── duplicate literal constants ─────────────────────────────────────────
@@ -32,6 +35,8 @@ public class FileGovernanceRepository {
   private static final String KEY_MAX_AGE_SECONDS = "maxAgeSeconds";
   private static final String KEY_TENANT_ID = "tenantId";
   private static final String KEY_FILE_ID = "fileId";
+  private static final String PIPELINE_STATUS_RUNNING = "RUNNING";
+  private static final String PIPELINE_STATUS_FAILED = "FAILED";
 
   public record FileIdentity(
       String tenantId, String fileCategory, String fileName, String fileFormatType) {}
@@ -308,8 +313,62 @@ public class FileGovernanceRepository {
             command.traceId(),
             "metadataJson",
             toJson(command.metadata()));
-    fileGovernanceMapper.insertReconciledFileRecord(params);
+    try {
+      fileGovernanceMapper.insertReconciledFileRecord(params);
+    } catch (DuplicateKeyException exception) {
+      log.info(
+          "reconciled file record already exists, skip duplicate insert: tenantId={},"
+              + " storagePath={}",
+          command.identity().tenantId(),
+          command.storage().storagePath());
+      return null;
+    }
     return toLong(params.get("id"));
+  }
+
+  public int markStaleRunningPipelineInstancesFailed(
+      String tenantId, long staleSeconds, int limit) {
+    if (!Texts.hasText(tenantId) || staleSeconds <= 0 || limit <= 0) {
+      return 0;
+    }
+    return fileGovernanceMapper.markStaleRunningPipelineInstancesFailed(
+        params(
+            KEY_TENANT_ID,
+            tenantId,
+            "runningStatus",
+            PIPELINE_STATUS_RUNNING,
+            "failedStatus",
+            PIPELINE_STATUS_FAILED,
+            "staleSeconds",
+            staleSeconds,
+            KEY_LIMIT,
+            limit));
+  }
+
+  public int markRunningPipelineStepsFailedForInstances(String tenantId, long staleSeconds) {
+    if (!Texts.hasText(tenantId) || staleSeconds <= 0) {
+      return 0;
+    }
+    return fileGovernanceMapper.markRunningPipelineStepsFailedForInstances(
+        params(
+            KEY_TENANT_ID,
+            tenantId,
+            "failedStatus",
+            "FAILED",
+            "pendingStatus",
+            "PENDING",
+            "runningStatus",
+            "RUNNING",
+            "retryingStatus",
+            "RETRYING",
+            "failedPipelineStatus",
+            PIPELINE_STATUS_FAILED,
+            "errorCode",
+            "PIPELINE_STALE_RUNNING",
+            "errorMessage",
+            "pipeline was marked FAILED by stale running sweep",
+            "staleSeconds",
+            staleSeconds));
   }
 
   /**

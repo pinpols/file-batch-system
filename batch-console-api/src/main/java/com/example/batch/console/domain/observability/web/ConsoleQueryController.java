@@ -50,6 +50,7 @@ import com.example.batch.console.domain.ops.web.response.ConsoleAuditLogResponse
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -153,6 +154,13 @@ public class ConsoleQueryController {
   public CommonResponse<PageResponse<ConsoleAuditLogResponse>> executionLogs(
       @Valid @ModelAttribute AuditLogQueryRequest request) {
     return responseFactory.success(applicationService.executionLogs(request));
+  }
+
+  /** GET /trace-snapshot — 按 traceId 聚合查询排障快照。 */
+  @GetMapping("/trace-snapshot")
+  public CommonResponse<ConsoleTraceSnapshotResponse> traceSnapshot(
+      @RequestParam("tenantId") String tenantId, @RequestParam("traceId") String traceId) {
+    return responseFactory.success(applicationService.traceSnapshot(tenantId, traceId));
   }
 
   /** GET /alerts — 告警事件列表。 */

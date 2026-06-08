@@ -3196,6 +3196,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
+  /api/console/queries/trace-snapshot:
+    get:
+      tags: [Queries]
+      summary: Query cross-domain trace snapshot
+      operationId: queryTraceSnapshot
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: traceId
+          in: query
+          required: true
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Cross-domain trace snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    $ref: '#/components/schemas/ConsoleTraceSnapshotResponse'
   /api/console/queries/pipeline-progress:
     get:
       tags: [Queries]
@@ -3244,6 +3267,10 @@ paths:
         - $ref: '#/components/parameters/AcknowledgedFilter'
         - $ref: '#/components/parameters/StartDateFilter'
         - $ref: '#/components/parameters/EndDateFilter'
+        - name: traceId
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
       responses:
         '200':
           description: Alert list
@@ -3376,6 +3403,10 @@ paths:
         - $ref: '#/components/parameters/EventKeyFilter'
         - $ref: '#/components/parameters/DeliveryStatusFilter'
         - $ref: '#/components/parameters/TargetTopicFilter'
+        - name: traceId
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
       responses:
         '200':
           description: Outbox delivery list
@@ -11295,6 +11326,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleFileRecordResponse'
         filePipelines:
           type: array
           items:
@@ -11303,7 +11338,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConsoleAuditLogResponse'
-      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, filePipelines, auditLogs]
+        operationAudits:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleOperationAuditResponse'
+        executionLogs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleAuditLogResponse'
+        outboxDeliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleOutboxDeliveryLogResponse'
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleAlertEventResponse'
+        deadLetters:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleDeadLetterTaskResponse'
+      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, files, filePipelines, auditLogs, operationAudits, executionLogs, outboxDeliveries, alerts, deadLetters]
     ConsoleWorkflowTopologyResponse:
       type: object
       properties:
@@ -12787,6 +12842,8 @@ components:
           type: string
         eventKey:
           type: string
+        traceId:
+          type: string
         deliveryStatus:
           type: string
         targetTopic:
@@ -12802,7 +12859,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, eventType, eventKey, deliveryStatus, targetTopic, deliveryAttempt, errorMessage, createdAt, updatedAt]
+      required: [id, tenantId, eventType, eventKey, traceId, deliveryStatus, targetTopic, deliveryAttempt, errorMessage, createdAt, updatedAt]
     ConsoleAlertRoutingResponse:
       type: object
       properties:

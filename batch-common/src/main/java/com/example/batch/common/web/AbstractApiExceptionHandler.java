@@ -46,7 +46,16 @@ public abstract class AbstractApiExceptionHandler {
 
   @ExceptionHandler(BizException.class)
   public ResponseEntity<CommonResponse<Void>> handleBizException(BizException exception) {
-    log.warn("{} biz exception", modulePrefix(), exception);
+    if (exception.getCode().httpStatus() >= 500) {
+      log.warn("{} biz exception", modulePrefix(), exception);
+    } else {
+      log.warn(
+          "{} biz exception: code={}, key={}, message={}",
+          modulePrefix(),
+          exception.getCode().code(),
+          exception.getMessageKey(),
+          exception.getMessage());
+    }
     return ResponseEntity.status(exception.getCode().httpStatus())
         .body(CommonResponse.failure(exception.getCode(), resolveBizMessage(exception)));
   }
