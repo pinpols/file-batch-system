@@ -20,6 +20,7 @@ public class ConsoleDashboardQueryService {
   private static final String KEY_DAILY_TREND = "dailyTrend";
   private static final String KEY_DAY = "day";
   private static final String KEY_COUNT = "count";
+  private static final String DASHBOARD_CACHE_PREFIX = "dashboard:";
   // null status / day 占位，13 处使用提常量
   private static final String UNKNOWN = "UNKNOWN";
 
@@ -39,7 +40,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> jobStats(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":job-stats:" + days,
+        DASHBOARD_CACHE_PREFIX + resolved + ":job-stats:" + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadJobStats(resolved, days));
@@ -74,7 +75,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> triggerStats(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":trigger-stats:" + days,
+        DASHBOARD_CACHE_PREFIX + resolved + ":trigger-stats:" + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadTriggerStats(resolved, days));
@@ -110,7 +111,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> workerLoad(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":worker-load",
+        DASHBOARD_CACHE_PREFIX + resolved + ":worker-load",
         ConsoleQueryCacheService.DASHBOARD_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadWorkerLoad(resolved));
@@ -162,7 +163,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> alertTrend(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":alert-trend:" + days,
+        DASHBOARD_CACHE_PREFIX + resolved + ":alert-trend:" + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadAlertTrend(resolved, days));
@@ -227,7 +228,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> tenantUsage(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":tenant-usage:" + days,
+        DASHBOARD_CACHE_PREFIX + resolved + ":tenant-usage:" + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadTenantUsage(resolved, days));
@@ -254,7 +255,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> slaReport(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":sla-report:" + days,
+        DASHBOARD_CACHE_PREFIX + resolved + ":sla-report:" + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadSlaReport(resolved, days));
@@ -289,7 +290,7 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> slaCompliance(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":sla-compliance:" + days,
+        DASHBOARD_CACHE_PREFIX + resolved + ":sla-compliance:" + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadSlaCompliance(resolved, days));
