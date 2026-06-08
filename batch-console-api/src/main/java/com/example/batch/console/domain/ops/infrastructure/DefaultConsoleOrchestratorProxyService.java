@@ -220,6 +220,45 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
+  public Map<String, Integer> adminTestDataCleanupByPrefix(String prefix) {
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "admin-test-data-cleanup",
+        () ->
+            orchestratorInternalRestClient
+                .build()
+                .delete()
+                .uri(
+                    uriBuilder ->
+                        uriBuilder
+                            .path("/internal/admin/test-data")
+                            .queryParam("prefix", prefix)
+                            .build())
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+  }
+
+  @Override
+  public Map<String, Integer> adminTestDataCleanupByExactTenantIds(List<String> tenantIds) {
+    String ids = tenantIds == null ? "" : String.join(",", tenantIds);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "admin-test-data-cleanup-by-ids",
+        () ->
+            orchestratorInternalRestClient
+                .build()
+                .delete()
+                .uri(
+                    uriBuilder ->
+                        uriBuilder
+                            .path("/internal/admin/test-data/by-ids")
+                            .queryParam("ids", ids)
+                            .build())
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+  }
+
+  @Override
   public Map<String, Object> batchDayOperate(
       String tenantId,
       String calendarCode,

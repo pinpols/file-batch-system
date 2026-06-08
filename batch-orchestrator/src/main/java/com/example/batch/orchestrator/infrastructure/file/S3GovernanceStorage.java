@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.file;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.storage.BatchObjectStore;
 import com.example.batch.common.storage.ObjectListing;
+import com.example.batch.common.storage.ObjectNotFoundException;
 import com.example.batch.common.storage.ObjectSummary;
 import java.time.Duration;
 import java.time.Instant;
@@ -78,6 +79,8 @@ public class S3GovernanceStorage {
     try {
       String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
       return objectStore.statSize(targetBucket, objectName);
+    } catch (ObjectNotFoundException exception) {
+      throw exception;
     } catch (Exception exception) {
       throw new IllegalStateException("failed to stat object: " + objectName, exception);
     }

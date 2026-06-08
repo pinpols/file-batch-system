@@ -1,26 +1,23 @@
 package com.example.batch.console.domain.ops.service;
 
-import com.example.batch.console.domain.ops.infrastructure.ConsoleAdminTestDataCleanupRepository;
+import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-/** 测试数据级联清理 service，负责事务边界，SQL 下沉到 repository。 */
+/** 测试数据清理 service。console 只做入口编排，实际清理由 orchestrator 内部接口执行。 */
 @Service
 @RequiredArgsConstructor
 public class ConsoleAdminTestDataCleanupService {
 
-  private final ConsoleAdminTestDataCleanupRepository repository;
+  private final ConsoleOrchestratorProxyService orchestratorProxyService;
 
-  @Transactional
   public Map<String, Integer> cleanupByPrefix(String prefix) {
-    return repository.cleanupByPrefix(prefix);
+    return orchestratorProxyService.adminTestDataCleanupByPrefix(prefix);
   }
 
-  @Transactional
   public Map<String, Integer> cleanupByExactTenantIds(List<String> tenantIds) {
-    return repository.cleanupByExactTenantIds(tenantIds);
+    return orchestratorProxyService.adminTestDataCleanupByExactTenantIds(tenantIds);
   }
 }

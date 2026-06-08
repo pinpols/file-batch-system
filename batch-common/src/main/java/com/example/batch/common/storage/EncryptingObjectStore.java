@@ -30,16 +30,27 @@ public class EncryptingObjectStore implements BatchObjectStore {
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties securityProperties;
   private final String defaultKeyRef;
+  private final long maxInMemoryEncryptBytes;
 
   public EncryptingObjectStore(
       BatchObjectStore delegate,
       BatchObjectCryptoService cryptoService,
       BatchSecurityProperties securityProperties,
       String defaultKeyRef) {
+    this(delegate, cryptoService, securityProperties, defaultKeyRef, 32L * 1024 * 1024);
+  }
+
+  public EncryptingObjectStore(
+      BatchObjectStore delegate,
+      BatchObjectCryptoService cryptoService,
+      BatchSecurityProperties securityProperties,
+      String defaultKeyRef,
+      long maxInMemoryEncryptBytes) {
     this.delegate = delegate;
     this.cryptoService = cryptoService;
     this.securityProperties = securityProperties;
     this.defaultKeyRef = defaultKeyRef;
+    this.maxInMemoryEncryptBytes = Math.max(1L, maxInMemoryEncryptBytes);
   }
 
   @Override
@@ -48,11 +59,20 @@ public class EncryptingObjectStore implements BatchObjectStore {
       delegate.put(bucket, key, in, size, contentType);
       return;
     }
+    if (size < 0 || size > maxInMemoryEncryptBytes) {
+      throw new ObjectStoreException(
+          "encrypted object store put exceeds in-memory encryption limit: bucket=%s, key=%s, size=%d, limit=%d"
+              .formatted(bucket, key, size, maxInMemoryEncryptBytes));
+    }
+    ExactSizeInputStream bounded =
+        ExactSizeInputStream.exactAndBounded(
+            in, "encrypted", bucket, key, size, maxInMemoryEncryptBytes);
     // BATCHENC 加密产物体积与明文不等长（含 magic + header + GCM tag），且 InputStream 路径不易预先知道密文长度。
     // 此处先全量加密到内存缓冲再以确切 size 写入 delegate；明文 ≤ 几十 MB 场景（export / dispatch 错误集等）足够，
     // 与现有 cryptoService.encrypt(byte[]) 范式保持一致。
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-    cryptoService.encrypt(in, out, defaultKeyRef);
+    cryptoService.encrypt(bounded, out, defaultKeyRef);
+    bounded.verifyFullyRead();
     byte[] ciphertext = out.toByteArray();
     try (InputStream wrapped = new ByteArrayInputStream(ciphertext)) {
       delegate.put(bucket, key, wrapped, ciphertext.length, contentType);

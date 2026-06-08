@@ -64,6 +64,62 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
+  void shouldRejectPayloadAboveInMemoryEncryptLimit(@TempDir Path root) {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    FilesystemObjectStore raw = newRaw(root);
+    BatchObjectCryptoService crypto = newCrypto(security);
+    EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF, 1024);
+    byte[] plaintext = new byte[2048];
+
+    assertThatThrownBy(
+            () ->
+                store.put(
+                    BUCKET,
+                    "too-large.bin",
+                    new ByteArrayInputStream(plaintext),
+                    plaintext.length,
+                    "x"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("in-memory encryption limit");
+    assertThat(raw.exists(BUCKET, "too-large.bin")).isFalse();
+  }
+
+  @Test
+  void shouldRejectActualBytesAboveLimitWhenCallerUnderReportsSize(@TempDir Path root) {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    FilesystemObjectStore raw = newRaw(root);
+    BatchObjectCryptoService crypto = newCrypto(security);
+    EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF, 1024);
+    byte[] plaintext = new byte[2048];
+
+    assertThatThrownBy(
+            () ->
+                store.put(
+                    BUCKET, "under-reported.bin", new ByteArrayInputStream(plaintext), 1, "x"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("read limit");
+    assertThat(raw.exists(BUCKET, "under-reported.bin")).isFalse();
+  }
+
+  @Test
+  void shouldRejectUnknownSizeWhenEncrypting(@TempDir Path root) {
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    FilesystemObjectStore raw = newRaw(root);
+    BatchObjectCryptoService crypto = newCrypto(security);
+    EncryptingObjectStore store = new EncryptingObjectStore(raw, crypto, security, KEY_REF, 1024);
+    byte[] plaintext = "unknown-size".getBytes(StandardCharsets.UTF_8);
+
+    assertThatThrownBy(
+            () -> store.put(BUCKET, "unknown.bin", new ByteArrayInputStream(plaintext), -1, "x"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("in-memory encryption limit");
+    assertThat(raw.exists(BUCKET, "unknown.bin")).isFalse();
+  }
+
+  @Test
   void bypassModeShouldPassThrough(@TempDir Path root) throws Exception {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true);

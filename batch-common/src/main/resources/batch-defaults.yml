@@ -265,6 +265,8 @@ batch:
       multipart-enabled: ${BATCH_S3_MULTIPART_ENABLED:true}
       multipart-threshold-bytes: ${BATCH_S3_MULTIPART_THRESHOLD_BYTES:67108864}
       multipart-part-size-bytes: ${BATCH_S3_MULTIPART_PART_SIZE_BYTES:16777216}
+    encryption:
+      max-in-memory-encrypt-bytes: ${BATCH_STORAGE_ENCRYPTION_MAX_IN_MEMORY_ENCRYPT_BYTES:33554432}
 
   # Orchestrator API 地址（trigger + 所有 worker 模块使用）
   orchestrator:
