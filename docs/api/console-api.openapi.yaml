@@ -3196,26 +3196,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
-  /api/console/queries/pipeline-progress:
+  /api/console/queries/trace-snapshot:
     get:
       tags: [Queries]
-      summary: 2026-06-03 拉取一组 worker 当前的 pipeline stage 行级进度(仅 IMPORT LOAD 流式 stage 在跑时有值)
-      operationId: queryPipelineProgress
+      summary: Query cross-domain trace snapshot
+      operationId: queryTraceSnapshot
       parameters:
-        - name: tenantId
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: traceId
           in: query
           required: true
-          schema: { type: string }
-        - name: workerCodes
-          in: query
-          required: true
-          description: 逗号分隔的 workerCode 列表(Spring 自动按 comma split)
-          schema:
-            type: array
-            items: { type: string }
+          schema: { type: string, maxLength: 128 }
       responses:
         '200':
-          description: Pipeline progress list(仅含有进度的 worker;无进度 / 已过期 5min 不出现)
+          description: Cross-domain trace snapshot
           content:
             application/json:
               schema:
@@ -3224,14 +3218,43 @@ paths:
                   code: { type: string }
                   message: { type: string }
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        workerCode: { type: string }
-                        rowsProcessed: { type: integer, format: int64, nullable: true }
-                        totalRowsHint: { type: integer, format: int64, nullable: true }
-                        heartbeatAt: { type: string, format: date-time }
+                    $ref: '#/components/schemas/ConsoleTraceSnapshotResponse'
+  /api/console/queries/pipeline-progress:
+    get:
+      tags: [Queries]
+      summary: 按 pipelineInstanceId 拉取当前 pipeline step 行级进度
+      operationId: queryPipelineProgress
+      parameters:
+        - name: pipelineInstanceId
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Pipeline step progress snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      pipelineInstanceId: { type: integer, format: int64 }
+                      steps:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            stepId: { type: integer, format: int64 }
+                            pipelineInstanceId: { type: integer, format: int64 }
+                            stepCode: { type: string }
+                            stageCode: { type: string }
+                            rowsProcessed: { type: integer, format: int64, nullable: true }
+                            totalRowsHint: { type: integer, format: int64, nullable: true }
+                            lastHeartbeatAt: { type: integer, format: int64, nullable: true }
   /api/console/queries/alerts:
     get:
       tags: [Queries]
@@ -3244,6 +3267,10 @@ paths:
         - $ref: '#/components/parameters/AcknowledgedFilter'
         - $ref: '#/components/parameters/StartDateFilter'
         - $ref: '#/components/parameters/EndDateFilter'
+        - name: traceId
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
       responses:
         '200':
           description: Alert list
@@ -3376,6 +3403,10 @@ paths:
         - $ref: '#/components/parameters/EventKeyFilter'
         - $ref: '#/components/parameters/DeliveryStatusFilter'
         - $ref: '#/components/parameters/TargetTopicFilter'
+        - name: traceId
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
       responses:
         '200':
           description: Outbox delivery list
@@ -11295,6 +11326,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleFileRecordResponse'
         filePipelines:
           type: array
           items:
@@ -11303,7 +11338,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConsoleAuditLogResponse'
-      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, filePipelines, auditLogs]
+        operationAudits:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleOperationAuditResponse'
+        executionLogs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleAuditLogResponse'
+        outboxDeliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleOutboxDeliveryLogResponse'
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleAlertEventResponse'
+        deadLetters:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleDeadLetterTaskResponse'
+      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, files, filePipelines, auditLogs, operationAudits, executionLogs, outboxDeliveries, alerts, deadLetters]
     ConsoleWorkflowTopologyResponse:
       type: object
       properties:
@@ -12787,6 +12842,8 @@ components:
           type: string
         eventKey:
           type: string
+        traceId:
+          type: string
         deliveryStatus:
           type: string
         targetTopic:
@@ -12802,7 +12859,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, eventType, eventKey, deliveryStatus, targetTopic, deliveryAttempt, errorMessage, createdAt, updatedAt]
+      required: [id, tenantId, eventType, eventKey, traceId, deliveryStatus, targetTopic, deliveryAttempt, errorMessage, createdAt, updatedAt]
     ConsoleAlertRoutingResponse:
       type: object
       properties:

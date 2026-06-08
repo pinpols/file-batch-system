@@ -245,7 +245,6 @@
         select count(1)
         from batch.file_record
         where tenant_id = #{tenantId}
-          and coalesce(storage_bucket, '') = coalesce(#{storageBucket}, '')
           and storage_path = #{storagePath}
     </select>
 
@@ -290,4 +289,45 @@
             #{operatorType}, #{operatorId}, #{traceId}, #{detailSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
         )
     </insert>
+
+    <update id="markStaleRunningPipelineInstancesFailed">
+        update batch.pipeline_instance pi
+        set run_status = #{failedStatus},
+            current_stage = coalesce(pi.current_stage, 'STALE_SWEEP'),
+            finished_at = current_timestamp,
+            updated_at = current_timestamp
+        where pi.id in (
+            select id
+            from batch.pipeline_instance
+            where tenant_id = #{tenantId}
+              and run_status = #{runningStatus}
+              and started_at is not null
+              and started_at &lt; current_timestamp - (#{staleSeconds} * interval '1 second')
+            order by started_at asc
+            limit #{limit}
+        )
+    </update>
+
+    <update id="markRunningPipelineStepsFailedForInstances">
+        update batch.pipeline_step_run psr
+        set step_status = #{failedStatus},
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            finished_at = current_timestamp,
+            duration_ms = greatest(
+                coalesce(psr.duration_ms, 0),
+                coalesce((extract(epoch from (current_timestamp - psr.started_at)) * 1000)::bigint, 0)
+            )
+        where psr.step_status in (#{pendingStatus}, #{runningStatus}, #{retryingStatus})
+          and exists (
+              select 1
+              from batch.pipeline_instance pi
+              where pi.id = psr.pipeline_instance_id
+                and pi.tenant_id = #{tenantId}
+                and pi.run_status = #{failedPipelineStatus}
+                and pi.finished_at &gt;= current_timestamp - interval '5 minutes'
+                and pi.started_at is not null
+                and pi.started_at &lt; current_timestamp - (#{staleSeconds} * interval '1 second')
+          )
+    </update>
 </mapper>

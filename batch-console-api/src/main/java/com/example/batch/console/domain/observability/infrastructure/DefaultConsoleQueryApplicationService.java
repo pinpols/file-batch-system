@@ -1,7 +1,9 @@
 package com.example.batch.console.domain.observability.infrastructure;
 
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.console.domain.audit.application.OperationAuditQueryService;
 import com.example.batch.console.domain.audit.web.query.ConsoleAiAuditLogQueryRequest;
+import com.example.batch.console.domain.audit.web.query.OperationAuditQueryRequest;
 import com.example.batch.console.domain.audit.web.response.AiAuditLogResponse;
 import com.example.batch.console.domain.file.infrastructure.query.ConsoleFileQueryService;
 import com.example.batch.console.domain.file.web.query.FileArrivalGroupQueryRequest;
@@ -15,6 +17,7 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileArrivalGrou
 import com.example.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileDispatchRecordResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileErrorRecordResponse;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
@@ -46,6 +49,7 @@ import com.example.batch.console.domain.ops.web.response.ConsoleAuditLogResponse
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.domain.ops.web.response.ConsolePendingCatchUpResponse;
+import com.example.batch.console.domain.ops.web.response.ConsoleTraceSnapshotResponse;
 import com.example.batch.console.domain.ops.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
 import com.example.batch.console.domain.workflow.web.query.WorkflowDefinitionQueryRequest;
@@ -80,10 +84,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplicationService {
 
+  private static final int TRACE_SNAPSHOT_PAGE_SIZE = 200;
+
   private final ConsoleJobQueryService jobQueryService;
   private final ConsoleFileQueryService fileQueryService;
   private final ConsoleWorkflowQueryService workflowQueryService;
   private final ConsoleOpsQueryService opsQueryService;
+  private final OperationAuditQueryService operationAuditQueryService;
 
   @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
@@ -93,6 +100,78 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   @Override
   public PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request) {
     return opsQueryService.executionLogs(request);
+  }
+
+  @Override
+  public ConsoleTraceSnapshotResponse traceSnapshot(String tenantId, String traceId) {
+    String normalizedTraceId = traceId == null ? "" : traceId.trim();
+    if (normalizedTraceId.isEmpty()) {
+      return new ConsoleTraceSnapshotResponse(
+          "", List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+          List.of(), List.of(), List.of(), List.of());
+    }
+
+    JobInstanceQueryRequest jobRequest = traceRequest(new JobInstanceQueryRequest());
+    jobRequest.setTenantId(tenantId);
+    jobRequest.setTraceId(normalizedTraceId);
+
+    WorkflowRunQueryRequest workflowRequest = traceRequest(new WorkflowRunQueryRequest());
+    workflowRequest.setTenantId(tenantId);
+    workflowRequest.setTraceId(normalizedTraceId);
+
+    FileChainQueryRequest fileRequest = traceRequest(new FileChainQueryRequest());
+    fileRequest.setTenantId(tenantId);
+    fileRequest.setTraceId(normalizedTraceId);
+
+    FilePipelineQueryRequest pipelineRequest = traceRequest(new FilePipelineQueryRequest());
+    pipelineRequest.setTenantId(tenantId);
+    pipelineRequest.setTraceId(normalizedTraceId);
+
+    AuditLogQueryRequest auditRequest = traceRequest(new AuditLogQueryRequest());
+    auditRequest.setTenantId(tenantId);
+    auditRequest.setTraceId(normalizedTraceId);
+
+    OperationAuditQueryRequest operationAuditRequest =
+        traceRequest(new OperationAuditQueryRequest());
+    operationAuditRequest.setTenantId(tenantId);
+    operationAuditRequest.setTraceId(normalizedTraceId);
+
+    AuditLogQueryRequest executionLogRequest = traceRequest(new AuditLogQueryRequest());
+    executionLogRequest.setTenantId(tenantId);
+    executionLogRequest.setTraceId(normalizedTraceId);
+
+    OutboxDeliveryLogQueryRequest outboxRequest = traceRequest(new OutboxDeliveryLogQueryRequest());
+    outboxRequest.setTenantId(tenantId);
+    outboxRequest.setTraceId(normalizedTraceId);
+
+    AlertEventQueryRequest alertRequest = traceRequest(new AlertEventQueryRequest());
+    alertRequest.setTenantId(tenantId);
+    alertRequest.setTraceId(normalizedTraceId);
+
+    DeadLetterQueryRequest deadLetterRequest = traceRequest(new DeadLetterQueryRequest());
+    deadLetterRequest.setTenantId(tenantId);
+    deadLetterRequest.setTraceId(normalizedTraceId);
+
+    return new ConsoleTraceSnapshotResponse(
+        normalizedTraceId,
+        jobInstances(jobRequest).items(),
+        workflowRuns(workflowRequest).items(),
+        List.of(),
+        fileChains(fileRequest).items(),
+        filePipelines(pipelineRequest).items(),
+        auditLogs(auditRequest).items(),
+        operationAuditQueryService.query(operationAuditRequest).items(),
+        executionLogs(executionLogRequest).items(),
+        outboxDeliveries(outboxRequest).items(),
+        alertEvents(alertRequest).items(),
+        deadLetters(deadLetterRequest).items());
+  }
+
+  private <T extends com.example.batch.console.web.query.PageQueryRequest> T traceRequest(
+      T request) {
+    request.setPageNo(1);
+    request.setPageSize(TRACE_SNAPSHOT_PAGE_SIZE);
+    return request;
   }
 
   @Override
@@ -169,6 +248,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
       FilePipelineStepQueryRequest request) {
     return fileQueryService.filePipelineSteps(request);
+  }
+
+  @Override
+  public ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId) {
+    return fileQueryService.pipelineProgress(pipelineInstanceId);
   }
 
   @Override

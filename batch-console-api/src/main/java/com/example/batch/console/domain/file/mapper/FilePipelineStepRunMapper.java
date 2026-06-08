@@ -7,6 +7,8 @@ import org.apache.ibatis.annotations.Param;
 
 public interface FilePipelineStepRunMapper {
 
+  String selectTenantIdByPipelineInstanceId(@Param("pipelineInstanceId") Long pipelineInstanceId);
+
   List<Map<String, Object>> selectByQuery(
       @Param("tenantId") String tenantId,
       @Param("pipelineInstanceId") Long pipelineInstanceId,
@@ -21,4 +23,7 @@ public interface FilePipelineStepRunMapper {
       @Param("stepCode") String stepCode,
       @Param("stageCode") String stageCode,
       @Param("stepStatus") String stepStatus);
+
+  List<Map<String, Object>> selectProgressByPipelineInstance(
+      @Param("tenantId") String tenantId, @Param("pipelineInstanceId") Long pipelineInstanceId);
 }

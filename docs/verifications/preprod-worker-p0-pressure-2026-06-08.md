@@ -10,7 +10,7 @@ P0 已按本地真实系统链路补跑并形成可复跑入口：
 - trigger misfire / cron / outbox 专项通过：覆盖 cron 首发、暂停恢复、misfire replay、requestId dedup、outbox retry 恢复和 storm 全终态。
 - PG 写入参数矩阵已完成 5 组 x 3 次取中位数；生产默认不建议关闭 `synchronous_commit`。
 
-P1/P2 不能诚实标记为全部完成：真实云 S3/OSS、真实 SFTP/NAS 故障、worker kill / PG 断链恢复、10w storm 和多租户公平性容量画像仍需独立窗口。
+P2 本地容量画像已补跑：process kill / PG 断链恢复可恢复；10w storm 在本机 local profile 下不通过；多租户最终全成功但公平性和恢复延迟不达标。真实云 S3/OSS、真实 SFTP/NAS 故障仍需生产同类环境单独窗口。
 
 ## 基线提交
 
@@ -125,6 +125,6 @@ P1/P2 不能诚实标记为全部完成：真实云 S3/OSS、真实 SFTP/NAS 故
 |---|---|---|
 | 真实 S3 / OSS export | 未完成 | 本地只有 MinIO/S3-compatible；不能冒充生产同类 OSS。下一步需要真实 endpoint、bucket、凭证和 checksum 口径。 |
 | dispatch / atomic 真实外部故障注入 | 部分完成 | 本地 API 500、LOCAL/NAS/SFTP、atomic HTTP/SQL timeout/shell cancel 已复跑；还缺真实 SFTP/NAS/OSS/HTTP timeout、断连、权限失败、重试/DLQ 组合。 |
-| process failure profile | 部分完成 | RUNNING cancel 已完成；还缺 DIRECT copy 中途 kill worker、PG 临时断开、恢复后 staging/脏数据核对。 |
-| 10w task storm | 未完成 | 1w 已完成；10w 属容量上限画像，应单独窗口跑，避免本机资源噪声误导生产承诺。 |
-| 多租户公平性混压 | 未完成 | 还缺 ta/tb/tc 大小租户并发、quota 公平、RLS 串租和 tenant 维度监控拆分。 |
+| process failure profile | 已完成本地 profile | `p2-process-failure-20260608171651`：kill worker 后 SUCCESS；PG backend terminate 后 `FAILED/INFRA_ERROR`，同 batchKey 重跑 SUCCESS；staging=0。 |
+| 10w task storm | 已完成本地容量画像，不通过 | `p2-capacity-20260608171944-10w`：100000 发起请求 OK=41096、KO=58904；DB 可见实例最终 non_terminal=0，但本机接入层和 launch backlog 达上限。 |
+| 多租户公平性混压 | 已完成本地画像，公平性不达标 | `p2-fairness-trigger-20260608180000`：ta/tb/tc 最终 6000/6000 SUCCESS；storm backlog 后首批关联延迟约 8 分钟，ta 先完成、tc 明显滞后。 |

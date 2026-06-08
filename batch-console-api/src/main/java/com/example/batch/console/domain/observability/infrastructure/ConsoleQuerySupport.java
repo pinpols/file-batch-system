@@ -12,6 +12,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
@@ -237,6 +238,9 @@ public final class ConsoleQuerySupport {
     }
     if (value instanceof LocalDateTime localDateTime) {
       return localDateTime.toInstant(ZoneOffset.UTC);
+    }
+    if (value instanceof OffsetDateTime offsetDateTime) {
+      return offsetDateTime.toInstant();
     }
     if (value instanceof Date date) {
       return date.toInstant();

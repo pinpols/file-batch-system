@@ -18,4 +18,7 @@ public class AlertEventQueryRequest extends PageQueryRequest {
 
   @Size(max = 64, message = "alertType too long (max 64)")
   private String alertType;
+
+  @Size(max = 128, message = "traceId too long (max 128)")
+  private String traceId;
 }

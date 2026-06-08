@@ -31,12 +31,15 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileArrivalGrou
 import com.example.batch.console.domain.file.web.response.ConsoleFileChannelResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileDispatchRecordResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileErrorRecordResponse;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineProgressResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
+import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineStepProgressResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineStepResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileTemplateResponse;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.web.query.FileChainQueryRequest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -122,6 +125,28 @@ public class ConsoleFileQueryService {
             request.getStageCode(),
             request.getStepStatus());
     return page(pageRequest, total, rows, this::toFilePipelineStepResponse);
+  }
+
+  public ConsoleFilePipelineProgressResponse pipelineProgress(Long pipelineInstanceId) {
+    if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.field.must_be_number", "pipelineInstanceId");
+    }
+    String tenantId =
+        fileMappers.filePipelineStepRunMapper.selectTenantIdByPipelineInstanceId(
+            pipelineInstanceId);
+    if (tenantId == null) {
+      return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, List.of());
+    }
+    tenantGuard.assertTenantAllowed(tenantId);
+    List<ConsoleFilePipelineStepProgressResponse> steps =
+        fileMappers
+            .filePipelineStepRunMapper
+            .selectProgressByPipelineInstance(tenantId, pipelineInstanceId)
+            .stream()
+            .map(this::toFilePipelineStepProgressResponse)
+            .toList();
+    return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, steps);
   }
 
   public PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(
@@ -353,6 +378,19 @@ public class ConsoleFileQueryService {
         longValue(row, "duration_ms"),
         instantValue(row, "started_at"),
         instantValue(row, "finished_at"));
+  }
+
+  private ConsoleFilePipelineStepProgressResponse toFilePipelineStepProgressResponse(
+      Map<String, Object> row) {
+    Instant lastHeartbeatAt = instantValue(row, "last_heartbeat_at");
+    return new ConsoleFilePipelineStepProgressResponse(
+        longValue(row, "step_id"),
+        longValue(row, "pipeline_instance_id"),
+        stringValue(row, "step_code"),
+        stringValue(row, "stage_code"),
+        longValue(row, "rows_processed"),
+        longValue(row, "total_rows_hint"),
+        lastHeartbeatAt == null ? null : lastHeartbeatAt.toEpochMilli());
   }
 
   private ConsoleFileDispatchRecordResponse toFileDispatchRecordResponse(Map<String, Object> row) {
