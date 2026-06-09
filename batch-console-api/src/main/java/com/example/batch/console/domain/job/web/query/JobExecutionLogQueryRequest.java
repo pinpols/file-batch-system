@@ -23,6 +23,9 @@ public class JobExecutionLogQueryRequest extends PageQueryRequest {
   /** 可选:SYSTEM / BUSINESS / RETRY / ALARM / AUDIT 单值过滤。 */
   private String logType;
 
+  /** 可选:trace snapshot 内部聚合使用；外部日志查看仍要求 jobInstanceId。 */
+  private String traceId;
+
   /** 可选:message 模糊匹配。 */
   private String keyword;
 }

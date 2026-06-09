@@ -18,7 +18,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
@@ -67,15 +69,16 @@ public class FilesystemObjectStore implements BatchObjectStore {
   @Override
   public void put(String bucket, String key, InputStream in, long size, String contentType) {
     Path target = resolveKey(bucket, key);
+    Path temp = null;
     try {
       Files.createDirectories(target.getParent());
-      Path temp =
-          target.resolveSibling(target.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
+      temp = target.resolveSibling(target.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
       try (FileChannel ch =
           FileChannel.open(temp, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-        try (InputStream src = in) {
-          src.transferTo(Channels.newOutputStream(ch));
-        }
+        ExactSizeInputStream exact =
+            ExactSizeInputStream.exact(in, "filesystem", bucket, key, size);
+        exact.transferTo(Channels.newOutputStream(ch));
+        exact.verifyFullyRead();
         // 强制 metadata + data 落盘，避免 rename 后崩溃丢数据
         ch.force(true);
       }
@@ -93,7 +96,11 @@ public class FilesystemObjectStore implements BatchObjectStore {
         Files.deleteIfExists(temp);
         throw moveEx;
       }
+    } catch (ObjectStoreException ex) {
+      cleanupTemp(temp);
+      throw ex;
     } catch (IOException | UncheckedIOException ex) {
+      cleanupTemp(temp);
       throw mapException("put", bucket, key, ex);
     }
   }
@@ -183,19 +190,29 @@ public class FilesystemObjectStore implements BatchObjectStore {
 
   @Override
   public ObjectListing list(String bucket, String prefix, String afterMarker, int maxKeys) {
+    if (maxKeys <= 0) {
+      return new ObjectListing(List.of(), null);
+    }
     Path bucketRoot = resolveBucketRoot(bucket);
     if (!Files.isDirectory(bucketRoot)) {
       return new ObjectListing(List.of(), null);
     }
     String safePrefix = prefix == null ? "" : prefix;
-    List<ObjectSummary> page = new ArrayList<>();
-    try (Stream<Path> walk = Files.walk(bucketRoot)) {
-      List<Path> sorted =
-          walk.filter(Files::isRegularFile)
-              .filter(p -> !isHiddenOrTemp(p))
-              .sorted(Comparator.comparing(p -> relativeKey(bucketRoot, p)))
-              .toList();
-      for (Path p : sorted) {
+    if (safePrefix.contains("..") || safePrefix.startsWith("/")) {
+      throw new ObjectStoreException(
+          "filesystem object list prefix contains illegal traversal sequence: " + safePrefix);
+    }
+    Path scanRoot = resolvePrefixScanRoot(bucketRoot, safePrefix);
+    if (!Files.isDirectory(scanRoot)) {
+      return new ObjectListing(List.of(), null);
+    }
+    PriorityQueue<ObjectSummary> smallestKeys =
+        new PriorityQueue<>(Comparator.comparing(ObjectSummary::key).reversed());
+    try (Stream<Path> walk = Files.walk(scanRoot)) {
+      Iterator<Path> iterator =
+          walk.filter(Files::isRegularFile).filter(path -> !isHiddenOrTemp(path)).iterator();
+      while (iterator.hasNext()) {
+        Path p = iterator.next();
         String relKey = relativeKey(bucketRoot, p);
         if (!relKey.startsWith(safePrefix)) {
           continue;
@@ -205,18 +222,21 @@ public class FilesystemObjectStore implements BatchObjectStore {
         }
         long size = Files.size(p);
         FileTime mtime = Files.getLastModifiedTime(p);
-        page.add(
+        smallestKeys.add(
             new ObjectSummary(
                 relKey, size, mtime.toInstant(), syntheticEtag(size, mtime.toInstant())));
-        if (page.size() >= maxKeys) {
-          break;
+        if (smallestKeys.size() > maxKeys + 1) {
+          smallestKeys.poll();
         }
       }
-    } catch (IOException ex) {
+    } catch (IOException | UncheckedIOException ex) {
       throw mapException("list", bucket, safePrefix, ex);
     }
-    String nextMarker =
-        page.size() >= maxKeys && !page.isEmpty() ? page.get(page.size() - 1).key() : null;
+    List<ObjectSummary> sorted = new ArrayList<>(smallestKeys);
+    sorted.sort(Comparator.comparing(ObjectSummary::key));
+    boolean hasMore = sorted.size() > maxKeys;
+    List<ObjectSummary> page = hasMore ? new ArrayList<>(sorted.subList(0, maxKeys)) : sorted;
+    String nextMarker = hasMore && !page.isEmpty() ? page.get(page.size() - 1).key() : null;
     return new ObjectListing(List.copyOf(page), nextMarker);
   }
 
@@ -275,6 +295,23 @@ public class FilesystemObjectStore implements BatchObjectStore {
     return bucketRoot.relativize(path).toString().replace('\\', '/');
   }
 
+  private Path resolvePrefixScanRoot(Path bucketRoot, String safePrefix) {
+    int slash = safePrefix.lastIndexOf('/');
+    if (slash < 0) {
+      return bucketRoot;
+    }
+    String directoryPrefix = safePrefix.substring(0, slash);
+    if (directoryPrefix.isBlank()) {
+      return bucketRoot;
+    }
+    Path resolved = bucketRoot.resolve(directoryPrefix).normalize();
+    if (!resolved.startsWith(bucketRoot)) {
+      throw new ObjectStoreException(
+          "filesystem object list prefix resolved outside bucket root: " + safePrefix);
+    }
+    return resolved;
+  }
+
   private boolean isHiddenOrTemp(Path path) {
     String name = path.getFileName().toString();
     if (name.startsWith(".")) {
@@ -285,6 +322,17 @@ public class FilesystemObjectStore implements BatchObjectStore {
 
   private String syntheticEtag(long size, Instant mtime) {
     return size + "-" + mtime.toEpochMilli();
+  }
+
+  private void cleanupTemp(Path temp) {
+    if (temp == null) {
+      return;
+    }
+    try {
+      Files.deleteIfExists(temp);
+    } catch (IOException ignored) {
+      log.warn("filesystem object store failed to cleanup temp file: {}", temp, ignored);
+    }
   }
 
   private ObjectStoreException mapException(

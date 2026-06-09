@@ -118,7 +118,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   public ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "snapshot:" + resolved,
+        "snapshot:" + ConsoleQueryCacheService.keySegment(resolved),
         ConsoleQueryCacheService.SNAPSHOT_TTL,
         ConsoleSchedulerSnapshotResponse.class,
         () -> loadSchedulerSnapshot(resolved));
@@ -148,7 +148,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
       String tenantId, int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "snapshot:" + resolved + ":history:" + limit,
+        "snapshot:" + ConsoleQueryCacheService.keySegment(resolved) + ":history:" + limit,
         ConsoleQueryCacheService.SNAPSHOT_TTL,
         new TypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {},
         () -> loadSchedulerSnapshotHistory(resolved, limit));
@@ -215,6 +215,45 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                             .queryParam(PARAM_TENANT_ID, resolved)
                             .build())
                 .body(Map.of("ids", ids == null ? List.of() : ids))
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+  }
+
+  @Override
+  public Map<String, Integer> adminTestDataCleanupByPrefix(String prefix) {
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "admin-test-data-cleanup",
+        () ->
+            orchestratorInternalRestClient
+                .build()
+                .delete()
+                .uri(
+                    uriBuilder ->
+                        uriBuilder
+                            .path("/internal/admin/test-data")
+                            .queryParam("prefix", prefix)
+                            .build())
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
+  }
+
+  @Override
+  public Map<String, Integer> adminTestDataCleanupByExactTenantIds(List<String> tenantIds) {
+    String ids = tenantIds == null ? "" : String.join(",", tenantIds);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "admin-test-data-cleanup-by-ids",
+        () ->
+            orchestratorInternalRestClient
+                .build()
+                .delete()
+                .uri(
+                    uriBuilder ->
+                        uriBuilder
+                            .path("/internal/admin/test-data/by-ids")
+                            .queryParam("ids", ids)
+                            .build())
                 .retrieve()
                 .body(new ParameterizedTypeReference<Map<String, Integer>>() {}));
   }

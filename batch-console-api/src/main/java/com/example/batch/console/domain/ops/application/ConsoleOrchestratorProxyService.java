@@ -18,6 +18,7 @@ import java.util.Map;
  *   <li>workflowRunSkipNode — 跳过指定节点并让 DAG 继续推进，用于卡死节点的人工干预
  *   <li>outboxCleanup / outboxRepublish — outbox_event 表运维（删除终结事件 / 重投递失败事件）， 由 orchestrator
  *       在自己事务里执行；console 不直接写 outbox 表
+ *   <li>adminTestDataCleanup* — 测试数据清理，涉及运行态表 DELETE/UPDATE，由 orchestrator 执行； console 只保留 admin 入口
  * </ul>
  *
  * <p>快照查询（schedulerSnapshot / schedulerSnapshotHistory）为只读，不改变编排器状态。
@@ -50,6 +51,12 @@ public interface ConsoleOrchestratorProxyService {
    * @return key=requested / reset 的统计（reset 可能小于 requested，因有些 id 不在 FAILED/GIVE_UP）
    */
   Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids);
+
+  /** 转发测试数据 prefix 清理：由 orchestrator 在状态主机边界内执行。 */
+  Map<String, Integer> adminTestDataCleanupByPrefix(String prefix);
+
+  /** 转发测试数据精确 tenantId 清理：由 orchestrator 在状态主机边界内执行。 */
+  Map<String, Integer> adminTestDataCleanupByExactTenantIds(List<String> tenantIds);
 
   /**
    * 转发批量日治理动作：FREEZE / RELEASE / SKIP / REOPEN / CLOSE。 状态机由 orchestrator 的

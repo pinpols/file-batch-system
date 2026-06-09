@@ -19,4 +19,11 @@ public class ObjectStoreEncryptionProperties {
    * com.example.batch.common.storage.EncryptingObjectStore}。
    */
   private boolean decoratorEnabled = false;
+
+  /**
+   * 加密装饰层当前使用内存缓冲生成密文，超过该阈值直接拒绝，避免大文件上传把 JVM 堆打满。
+   *
+   * <p>后续若改成临时文件或分片加密，可放宽该限制。
+   */
+  private long maxInMemoryEncryptBytes = 32L * 1024 * 1024;
 }

@@ -14,7 +14,12 @@ import java.time.Duration;
  */
 public interface BatchObjectStore {
 
-  /** 写入对象。 */
+  /**
+   * 写入对象。
+   *
+   * <p>调用方负责关闭传入的 {@link InputStream}；实现类只读取，不接管流生命周期。{@code size >= 0} 时实现类必须按精确长度写入，底层读到的字节数不匹配应抛
+   * {@link ObjectStoreException}。
+   */
   void put(String bucket, String key, InputStream in, long size, String contentType);
 
   /** 同 bucket 内服务端复制对象。 */

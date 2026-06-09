@@ -12,4 +12,5 @@ public class WorkflowNodeRunQueryRequest extends PageQueryRequest {
   private Long workflowRunId;
   private String nodeCode;
   private String nodeStatus;
+  private String traceId;
 }

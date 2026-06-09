@@ -142,7 +142,7 @@ public class ConsoleMetaQueryService {
   public Map<String, List<ConsoleMetaEnumItem>> enums() {
     Locale locale = LocaleContextHolder.getLocale();
     return cacheService.getOrLoad(
-        "meta:enums:" + locale.toLanguageTag(),
+        "meta:enums:" + ConsoleQueryCacheService.keySegment(locale.toLanguageTag()),
         ConsoleQueryCacheService.META_ENUM_TTL,
         Map.class,
         () -> buildEnums(locale));
@@ -173,7 +173,7 @@ public class ConsoleMetaQueryService {
   public List<ConsoleMetaOption> queues(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":queues",
+        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":queues",
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.queueOptions(resolved)));
@@ -183,7 +183,7 @@ public class ConsoleMetaQueryService {
   public List<ConsoleMetaOption> calendars(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":calendars",
+        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":calendars",
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.calendarOptions(resolved)));
@@ -193,7 +193,7 @@ public class ConsoleMetaQueryService {
   public List<ConsoleMetaOption> windows(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":windows",
+        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":windows",
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.windowOptions(resolved)));
@@ -203,7 +203,7 @@ public class ConsoleMetaQueryService {
   public List<ConsoleMetaOption> workerGroups(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":workerGroups",
+        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":workerGroups",
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.workerGroupOptions(resolved)));
@@ -213,7 +213,7 @@ public class ConsoleMetaQueryService {
   public List<ConsoleMetaOption> bizTypes(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":bizTypes",
+        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":bizTypes",
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.bizTypeOptions(resolved)));

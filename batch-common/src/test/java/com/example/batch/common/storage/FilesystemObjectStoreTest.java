@@ -42,6 +42,42 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  void putShouldNotCloseCallerOwnedInputStream(@TempDir Path root) {
+    FilesystemObjectStore store = newStore(root);
+    byte[] payload = "caller-owned".getBytes(StandardCharsets.UTF_8);
+    CloseTrackingInputStream inputStream = new CloseTrackingInputStream(payload);
+
+    store.put(BUCKET, "owned.txt", inputStream, payload.length, "text/plain");
+
+    assertThat(inputStream.closed).isFalse();
+  }
+
+  @Test
+  void putShouldRejectLengthMismatch(@TempDir Path root) {
+    FilesystemObjectStore store = newStore(root);
+    byte[] payload = "short".getBytes(StandardCharsets.UTF_8);
+
+    assertThatThrownBy(
+            () ->
+                store.put(BUCKET, "short.txt", new ByteArrayInputStream(payload), 99, "text/plain"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("length mismatch");
+    assertThat(store.exists(BUCKET, "short.txt")).isFalse();
+  }
+
+  @Test
+  void putShouldRejectExtraBytesBeyondDeclaredSize(@TempDir Path root) {
+    FilesystemObjectStore store = newStore(root);
+    byte[] payload = "longer-than-declared".getBytes(StandardCharsets.UTF_8);
+
+    assertThatThrownBy(
+            () -> store.put(BUCKET, "long.txt", new ByteArrayInputStream(payload), 4, "text/plain"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("length mismatch");
+    assertThat(store.exists(BUCKET, "long.txt")).isFalse();
+  }
+
+  @Test
   void shouldReadFromArbitraryOffset(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "0123456789ABCDEF".getBytes(StandardCharsets.UTF_8);
@@ -225,5 +261,19 @@ class FilesystemObjectStoreTest {
       }
     }
     throw new IllegalArgumentException("missing param: " + name);
+  }
+
+  private static final class CloseTrackingInputStream extends ByteArrayInputStream {
+    private boolean closed;
+
+    private CloseTrackingInputStream(byte[] buf) {
+      super(buf);
+    }
+
+    @Override
+    public void close() throws IOException {
+      closed = true;
+      super.close();
+    }
   }
 }

@@ -1,12 +1,6 @@
 package com.example.batch.console.domain.ops.web;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -17,40 +11,39 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.common.time.BatchDateTimeSupport;
-import com.example.batch.console.domain.ops.infrastructure.ConsoleAdminTestDataCleanupRepository;
+import com.example.batch.console.domain.ops.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.domain.ops.service.ConsoleAdminTestDataCleanupService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.web.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /**
- * P0: ConsoleAdminTestDataController 安全 + FK 链路守卫。
+ * P0: ConsoleAdminTestDataController 安全 + orchestrator 转发守卫。
  *
  * <p>覆盖:
  *
  * <ul>
  *   <li>prod profile fail-fast — controller 实例化即拒
  *   <li>prefix 正则校验 — 非法字符 / 空 / 过短全 400
- *   <li>FK 链路:删 13 张依赖表(workflow_node_run → workflow_run → 5 张 job 依赖 → job_partition →
- *       job_instance → workflow_node/edge/definition → job_definition + file/user/archive/tenant)
- *   <li>job_instance.parent_instance_id 自引 FK 先 NULL 再删
+ *   <li>合法请求只转发给 orchestrator proxy，console 不再直接写运行态表
  * </ul>
  */
 class ConsoleAdminTestDataControllerTest {
 
-  private final NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private final Environment environment = mock(Environment.class);
+  private final ConsoleOrchestratorProxyService orchestratorProxyService =
+      mock(ConsoleOrchestratorProxyService.class);
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -61,7 +54,12 @@ class ConsoleAdminTestDataControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
-    when(jdbc.update(anyString(), any(MapSqlParameterSource.class))).thenReturn(0);
+    when(orchestratorProxyService.adminTestDataCleanupByPrefix("e2e"))
+        .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
+    when(orchestratorProxyService.adminTestDataCleanupByPrefix("test"))
+        .thenReturn(Map.of("job_definition", 0));
+    when(orchestratorProxyService.adminTestDataCleanupByExactTenantIds(List.of("td", "te")))
+        .thenReturn(Map.of("tenant", 2));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -96,63 +94,31 @@ class ConsoleAdminTestDataControllerTest {
         .perform(delete("/api/console/admin/test-data").param("prefix", "   "))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
-    verify(jdbc, never()).update(anyString(), any(MapSqlParameterSource.class));
+    verify(orchestratorProxyService, never()).adminTestDataCleanupByPrefix("   ");
   }
 
   @Test
-  void shouldRunFullFkDeletionChainOnValidPrefix() throws Exception {
-    when(jdbc.update(anyString(), any(MapSqlParameterSource.class))).thenReturn(1);
+  void shouldForwardValidPrefixCleanupToOrchestrator() throws Exception {
     mockMvc
         .perform(delete("/api/console/admin/test-data").param("prefix", "e2e"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.workflow_node_run").value(1))
-        .andExpect(jsonPath("$.data.workflow_run").value(1))
-        .andExpect(jsonPath("$.data.compensation_command").value(1))
-        .andExpect(jsonPath("$.data.pipeline_instance").value(1))
-        .andExpect(jsonPath("$.data.job_execution_log").value(1))
-        .andExpect(jsonPath("$.data.job_step_instance").value(1))
-        .andExpect(jsonPath("$.data.job_task").value(1))
-        .andExpect(jsonPath("$.data.job_partition").value(1))
-        .andExpect(jsonPath("$.data.job_instance").value(1))
-        .andExpect(jsonPath("$.data.workflow_node").value(1))
-        .andExpect(jsonPath("$.data.workflow_edge").value(1))
-        .andExpect(jsonPath("$.data.workflow_definition").value(1))
-        .andExpect(jsonPath("$.data.job_definition").value(1));
-    // 至少 14 次 update(13 张表 + 1 次 parent_instance_id NULL update)
-    verify(jdbc, atLeast(14)).update(anyString(), any(MapSqlParameterSource.class));
+        .andExpect(jsonPath("$.data.job_definition").value(1))
+        .andExpect(jsonPath("$.data.workflow_definition").value(1));
+    verify(orchestratorProxyService).adminTestDataCleanupByPrefix("e2e");
   }
 
   @Test
-  void shouldNullOutSelfReferentialParentBeforeDeletingJobInstance() throws Exception {
-    when(jdbc.update(anyString(), any(MapSqlParameterSource.class))).thenReturn(0);
+  void shouldForwardExactIdsCleanupToOrchestrator() throws Exception {
     mockMvc
-        .perform(delete("/api/console/admin/test-data").param("prefix", "e2e"))
-        .andExpect(status().isOk());
-    // 验证存在 UPDATE ... SET parent_instance_id = NULL 的语句
-    verify(jdbc)
-        .update(
-            contains("UPDATE batch.job_instance SET parent_instance_id = NULL"),
-            any(MapSqlParameterSource.class));
-  }
-
-  @Test
-  void shouldMatchPrefixHyphenSuffixOnlyNotBarePrefixSubstring() throws Exception {
-    // prefix='test' 不应误删 'tester';验证 SQL LIKE 模板用 prefix + "-%"
-    when(jdbc.update(anyString(), any(MapSqlParameterSource.class))).thenReturn(0);
-    org.mockito.ArgumentCaptor<MapSqlParameterSource> captor =
-        org.mockito.ArgumentCaptor.forClass(MapSqlParameterSource.class);
-    mockMvc
-        .perform(delete("/api/console/admin/test-data").param("prefix", "test"))
-        .andExpect(status().isOk());
-    verify(jdbc, atLeastOnce()).update(anyString(), captor.capture());
-    MapSqlParameterSource params = captor.getValue();
-    assertThat(params.getValue("p")).isEqualTo("test-%");
-    // 确认不是 "test%"
-    assertThat(params.getValue("p")).asString().endsWith("-%");
+        .perform(delete("/api/console/admin/test-data/by-ids").param("ids", "td,te"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.tenant").value(2));
+    verify(orchestratorProxyService).adminTestDataCleanupByExactTenantIds(List.of("td", "te"));
   }
 
   private ConsoleAdminTestDataCleanupService cleanupService() {
-    return new ConsoleAdminTestDataCleanupService(new ConsoleAdminTestDataCleanupRepository(jdbc));
+    return new ConsoleAdminTestDataCleanupService(orchestratorProxyService);
   }
 }

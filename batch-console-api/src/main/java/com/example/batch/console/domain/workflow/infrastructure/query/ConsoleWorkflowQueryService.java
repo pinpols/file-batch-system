@@ -165,6 +165,7 @@ public class ConsoleWorkflowQueryService {
             request.getWorkflowRunId(),
             request.getNodeCode(),
             request.getNodeStatus(),
+            request.getTraceId(),
             pageRequest,
             decodeCursorId(request.getCursor()));
     List<WorkflowNodeRunEntity> rows = workflowMappers.workflowNodeRunMapper.selectByQuery(query);
@@ -246,6 +247,7 @@ public class ConsoleWorkflowQueryService {
                 new WorkflowNodeRunQuery(
                     resolveTenant(tenantGuard, request.getTenantId()),
                     request.getWorkflowRunId(),
+                    null,
                     null,
                     null,
                     null,

@@ -11122,6 +11122,36 @@ components:
           type: string
           description: ADR-012 失败分类码（FailureClass enum），仅终态 FAILED/PARTIAL_FAILED 时填值。
       required: [id, tenantId, jobCode, instanceNo, bizDate, triggerType, instanceStatus, batchNo, operatorId, rerunFlag, retryFlag, rerunReason, relatedFileId, parentInstanceId, queueCode, workerGroup, priority, traceId, paramsSnapshot, resultSummary, deadlineAt, expectedDurationSeconds, slaAlertedAt, startedAt, finishedAt]
+    ConsoleJobExecutionLogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        jobInstanceId:
+          type: integer
+          format: int64
+        jobPartitionId:
+          type: integer
+          format: int64
+        logLevel:
+          type: string
+        logType:
+          type: string
+        traceId:
+          type: string
+        message:
+          type: string
+        detailRef:
+          type: string
+        extraJson:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, jobInstanceId, jobPartitionId, logLevel, logType, traceId, message, detailRef, extraJson, createdAt]
     ConsoleJobStepInstanceResponse:
       type: object
       properties:
@@ -11415,7 +11445,7 @@ components:
         executionLogs:
           type: array
           items:
-            $ref: '#/components/schemas/ConsoleAuditLogResponse'
+            $ref: '#/components/schemas/ConsoleJobExecutionLogResponse'
         outboxDeliveries:
           type: array
           items:

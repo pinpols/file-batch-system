@@ -35,7 +35,7 @@ public class ConsoleClusterDiagnosticService {
   public Map<String, Object> diagnose(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "diagnostic:" + resolved + ":all",
+        "diagnostic:" + cacheTenant(resolved) + ":all",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadDiagnose(resolved));
@@ -53,7 +53,7 @@ public class ConsoleClusterDiagnosticService {
   public Map<String, Object> shedLockStatus(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "diagnostic:" + resolved + ":shedlock",
+        "diagnostic:" + cacheTenant(resolved) + ":shedlock",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadShedLockStatus(resolved));
@@ -83,7 +83,7 @@ public class ConsoleClusterDiagnosticService {
   public Map<String, Object> workerConsistency(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "diagnostic:" + resolved + ":workers",
+        "diagnostic:" + cacheTenant(resolved) + ":workers",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadWorkerConsistency(resolved));
@@ -126,7 +126,7 @@ public class ConsoleClusterDiagnosticService {
   public Map<String, Object> outboxHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "diagnostic:" + resolved + ":outbox",
+        "diagnostic:" + cacheTenant(resolved) + ":outbox",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadOutboxHealth(resolved));
@@ -168,7 +168,7 @@ public class ConsoleClusterDiagnosticService {
   public Map<String, Object> terminalChildrenHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "diagnostic:" + resolved + ":terminal-children",
+        "diagnostic:" + cacheTenant(resolved) + ":terminal-children",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<Map<String, Object>>() {},
         () -> loadTerminalChildrenHealth(resolved));
@@ -185,5 +185,9 @@ public class ConsoleClusterDiagnosticService {
 
   private static long valueOrZero(Long value) {
     return value == null ? 0L : value;
+  }
+
+  private static String cacheTenant(String tenantId) {
+    return ConsoleQueryCacheService.keySegment(tenantId);
   }
 }

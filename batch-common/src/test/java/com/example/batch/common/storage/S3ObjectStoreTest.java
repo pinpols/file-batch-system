@@ -95,6 +95,17 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  void shouldRejectExtraBytesBeyondDeclaredSize() {
+    String key = "store/under-reported.txt";
+    byte[] content = "payload-with-extra-bytes".getBytes(StandardCharsets.UTF_8);
+
+    assertThatThrownBy(
+            () -> store.put(bucket, key, new ByteArrayInputStream(content), 7, "text/plain"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("length mismatch");
+  }
+
+  @Test
   void shouldReadFromOffset() throws Exception {
     String key = "store/offset.txt";
     byte[] content = "0123456789".getBytes(StandardCharsets.UTF_8);
