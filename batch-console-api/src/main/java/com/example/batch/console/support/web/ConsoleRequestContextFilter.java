@@ -5,6 +5,7 @@ import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.utils.CorrelationIds;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.console.domain.rbac.support.ConsolePrincipal;
 import com.example.batch.console.domain.rbac.support.ConsoleRoles;
@@ -38,11 +39,11 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
     String requestId =
-        firstNonBlank(
+        CorrelationIds.normalize(
             request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER),
             IdGenerator.newBusinessNo("req"));
     String traceId =
-        firstNonBlank(
+        CorrelationIds.normalize(
             request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
     String operatorId = request.getHeader(CommonConstants.DEFAULT_OPERATOR_ID_HEADER);
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
@@ -114,12 +115,5 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
       return principal.tenantId();
     }
     return requestedTenantId;
-  }
-
-  private String firstNonBlank(String value, String fallback) {
-    if (value == null || value.isBlank()) {
-      return fallback;
-    }
-    return value;
   }
 }

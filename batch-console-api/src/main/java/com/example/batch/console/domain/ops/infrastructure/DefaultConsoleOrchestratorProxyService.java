@@ -118,7 +118,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   public ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "snapshot:" + resolved,
+        "snapshot:" + ConsoleQueryCacheService.keySegment(resolved),
         ConsoleQueryCacheService.SNAPSHOT_TTL,
         ConsoleSchedulerSnapshotResponse.class,
         () -> loadSchedulerSnapshot(resolved));
@@ -148,7 +148,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
       String tenantId, int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "snapshot:" + resolved + ":history:" + limit,
+        "snapshot:" + ConsoleQueryCacheService.keySegment(resolved) + ":history:" + limit,
         ConsoleQueryCacheService.SNAPSHOT_TTL,
         new TypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {},
         () -> loadSchedulerSnapshotHistory(resolved, limit));

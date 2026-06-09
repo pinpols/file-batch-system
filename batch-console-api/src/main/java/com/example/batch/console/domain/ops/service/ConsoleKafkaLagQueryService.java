@@ -79,7 +79,7 @@ public class ConsoleKafkaLagQueryService {
   }
 
   private static String cacheSegment(String value) {
-    return value == null || value.isBlank() ? "all" : value;
+    return value == null || value.isBlank() ? "all" : ConsoleQueryCacheService.keySegment(value);
   }
 
   private Map<String, Object> queryGroupLag(AdminClient admin, String groupId)

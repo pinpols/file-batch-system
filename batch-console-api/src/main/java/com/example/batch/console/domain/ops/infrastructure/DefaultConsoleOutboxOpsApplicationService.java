@@ -35,7 +35,7 @@ public class DefaultConsoleOutboxOpsApplicationService
   public ConsoleOutboxStatsResponse stats(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolved + ":outbox-stats",
+        "dashboard:" + ConsoleQueryCacheService.keySegment(resolved) + ":outbox-stats",
         ConsoleQueryCacheService.DASHBOARD_TTL,
         ConsoleOutboxStatsResponse.class,
         () ->

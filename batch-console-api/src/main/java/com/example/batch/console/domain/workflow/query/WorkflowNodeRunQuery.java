@@ -12,5 +12,6 @@ public record WorkflowNodeRunQuery(
     Long workflowRunId,
     String nodeCode,
     String nodeStatus,
+    String traceId,
     PageRequest pageRequest,
     Long cursorId) {}

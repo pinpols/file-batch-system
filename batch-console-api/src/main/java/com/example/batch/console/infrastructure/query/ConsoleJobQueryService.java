@@ -84,6 +84,7 @@ public class ConsoleJobQueryService {
             request.getJobPartitionId(),
             request.getLogLevel(),
             request.getLogType(),
+            request.getTraceId(),
             request.getKeyword(),
             pageRequest,
             decodeCursorId(request.getCursor()));

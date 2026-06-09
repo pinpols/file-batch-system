@@ -1,6 +1,7 @@
 package com.example.batch.common.logging;
 
 import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.utils.CorrelationIds;
 import com.example.batch.common.utils.IdGenerator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,11 +25,11 @@ public class HttpRequestMdcFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
     String requestId =
-        firstNonBlank(
+        CorrelationIds.normalize(
             request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER),
             IdGenerator.newBusinessNo("req"));
     String traceId =
-        firstNonBlank(
+        CorrelationIds.normalize(
             request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
     String tenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
     try {
@@ -42,12 +43,5 @@ public class HttpRequestMdcFilter extends OncePerRequestFilter {
     } finally {
       BatchMdc.clear();
     }
-  }
-
-  private static String firstNonBlank(String value, String fallback) {
-    if (value == null || value.isBlank()) {
-      return fallback;
-    }
-    return value;
   }
 }

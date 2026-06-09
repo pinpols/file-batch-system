@@ -117,4 +117,25 @@ class ConsoleJobExecutionLogQueryTest {
     verify(jobExecutionLogMapper).selectByQuery(captor.capture());
     assertThat(captor.getValue().cursorId()).isEqualTo(9L);
   }
+
+  @Test
+  void traceMode_allowsTraceWithoutJobInstanceForSnapshot() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(7)));
+    when(jobExecutionLogMapper.countByQuery(any())).thenReturn(1L);
+
+    JobExecutionLogQueryRequest req = new JobExecutionLogQueryRequest();
+    req.setTenantId("t1");
+    req.setTraceId("trace-1");
+
+    PageResponse<ConsoleJobExecutionLogResponse> resp = service.jobExecutionLogs(req);
+
+    assertThat(resp.items()).hasSize(1);
+
+    ArgumentCaptor<JobExecutionLogQuery> captor =
+        ArgumentCaptor.forClass(JobExecutionLogQuery.class);
+    verify(jobExecutionLogMapper).selectByQuery(captor.capture());
+    assertThat(captor.getValue().jobInstanceId()).isNull();
+    assertThat(captor.getValue().traceId()).isEqualTo("trace-1");
+  }
 }
