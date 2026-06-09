@@ -18,6 +18,7 @@ import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalR
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
@@ -154,7 +155,7 @@ class DefaultConsoleFileApplicationServiceTest {
     }
 
     @Override
-    public void transferTo(java.io.File dest) {
+    public void transferTo(File dest) {
       throw new UnsupportedOperationException();
     }
   }

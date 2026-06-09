@@ -3,6 +3,7 @@ package com.example.batch.common.storage;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 
 /**
@@ -90,7 +91,7 @@ final class ExactSizeInputStream extends FilterInputStream {
   }
 
   @Override
-  public long transferTo(java.io.OutputStream out) throws IOException {
+  public long transferTo(OutputStream out) throws IOException {
     byte[] buffer = new byte[8192];
     long total = 0L;
     while (true) {
