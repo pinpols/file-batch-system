@@ -122,6 +122,8 @@ public class BatchObjectCryptoService {
       try (CipherOutputStream cipherOutput = new CipherOutputStream(encryptedOutput, cipher)) {
         plainInput.transferTo(cipherOutput);
       }
+    } catch (RuntimeException exception) {
+      throw exception;
     } catch (Exception exception) {
       throw new IllegalStateException("failed to encrypt content", exception);
     }

@@ -17,11 +17,15 @@ import com.example.batch.console.domain.file.web.response.ConsoleFileOperationRe
 import com.example.batch.console.domain.ops.infrastructure.OrchestratorInternalRestClient;
 import com.example.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 class DefaultConsoleFileApplicationServiceTest {
 
@@ -74,6 +78,23 @@ class DefaultConsoleFileApplicationServiceTest {
   }
 
   @Test
+  void shouldCloseUploadInputStreamAfterStorePut() {
+    when(fileRecordMapper.selectFileRecordById("t1", 1L))
+        .thenReturn(
+            Map.of(
+                "storage_type", "S3",
+                "storage_bucket", "bucket-a",
+                "storage_path", "uploads/t1/a.csv"));
+    CloseTrackingInputStream inputStream =
+        new CloseTrackingInputStream("id,name\n1,A\n".getBytes());
+    MultipartFile file = new CloseTrackingMultipartFile(inputStream, 12L, "text/csv");
+
+    service.uploadContent("t1", 1L, file, "idem-1");
+
+    assertThat(inputStream.closed).isTrue();
+  }
+
+  @Test
   void shouldRejectLocalPathFileRecordForUploadContent() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
         .thenReturn(Map.of("storage_type", "LOCAL", "storage_path", "/tmp/a.csv"));
@@ -84,5 +105,72 @@ class DefaultConsoleFileApplicationServiceTest {
         .isInstanceOf(BizException.class)
         .extracting(e -> ((BizException) e).getCode())
         .isEqualTo(ResultCode.STATE_CONFLICT);
+  }
+
+  private static final class CloseTrackingMultipartFile implements MultipartFile {
+    private final CloseTrackingInputStream inputStream;
+    private final long size;
+    private final String contentType;
+
+    private CloseTrackingMultipartFile(
+        CloseTrackingInputStream inputStream, long size, String contentType) {
+      this.inputStream = inputStream;
+      this.size = size;
+      this.contentType = contentType;
+    }
+
+    @Override
+    public String getName() {
+      return "file";
+    }
+
+    @Override
+    public String getOriginalFilename() {
+      return "a.csv";
+    }
+
+    @Override
+    public String getContentType() {
+      return contentType;
+    }
+
+    @Override
+    public boolean isEmpty() {
+      return size <= 0;
+    }
+
+    @Override
+    public long getSize() {
+      return size;
+    }
+
+    @Override
+    public byte[] getBytes() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public InputStream getInputStream() {
+      return inputStream;
+    }
+
+    @Override
+    public void transferTo(File dest) {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  private static final class CloseTrackingInputStream extends ByteArrayInputStream {
+    private boolean closed;
+
+    private CloseTrackingInputStream(byte[] buf) {
+      super(buf);
+    }
+
+    @Override
+    public void close() throws IOException {
+      closed = true;
+      super.close();
+    }
   }
 }

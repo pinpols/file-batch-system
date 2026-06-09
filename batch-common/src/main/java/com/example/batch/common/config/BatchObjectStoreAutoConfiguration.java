@@ -86,6 +86,11 @@ public class BatchObjectStoreAutoConfiguration {
       return raw;
     }
     String defaultKeyRef = kmsProperties == null ? null : kmsProperties.getDefaultKeyRef();
-    return new EncryptingObjectStore(raw, crypto, securityProperties, defaultKeyRef);
+    return new EncryptingObjectStore(
+        raw,
+        crypto,
+        securityProperties,
+        defaultKeyRef,
+        encryptionProperties.getMaxInMemoryEncryptBytes());
   }
 }

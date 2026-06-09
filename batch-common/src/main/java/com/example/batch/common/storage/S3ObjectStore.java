@@ -48,14 +48,22 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public void put(String bucket, String key, InputStream in, long size, String contentType) {
     ensureBucket(bucket);
+    ExactSizeInputStream exact = ExactSizeInputStream.exact(in, "s3", bucket, key, size);
     try {
       if (shouldMultipart(size)) {
-        putMultipart(bucket, key, in, size, contentType);
+        putMultipart(bucket, key, exact, size, contentType);
         return;
       }
+      if (size < 0 || size > Integer.MAX_VALUE) {
+        throw new ObjectStoreException(
+            "s3 object store single put requires known int-sized content length: bucket=%s, key=%s, size=%d"
+                .formatted(bucket, key, size));
+      }
+      byte[] payload = exact.readNBytes((int) size);
+      exact.verifyEndOfStream();
       s3Client.putObject(
           PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
-          RequestBody.fromInputStream(in, size));
+          RequestBody.fromBytes(payload));
     } catch (ObjectStoreException ex) {
       throw ex;
     } catch (Exception ex) {
@@ -189,7 +197,7 @@ public class S3ObjectStore implements BatchObjectStore {
   }
 
   private void putMultipart(
-      String bucket, String key, InputStream in, long size, String contentType) {
+      String bucket, String key, ExactSizeInputStream in, long size, String contentType) {
     CreateMultipartUploadResponse created =
         s3Client.createMultipartUpload(
             CreateMultipartUploadRequest.builder()
@@ -206,11 +214,6 @@ public class S3ObjectStore implements BatchObjectStore {
       while (remaining > 0) {
         int len = (int) Math.min(partSize, remaining);
         byte[] bytes = in.readNBytes(len);
-        if (bytes.length != len) {
-          throw new ObjectStoreException(
-              "s3 multipart upload input ended early: bucket=%s, key=%s, expected=%d, actual=%d"
-                  .formatted(bucket, key, len, bytes.length));
-        }
         UploadPartResponse uploaded =
             s3Client.uploadPart(
                 UploadPartRequest.builder()
@@ -226,6 +229,7 @@ public class S3ObjectStore implements BatchObjectStore {
         remaining -= bytes.length;
         partNumber++;
       }
+      in.verifyEndOfStream();
       s3Client.completeMultipartUpload(
           CompleteMultipartUploadRequest.builder()
               .bucket(bucket)

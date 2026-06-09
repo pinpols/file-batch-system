@@ -16,6 +16,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.storage.ObjectNotFoundException;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
@@ -630,7 +631,6 @@ class DefaultFileGovernanceServiceTest {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
         .thenReturn(Map.of("storage_bucket", "bucket-a", "storage_path", "uploads/t1/a.csv"));
-    when(s3GovernanceStorage.objectExists("bucket-a", "uploads/t1/a.csv")).thenReturn(true);
     when(s3GovernanceStorage.objectSize("bucket-a", "uploads/t1/a.csv")).thenReturn(123L);
 
     String result = service.confirmFileArrival(cmd);
@@ -645,7 +645,8 @@ class DefaultFileGovernanceServiceTest {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
         .thenReturn(Map.of("storage_bucket", "bucket-a", "storage_path", "uploads/t1/a.csv"));
-    when(s3GovernanceStorage.objectExists("bucket-a", "uploads/t1/a.csv")).thenReturn(false);
+    when(s3GovernanceStorage.objectSize("bucket-a", "uploads/t1/a.csv"))
+        .thenThrow(new ObjectNotFoundException("missing"));
 
     assertThatThrownBy(() -> service.confirmFileArrival(cmd))
         .isInstanceOf(BizException.class)

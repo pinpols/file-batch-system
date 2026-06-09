@@ -24,6 +24,7 @@ import com.example.batch.console.support.web.ConsoleRequestMetadata;
 import com.example.batch.console.support.web.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.file.ConsolePresignDownloadResponse;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Builder;
@@ -239,8 +240,8 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     if (!Texts.hasText(contentType)) {
       contentType = "application/octet-stream";
     }
-    try {
-      objectStore.put(bucket, storagePath, file.getInputStream(), file.getSize(), contentType);
+    try (InputStream inputStream = file.getInputStream()) {
+      objectStore.put(bucket, storagePath, inputStream, file.getSize(), contentType);
       return new ConsoleFileOperationResponse("UPLOADED");
     } catch (IOException exception) {
       throw new IllegalStateException("failed to open upload stream", exception);

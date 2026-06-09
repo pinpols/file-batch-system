@@ -4,6 +4,7 @@ import com.example.batch.console.domain.audit.web.response.ConsoleOperationAudit
 import com.example.batch.console.domain.file.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.domain.file.web.response.ConsoleFileRecordResponse;
 import com.example.batch.console.domain.governance.web.response.ConsoleDeadLetterTaskResponse;
+import com.example.batch.console.domain.job.web.response.ConsoleJobExecutionLogResponse;
 import com.example.batch.console.domain.job.web.response.ConsoleJobInstanceResponse;
 import com.example.batch.console.domain.notification.web.response.ConsoleAlertEventResponse;
 import com.example.batch.console.domain.workflow.web.response.ConsoleWorkflowNodeRunResponse;
@@ -19,7 +20,7 @@ public record ConsoleTraceSnapshotResponse(
     List<ConsoleFilePipelineResponse> filePipelines,
     List<ConsoleAuditLogResponse> auditLogs,
     List<ConsoleOperationAuditResponse> operationAudits,
-    List<ConsoleAuditLogResponse> executionLogs,
+    List<ConsoleJobExecutionLogResponse> executionLogs,
     List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries,
     List<ConsoleAlertEventResponse> alerts,
     List<ConsoleDeadLetterTaskResponse> deadLetters) {}

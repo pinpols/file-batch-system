@@ -21,7 +21,7 @@ public class ConsoleWorkerFingerprintQueryService {
   public List<WorkerFingerprintResponse> list(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "workers:" + resolved + ":fingerprints",
+        "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":fingerprints",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<List<WorkerFingerprintResponse>>() {},
         () ->
@@ -33,7 +33,7 @@ public class ConsoleWorkerFingerprintQueryService {
   public List<WorkerFingerprintSummaryResponse> summary(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "workers:" + resolved + ":fingerprints-summary",
+        "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":fingerprints-summary",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<List<WorkerFingerprintSummaryResponse>>() {},
         () ->

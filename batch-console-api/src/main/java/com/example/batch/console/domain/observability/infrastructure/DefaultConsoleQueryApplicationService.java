@@ -119,6 +119,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     workflowRequest.setTenantId(tenantId);
     workflowRequest.setTraceId(normalizedTraceId);
 
+    WorkflowNodeRunQueryRequest workflowNodeRequest =
+        traceRequest(new WorkflowNodeRunQueryRequest());
+    workflowNodeRequest.setTenantId(tenantId);
+    workflowNodeRequest.setTraceId(normalizedTraceId);
+
     FileChainQueryRequest fileRequest = traceRequest(new FileChainQueryRequest());
     fileRequest.setTenantId(tenantId);
     fileRequest.setTraceId(normalizedTraceId);
@@ -136,7 +141,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     operationAuditRequest.setTenantId(tenantId);
     operationAuditRequest.setTraceId(normalizedTraceId);
 
-    AuditLogQueryRequest executionLogRequest = traceRequest(new AuditLogQueryRequest());
+    JobExecutionLogQueryRequest executionLogRequest =
+        traceRequest(new JobExecutionLogQueryRequest());
     executionLogRequest.setTenantId(tenantId);
     executionLogRequest.setTraceId(normalizedTraceId);
 
@@ -156,12 +162,12 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         normalizedTraceId,
         jobInstances(jobRequest).items(),
         workflowRuns(workflowRequest).items(),
-        List.of(),
+        workflowNodeRuns(workflowNodeRequest).items(),
         fileChains(fileRequest).items(),
         filePipelines(pipelineRequest).items(),
         auditLogs(auditRequest).items(),
         operationAuditQueryService.query(operationAuditRequest).items(),
-        executionLogs(executionLogRequest).items(),
+        jobExecutionLogs(executionLogRequest).items(),
         outboxDeliveries(outboxRequest).items(),
         alertEvents(alertRequest).items(),
         deadLetters(deadLetterRequest).items());

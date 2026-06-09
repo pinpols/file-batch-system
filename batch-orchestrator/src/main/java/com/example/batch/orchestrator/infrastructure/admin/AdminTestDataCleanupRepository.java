@@ -1,4 +1,4 @@
-package com.example.batch.console.domain.ops.infrastructure;
+package com.example.batch.orchestrator.infrastructure.admin;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
@@ -16,55 +16,31 @@ import org.springframework.stereotype.Repository;
 /**
  * 测试数据级联清理 SQL repository。
  *
- * <p>按 FK 反向 DELETE。事务边界由 ConsoleAdminTestDataCleanupService 持有，本类只承载 SQL。
+ * <p>按 FK 反向 DELETE。事务边界由 AdminTestDataCleanupService 持有，本类只承载 SQL。该清理由 orchestrator 执行，
+ * console-api 只能通过内部代理触发。
  */
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public class ConsoleAdminTestDataCleanupRepository {
+public class AdminTestDataCleanupRepository {
 
   private final NamedParameterJdbcTemplate jdbc;
 
   /**
-   * 按 prefix 级联清理 11 张**核心配置 + 运行实例**业务表(不是"零残留"全清):
-   *
-   * <ul>
-   *   <li>**已覆盖**(按 FK 反向): workflow_node_run / workflow_run / workflow_node / workflow_edge /
-   *       workflow_definition / job_partition / job_task / job_step_instance / job_execution_log /
-   *       compensation_command / pipeline_instance / job_instance / job_definition /
-   *       file_channel_config / file_template_config / console_user_account / archive_policy /
-   *       tenant
-   *   <li>**未覆盖(已知残留)**: trigger_request / trigger_outbox_event / outbox_event / event_delivery_log
-   *       / event_outbox_retry / webhook_subscription / webhook_delivery_log / notification_channel
-   *       / alert_routing_config / dead_letter_task / file_record / file_dispatch_record / 各种
-   *       *_audit / *_history 表
-   * </ul>
-   *
-   * <p>CI/E2E 清场场景下,未覆盖表会随每次跑积累 prefix=e2e- 的脏数据。需要彻底"零残留"建议 直接 DROP + recreate schema
-   * 或扩展本方法白名单(每次扩展须配 IT 验证 FK 反向顺序)。
+   * 按 prefix 级联清理 11 张核心配置 + 运行实例业务表(不是"零残留"全清)。
    *
    * @param prefix 已由 Controller 层正则约束 (`^[a-zA-Z][a-zA-Z0-9-]{2,32}$`,禁 `_/%/\\`),本方法不重复校验
    * @return 每张表删了多少行的 ordered map(LinkedHashMap 保留依赖顺序)
    */
   public Map<String, Integer> cleanupByPrefix(String prefix) {
-    // Controller 正则 PREFIX_PATTERN 已禁 `_/%/\` 这些 SQL LIKE 元字符,
-    // 此处再做一次 service 层兜底转义(深度防御:Controller 规则未来若放开字符集,
-    // service 仍能阻止"prefix=e2e_A 误匹配 e2eXA-%"这类管理员误删风险)。
     String escapedPrefix = escapeLike(prefix);
     String like = escapedPrefix + "-%";
-    String opLike = "op-" + escapedPrefix + "-%"; // RBAC 测试创建的 op-${prefix}-xxx 用户
+    String opLike = "op-" + escapedPrefix + "-%";
     Map<String, Integer> result = new LinkedHashMap<>();
 
-    // 按 FK 反向清理。每段独立 SQL 便于 audit + 排障。
-    // 依赖链(无 CASCADE,必须自上而下):
-    //   workflow_node_run → workflow_run → (workflow_definition / job_instance)
-    //   job_task / job_step_instance / job_execution_log / compensation_command / pipeline_instance
-    // → job_instance
-    //   job_partition (CASCADE) / job_instance.parent_instance_id (自引,先 NULL 再删)
     String jobInstanceSubquery =
         "SELECT id FROM batch.job_instance WHERE job_code LIKE :p ESCAPE '\\'";
 
-    // 1) workflow 运行态
     result.put(
         "workflow_node_run",
         jdbc.update(
@@ -85,7 +61,6 @@ public class ConsoleAdminTestDataCleanupRepository {
                 + ")",
             new MapSqlParameterSource("p", like)));
 
-    // 2) job_instance 的非 CASCADE 依赖
     result.put(
         "compensation_command",
         jdbc.update(
@@ -120,7 +95,6 @@ public class ConsoleAdminTestDataCleanupRepository {
             "DELETE FROM batch.job_task WHERE job_instance_id IN (" + jobInstanceSubquery + ")",
             new MapSqlParameterSource("p", like)));
 
-    // 3) job_partition (CASCADE,显式 DELETE 保留 audit row count)
     result.put(
         "job_partition",
         jdbc.update(
@@ -129,7 +103,6 @@ public class ConsoleAdminTestDataCleanupRepository {
                 + ")",
             new MapSqlParameterSource("p", like)));
 
-    // 4) job_instance:先 NULL parent_instance_id 解自引,再 DELETE
     jdbc.update(
         "UPDATE batch.job_instance SET parent_instance_id = NULL"
             + " WHERE parent_instance_id IN ("
@@ -142,7 +115,6 @@ public class ConsoleAdminTestDataCleanupRepository {
             "DELETE FROM batch.job_instance WHERE job_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
 
-    // 5) workflow 定义态
     result.put(
         "workflow_node",
         jdbc.update(
@@ -161,7 +133,6 @@ public class ConsoleAdminTestDataCleanupRepository {
             "DELETE FROM batch.workflow_definition WHERE workflow_code LIKE :p ESCAPE '\\'",
             new MapSqlParameterSource("p", like)));
 
-    // 6) job_definition:trigger_runtime_state 是 CASCADE,无需显式
     result.put(
         "job_definition",
         jdbc.update(
@@ -203,11 +174,6 @@ public class ConsoleAdminTestDataCleanupRepository {
     return result;
   }
 
-  /**
-   * 转义 LIKE 元字符,配合 SQL 端 `ESCAPE '\'` 子句。
-   *
-   * <p>转义顺序:`\` 必须先转义(避免后续 `_/%` 被转义后又被吞)。
-   */
   private static String escapeLike(String input) {
     if (input == null || input.isEmpty()) {
       return input;
@@ -218,14 +184,7 @@ public class ConsoleAdminTestDataCleanupRepository {
   /** 永远不删的白名单 —— 跟 scripts/db/wipe-non-system-tenants.sql `:keep` 同步。改这里要同步改 SQL。 */
   private static final Set<String> PROTECTED_TENANT_IDS = CommonConstants.PROTECTED_TENANT_IDS;
 
-  /**
-   * 按精确 tenantId 列表清理。补刀 prefix 模式清不掉的纯短名残留(td/te/tx 这类)。
-   *
-   * <p>白名单(system/default/default-tenant/ta/tb/tc)出现在列表里直接抛拒绝整批,不静默跳过。
-   *
-   * <p>FK 顺序参考 wipe-non-system-tenants.sql:pipeline 运行 → workflow 运行 → job 实例链 → file 相关 → 各种 log →
-   * workflow 定义 → pipeline 定义 → job 定义 → 配置 → 租户本体。
-   */
+  /** 按精确 tenantId 列表清理。补刀 prefix 模式清不掉的纯短名残留(td/te/tx 这类)。 */
   public Map<String, Integer> cleanupByExactTenantIds(List<String> tenantIds) {
     if (tenantIds == null || tenantIds.isEmpty()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
@@ -239,7 +198,6 @@ public class ConsoleAdminTestDataCleanupRepository {
     MapSqlParameterSource params = new MapSqlParameterSource("ids", tenantIds);
     Map<String, Integer> result = new LinkedHashMap<>();
 
-    // 运行态 → 文件前置(pipeline 运行 + workflow 运行 + job 实例链)
     result.put(
         "workflow_node_run",
         jdbc.update(
@@ -266,7 +224,6 @@ public class ConsoleAdminTestDataCleanupRepository {
     result.put(
         "job_partition",
         jdbc.update("DELETE FROM batch.job_partition WHERE tenant_id IN (:ids)", params));
-    // job_instance 自引,先 NULL 再删
     jdbc.update(
         "UPDATE batch.job_instance SET parent_instance_id = NULL WHERE parent_instance_id IN"
             + " (SELECT id FROM batch.job_instance WHERE tenant_id IN (:ids))",
@@ -275,7 +232,6 @@ public class ConsoleAdminTestDataCleanupRepository {
         "job_instance",
         jdbc.update("DELETE FROM batch.job_instance WHERE tenant_id IN (:ids)", params));
 
-    // 文件相关(必须在 pipeline_instance / job_instance 之后)
     result.put(
         "file_error_record",
         jdbc.update("DELETE FROM batch.file_error_record WHERE tenant_id IN (:ids)", params));
@@ -286,7 +242,6 @@ public class ConsoleAdminTestDataCleanupRepository {
         "file_record",
         jdbc.update("DELETE FROM batch.file_record WHERE tenant_id IN (:ids)", params));
 
-    // workflow / pipeline / job 定义
     result.put(
         "workflow_edge",
         jdbc.update(
@@ -315,7 +270,6 @@ public class ConsoleAdminTestDataCleanupRepository {
         "job_definition",
         jdbc.update("DELETE FROM batch.job_definition WHERE tenant_id IN (:ids)", params));
 
-    // 配置 + 用户 + 租户本体
     result.put(
         "file_channel_config",
         jdbc.update("DELETE FROM batch.file_channel_config WHERE tenant_id IN (:ids)", params));

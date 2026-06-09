@@ -1,5 +1,6 @@
 package com.example.batch.console.support.cache;
 
+import com.example.batch.common.utils.Hashes;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -46,10 +47,13 @@ public class ConsoleQueryCacheService {
   /** SCAN 单次返回上限 + DEL 单批次上限：避免一次 DEL 大列表阻塞 Redis 主线程。 */
   private static final int SCAN_BATCH_SIZE = 500;
 
+  private static final int MAX_KEY_SEGMENT_LENGTH = 96;
+  private static final int KEY_SEGMENT_PREFIX_LENGTH = 64;
+
   /** Meta 枚举（纯静态数据）。 */
   public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
 
-  /** Meta 配置选项（队列/日历/窗口等，跟随租户配置变化���。 */
+  /** Meta 配置选项（队列/日历/窗口等，跟随租户配置变化）。 */
   public static final Duration META_OPTION_TTL = Duration.ofMinutes(5);
 
   /** Dashboard 汇总。 */
@@ -133,13 +137,13 @@ public class ConsoleQueryCacheService {
     String pattern = PREFIX + keyPrefix + "*";
     long deleted = RedisKeyUtils.scanAndDelete(redisTemplate, pattern, SCAN_BATCH_SIZE);
     if (deleted > 0) {
-      log.debug("evicted {} cache keys with prefix: {}", deleted, keyPrefix);
+      log.debug("evicted {} cache keys with prefix: {}", deleted, logValue(keyPrefix));
     }
   }
 
   /** 清除指定租户的 meta 选项缓存。 */
   public void evictMetaOptions(String tenantId) {
-    evictByPrefix("meta:" + tenantId);
+    evictByPrefix("meta:" + keySegment(tenantId) + ":");
   }
 
   /** 清除所有 meta 枚举缓存。 */
@@ -149,10 +153,55 @@ public class ConsoleQueryCacheService {
 
   /** 清除指定租户的 dashboard 缓存。 */
   public void evictDashboard(String tenantId) {
-    evictByPrefix("dashboard:" + tenantId);
+    evictByPrefix("dashboard:" + keySegment(tenantId) + ":");
+  }
+
+  /**
+   * 将外部输入归一化成 Redis key segment。
+   *
+   * <p>cache key 保留短可读前缀；遇到长值或特殊字符时追加短 hash，避免高基数字段拉长 key，也避免冒号等分隔符造成前缀误伤。
+   */
+  public static String keySegment(String value) {
+    if (!Texts.hasText(value)) {
+      return "_";
+    }
+    String trimmed = value.trim();
+    StringBuilder out = new StringBuilder(Math.min(trimmed.length(), MAX_KEY_SEGMENT_LENGTH));
+    boolean changed = false;
+    for (int i = 0; i < trimmed.length() && out.length() < MAX_KEY_SEGMENT_LENGTH; i++) {
+      char c = trimmed.charAt(i);
+      if (isKeySegmentChar(c)) {
+        out.append(c);
+      } else {
+        out.append('_');
+        changed = true;
+      }
+    }
+    if (trimmed.length() > MAX_KEY_SEGMENT_LENGTH) {
+      changed = true;
+    }
+    String normalized = out.isEmpty() ? "_" : out.toString();
+    if (!changed) {
+      return normalized;
+    }
+    String hash = Hashes.sha256Short(trimmed);
+    String prefix =
+        normalized.length() <= KEY_SEGMENT_PREFIX_LENGTH
+            ? normalized
+            : normalized.substring(0, KEY_SEGMENT_PREFIX_LENGTH);
+    return prefix + "~" + (hash == null ? "0000000000000000" : hash);
+  }
+
+  private static boolean isKeySegmentChar(char c) {
+    return (c >= 'a' && c <= 'z')
+        || (c >= 'A' && c <= 'Z')
+        || (c >= '0' && c <= '9')
+        || c == '-'
+        || c == '_'
+        || c == '.';
   }
 
   private static String logValue(String value) {
-    return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
+    return value == null ? "" : value.replace('\r', '_').replace('\n', '_').replace('\t', '_');
   }
 }

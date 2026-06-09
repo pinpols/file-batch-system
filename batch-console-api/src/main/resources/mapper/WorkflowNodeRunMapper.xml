@@ -35,6 +35,9 @@
         <if test="nodeStatus != null and nodeStatus != ''">
             and n.node_status = #{nodeStatus}
         </if>
+        <if test="traceId != null and traceId != ''">
+            and r.trace_id like concat('%', #{traceId}, '%')
+        </if>
         <choose>
             <when test="cursorId != null">
                 order by n.id desc
@@ -68,6 +71,9 @@
         </if>
         <if test="nodeStatus != null and nodeStatus != ''">
             and n.node_status = #{nodeStatus}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and r.trace_id like concat('%', #{traceId}, '%')
         </if>
     </select>
 </mapper>

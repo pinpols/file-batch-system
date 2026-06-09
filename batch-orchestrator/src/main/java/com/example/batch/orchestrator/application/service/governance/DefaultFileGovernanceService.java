@@ -6,6 +6,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.storage.ObjectNotFoundException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.Guard;
@@ -251,10 +252,12 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
     String storageBucket = stringValue(fileRecord.get("storage_bucket"));
-    if (!s3GovernanceStorage.objectExists(storageBucket, storagePath)) {
+    long fileSizeBytes;
+    try {
+      fileSizeBytes = s3GovernanceStorage.objectSize(storageBucket, storagePath);
+    } catch (ObjectNotFoundException exception) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
     }
-    long fileSizeBytes = s3GovernanceStorage.objectSize(storageBucket, storagePath);
     Instant now = BatchDateTimeSupport.utcNow();
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("arrivalConfirmedAt", now.toString());

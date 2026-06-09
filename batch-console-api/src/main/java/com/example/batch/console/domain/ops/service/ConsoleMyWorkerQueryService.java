@@ -20,7 +20,7 @@ public class ConsoleMyWorkerQueryService {
   public List<WorkerRegistryEntity> listSelfHosted(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "workers:" + resolved + ":self-hosted",
+        "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":self-hosted",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<List<WorkerRegistryEntity>>() {},
         () -> mapper.selectSelfHostedByTenant(resolved));
@@ -29,7 +29,7 @@ public class ConsoleMyWorkerQueryService {
   public long countSelfHosted(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "workers:" + resolved + ":self-hosted-count",
+        "workers:" + ConsoleQueryCacheService.keySegment(resolved) + ":self-hosted-count",
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         Long.class,
         () -> mapper.countSelfHostedByTenant(resolved));

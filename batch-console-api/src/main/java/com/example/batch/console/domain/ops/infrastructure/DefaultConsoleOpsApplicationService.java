@@ -43,7 +43,7 @@ public class DefaultConsoleOpsApplicationService implements ConsoleOpsApplicatio
   public ConsoleOpsSummaryResponse summary(String tenantId) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "dashboard:" + resolvedTenantId + ":summary",
+        "dashboard:" + ConsoleQueryCacheService.keySegment(resolvedTenantId) + ":summary",
         ConsoleQueryCacheService.DASHBOARD_TTL,
         ConsoleOpsSummaryResponse.class,
         () -> loadSummary(resolvedTenantId));
