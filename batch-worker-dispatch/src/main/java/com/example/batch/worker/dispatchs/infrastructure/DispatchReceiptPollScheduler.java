@@ -1,5 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
@@ -10,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.io.InputStream;
 import java.net.ConnectException;
+import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 import java.net.URLEncoder;
 import java.net.UnknownHostException;
@@ -23,6 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -55,24 +59,47 @@ public class DispatchReceiptPollScheduler {
   private final ObjectMapper objectMapper;
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final MeterRegistry meterRegistry;
+  private final BatchSecurityProperties securityProperties;
   // R2-P0-4：OkHttp 默认 0 超时（永不超时）。stale 远端 → @SchedulerLock 持锁、调度线程被阻塞 → 整 receipt 轮询死锁。
   // 显式 connect/read/write/call 超时；进程 shutdown 时显式回收 dispatcher / connectionPool（默认 keepalive 60s
   // 非守护线程）。
-  private final OkHttpClient httpClient =
-      new OkHttpClient.Builder()
-          .connectTimeout(Duration.ofSeconds(5))
-          .readTimeout(Duration.ofSeconds(15))
-          .writeTimeout(Duration.ofSeconds(5))
-          .callTimeout(Duration.ofSeconds(30))
-          .build();
+  // SSRF: receipt_poll_url 是渠道配置的自由文本(运营/租户可写),与本模块其他 HTTP 出口一致,
+  // 必须经 DnsResolveGuard 做 resolve-then-connect IP 校验,挡内网/云 metadata(169.254.169.254)。
+  // 因 guardedDns 依赖注入的 securityProperties,httpClient 改在 @PostConstruct 构造(字段初始化器拿不到)。
+  private OkHttpClient httpClient;
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicLong pollFailures = new AtomicLong();
   private final AtomicLong pollSuccesses = new AtomicLong();
 
   @PostConstruct
   void initializeMeters() {
+    this.httpClient =
+        new OkHttpClient.Builder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .readTimeout(Duration.ofSeconds(15))
+            .writeTimeout(Duration.ofSeconds(5))
+            .callTimeout(Duration.ofSeconds(30))
+            .dns(guardedDns())
+            .build();
     meterRegistry.gauge("batch.dispatch.receipt.poll.failures", pollFailures);
     meterRegistry.gauge("batch.dispatch.receipt.poll.successes", pollSuccesses);
+  }
+
+  /**
+   * resolve-then-connect 防 SSRF：在 OkHttp 真正建连前回调,解析主机名并对每个 IP 做 {@link DnsResolveGuard}
+   * 黑名单校验(loopback/link-local/private/metadata),命中即抛 {@link UnknownHostException}
+   * 阻止建连。bypass-mode(非 prod 联调)直接走系统解析。与 {@code HttpDispatchChannelAdapter} 同款。
+   */
+  private Dns guardedDns() {
+    return new Dns() {
+      @Override
+      public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+        if (securityProperties.isBypassMode()) {
+          return Dns.SYSTEM.lookup(hostname);
+        }
+        return List.of(DnsResolveGuard.resolveAndValidate(hostname));
+      }
+    };
   }
 
   /**
@@ -91,6 +118,9 @@ public class DispatchReceiptPollScheduler {
 
   private void stopHttpClient(String source) {
     if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
+    if (httpClient == null) {
       return;
     }
     try {
