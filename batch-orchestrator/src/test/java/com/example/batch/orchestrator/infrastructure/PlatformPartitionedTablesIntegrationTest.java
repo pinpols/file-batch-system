@@ -39,7 +39,7 @@ class PlatformPartitionedTablesIntegrationTest extends AbstractIntegrationTest {
             "SELECT count(*) FROM pg_inherits WHERE inhparent='batch.job_instance'::regclass",
             Integer.class);
     // 36 月分区 + default
-    assertThat(outboxParts).isEqualTo(37);
-    assertThat(jiParts).isEqualTo(37);
+    assertThat(outboxParts).as("outbox_event 分区数").isEqualTo(37);
+    assertThat(jiParts).as("job_instance 分区数").isEqualTo(37);
   }
 }
