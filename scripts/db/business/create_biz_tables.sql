@@ -44,21 +44,23 @@ CREATE SCHEMA IF NOT EXISTS batch;
 -- ⚠️ 运维勿在有 in-flight PROCESS 任务时跑本脚本(in-flight staging 会丢,任务幂等重跑)。
 -- 幂等守护:仅当旧表存在且**不是**分区表时才 DROP;已是分区表(正常生产态)绝不 DROP,
 -- 防止运维误跑本脚本(已有库本应跑 migrate-process-staging-to-partitioned.sql)时删掉生产表。
-DO $$
+-- ⚠️ 本文件被 e2e 经 Spring @Sql(ScriptUtils)按分号切割加载,ScriptUtils 不识别 $$ dollar-quote
+-- (会把 DO 块拦腰切断报 "Unterminated dollar quote"),故 DO 体必须用单引号字符串(内部引号翻倍)。
+DO '
 DECLARE
     v_relkind CHAR;
 BEGIN
     SELECT c.relkind INTO v_relkind
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'batch' AND c.relname = 'process_staging';
+    WHERE n.nspname = ''batch'' AND c.relname = ''process_staging'';
 
-    IF v_relkind IS NOT NULL AND v_relkind <> 'p' THEN
-        RAISE NOTICE 'batch.process_staging 是非分区旧表 → DROP 重建为分区表';
+    IF v_relkind IS NOT NULL AND v_relkind <> ''p'' THEN
+        RAISE NOTICE ''batch.process_staging 是非分区旧表 → DROP 重建为分区表'';
         DROP TABLE batch.process_staging CASCADE;
-    ELSIF v_relkind = 'p' THEN
-        RAISE NOTICE 'batch.process_staging 已是分区表 → 保留,跳过 DROP(幂等)';
+    ELSIF v_relkind = ''p'' THEN
+        RAISE NOTICE ''batch.process_staging 已是分区表 → 保留,跳过 DROP(幂等)'';
     END IF;
-END $$;
+END';
 CREATE TABLE IF NOT EXISTS batch.process_staging (
     batch_key      TEXT        NOT NULL,
     row_seq        BIGSERIAL   NOT NULL,
