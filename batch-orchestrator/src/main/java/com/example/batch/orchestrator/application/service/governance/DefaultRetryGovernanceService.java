@@ -3,11 +3,13 @@ package com.example.batch.orchestrator.application.service.governance;
 import com.example.batch.common.enums.DeadLetterErrorClass;
 import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
@@ -338,16 +340,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   public void retryTask(String tenantId, Long taskId, String eventKey) {
     JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
     if (task == null) {
-      throw new IllegalStateException("retry task not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.task.retry_not_found");
     }
     String status = task.getStatus();
     if (!TaskStatus.FAILED.code().equals(status)
         && !TaskStatus.CANCELLED.code().equals(status)
         && !TaskStatus.TERMINATED.code().equals(status)) {
-      throw new IllegalStateException(
-          "retry only allowed from terminal state (FAILED/CANCELLED/TERMINATED), current"
-              + " status: "
-              + status);
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_not_terminal", status);
     }
     if (task.getJobPartitionId() != null) {
       requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
@@ -440,7 +439,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     DeadLetterTaskEntity deadLetterTask =
         deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
     if (deadLetterTask == null) {
-      throw new IllegalStateException("dead letter task not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.dead_letter.not_found");
     }
     String traceId = deadLetterTask.getTraceId();
     boolean injectMdc = traceId != null && !traceId.isBlank();
@@ -452,7 +451,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     try {
       if (!DeadLetterReplayStatus.NEW.code().equals(deadLetterTask.getReplayStatus())
           && !DeadLetterReplayStatus.FAILED.code().equals(deadLetterTask.getReplayStatus())) {
-        throw new IllegalStateException("dead letter task is not replayable");
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.dead_letter.not_replayable");
       }
       if (deadLetterTaskMapper.markReplaying(
               tenantId,
@@ -460,14 +459,16 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
               deadLetterTask.getReplayStatus(),
               DeadLetterReplayStatus.REPLAYING.code())
           <= 0) {
-        throw new IllegalStateException("dead letter task replay conflict");
+        throw BizException.of(ResultCode.CONFLICT, "error.dead_letter.replay_conflict");
       }
       Instant replayAt = BatchDateTimeSupport.utcNow();
       int replayCount = Optional.ofNullable(deadLetterTask.getReplayCount()).orElse(0) + 1;
       try {
         if (!"JOB_PARTITION".equals(deadLetterTask.getSourceType())) {
-          throw new IllegalStateException(
-              "unsupported dead letter source type: " + deadLetterTask.getSourceType());
+          throw BizException.of(
+              ResultCode.INVALID_ARGUMENT,
+              "error.dead_letter.unsupported_source_type",
+              deadLetterTask.getSourceType());
         }
         requeuePartition(
             tenantId, deadLetterTask.getSourceId(), tenantId + ":dead-letter:" + deadLetterTaskId);
@@ -529,12 +530,12 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private void requeuePartition(String tenantId, Long partitionId, String eventKey) {
     JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, partitionId);
     if (partition == null) {
-      throw new IllegalStateException("retry partition not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_not_found");
     }
     JobInstanceEntity jobInstance =
         jobInstanceMapper.selectById(tenantId, partition.getJobInstanceId());
     if (jobInstance == null) {
-      throw new IllegalStateException("retry job instance not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_instance_not_found");
     }
     String traceId = jobInstance.getTraceId();
     boolean injectMdc = traceId != null && !traceId.isBlank();
@@ -557,7 +558,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                           left.getTaskSeq() == null ? 0 : left.getTaskSeq(),
                           right.getTaskSeq() == null ? 0 : right.getTaskSeq()))
               .findFirst()
-              .orElseThrow(() -> new IllegalStateException("retry task not found"));
+              .orElseThrow(
+                  () -> BizException.of(ResultCode.NOT_FOUND, "error.task.retry_not_found"));
 
       JobStepInstanceEntity stepInstance =
           jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
@@ -592,7 +594,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private void requeueTaskWithoutPartition(String tenantId, JobTaskEntity task, String eventKey) {
     JobInstanceEntity jobInstance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
     if (jobInstance == null) {
-      throw new IllegalStateException("retry job instance not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.partition.retry_instance_not_found");
     }
     JobStepInstanceEntity stepInstance =
         jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
@@ -776,13 +778,14 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
   /** 分区或作业实例已被清理（如脚本 sweep）但死信行仍在时,requeue 会失败；不应占用自动重放预算反复打 WARN。 */
   private static boolean isOrphanPartitionReplayFailure(Throwable exception) {
-    if (!(exception instanceof IllegalStateException)) {
+    // requeuePartition 对 partition / job_instance 行缺失抛 BizException(NOT_FOUND),其 getMessage()
+    // 返回 i18n key(BizException 以 messageKey 作 super.message)。死信重放时据此判定 orphan → markGiveUp。
+    if (!(exception instanceof BizException)) {
       return false;
     }
-    String message = exception.getMessage();
-    return message != null
-        && ("retry partition not found".equals(message)
-            || "retry job instance not found".equals(message));
+    String messageKey = exception.getMessage();
+    return "error.partition.retry_not_found".equals(messageKey)
+        || "error.partition.retry_instance_not_found".equals(messageKey);
   }
 
   private record RetryPolicyPlan(String retryPolicy, int maxRetryCount) {}

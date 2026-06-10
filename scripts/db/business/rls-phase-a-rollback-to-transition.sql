@@ -34,6 +34,11 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
+    -- 存在性守护:缺表只跳过并告警,不让整个 DO 块回滚。
+    IF to_regclass(t) IS NULL THEN
+      RAISE NOTICE 'rls-phase-a-rollback: skip missing table % (policy not restored)', t;
+      CONTINUE;
+    END IF;
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_strict ON %s', t);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_transition ON %s', t);
     EXECUTE format($p$

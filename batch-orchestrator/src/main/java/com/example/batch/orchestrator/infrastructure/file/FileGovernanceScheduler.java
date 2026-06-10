@@ -123,22 +123,19 @@ public class FileGovernanceScheduler {
       return;
     }
     try {
-      int failedPipelines =
-          fileGovernanceRepository.markStaleRunningPipelineInstancesFailed(
+      FileGovernanceRepository.StaleSweepResult result =
+          fileGovernanceRepository.markStaleRunningPipelinesAndStepsFailed(
               tenantId, staleSeconds, limit);
-      if (failedPipelines <= 0) {
+      if (result.failedPipelines() <= 0) {
         return;
       }
-      int failedSteps =
-          fileGovernanceRepository.markRunningPipelineStepsFailedForInstances(
-              tenantId, staleSeconds);
       log.warn(
           "stale running pipeline sweep finalized records: tenantId={}, staleSeconds={},"
               + " failedPipelines={}, failedSteps={}",
           tenantId,
           staleSeconds,
-          failedPipelines,
-          failedSteps);
+          result.failedPipelines(),
+          result.failedSteps());
     } catch (Exception exception) {
       log.warn(
           "stale running pipeline sweep failed: tenantId={}, staleSeconds={}, error={}",

@@ -92,8 +92,8 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
    *
    * <ul>
    *   <li>当前已是 EXECUTED：幂等重复调用（例如执行回调重试），直接返回当前记录。
-   *   <li>当前非 APPROVED 且非 EXECUTED：非法状态转换（如 PENDING/REJECTED），抛 {@link IllegalStateException}
-   *       防止把未审批或已拒绝的命令偷偷执行掉。
+   *   <li>当前非 APPROVED 且非 EXECUTED：非法状态转换（如 PENDING/REJECTED），抛 {@link BizException}
+   *       （STATE_CONFLICT → 409）防止把未审批或已拒绝的命令偷偷执行掉。
    * </ul>
    */
   @Override
@@ -108,11 +108,11 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
       // M-3: 区分幂等重复执行（已是 EXECUTED）与非法状态转换
       ApprovalCommandEntity current = require(tenantId, approvalNo);
       if (!ApprovalCommandStatus.EXECUTED.code().equals(current.getApprovalStatus())) {
-        throw new IllegalStateException(
-            "markExecuted failed: approvalNo="
-                + approvalNo
-                + " is not in APPROVED state, current status="
-                + current.getApprovalStatus());
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT,
+            "error.approval.not_in_approved_state",
+            approvalNo,
+            current.getApprovalStatus());
       }
       return toRecord(current);
     }

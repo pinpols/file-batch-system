@@ -130,7 +130,7 @@
 1. 停所有服务:`docker compose down`(不带 `-v`,**别清卷**)
 2. 备份现有卷:`docker run --rm -v batch_postgres-primary-data:/data -v $(pwd)/backup:/backup alpine tar czf /backup/pg-primary-$(date +%s).tgz /data`
 3. 回滚到上一个已知好版本:`git checkout <last-known-good-tag>`(`docs/runbook/releasing.md` 有 tag 规则)
-4. 从最近一份 WAL 备份或 logical dump 恢复(本仓未集成 PITR — TODO ops 团队补)
+4. 从最近一份 WAL 备份或 logical dump 恢复 → 完整步骤见 [`../backup-and-pitr.md`](../backup-and-pitr.md)(§2 恢复演练:PITR 物理恢复 / 逻辑全量恢复)
 5. `docker compose up -d`,人工验证 `batch.job_instance` / `batch.outbox_event` 最近 1h 数据完整性
 
 ---

@@ -7,6 +7,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import com.example.batch.orchestrator.application.service.task.TaskExecutionService;
@@ -166,8 +167,8 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     // task 是 RUNNING，retryTask 应拒绝（只允许 FAILED/CANCELLED/TERMINATED）
     assertThatThrownBy(
             () -> retryGovernanceService.retryTask(TENANT, job.taskId, "boundary-reject"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("terminal state");
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.task.retry_not_terminal");
   }
 
   // ── reclaimTask: 非法状态拒绝 ────────────────────────────────────────────

@@ -38,6 +38,11 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
+    -- 存在性守护:缺表只跳过并告警,不让整个 DO 块回滚。
+    IF to_regclass(t) IS NULL THEN
+      RAISE NOTICE 'rls-phase-a-strict: skip missing table % (RLS not applied)', t;
+      CONTINUE;
+    END IF;
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_transition ON %s', t);
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_strict ON %s', t);
     EXECUTE format($p$
@@ -68,4 +73,5 @@ END $$;
 -- 验证
 -- SELECT schemaname, tablename, policyname FROM pg_policies
 --   WHERE schemaname IN ('biz','batch') AND policyname='tenant_isolation_strict';
--- 期望:9 张 biz 表 + 1 张 batch.process_staging
+-- 期望:10 张 biz 表(含 process_event_copy)+ 1 张 batch.process_staging
+--   注:customer_processed 若环境未建则按存在性守护跳过,期望张数相应减 1。

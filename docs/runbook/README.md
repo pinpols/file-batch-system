@@ -34,6 +34,7 @@
 | 12 | [pg-table-partitioning.md](./pg-table-partitioning.md) | PG 表分区运维（job_instance / outbox 等大表） |
 | 13 | [read-replica.md](./read-replica.md) | Console-API 读写分离（PG streaming replication） |
 | 14 | [minio-lifecycle-policy.md](./minio-lifecycle-policy.md) | MinIO 桶生命周期策略（自动清理） |
+| 15 | [backup-and-pitr.md](./backup-and-pitr.md) | **PG 备份 / PITR / 容量护栏**（上线前必做:base+WAL+逻辑导出、恢复演练、磁盘告警） |
 
 ### 四、灰度 / 切换（特性开关）
 

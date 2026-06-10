@@ -796,3 +796,102 @@ groups:
           summary: "Worker report outbox give-up occurred"
           description: "worker report outbox 放弃投递 ≥ 1 条 (10m 内)。orchestrator 长时间不可达或回报 endpoint 错误,会丢失状态回报。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/incident-response.md#worker-report-outbox-give-up-high"
+
+  # ===========================================================================
+  # 容量护栏(2026-06-10 审计 P2-7 补)。
+  # 背景:归档/清理调度若坏死(ShedLock 卡死 / cron 配错 / 调度异常),原本只有
+  #   应用级 backlog 告警,缺"磁盘 / 库体积"这道兜底——磁盘写满是所有组件的共因故障。
+  #   历史教训:process_staging 曾积压 118GB dead、Docker.raw 147G bloat 才被发现。
+  # 数据源:node-exporter(9100)/ postgres-exporter(9187)/ cadvisor,均已在 prometheus.yml scrape。
+  # 注:归档调度"最近成功时间"目前无直接指标(scheduler 未埋点);此处用「库体积持续增长 +
+  #   磁盘水位」作代理——归档失效必然表现为这两者异常。要精确定位"哪个调度停了",
+  #   后续给 OutboxArchiveScheduler / WorkflowArchiveScheduler / FileGovernanceScheduler 加
+  #   last-success 时间戳 Gauge,再补 `time() - batch_*_archive_last_success_seconds > N` 告警。
+  # ===========================================================================
+  - name: batch.capacity
+    rules:
+      - alert: NodeDiskSpaceLow
+        # 真实数据盘(排除 tmpfs/overlay 等虚拟挂载)可用率 < 15%
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Disk space low (<15% free) on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "挂载点 {{ $labels.mountpoint }} 可用空间 {{ $value | humanizePercentage }},持续 10m。PG 数据盘写满会导致主库拒写、全链路 outage。先查 pg_database_size 与 process_staging 是否失控,确认归档/清理调度在跑。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#磁盘水位与容量护栏"
+
+      - alert: NodeDiskSpaceCritical
+        # 可用率 < 7% = 逼近写满,任何大事务/WAL 突增就 outage
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}) < 0.07
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Disk space CRITICAL (<7% free) on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "挂载点 {{ $labels.mountpoint }} 可用 {{ $value | humanizePercentage }},逼近写满。PG 主库一旦无法写 WAL 即停服。立刻人工干预:DROP 过期分区 / 清归档表 / 扩盘。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#磁盘水位与容量护栏"
+
+      - alert: NodeDiskWillFillIn4Hours
+        # 按近 1h 写入斜率线性外推,预测 4h 内写满 → 提前告警争取处置窗口
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs"}[1h], 4 * 3600) < 0
+        for: 15m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Disk on {{ $labels.instance }}:{{ $labels.mountpoint }} will fill within 4h"
+          description: "按近 1h 写入速率外推,{{ $labels.mountpoint }} 将在 ~4h 内写满。常见根因:归档/清理调度停摆导致表无界增长。查 ProcessStagingOldestAge 与 Outbox backlog 告警是否同时触发。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#磁盘水位与容量护栏"
+
+      - alert: PostgresDatabaseGrowthHigh
+        # 单库 6h 净增 > 10GB = 异常增长(正常增量批处理远低于此);归档失效的最早可观测信号
+        expr: increase(pg_database_size_bytes{datname=~"batch_platform|batch_business"}[6h]) > 10 * 1024 * 1024 * 1024
+        for: 30m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "PostgreSQL database {{ $labels.datname }} grew >10GB in 6h"
+          description: "库 {{ $labels.datname }} 6h 内净增 {{ $value | humanize1024 }}B。正常增量同步远低于此——多半是归档/清理调度坏死(outbox PUBLISHED 不归档 / process_staging 不清 / run 表不归档)。查对应 ShedLock 是否卡死、scheduler 日志有无异常。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#库体积增长治理"
+
+      - alert: PostgresDatabaseSizeHigh
+        # 绝对体积早期预警(默认 200GB,按实际盘容量调)。给运维"该清理/扩容了"的提前量
+        expr: pg_database_size_bytes{datname=~"batch_platform|batch_business"} > 200 * 1024 * 1024 * 1024
+        for: 30m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "PostgreSQL database {{ $labels.datname }} size > 200GB"
+          description: "库 {{ $labels.datname }} 体积 {{ $value | humanize1024 }}B 超 200GB 阈值。确认归档保留策略与分区回收符合预期;阈值按实际数据盘容量在本规则内调整。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#库体积增长治理"
+
+      - alert: PostgresBackupStale
+        # 备份新鲜度:依赖备份脚本成功后 push 一个 unix 时间戳到 Pushgateway(见 backup-and-pitr.md)。
+        # 指标缺失(absent)或 > 26h 未更新都告警——26h 容纳每日备份 + 2h 抖动窗口。
+        expr: |
+          (time() - batch_pg_last_successful_backup_timestamp_seconds > 26 * 3600)
+          or absent(batch_pg_last_successful_backup_timestamp_seconds)
+        for: 10m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "PostgreSQL backup is stale or missing ({{ $labels.datname }})"
+          description: "距上次成功备份已超 26h,或备份新鲜度指标缺失。备份链路(pg_basebackup / pg_dump / WAL 归档)可能已断——这是数据安全底线,立刻排查备份 cron 与归档目标可写性。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#备份新鲜度监控"

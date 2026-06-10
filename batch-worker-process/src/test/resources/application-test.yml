@@ -16,3 +16,8 @@ batch:
     process:
       staging-cleanup:
         enabled: false
+  business:
+    rls:
+      # 测试库未跑 rls-phase-a 脚本(biz 表无 policy),关闭 RLS 健康探针避免 readiness 误报 DOWN。
+      health-check:
+        enabled: false
