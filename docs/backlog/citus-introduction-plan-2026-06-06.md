@@ -26,6 +26,8 @@
 > | **序列 / useGeneratedKeys** | 43 处 mapper `useGeneratedKeys`,distributed insert 取自增 id 行为 | 🟡 POC 验证 |
 >
 > **修正后定位**:Citus 不是"运维改造为主、应用极小",而是 **PK 复合化驱动的跨 23 表 + 千处应用代码重构**(估 12-20 周)。所以 §7 RLS POC **之外**必须再加一个 **PK 复合化 POC**(选 1-2 张核心表先改复合主键,实测应用层爆炸半径),两个 POC 都过才进入实施。
+>
+> **2026-06-10 复核(实库直查)**:上述阻塞全部仍成立——10/10 核心表(`job_instance`/`pipeline_instance`/`outbox_event`/`workflow_run`/`file_record`/`trigger_request`/`dead_letter_task`/`job_partition`/`pipeline_step_run`/`workflow_node_run`)PK 仍为单列 `id`;`useGeneratedKeys` 43 → **49 处**(阻塞面在涨)。已采取的止血:CLAUDE.md §多租隔离新增「新表 PK 前瞻」(新多租大表一律复合 PK);洪峰 benchmark(门槛③)已排入 `worker-throughput-benchmark-plan-2026-06-07.md` P2。另:`outbox_event`/`job_instance` 月分区(partition-migration 01/02)同日在本地环境实跑——**触发新硬阻塞后已回滚**:分区键进 UNIQUE 打破 `ON CONFLICT (tenant_id,event_key)` 等 upsert 契约,orchestrator outbox 写入全失败(6 个 mapper 受影响,清单见脚本 01 头注释)。**该教训直接外推到 Citus**:distributed table 同样要求 UNIQUE 含分片键,同一批 ON CONFLICT 全部会炸——§0.5 的"PK 复合化爆炸半径"POC 必须把 `grep -r 'on conflict'` 全量 mapper 清单纳入评估范围,这是比 `findById` 更隐蔽的爆炸点。
 
 ## 章节速览
 
