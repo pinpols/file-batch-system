@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 文件治理数据访问层（纯 DAO）：提供文件记录查询、状态更新、归档/删除、对账写入和审计追加等操作。
@@ -363,6 +364,24 @@ public class FileGovernanceRepository {
             staleSeconds,
             KEY_LIMIT,
             limit));
+  }
+
+  /** stale running 清理两步结果:置 FAILED 的 pipeline 实例数 + 连带置 FAILED 的 step 数。 */
+  public record StaleSweepResult(int failedPipelines, int failedSteps) {}
+
+  /**
+   * 把超时 RUNNING 的 pipeline 实例与其 step **同事务**置 FAILED。原先两步分属独立事务,第一步提交后崩溃会让 step 永久滞留 RUNNING(下轮扫描按
+   * pipeline_instance.updated_at 过滤,已 FAILED 的实例不再命中)。合并到一个事务,要么全成要么全回滚。
+   */
+  @Transactional
+  public StaleSweepResult markStaleRunningPipelinesAndStepsFailed(
+      String tenantId, long staleSeconds, int limit) {
+    int failedPipelines = markStaleRunningPipelineInstancesFailed(tenantId, staleSeconds, limit);
+    if (failedPipelines <= 0) {
+      return new StaleSweepResult(0, 0);
+    }
+    int failedSteps = markRunningPipelineStepsFailedForInstances(tenantId, staleSeconds);
+    return new StaleSweepResult(failedPipelines, failedSteps);
   }
 
   public int markRunningPipelineStepsFailedForInstances(String tenantId, long staleSeconds) {

@@ -12,6 +12,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -113,6 +114,22 @@ public abstract class AbstractApiExceptionHandler {
             CommonResponse.failure(
                 ResultCode.NOT_FOUND,
                 resolveCommonCode(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.label())));
+  }
+
+  /**
+   * 400 path variable / 查询参数类型转换失败(如 {@code /internal/x/{id}} 的 id 传了非数字)。否则落到 Exception.class 兜底的
+   * 500,console BFF 透传下游 status 会把这类入参错误当系统崩溃展示给操作员。
+   */
+  @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+  public ResponseEntity<CommonResponse<Void>> handleTypeMismatch(
+      MethodArgumentTypeMismatchException exception) {
+    log.info("{} argument type mismatch: name={}", modulePrefix(), exception.getName());
+    return ResponseEntity.badRequest()
+        .body(
+            CommonResponse.failure(
+                ResultCode.INVALID_ARGUMENT,
+                resolveCommonCode(
+                    ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
   }
 
   @ExceptionHandler(Exception.class)

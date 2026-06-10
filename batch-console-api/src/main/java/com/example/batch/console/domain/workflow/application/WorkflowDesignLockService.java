@@ -8,8 +8,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 /**
@@ -35,6 +38,37 @@ public class WorkflowDesignLockService {
   public static final Duration LOCK_TTL = Duration.ofMinutes(5);
 
   private static final String KEY_PREFIX = "wf-design-lock:";
+
+  /**
+   * 原子释放:GET → 校验 lockedBy == 调用者 → DEL,全程在 Redis 单线程内执行,消除「GET 后 TTL 过期、他人重新获锁、本调用误删他人锁」 的竞态。返回
+   * 0=无锁(幂等) / 1=已删 / -1=非持锁人。lockedBy 用 Redis 内置 cjson 解析。
+   */
+  private static final RedisScript<Long> RELEASE_SCRIPT =
+      new DefaultRedisScript<>(
+          "local v = redis.call('GET', KEYS[1])\n"
+              + "if not v then return 0 end\n"
+              + "if cjson.decode(v)['lockedBy'] == ARGV[1] then\n"
+              + "  return redis.call('DEL', KEYS[1])\n"
+              + "else\n"
+              + "  return -1\n"
+              + "end",
+          Long.class);
+
+  /** 原子续期:GET → 校验 lockedBy == 调用者 → SET 新 payload + TTL。返回 0=锁不存在(已过期) / 1=已续 / -1=非持锁人。 */
+  private static final RedisScript<Long> RENEW_SCRIPT =
+      new DefaultRedisScript<>(
+          "local v = redis.call('GET', KEYS[1])\n"
+              + "if not v then return 0 end\n"
+              + "if cjson.decode(v)['lockedBy'] == ARGV[1] then\n"
+              + "  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])\n"
+              + "  return 1\n"
+              + "else\n"
+              + "  return -1\n"
+              + "end",
+          Long.class);
+
+  private static final long RESULT_NOT_OWNER = -1L;
+  private static final long RESULT_ABSENT = 0L;
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -76,36 +110,44 @@ public class WorkflowDesignLockService {
         current != null ? current.lockedBy() : "unknown");
   }
 
-  /** 释放锁:必须持锁人调用;非持锁人调用 → FORBIDDEN(防误删别人锁)。 */
+  /** 释放锁:必须持锁人调用;非持锁人调用 → FORBIDDEN(防误删别人锁)。GET+校验+DEL 由 Lua 原子完成。 */
   public void release(String tenantId, Long definitionId, String userId) {
     String key = buildKey(tenantId, definitionId);
-    LockHolder current = readCurrent(key);
-    if (current == null) {
-      // 锁已过期或从未持有:幂等 no-op
-      return;
-    }
-    if (!current.lockedBy().equals(userId)) {
+    Long result = redisTemplate.execute(RELEASE_SCRIPT, List.of(key), userId);
+    if (result != null && result == RESULT_NOT_OWNER) {
       throw BizException.of(
-          ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", current.lockedBy());
+          ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", currentOwnerOrUnknown(key));
     }
-    redisTemplate.delete(key);
+    // 0(无锁,幂等) / 1(已删) 均视为成功
   }
 
-  /** 续期 5 分钟:必须持锁人调用;锁不存在(过期) → CONFLICT 提示重新申请。 */
+  /** 续期 5 分钟:必须持锁人调用;锁不存在(过期) → CONFLICT 提示重新申请。GET+校验+SET 由 Lua 原子完成。 */
   public LockHolder renew(String tenantId, Long definitionId, String userId) {
     String key = buildKey(tenantId, definitionId);
-    LockHolder current = readCurrent(key);
-    if (current == null) {
-      throw BizException.of(ResultCode.CONFLICT, "error.workflow_design_lock.expired");
-    }
-    if (!current.lockedBy().equals(userId)) {
-      throw BizException.of(
-          ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", current.lockedBy());
-    }
     Instant expiresAt = Instant.now(clock).plus(LOCK_TTL);
     LockHolder renewed = new LockHolder(userId, expiresAt);
-    redisTemplate.opsForValue().set(key, serialize(renewed), LOCK_TTL);
+    Long result =
+        redisTemplate.execute(
+            RENEW_SCRIPT,
+            List.of(key),
+            userId,
+            serialize(renewed),
+            String.valueOf(LOCK_TTL.toMillis()));
+    long code = result == null ? RESULT_ABSENT : result;
+    if (code == RESULT_ABSENT) {
+      throw BizException.of(ResultCode.CONFLICT, "error.workflow_design_lock.expired");
+    }
+    if (code == RESULT_NOT_OWNER) {
+      throw BizException.of(
+          ResultCode.FORBIDDEN, "error.workflow_design_lock.not_owner", currentOwnerOrUnknown(key));
+    }
     return renewed;
+  }
+
+  /** 仅用于 FORBIDDEN 错误消息展示当前持锁人(best-effort);为空返回 "unknown"。 */
+  private String currentOwnerOrUnknown(String key) {
+    LockHolder current = readCurrent(key);
+    return current != null ? current.lockedBy() : "unknown";
   }
 
   /** 读当前锁状态(供 fullUpdate 校验持锁人是否当前 user)。null 表示无锁。 */

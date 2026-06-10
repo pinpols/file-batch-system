@@ -3,10 +3,9 @@ package com.example.batch.console.domain.workflow.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.ResultCode;
@@ -30,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 /** 单测 WorkflowDesignLockService:acquire / release / renew / not-owner / expired 5 case。 */
 @ExtendWith(MockitoExtension.class)
@@ -93,47 +93,47 @@ class WorkflowDesignLockServiceTest {
   }
 
   @Test
-  @DisplayName("renew:持锁人续期 → expiresAt 推到 now + 5min")
+  @DisplayName("renew:持锁人续期(Lua 返回 1) → expiresAt 推到 now + 5min")
   void shouldRenew_whenOwner() {
-    when(valueOps.get(EXPECTED_KEY)).thenReturn(serialize(USER_ALICE, fixedNow.plusSeconds(60)));
+    // renew 走 RENEW_SCRIPT(GET+校验+SET 原子),owner 命中返回 1
+    when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any()))
+        .thenReturn(1L);
 
     LockHolder holder = service.renew(TENANT, DEF_ID, USER_ALICE);
 
     assertThat(holder.lockedBy()).isEqualTo(USER_ALICE);
     assertThat(holder.expiresAt()).isEqualTo(fixedNow.plus(Duration.ofMinutes(5)));
-    verify(valueOps).set(eq(EXPECTED_KEY), anyString(), eq(WorkflowDesignLockService.LOCK_TTL));
   }
 
   @Test
-  @DisplayName("release:持锁人释放 → DELETE key")
+  @DisplayName("release:持锁人释放(Lua 返回 1) → 不抛异常")
   void shouldRelease_whenOwner() {
-    when(valueOps.get(EXPECTED_KEY)).thenReturn(serialize(USER_ALICE, fixedNow.plusSeconds(60)));
+    when(redisTemplate.execute(any(RedisScript.class), anyList(), any())).thenReturn(1L);
 
     service.release(TENANT, DEF_ID, USER_ALICE);
-
-    verify(redisTemplate).delete(EXPECTED_KEY);
   }
 
   @Test
-  @DisplayName("release:非持锁人 → FORBIDDEN,不 DELETE")
+  @DisplayName("release:非持锁人(Lua 返回 -1) → FORBIDDEN")
   void shouldThrowForbidden_whenReleaseByNonOwner() {
+    when(redisTemplate.execute(any(RedisScript.class), anyList(), any())).thenReturn(-1L);
+    // FORBIDDEN 错误消息读当前持锁人(best-effort)
     when(valueOps.get(EXPECTED_KEY)).thenReturn(serialize(USER_BOB, fixedNow.plusSeconds(60)));
 
     assertThatThrownBy(() -> service.release(TENANT, DEF_ID, USER_ALICE))
         .isInstanceOfSatisfying(
             BizException.class, ex -> assertThat(ex.getCode()).isEqualTo(ResultCode.FORBIDDEN));
-    verify(redisTemplate, never()).delete(anyString());
   }
 
   @Test
-  @DisplayName("renew:锁已过期 → CONFLICT,让前端重新 acquire")
+  @DisplayName("renew:锁已过期(Lua 返回 0) → CONFLICT,让前端重新 acquire")
   void shouldThrowConflict_whenRenewExpired() {
-    when(valueOps.get(EXPECTED_KEY)).thenReturn(null);
+    when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any()))
+        .thenReturn(0L);
 
     assertThatThrownBy(() -> service.renew(TENANT, DEF_ID, USER_ALICE))
         .isInstanceOfSatisfying(
             BizException.class, ex -> assertThat(ex.getCode()).isEqualTo(ResultCode.CONFLICT));
-    verify(valueOps, never()).set(anyString(), anyString(), any(Duration.class));
   }
 
   private String serialize(String user, Instant expiresAt) {

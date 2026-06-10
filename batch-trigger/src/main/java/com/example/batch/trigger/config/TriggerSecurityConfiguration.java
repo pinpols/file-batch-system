@@ -1,13 +1,12 @@
 package com.example.batch.trigger.config;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.security.SecretComparator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -85,9 +84,7 @@ public class TriggerSecurityConfiguration {
 
       String header = request.getHeader(HEADER_NAME);
       if (header != null
-          && MessageDigest.isEqual(
-              securityProperties.getInternalSecret().getBytes(StandardCharsets.UTF_8),
-              header.getBytes(StandardCharsets.UTF_8))) {
+          && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
         setAuthenticated();
         chain.doFilter(request, response);
       } else {

@@ -3,6 +3,7 @@ package com.example.batch.worker.processes.config;
 import com.example.batch.common.config.BatchPgSessionProperties;
 import com.example.batch.common.config.BusinessDataSourceProperties;
 import com.example.batch.common.config.HikariPgSessionSupport;
+import com.example.batch.common.rls.RlsPolicyHealthIndicator;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
@@ -11,6 +12,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -91,5 +93,20 @@ public class BusinessDataSourceConfiguration {
   public DataSourceTransactionManager processBusinessTransactionManager(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
     return new DataSourceTransactionManager(processBusinessDataSource);
+  }
+
+  /**
+   * 注册 RLS 健康探针到 actuator/health。worker-process 是持有 business 数据源的运行时,缺 ENABLE/FORCE/policy 即报 DOWN,
+   * 让平台运维加新 biz 表时漏配 RLS 立刻可见。默认开启;e2e/单库测试经 {@code batch.business.rls.health-check.enabled=false}
+   * 关闭(测试库未跑 rls-phase-a 脚本)。
+   */
+  @Bean(name = "rlsPolicyHealthIndicator")
+  @ConditionalOnProperty(
+      name = "batch.business.rls.health-check.enabled",
+      havingValue = "true",
+      matchIfMissing = true)
+  public RlsPolicyHealthIndicator rlsPolicyHealthIndicator(
+      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
+    return new RlsPolicyHealthIndicator(processBusinessDataSource);
   }
 }

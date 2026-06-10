@@ -11,6 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.ObjectProvider;
@@ -97,6 +98,12 @@ public class ProcessStagingOrphanCleaner {
   private static final DateTimeFormatter PARTITION_YMD = DateTimeFormatter.ofPattern("yyyyMMdd");
 
   /**
+   * 分区名白名单:仅允许 {@code process_staging_p<8位日期>}。dropPartition 走 {@code ${}} DDL 拼接,虽然取值来自
+   * listExpiredDailyPartitions(pg_class.relname,系统回显),仍在 DROP 前强制校验做纵深防御——防止后续有人改成把外部值喂进来。
+   */
+  private static final Pattern PARTITION_NAME = Pattern.compile("^process_staging_p[0-9]{8}$");
+
+  /**
    * 分区维护:确保 {@code [今天, 今天+preCreateDays]} 的天级分区存在,并 DROP 早于 {@code 今天-retentionDays} 的过期日分区。
    *
    * <p>DROP 整个日分区瞬间把空间还给 OS,是根治 staging 物理膨胀的关键(DELETE 不缩文件)。分区名 / 边界全部从 UTC 日期派生,无注入面。 {@code
@@ -128,6 +135,10 @@ public class ProcessStagingOrphanCleaner {
       String cutoffYmd = today.minusDays(retentionDays).format(PARTITION_YMD);
       List<String> expired = processStagingMapper.listExpiredDailyPartitions(cutoffYmd);
       for (String partition : expired) {
+        if (partition == null || !PARTITION_NAME.matcher(partition).matches()) {
+          log.warn("skip drop: unexpected partition name (whitelist mismatch): name={}", partition);
+          continue;
+        }
         try {
           processStagingMapper.dropPartition(partition);
           dropped++;

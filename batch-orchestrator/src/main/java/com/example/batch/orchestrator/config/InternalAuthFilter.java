@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.config;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.security.SecretComparator;
 import com.example.batch.orchestrator.auth.ApiKeyEntity;
 import com.example.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
@@ -8,8 +9,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -99,9 +98,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     // Path 2: legacy X-Internal-Secret(主项目 worker / orchestrator 内部互调)
     String header = request.getHeader(HEADER_SECRET);
     if (header != null
-        && MessageDigest.isEqual(
-            securityProperties.getInternalSecret().getBytes(StandardCharsets.UTF_8),
-            header.getBytes(StandardCharsets.UTF_8))) {
+        && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
       chain.doFilter(request, response);
       return;
     }
