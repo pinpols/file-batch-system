@@ -12,7 +12,7 @@
 
 ## ⛔ 运营红线(执行者必读)
 
-1. **本分支严禁在共享本地库(docker batch-postgres-primary)上启动任何服务**——Flyway V170+ 会单向迁移共享库,切回 main 后所有服务 Flyway 校验失配。本分支一切验证只走 **testcontainers**(`mvn test/verify`,新鲜库)。
+1. **本分支服务只连分支专用库**(2026-06-10 修订,经用户确认"开发期不考虑迁移成本"):在现有 PG 容器内新建 `batch_platform_part` / `batch_business_part` 两个全新库,Flyway 从 V1 直跑到 V171(空表,迁移复制步骤自然空转)。**共享库(batch_platform/batch_business)严禁被分支服务触碰**。单测/IT 仍走 testcontainers;全链路验证走专用库(Task 7b),验证时先 stop-all 主服务再起分支服务(端口复用)。
 2. **本分支不开 PR、不合 main**。推 `origin/feature/partition-readiness` 保存即可。
 3. 定期维护:`git rebase origin/main` 保持新鲜(冲突热点预期在 mapper XML 与 db/migration 序号;rebase 后必须全量重跑 Task 9)。
 4. V 序号占用 V170/V171/V172;若 rebase 时 main 已用,顺延并同步改本文档。
@@ -468,6 +468,85 @@ Expected: `ALL TESTS PASSED [mode=e2e]`(41 个)。
 
 ```bash
 git push -u origin feature/partition-readiness
+```
+
+---
+
+### Task 7b: 分支专用环境 + 真实链路全栈验证
+
+**Files:**
+- Create: `scripts/local/env-partition-branch.sh`(专用库建库/初始化/指引一体脚本)
+
+- [ ] **Step 1: 写专用环境脚本**
+
+```bash
+#!/usr/bin/env bash
+# env-partition-branch.sh — feature/partition-readiness 分支专用库管理。
+# 用法: bash scripts/local/env-partition-branch.sh {init|reset|env}
+#   init  — 在现有 batch-postgres-primary 容器内建 batch_platform_part / batch_business_part
+#           (business 库跑 create_biz_tables.sql + rls-phase-a.sql 手工脚本)
+#   reset — DROP 两库重建(全新 Flyway 基线)
+#   env   — 打印起服务前要 export 的 JDBC URL 覆盖(platform/business 指向 *_part)
+set -euo pipefail
+PGC=batch-postgres-primary
+case "${1:-env}" in
+  init|reset)
+    if [[ "$1" == reset ]]; then
+      docker exec $PGC psql -U batch_user -d batch_platform -c "DROP DATABASE IF EXISTS batch_platform_part;" || true
+      docker exec $PGC psql -U batch_user -d batch_platform -c "DROP DATABASE IF EXISTS batch_business_part;" || true
+    fi
+    docker exec $PGC psql -U batch_user -d batch_platform -c "CREATE DATABASE batch_platform_part OWNER batch_user;"
+    docker exec $PGC psql -U batch_user -d batch_platform -c "CREATE DATABASE batch_business_part OWNER batch_user;"
+    docker exec -i $PGC psql -U batch_user -d batch_business_part -v ON_ERROR_STOP=1 < scripts/db/business/create_biz_tables.sql
+    docker exec -i $PGC psql -U batch_user -d batch_business_part -v ON_ERROR_STOP=1 < scripts/db/business/rls-phase-a.sql
+    echo "OK: *_part 两库就绪(platform 库由首个服务启动时 Flyway V1..V171 建表)"
+    ;;
+  env)
+    cat <<'ENV'
+export BATCH_PLATFORM_DB_URL="jdbc:postgresql://localhost:15432/batch_platform_part"
+export BATCH_BUSINESS_DB_URL="jdbc:postgresql://localhost:15432/batch_business_part"
+ENV
+    ;;
+esac
+```
+(若仓库 env 键名与上述不一致,以 `scripts/lib/env-common.sh` / application.yml 实际占位符为准修正,语义不变:platform/business JDBC URL 指向 `*_part`。)
+
+- [ ] **Step 2: 初始化专用库 + 全栈起服务验证**
+
+```bash
+bash scripts/local/env-partition-branch.sh init
+bash scripts/local/stop-all.sh          # 停主分支服务
+mvn -q package -DskipTests -pl batch-e2e-tests -am
+# 拷 8 jar 到 build/runtime-jars/(worktree 内)后:
+eval "$(bash scripts/local/env-partition-branch.sh env)"
+bash scripts/local/restart.sh orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic
+```
+Expected: 8 服务 health UP;orchestrator 日志无 ERROR;`batch_platform_part` 中 outbox_event/job_instance relkind='p'。
+
+- [ ] **Step 3: 真实链路冒烟**
+
+```bash
+# outbox 流转(2 分钟新事件>0、无 publish 积压)
+docker exec batch-postgres-primary psql -U batch_user -d batch_platform_part -tAc   "SELECT count(*) FROM batch.outbox_event WHERE created_at > now() - interval '2 minutes';"
+# 触发一个真实 import job(走 sim 脚本或 console API),确认 job_instance 落分区
+docker exec batch-postgres-primary psql -U batch_user -d batch_platform_part -tAc   "SELECT tableoid::regclass::text, count(*) FROM batch.job_instance GROUP BY 1 LIMIT 5;"
+```
+Expected: 事件计数>0;job_instance 行落在 `job_instance_p_YYYY_MM` 而非 default。
+
+- [ ] **Step 4: 切回主环境确认零污染**
+
+```bash
+bash scripts/local/stop-all.sh
+# 不带 env 覆盖重启主服务(主 checkout, main 分支 jar)
+docker exec batch-postgres-primary psql -U batch_user -d batch_platform -tAc   "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='batch' AND c.relkind='p';"
+```
+Expected: 共享库分区父表数 = 0(未被触碰);主服务 health UP。
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add scripts/local/env-partition-branch.sh
+git commit -m "ops(local): 分支专用库管理脚本(零迁移全新建,共享库零污染)"
 ```
 
 ---
