@@ -18,8 +18,12 @@
   \set months_ahead 6
 \endif
 
+-- psql 变量无法在 $$ 块内插值,经 set_config 传入,DO 块里 current_setting 取回。
+SELECT set_config('batch.months_ahead', :'months_ahead'::text, false);
+
 DO $$
 DECLARE
+    months_ahead INT := current_setting('batch.months_ahead')::int;
     target_table TEXT;
     partition_key TEXT;
     m INT;
@@ -32,7 +36,7 @@ BEGIN
         ('outbox_event', 'created_at'),
         ('job_instance', 'biz_date')
     LOOP
-        FOR m IN 0..(:months_ahead) LOOP
+        FOR m IN 0..months_ahead LOOP
             start_month := date_trunc('month', CURRENT_DATE) + (m || ' months')::interval;
             end_month := start_month + interval '1 month';
             pname := target_table || '_p_' || to_char(start_month, 'YYYY_MM');

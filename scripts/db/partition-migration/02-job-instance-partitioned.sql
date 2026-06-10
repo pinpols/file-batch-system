@@ -2,10 +2,24 @@
 -- 02-job-instance-partitioned.sql
 -- job_instance 改造为按 biz_date 月分区。配合 01-outbox-event-partitioned.sql 使用。
 --
+-- 🔴 2026-06-10 实测硬阻塞(本地全链路实跑发现,已回滚):**本脚本当前禁止执行**。
+--    同 01 脚本:ON CONFLICT upsert 依赖的全局唯一约束被分区键打破(JobInstanceMapper /
+--    WorkflowRunMapper 等 6 个 mapper 受影响,清单见 01 头注释),orchestrator 运行时报
+--    "no unique or exclusion constraint matching the ON CONFLICT specification"。
+--    必须先完成应用层 mapper 改造 + dedup_key 幂等语义评审,才能重启此迁移。
+--    回滚记录:legacy 表换回 + 8 条子表 FK 按 V5/V13/V58 权威定义重建,全表校验零孤儿。
+--
 -- 为什么用 biz_date 而不是 created_at：
 --   - 业务查询多按 biz_date 过滤（"昨天/上周的批次"），分区裁剪命中率高
 --   - 跨年/跨月 catch-up 时同一日期的实例归到对应月分区，便于按业务窗口归档
 --   - created_at 也可用作分区键（适合纯运行态查询），按业务画像取舍
+--
+-- ⚠️ 2026-06-10 重生成:首版脚本按写作时 schema 手写,"备而未用"期间 Flyway 演进新增了
+--    16 列(operator_id/rerun_*/related_file_id/result_summary/high_water_mark_*/calendar_code/
+--    data_interval_*/job_definition_version/rerun_policy_snapshot/replay_session_id/
+--    failure_class/dry_run)+ 9 个二级索引,首次实际应用被 ArchiveSchemaDriftCheck fail-fast
+--    拦截(新表缺列 → orchestrator 拒启)。本版列/约束/索引全部从 pg_dump 实库 DDL 重生成。
+--    教训:本脚本不在 CI/测试覆盖内,每次实际执行前先 pg_dump 对照列集是否漂移。
 --
 -- 重要前置（**比 outbox 更复杂**）：
 --   - PK 改为 (id, biz_date)，所有外键引用 job_instance.id 的表都要重检
@@ -13,6 +27,9 @@
 --     workflow_run / job_execution_log / compensation_command / job_instance.parent_instance_id（自引用）
 --   - 子表 FK 跨分区不被 PG 原生支持 → 全部改为应用层守护
 --   - cleanup-success-instances.sql / SuccessInstanceArchiveScheduler 已支持级联删，仍可用
+--   - 唯一约束语义变化:uk(tenant_id,dedup_key,run_attempt) 与 uk(tenant_id,instance_no)
+--     均追加 biz_date —— 唯一性从"全局"弱化为"每 biz_date 内"。dedup_key 业务上已含
+--     biz_date 维度,实际影响有限;评审时知悉即可。
 --
 -- 风险：HIGH。**强烈建议先在 staging 完整跑一遍**，包括所有 e2e 测试。
 -- =========================================================
@@ -21,7 +38,8 @@
 
 BEGIN;
 
--- A) 建分区父表（biz_date 不可为 NULL，否则分区裁剪失败）
+-- A) 建分区父表(列集 = pg_dump 实库 DDL,2026-06-10;biz_date 升 NOT NULL,
+--    INSERT 时 COALESCE(biz_date, created_at::date) 兜底——分区键不可为 NULL)
 CREATE TABLE batch.job_instance_p (
     id                        BIGINT       NOT NULL,
     tenant_id                 VARCHAR(64)  NOT NULL,
@@ -29,7 +47,6 @@ CREATE TABLE batch.job_instance_p (
     trigger_request_id        BIGINT,
     job_code                  VARCHAR(128) NOT NULL,
     instance_no               VARCHAR(128) NOT NULL,
-    -- biz_date NOT NULL（原表允许 NULL，需要补默认值；下面 INSERT 时用 created_at::date 兜底）
     biz_date                  DATE         NOT NULL,
     trigger_type              VARCHAR(32)  NOT NULL,
     instance_status           VARCHAR(32)  NOT NULL,
@@ -51,17 +68,62 @@ CREATE TABLE batch.job_instance_p (
     expected_duration_seconds INTEGER      NOT NULL DEFAULT 0,
     sla_alerted_at            TIMESTAMPTZ,
     batch_no                  VARCHAR(128),
+    operator_id               VARCHAR(64),
+    rerun_flag                BOOLEAN      NOT NULL DEFAULT false,
+    retry_flag                BOOLEAN      NOT NULL DEFAULT false,
+    rerun_reason              VARCHAR(512),
+    related_file_id           BIGINT,
     parent_instance_id        BIGINT,
+    result_summary            JSONB,
     run_attempt               INTEGER      NOT NULL DEFAULT 1,
+    high_water_mark_in        VARCHAR(64),
+    high_water_mark_out       VARCHAR(64),
+    calendar_code             VARCHAR(64),
+    data_interval_start       TIMESTAMPTZ,
+    data_interval_end         TIMESTAMPTZ,
+    job_definition_version    INTEGER,
+    rerun_policy_snapshot     JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    replay_session_id         BIGINT,
+    failure_class             VARCHAR(32),
+    dry_run                   BOOLEAN      NOT NULL DEFAULT false,
     -- PK 必须包含分区键
     CONSTRAINT job_instance_p_pkey PRIMARY KEY (id, biz_date),
-    -- 唯一约束（含 run_attempt 与 dedup_key）也需包含分区键
+    -- 唯一约束也需包含分区键(语义弱化见文件头注释)
     CONSTRAINT uk_job_instance_p_dedup UNIQUE (tenant_id, dedup_key, run_attempt, biz_date),
-    CONSTRAINT ck_job_instance_p_run_attempt CHECK (run_attempt >= 1)
+    CONSTRAINT uk_job_instance_p_instance_no UNIQUE (tenant_id, instance_no, biz_date),
+    -- CHECK 全量对齐实库(constraint 名 per-table,可与 legacy 同名共存)
+    CONSTRAINT ck_job_instance_data_interval_pair CHECK (
+        (data_interval_start IS NULL AND data_interval_end IS NULL)
+        OR (data_interval_start IS NOT NULL AND data_interval_end IS NOT NULL
+            AND data_interval_start < data_interval_end)),
+    CONSTRAINT ck_job_instance_expected_duration_seconds CHECK (expected_duration_seconds >= 0),
+    CONSTRAINT ck_job_instance_expected_partition_count CHECK (expected_partition_count >= 0),
+    CONSTRAINT ck_job_instance_failed_partition_count CHECK (failed_partition_count >= 0),
+    CONSTRAINT ck_job_instance_failure_class CHECK (
+        failure_class IS NULL OR failure_class IN
+        ('INFRASTRUCTURE','DATA_QUALITY','BUSINESS_RULE','CONFIG','UPSTREAM_DELAY','TIMEOUT','UNKNOWN')),
+    CONSTRAINT ck_job_instance_priority CHECK (priority >= 1 AND priority <= 9),
+    CONSTRAINT ck_job_instance_run_attempt CHECK (run_attempt >= 1),
+    CONSTRAINT ck_job_instance_status CHECK (instance_status IN
+        ('CREATED','WAITING','READY','RUNNING','PARTIAL_FAILED','SUCCESS','FAILED',
+         'CANCELLED','TERMINATED','SUCCESS_DRY_RUN','FAILED_DRY_RUN')),
+    CONSTRAINT ck_job_instance_success_partition_count CHECK (success_partition_count >= 0),
+    CONSTRAINT ck_job_instance_trigger_source CHECK (
+        trigger_request_id IS NOT NULL OR trigger_type = 'MANUAL'),
+    CONSTRAINT ck_job_instance_trigger_type CHECK (trigger_type IN
+        ('SCHEDULED','API','MANUAL','EVENT','CATCH_UP','RERUN'))
 ) PARTITION BY RANGE (biz_date);
 
 ALTER TABLE batch.job_instance_p
     ALTER COLUMN id SET DEFAULT nextval('batch.job_instance_id_seq'::regclass);
+
+-- 出向 FK(分区表 → 普通表,PG 12+ 支持)对齐实库
+ALTER TABLE batch.job_instance_p
+    ADD CONSTRAINT job_instance_p_job_definition_id_fkey
+    FOREIGN KEY (job_definition_id) REFERENCES batch.job_definition(id);
+ALTER TABLE batch.job_instance_p
+    ADD CONSTRAINT job_instance_p_trigger_request_id_fkey
+    FOREIGN KEY (trigger_request_id) REFERENCES batch.trigger_request(id);
 
 -- B) 建月分区（同 outbox-event 模式，前 24 月 + 后 12 月 + 默认）
 DO $$
@@ -84,22 +146,51 @@ BEGIN
             'PARTITION OF batch.job_instance_p DEFAULT';
 END$$;
 
--- C) 业务查询索引
+-- C) 业务查询索引(对齐实库全部 12 个二级索引;_p 命名与 legacy 共存)
 CREATE INDEX idx_job_instance_p_status ON batch.job_instance_p (tenant_id, instance_status, biz_date);
 CREATE INDEX idx_job_instance_p_job_code ON batch.job_instance_p (tenant_id, job_code, biz_date);
 CREATE INDEX idx_job_instance_p_finished_at ON batch.job_instance_p (finished_at)
     WHERE finished_at IS NOT NULL;
+-- DBA-2026-05-20 P1-1 — 活跃实例 partial, scheduler/wait 队列扫描专用
+CREATE INDEX idx_job_instance_p_active_tenant_created ON batch.job_instance_p (tenant_id, created_at)
+    WHERE instance_status IN ('CREATED','WAITING','READY','RUNNING');
+CREATE INDEX idx_job_instance_p_batch_lookup ON batch.job_instance_p (tenant_id, job_code, biz_date, batch_no);
+CREATE INDEX idx_job_instance_p_calendar_bizdate ON batch.job_instance_p (tenant_id, calendar_code, biz_date)
+    WHERE calendar_code IS NOT NULL;
+CREATE INDEX idx_job_instance_p_created_at ON batch.job_instance_p (created_at);
+CREATE INDEX idx_job_instance_p_failure_class ON batch.job_instance_p (tenant_id, failure_class, finished_at DESC)
+    WHERE failure_class IS NOT NULL;
+CREATE INDEX idx_job_instance_p_job_status ON batch.job_instance_p (tenant_id, job_code, instance_status);
+CREATE INDEX idx_job_instance_p_related_file ON batch.job_instance_p (tenant_id, related_file_id);
+CREATE INDEX idx_job_instance_p_sla_tracking ON batch.job_instance_p (instance_status, deadline_at, sla_alerted_at);
+-- DBA-2026-05-20 P0-2 / P1-1 — cleanup-success-instances.sql 与 console biz_date 列表 ORDER BY DESC
+CREATE INDEX idx_job_instance_p_tenant_bizdate_status ON batch.job_instance_p (tenant_id, biz_date DESC, instance_status);
+CREATE INDEX idx_job_instance_p_tenant_status_started ON batch.job_instance_p (tenant_id, instance_status, started_at DESC);
+CREATE INDEX idx_job_instance_p_trace_id ON batch.job_instance_p (trace_id);
 
--- D) 复制数据；biz_date NULL 用 created_at::date 兜底
-INSERT INTO batch.job_instance_p
+-- D) 复制数据(显式全列;biz_date NULL 用 created_at::date 兜底)
+INSERT INTO batch.job_instance_p (
+    id, tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
+    biz_date, trigger_type, instance_status, queue_code, worker_group, priority,
+    dedup_key, version, expected_partition_count, success_partition_count,
+    failed_partition_count, trace_id, params_snapshot, started_at, finished_at,
+    created_at, updated_at, deadline_at, expected_duration_seconds, sla_alerted_at,
+    batch_no, operator_id, rerun_flag, retry_flag, rerun_reason, related_file_id,
+    parent_instance_id, result_summary, run_attempt, high_water_mark_in,
+    high_water_mark_out, calendar_code, data_interval_start, data_interval_end,
+    job_definition_version, rerun_policy_snapshot, replay_session_id, failure_class, dry_run
+)
 SELECT
     id, tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
-    COALESCE(biz_date, created_at::date) AS biz_date,
-    trigger_type, instance_status, queue_code, worker_group, priority, dedup_key,
-    version, expected_partition_count, success_partition_count, failed_partition_count,
-    trace_id, params_snapshot, started_at, finished_at, created_at, updated_at,
-    deadline_at, expected_duration_seconds, sla_alerted_at, batch_no, parent_instance_id,
-    run_attempt
+    COALESCE(biz_date, created_at::date), trigger_type, instance_status, queue_code,
+    worker_group, priority, dedup_key, version, expected_partition_count,
+    success_partition_count, failed_partition_count, trace_id, params_snapshot,
+    started_at, finished_at, created_at, updated_at, deadline_at,
+    expected_duration_seconds, sla_alerted_at, batch_no, operator_id, rerun_flag,
+    retry_flag, rerun_reason, related_file_id, parent_instance_id, result_summary,
+    run_attempt, high_water_mark_in, high_water_mark_out, calendar_code,
+    data_interval_start, data_interval_end, job_definition_version,
+    rerun_policy_snapshot, replay_session_id, failure_class, dry_run
 FROM batch.job_instance;
 
 SELECT setval('batch.job_instance_id_seq',
@@ -136,5 +227,10 @@ LIMIT 20;
 SELECT
     (SELECT count(*) FROM batch.job_instance) AS new_count,
     (SELECT count(*) FROM batch.job_instance_legacy) AS legacy_count;
+
+\echo '=== 列数 vs legacy（应一致,防 schema 漂移复发） ==='
+SELECT
+    (SELECT count(*) FROM information_schema.columns WHERE table_schema='batch' AND table_name='job_instance') AS new_cols,
+    (SELECT count(*) FROM information_schema.columns WHERE table_schema='batch' AND table_name='job_instance_legacy') AS legacy_cols;
 
 \echo '=== 验证后请手动 DROP TABLE batch.job_instance_legacy CASCADE; ==='

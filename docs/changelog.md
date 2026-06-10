@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-06-10
+- **CLAUDE.md §多租隔离 新增「新表 PK 前瞻」**:新建多租大表 PK 一律复合 `(tenant_id, id)`(或含分区键),禁单列 `id` PK。理由:Citus 可行性实扫(`docs/backlog/citus-introduction-plan-2026-06-06.md` §0.5,2026-06-10 复核仍成立)确认存量 23 张表单列 PK 是最大迁移阻塞(复合化重构估 12-20 周,`useGeneratedKeys` 已从 43 涨到 49 处),新表止血控制阻塞面增速。小字典/配置/系统表豁免。存量表**不迁移**(等 Citus 触发门槛满足后按 POC 推进)。
+
 ### 2026-06-01
 - **CLAUDE.md §Java 编码细则 #3 添测试豁免**:`@Autowired` field 注入除了原有的 `@Lazy self` AOP workaround 例外,新增第二类豁免 — `@SpringBootTest` IT 测试。理由:全仓 IT 测继承 `AbstractIntegrationTest` 走 Spring 测试惯例,77 处 `@Autowired private Foo foo;` 已是事实标准,Spring `@SpringBootTest` 下构造器注入需要额外 ParameterResolver 协调且生态不偏好。本规则只豁免 IT 测试,生产代码继续严格执行构造器注入。最近 2 天扫到 17 处看似违反实为这条豁免覆盖,不予迁移。
 
