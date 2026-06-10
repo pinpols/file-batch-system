@@ -95,6 +95,26 @@
         limit #{limit}
     </select>
 
+    <!-- 托管上传会话孤儿候选:#440 createUploadSession 写入的占位行(RECEIVED + APP_MANAGED + WAITING_ARRIVAL),
+         超过 TTL 且从未确认到达(arrivalConfirmedAt 缺失)。S3 对象是否真实存在由调用方二次确认。 -->
+    <select id="selectOrphanUploadSessions" resultType="map">
+        select id,
+               tenant_id,
+               file_name,
+               file_status,
+               storage_bucket,
+               storage_path,
+               created_at
+        from batch.file_record
+        where file_status = #{receivedStatus}
+          and metadata_json -&gt;&gt; 'uploadMode' = #{uploadMode}
+          and coalesce(metadata_json -&gt;&gt; 'arrivalState', '') = #{waitingArrivalState}
+          and metadata_json -&gt;&gt; 'arrivalConfirmedAt' is null
+          and created_at &lt; current_timestamp - (#{ttlSeconds} * interval '1 second')
+        order by created_at asc
+        limit #{limit}
+    </select>
+
     <select id="selectArrivalGovernanceCandidates" resultType="map">
         select id,
                tenant_id,

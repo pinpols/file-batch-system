@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.file;
 import com.example.batch.common.enums.FileDispatchRunStatus;
 import com.example.batch.common.enums.FileDispatchStatus;
 import com.example.batch.common.enums.FileReceiptStatus;
+import com.example.batch.common.enums.FileStatus;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.mapper.FileGovernanceMapper;
@@ -166,6 +167,25 @@ public class FileGovernanceRepository {
             limit,
             "archivedStatus",
             FileDispatchRunStatus.ARCHIVED.code()));
+  }
+
+  /** 托管上传会话孤儿候选:超过 TTL 仍停留在 RECEIVED + APP_MANAGED + WAITING_ARRIVAL 且从未确认到达的占位行。 */
+  public List<Map<String, Object>> selectOrphanUploadSessions(long ttlSeconds, int limit) {
+    if (ttlSeconds <= 0 || limit <= 0) {
+      return List.of();
+    }
+    return fileGovernanceMapper.selectOrphanUploadSessions(
+        params(
+            "receivedStatus",
+            FileStatus.RECEIVED.code(),
+            "uploadMode",
+            "APP_MANAGED",
+            "waitingArrivalState",
+            "WAITING_ARRIVAL",
+            "ttlSeconds",
+            ttlSeconds,
+            KEY_LIMIT,
+            limit));
   }
 
   public List<Map<String, Object>> selectArrivalGovernanceCandidates(int limit) {

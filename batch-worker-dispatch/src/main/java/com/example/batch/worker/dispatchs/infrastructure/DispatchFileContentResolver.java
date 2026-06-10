@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.storage.BatchObjectStore;
+import com.example.batch.common.storage.ObjectStoreException;
 import com.example.batch.common.utils.Texts;
 import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
@@ -14,21 +15,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
-/** 解析分发文件字节：支持本地路径或对象存储（MinIO/S3 兼容）。 */
+/** 解析分发文件字节：支持本地路径或对象存储（S3 协议兼容 / filesystem 后端）。 */
 @Component
 @RequiredArgsConstructor
 public class DispatchFileContentResolver {
 
   private final S3StorageProperties s3Properties;
   private final BatchObjectCryptoService cryptoService;
-  // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配 MinIO 时保持 null(同历史行为)。
+  // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配对象存储时保持 null(同历史行为)。
   private final ObjectProvider<BatchObjectStore> objectStoreProvider;
   private BatchObjectStore objectStore;
 
   @PostConstruct
   void init() {
-    // 对象存储 bean 仅在 MinIO 配置有效时装配;未配则 null
-    // (LOCAL 路径无需对象存储;远程路径在 openInputStream 里按 null 抛"MinIO not configured")。
+    // 对象存储 bean 仅在存储配置有效时装配;未配则 null
+    // (LOCAL 路径无需对象存储;远程路径在 openInputStream 里按 null 抛 ObjectStoreException)。
     this.objectStore = objectStoreProvider.getIfAvailable();
   }
 
@@ -49,7 +50,8 @@ public class DispatchFileContentResolver {
       return Files.newInputStream(local);
     }
     if (objectStore == null) {
-      throw new IllegalStateException("MinIO not configured for remote storage");
+      // 走项目存储异常体系,上层可区分「存储未配置」与其他技术错误(而非被通用 500 吞掉)。
+      throw new ObjectStoreException("object store not configured for remote storage");
     }
     String bucket =
         String.valueOf(fileRecord.getOrDefault("storage_bucket", s3Properties.getBucket()));

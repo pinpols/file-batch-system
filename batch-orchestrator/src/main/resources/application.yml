@@ -36,7 +36,7 @@ spring:
       # 调度侧平台库 Hikari 连接池（调度 / 状态推进 / 查询为主）
       # Outbox 轮询 + 任务状态写入 + ShedLock + Console API 共用，生产建议前置 PgBouncer（transaction mode）
       # 连接需求估算基线:并发调度 tick 数(outbox-poll / waiting-dispatch / partition-reclaim / SLA
-      #   / file-governance x 4 / quota-snapshot / archive x 3,共约 12 路) x 平均事务持续 <= 2s
+      #   / file-governance x 5 / quota-snapshot / archive x 3,共约 13 路) x 平均事务持续 <= 2s
       #   + minimum-idle 保留(5) + Console API 突发(约 10),综合得出生产推荐 50。
       maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:50}
       minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:5}
@@ -260,6 +260,15 @@ batch:
       enabled: ${BATCH_FILE_GOVERNANCE_ACCESS_ENABLED:true}
       # 预签名链接有效期（秒）
       presign-expiry-seconds: ${BATCH_FILE_GOVERNANCE_ACCESS_PRESIGN_EXPIRY_SECONDS:600}
+    upload-session:
+      # 文件治理 - 托管上传会话孤儿清理（#440）：createUploadSession 占位后既未上传也未确认的滞留记录
+      cleanup-enabled: ${BATCH_FILE_GOVERNANCE_UPLOAD_SESSION_CLEANUP_ENABLED:true}
+      # 清理任务间隔（毫秒）
+      cleanup-interval-millis: ${BATCH_FILE_GOVERNANCE_UPLOAD_SESSION_CLEANUP_INTERVAL_MILLIS:3600000}
+      # 孤儿判定 TTL（秒），创建超过该时长仍未上传/未确认视为孤儿，默认 24 小时
+      orphan-ttl-seconds: ${BATCH_FILE_GOVERNANCE_UPLOAD_SESSION_ORPHAN_TTL_SECONDS:86400}
+      # 单次清理批大小
+      cleanup-batch-size: ${BATCH_FILE_GOVERNANCE_UPLOAD_SESSION_CLEANUP_BATCH_SIZE:100}
   sensor:
      kafka-offset:
        enabled: true

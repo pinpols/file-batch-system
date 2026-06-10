@@ -117,6 +117,17 @@ public class EncryptingObjectStore implements BatchObjectStore {
   }
 
   @Override
+  public boolean supportsRangeRead() {
+    // 与 getFrom 抛 UnsupportedOperationException 对称:整对象加密,密文 offset ≠ 明文 offset。
+    // 调用方(如 PreprocessStep range-slice)据此回退整份顺序流。
+    return false;
+  }
+
+  /**
+   * ⚠ 返回的是<b>存储层(密文)字节数</b>,不等于明文字节数(BATCHENC 含 magic + header + GCM tag)。
+   * 仅可用于「对象是否存在/近似大小」判断;<b>严禁</b>当明文长度做 offset/切片计算 (切片入口已由 {@link #supportsRangeRead()} 关死)。
+   */
+  @Override
   public long statSize(String bucket, String key) {
     return delegate.statSize(bucket, key);
   }
@@ -131,6 +142,11 @@ public class EncryptingObjectStore implements BatchObjectStore {
     return delegate.list(bucket, prefix, afterMarker, maxKeys);
   }
 
+  /**
+   * ⚠ presign 返回的是存储层原文的直链——对加密对象,终端用户拿到的是<b>密文</b>。 加密文件的下载必须走 console 代理路径(服务端 {@link #get}
+   * 解密后回传, 见 {@code DefaultFileGovernanceService} 按 {@code content_encryption_enabled} 的路由);
+   * 此处保留透传是因为装饰层下可能存在历史/外部写入的明文对象,对它们 presign 仍合法。
+   */
   @Override
   public String presign(String bucket, String key, Duration ttl) {
     return delegate.presign(bucket, key, ttl);
