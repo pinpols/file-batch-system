@@ -145,9 +145,18 @@ jcmd <pid> VM.native_memory summary                # off-heap 分布
 jcmd <pid> VM.native_memory summary.diff           # vs 上次 baseline 的 diff
 jcmd <pid> VM.native_memory baseline               # 打 baseline
 jcmd <pid> GC.heap_info                            # heap 内存分区
+jcmd <pid> GC.class_histogram                       # heap histogram:按类统计实例数/字节,定位内存大户(等价 jmap -histo)
 jcmd <pid> Thread.print                            # 等价 jstack
 jcmd <pid> JFR.start name=adhoc duration=120s filename=/tmp/adhoc.jfr  # ad-hoc 录制
 jcmd <pid> JFR.dump name=continuous filename=/tmp/now.jfr              # 从 §1.1 持续录制里 dump
+
+# === JEP 520 JFR Method Timing & Tracing(JDK 25 新增,低开销定位慢方法)===
+# 无需 async-profiler/arthas 字节码插桩,直接用 JFR 的 jdk.MethodTiming / jdk.MethodTrace
+# 两个事件 + method filter 采样指定方法的调用计时/调用栈。适合生产环境精确定位单个慢方法,
+# 比 async-profiler 全量采样开销更可控。filter 语法以 `jcmd <pid> help JFR.start` 为准:
+jcmd <pid> help JFR.start                                              # 先看本机 JDK 25 支持的 filter 写法
+jcmd <pid> JFR.start name=mt jdk.MethodTiming#filter=com.example.batch.<Class>::<method>
+jcmd <pid> JFR.dump name=mt filename=/tmp/method-timing.jfr            # 用 JMC 打开看每方法累计耗时/调用次数
 
 # === async-profiler:CPU / Alloc / Lock 火焰图 ===
 ./profiler.sh -d 60 -f /tmp/cpu.html <pid>                  # 60s CPU 火焰图(HTML)
@@ -172,9 +181,10 @@ jcmd <pid> VM.system_properties > /tmp/sysprops.txt
 jcmd <pid> VM.flags > /tmp/flags.txt
 jcmd <pid> Thread.print > /tmp/threads.txt
 jcmd <pid> GC.heap_info > /tmp/heap.txt
+jcmd <pid> GC.class_histogram > /tmp/histo.txt
 jcmd <pid> VM.native_memory summary > /tmp/nmt.txt
 jcmd <pid> JFR.dump name=continuous filename=/tmp/jfr.jfr
-tar czf /tmp/diag-$(date +%s).tar.gz /tmp/{sysprops,flags,threads,heap,nmt}.txt /tmp/jfr.jfr /var/log/app/gc-*.log
+tar czf /tmp/diag-$(date +%s).tar.gz /tmp/{sysprops,flags,threads,heap,histo,nmt}.txt /tmp/jfr.jfr /var/log/app/gc-*.log
 ```
 
 ---
