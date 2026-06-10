@@ -177,6 +177,11 @@ public class WorkerTaskLeaseRenewer {
    */
   @Scheduled(fixedDelayString = "${batch.worker.lease.fast-retry-interval-millis:2000}")
   public void fastRetryFailedLeases() {
+    // 与主续期对称:熔断 OPEN(orchestrator 不可达)时不做逐条快速重试,
+    // 否则反而对不可达 orchestrator 持续加压;等主路径半开探测恢复后再 fast-retry。
+    if (circuitOpen.get()) {
+      return;
+    }
     if (consecutiveFailures.isEmpty()) {
       return;
     }

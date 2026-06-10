@@ -60,7 +60,11 @@ public class OrchestratorGracefulShutdown implements ApplicationListener<Context
   }
 
   public void stopDraining(String source) {
+    // 诊断字段只在 CAS 赢家分支里更新:并发 start/stop 时,输家不得覆盖 reason/drainingSince,
+    // 否则 status() 展示与 draining 实际状态对不上。
     if (draining.compareAndSet(true, false)) {
+      drainingSince = null;
+      reason = source;
       log.info("Orchestrator drain cancelled: source={}", source);
       // 取消 drain → 重新接受流量
       if (eventPublisher != null) {
@@ -71,8 +75,6 @@ public class OrchestratorGracefulShutdown implements ApplicationListener<Context
         }
       }
     }
-    drainingSince = null;
-    reason = source;
   }
 
   public boolean isDraining() {

@@ -28,6 +28,7 @@ public class FileGovernanceProperties {
   private final Reconcile reconcile = new Reconcile();
   private final Arrival arrival = new Arrival();
   private final Access access = new Access();
+  private final UploadSession uploadSession = new UploadSession();
 
   /** 文件到达 / 处理延迟监控（写指标到 Prometheus，超过阈值告警）。 */
   @Data
@@ -125,6 +126,25 @@ public class FileGovernanceProperties {
 
     /** {@code MANUAL_CONFIRM} 模式下"延长等待"按钮单次延长秒数。 */
     private long manualWaitExtensionSeconds = 1800L;
+  }
+
+  /**
+   * 托管上传会话孤儿清理（#440 {@code createUploadSession} 创建占位 file_record 后, 前端既不上传也不调 confirmFileArrival
+   * 时该行会永久滞留——到达组调度不处理、归档清理不清、对账不清）。 超过 TTL 且对象存储中确认无对象的占位行由清理任务置为 DELETED 终态。
+   */
+  @Data
+  public static class UploadSession {
+    /** 孤儿清理总开关。关闭后 UploadSessionCleanupScheduler 不执行。 */
+    private boolean cleanupEnabled = true;
+
+    /** 清理调度间隔（ms）。孤儿会话不紧急，默认 1 小时扫一次。 */
+    private long cleanupIntervalMillis = 3600000L;
+
+    /** 孤儿判定 TTL（秒）。创建超过该时长仍未上传 / 未确认的会话视为孤儿。默认 24 小时。 */
+    private long orphanTtlSeconds = 86400L;
+
+    /** 单次清理批大小。 */
+    private int cleanupBatchSize = 100;
   }
 
   /** 预签名 URL 下载控制（避免暴露长期凭证）。 */

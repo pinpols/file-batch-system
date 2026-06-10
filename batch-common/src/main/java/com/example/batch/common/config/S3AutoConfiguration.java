@@ -24,6 +24,9 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @AutoConfiguration
 @ConditionalOnClass(S3Client.class)
+// 与 BatchObjectStoreAutoConfiguration 的 S3 分支同条件:backend=filesystem 时不实例化 S3Client/
+// S3Presigner/健康探针——否则会对不存在的 endpoint 发 headBucket,把 readiness 拉 DOWN。
+@ConditionalOnProperty(name = "batch.storage.backend", havingValue = "s3", matchIfMissing = true)
 @EnableConfigurationProperties(S3StorageProperties.class)
 public class S3AutoConfiguration {
 

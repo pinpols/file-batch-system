@@ -153,8 +153,10 @@ public class PreprocessStep implements ImportStageStep {
         Integer partitionCount =
             intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
         Charset directCharset = resolveCharset(importPayload, templateConfigObject);
-        if (rangeSliceEligible(
-            importPayload, templateConfig, partitionNo, partitionCount, directCharset)) {
+        // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
+        if (objectStore.supportsRangeRead()
+            && rangeSliceEligible(
+                importPayload, templateConfig, partitionNo, partitionCount, directCharset)) {
           return streamObjectRangeToSpool(
               context,
               importPayload,

@@ -20,5 +20,6 @@ TRUNCATE TABLE
   batch.quota_runtime_state, batch.tenant_scheduler_snapshot,
   batch.data_quality_check, batch.forensic_export_log,
   batch.console_operation_audit, batch.console_ai_audit_log,
-  batch.process_staging, batch.shedlock
+  batch.shedlock
 RESTART IDENTITY CASCADE;
+-- 注意:batch.process_staging 属业务库(batch_business),由 clean-business-runtime.sql 清理,勿在平台库 TRUNCATE。
