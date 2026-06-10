@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.storage.ObjectNotFoundException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
@@ -219,6 +220,40 @@ public class FileGovernanceScheduler {
     }
   }
 
+  /**
+   * 托管上传会话孤儿清理（#440）：{@code createUploadSession} 写入的占位 file_record（RECEIVED + APP_MANAGED +
+   * WAITING_ARRIVAL），前端既不上传也不调 confirmFileArrival 时会永久滞留—— 到达组调度不处理（无 fileGroupCode）、归档清理不清（非
+   * ARCHIVED）、对账不清（S3 对象不存在）。 超过 TTL 且对象存储确认无对象的占位行在此置为 DELETED 终态；对象已存在（用户上传了但没 confirm）则跳过并记日志。
+   */
+  public void cleanupOrphanUploadSessions() {
+    if (!properties.getUploadSession().isCleanupEnabled()) {
+      return;
+    }
+    List<Map<String, Object>> sessions =
+        fileGovernanceRepository.selectOrphanUploadSessions(
+            properties.getUploadSession().getOrphanTtlSeconds(),
+            properties.getUploadSession().getCleanupBatchSize());
+    if (sessions.isEmpty()) {
+      return;
+    }
+    long cleaned = 0L;
+    long skipped = 0L;
+    for (Map<String, Object> session : sessions) {
+      if (cleanupOrphanUploadSession(session)) {
+        cleaned++;
+      } else {
+        skipped++;
+      }
+    }
+    log.info(
+        "orphan upload session cleanup finished: candidates={}, cleaned={}, skipped={},"
+            + " ttlSeconds={}",
+        sessions.size(),
+        cleaned,
+        skipped,
+        properties.getUploadSession().getOrphanTtlSeconds());
+  }
+
   public void reconcileObjectStorage() {
     if (!properties.getReconcile().isEnabled()) {
       return;
@@ -288,6 +323,87 @@ public class FileGovernanceScheduler {
           fileId,
           exception.getMessage(),
           exception);
+    }
+  }
+
+  /**
+   * 单条孤儿会话清理。
+   *
+   * @return true = 已清理；false = 跳过（对象已上传未确认 / 并发状态变化 / 存储侧不确定 / 异常）
+   */
+  private boolean cleanupOrphanUploadSession(Map<String, Object> fileRecord) {
+    Long fileId = toLong(fileRecord.get("id"));
+    String tenantId = text(fileRecord.get("tenant_id"));
+    String storageBucket = text(fileRecord.get("storage_bucket"));
+    String storagePath = text(fileRecord.get("storage_path"));
+    if (fileId == null || tenantId == null || storagePath == null) {
+      return false;
+    }
+    try {
+      // 清理前用对象存储 statSize 确认对象确实不存在:对象已存在 = 用户上传了但没 confirm,
+      // 不能删,跳过并记日志,留给人工 confirm 或后续治理。
+      try {
+        long sizeBytes = s3GovernanceStorage.objectSize(storageBucket, storagePath);
+        log.info(
+            "skip orphan upload session, object uploaded but never confirmed: tenantId={},"
+                + " fileId={}, storagePath={}, sizeBytes={}",
+            tenantId,
+            fileId,
+            storagePath,
+            sizeBytes);
+        return false;
+      } catch (ObjectNotFoundException notFound) {
+        // 期望分支:对象确实不存在 → 确认是孤儿占位行,继续清理
+      }
+      Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
+      cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
+      cleanupMetadata.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
+      // file_audit_log.file_id 外键禁止物理删除 file_record;状态机不允许 RECEIVED → DELETED 直跳,
+      // 沿用归档清理的软删路径,经 ARCHIVED 中转两步置 DELETED 终态。首跳 CAS 在 currentStatus 上,
+      // 并发期间状态已变(如恰好开始 PARSING)则放弃本轮,留给下一轮重新判定。
+      FileStateMachine.assertTransition("RECEIVED", "ARCHIVED");
+      int archived =
+          fileGovernanceRepository.updateFileStatus(
+              tenantId, fileId, "RECEIVED", "ARCHIVED", cleanupMetadata);
+      if (archived <= 0) {
+        return false;
+      }
+      FileStateMachine.assertTransition("ARCHIVED", "DELETED");
+      fileGovernanceRepository.updateFileStatus(tenantId, fileId, "ARCHIVED", "DELETED", null);
+      Map<String, Object> auditDetail = new LinkedHashMap<>();
+      auditDetail.put("storageBucket", storageBucket);
+      auditDetail.put("storagePath", storagePath);
+      auditDetail.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
+      fileGovernanceRepository.appendAudit(
+          new FileGovernanceRepository.FileAuditCommand(
+              tenantId,
+              fileId,
+              "CLEANUP",
+              "SUCCESS",
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+              "orphan-upload-" + fileId,
+              auditDetail));
+      return true;
+    } catch (Exception exception) {
+      Map<String, Object> auditDetail = new LinkedHashMap<>();
+      auditDetail.put("storagePath", storagePath);
+      auditDetail.put("errorMessage", exception.getMessage());
+      fileGovernanceRepository.appendAudit(
+          new FileGovernanceRepository.FileAuditCommand(
+              tenantId,
+              fileId,
+              "CLEANUP",
+              "FAILED",
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+              "orphan-upload-" + fileId,
+              auditDetail));
+      log.warn(
+          "orphan upload session cleanup failed: tenantId={}, fileId={}, error={}",
+          tenantId,
+          fileId,
+          exception.getMessage(),
+          exception);
+      return false;
     }
   }
 

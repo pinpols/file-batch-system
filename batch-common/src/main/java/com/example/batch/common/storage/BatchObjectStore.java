@@ -34,6 +34,15 @@ public interface BatchObjectStore {
   /** 从 {@code offset} 起的正向流（range-slice 用）；调用方读多少、何时停由其自定。 */
   InputStream getFrom(String bucket, String key, long offset);
 
+  /**
+   * 是否支持按明文 offset 的 range 读（{@link #getFrom}）。加密装饰层（{@link EncryptingObjectStore}）整对象加密， 密文 offset
+   * ≠ 明文 offset，返回 {@code false}；需要 range-slice 的调用方（如 import 分片直载）应先探测本方法， 不支持时回退整份顺序流，而不是调 {@code
+   * getFrom} 砸 {@link UnsupportedOperationException}。
+   */
+  default boolean supportsRangeRead() {
+    return true;
+  }
+
   /** 返回对象字节大小。 */
   long statSize(String bucket, String key);
 

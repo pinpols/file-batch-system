@@ -285,10 +285,19 @@ public record JdbcMappedImportSpec(
           "jdbc_mapped_import.stageSwap.attachClause is required for PARTITION_STAGE_SWAP_COPY");
     }
     String upper = clause.trim().toUpperCase();
-    if (!upper.startsWith("FOR VALUES ") || clause.contains(";") || clause.contains("--")) {
+    if (!upper.startsWith("FOR VALUES ")) {
       throw new WorkerConfigException(
-          "jdbc_mapped_import.stageSwap.attachClause must start with FOR VALUES and must not"
-              + " contain statement separators");
+          "jdbc_mapped_import.stageSwap.attachClause must start with FOR VALUES");
+    }
+    // attachClause 是运营在 Console 写入的自由文本,最终拼进 ATTACH PARTITION DDL——
+    // 用白名单字符集而非黑名单:仅允许分区边界字面量(FROM ('2026-06-09') TO (...) /
+    // IN (...) / WITH (MODULUS n, REMAINDER m) / MINVALUE / MAXVALUE)所需字符。
+    // 同时杜绝 ; 分隔、-- 行注释、/* */ 块注释、$$ dollar-quoting、双引号标识符等
+    // 一切可携带附加 DDL 语法的载体('-' 保留给日期字面量,但 '--' 仍显式拒绝)。
+    if (!clause.matches("[A-Za-z0-9_(),'.:+\\-\\s]+") || clause.contains("--")) {
+      throw new WorkerConfigException(
+          "jdbc_mapped_import.stageSwap.attachClause contains characters outside the partition"
+              + " bound whitelist [A-Za-z0-9_(),'.:+- and whitespace]");
     }
   }
 }

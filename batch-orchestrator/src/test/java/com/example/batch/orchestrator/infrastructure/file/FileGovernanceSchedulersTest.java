@@ -20,6 +20,7 @@ class FileGovernanceSchedulersTest {
   private FileGovernanceReconcileScheduler reconcileScheduler;
   private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
   private FileGovernanceLatencyScheduler latencyScheduler;
+  private FileGovernanceUploadSessionCleanupScheduler uploadSessionCleanupScheduler;
 
   @BeforeEach
   void setUp() {
@@ -31,6 +32,8 @@ class FileGovernanceSchedulersTest {
         new FileGovernanceArrivalGroupScheduler(fileGovernanceScheduler, gracefulShutdown);
     latencyScheduler =
         new FileGovernanceLatencyScheduler(fileGovernanceScheduler, gracefulShutdown);
+    uploadSessionCleanupScheduler =
+        new FileGovernanceUploadSessionCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
   }
 
   @Test
@@ -52,6 +55,13 @@ class FileGovernanceSchedulersTest {
     arrivalGroupScheduler.manageFileArrivalGroups();
 
     verify(fileGovernanceScheduler).manageFileArrivalGroups();
+  }
+
+  @Test
+  void shouldDelegateOrphanUploadSessionCleanup() {
+    uploadSessionCleanupScheduler.cleanupOrphanUploadSessions();
+
+    verify(fileGovernanceScheduler).cleanupOrphanUploadSessions();
   }
 
   @Test

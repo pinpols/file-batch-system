@@ -7,12 +7,28 @@
 #   - target index count: 0 / 3 extra secondary indexes
 #
 # The script restores checkpoint_timeout/max_wal_size when it exits.
+#
+# ⚠️ NEVER run against production: ALTER SYSTEM 修改的是 PG 实例级全局参数
+#    (影响实例上所有库),且 SIGKILL/崩溃时 EXIT trap 不保证恢复。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
 cd "$ROOT"
+
+# 守护:本脚本会 ALTER SYSTEM,只允许打本地 PG;确需远程 benchmark 实例时
+# 显式 PG_PARAM_MATRIX_ALLOW_REMOTE=1 越过(自担风险)。
+if [[ "${PG_PARAM_MATRIX_ALLOW_REMOTE:-0}" != "1" ]]; then
+  case "${PGHOST:-localhost}" in
+    localhost|127.0.0.1|::1) ;;
+    *)
+      echo "FATAL: 本脚本通过 ALTER SYSTEM 修改实例级参数,仅允许对本地 PG 执行;当前 PGHOST='${PGHOST}'." >&2
+      echo "       确认目标不是生产实例后,可用 PG_PARAM_MATRIX_ALLOW_REMOTE=1 强制执行。" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 ROWS="${ROWS:-100000}"
 BATCH_SIZE="${BATCH_SIZE:-5000}"

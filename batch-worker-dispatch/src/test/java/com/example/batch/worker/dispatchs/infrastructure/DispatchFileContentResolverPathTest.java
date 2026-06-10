@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.example.batch.common.config.S3StorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.storage.BatchObjectStore;
+import com.example.batch.common.storage.ObjectStoreException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -73,10 +74,10 @@ class DispatchFileContentResolverPathTest {
   }
 
   @Test
-  void openInputStream_remoteWithoutMinioConfig_throwsIllegalState() {
+  void openInputStream_remoteWithoutObjectStore_throwsObjectStoreException() {
     Map<String, Object> record = Map.of("storage_type", "OSS", "storage_path", "bucket/file.csv");
     assertThatThrownBy(() -> resolver.openInputStream(record))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("MinIO");
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("object store not configured");
   }
 }

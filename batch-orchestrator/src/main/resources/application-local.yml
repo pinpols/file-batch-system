@@ -120,6 +120,11 @@ batch:
     access:
       enabled: true
       presign-expiry-seconds: 600
+    upload-session:
+      cleanup-enabled: true
+      cleanup-interval-millis: 3600000
+      orphan-ttl-seconds: 86400
+      cleanup-batch-size: 100
   mq:
     topics:
       import-dispatch: batch.task.dispatch.import

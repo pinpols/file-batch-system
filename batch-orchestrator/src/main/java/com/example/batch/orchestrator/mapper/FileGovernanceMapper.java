@@ -21,6 +21,8 @@ public interface FileGovernanceMapper {
 
   List<Map<String, Object>> selectArchivedFilesForCleanup(Map<String, Object> params);
 
+  List<Map<String, Object>> selectOrphanUploadSessions(Map<String, Object> params);
+
   List<Map<String, Object>> selectArrivalGovernanceCandidates(Map<String, Object> params);
 
   List<Map<String, Object>> selectArrivalGroupSummaries(Map<String, Object> params);
