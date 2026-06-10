@@ -94,7 +94,7 @@ class DeadLetterAutoRetryTest {
   void exhaustedAfterReplayFailure_shouldGiveUp() {
     DeadLetterTaskEntity dl = entity(8L, "tB", 2, 3); // 重放后会变 3 = max
     when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
-    // replayDeadLetter 内部第一步 selectById：返回不存在，触发 IllegalStateException
+    // replayDeadLetter 内部第一步 selectById：返回不存在，触发 BizException(NOT_FOUND)
     when(deadLetterTaskMapper.selectById("tB", 8L)).thenReturn(null);
 
     service.autoRetryDueDeadLetters();

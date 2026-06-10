@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +43,13 @@ public class ApiKeyVerifier {
   private final ApiKeyAuthMapper mapper;
 
   /**
+   * 自注入(CLAUDE.md §Java #3 豁免①):{@code touchAsync} / {@code upgradeLegacyHashAsync} 标了
+   * {@code @Async}, 必须经 Spring 代理调用才异步。原先 {@code this.touchAsync()} 是同类自调用,绕过代理 → @Async 失效 → DB 写
+   * + PBKDF2(50-200ms CPU)在请求线程同步执行,洪峰打爆 Tomcat 线程池。改走 {@code self.xxx()}。
+   */
+  @Lazy @Autowired private ApiKeyVerifier self;
+
+  /**
    * @param rawKey 客户端传来的 X-Batch-Api-Key 原文
    * @param claimedTenantId 客户端传来的 X-Batch-Tenant-Id;必须与 key 在表里的 tenant_id 一致
    * @return 命中且活跃的 {@link ApiKeyEntity};否则空(filter 直接返 401,不暴露具体原因防侧信道)
@@ -60,9 +69,9 @@ public class ApiKeyVerifier {
     for (ApiKeyEntity rec : candidates) {
       String algo = rec.keyHashAlgo() == null ? ApiKeyHasher.ALGO_SHA256_LEGACY : rec.keyHashAlgo();
       if (ApiKeyHasher.verify(rawKey, rec.keyHash(), rec.salt(), algo)) {
-        touchAsync(rec.id());
+        self.touchAsync(rec.id());
         if (ApiKeyHasher.ALGO_SHA256_LEGACY.equals(algo)) {
-          upgradeLegacyHashAsync(rec.id(), rec.keyHash(), rawKey);
+          self.upgradeLegacyHashAsync(rec.id(), rec.keyHash(), rawKey);
         }
         return Optional.of(rec);
       }
@@ -93,7 +102,7 @@ public class ApiKeyVerifier {
   }
 
   @Async
-  void touchAsync(Long id) {
+  public void touchAsync(Long id) {
     try {
       mapper.touchLastUsedAt(id);
     } catch (Exception ex) {
@@ -108,7 +117,7 @@ public class ApiKeyVerifier {
    * worker 并发升级的场景下,落败方无副作用退出。
    */
   @Async
-  void upgradeLegacyHashAsync(Long id, String oldHash, String rawKey) {
+  public void upgradeLegacyHashAsync(Long id, String oldHash, String rawKey) {
     try {
       ApiKeyHasher.SaltedHash upgraded = ApiKeyHasher.hashWithSaltKdf(rawKey);
       int rows = mapper.upgradeHashIfLegacy(id, oldHash, upgraded.hash(), upgraded.salt());

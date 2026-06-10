@@ -14,17 +14,25 @@ import com.example.batch.common.security.ApiKeyHasher;
 import com.example.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ApiKeyVerifierTest {
 
   @Mock private ApiKeyAuthMapper mapper;
   @InjectMocks private ApiKeyVerifier verifier;
+
+  @BeforeEach
+  void wireSelf() {
+    // @Lazy self 自注入在单测无 Spring 容器时为 null;指向自身,@Async 方法在测试里同步执行。
+    ReflectionTestUtils.setField(verifier, "self", verifier);
+  }
 
   // 至少 8 字符 (KEY_PREFIX_LEN)
   private static final String RAW_KEY = "bk_AAAA-secret-token";

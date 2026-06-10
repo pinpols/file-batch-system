@@ -36,8 +36,8 @@ SELECT n.nspname || '.' || c.relname AS tbl, c.relrowsecurity, c.relforcerowsecu
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname IN ('biz','batch')
     AND c.relname IN ('customer_account','customer_processed','process_account_summary',
-                      'process_order_event','risk_alert','risk_score','settlement_batch',
-                      'settlement_detail','transaction','process_staging');
+                      'process_event_copy','process_order_event','risk_alert','risk_score',
+                      'settlement_batch','settlement_detail','transaction','process_staging');
 ```
 
 期望:每张表都有 1 行 policy,`relrowsecurity=t` + `relforcerowsecurity=t`。

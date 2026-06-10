@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.RetryScheduleStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
@@ -195,8 +196,8 @@ class DefaultRetryGovernanceServiceTest {
     when(deadLetterTaskMapper.selectById("t1", 999L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.replayDeadLetter("t1", 999L))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("not found");
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.dead_letter.not_found");
   }
 
   @Test
@@ -205,8 +206,8 @@ class DefaultRetryGovernanceServiceTest {
     when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
 
     assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("not replayable");
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.dead_letter.not_replayable");
   }
 
   @Test
@@ -217,8 +218,8 @@ class DefaultRetryGovernanceServiceTest {
         .thenReturn(0);
 
     assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("conflict");
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.dead_letter.replay_conflict");
   }
 
   @Test
@@ -229,8 +230,7 @@ class DefaultRetryGovernanceServiceTest {
     when(deadLetterTaskMapper.markReplaying(anyString(), anyLong(), anyString(), anyString()))
         .thenReturn(1);
 
-    assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L))
-        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L)).isInstanceOf(BizException.class);
     verify(deadLetterTaskMapper)
         .markReplayFailure(
             anyString(), anyLong(), anyString(), anyInt(), any(), anyString(), any());
