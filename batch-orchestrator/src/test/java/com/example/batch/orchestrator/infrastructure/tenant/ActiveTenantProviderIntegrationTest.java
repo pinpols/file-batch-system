@@ -20,7 +20,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
-    properties = {"batch.startup-self-check.enabled=false"})
+    // 本类专测缓存命中语义,覆盖 application-test.yml 的全局 0(关缓存)为 30s;
+    // 用 invalidateCache() 控制确定性。其余调度测试靠全局 0 避免 staleness。
+    properties = {
+      "batch.startup-self-check.enabled=false",
+      "batch.tenant.active-cache-ttl-millis=30000"
+    })
 class ActiveTenantProviderIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private JdbcTemplate jdbcTemplate;
