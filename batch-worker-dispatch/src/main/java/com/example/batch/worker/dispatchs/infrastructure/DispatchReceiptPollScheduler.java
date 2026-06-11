@@ -95,7 +95,7 @@ public class DispatchReceiptPollScheduler {
       @Override
       public List<InetAddress> lookup(String hostname) throws UnknownHostException {
         if (securityProperties.isBypassMode()) {
-          return Dns.SYSTEM.lookup(hostname);
+          return SYSTEM.lookup(hostname);
         }
         return List.of(DnsResolveGuard.resolveAndValidate(hostname));
       }
