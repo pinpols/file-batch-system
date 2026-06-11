@@ -35,3 +35,11 @@
 - 原"12-20 周"估算中 schema 部分:**实际 1 个工作日内完成**(agent 流水线 + 既有铺路);
   剩余真实工作量集中在:全局轮询器按租户路由改造(5 处 FOR UPDATE + OutboxPollScheduler
   类全局扫描)、连接池三元组调优、worker/console 全栈在 Citus 上的 e2e —— 即"运行时适配"阶段。
+
+## 连接三元组建议(最后一公里 T5 固化)
+
+约束链:`Σ(各服务 Hikari max-pool) ≤ citus.max_shared_pool_size × 有效并发系数 ≤ worker max_connections - 预留`。
+本地基线:8 服务 × Hikari 10 = 80 潜在 coordinator 连接,每个分布式查询经
+coordinator 扇出 → `citus.max_shared_pool_size=25` 限流(实测可活,排队可接受);
+生产按 worker max_connections(默认 100→建议 ≥400)与分片并行度重算。
+集群管理已脚本化:`scripts/local/citus-cluster.sh {up|initdb|status|down}`。
