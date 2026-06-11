@@ -43,3 +43,37 @@
 coordinator 扇出 → `citus.max_shared_pool_size=25` 限流(实测可活,排队可接受);
 生产按 worker max_connections(默认 100→建议 ≥400)与分片并行度重算。
 集群管理已脚本化:`scripts/local/citus-cluster.sh {up|initdb|status|down}`。
+
+---
+
+## 最后一公里完成记录(2026-06-12)
+
+运行时层全部铺通。实施计划:`docs/plans/2026-06-11-citus-runtime-last-mile.md`。
+
+### 跨分片 FOR UPDATE 实际共 9 处(初盘 5 处低估,真集群联调补全)
+| 位置 | 处理 | commit |
+|---|---|---|
+| orchestrator WorkflowNodeRun.selectLatestForUpdate | 补 tenant 单分片 | 73e3aeb30 |
+| orchestrator 补偿 stale 扫 | 租户循环+隔离 | a7b3b4a49 |
+| orchestrator WAIT 传感器扫 | 租户循环,MAX 转每租户 | 40db1f89f |
+| orchestrator JobPartitionMapper:58 | 已带 tenant,零改 | - |
+| orchestrator stale CREATED 三重 not-exists JOIN | 子查询补 tenant 相关联(complex join) | 34447bdbb |
+| trigger TriggerOutboxEvent relay claim | 租户循环 | f29a5e0fc |
+| trigger TriggerRuntimeState wheel 扫 | 租户循环 | f29a5e0fc |
+| console webhook 重试 claim | 租户循环 | f29a5e0fc |
+| worker-core report outbox CTE claim | worker 自身 tenant | f29a5e0fc |
+
+### 租户路由基建(batch-common ActiveTenantRegistry + orchestrator ActiveTenantProvider)
+- 缓存 TTL `@Value("${batch.tenant.active-cache-ttl-millis:30000}")`,测试 profile 设 0 保确定性
+- **registry 必走 AutoConfiguration**(BatchTenantRoutingAutoConfiguration + imports),不用 @Component
+  ——精简 application(e2e app)component-scan 不覆盖 batch-common 子包,@Component 会致注入失败
+
+### 双栈零回归(普通 PG)
+单测+IT+e2e 全绿:orchestrator 1110 / trigger 154 / console 886 / e2e 41/41(Flakes 2 为
+circuit-breaker/misfire timing,重试通过,非回归)。BUILD SUCCESS。所有租户路由改造在普通 PG
+语义等价(多一个 tenant 等值条件),双栈兼容。
+
+### 连接扇出实测教训
+8 服务 × Hikari pool 默认在 coordinator(max_connections 100)上打满("too many clients",
+连诊断查询都排队)。小池(6)可用。生产必须按 `Σ(各服务池) ≤ worker max_connections - 预留`
+三元组重算;集群脚本 citus.max_shared_pool_size=25 限 coordinator→worker 扇出。
