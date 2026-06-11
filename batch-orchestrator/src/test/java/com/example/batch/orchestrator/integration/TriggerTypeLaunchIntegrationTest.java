@@ -62,7 +62,10 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     assertThat(ji).isNotNull();
     assertThat(ji.getTriggerType()).isEqualTo(triggerType.code());
 
-    assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
+    // 修正(2026-06-11):本测试播种的是 DISPATCH 任务,历史断言 "IMPORT" 是隐性 bug——
+    // 全量跑时靠前序 import 测试在共享容器泄漏的事件蹭绿,单跑/类顺序变化即暴露。
+    assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "DISPATCH"))
+        .as("本测试自己播种的 DISPATCH 任务应产生 DISPATCH outbox 事件")
         .isGreaterThanOrEqualTo(1L);
   }
 }
