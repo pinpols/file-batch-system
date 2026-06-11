@@ -76,14 +76,16 @@
     <select id="findById" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
           from batch.webhook_delivery_log
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
          limit 1
     </select>
 
     <update id="claimForRetry">
         update batch.webhook_delivery_log
            set next_retry_at = null
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
            and delivery_status in ('PENDING', 'EXHAUSTED')
            and next_retry_at is not null
     </update>
@@ -95,7 +97,8 @@
                response_body   = null,
                attempt         = #{attempt},
                next_retry_at   = null
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
     </update>
 
     <update id="markRetryFailure">
@@ -105,7 +108,8 @@
                response_body  = #{responseBody},
                delivery_status = 'EXHAUSTED',
                next_retry_at  = #{nextRetryAt}
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
     </update>
 
     <update id="markGiveUp">
@@ -115,6 +119,7 @@
                http_status     = #{httpStatus},
                response_body   = #{responseBody},
                next_retry_at   = null
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
     </update>
 </mapper>

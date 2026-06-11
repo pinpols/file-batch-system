@@ -237,7 +237,7 @@ public class WebhookDeliveryRelay {
   }
 
   private void retryOne(WebhookDeliveryLogEntity row) {
-    int claimed = deliveryLogRepository.claimForRetry(row.getId());
+    int claimed = deliveryLogRepository.claimForRetry(row.getTenantId(), row.getId());
     if (claimed == 0) {
       // 已被其它 relay 实例抢走或行状态已变,本轮跳过
       return;
@@ -253,7 +253,11 @@ public class WebhookDeliveryRelay {
           row.getTenantId(),
           row.getSubscriptionId());
       deliveryLogRepository.markGiveUp(
-          row.getId(), row.getAttempt(), row.getHttpStatus(), "subscription disabled or deleted");
+          row.getTenantId(),
+          row.getId(),
+          row.getAttempt(),
+          row.getHttpStatus(),
+          "subscription disabled or deleted");
       giveUpCounter.increment();
       return;
     }
@@ -269,6 +273,7 @@ public class WebhookDeliveryRelay {
           row.getTenantId(),
           ex);
       deliveryLogRepository.markGiveUp(
+          row.getTenantId(),
           row.getId(),
           row.getAttempt(),
           row.getHttpStatus(),
@@ -281,7 +286,8 @@ public class WebhookDeliveryRelay {
     WebhookDeliveryResult result =
         dispatcher.attemptDelivery(subscription.get(), payload, row.getPayloadJson());
     if (result.success()) {
-      deliveryLogRepository.markRetrySuccess(row.getId(), nextAttempt, result.httpStatus());
+      deliveryLogRepository.markRetrySuccess(
+          row.getTenantId(), row.getId(), nextAttempt, result.httpStatus());
       log.info(
           "WebhookDeliveryRelay 重投成功: id={} tenantId={} attempt={}",
           row.getId(),
@@ -292,7 +298,7 @@ public class WebhookDeliveryRelay {
 
     if (nextAttempt >= properties.getAbsoluteMaxAttempts()) {
       deliveryLogRepository.markGiveUp(
-          row.getId(), nextAttempt, result.httpStatus(), result.errorSummary());
+          row.getTenantId(), row.getId(), nextAttempt, result.httpStatus(), result.errorSummary());
       giveUpCounter.increment();
       log.warn(
           "WebhookDeliveryRelay 达到上限,标 GIVE_UP: id={} tenantId={} attempt={} max={}",
@@ -306,7 +312,12 @@ public class WebhookDeliveryRelay {
     Instant nextRetryAt =
         BatchDateTimeSupport.utcNow().plusSeconds(computeBackoffSeconds(nextAttempt));
     deliveryLogRepository.markRetryFailure(
-        row.getId(), nextAttempt, result.httpStatus(), result.errorSummary(), nextRetryAt);
+        row.getTenantId(),
+        row.getId(),
+        nextAttempt,
+        result.httpStatus(),
+        result.errorSummary(),
+        nextRetryAt);
     log.debug(
         "WebhookDeliveryRelay 重投失败,排程下次: id={} tenantId={} attempt={} nextRetryAt={}",
         row.getId(),

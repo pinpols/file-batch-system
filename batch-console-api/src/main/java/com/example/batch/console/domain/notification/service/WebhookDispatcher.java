@@ -189,7 +189,7 @@ public class WebhookDispatcher {
                       BatchDateTimeSupport.utcNow().plusSeconds(INITIAL_RELAY_DELAY_SECONDS))
                   .build());
       pendingDeliveries.add(
-          new PendingWebhookDelivery(deliveryLogId, subscription, payload, payloadJson));
+          new PendingWebhookDelivery(tenantId, deliveryLogId, subscription, payload, payloadJson));
     }
     return pendingDeliveries;
   }
@@ -202,7 +202,7 @@ public class WebhookDispatcher {
 
       if (result.success()) {
         deliveryLogRepository.markRetrySuccess(
-            pending.deliveryLogId(), attempt, result.httpStatus());
+            pending.tenantId(), pending.deliveryLogId(), attempt, result.httpStatus());
         return;
       }
 
@@ -211,6 +211,7 @@ public class WebhookDispatcher {
         backoffMillis *= 2;
       } else {
         deliveryLogRepository.markRetryFailure(
+            pending.tenantId(),
             pending.deliveryLogId(),
             attempt,
             result.httpStatus(),
@@ -319,6 +320,7 @@ public class WebhookDispatcher {
   }
 
   private record PendingWebhookDelivery(
+      String tenantId,
       Long deliveryLogId,
       WebhookSubscriptionEntity subscription,
       WebhookEventPayload payload,

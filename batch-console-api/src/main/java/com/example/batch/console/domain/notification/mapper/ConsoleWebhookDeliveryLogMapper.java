@@ -29,15 +29,20 @@ public interface ConsoleWebhookDeliveryLogMapper {
   List<WebhookDeliveryLogEntity> findEligibleRetries(
       @Param("now") Instant now, @Param("limit") int limit);
 
-  Optional<WebhookDeliveryLogEntity> findById(@Param("id") Long id);
+  Optional<WebhookDeliveryLogEntity> findById(
+      @Param("tenantId") String tenantId, @Param("id") Long id);
 
   /** Relay CAS 抢占：把 next_retry_at 置 null，返回 1=本实例独占成功，0=被其他 relay 抢先。 */
-  int claimForRetry(@Param("id") Long id);
+  int claimForRetry(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   int markRetrySuccess(
-      @Param("id") Long id, @Param("attempt") int attempt, @Param("httpStatus") Integer httpStatus);
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("attempt") int attempt,
+      @Param("httpStatus") Integer httpStatus);
 
   int markRetryFailure(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("attempt") int attempt,
       @Param("httpStatus") Integer httpStatus,
@@ -45,6 +50,7 @@ public interface ConsoleWebhookDeliveryLogMapper {
       @Param("nextRetryAt") Instant nextRetryAt);
 
   int markGiveUp(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("attempt") int attempt,
       @Param("httpStatus") Integer httpStatus,

@@ -67,7 +67,8 @@
                last_reset_at      = #{lastResetAt},
                updated_at         = current_timestamp,
                version            = version + 1
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
            and version = #{version}
     </update>
 

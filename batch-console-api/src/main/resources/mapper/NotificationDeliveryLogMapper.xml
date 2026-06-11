@@ -26,6 +26,7 @@
                error_key = #{errorKey},
                error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
                attempt = #{attempt}
-         WHERE id = #{id}
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
     </update>
 </mapper>
