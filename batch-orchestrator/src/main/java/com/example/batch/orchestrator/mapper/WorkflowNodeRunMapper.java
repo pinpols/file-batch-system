@@ -25,7 +25,9 @@ public interface WorkflowNodeRunMapper {
   // C-1/C-3: pessimistic lock to serialize concurrent recordNodeRunFinish /
   // isNodeAlreadyActivated
   WorkflowNodeRunEntity selectLatestForUpdate(
-      @Param("workflowRunId") Long workflowRunId, @Param("nodeCode") String nodeCode);
+      @Param("tenantId") String tenantId,
+      @Param("workflowRunId") Long workflowRunId,
+      @Param("nodeCode") String nodeCode);
 
   int updateStatus(UpdateNodeRunStatusParam param);
 

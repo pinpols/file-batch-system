@@ -94,7 +94,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
     existingRun.setNodeCode("NODE_A");
     existingRun.setNodeStatus("RUNNING");
 
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString()))
+    when(workflowNodeRunMapper.selectLatestForUpdate(anyString(), anyLong(), anyString()))
         .thenReturn(existingRun);
 
     JobInstanceEntity jobInstance = new JobInstanceEntity();
@@ -114,7 +114,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
     // 节点已激活时直接短路返回 0，不会再触达 isNodeReadyForDispatch / selectByWorkflowDefinitionIdAndNodeCode。
     int result = service.dispatchNode(jobInstance, workflowRun, node, "{}", "trace-1");
 
-    verify(workflowNodeRunMapper).selectLatestForUpdate(10L, "NODE_A");
+    verify(workflowNodeRunMapper).selectLatestForUpdate("t1", 10L, "NODE_A");
     assertThat(result).isZero();
   }
 }

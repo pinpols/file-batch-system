@@ -202,7 +202,8 @@ public class SensorStateMachine {
             .finishedAt(now)
             .outputJson(serializeOutput(output))
             .build();
-    NodeRunKey key = new NodeRunKey(wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
+    NodeRunKey key =
+        new NodeRunKey(wfRun.getTenantId(), wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(key, outcome));
     // 探测状态归零（之后归档/审计读到的快照不带遗留 next_probe_at）
     nodeRunMapper.updateSensorProbeState(
@@ -225,7 +226,8 @@ public class SensorStateMachine {
             .startedAt(nodeRun.getStartedAt())
             .finishedAt(now)
             .build();
-    NodeRunKey key = new NodeRunKey(wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
+    NodeRunKey key =
+        new NodeRunKey(wfRun.getTenantId(), wfRun.getId(), nodeRun.getNodeCode(), "WAIT");
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(key, outcome));
     nodeRunMapper.updateSensorProbeState(
         nodeRun.getId(), null, now, safe(nodeRun.getSensorProbeCount()) + 1, 0);
@@ -288,7 +290,8 @@ public class SensorStateMachine {
     }
     NodeRunOutcome endOutcome =
         NodeRunOutcome.builder().success(success).startedAt(now).finishedAt(now).build();
-    NodeRunKey endKey = new NodeRunKey(wfRun.getId(), endNode.nodeCode(), endNode.nodeType());
+    NodeRunKey endKey =
+        new NodeRunKey(wfRun.getTenantId(), wfRun.getId(), endNode.nodeCode(), endNode.nodeType());
     taskOutcomeService.recordNodeRunFinish(NodeRunFinishCommand.of(endKey, endOutcome));
   }
 

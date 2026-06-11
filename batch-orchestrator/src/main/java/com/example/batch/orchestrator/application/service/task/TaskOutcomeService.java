@@ -13,7 +13,7 @@ import lombok.Builder;
  */
 public interface TaskOutcomeService {
 
-  record NodeRunKey(Long workflowRunId, String nodeCode, String nodeType) {}
+  record NodeRunKey(String tenantId, Long workflowRunId, String nodeCode, String nodeType) {}
 
   /**
    * @param outputJson ADR-009 Stage 1.2: worker SUCCESS 时上报的产出 JSON(已序列化字符串),写入
@@ -75,6 +75,10 @@ public interface TaskOutcomeService {
 
     public String outputJson() {
       return outcome.outputJson();
+    }
+
+    public String tenantId() {
+      return key.tenantId();
     }
 
     public Long workflowRunId() {

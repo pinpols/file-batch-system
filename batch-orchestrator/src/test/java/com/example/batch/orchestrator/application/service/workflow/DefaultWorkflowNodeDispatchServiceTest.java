@@ -125,7 +125,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
             service.dispatchNode(
                 null, workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
-    verify(workflowNodeRunMapper, never()).selectLatestForUpdate(anyLong(), anyString());
+    verify(workflowNodeRunMapper, never())
+        .selectLatestForUpdate(anyString(), anyLong(), anyString());
   }
 
   @Test
@@ -150,7 +151,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadyReadyReturnsZero() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.READY.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(eq("ta"), eq(10L), eq("n1")))
+        .thenReturn(existing);
 
     int result =
         service.dispatchNode(
@@ -165,7 +167,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadyRunningReturnsZero() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(eq("ta"), eq(10L), eq("n1")))
+        .thenReturn(existing);
 
     assertThat(
             service.dispatchNode(
@@ -178,7 +181,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadySuccessReturnsZero() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(eq("ta"), eq(10L), eq("n1")))
+        .thenReturn(existing);
 
     assertThat(
             service.dispatchNode(
@@ -191,7 +195,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   void alreadyFailedProceedsToDagCheck() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
-    when(workflowNodeRunMapper.selectLatestForUpdate(eq(10L), eq("n1"))).thenReturn(existing);
+    when(workflowNodeRunMapper.selectLatestForUpdate(eq("ta"), eq(10L), eq("n1")))
+        .thenReturn(existing);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(false);
 
@@ -207,7 +212,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   @Test
   @DisplayName("DAG readiness=false → 返 0,不读 workflow_node")
   void notReadyReturnsZero() {
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
+    when(workflowNodeRunMapper.selectLatestForUpdate(anyString(), anyLong(), anyString()))
+        .thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(false);
 
@@ -224,7 +230,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   @Test
   @DisplayName("workflow_node 不存在 → 返 0,不调任何 dispatch 路径")
   void missingWorkflowNodeReturnsZero() {
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
+    when(workflowNodeRunMapper.selectLatestForUpdate(anyString(), anyLong(), anyString()))
+        .thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);
     when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(eq(50L), eq("n1")))
@@ -241,7 +248,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
   @Test
   @DisplayName("workflow_node 存在但 cross-day 依赖 halt → 返 0,不进入 dispatch 路径")
   void crossDayDependencyHaltReturnsZero() {
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
+    when(workflowNodeRunMapper.selectLatestForUpdate(anyString(), anyLong(), anyString()))
+        .thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);
     WorkflowNodeEntity node = new WorkflowNodeEntity();

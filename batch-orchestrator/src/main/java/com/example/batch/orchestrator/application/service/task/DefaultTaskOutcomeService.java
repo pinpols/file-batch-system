@@ -199,7 +199,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // C-1: 行锁防止并发 recordNodeRunFinish 对同一 (workflowRunId, nodeCode) 创建重复 node_run 记录
     WorkflowNodeRunEntity current =
         workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
-            command.workflowRunId(), command.nodeCode());
+            command.tenantId(), command.workflowRunId(), command.nodeCode());
     if (current == null) {
       current =
           self.recordNodeRunStart(
@@ -614,7 +614,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .build();
     NodeRunKey currentKey =
         new NodeRunKey(
-            ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task()));
+            ctx.workflowRun().getTenantId(),
+            ctx.workflowRun().getId(),
+            ctx.currentNodeCode(),
+            resolveCurrentNodeType(ctx.task()));
     self.recordNodeRunFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
         collaborators
@@ -653,7 +656,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                   .finishedAt(ctx.finishedAt())
                   .build();
           NodeRunKey endKey =
-              new NodeRunKey(ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType());
+              new NodeRunKey(
+                  ctx.workflowRun().getTenantId(),
+                  ctx.workflowRun().getId(),
+                  nextNode.nodeCode(),
+                  nextNode.nodeType());
           self.recordNodeRunFinish(NodeRunFinishCommand.of(endKey, endOutcome));
         }
         continue;

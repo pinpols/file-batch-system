@@ -73,10 +73,12 @@
     </select>
 
     <!-- C-1/C-3: row-level lock to prevent TOCTOU in recordNodeRunFinish / isNodeAlreadyActivated -->
+    <!-- tenant_id 过滤使 Citus 单分片路由，FOR UPDATE 合法；普通 PG 语义等价 -->
     <select id="selectLatestForUpdate" resultMap="WorkflowNodeRunResultMap">
         select *
         from batch.workflow_node_run
-        where workflow_run_id = #{workflowRunId}
+        where tenant_id = #{tenantId}
+          and workflow_run_id = #{workflowRunId}
           and node_code = #{nodeCode}
         order by run_seq desc
         limit 1

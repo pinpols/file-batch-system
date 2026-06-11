@@ -98,7 +98,8 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
             childJobLaunchSupport,
             crossDayDependencyResolver);
     // 通用 stub:让流程能走到 nodeType 分派点
-    when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
+    when(workflowNodeRunMapper.selectLatestForUpdate(anyString(), anyLong(), anyString()))
+        .thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);
   }

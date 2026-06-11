@@ -102,7 +102,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // 两个上游同时上报 SUCCESS 触发 join 节点，两个线程可同时通过 readiness 检查、再去拿锁。
     // 调换顺序后，若存在历史 READY/RUNNING 记录，第二个线程在 FOR UPDATE 上阻塞或读取到已激活状态直接退出。
     // 残留 race（首次激活、节点 run 行尚未存在）由下游 unique 索引 / DuplicateKeyException catch 兜底。
-    if (isNodeAlreadyActivated(workflowRun.getId(), node.nodeCode())) {
+    if (isNodeAlreadyActivated(workflowRun.getTenantId(), workflowRun.getId(), node.nodeCode())) {
       return 0;
     }
     if (!workflowDagService.isNodeReadyForDispatch(
@@ -492,10 +492,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     return WorkflowNodeType.JOB.code().equalsIgnoreCase(nodeType);
   }
 
-  private boolean isNodeAlreadyActivated(Long workflowRunId, String nodeCode) {
+  private boolean isNodeAlreadyActivated(String tenantId, Long workflowRunId, String nodeCode) {
     // C-3: 行锁防止 isNodeAlreadyActivated 与 createPartitions 之间的 TOCTOU 竞态
     WorkflowNodeRunEntity latestNodeRun =
-        workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(workflowRunId, nodeCode);
+        workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
+            tenantId, workflowRunId, nodeCode);
     if (latestNodeRun == null) {
       return false;
     }
