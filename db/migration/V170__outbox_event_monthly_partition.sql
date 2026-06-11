@@ -2,6 +2,8 @@
 -- 配套:OutboxEventMapper insert 已改 NOT EXISTS(同分支后续提交),
 -- 幂等语义决策见 docs/design/partition-idempotency-decision.md。
 -- 列/约束/索引权威源:scripts/db/partition-migration/01-*.sql(2026-06-10 pg_dump 重生成)。
+-- ⚠️ UNIQUE 约束名沿用原表名 uk_outbox_event_key(不用 _p_key):约束名是隐性契约,
+--    OutboxEventKeyGenerator/SqlConsistency 等按名引用,改名会破坏调用方(CLAUDE.md 禁)。
 -- 注意:本迁移含全表复制,生产规模执行前评估窗口;当前为上线前阶段,数据量 <20 万行,秒级。
 
 -- A) 建分区父表(列集 = pg_dump 实库 DDL,2026-06-10)
@@ -114,3 +116,7 @@ ALTER SEQUENCE batch.outbox_event_id_seq OWNED BY batch.outbox_event.id;
 -- 但分区父表的 DEFAULT 不会被继承到 archive，也无需清除。
 
 DROP TABLE batch.outbox_event_legacy;
+
+-- legacy 已 DROP 释放原约束名,改回兼容名(DuplicateKey 异常消息用 conname,
+-- 调用方按 uk_outbox_event_key 识别;建表期用 _p_key 仅为避开与 legacy 的 index 撞名)。
+ALTER TABLE batch.outbox_event RENAME CONSTRAINT uk_outbox_event_p_key TO uk_outbox_event_key;

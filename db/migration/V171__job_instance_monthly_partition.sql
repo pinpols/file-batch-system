@@ -3,6 +3,8 @@
 -- biz_date 升 NOT NULL(INSERT COALESCE(biz_date, created_at::date) 兜底,实库 0 行 NULL)。
 -- 唯一约束语义变化:dedup/instance_no 唯一从全局弱化为每 biz_date 内(评审已知悉)。
 -- 列/约束/索引权威源:scripts/db/partition-migration/02-*.sql(2026-06-10 pg_dump 重生成)。
+-- ⚠️ UNIQUE 约束名沿用原表名(不用 _p_*):DefaultLaunchService:531 靠 m.contains(
+--    "uk_job_instance_tenant_dedup") 判 dedup 幂等兜底,改名会让分区后兜底静默失效。
 
 -- A) 建分区父表(列集 = pg_dump 实库 DDL,2026-06-10;biz_date 升 NOT NULL,
 --    INSERT 时 COALESCE(biz_date, created_at::date) 兜底——分区键不可为 NULL)
@@ -181,3 +183,8 @@ ALTER TABLE batch.job_instance_p RENAME TO job_instance;
 -- 修复序列 ownership（RENAME 不转移 SEQUENCE OWNED BY，直接 DROP legacy 会级联删序列）
 ALTER SEQUENCE batch.job_instance_id_seq OWNED BY batch.job_instance.id;
 DROP TABLE batch.job_instance_legacy;
+
+-- legacy 已 DROP 释放原约束名,改回兼容名(DefaultLaunchService:531 按 contains
+-- "uk_job_instance_tenant_dedup" 判 dedup 幂等;建表期用 _p_* 仅为避开与 legacy 撞名)。
+ALTER TABLE batch.job_instance RENAME CONSTRAINT uk_job_instance_p_dedup TO uk_job_instance_tenant_dedup_attempt;
+ALTER TABLE batch.job_instance RENAME CONSTRAINT uk_job_instance_p_instance_no TO uk_job_instance_tenant_instance_no;
