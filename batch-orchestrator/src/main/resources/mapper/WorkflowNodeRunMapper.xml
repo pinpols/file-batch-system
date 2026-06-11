@@ -124,11 +124,13 @@
         limit #{limit}
     </select>
 
-    <!-- ADR-028 S3: 扫到期 WAIT 节点；FOR UPDATE SKIP LOCKED 防多 scheduler 并发探同一节点 -->
+    <!-- ADR-028 S3: 扫到期 WAIT 节点；FOR UPDATE SKIP LOCKED 防多 scheduler 并发探同一节点。
+         tenant_id = #{tenantId} 作为首条件使 Citus 单分片路由，FOR UPDATE 跨分片限制由此消除。-->
     <select id="selectDueWaitNodes" resultMap="WorkflowNodeRunResultMap">
         select *
         from batch.workflow_node_run
-        where node_type = 'WAIT'
+        where tenant_id = #{tenantId}
+          and node_type = 'WAIT'
           and node_status = 'RUNNING'
           and (sensor_next_probe_at is null or sensor_next_probe_at &lt;= #{now})
         order by sensor_next_probe_at asc nulls first, id asc
