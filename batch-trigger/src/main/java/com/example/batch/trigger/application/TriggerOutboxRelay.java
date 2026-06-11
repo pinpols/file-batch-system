@@ -3,6 +3,7 @@ package com.example.batch.trigger.application;
 import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import com.example.batch.common.tenant.ActiveTenantRegistry;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.config.TriggerOutboxRelayProperties;
@@ -68,6 +69,7 @@ public class TriggerOutboxRelay {
   private final MeterRegistry meterRegistry;
   private final TriggerOutboxRelayProperties properties;
   private final ThreadPoolTaskScheduler scheduler;
+  private final ActiveTenantRegistry activeTenantRegistry;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong pendingEvents = new AtomicLong();
@@ -83,13 +85,15 @@ public class TriggerOutboxRelay {
       LockingTaskExecutor lockingTaskExecutor,
       MeterRegistry meterRegistry,
       TriggerOutboxRelayProperties properties,
-      @Qualifier("triggerOutboxRelayScheduler") ThreadPoolTaskScheduler scheduler) {
+      @Qualifier("triggerOutboxRelayScheduler") ThreadPoolTaskScheduler scheduler,
+      ActiveTenantRegistry activeTenantRegistry) {
     this.mapper = mapper;
     this.publisher = publisher;
     this.lockingTaskExecutor = lockingTaskExecutor;
     this.meterRegistry = meterRegistry;
     this.properties = properties;
     this.scheduler = scheduler;
+    this.activeTenantRegistry = activeTenantRegistry;
   }
 
   // R3-P1-3：单条 outbox 事件 NEW→PUBLISHED 端到端延迟分位，按 result tag (ok/fail) 拆分。
@@ -236,8 +240,24 @@ public class TriggerOutboxRelay {
       return;
     }
     Instant now = BatchDateTimeSupport.utcNow();
+    List<String> tenantIds = activeTenantRegistry.activeTenantIds();
+    for (String tenantId : tenantIds) {
+      if (shouldStopPolling()) {
+        return;
+      }
+      try {
+        pollTenant(tenantId, now);
+      } catch (Throwable t) {
+        log.warn("TriggerOutboxRelay 租户投递异常,跳过继续: tenantId={}", tenantId, t);
+      }
+    }
+  }
+
+  /** 单租户投递批次。Citus 路由:{@code tenant_id} 等值使 FOR UPDATE SKIP LOCKED 在单分片内合法。 */
+  private void pollTenant(String tenantId, Instant now) {
     List<TriggerOutboxEventEntity> batch =
         mapper.selectPending(
+            tenantId,
             now,
             properties.getBatchSize(),
             OutboxPublishStatus.NEW.code(),
@@ -245,7 +265,7 @@ public class TriggerOutboxRelay {
     if (batch.isEmpty()) {
       return;
     }
-    log.debug("TriggerOutboxRelay 本轮取 {} 条待发", batch.size());
+    log.debug("TriggerOutboxRelay 租户 {} 本轮取 {} 条待发", tenantId, batch.size());
     for (TriggerOutboxEventEntity event : batch) {
       if (shouldStopPolling()) {
         return;

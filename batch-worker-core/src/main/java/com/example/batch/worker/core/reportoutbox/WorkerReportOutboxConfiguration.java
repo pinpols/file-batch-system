@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.reportoutbox;
 
+import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
 import com.example.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
 import com.example.batch.worker.core.mapper.WorkerReportOutboxPgMapper;
@@ -96,9 +97,15 @@ public class WorkerReportOutboxConfiguration {
     WorkerReportOutboxRepository workerReportOutboxRepository(
         WorkerReportOutboxSqliteMapper sqliteMapper,
         @Qualifier("workerReportOutboxJdbcTemplate") JdbcTemplate jdbcTemplate,
-        WorkerReportOutboxProperties props) {
+        WorkerReportOutboxProperties props,
+        ObjectProvider<WorkerConfiguration> workerConfigurationProvider) {
+      String tenantId =
+          workerConfigurationProvider.stream()
+              .map(WorkerConfiguration::tenantId)
+              .findFirst()
+              .orElse("unknown");
       return new WorkerReportOutboxRepository(
-          props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbcTemplate);
+          props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbcTemplate, tenantId);
     }
 
     @Bean
@@ -145,9 +152,16 @@ public class WorkerReportOutboxConfiguration {
 
     @Bean
     WorkerReportOutboxRepository workerReportOutboxRepository(
-        WorkerReportOutboxPgMapper pgMapper, WorkerReportOutboxProperties props) {
+        WorkerReportOutboxPgMapper pgMapper,
+        WorkerReportOutboxProperties props,
+        ObjectProvider<WorkerConfiguration> workerConfigurationProvider) {
+      String tenantId =
+          workerConfigurationProvider.stream()
+              .map(WorkerConfiguration::tenantId)
+              .findFirst()
+              .orElse("unknown");
       return new WorkerReportOutboxRepository(
-          props, WorkerReportOutboxDialect.POSTGRESQL, pgMapper, null, null);
+          props, WorkerReportOutboxDialect.POSTGRESQL, pgMapper, null, null, tenantId);
     }
 
     @Bean

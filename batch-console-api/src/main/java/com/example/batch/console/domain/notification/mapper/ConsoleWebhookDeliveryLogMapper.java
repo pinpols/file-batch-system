@@ -25,9 +25,13 @@ public interface ConsoleWebhookDeliveryLogMapper {
 
   Long insertReturningId(@Param("p") WebhookDeliveryLogInsertParam p);
 
-  /** Relay 候选扫描：取 PENDING/EXHAUSTED 且到期需投递的行，{@code FOR UPDATE SKIP LOCKED} 防止多 relay 实例抢同一批。 */
+  /**
+   * Relay 候选扫描：取 PENDING/EXHAUSTED 且到期需投递的行，{@code FOR UPDATE SKIP LOCKED} 防止多 relay 实例抢同一批。
+   *
+   * <p>Citus 路由：{@code tenant_id} 等值使 FOR UPDATE SKIP LOCKED 限定在单分片内合法。
+   */
   List<WebhookDeliveryLogEntity> findEligibleRetries(
-      @Param("now") Instant now, @Param("limit") int limit);
+      @Param("tenantId") String tenantId, @Param("now") Instant now, @Param("limit") int limit);
 
   Optional<WebhookDeliveryLogEntity> findById(
       @Param("tenantId") String tenantId, @Param("id") Long id);

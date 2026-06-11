@@ -90,7 +90,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
         otherJobDef, BatchDateTimeSupport.utcNow().plusSeconds(120)); // not due in 60s window
 
     List<TriggerRuntimeStateEntity> due =
-        mapper.findReadyToSchedule(BatchDateTimeSupport.utcNow().plusSeconds(60), 100);
+        mapper.findReadyToSchedule(tenantId, BatchDateTimeSupport.utcNow().plusSeconds(60), 100);
 
     assertThat(due).hasSizeGreaterThanOrEqualTo(1);
     assertThat(due.stream().anyMatch(t -> t.getJobCode().equals(jobCode))).isTrue();

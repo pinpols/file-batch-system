@@ -18,6 +18,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
+import com.example.batch.common.tenant.ActiveTenantRegistry;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.trigger.config.TriggerOutboxRelayProperties;
@@ -51,6 +52,7 @@ class TriggerOutboxRelayTest {
   @Mock private TriggerOutboxEventMapper mapper;
   @Mock private TriggerEventPublisher publisher;
   @Mock private LockingTaskExecutor lockingTaskExecutor;
+  @Mock private ActiveTenantRegistry activeTenantRegistry;
 
   private TriggerOutboxRelay relay;
   private TriggerOutboxRelayProperties relayProperties;
@@ -70,7 +72,9 @@ class TriggerOutboxRelayTest {
             lockingTaskExecutor,
             new SimpleMeterRegistry(),
             relayProperties,
-            scheduler);
+            scheduler,
+            activeTenantRegistry);
+    when(activeTenantRegistry.activeTenantIds()).thenReturn(List.of("tenant-a"));
     when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
         .thenReturn(0);
     when(mapper.countByStatuses(any())).thenReturn(0L);
@@ -95,7 +99,8 @@ class TriggerOutboxRelayTest {
 
   @Test
   void poll_emptyBatch_doesNothing() throws Throwable {
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of());
 
     relay.poll();
 
@@ -135,7 +140,8 @@ class TriggerOutboxRelayTest {
   void poll_resetsStalePublishingBeforeSelectingPending() {
     when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
         .thenReturn(2);
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
+        .thenReturn(List.of());
 
     relay.poll();
 
@@ -150,7 +156,7 @@ class TriggerOutboxRelayTest {
   @Test
   void poll_successPath_marksPublished() {
     TriggerOutboxEventEntity event = buildPendingEvent(101L, validEnvelopePayload());
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
     when(mapper.markPublishing(anyString(), eq(101L), anyString(), anyString(), anyString()))
         .thenReturn(1);
@@ -173,7 +179,7 @@ class TriggerOutboxRelayTest {
   void poll_publisherFailure_marksFailedWithBackoff() {
     TriggerOutboxEventEntity event = buildPendingEvent(102L, validEnvelopePayload());
     event.setPublishAttempt(2);
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
     when(mapper.markPublishing(anyString(), eq(102L), anyString(), anyString(), anyString()))
         .thenReturn(1);
@@ -197,7 +203,7 @@ class TriggerOutboxRelayTest {
     relayProperties.setMaxPublishAttempts(3);
     TriggerOutboxEventEntity event = buildPendingEvent(107L, validEnvelopePayload());
     event.setPublishAttempt(2);
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
     when(mapper.markPublishing(anyString(), eq(107L), anyString(), anyString(), anyString()))
         .thenReturn(1);
@@ -219,7 +225,7 @@ class TriggerOutboxRelayTest {
   @Test
   void poll_payloadDeserializeError_marksGiveUp() {
     TriggerOutboxEventEntity event = buildPendingEvent(103L, "{not-json}");
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
     when(mapper.markPublishing(anyString(), eq(103L), anyString(), anyString(), anyString()))
         .thenReturn(1);
@@ -239,7 +245,7 @@ class TriggerOutboxRelayTest {
   @Test
   void poll_alreadyClaimedByOtherInstance_skipsSilently() {
     TriggerOutboxEventEntity event = buildPendingEvent(104L, validEnvelopePayload());
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
     when(mapper.markPublishing(anyString(), eq(104L), anyString(), anyString(), anyString()))
         .thenReturn(0);
@@ -255,7 +261,7 @@ class TriggerOutboxRelayTest {
   void poll_singleItemException_doesNotBlockRestOfBatch() {
     TriggerOutboxEventEntity bad = buildPendingEvent(105L, validEnvelopePayload());
     TriggerOutboxEventEntity good = buildPendingEvent(106L, validEnvelopePayload());
-    when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
+    when(mapper.selectPending(anyString(), any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(bad, good));
     // bad: markPublishing 抛异常模拟 DB 偶发问题
     when(mapper.markPublishing(anyString(), eq(105L), anyString(), anyString(), anyString()))

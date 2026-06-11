@@ -25,14 +25,17 @@
 
     <!--
       滑动窗口扫库:
-      WHERE next_fire_time < horizon AND scheduled_fire_marker IS NULL
+      WHERE tenant_id = #{tenantId} AND next_fire_time < horizon AND scheduled_fire_marker IS NULL
       命中 idx_trigger_runtime_state_next_fire (partial index)
       FOR UPDATE SKIP LOCKED 防多 leader 撞锁
+      Citus 路由:tenant_id 等值使 FOR UPDATE SKIP LOCKED 锁限定在单分片内合法;
+      limit 语义为每租户上限(非全局总量)。
     -->
     <select id="findReadyToSchedule" resultMap="TriggerRuntimeStateResultMap">
         select *
           from batch.trigger_runtime_state
-         where next_fire_time &lt; #{horizon}
+         where tenant_id = #{tenantId}
+           and next_fire_time &lt; #{horizon}
            and scheduled_fire_marker is null
          order by next_fire_time
          limit #{limit}

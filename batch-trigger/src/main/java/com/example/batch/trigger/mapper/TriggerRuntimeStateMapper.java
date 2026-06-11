@@ -27,9 +27,14 @@ public interface TriggerRuntimeStateMapper {
    * 滑动窗口扫库:next_fire_time 在 horizon 之前,且 marker 未占位。
    *
    * <p>使用 FOR UPDATE SKIP LOCKED 避免 leader 漂移时撞锁;调用方在事务内立即调 {@link #claimForSchedule} 占位。
+   *
+   * <p>Citus 路由:{@code tenant_id} 等值使 FOR UPDATE SKIP LOCKED 限定在单分片内合法;{@code limit} 为每租户上限
+   * (非全局总量)——调用方按租户循环,单租户空结果 fast-continue。
    */
   List<TriggerRuntimeStateEntity> findReadyToSchedule(
-      @Param("horizon") Instant horizon, @Param("limit") int limit);
+      @Param("tenantId") String tenantId,
+      @Param("horizon") Instant horizon,
+      @Param("limit") int limit);
 
   /**
    * 占位:CAS 写 scheduled_fire_marker,撞 version 失败(其他 leader 已占)。

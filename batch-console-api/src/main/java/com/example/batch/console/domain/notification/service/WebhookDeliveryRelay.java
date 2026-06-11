@@ -1,6 +1,7 @@
 package com.example.batch.console.domain.notification.service;
 
 import com.example.batch.common.logging.SwallowedExceptionLogger;
+import com.example.batch.common.tenant.ActiveTenantRegistry;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.config.WebhookRelayProperties;
@@ -74,6 +75,7 @@ public class WebhookDeliveryRelay {
   private final LockingTaskExecutor lockingTaskExecutor;
   private final Counter giveUpCounter;
   private final WebhookRelayProperties properties;
+  private final ActiveTenantRegistry activeTenantRegistry;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
@@ -86,12 +88,14 @@ public class WebhookDeliveryRelay {
       WebhookDispatcher dispatcher,
       LockingTaskExecutor lockingTaskExecutor,
       MeterRegistry meterRegistry,
-      WebhookRelayProperties properties) {
+      WebhookRelayProperties properties,
+      ActiveTenantRegistry activeTenantRegistry) {
     this.deliveryLogRepository = deliveryLogRepository;
     this.subscriptionRepository = subscriptionRepository;
     this.dispatcher = dispatcher;
     this.lockingTaskExecutor = lockingTaskExecutor;
     this.properties = properties;
+    this.activeTenantRegistry = activeTenantRegistry;
     this.giveUpCounter =
         Counter.builder("batch_webhook_delivery_give_up_total")
             .description("Webhook 行被 relay 标 GIVE_UP 的累计次数(达到 absolute-max-attempts)")
@@ -212,12 +216,27 @@ public class WebhookDeliveryRelay {
       return;
     }
     Instant now = BatchDateTimeSupport.utcNow();
+    List<String> tenantIds = activeTenantRegistry.activeTenantIds();
+    for (String tenantId : tenantIds) {
+      if (stopping.get()) {
+        return;
+      }
+      try {
+        pollTenant(tenantId, now);
+      } catch (Throwable t) {
+        log.warn("WebhookDeliveryRelay 租户重投异常,跳过继续: tenantId={}", tenantId, t);
+      }
+    }
+  }
+
+  /** 单租户重投批次。Citus 路由:{@code tenant_id} 等值使 FOR UPDATE SKIP LOCKED 在单分片内合法。 */
+  private void pollTenant(String tenantId, Instant now) {
     List<WebhookDeliveryLogEntity> batch =
-        deliveryLogRepository.findEligibleRetries(now, properties.getBatchSize());
+        deliveryLogRepository.findEligibleRetries(tenantId, now, properties.getBatchSize());
     if (batch.isEmpty()) {
       return;
     }
-    log.debug("WebhookDeliveryRelay 本轮取 {} 条待重投", batch.size());
+    log.debug("WebhookDeliveryRelay 租户 {} 本轮取 {} 条待重投", tenantId, batch.size());
     for (WebhookDeliveryLogEntity row : batch) {
       if (stopping.get()) {
         return;

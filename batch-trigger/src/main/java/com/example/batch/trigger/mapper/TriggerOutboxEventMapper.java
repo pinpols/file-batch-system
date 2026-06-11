@@ -27,8 +27,11 @@ public interface TriggerOutboxEventMapper {
   /**
    * 取一批待发事件:{@code publish_status IN ('PENDING','FAILED') AND next_publish_at <= now()}, 按 {@code
    * created_at ASC} 排序,锁定行(SKIP LOCKED)防多实例 trigger 重发。
+   *
+   * <p>Citus 路由:{@code tenant_id = #{tenantId}} 等值条件使 FOR UPDATE SKIP LOCKED 锁限定在单分片内合法化。
    */
   List<TriggerOutboxEventEntity> selectPending(
+      @Param("tenantId") String tenantId,
       @Param("now") Instant now,
       @Param("limit") int limit,
       @Param("pendingStatus1") String pendingStatus1,

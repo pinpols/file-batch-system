@@ -65,7 +65,8 @@
     <select id="findEligibleRetries" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
           from batch.webhook_delivery_log
-         where delivery_status in ('PENDING', 'EXHAUSTED')
+         where tenant_id = #{tenantId}
+           and delivery_status in ('PENDING', 'EXHAUSTED')
            and next_retry_at is not null
            and next_retry_at &lt;= #{now}
          order by next_retry_at asc

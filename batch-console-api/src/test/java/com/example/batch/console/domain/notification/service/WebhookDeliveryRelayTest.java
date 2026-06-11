@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.tenant.ActiveTenantRegistry;
 import com.example.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
@@ -33,6 +34,7 @@ class WebhookDeliveryRelayTest {
   private WebhookDispatcher dispatcher;
   private SimpleMeterRegistry meterRegistry;
   private LockingTaskExecutor lockExecutor;
+  private ActiveTenantRegistry activeTenantRegistry;
   private WebhookDeliveryRelay relay;
 
   @BeforeEach
@@ -42,6 +44,8 @@ class WebhookDeliveryRelayTest {
     dispatcher = mock(WebhookDispatcher.class);
     meterRegistry = new SimpleMeterRegistry();
     lockExecutor = mock(LockingTaskExecutor.class);
+    activeTenantRegistry = mock(ActiveTenantRegistry.class);
+    when(activeTenantRegistry.activeTenantIds()).thenReturn(List.of("t1"));
     doAnswer(
             inv -> {
               LockingTaskExecutor.Task t = inv.getArgument(0);
@@ -61,7 +65,8 @@ class WebhookDeliveryRelayTest {
             dispatcher,
             lockExecutor,
             meterRegistry,
-            props);
+            props,
+            activeTenantRegistry);
   }
 
   @Test
@@ -71,7 +76,7 @@ class WebhookDeliveryRelayTest {
     relay.poll();
 
     verify(lockExecutor, never()).executeWithLock(any(LockingTaskExecutor.Task.class), any());
-    verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
+    verify(deliveryLogRepository, never()).findEligibleRetries(anyString(), any(), anyInt());
   }
 
   @Test
@@ -86,12 +91,12 @@ class WebhookDeliveryRelayTest {
 
     relay.poll();
 
-    verify(deliveryLogRepository, never()).findEligibleRetries(any(), anyInt());
+    verify(deliveryLogRepository, never()).findEligibleRetries(anyString(), any(), anyInt());
   }
 
   @Test
   void shouldSkipPollWhenNoEligibleRows() {
-    when(deliveryLogRepository.findEligibleRetries(any(Instant.class), eq(50)))
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(Instant.class), eq(50)))
         .thenReturn(List.of());
 
     relay.poll();
@@ -104,7 +109,8 @@ class WebhookDeliveryRelayTest {
   void shouldMarkRetrySuccessWhenDeliveryReturns200() {
     WebhookDeliveryLogEntity row = exhaustedRow(101L, 3);
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
+        .thenReturn(List.of(row));
     when(deliveryLogRepository.claimForRetry("t1", 101L)).thenReturn(1);
     when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
     when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
@@ -124,7 +130,8 @@ class WebhookDeliveryRelayTest {
   void shouldMarkRetryFailureWithBackoffWhenBelowAbsoluteMax() {
     WebhookDeliveryLogEntity row = exhaustedRow(102L, 3); // next attempt = 4, 还没到 max 8
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
+        .thenReturn(List.of(row));
     when(deliveryLogRepository.claimForRetry("t1", 102L)).thenReturn(1);
     when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
     when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
@@ -147,7 +154,8 @@ class WebhookDeliveryRelayTest {
     // 当前 attempt=7,下一次 nextAttempt=8,正好达到绝对最大重试次数。
     WebhookDeliveryLogEntity row = exhaustedRow(103L, 7);
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
+        .thenReturn(List.of(row));
     when(deliveryLogRepository.claimForRetry("t1", 103L)).thenReturn(1);
     when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
     when(dispatcher.attemptDelivery(eq(subscription), any(), eq(row.getPayloadJson())))
@@ -165,7 +173,8 @@ class WebhookDeliveryRelayTest {
     WebhookDeliveryLogEntity row = exhaustedRow(104L, 3);
     WebhookSubscriptionEntity disabled = enabledSubscription(7L);
     disabled.setEnabled(false);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
+        .thenReturn(List.of(row));
     when(deliveryLogRepository.claimForRetry("t1", 104L)).thenReturn(1);
     when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(disabled));
 
@@ -181,7 +190,8 @@ class WebhookDeliveryRelayTest {
   @Test
   void shouldGiveUpWhenSubscriptionMissing() {
     WebhookDeliveryLogEntity row = exhaustedRow(105L, 3);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
+        .thenReturn(List.of(row));
     when(deliveryLogRepository.claimForRetry("t1", 105L)).thenReturn(1);
     when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.empty());
 
@@ -195,7 +205,8 @@ class WebhookDeliveryRelayTest {
   @Test
   void shouldSkipRowWhenClaimLost() {
     WebhookDeliveryLogEntity row = exhaustedRow(106L, 3);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
+        .thenReturn(List.of(row));
     when(deliveryLogRepository.claimForRetry("t1", 106L)).thenReturn(0); // 抢占失败
 
     relay.poll();
@@ -211,7 +222,8 @@ class WebhookDeliveryRelayTest {
     WebhookDeliveryLogEntity row = exhaustedRow(107L, 3);
     row.setPayloadJson("{ this is not valid json"); // 故意坏掉
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
+        .thenReturn(List.of(row));
     when(deliveryLogRepository.claimForRetry("t1", 107L)).thenReturn(1);
     when(subscriptionRepository.findByTenantAndId("t1", 7L)).thenReturn(Optional.of(subscription));
 
@@ -244,7 +256,7 @@ class WebhookDeliveryRelayTest {
     WebhookDeliveryLogEntity okRow = exhaustedRow(201L, 3);
     WebhookDeliveryLogEntity badRow = exhaustedRow(202L, 3);
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
-    when(deliveryLogRepository.findEligibleRetries(any(), anyInt()))
+    when(deliveryLogRepository.findEligibleRetries(anyString(), any(), anyInt()))
         .thenReturn(List.of(badRow, okRow));
     when(deliveryLogRepository.claimForRetry("t1", 202L)).thenReturn(1);
     when(deliveryLogRepository.claimForRetry("t1", 201L)).thenReturn(1);

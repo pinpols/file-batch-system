@@ -68,7 +68,7 @@ class WorkerReportOutboxCoordinatorTest {
           sessionTemplate.getMapper(WorkerReportOutboxSqliteMapper.class);
       WorkerReportOutboxRepository repo =
           new WorkerReportOutboxRepository(
-              props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbc);
+              props, WorkerReportOutboxDialect.SQLITE, null, sqliteMapper, jdbc, "t-outbox");
 
       TransactionTemplate tt = new TransactionTemplate(new DataSourceTransactionManager(ds));
       tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

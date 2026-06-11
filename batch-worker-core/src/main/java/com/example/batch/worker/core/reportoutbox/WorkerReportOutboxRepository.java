@@ -24,14 +24,23 @@ public class WorkerReportOutboxRepository {
   private final WorkerReportOutboxPgMapper pgMapper;
   private final WorkerReportOutboxSqliteMapper sqliteMapper;
 
+  /**
+   * 本 worker 的租户标识——单实例单租户约束（worker 配置 {@code batch.worker.*.tenant-id}）。
+   *
+   * <p>Citus 路由：PostgreSQL 路径的所有 DML 操作携带此值，使读写限定在单分片内合法。
+   */
+  private final String tenantId;
+
   public WorkerReportOutboxRepository(
       WorkerReportOutboxProperties props,
       WorkerReportOutboxDialect dialect,
       WorkerReportOutboxPgMapper pgMapper,
       WorkerReportOutboxSqliteMapper sqliteMapper,
-      JdbcTemplate sqliteDdlJdbcTemplate) {
+      JdbcTemplate sqliteDdlJdbcTemplate,
+      String tenantId) {
     this.props = props;
     this.dialect = dialect;
+    this.tenantId = tenantId;
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
       if (pgMapper == null) {
         throw new IllegalArgumentException("WorkerReportOutboxPgMapper required for PLATFORM_PG");
@@ -110,7 +119,7 @@ public class WorkerReportOutboxRepository {
   Optional<WorkerReportOutboxRow> claimNext(long nowEpochMillis) {
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
       List<WorkerReportOutboxRow> rows =
-          pgMapper.claimNextReturning(nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
+          pgMapper.claimNextReturning(tenantId, nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
       return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
     }
     Long id = sqliteMapper.pickNextNewId(nowEpochMillis, STATUS_NEW);
@@ -149,7 +158,7 @@ public class WorkerReportOutboxRepository {
 
   void delete(long id) {
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      pgMapper.deleteById(id);
+      pgMapper.deleteById(tenantId, id);
     } else {
       sqliteMapper.deleteById(id);
     }
@@ -158,7 +167,7 @@ public class WorkerReportOutboxRepository {
   void recordFailure(long id, long nowEpochMillis, RuntimeException cause) {
     Integer attemptsNullable =
         dialect == WorkerReportOutboxDialect.POSTGRESQL
-            ? pgMapper.selectAttemptCount(id)
+            ? pgMapper.selectAttemptCount(tenantId, id)
             : sqliteMapper.selectAttemptCount(id);
     if (attemptsNullable == null) {
       return;
@@ -167,7 +176,7 @@ public class WorkerReportOutboxRepository {
     int nextAttempts = attempts + 1;
     if (nextAttempts >= props.getMaxPublishAttempts()) {
       if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        pgMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
+        pgMapper.updateGiveUp(tenantId, id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
       } else {
         sqliteMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
       }
@@ -182,7 +191,7 @@ public class WorkerReportOutboxRepository {
       long jitter = jitterMax == 0 ? 0L : ThreadLocalRandom.current().nextLong(0, jitterMax + 1);
       long nextAt = nowEpochMillis + backoff + jitter;
       if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        pgMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
+        pgMapper.updateRetry(tenantId, id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
       } else {
         sqliteMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
       }
@@ -200,7 +209,7 @@ public class WorkerReportOutboxRepository {
     long now = BatchDateTimeSupport.utcEpochMillis();
     int maxAttempts = props.getMaxPublishAttempts();
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      pgMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);
+      pgMapper.giveUpRow(tenantId, id, STATUS_GIVE_UP, now, maxAttempts);
     } else {
       sqliteMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);
     }

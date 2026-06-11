@@ -6,6 +6,7 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.SwallowedExceptionLogger;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.common.tenant.ActiveTenantRegistry;
 import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.config.WheelSchedulerProperties;
@@ -85,6 +86,7 @@ public class HashedWheelTriggerScheduler {
   private final BatchDateTimeSupport dateTimeSupport;
   private final WheelMetrics metrics;
   private final CatchUpThrottle catchUpThrottle;
+  private final ActiveTenantRegistry activeTenantRegistry;
 
   /**
    * P0 (audit 2026-05-23):wheel worker 线程仅负责 dispatch,真正的 fire 逻辑(loadDescriptor + launchScheduled
@@ -264,7 +266,12 @@ public class HashedWheelTriggerScheduler {
 
   // ── 滑动窗口扫库 + 推 wheel ─────────────────────────────────
 
-  /** 测试 + 内部都用,public 为了 IT 能直接触发(避免依赖 @Scheduled 60s 周期等)。 */
+  /**
+   * 测试 + 内部都用,public 为了 IT 能直接触发(避免依赖 @Scheduled 60s 周期等)。
+   *
+   * <p>Citus 路由:按租户循环调用 {@code findReadyToSchedule},每次带 {@code tenant_id} 等值过滤使 FOR UPDATE SKIP
+   * LOCKED 在单分片内合法。单租户异常隔离,空租户 fast-continue。{@code limit} 为每租户上限,非全局总量。
+   */
   public void scanAndSchedule(Duration window) {
     // P1: 内存 in-flight 上限保护 — fire callback 卡死时 wheel 推入速率 ≫ 释放速率会让
     // inFlightFires / timeoutRegistry 无界增长。任一超阈值 → WARN + skip 本轮,等下次 tick
@@ -283,12 +290,19 @@ public class HashedWheelTriggerScheduler {
     }
     long start = System.nanoTime();
     Instant horizon = dateTimeSupport.nowInstant().plus(window);
-    List<TriggerRuntimeStateEntity> due =
-        stateMapper.findReadyToSchedule(horizon, props.getScanBatchSize());
+    List<String> tenantIds = activeTenantRegistry.activeTenantIds();
     int pushed = 0;
-    for (TriggerRuntimeStateEntity state : due) {
-      if (claimAndSchedule(state)) {
-        pushed++;
+    for (String tenantId : tenantIds) {
+      try {
+        List<TriggerRuntimeStateEntity> due =
+            stateMapper.findReadyToSchedule(tenantId, horizon, props.getScanBatchSize());
+        for (TriggerRuntimeStateEntity state : due) {
+          if (claimAndSchedule(state)) {
+            pushed++;
+          }
+        }
+      } catch (Exception e) {
+        log.warn("scanAndSchedule failed for tenant, skipping: tenantId={}", tenantId, e);
       }
     }
     if (pushed > 0) {

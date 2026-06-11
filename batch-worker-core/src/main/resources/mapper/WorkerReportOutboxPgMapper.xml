@@ -24,7 +24,8 @@
     <select id="claimNextReturning" resultType="com.example.batch.worker.core.reportoutbox.WorkerReportOutboxRow">
         WITH picked AS (
             SELECT id FROM batch.worker_report_outbox
-            WHERE publish_status = #{statusNew} AND next_attempt_at &lt;= #{nowEpochMillis}
+            WHERE tenant_id = #{tenantId}
+              AND publish_status = #{statusNew} AND next_attempt_at &lt;= #{nowEpochMillis}
             ORDER BY id ASC
             LIMIT 1
             FOR UPDATE SKIP LOCKED
@@ -32,25 +33,26 @@
         UPDATE batch.worker_report_outbox AS o
         SET publish_status = #{statusPublishing}, updated_at = #{nowEpochMillis}
         FROM picked AS p
-        WHERE o.id = p.id
+        WHERE o.tenant_id = #{tenantId} AND o.id = p.id
         RETURNING o.id, o.payload_json::text AS payload_json
     </select>
 
     <select id="selectAttemptCount" resultType="java.lang.Integer">
-        SELECT attempt_count FROM batch.worker_report_outbox WHERE id = #{id}
+        SELECT attempt_count FROM batch.worker_report_outbox
+        WHERE tenant_id = #{tenantId} AND id = #{id}
     </select>
 
     <update id="updateGiveUp">
         UPDATE batch.worker_report_outbox
         SET publish_status = #{publishStatus}, attempt_count = #{attemptCount}, updated_at = #{updatedAt}
-        WHERE id = #{id}
+        WHERE tenant_id = #{tenantId} AND id = #{id}
     </update>
 
     <update id="updateRetry">
         UPDATE batch.worker_report_outbox
         SET attempt_count = #{attemptCount}, next_attempt_at = #{nextAttemptAt}, updated_at = #{updatedAt},
             publish_status = #{publishStatus}
-        WHERE id = #{id}
+        WHERE tenant_id = #{tenantId} AND id = #{id}
     </update>
 
     <update id="resetStalePublishing">
@@ -70,12 +72,12 @@
     </select>
 
     <delete id="deleteById">
-        DELETE FROM batch.worker_report_outbox WHERE id = #{id}
+        DELETE FROM batch.worker_report_outbox WHERE tenant_id = #{tenantId} AND id = #{id}
     </delete>
 
     <update id="giveUpRow">
         UPDATE batch.worker_report_outbox SET publish_status = #{publishStatus}, updated_at = #{now}, attempt_count =
             CASE WHEN attempt_count &lt; #{maxAttempts} THEN #{maxAttempts} ELSE attempt_count END
-        WHERE id = #{id}
+        WHERE tenant_id = #{tenantId} AND id = #{id}
     </update>
 </mapper>
