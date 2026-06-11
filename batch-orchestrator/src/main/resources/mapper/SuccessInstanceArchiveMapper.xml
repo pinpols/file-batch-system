@@ -175,13 +175,14 @@
         on conflict (id) do nothing
     </insert>
 
+    <!-- V177: workflow_run PK 改复合 (tenant_id, id)，archive 表同步；on conflict 改为复合约束 -->
     <insert id="archiveWorkflowRunsByInstanceIds">
         insert into archive.workflow_run_archive
         select *
         from batch.workflow_run
         where related_job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (id) do nothing
+        on conflict (tenant_id, id) do nothing
     </insert>
 
     <insert id="archiveWorkflowNodeRunsByInstanceIds">

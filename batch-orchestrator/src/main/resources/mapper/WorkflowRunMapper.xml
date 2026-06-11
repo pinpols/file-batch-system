@@ -155,18 +155,19 @@
         from batch.workflow_run
         where id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (id) do nothing
+        on conflict (tenant_id, id) do nothing
     </insert>
 
+    <!-- V177: 归档列表同步加 tenant_id（archive 镜像 1:1 要求）-->
     <insert id="archiveWorkflowNodeRunsByWorkflowRunIds">
         insert into archive.workflow_node_run_archive (
-            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
+            id, tenant_id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
             error_code, error_message, started_at, finished_at, duration_ms, output,
             error_key, error_args, sensor_next_probe_at, sensor_last_probe_at,
             sensor_probe_count, sensor_error_count
         )
         select
-            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
+            id, tenant_id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
             error_code, error_message, started_at, finished_at, duration_ms, output,
             error_key, error_args, sensor_next_probe_at, sensor_last_probe_at,
             sensor_probe_count, sensor_error_count

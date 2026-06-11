@@ -12,6 +12,8 @@ import lombok.EqualsAndHashCode;
 public class WorkflowNodeRunEntity extends AbstractLocalizedErrorEntity implements Stateful {
 
   private Long id;
+  // V177: workflow_node_run 补 tenant_id（Citus 分片键前置）
+  private String tenantId;
   private Long workflowRunId;
   private String nodeCode;
   private String nodeType;

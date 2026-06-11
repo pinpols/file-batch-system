@@ -3,6 +3,7 @@
 <mapper namespace="com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper">
     <resultMap id="WorkflowNodeRunResultMap" type="com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity">
         <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
         <result column="workflow_run_id" property="workflowRunId"/>
         <result column="node_code" property="nodeCode"/>
         <result column="node_type" property="nodeType"/>
@@ -23,9 +24,12 @@
         <result column="sensor_error_count" property="sensorErrorCount"/>
     </resultMap>
 
+    <!-- V177: workflow_node_run 补 tenant_id 列后，INSERT 通过子查询从 workflow_run 取 tenant_id，
+         无需改接口签名（调用链仅传 workflowRunId）。-->
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.workflow_node_run (
+            tenant_id,
             workflow_run_id,
             node_code,
             node_type,
@@ -39,7 +43,9 @@
             started_at,
             finished_at,
             duration_ms
-        ) values (
+        )
+        select
+            wr.tenant_id,
             #{workflowRunId},
             #{nodeCode},
             #{nodeType},
@@ -53,7 +59,8 @@
             #{startedAt},
             #{finishedAt},
             #{durationMs}
-        )
+        from batch.workflow_run wr
+        where wr.id = #{workflowRunId}
     </insert>
 
     <select id="selectLatestByWorkflowRunIdAndNodeCode" resultMap="WorkflowNodeRunResultMap">
