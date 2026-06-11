@@ -65,6 +65,12 @@ final class RemoteFilesystemDispatchSupport {
   // 默认 5 分钟（GB 级文件 + 10 MB/s 慢盘 ~100s 留余量），可被 jvm property 覆盖。
   private static final long NAS_COPY_TIMEOUT_SECONDS =
       Long.getLong("batch.dispatch.nas-copy-timeout-seconds", 300L);
+
+  // OSS 内联上传需把对象整读入堆(AWS SDK v2 RequestBody 需精确 contentLength,且分发流可能已解密)。
+  // 无上限 readAllBytes 遇 GB 级文件 + 多路并发 dispatch → OOM。与 import 侧 MAX_OBJECT_BYTES 同语义,
+  // 默认 512 MiB,jvm property 可调;超限拒绝该 dispatch(返回 failed,不 OOM)。
+  private static final int MAX_OSS_INLINE_PAYLOAD_BYTES =
+      Integer.getInteger("batch.dispatch.oss-max-inline-mib", 512) * 1024 * 1024;
   private static final ExecutorService NAS_COPY_EXECUTOR =
       Executors.newCachedThreadPool(
           new java.util.concurrent.ThreadFactory() {
@@ -261,9 +267,22 @@ final class RemoteFilesystemDispatchSupport {
               command.fileRecord(), "mime_type", BatchFileConstants.CONTENT_TYPE_OCTET_STREAM);
       // AWS SDK v2 RequestBody.fromInputStream 需要确定的 contentLength；分发流可能已解密、
       // 长度与声明值不一致，故先读入内存再以精确字节数上传（与 probeOss 的 ByteArrayInputStream 一致）。
+      // 防 OOM:bounded 读到上限+1,超限说明文件过大,拒绝该 dispatch 而非把 GB 级整文件读进堆。
       byte[] payload;
       try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
-        payload = in.readAllBytes();
+        payload = in.readNBytes(MAX_OSS_INLINE_PAYLOAD_BYTES + 1);
+      }
+      if (payload.length > MAX_OSS_INLINE_PAYLOAD_BYTES) {
+        return new DispatchResult(
+            false,
+            null,
+            null,
+            false,
+            false,
+            "oss payload exceeds inline upload limit ("
+                + MAX_OSS_INLINE_PAYLOAD_BYTES
+                + " bytes); reduce file size or use a streaming-capable channel",
+            null);
       }
       DispatchManifestSupport.PayloadDigest payloadDigest = DispatchManifestSupport.digest(payload);
       objectStore.put(
