@@ -113,10 +113,12 @@
             error_code = #{errorCode},
             error_message = #{errorMessage},
             finished_at = CURRENT_TIMESTAMP
-        where id in (
+        where tenant_id = #{tenantId}
+          and id in (
             select id
             from batch.compensation_command
-            where command_status = #{runningStatus}
+            where tenant_id = #{tenantId}
+              and command_status = #{runningStatus}
               and created_at &lt; #{cutoff}
             order by created_at asc, id asc
             limit #{limit}

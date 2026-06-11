@@ -2,7 +2,10 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.CompensationCommandStatus;
 import com.example.batch.common.time.BatchDateTimeSupport;
+import com.example.batch.orchestrator.infrastructure.tenant.ActiveTenantProvider;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
+import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +33,7 @@ public class StaleCompensationCommandReconciler {
   static final String ERROR_CODE = "STALE_RUNNING_TIMEOUT";
 
   private final CompensationCommandMapper compensationCommandMapper;
+  private final ActiveTenantProvider activeTenantProvider;
 
   @Value("${batch.compensation.stale-running-reconciler.timeout-seconds:3600}")
   private long timeoutSeconds;
@@ -45,20 +49,32 @@ public class StaleCompensationCommandReconciler {
     if (timeoutSeconds <= 0 || batchSize <= 0) {
       return;
     }
-    int updated =
-        compensationCommandMapper.markStaleRunningFailed(
-            CompensationCommandStatus.RUNNING.code(),
-            CompensationCommandStatus.FAILED.code(),
-            BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds),
-            ERROR_CODE,
-            "compensation command stayed RUNNING beyond timeout; marked failed by reconciler",
-            batchSize);
-    if (updated > 0) {
-      log.warn(
-          "stale compensation RUNNING reconciled: updated={}, timeoutSeconds={}, batchSize={}",
-          updated,
-          timeoutSeconds,
-          batchSize);
+    List<String> tenantIds = activeTenantProvider.activeTenantIds();
+    Instant cutoff = BatchDateTimeSupport.utcNow().minusSeconds(timeoutSeconds);
+    for (String tenantId : tenantIds) {
+      try {
+        int updated =
+            compensationCommandMapper.markStaleRunningFailed(
+                tenantId,
+                CompensationCommandStatus.RUNNING.code(),
+                CompensationCommandStatus.FAILED.code(),
+                cutoff,
+                ERROR_CODE,
+                "compensation command stayed RUNNING beyond timeout; marked failed by reconciler",
+                batchSize);
+        if (updated > 0) {
+          log.warn(
+              "stale compensation RUNNING reconciled: tenantId={}, updated={}, timeoutSeconds={},"
+                  + " batchSize={}",
+              tenantId,
+              updated,
+              timeoutSeconds,
+              batchSize);
+        }
+      } catch (Exception e) {
+        log.warn(
+            "stale compensation reconcile failed for tenant, skipping: tenantId={}", tenantId, e);
+      }
     }
   }
 }

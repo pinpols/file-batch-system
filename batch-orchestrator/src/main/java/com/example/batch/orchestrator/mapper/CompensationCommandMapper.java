@@ -20,6 +20,7 @@ public interface CompensationCommandMapper {
       @Param("runningStatus") String runningStatus);
 
   int markStaleRunningFailed(
+      @Param("tenantId") String tenantId,
       @Param("runningStatus") String runningStatus,
       @Param("failedStatus") String failedStatus,
       @Param("cutoff") Instant cutoff,
