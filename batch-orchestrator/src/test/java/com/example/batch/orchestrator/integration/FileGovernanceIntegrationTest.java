@@ -226,6 +226,10 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldReconcileOrphanObjectIntoFileRecord() throws Exception {
+    // 2026-06-11:MinIO 是 reuse 容器,历史失败 run 留下的 *-orphan.csv 会跨 run 积压、
+    // 吃掉 reconcile sweep 视野导致本 run 对象排不上队(实测积压 32 个时本测试永久红)。
+    // 先清同模式遗留,保证测试对容器复用污染免疫。
+    purgeLeftoverOrphans();
     String objectName = "incoming/" + suffix() + "-orphan.csv";
     putObject(objectName, "alpha,beta\n1,2\n");
 
@@ -359,6 +363,13 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         spec.metadataJson,
         Timestamp.from(spec.createdAt),
         Timestamp.from(spec.updatedAt));
+  }
+
+  private void purgeLeftoverOrphans() {
+    S3Client client = s3Client();
+    client.listObjectsV2(b -> b.bucket(s3Bucket()).prefix("incoming/")).contents().stream()
+        .filter(o -> o.key().endsWith("-orphan.csv"))
+        .forEach(o -> client.deleteObject(b -> b.bucket(s3Bucket()).key(o.key())));
   }
 
   private void putObject(String objectName, String content) throws Exception {
