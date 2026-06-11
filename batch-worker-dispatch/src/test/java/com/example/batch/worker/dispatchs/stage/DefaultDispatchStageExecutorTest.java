@@ -56,7 +56,7 @@ class DefaultDispatchStageExecutorTest {
     prepareStep = stubStep(DispatchStage.PREPARE);
 
     when(runtimeRepository.toLong(any())).thenReturn(PIPELINE_INSTANCE_ID);
-    when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
+    when(runtimeRepository.startStepRun(any(), any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
     // Provide all required stages so buildDefaultStepDefinitions() does not throw
     List<DispatchStageStep> allSteps = new ArrayList<>();

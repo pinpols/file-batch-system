@@ -53,7 +53,7 @@ class DefaultImportStageExecutorTest {
     receiveStep = stubStep(ImportStage.RECEIVE);
 
     when(runtimeRepository.toLong(any())).thenReturn(PIPELINE_INSTANCE_ID);
-    when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
+    when(runtimeRepository.startStepRun(any(), any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
     List<ImportStageStep> allSteps = new ArrayList<>();
     allSteps.add(receiveStep);

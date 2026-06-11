@@ -45,7 +45,7 @@ class DefaultProcessStageExecutorTest {
   @BeforeEach
   void setUp() {
     when(runtimeRepository.toLong(any())).thenReturn(PIPELINE_INSTANCE_ID);
-    when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
+    when(runtimeRepository.startStepRun(any(), any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
   }
 
   @Test
