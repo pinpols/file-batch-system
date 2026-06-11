@@ -219,6 +219,25 @@ else
 fi
 
 # ───────────────────────────────────────────────────────────
+# §3b. outbox 重复事件观测(分区分支:NOT EXISTS 竞态残余监控)
+#   feature/partition-readiness 起,outbox_event 分区后无全局 (tenant_id,event_key)
+#   唯一约束,insert 走 NOT EXISTS;此检查监控竞态残余(预期恒为 0)。
+#   设计依据: docs/design/partition-idempotency-decision.md
+# ───────────────────────────────────────────────────────────
+hdr "3b. outbox 重复事件观测"
+
+DUP_EVENTS=$(psql_q "select count(*) from (
+  select tenant_id, event_key from batch.outbox_event
+  group by tenant_id, event_key having count(*) > 1) d;")
+if [[ -z "$DUP_EVENTS" ]]; then
+  echo "  ${YELLOW}🟡 SKIP${RST}  outbox_event 不可查(PG 未起或表缺失)"
+elif [[ "$DUP_EVENTS" == "0" ]]; then
+  pass "outbox 无重复 (tenant_id,event_key)" "NOT EXISTS 幂等观测正常"
+else
+  fail "outbox 出现 $DUP_EVENTS 组重复事件" "NOT EXISTS 竞态残余,需查发射方(docs/design/partition-idempotency-decision.md)"
+fi
+
+# ───────────────────────────────────────────────────────────
 # §4. maintenance 状态接口
 # ───────────────────────────────────────────────────────────
 hdr "4. maintenance 状态接口"
