@@ -70,6 +70,7 @@ public abstract class AbstractStageExecutor<
       injectCurrentStepAttributes(context, currentStep);
       Long stepRunId =
           runtimeRepository.startStepRun(
+              context.getTenantId(),
               pipelineInstanceId,
               currentStep.stepCode(),
               currentStep.stageCode(),

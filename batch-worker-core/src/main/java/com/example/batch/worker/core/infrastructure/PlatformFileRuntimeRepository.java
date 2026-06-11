@@ -274,12 +274,21 @@ public class PlatformFileRuntimeRepository {
   }
 
   public Long startStepRun(
-      Long pipelineInstanceId, String stepCode, String stageCode, Object inputSummary) {
-    if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {
+      String tenantId,
+      Long pipelineInstanceId,
+      String stepCode,
+      String stageCode,
+      Object inputSummary) {
+    if (!Texts.hasText(tenantId)
+        || pipelineInstanceId == null
+        || !Texts.hasText(stepCode)
+        || !Texts.hasText(stageCode)) {
       return null;
     }
     Map<String, Object> paramMap =
         params(
+            KEY_TENANT_ID,
+            tenantId,
             KEY_PIPELINE_INSTANCE_ID,
             pipelineInstanceId,
             "stepCode",

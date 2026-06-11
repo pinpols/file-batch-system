@@ -174,11 +174,11 @@
               and step_code = #{stepCode}
         )
         insert into batch.pipeline_step_run (
-            pipeline_instance_id, step_code, stage_code, run_seq,
+            tenant_id, pipeline_instance_id, step_code, stage_code, run_seq,
             step_status, input_summary, started_at
         )
         select
-            #{pipelineInstanceId}, #{stepCode}, #{stageCode}, next_seq.run_seq,
+            #{tenantId}, #{pipelineInstanceId}, #{stepCode}, #{stageCode}, next_seq.run_seq,
             #{stepStatus}, #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
         from next_seq
     </insert>
