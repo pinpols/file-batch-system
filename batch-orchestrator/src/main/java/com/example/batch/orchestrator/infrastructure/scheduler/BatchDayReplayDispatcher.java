@@ -163,9 +163,11 @@ public class BatchDayReplayDispatcher {
             .build();
     try {
       compensationService.submit(command);
-      entryMapper.updateStatus(entry.id(), ENTRY_RUNNING, null, null, null, now, null, now);
+      entryMapper.updateStatus(
+          entry.tenantId(), entry.id(), ENTRY_RUNNING, null, null, null, now, null, now);
     } catch (RuntimeException submitFailure) {
       entryMapper.updateStatus(
+          entry.tenantId(),
           entry.id(),
           ENTRY_FAILED,
           null,

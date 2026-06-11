@@ -101,7 +101,8 @@ class TriggerOutboxRelayTest {
 
     verify(mapper).resetStalePublishing(anyString(), anyString(), anyString(), anyLong());
     verify(publisher, never()).publish(any(), any(), any(), any());
-    verify(mapper, never()).markPublishing(anyLong(), anyString(), anyString(), anyString());
+    verify(mapper, never())
+        .markPublishing(anyString(), anyLong(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -151,7 +152,8 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity event = buildPendingEvent(101L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(101L), anyString(), anyString(), anyString())).thenReturn(1);
+    when(mapper.markPublishing(anyString(), eq(101L), anyString(), anyString(), anyString()))
+        .thenReturn(1);
     when(publisher.publish(any(), any(), any(), any()))
         .thenReturn(TriggerEventPublisher.PublishResult.ok());
 
@@ -163,8 +165,8 @@ class TriggerOutboxRelayTest {
             eq("tenant-a:req-1"),
             any(LaunchEnvelope.class),
             eq("trace-1"));
-    verify(mapper).markPublished(101L, OutboxPublishStatus.PUBLISHED.code());
-    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any());
+    verify(mapper).markPublished(anyString(), eq(101L), eq(OutboxPublishStatus.PUBLISHED.code()));
+    verify(mapper, never()).markFailed(anyString(), anyLong(), anyString(), anyString(), any());
   }
 
   @Test
@@ -173,7 +175,8 @@ class TriggerOutboxRelayTest {
     event.setPublishAttempt(2);
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(102L), anyString(), anyString(), anyString())).thenReturn(1);
+    when(mapper.markPublishing(anyString(), eq(102L), anyString(), anyString(), anyString()))
+        .thenReturn(1);
     when(publisher.publish(any(), any(), any(), any()))
         .thenReturn(TriggerEventPublisher.PublishResult.fail("kafka broker not reachable"));
 
@@ -181,11 +184,12 @@ class TriggerOutboxRelayTest {
 
     verify(mapper)
         .markFailed(
+            anyString(),
             eq(102L),
             eq(OutboxPublishStatus.FAILED.code()),
             eq("kafka broker not reachable"),
             any(Instant.class));
-    verify(mapper, never()).markPublished(anyLong(), anyString());
+    verify(mapper, never()).markPublished(anyString(), anyLong(), anyString());
   }
 
   @Test
@@ -195,7 +199,8 @@ class TriggerOutboxRelayTest {
     event.setPublishAttempt(2);
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(107L), anyString(), anyString(), anyString())).thenReturn(1);
+    when(mapper.markPublishing(anyString(), eq(107L), anyString(), anyString(), anyString()))
+        .thenReturn(1);
     when(publisher.publish(any(), any(), any(), any()))
         .thenReturn(TriggerEventPublisher.PublishResult.fail("kafka still down"));
 
@@ -203,11 +208,12 @@ class TriggerOutboxRelayTest {
 
     verify(mapper)
         .markFailed(
+            anyString(),
             eq(107L),
             eq(OutboxPublishStatus.GIVE_UP.code()),
             eq("kafka still down"),
             any(Instant.class));
-    verify(mapper, never()).markPublished(anyLong(), anyString());
+    verify(mapper, never()).markPublished(anyString(), anyLong(), anyString());
   }
 
   @Test
@@ -215,12 +221,14 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity event = buildPendingEvent(103L, "{not-json}");
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(103L), anyString(), anyString(), anyString())).thenReturn(1);
+    when(mapper.markPublishing(anyString(), eq(103L), anyString(), anyString(), anyString()))
+        .thenReturn(1);
 
     relay.poll();
 
     verify(mapper)
         .markFailed(
+            anyString(),
             eq(103L),
             eq(OutboxPublishStatus.GIVE_UP.code()),
             contains("payload deserialize"),
@@ -233,13 +241,14 @@ class TriggerOutboxRelayTest {
     TriggerOutboxEventEntity event = buildPendingEvent(104L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(event));
-    when(mapper.markPublishing(eq(104L), anyString(), anyString(), anyString())).thenReturn(0);
+    when(mapper.markPublishing(anyString(), eq(104L), anyString(), anyString(), anyString()))
+        .thenReturn(0);
 
     relay.poll();
 
     verify(publisher, never()).publish(any(), any(), any(), any());
-    verify(mapper, never()).markPublished(anyLong(), anyString());
-    verify(mapper, never()).markFailed(anyLong(), anyString(), anyString(), any());
+    verify(mapper, never()).markPublished(anyString(), anyLong(), anyString());
+    verify(mapper, never()).markFailed(anyString(), anyLong(), anyString(), anyString(), any());
   }
 
   @Test
@@ -249,15 +258,16 @@ class TriggerOutboxRelayTest {
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
         .thenReturn(List.of(bad, good));
     // bad: markPublishing 抛异常模拟 DB 偶发问题
-    when(mapper.markPublishing(eq(105L), anyString(), anyString(), anyString()))
+    when(mapper.markPublishing(anyString(), eq(105L), anyString(), anyString(), anyString()))
         .thenThrow(new RuntimeException("db transient error"));
-    when(mapper.markPublishing(eq(106L), anyString(), anyString(), anyString())).thenReturn(1);
+    when(mapper.markPublishing(anyString(), eq(106L), anyString(), anyString(), anyString()))
+        .thenReturn(1);
     when(publisher.publish(any(), any(), any(), any()))
         .thenReturn(TriggerEventPublisher.PublishResult.ok());
 
     relay.poll();
 
-    verify(mapper).markPublished(106L, OutboxPublishStatus.PUBLISHED.code());
+    verify(mapper).markPublished(anyString(), eq(106L), eq(OutboxPublishStatus.PUBLISHED.code()));
     verify(publisher, times(1)).publish(any(), any(), any(), any());
   }
 

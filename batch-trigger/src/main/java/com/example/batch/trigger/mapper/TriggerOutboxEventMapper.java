@@ -36,16 +36,19 @@ public interface TriggerOutboxEventMapper {
 
   /** 标记为 PUBLISHING(投递前状态),只对 PENDING/FAILED 行生效。 返回 1 表示成功抢占,0 表示已被其它 relay 实例抢走。 */
   int markPublishing(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("publishingStatus") String publishingStatus,
       @Param("pendingStatus1") String pendingStatus1,
       @Param("pendingStatus2") String pendingStatus2);
 
   /** 投递成功,设置 published_at + status。 */
-  int markPublished(@Param("id") Long id, @Param("status") String status);
+  int markPublished(
+      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);
 
   /** 投递失败,递增 publish_attempt,写 last_error,延迟下次扫描。 */
   int markFailed(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("status") String status,
       @Param("lastError") String lastError,

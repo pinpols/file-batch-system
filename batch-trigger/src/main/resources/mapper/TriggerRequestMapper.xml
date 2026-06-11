@@ -37,7 +37,8 @@
     <select id="selectById" resultMap="TriggerRequestResultMap">
         select *
         from batch.trigger_request
-        where id = #{id}
+        where tenant_id = #{tenantId}
+          and id = #{id}
     </select>
 
     <select id="selectByTenantAndRequestId" resultMap="TriggerRequestResultMap">

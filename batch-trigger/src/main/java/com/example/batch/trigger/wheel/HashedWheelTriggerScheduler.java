@@ -302,7 +302,9 @@ public class HashedWheelTriggerScheduler {
     if (inFlightFires.putIfAbsent(dedupKey, Boolean.TRUE) != null) {
       return false; // 内存层去重(同 leader 同周期重复扫)
     }
-    int claimed = stateMapper.claimForSchedule(state.getId(), state.getVersion(), leaderInstanceId);
+    int claimed =
+        stateMapper.claimForSchedule(
+            state.getTenantId(), state.getId(), state.getVersion(), leaderInstanceId);
     if (claimed == 0) {
       inFlightFires.remove(dedupKey);
       return false; // DB 层去重(其他 leader 已占,或 marker 非空)
@@ -492,6 +494,7 @@ public class HashedWheelTriggerScheduler {
               ? Math.max(1, state.getFireSequence() == null ? 1 : state.getFireSequence()) + 1
               : 1;
       stateMapper.advanceAfterFire(
+          state.getTenantId(),
           state.getId(),
           next,
           scheduledFireTime,

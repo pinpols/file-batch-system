@@ -86,7 +86,8 @@ public class BatchDayReplayTerminalReconciler {
     }
     Instant now = dateTimeSupport.nowInstant();
     String entryStatus = mapInstanceTerminalToEntryStatus(instanceStatus);
-    entryMapper.updateStatus(entry.id(), entryStatus, jobInstanceId, null, null, null, now, now);
+    entryMapper.updateStatus(
+        entry.tenantId(), entry.id(), entryStatus, jobInstanceId, null, null, null, now, now);
     advanceSessionCounts(session, now);
   }
 

@@ -62,7 +62,8 @@
         UPDATE batch.trigger_outbox_event
            SET publish_status = #{publishingStatus},
                updated_at     = CURRENT_TIMESTAMP
-         WHERE id = #{id}
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
            AND publish_status IN (#{pendingStatus1}, #{pendingStatus2})
     </update>
 
@@ -71,7 +72,8 @@
            SET publish_status = #{status},
                published_at   = CURRENT_TIMESTAMP,
                updated_at     = CURRENT_TIMESTAMP
-         WHERE id = #{id}
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
     </update>
 
     <update id="markFailed">
@@ -81,7 +83,8 @@
                last_error       = #{lastError,jdbcType=VARCHAR},
                next_publish_at  = #{nextPublishAt},
                updated_at       = CURRENT_TIMESTAMP
-         WHERE id = #{id}
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
     </update>
 
     <update id="resetStalePublishing">

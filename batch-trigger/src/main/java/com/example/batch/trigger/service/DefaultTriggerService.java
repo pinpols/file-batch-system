@@ -73,7 +73,7 @@ public class DefaultTriggerService implements TriggerService {
   private final PlatformTransactionManager transactionManager;
 
   private record PendingApprovalTarget(
-      TriggerRequestEntity request, Long pendingId, boolean approvePending) {}
+      TriggerRequestEntity request, String tenantId, Long pendingId, boolean approvePending) {}
 
   @Override
   public LaunchResponse launch(TriggerLaunchCommand command) {
@@ -140,7 +140,8 @@ public class DefaultTriggerService implements TriggerService {
             _ -> {
               TriggerRequestEntity pendingRequest =
                   requestFromPending != null
-                      ? triggerRequestMapper.selectById(requestFromPending.getId())
+                      ? triggerRequestMapper.selectById(
+                          command.getTenantId(), requestFromPending.getId())
                       : triggerRequestMapper.selectByTenantAndRequestId(
                           command.getTenantId(), command.getRequestId());
               Guard.requireFound(pendingRequest, "pending catch-up request not found");
@@ -164,7 +165,8 @@ public class DefaultTriggerService implements TriggerService {
                     pendingRequest.getRequestId(), pendingRequest.getTraceId());
               }
               if (pendingTarget != null && pendingTarget.approvePending()) {
-                triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
+                triggerMisfirePendingMapper.approve(
+                    pendingTarget.tenantId(), pendingTarget.pendingId(), "trigger-api");
               }
               LaunchRequest launchRequest =
                   new LaunchRequest(
@@ -301,7 +303,8 @@ public class DefaultTriggerService implements TriggerService {
               command.triggerRuntimeStateId(), command.fireTime());
     }
     if (pending != null && pending.getId() != null && request.getId() != null) {
-      triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
+      triggerMisfirePendingMapper.linkCatchUpRequest(
+          pending.getTenantId(), pending.getId(), request.getId());
     }
   }
 
@@ -311,7 +314,7 @@ public class DefaultTriggerService implements TriggerService {
     }
     TriggerMisfirePendingEntity pending =
         Guard.requireFound(
-            triggerMisfirePendingMapper.selectById(command.getPendingId()),
+            triggerMisfirePendingMapper.selectById(command.getTenantId(), command.getPendingId()),
             "misfire pending not found");
     if (!command.getTenantId().equals(pending.getTenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
@@ -329,10 +332,14 @@ public class DefaultTriggerService implements TriggerService {
     }
     TriggerRequestEntity request =
         Guard.requireFound(
-            triggerRequestMapper.selectById(requestId), "catch-up request not found");
+            triggerRequestMapper.selectById(pending.getTenantId(), requestId),
+            "catch-up request not found");
     command.setRequestId(request.getRequestId());
     return new PendingApprovalTarget(
-        request, pending.getId(), "PENDING".equalsIgnoreCase(pending.getStatus()));
+        request,
+        pending.getTenantId(),
+        pending.getId(),
+        "PENDING".equalsIgnoreCase(pending.getStatus()));
   }
 
   private String buildScheduledDedupKey(ScheduledTriggerCommand command) {

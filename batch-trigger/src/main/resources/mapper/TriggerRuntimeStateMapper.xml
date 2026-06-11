@@ -46,7 +46,8 @@
                scheduled_at = now(),
                version = version + 1,
                updated_at = now()
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
            and version = #{expectedVersion}
            and scheduled_fire_marker is null
     </update>
@@ -69,7 +70,8 @@
                scheduled_at = null,
                version = version + 1,
                updated_at = now()
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
     </update>
 
     <!--
@@ -144,7 +146,8 @@
                scheduled_at = null,
                version = version + 1,
                updated_at = now()
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
     </update>
 
 </mapper>

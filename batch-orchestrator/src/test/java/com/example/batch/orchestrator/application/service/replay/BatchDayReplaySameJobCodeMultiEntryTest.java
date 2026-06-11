@@ -89,7 +89,15 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     ArgumentCaptor<Long> updatedId = ArgumentCaptor.forClass(Long.class);
     verify(entryMapper)
         .updateStatus(
-            updatedId.capture(), eq(ENTRY_SUCCEEDED), eq(5001L), any(), any(), any(), any(), any());
+            anyString(),
+            updatedId.capture(),
+            eq(ENTRY_SUCCEEDED),
+            eq(5001L),
+            any(),
+            any(),
+            any(),
+            any(),
+            any());
     assertThat(updatedId.getValue()).as("必须按 sourceInstanceId 命中第二条 entry").isEqualTo(102L);
     // 不应回退到线性扫
     verify(entryMapper, org.mockito.Mockito.never()).selectBySessionId(anyLong());
@@ -118,7 +126,16 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
 
     // 断言
     verify(entryMapper)
-        .updateStatus(eq(201L), eq(ENTRY_SUCCEEDED), eq(7100L), any(), any(), any(), any(), any());
+        .updateStatus(
+            anyString(),
+            eq(201L),
+            eq(ENTRY_SUCCEEDED),
+            eq(7100L),
+            any(),
+            any(),
+            any(),
+            any(),
+            any());
     // 不需要 source 兜底也不需要线性扫
     verify(entryMapper, org.mockito.Mockito.never())
         .selectBySessionAndSourceInstanceId(anyLong(), anyString(), anyLong());
@@ -146,7 +163,16 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     reconciler.reconcileOnTerminal("t1", 9L, "JOB_LEGACY", 8000L, JOB_SUCCESS);
 
     verify(entryMapper)
-        .updateStatus(eq(301L), eq(ENTRY_SUCCEEDED), eq(8000L), any(), any(), any(), any(), any());
+        .updateStatus(
+            anyString(),
+            eq(301L),
+            eq(ENTRY_SUCCEEDED),
+            eq(8000L),
+            any(),
+            any(),
+            any(),
+            any(),
+            any());
   }
 
   private static BatchDayReplaySessionEntity session(Long id, String status, int totalCount) {

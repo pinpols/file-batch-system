@@ -144,7 +144,12 @@ public class WheelTriggerReconciler {
           ZoneId zone = timezoneProvider.resolveOrDefault(d.getTimezone());
           ZonedDateTime zdt = next.atZone(zone);
           stateMapper.rescheduleNextFireTime(
-              existing.getId(), next, zone.getId(), zdt.toLocalDate(), zdt.toLocalTime());
+              existing.getTenantId(),
+              existing.getId(),
+              next,
+              zone.getId(),
+              zdt.toLocalDate(),
+              zdt.toLocalTime());
           updated++;
           log.info(
               "wheel reschedule due to drift: jobDefId={} jobCode={} newNextFireTime={} zone={}",

@@ -284,6 +284,7 @@ public class TriggerOutboxRelay {
     }
     int claimed =
         mapper.markPublishing(
+            event.getTenantId(),
             event.getId(),
             OutboxPublishStatus.PUBLISHING.code(),
             OutboxPublishStatus.NEW.code(),
@@ -303,6 +304,7 @@ public class TriggerOutboxRelay {
           event.getRequestId(),
           ex);
       mapper.markFailed(
+          event.getTenantId(),
           event.getId(),
           OutboxPublishStatus.GIVE_UP.code(),
           truncate("payload deserialize: " + ex.getMessage()),
@@ -319,7 +321,8 @@ public class TriggerOutboxRelay {
       return false;
     }
     if (result.success()) {
-      mapper.markPublished(event.getId(), OutboxPublishStatus.PUBLISHED.code());
+      mapper.markPublished(
+          event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
       return true;
     } else {
       int nextAttempt = event.getPublishAttempt() + 1;
@@ -335,6 +338,7 @@ public class TriggerOutboxRelay {
             event.getTopic(),
             result.errorMessage());
         mapper.markFailed(
+            event.getTenantId(),
             event.getId(),
             OutboxPublishStatus.GIVE_UP.code(),
             truncate(result.errorMessage()),
@@ -346,6 +350,7 @@ public class TriggerOutboxRelay {
       }
       Instant retryAt = BatchDateTimeSupport.utcNow().plusSeconds(backoffSeconds(nextAttempt));
       mapper.markFailed(
+          event.getTenantId(),
           event.getId(),
           OutboxPublishStatus.FAILED.code(),
           truncate(result.errorMessage()),

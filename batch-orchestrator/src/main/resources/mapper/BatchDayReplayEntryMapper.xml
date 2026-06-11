@@ -88,7 +88,8 @@
             started_at        = coalesce(#{startedAt}, started_at),
             finished_at       = coalesce(#{finishedAt}, finished_at),
             updated_at        = #{now}
-        where id = #{id}
+        where tenant_id = #{tenantId}
+          and id = #{id}
     </update>
 
     <select id="countBySessionAndStatus" resultType="java.lang.Long">

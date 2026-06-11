@@ -79,7 +79,16 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_A", 1001L, JOB_SUCCESS);
 
     verify(entryMapper)
-        .updateStatus(eq(11L), eq(ENTRY_SUCCEEDED), eq(1001L), any(), any(), any(), any(), any());
+        .updateStatus(
+            anyString(),
+            eq(11L),
+            eq(ENTRY_SUCCEEDED),
+            eq(1001L),
+            any(),
+            any(),
+            any(),
+            any(),
+            any());
     ArgumentCaptor<List<String>> expected = ArgumentCaptor.captor();
     verify(sessionMapper)
         .updateStatus(
@@ -107,7 +116,8 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 8L, "JOB_X", 2001L, JOB_FAILED);
 
     verify(entryMapper)
-        .updateStatus(eq(20L), eq(ENTRY_FAILED), eq(2001L), any(), any(), any(), any(), any());
+        .updateStatus(
+            anyString(), eq(20L), eq(ENTRY_FAILED), eq(2001L), any(), any(), any(), any(), any());
     verify(sessionMapper)
         .updateStatus(
             eq("t1"), eq(8L), eq("PARTIAL_FAILED"), anyList(), any(), any(), any(), any());
@@ -157,7 +167,8 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 50L, "JOB_X", 9999L, JOB_SUCCESS);
 
     verify(entryMapper, never())
-        .updateStatus(anyLong(), anyString(), any(), any(), any(), any(), any(), any());
+        .updateStatus(
+            anyString(), anyLong(), anyString(), any(), any(), any(), any(), any(), any());
     verify(sessionMapper, never())
         .updateCounts(anyString(), anyLong(), anyInt(), anyInt(), anyInt(), anyInt(), any());
   }

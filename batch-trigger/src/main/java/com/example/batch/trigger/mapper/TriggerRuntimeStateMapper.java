@@ -37,6 +37,7 @@ public interface TriggerRuntimeStateMapper {
    * @return 影响行数(0=别人占了,1=占位成功)
    */
   int claimForSchedule(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("expectedVersion") Integer expectedVersion,
       @Param("marker") String marker);
@@ -48,6 +49,7 @@ public interface TriggerRuntimeStateMapper {
    * advance 应该悄悄继续(下次扫库会重捡)。
    */
   int advanceAfterFire(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("nextFireTime") Instant nextFireTime,
       @Param("lastFireTime") Instant lastFireTime,
@@ -89,6 +91,7 @@ public interface TriggerRuntimeStateMapper {
 
   /** schedule_expr 修改时:重新计算的 next_fire_time 直接写回,清掉 marker;同步本地计划审计字段。 */
   int rescheduleNextFireTime(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("nextFireTime") Instant nextFireTime,
       @Param("scheduleTimezone") String scheduleTimezone,

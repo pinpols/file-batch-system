@@ -166,8 +166,8 @@ class DefaultTriggerServiceTest {
     pendingRequest.setTraceId("trace-linked");
     pendingRequest.setDedupKey("dedup-linked");
 
-    when(triggerMisfirePendingMapper.selectById(10L)).thenReturn(pendingRow);
-    when(triggerRequestMapper.selectById(77L)).thenReturn(pendingRequest);
+    when(triggerMisfirePendingMapper.selectById(anyString(), eq(10L))).thenReturn(pendingRow);
+    when(triggerRequestMapper.selectById(anyString(), eq(77L))).thenReturn(pendingRequest);
     when(triggerRequestMapper.updateRequestStatusConditional(
             "t1", "req-linked", "PROCESSING", "ACCEPTED"))
         .thenReturn(1);
@@ -176,7 +176,7 @@ class DefaultTriggerServiceTest {
 
     assertThat(approved.instanceNo()).isEqualTo("req-linked");
     assertThat(approved.traceId()).isEqualTo("trace-linked");
-    verify(triggerMisfirePendingMapper).approve(10L, "trigger-api");
+    verify(triggerMisfirePendingMapper).approve(anyString(), eq(10L), eq("trigger-api"));
     verify(triggerOutboxPublisher)
         .publishRaw(eq("t1"), eq("req-linked"), eq("trace-linked"), anyString());
     verify(triggerRequestMapper).updateRequestStatus("t1", "req-linked", "LAUNCHED");
@@ -273,7 +273,7 @@ class DefaultTriggerServiceTest {
     assertThat(response.instanceNo()).isEqualTo("req-cu");
     verify(triggerRequestMapper).insert(any());
     verify(triggerMisfirePendingMapper).insertPending(any());
-    verify(triggerMisfirePendingMapper).linkCatchUpRequest(901L, 900L);
+    verify(triggerMisfirePendingMapper).linkCatchUpRequest(anyString(), eq(901L), eq(900L));
   }
 
   @Test

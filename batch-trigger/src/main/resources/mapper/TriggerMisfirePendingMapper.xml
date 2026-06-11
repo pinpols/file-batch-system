@@ -33,7 +33,9 @@
     </insert>
 
     <select id="selectById" resultMap="TriggerMisfirePendingResultMap">
-        select * from batch.trigger_misfire_pending where id = #{id}
+        select * from batch.trigger_misfire_pending
+        where tenant_id = #{tenantId}
+          and id = #{id}
     </select>
 
     <select id="selectByRuntimeStateAndFireTime" resultMap="TriggerMisfirePendingResultMap">
@@ -58,7 +60,8 @@
                approved_by = #{approvedBy},
                approved_at = now(),
                updated_at = now()
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
            and status = 'PENDING'
     </update>
 
@@ -69,7 +72,8 @@
                approved_at = now(),
                rejection_reason = #{rejectionReason},
                updated_at = now()
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
            and status = 'PENDING'
     </update>
 
@@ -77,7 +81,8 @@
         update batch.trigger_misfire_pending
            set catch_up_request_id = #{catchUpRequestId},
                updated_at = now()
-         where id = #{id}
+         where tenant_id = #{tenantId}
+           and id = #{id}
     </update>
 
     <update id="markExpired">

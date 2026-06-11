@@ -133,7 +133,8 @@ class BatchDayReplayDispatcherTest {
                 assertThat(cmd.resultPolicy())
                     .isEqualTo("CREATE_NEW_VERSION")); // 透传 session policy
     verify(entryMapper, times(2))
-        .updateStatus(anyLong(), eq("RUNNING"), any(), any(), any(), any(), any(), any());
+        .updateStatus(
+            anyString(), anyLong(), eq("RUNNING"), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -157,7 +158,7 @@ class BatchDayReplayDispatcherTest {
     dispatcher.scheduledDispatch();
 
     verify(entryMapper)
-        .updateStatus(eq(1L), eq("FAILED"), any(), any(), any(), any(), any(), any());
+        .updateStatus(anyString(), eq(1L), eq("FAILED"), any(), any(), any(), any(), any(), any());
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

@@ -95,7 +95,8 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
     insertState(BatchDateTimeSupport.utcNow().plusSeconds(60));
     TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
     // 手工 claim + 把 scheduled_at 改到 stale 之前(threshold=2s,设 10s 前)
-    stateMapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "dead-leader-instance");
+    stateMapper.claimForSchedule(
+        loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "dead-leader-instance");
     jdbcTemplate.update(
         "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds' where"
             + " id = ?",
@@ -143,7 +144,8 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
     // 不依赖 fast-path,独立调用 doReleaseStaleMarkers 绕开 @SchedulerLock(IT 不测 lock 语义)
     insertState(BatchDateTimeSupport.utcNow().plusSeconds(60));
     TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
-    stateMapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "dead-leader-instance");
+    stateMapper.claimForSchedule(
+        loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "dead-leader-instance");
     jdbcTemplate.update(
         "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds' where"
             + " id = ?",
@@ -215,7 +217,10 @@ class WheelLeaderFailoverIntegrationTest extends AbstractIntegrationTest {
 
     for (int i = 0; i < rounds; i++) {
       stateMapper.claimForSchedule(
-          loaded.getId(), getCurrentVersion(loaded.getId()), "dead-leader-" + i);
+          loaded.getTenantId(),
+          loaded.getId(),
+          getCurrentVersion(loaded.getId()),
+          "dead-leader-" + i);
       jdbcTemplate.update(
           "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds'"
               + " where id = ?",

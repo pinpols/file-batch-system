@@ -37,6 +37,7 @@ public interface BatchDayReplayEntryMapper {
 
   /** 推进 status + 关联字段。 */
   int updateStatus(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("toStatus") String toStatus,
       @Param("rerunInstanceId") Long rerunInstanceId,

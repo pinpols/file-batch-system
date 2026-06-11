@@ -80,7 +80,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     assertThat(rows).isEqualTo(1);
     assertThat(e.getId()).isNotNull();
 
-    TriggerMisfirePendingEntity loaded = mapper.selectById(e.getId());
+    TriggerMisfirePendingEntity loaded = mapper.selectById(tenantId, e.getId());
     assertThat(loaded.getStatus()).isEqualTo("PENDING");
     assertThat(loaded.getScheduledFireTime()).isEqualTo(scheduled);
     assertThat(loaded.getExpiresAt())
@@ -107,7 +107,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     mapper.insertPending(b);
     TriggerMisfirePendingEntity c = newPending(fireC);
     mapper.insertPending(c);
-    mapper.approve(b.getId(), "ops-user");
+    mapper.approve(tenantId, b.getId(), "ops-user");
 
     List<TriggerMisfirePendingEntity> pending = mapper.selectPendingByTenant(tenantId, 100);
     assertThat(pending)
@@ -121,16 +121,16 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
-    int rows = mapper.approve(e.getId(), "ops-user");
+    int rows = mapper.approve(tenantId, e.getId(), "ops-user");
     assertThat(rows).isEqualTo(1);
 
-    TriggerMisfirePendingEntity loaded = mapper.selectById(e.getId());
+    TriggerMisfirePendingEntity loaded = mapper.selectById(tenantId, e.getId());
     assertThat(loaded.getStatus()).isEqualTo("APPROVED");
     assertThat(loaded.getApprovedBy()).isEqualTo("ops-user");
     assertThat(loaded.getApprovedAt()).isNotNull();
 
     // 二次 approve 不再生效(status != PENDING)
-    int second = mapper.approve(e.getId(), "ops-user2");
+    int second = mapper.approve(tenantId, e.getId(), "ops-user2");
     assertThat(second).isZero();
   }
 
@@ -139,9 +139,9 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
-    int rows = mapper.reject(e.getId(), "ops-user", "duplicate launch");
+    int rows = mapper.reject(tenantId, e.getId(), "ops-user", "duplicate launch");
     assertThat(rows).isEqualTo(1);
-    TriggerMisfirePendingEntity loaded = mapper.selectById(e.getId());
+    TriggerMisfirePendingEntity loaded = mapper.selectById(tenantId, e.getId());
     assertThat(loaded.getStatus()).isEqualTo("REJECTED");
     assertThat(loaded.getRejectionReason()).isEqualTo("duplicate launch");
   }
@@ -150,11 +150,11 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
   void linkCatchUpRequestSetsRequestId() {
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
-    mapper.approve(e.getId(), "ops-user");
+    mapper.approve(tenantId, e.getId(), "ops-user");
 
-    int rows = mapper.linkCatchUpRequest(e.getId(), 999_999L);
+    int rows = mapper.linkCatchUpRequest(tenantId, e.getId(), 999_999L);
     assertThat(rows).isEqualTo(1);
-    assertThat(mapper.selectById(e.getId()).getCatchUpRequestId()).isEqualTo(999_999L);
+    assertThat(mapper.selectById(tenantId, e.getId()).getCatchUpRequestId()).isEqualTo(999_999L);
   }
 
   @Test
@@ -170,14 +170,14 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
     int expired = mapper.markExpired(BatchDateTimeSupport.utcNow());
     assertThat(expired).isGreaterThanOrEqualTo(1);
-    assertThat(mapper.selectById(e.getId()).getStatus()).isEqualTo("EXPIRED");
+    assertThat(mapper.selectById(tenantId, e.getId()).getStatus()).isEqualTo("EXPIRED");
   }
 
   @Test
   void markExpiredDoesNotTouchAlreadyApproved() {
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
-    mapper.approve(e.getId(), "ops-user");
+    mapper.approve(tenantId, e.getId(), "ops-user");
 
     jdbcTemplate.update(
         "update batch.trigger_misfire_pending set expires_at = now() - interval '1 hour' where id ="
@@ -185,7 +185,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
         e.getId());
 
     mapper.markExpired(BatchDateTimeSupport.utcNow());
-    assertThat(mapper.selectById(e.getId()).getStatus()).isEqualTo("APPROVED"); // 不变
+    assertThat(mapper.selectById(tenantId, e.getId()).getStatus()).isEqualTo("APPROVED"); // 不变
   }
 
   // ── helpers ─────────────────────────────────────────────

@@ -101,11 +101,15 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
 
-    int firstClaim = mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    int firstClaim =
+        mapper.claimForSchedule(
+            loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-A");
     assertThat(firstClaim).isEqualTo(1);
 
     // 同 version 再 claim 一次:已被占,且 version 已变,失败
-    int secondClaim = mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-B");
+    int secondClaim =
+        mapper.claimForSchedule(
+            loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-B");
     assertThat(secondClaim).isZero();
 
     TriggerRuntimeStateEntity afterClaim = mapper.selectByJobDefinitionId(jobDefId);
@@ -118,10 +122,12 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
 
-    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    mapper.claimForSchedule(loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-A");
 
     // 即使 version 对(是 stale),marker 不为 null 时也拒绝
-    int rows = mapper.claimForSchedule(loaded.getId(), loaded.getVersion() + 1, "leader-B");
+    int rows =
+        mapper.claimForSchedule(
+            loaded.getTenantId(), loaded.getId(), loaded.getVersion() + 1, "leader-B");
     assertThat(rows).isZero();
   }
 
@@ -131,10 +137,11 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
     Instant nextNext = origin.plus(Duration.ofMinutes(60));
     insertWithFireTime(origin);
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
-    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    mapper.claimForSchedule(loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-A");
 
     int rows =
         mapper.advanceAfterFire(
+            loaded.getTenantId(),
             loaded.getId(),
             nextNext,
             origin,
@@ -160,10 +167,11 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
   void advanceAfterFireWithMisfireDeltaIncrementsCount() {
     insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
-    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    mapper.claimForSchedule(loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-A");
 
     Instant next = BatchDateTimeSupport.utcNow().plus(Duration.ofMinutes(60));
     mapper.advanceAfterFire(
+        loaded.getTenantId(),
         loaded.getId(),
         next,
         BatchDateTimeSupport.utcNow(),
@@ -183,7 +191,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
   void releaseStaleMarkersClearsOldOccupations() {
     insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
-    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    mapper.claimForSchedule(loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-A");
 
     // 模拟 marker 已 7 分钟前写入(超 5 min 阈值)
     jdbcTemplate.update(
@@ -204,7 +212,7 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
   void releaseStaleMarkersDoesNotTouchFreshMarkers() {
     insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
-    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    mapper.claimForSchedule(loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-A");
 
     mapper.releaseStaleMarkers(BatchDateTimeSupport.utcNow().minus(Duration.ofMinutes(5)));
     // 刚写入的 marker(scheduled_at = 现在)不在 release 范围
@@ -216,11 +224,12 @@ class TriggerRuntimeStateMapperIntegrationTest extends AbstractIntegrationTest {
   void rescheduleNextFireTimeClearsMarker() {
     insertWithFireTime(BatchDateTimeSupport.utcNow().plusSeconds(30));
     TriggerRuntimeStateEntity loaded = mapper.selectByJobDefinitionId(jobDefId);
-    mapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "leader-A");
+    mapper.claimForSchedule(loaded.getTenantId(), loaded.getId(), loaded.getVersion(), "leader-A");
 
     Instant newNext = BatchDateTimeSupport.utcNow().plus(Duration.ofHours(1));
     int rows =
         mapper.rescheduleNextFireTime(
+            loaded.getTenantId(),
             loaded.getId(),
             newNext,
             "Asia/Shanghai",

@@ -229,10 +229,12 @@ public class BatchDayReplayService {
               ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.outputs_only_version_missing");
         }
         promoteService.promote(tenantId, versionId);
-        entryMapper.updateStatus(entry.id(), ENTRY_SUCCEEDED, null, versionId, null, now, now, now);
+        entryMapper.updateStatus(
+            entry.tenantId(), entry.id(), ENTRY_SUCCEEDED, null, versionId, null, now, now, now);
         succeeded++;
       } catch (Exception failure) {
         entryMapper.updateStatus(
+            entry.tenantId(),
             entry.id(),
             ENTRY_FAILED,
             null,
