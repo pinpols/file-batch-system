@@ -9,6 +9,8 @@ spring:
       api-key: "test-api-key"
 
 batch:
+  tenant:
+    active-cache-ttl-millis: 0  # 测试关缓存,保证新插租户即时可见(Citus 租户路由确定性)
   scheduling:
     # IT 不验证 Spring @Scheduled 线程池的优雅收尾；关闭时立即取消，避免 surefire fork 退出超时。
     wait-for-tasks-to-complete-on-shutdown: false

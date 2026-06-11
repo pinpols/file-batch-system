@@ -3,6 +3,7 @@ package com.example.batch.common.tenant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -21,9 +22,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ActiveTenantRegistry {
 
-  private static final long CACHE_TTL_NANOS = TimeUnit.SECONDS.toNanos(30);
-
   private final JdbcTemplate jdbcTemplate;
+
+  /** 缓存 TTL(毫秒);生产默认 30s,测试 profile 设 0 关闭缓存以保证确定性(避免 30s 窗口内新插租户读不到)。 */
+  @Value("${batch.tenant.active-cache-ttl-millis:30000}")
+  private long cacheTtlMillis;
 
   private volatile List<String> cache;
   private volatile long cacheAtNanos;
@@ -37,7 +40,7 @@ public class ActiveTenantRegistry {
    */
   public List<String> activeTenantIds() {
     long now = System.nanoTime();
-    if (cache != null && (now - cacheAtNanos) < CACHE_TTL_NANOS) {
+    if (cache != null && (now - cacheAtNanos) < TimeUnit.MILLISECONDS.toNanos(cacheTtlMillis)) {
       return cache;
     }
     List<String> fresh =
