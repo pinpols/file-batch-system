@@ -104,7 +104,7 @@
             #{fileId}, #{relatedJobInstanceId}, #{currentStage}, #{runStatus},
             #{traceId}, current_timestamp, current_timestamp, current_timestamp
         )
-        on conflict (related_job_instance_id)
+        on conflict (tenant_id, related_job_instance_id)
           where related_job_instance_id is not null
           do update set
             current_stage = excluded.current_stage,
