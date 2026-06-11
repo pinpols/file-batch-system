@@ -244,20 +244,25 @@
           and tr.request_status = 'ACCEPTED'
           and ji.created_at &lt; #{olderThan}
           and coalesce(jd.job_type, '') &lt;&gt; 'WORKFLOW'
+          <!-- 子查询带 tenant_id 相关联:Citus 分布式相关子查询须按分布列共置
+               (complex join 限制);id 全局唯一,语义零变化 -->
           and not exists (
               select 1
               from batch.job_partition jp
-              where jp.job_instance_id = ji.id
+              where jp.tenant_id = ji.tenant_id
+                and jp.job_instance_id = ji.id
           )
           and not exists (
               select 1
               from batch.job_task jt
-              where jt.job_instance_id = ji.id
+              where jt.tenant_id = ji.tenant_id
+                and jt.job_instance_id = ji.id
           )
           and not exists (
               select 1
               from batch.workflow_run wr
-              where wr.related_job_instance_id = ji.id
+              where wr.tenant_id = ji.tenant_id
+                and wr.related_job_instance_id = ji.id
           )
         order by ji.id asc
         limit #{limit}
