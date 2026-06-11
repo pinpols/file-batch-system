@@ -696,3 +696,55 @@ git push origin feature/partition-readiness
 - 全量验证:单测+IT 1106+886+... 全绿(各模块 0 失败)、e2e 41/41、分区守护 IT 37+37。
 - 关键修复沉淀:UNIQUE 约束名是隐性契约(DefaultLaunchService 按名匹配 dedup)→ V170/V171
   采用"建表 _p_ 临时名 + DROP legacy 后 RENAME 回原名"模式。
+
+---
+
+# Phase 2:Citus 全量施工(2026-06-11 起,两道 POC 门全过后开闸)
+
+> POC 结果:docs/analysis/citus-poc-gates-2026-06-11.md(RLS 透传 ✅ 需 GUC;ugk 档B ✅)。
+> 81 张单列 PK 表实测分类(共享库 catalog):**reference 表(~40 张配置/字典)PK 不动、零迁移**;
+> distributed 表(~35 张运行态)需复合 PK。V171 已把 job_instance 子表 FK 转应用层守护(最难部分已解)。
+
+## 分类矩阵(§3.1 落地)
+
+**REFERENCE(create_reference_table,PK 保持单列 id,零 schema 改动)**:
+job_definition / pipeline_definition / pipeline_step_definition / workflow_definition /
+workflow_definition_version / workflow_node / workflow_edge / custom_task_type_registry /
+atomic_task_config / file_channel_config / file_template_config / alert_routing_config /
+archive_policy / batch_window / business_calendar / calendar_dependency / calendar_group /
+calendar_holiday / disaster_day_override / resource_queue / resource_tag / subscription_rule /
+notification_channel / webhook_subscription / system_parameter / tenant_quota_policy /
+data_quality_rule / config_release / config_approval / secret_version / tenant / console_user_account / api_key
+
+**LOCAL(coordinator-only,不分布)**:worker_registry(平台基础设施,心跳高频 UPDATE,
+reference 的 2PC 写放大不可接受)+ 既有豁免 4 系统表。
+
+**DISTRIBUTED(复合 PK,按 FK 簇分波)**:
+- W1 job 簇:job_instance(V171 已分区,PK 加 tenant_id 前缀)/ job_partition / job_task /
+  job_step_instance / job_execution_log / compensation_command / compensation_checkpoint / retry_schedule
+- W2 trigger/batch_day 簇:trigger_request / trigger_outbox_event / trigger_misfire_pending /
+  trigger_runtime_state / batch_day_instance / batch_day_waiting_launch / batch_day_replay_session /
+  batch_day_replay_entry / batch_day_operation_audit / tenant_scheduler_snapshot
+- W3 outbox/event 簇:outbox_event(V170 已分区,同 W1 模式)/ event_delivery_log /
+  event_outbox_retry / worker_report_outbox(dead_letter_task ✅ V172 已做)
+- W4 file/pipeline 簇:file_record / file_dispatch_record / file_error_record / file_audit_log /
+  file_channel_health / pipeline_instance / pipeline_progress / pipeline_step_run(先补 tenant_id)
+- W5 workflow 簇:workflow_run / workflow_node_run(先补 tenant_id)/ approval_command
+- W6 audit/notify 散表:console_operation_audit / console_ai_audit_log / console_push_subscription /
+  console_push_job_notification / console_push_approval_notification / notification_delivery_log /
+  webhook_delivery_log / forensic_export_log / alert_event / data_quality_check / idempotency_record /
+  quota_runtime_state / result_version / config_change_log / config_sync_log
+- W7 Citus 启用资产:scripts/db/citus/01-distribute.sql(create_distributed_table 全清单 + colocation
+  + create_reference_table 清单;**不进 Flyway**,仅 Citus 集群执行)+ 启动期 GUC 自检
+- W8 终验:Flyway V1..V17x 跑在 citus-coord → 01-distribute.sql → 8 服务连 coordinator 全栈起 →
+  e2e 级冒烟(真 Citus 上的系统验收)
+
+## 每波统一施工模式(V172 + V170/V171 已验证)
+
+1. V 迁移:DROP 单列 pkey → ADD PRIMARY KEY (tenant_id, id[, 分区键]);簇内 FK 重建为复合
+   (tenant_id, parent_id),不可复合的(跨簇/打分区表)转应用层守护并注释
+2. 约束名沿用原名(隐性契约;临时名+RENAME 模式按需)
+3. mapper/调用链:量测该簇 `where id = #{}` 缺 tenant_id 的真实处数(dead_letter 实测为 0,
+   多数查询已带),缺的补;签名上提逐处记录
+4. 测试:簇内回归 + 分区守护 IT 扩展
+5. 提交模式:每波一个 commit,全量回归绿后推分支
