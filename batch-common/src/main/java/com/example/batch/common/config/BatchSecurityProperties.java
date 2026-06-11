@@ -62,6 +62,29 @@ public class BatchSecurityProperties {
       }
       validateNotPlaceholder(
           "POSTGRES_PASSWORD", environment.getProperty("spring.datasource.password"));
+      // #I-1: console-api 的主/从库密码走独立 key(batch.console.read-replica.*),不经
+      // spring.datasource.password,故上面的校验覆盖不到。这些 key 默认值是弱口令 batch_pass_123,
+      // prod 下若未注入 env 会静默用默认密码连生产库。非 console 模块该 property 不存在(null)→ 跳过。
+      validateNotKnownWeakDbPassword(
+          "batch.console.read-replica.primary.password",
+          environment.getProperty("batch.console.read-replica.primary.password"));
+      validateNotKnownWeakDbPassword(
+          "batch.console.read-replica.replica.password",
+          environment.getProperty("batch.console.read-replica.replica.password"));
+    }
+  }
+
+  /** prod 库连接默认弱口令清单——出现在 application.yml 默认值里,绝不能进生产。 */
+  private static final Set<String> KNOWN_WEAK_DB_PASSWORDS = Set.of("batch_pass_123");
+
+  /** 仅当 property 实际存在(非 null)且命中已知弱默认口令时 fail-fast;property 不存在的模块跳过。 */
+  private void validateNotKnownWeakDbPassword(String key, String value) {
+    if (value == null) {
+      return;
+    }
+    if (KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
+      throw new IllegalStateException(
+          "FATAL: 生产环境数据库密码 " + key + " 仍为默认弱口令,请通过 secret manager 或环境变量注入真实凭据");
     }
   }
 

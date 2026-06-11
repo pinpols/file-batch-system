@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,7 +45,8 @@ class DispatchReceiptPollSchedulerTest {
             fileDispatchRepository,
             new ObjectMapper(),
             runtimeRepository,
-            new SimpleMeterRegistry());
+            new SimpleMeterRegistry(),
+            new BatchSecurityProperties());
     scheduler.initializeMeters();
   }
 

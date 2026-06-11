@@ -367,6 +367,14 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   private static final Pattern EXPLAIN_PREFIX =
       Pattern.compile("^\\s*EXPLAIN\\b", Pattern.CASE_INSENSITIVE);
 
+  // 纵深防御:dry-run 探测的 SQL 只允许 SELECT / WITH(CTE)开头。EXPLAIN (ANALYZE FALSE) 虽已是
+  // planner-only,但那是对 PG 实现细节的单层依赖(个别语句如 CREATE INDEX CONCURRENTLY / REFRESH
+  // MAT VIEW 历史上有越过 ANALYZE 标志真执行的分支)。此处先做语句类型白名单,把 DML/DDL 挡在
+  // EXPLAIN 之前。用首关键字而非 AST 解析:合法探测 SQL 本就是 SELECT/WITH,零误伤;WITH..DML 这类
+  // CTE 内嵌 DML 仍由下游 ANALYZE FALSE 兜底。注释/前导空白由 \\s* + 关键字边界覆盖。
+  private static final Pattern SELECT_OR_WITH_PREFIX =
+      Pattern.compile("^\\s*(SELECT|WITH)\\b", Pattern.CASE_INSENSITIVE);
+
   /** L3-1: 对 params 中匹配 SQL_PARAM_KEYS 的字符串调用 EXPLAIN(ANALYZE FALSE)，仅做计划探测。 */
   private int probeSqlExplain(Map<String, Object> params, List<DryRunFinding> findings) {
     JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
@@ -385,6 +393,17 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
                 SCOPE_EXECUTION,
                 "payload starts with EXPLAIN — refusing to nest a second EXPLAIN; submit raw"
                     + " SELECT",
+                key));
+        continue;
+      }
+      if (!SELECT_OR_WITH_PREFIX.matcher(trimmed).find()) {
+        // 纵深防御:非 SELECT/WITH(即 DML/DDL)在进入 EXPLAIN 之前直接拒绝,不依赖 ANALYZE FALSE 兜底。
+        findings.add(
+            DryRunFinding.error(
+                "EXEC_SQL_NON_SELECT_REJECTED",
+                SCOPE_EXECUTION,
+                "dry-run SQL probe only accepts SELECT / WITH statements; refusing to EXPLAIN a"
+                    + " DML/DDL payload",
                 key));
         continue;
       }
