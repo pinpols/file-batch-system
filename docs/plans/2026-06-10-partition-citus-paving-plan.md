@@ -748,3 +748,27 @@ reference 的 2PC 写放大不可接受)+ 既有豁免 4 系统表。
    多数查询已带),缺的补;签名上提逐处记录
 4. 测试:簇内回归 + 分区守护 IT 扩展
 5. 提交模式:每波一个 commit,全量回归绿后推分支
+
+---
+
+## Phase 2 执行结果(2026-06-11 收尾)
+
+| 波次 | 状态 | 提交 |
+|---|---|---|
+| POC 双门(RLS 透传 / ugk RETURNING) | ✅ 全过 | 3f535e936(docs/analysis/citus-poc-gates-2026-06-11.md) |
+| W1 job 簇 8 表(V173) | ✅ | 6cf58818e |
+| W2 trigger/batch_day 簇 10 表(V174) | ✅ | ea875fc03 |
+| W3 outbox/event 簇 4 表(V175) | ✅ | abf1cf1de |
+| W4 file/pipeline 簇 8 表(V176,pipeline_step_run 补列) | ✅ | e1fea44e8 |
+| W5 workflow 簇 3 表(V177,workflow_node_run 补列) | ✅ | 328774fbf |
+| W6 audit/notify 簇 15 表(V178) | ✅ | cb6c54386 |
+| V179 父id域内 UNIQUE 8 条补 tenant_id | ✅ | 467c24d03 |
+| W7 01-distribute.sql(7 条 Citus 约束编码) | ✅ | 4b8e5c029→467c24d03 迭代 6 轮 |
+| W8 真集群终验(123 distributed+32 reference) | ✅ schema 层;运行时清单见 findings | 467c24d03 |
+
+**Phase 2 期间击毙的环境/测试问题**:TriggerTypeLaunchIT 顺序依赖蹭绿(41825926d)、
+FileGovernanceIT reuse-MinIO 积压免疫(6299e4725)、4 个 StageExecutorTest stale-m2 假绿
+mock 签名(4b8e5c029)。
+
+**下一阶段(运行时适配,未排期)**:跨分片 FOR UPDATE×5 按租户路由改造、连接扇出三元组
+调优、worker/console 全栈 Citus e2e——清单与论证:docs/analysis/citus-w8-runtime-findings-2026-06-11.md。
