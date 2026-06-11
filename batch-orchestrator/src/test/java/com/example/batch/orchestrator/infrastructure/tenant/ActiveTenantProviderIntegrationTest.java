@@ -43,6 +43,8 @@ class ActiveTenantProviderIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("activeTenantIds 应含 ACTIVE 租户、不含 SUSPENDED 租户")
   void shouldReturnOnlyActiveTenants() {
+    // 全量套件中其他测试可能已触发缓存(30s 窗口),先失效保证读到本测试新插租户
+    provider.invalidateCache();
     // arrange
     long suffix = System.nanoTime();
     activeTenantId = "atp-active-" + suffix;
