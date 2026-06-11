@@ -5,7 +5,6 @@ import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
 
 /**
  * Citus 租户路由清单源 — 供 trigger / console 等模块按租户循环做 FOR UPDATE 路由时使用。
@@ -17,8 +16,11 @@ import org.springframework.stereotype.Component;
  * 双重查库（多线程同时穿透）完全可接受。
  *
  * <p>写路径（创建 / 停用租户）归 batch-console-api，本组件严格只读。
+ *
+ * <p>注册:经 {@code BatchTenantRoutingAutoConfiguration} 走 AutoConfiguration.imports, 不用
+ * {@code @Component}——batch-common 是跨模块依赖,下游精简 application(如 e2e app)的 component-scan 范围不保证覆盖本包,只有
+ * AutoConfiguration 才对所有 Spring Boot 上下文生效。
  */
-@Component
 @RequiredArgsConstructor
 public class ActiveTenantRegistry {
 
