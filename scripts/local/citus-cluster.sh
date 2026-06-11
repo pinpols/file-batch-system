@@ -30,8 +30,14 @@ case "${1:-status}" in
     docker run -d --rm --name citus-coord --network $NET -p ${COORD_PORT}:5432 -e POSTGRES_PASSWORD=$PASS $IMG >/dev/null
     docker run -d --rm --name citus-w1 --network $NET -e POSTGRES_PASSWORD=$PASS $IMG >/dev/null
     docker run -d --rm --name citus-w2 --network $NET -e POSTGRES_PASSWORD=$PASS $IMG >/dev/null
+    # citus 镜像 entrypoint 初始化后会重启 postgres——pg_isready 会过早放行,
+    # 必须用真 SQL 探活且连续 2 次成功(跨重启稳定窗口)。
     for c in citus-coord citus-w1 citus-w2; do
-      until docker exec $c pg_isready -U postgres -q 2>/dev/null; do sleep 1; done
+      ok=0
+      until [ $ok -ge 2 ]; do
+        if docker exec $c psql -U postgres -tAc "SELECT 1" >/dev/null 2>&1; then ok=$((ok+1)); else ok=0; fi
+        sleep 1
+      done
       echo "$c ready"
     done
     docker exec citus-coord psql -U postgres -c "ALTER SYSTEM SET citus.propagate_set_commands = 'local';"
