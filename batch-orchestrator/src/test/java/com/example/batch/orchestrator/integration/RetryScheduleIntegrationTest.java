@@ -29,7 +29,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
 
     assertThat(entity.getId()).isNotNull();
 
-    RetryScheduleEntity loaded = retryScheduleMapper.selectById(entity.getId());
+    RetryScheduleEntity loaded =
+        retryScheduleMapper.selectById(entity.getTenantId(), entity.getId());
     assertThat(loaded).isNotNull();
     assertThat(loaded.getTenantId()).isEqualTo("t1");
     assertThat(loaded.getRelatedId()).isEqualTo(100L);
@@ -80,7 +81,10 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
 
     int updated =
         retryScheduleMapper.markRunning(
-            entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+            entity.getTenantId(),
+            entity.getId(),
+            RetryScheduleStatus.WAITING.code(),
+            RetryScheduleStatus.RUNNING.code());
 
     assertThat(updated).isEqualTo(1);
   }
@@ -93,11 +97,17 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     retryScheduleMapper.insert(entity);
 
     retryScheduleMapper.markRunning(
-        entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
     // 第二次尝试应失败（通过 fromStatus 检查实现乐观锁）
     int second =
         retryScheduleMapper.markRunning(
-            entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+            entity.getTenantId(),
+            entity.getId(),
+            RetryScheduleStatus.WAITING.code(),
+            RetryScheduleStatus.RUNNING.code());
 
     assertThat(second).isZero();
   }
@@ -109,13 +119,18 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
     retryScheduleMapper.markRunning(
-        entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
 
     int updated =
-        retryScheduleMapper.markSuccess(entity.getId(), RetryScheduleStatus.SUCCESS.code());
+        retryScheduleMapper.markSuccess(
+            entity.getTenantId(), entity.getId(), RetryScheduleStatus.SUCCESS.code());
 
     assertThat(updated).isEqualTo(1);
-    RetryScheduleEntity loaded = retryScheduleMapper.selectById(entity.getId());
+    RetryScheduleEntity loaded =
+        retryScheduleMapper.selectById(entity.getTenantId(), entity.getId());
     assertThat(loaded.getRetryStatus()).isEqualTo(RetryScheduleStatus.SUCCESS.code());
   }
 
@@ -126,10 +141,14 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     entity.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(10));
     retryScheduleMapper.insert(entity);
     retryScheduleMapper.markRunning(
-        entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
+        entity.getTenantId(),
+        entity.getId(),
+        RetryScheduleStatus.WAITING.code(),
+        RetryScheduleStatus.RUNNING.code());
 
     RetryScheduleMapper.MarkFailedParam markFailedParam =
         RetryScheduleMapper.MarkFailedParam.builder()
+            .tenantId(entity.getTenantId())
             .id(entity.getId())
             .retryStatus(RetryScheduleStatus.FAILED.code())
             .lastErrorCode("DISPATCH_FAILED")
@@ -139,7 +158,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     int updated = retryScheduleMapper.markFailed(markFailedParam);
 
     assertThat(updated).isEqualTo(1);
-    RetryScheduleEntity loaded = retryScheduleMapper.selectById(entity.getId());
+    RetryScheduleEntity loaded =
+        retryScheduleMapper.selectById(entity.getTenantId(), entity.getId());
     assertThat(loaded.getRetryStatus()).isEqualTo(RetryScheduleStatus.FAILED.code());
     assertThat(loaded.getLastErrorCode()).isEqualTo("DISPATCH_FAILED");
   }

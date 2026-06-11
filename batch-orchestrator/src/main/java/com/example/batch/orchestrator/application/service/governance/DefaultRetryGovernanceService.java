@@ -223,6 +223,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             exception);
         RetryScheduleMapper.MarkFailedParam markFailedParam =
             RetryScheduleMapper.MarkFailedParam.builder()
+                .tenantId(retrySchedule.getTenantId())
                 .id(retrySchedule.getId())
                 .retryStatus(RetryScheduleStatus.FAILED.code())
                 .lastErrorCode("RETRY_DISPATCH_FAILED")
@@ -250,6 +251,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void requeueOneRetry(RetryScheduleEntity retrySchedule) {
     if (retryScheduleMapper.markRunning(
+            retrySchedule.getTenantId(),
             retrySchedule.getId(),
             RetryScheduleStatus.WAITING.code(),
             RetryScheduleStatus.RUNNING.code())
@@ -257,7 +259,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       return; // 另一实例已 claim
     }
     requeuePartition(retrySchedule);
-    retryScheduleMapper.markSuccess(retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
+    retryScheduleMapper.markSuccess(
+        retrySchedule.getTenantId(), retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
   }
 
   /** R2-P0-2：非 transient 失败的独立事务标记，避免与外层扫描状态混合。 */

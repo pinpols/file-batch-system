@@ -262,7 +262,8 @@ class DefaultRetryGovernanceServiceTest {
     service.dispatchDueRetries();
 
     verify(retryScheduleMapper).selectByQuery(any());
-    verify(retryScheduleMapper, never()).markRunning(anyLong(), anyString(), anyString());
+    verify(retryScheduleMapper, never())
+        .markRunning(anyString(), anyLong(), anyString(), anyString());
   }
 
   @Test
@@ -273,7 +274,7 @@ class DefaultRetryGovernanceServiceTest {
     schedule.setRelatedId(100L);
     when(retryScheduleMapper.selectByQuery(any())).thenReturn(List.of(schedule));
     when(retryScheduleMapper.markRunning(
-            1L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
+            "t1", 1L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
         .thenReturn(0);
 
     service.dispatchDueRetries();

@@ -11,23 +11,31 @@ public interface RetryScheduleMapper {
 
   int insert(RetryScheduleEntity entity);
 
-  RetryScheduleEntity selectById(@Param("id") Long id);
+  RetryScheduleEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   List<RetryScheduleEntity> selectByQuery(RetryScheduleQuery query);
 
   int markRunning(
+      @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("fromStatus") String fromStatus,
       @Param("runningStatus") String runningStatus);
 
-  int markSuccess(@Param("id") Long id, @Param("successStatus") String successStatus);
+  int markSuccess(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("successStatus") String successStatus);
 
   int markFailed(@Param("p") MarkFailedParam p);
 
-  int resetToWaiting(@Param("id") Long id, @Param("waitingStatus") String waitingStatus);
+  int resetToWaiting(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("waitingStatus") String waitingStatus);
 
   @Builder
   record MarkFailedParam(
+      String tenantId,
       Long id,
       String retryStatus,
       String lastErrorCode,
