@@ -30,7 +30,7 @@
     <update id="tryClaimHalfOpenProbe" parameterType="map">
         update batch.file_channel_health
            set next_probe_at = #{newNextProbeAt},
-               updated_at    = current_timestamp
+               updated_at    = excluded.updated_at
          where tenant_id   = #{tenantId}
            and channel_code = #{channelCode}
            and (next_probe_at is null or next_probe_at &lt;= #{now})
@@ -60,7 +60,7 @@
             next_probe_at         = excluded.next_probe_at,
             probe_message         = excluded.probe_message,
             probe_evidence        = excluded.probe_evidence,
-            updated_at            = current_timestamp
+            updated_at            = excluded.updated_at
     </insert>
 
     <!--
@@ -92,7 +92,7 @@
             next_probe_at        = batch.file_channel_health.next_probe_at, -- 先占位，后面再按新 count 更新
             probe_message        = excluded.probe_message,
             probe_evidence       = excluded.probe_evidence,
-            updated_at           = current_timestamp
+            updated_at           = excluded.updated_at
     </insert>
 
     <!--
@@ -152,7 +152,7 @@
             next_probe_at         = excluded.next_probe_at,
             probe_message         = excluded.probe_message,
             probe_evidence        = excluded.probe_evidence,
-            updated_at            = current_timestamp
+            updated_at            = excluded.updated_at
     </insert>
 
 </mapper>

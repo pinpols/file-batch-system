@@ -107,13 +107,15 @@
         on conflict (tenant_id, related_job_instance_id)
           where related_job_instance_id is not null
           do update set
+            <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp(STABLE)
+                 改 excluded 引用(值=INSERT 的 current_timestamp,同语句同值,双栈语义等价) -->
             current_stage = excluded.current_stage,
             last_success_stage = null,
             run_status = excluded.run_status,
             trace_id = excluded.trace_id,
-            started_at = current_timestamp,
+            started_at = excluded.started_at,
             finished_at = null,
-            updated_at = current_timestamp
+            updated_at = excluded.updated_at
     </insert>
 
     <update id="bindFileToPipelineInstance">
