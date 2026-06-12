@@ -160,29 +160,24 @@
           and step_code = #{stepCode}
     </select>
 
+    <!-- Citus:advisory-lock CTE(void 函数作 CTE select 列)不被分布式 planner 支持。
+         去锁,run_seq 用 inline scalar subquery(tenant_id 单分片路由),并发冲突由
+         uk_pipeline_step_run(tenant_id,pipeline_instance_id,step_code,run_seq,V179) +
+         调用方 startStepRun 的 DuplicateKey 重试循环兜底(同 step 并发概率极低)。 -->
     <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
-        with step_run_lock as (
-            select pg_advisory_xact_lock(
-                hashtextextended(
-                    concat('pipeline_step_run:', #{pipelineInstanceId}, ':', #{stepCode}),
-                    0
-                )
-            )
-        ),
-        next_seq as (
-            select coalesce(max(run_seq), 0) + 1 as run_seq
-            from batch.pipeline_step_run, step_run_lock
-            where pipeline_instance_id = #{pipelineInstanceId}
-              and step_code = #{stepCode}
-        )
         insert into batch.pipeline_step_run (
             tenant_id, pipeline_instance_id, step_code, stage_code, run_seq,
             step_status, input_summary, started_at
         )
-        select
-            #{tenantId}, #{pipelineInstanceId}, #{stepCode}, #{stageCode}, next_seq.run_seq,
+        values (
+            #{tenantId}, #{pipelineInstanceId}, #{stepCode}, #{stageCode},
+            (select coalesce(max(run_seq), 0) + 1
+               from batch.pipeline_step_run
+              where tenant_id = #{tenantId}
+                and pipeline_instance_id = #{pipelineInstanceId}
+                and step_code = #{stepCode}),
             #{stepStatus}, #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
-        from next_seq
+        )
     </insert>
 
     <update id="finishStepRun">
