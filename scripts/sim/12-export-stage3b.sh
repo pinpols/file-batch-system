@@ -143,8 +143,8 @@ subprocess.run(
 check_sql = (
     "with tasks as ("
     f"select count(*) filter (where t.task_status='SUCCESS') as success_tasks "
-    "from batch.job_task t join batch.job_partition p on p.id=t.job_partition_id "
-    f"where p.job_instance_id={instance_id}"
+    "from batch.job_task t join batch.job_partition p on p.id=t.job_partition_id and p.tenant_id=t.tenant_id "
+    f"where p.tenant_id='ta' and p.job_instance_id={instance_id}"
     "), files as ("
     "select count(*) as file_count, "
     "count(*) filter (where file_name ~ '_p[1-4]of4\\.json$') as tagged_files, "

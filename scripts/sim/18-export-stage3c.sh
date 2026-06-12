@@ -163,7 +163,7 @@ dedup = (psql(
 ta_check = (psql(
     "with tasks as ("
     "select count(*) filter (where t.task_status='SUCCESS') as success_tasks "
-    "from batch.job_task t join batch.job_partition p on p.id=t.job_partition_id "
+    "from batch.job_task t join batch.job_partition p on p.id=t.job_partition_id and p.tenant_id=t.tenant_id "
     f"where p.job_instance_id={ta_instance}"
     "), files as ("
     "select count(*) as file_count, "

@@ -125,7 +125,7 @@ subprocess.run(
     "select i.instance_status,p.partition_status,t.task_status,t.error_code,"
     "d.dispatch_status,d.error_code as dispatch_error "
     "from batch.job_instance i "
-    "left join batch.job_partition p on p.job_instance_id=i.id "
+    "left join batch.job_partition p on p.job_instance_id=i.id and p.tenant_id=i.tenant_id "
     "left join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
     "where i.id=" + instance_id
@@ -135,7 +135,7 @@ out = psql(
     "select i.instance_status || '|' || p.partition_status || '|' || t.task_status || '|' || "
     "coalesce(d.dispatch_status,'') "
     "from batch.job_instance i "
-    "join batch.job_partition p on p.job_instance_id=i.id "
+    "join batch.job_partition p on p.job_instance_id=i.id and p.tenant_id=i.tenant_id "
     "join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
     "where i.id=" + instance_id,

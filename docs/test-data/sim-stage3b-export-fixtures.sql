@@ -14,7 +14,7 @@ WITH src AS (
     '客户 JSON keyset-range 分片导出模板' AS template_name,
     'TA_EXPORT_REPORT_JSON_KEYSET' AS biz_type,
     'ta_export_customer_keyset_${bizDate}_${batchNo}.json' AS naming_rule,
-    'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP3B-%'' AND (:batchNo IS NOT NULL)' AS default_query_sql,
+    'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP3B-%'' AND (CAST(:batchNo AS text) IS NOT NULL)' AS default_query_sql,
     jsonb_set(src.query_param_schema, '{partition_keyset_range}', 'true'::jsonb, true)
       AS query_param_schema,
     'Stage 3b export keyset-range 4-shard scenario' AS description

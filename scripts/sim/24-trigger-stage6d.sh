@@ -258,7 +258,7 @@ for i in range(STORM_COUNT):
 terminal_count = wait_int(
     "storm-terminal",
     "select count(*) from batch.trigger_request tr "
-    "join batch.job_instance ji on ji.id=tr.related_job_instance_id "
+    "join batch.job_instance ji on ji.id=tr.related_job_instance_id and ji.tenant_id=tr.tenant_id "
     f"where tr.tenant_id='ta' and tr.request_id like '{BATCH}-storm-%' "
     "and ji.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')",
     lambda v: v >= STORM_COUNT,
@@ -272,7 +272,7 @@ pending_outbox = int(scalar(
 ) or "0")
 non_terminal = int(scalar(
     "select count(*) from batch.trigger_request tr "
-    "join batch.job_instance ji on ji.id=tr.related_job_instance_id "
+    "join batch.job_instance ji on ji.id=tr.related_job_instance_id and ji.tenant_id=tr.tenant_id "
     f"where tr.tenant_id='ta' and tr.request_id like '{BATCH}%' "
     "and ji.instance_status not in ('SUCCESS','FAILED','PARTIAL_FAILED','CANCELLED','TERMINATED')"
 ) or "0")

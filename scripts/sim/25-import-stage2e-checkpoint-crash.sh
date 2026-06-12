@@ -31,11 +31,11 @@ restart_import_with_checkpoint() {
 }
 
 echo "==> apply bootstrap + checkpoint fixture"
-docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
+pg_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
-docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
+pg_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2e-import-checkpoint.sql >/dev/null
-docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_BUSINESS_DB" \
+pg_business \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2e-import-checkpoint-business.sql >/dev/null
 
 if [[ "${RESTART_IMPORT_WITH_CHECKPOINT:-1}" == "1" ]]; then
@@ -72,11 +72,16 @@ MINIO_SECRET_KEY = os.environ["BATCH_S3_SECRET_KEY"]
 def sh(args, check=False):
     return subprocess.run(args, check=check, capture_output=True, text=True)
 
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user")]
+_BIZ_DB = os.environ.get("PG_BUSINESS_DB", "batch_business")
+
 def psql(db, sql, tuples=False):
-    args = [
-        "docker", "exec", os.environ["PG_CONTAINER"], "psql",
-        "-U", os.environ["POSTGRES_USER"], "-d", db, "-P", "pager=off",
-    ]
+    base = PG_BIZ if db == _BIZ_DB else PG_PLAT
+    args = list(base) + ["-d", db, "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -161,7 +166,7 @@ def state_row(rid):
         "coalesce(p.lease_expire_at::text,'') "
         "from batch.trigger_request tr "
         "left join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
-        "left join batch.job_partition p on p.job_instance_id=i.id "
+        "left join batch.job_partition p on p.job_instance_id=i.id and p.tenant_id=i.tenant_id "
         "left join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
         "left join batch.pipeline_instance pi on pi.related_job_instance_id=i.id "
         "left join batch.pipeline_progress pp on pp.pipeline_instance_id=pi.id and pp.stage='LOAD' "
