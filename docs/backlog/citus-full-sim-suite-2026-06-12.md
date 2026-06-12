@@ -91,3 +91,23 @@
 - **orchestrator hikari pool=6 在 15 storm(30 并发 launch)+ citus 慢查询下打满** → 连接超时、health down。调 pool=16 仍被 citus-w1 连接慢(偶发 30s establish 超时)拖到 connection leak。根因:citus coordinator→worker 连接建立偶发慢 + 服务 pool 偏小。待:服务 pool 调大 + citus 连接预热 / pgbouncer。
 - **手动重启服务必须 source scripts/lib/env-common.sh**(供 BATCH_S3_ACCESS_KEY/SECRET_KEY/INTERNAL_SECRET),否则 S3Client bean `Secret access key cannot be blank` 启动失败。citus 拓扑用 `-Dspring.datasource.url=...25432... -Dspring.datasource.password=poc -Dbatch.datasource.business.url=...15432/batch_business_part`。
 - 15 trigger / 16 atomic / 17-19 c系列 / 21 atomic / 22-25 trigger&import:未跑(环境恢复后续)。
+
+### ⭐ Citus 性能发现:orchestrator 定时扫描 fan-out 过载(生产隐患,非仅测试)
+现象:重启 orchestrator 后系统 load 飙到 16-24、citus-w1/w2 worker CPU 持续 300%+、
+节点间连接建立 3s(sslmode=require SSL handshake)、orchestrator health timeout、不自愈。
+诊断:citus-w1 上 30+ active 查询全是 `SELECT ji.id ... FROM batch.job_instance` 的
+worker fan-out(coordinator 上 orchestrator 10+ active)。即 orchestrator 后台定时任务
+(PartitionLeaseReclaim / DefaultRetryGovernance / 待处理 instance 扫描)发起的 job_instance
+**全表/范围扫描查询不带 tenant_id 路由键 → Citus fan-out 到所有 shard 并行执行**,
+高频定时 + 连接建立慢 → worker CPU 打满 → 查询堆积 → 恶性循环。
+**这是 job_instance 复合分布(tenant_id)后,凡是"跨租户扫全表"的运维/调度查询都会 fan-out
+放大的固有摩擦,生产同样存在**。待:① 定时扫描加 tenant 维度分批 / 或走 coordinator-local
+物化视图 ② 调度查询避免无路由全表扫 ③ 节点间 sslmode=require→改快或预热连接池
+④ 服务 hikari 必须 connection-timeout 放宽(citus 连接建立慢)+ initialization-fail-timeout=-1。
+
+### 环境恢复 SOP(本轮过载后)
+1. 系统过载(load>15 / worker CPU 300%+)不会自愈 → 重启 citus 栈 + 8 服务
+2. 服务手动起必须 `source scripts/lib/env-common.sh`(S3/secret env)+ citus datasource -D 覆盖
+3. worker-dispatch 改 mapper 后重 build 的 jar 在 JDK25 AspectJ 慢启动(10min+),需先解决再起
+4. orchestrator/服务 hikari 加 -Dspring.datasource.hikari.connection-timeout=60000
+   -Dspring.datasource.hikari.initialization-fail-timeout=-1(容忍 citus 连接建立慢)→ 实测 Started in 29.9s
