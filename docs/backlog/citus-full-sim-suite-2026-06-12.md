@@ -185,3 +185,19 @@ backend 并发 fan-out,每个需连一个 worker 的 16 shard,N×16×2 很快顶
 1. **reshard 32→4**:`alter_distributed_table(任一表, shard_count=>4, cascade_to_colocated=>true)`
    (group 2 含全部 123 表,注意 outbox_event/job_instance 月分区表的 reshard 兼容性需先验证)
 2. **orchestrator 定时扫描加租户路由**(outbox relay/SLA/lease 按 ACTIVE 租户分批,参考 selectPendingTenantIds)
+
+### ✅✅ 根治成功:reshard 32→4 解决 fan-out 过载(2026-06-13)
+配置层穷尽后确认 32-shard 是硬限制,执行 reshard 根治:
+```sql
+SELECT alter_distributed_table('batch.job_task', shard_count => 4, cascade_to_colocated => true);
+```
+- group 2 全部 123 表(含 outbox_event/job_instance 两张月分区表)32→4,citus 13 在线 reshard,
+  数据量小(总几千行)几分钟完成,无需停 schema(停服务避免锁冲突即可)
+- **fan-out 暖后 487ms → 4.9ms(降 100 倍)**;orchestrator pool 不再耗尽
+- **orchestrator health 200 恢复,08 端到端跑通(2 SUCCESS + 3 预期 FAILED)**
+- citus 13 的 alter_distributed_table 正确处理了月分区表(reshard parent + 分区),无兼容问题
+
+**结论**:job_instance/outbox_event 这类"小数据 + 高频全局扫描"的表,32-shard 是过度分片;
+4-shard 在保留分布式能力的同时让 fan-out 成本可接受。这应是 partition-readiness 的 shard_count
+默认值修正(citus.shard_count 默认 32 对本系统数据规模偏大)。配合前述配置优化(max_connections=500
++ 认证 pg_hba trust),环境恢复可承载 sim。
