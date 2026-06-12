@@ -301,6 +301,8 @@ public class PlatformFileRuntimeRepository {
             toJson(inputSummary));
     for (int i = 0; i < 5; i++) {
       try {
+        // Citus:run_seq 独立取(INSERT 不支持 subquery/advisory-lock),冲突重试时重新取。
+        paramMap.put("runSeq", platformFileRuntimeMapper.selectNextStepRunSeq(paramMap));
         platformFileRuntimeMapper.insertStepRun(paramMap);
         return toLong(paramMap.get(KEY_ID));
       } catch (DuplicateKeyException e) {

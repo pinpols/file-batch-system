@@ -156,26 +156,22 @@
     <select id="selectNextStepRunSeq" resultType="java.lang.Integer">
         select coalesce(max(run_seq), 0) + 1
         from batch.pipeline_step_run
-        where pipeline_instance_id = #{pipelineInstanceId}
+        where tenant_id = #{tenantId}
+          and pipeline_instance_id = #{pipelineInstanceId}
           and step_code = #{stepCode}
     </select>
 
-    <!-- Citus:advisory-lock CTE(void 函数作 CTE select 列)不被分布式 planner 支持。
-         去锁,run_seq 用 inline scalar subquery(tenant_id 单分片路由),并发冲突由
+    <!-- Citus:① advisory-lock CTE(void 函数作 select 列)② INSERT 内 subquery 均不被分布式
+         planner 支持。run_seq 拆为独立 SELECT(单分片路由),insert 纯 VALUES;并发冲突由
          uk_pipeline_step_run(tenant_id,pipeline_instance_id,step_code,run_seq,V179) +
-         调用方 startStepRun 的 DuplicateKey 重试循环兜底(同 step 并发概率极低)。 -->
+         调用方 startStepRun 的 DuplicateKey 重试循环(重试内重新取 nextRunSeq)兜底。 -->
     <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.pipeline_step_run (
             tenant_id, pipeline_instance_id, step_code, stage_code, run_seq,
             step_status, input_summary, started_at
         )
         values (
-            #{tenantId}, #{pipelineInstanceId}, #{stepCode}, #{stageCode},
-            (select coalesce(max(run_seq), 0) + 1
-               from batch.pipeline_step_run
-              where tenant_id = #{tenantId}
-                and pipeline_instance_id = #{pipelineInstanceId}
-                and step_code = #{stepCode}),
+            #{tenantId}, #{pipelineInstanceId}, #{stepCode}, #{stageCode}, #{runSeq},
             #{stepStatus}, #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
         )
     </insert>
