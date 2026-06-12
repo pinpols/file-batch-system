@@ -241,7 +241,7 @@ WHERE tenant_id IN ('ta','tb','tc')
 
 -- ----------------------------------------------------------------------------
 -- 7b. EXPORT file_template_config.default_query_sql + query_param_schema
---      默认 SQL 必须带 :tenantId AND :batchNo IS NOT NULL,防止 export 拉全表;
+--      默认 SQL 必须带 :tenantId AND CAST(:batchNo AS text) IS NOT NULL,防止 export 拉全表;
 --      query_param_schema 注入 sqlTemplateExport.cursorColumn。
 -- ----------------------------------------------------------------------------
 UPDATE batch.file_template_config
@@ -253,7 +253,7 @@ UPDATE batch.file_template_config
 SET default_query_sql = 'SELECT * FROM ' || lower(biz_type) || '_export '
                          || 'WHERE tenant_id = :tenantId '
                          || 'AND batch_no = :batchNo '
-                         || 'AND :batchNo IS NOT NULL '
+                         || 'AND CAST(:batchNo AS text) IS NOT NULL '
                          || 'ORDER BY id',
     updated_at        = CURRENT_TIMESTAMP
 WHERE tenant_id IN ('ta','tb','tc')
@@ -261,7 +261,7 @@ WHERE tenant_id IN ('ta','tb','tc')
   AND (default_query_sql IS NULL
        OR default_query_sql = ''
        OR default_query_sql NOT ILIKE '%:tenantId%'
-       OR default_query_sql NOT ILIKE '%:batchNo IS NOT NULL%');
+       OR default_query_sql NOT ILIKE '%CAST(:batchNo AS text) IS NOT NULL%');
 
 UPDATE batch.file_template_config
 SET query_param_schema = jsonb_build_object(
@@ -394,7 +394,7 @@ WHERE tenant_id = 'tc'
   AND template_code = 'TC_IMPORT_RISK_SCORE_TPL';
 
 UPDATE batch.file_template_config
-SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)',
+SET default_query_sql = 'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND (CAST(:batchNo AS text) IS NULL OR CAST(:batchNo AS text) IS NOT NULL)',
     query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
     export_data_ref = 'sql_template_export',
     updated_at = CURRENT_TIMESTAMP
@@ -402,7 +402,7 @@ WHERE tenant_id = 'ta'
   AND template_code = 'TA_EXPORT_REPORT_TPL';
 
 UPDATE batch.file_template_config
-SET default_query_sql = 'SELECT id, tenant_id, txn_no, account_no, txn_type, amount, currency_code, txn_date, remark FROM biz.transaction WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)',
+SET default_query_sql = 'SELECT id, tenant_id, txn_no, account_no, txn_type, amount, currency_code, txn_date, remark FROM biz.transaction WHERE tenant_id = :tenantId AND (CAST(:batchNo AS text) IS NULL OR CAST(:batchNo AS text) IS NOT NULL)',
     query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
     export_data_ref = 'sql_template_export',
     updated_at = CURRENT_TIMESTAMP
@@ -410,7 +410,7 @@ WHERE tenant_id = 'tb'
   AND template_code = 'TB_EXPORT_STATEMENT_TPL';
 
 UPDATE batch.file_template_config
-SET default_query_sql = 'SELECT id, tenant_id, entity_id, entity_type, score_value, score_band, score_date FROM biz.risk_score WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)',
+SET default_query_sql = 'SELECT id, tenant_id, entity_id, entity_type, score_value, score_band, score_date FROM biz.risk_score WHERE tenant_id = :tenantId AND (CAST(:batchNo AS text) IS NULL OR CAST(:batchNo AS text) IS NOT NULL)',
     query_param_schema = '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
     export_data_ref = 'sql_template_export',
     updated_at = CURRENT_TIMESTAMP
@@ -802,7 +802,7 @@ WITH source_template AS (
         'JSON',
         'ta_export_customer_json_${bizDate}_${batchNo}.json',
         0,
-        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (:batchNo IS NOT NULL)',
+        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (CAST(:batchNo AS text) IS NOT NULL)',
         '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
         'Stage 3 JSON export system scenario'
       ),
@@ -813,7 +813,7 @@ WITH source_template AS (
         'FIXED_WIDTH',
         'ta_export_customer_fixed_${bizDate}_${batchNo}.txt',
         88,
-        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (:batchNo IS NOT NULL)',
+        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (CAST(:batchNo AS text) IS NOT NULL)',
         jsonb_build_object(
           'export_data_ref', 'sql_template_export',
           'sqlTemplateExport', jsonb_build_object('cursorColumn', 'id'),
@@ -832,7 +832,7 @@ WITH source_template AS (
         'EXCEL',
         'ta_export_customer_excel_${bizDate}_${batchNo}.xlsx',
         0,
-        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (:batchNo IS NOT NULL)',
+        'SELECT id, tenant_id, customer_no, customer_name, customer_type, certificate_no, mobile_no, email, status FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (CAST(:batchNo AS text) IS NOT NULL)',
         jsonb_build_object(
           'export_data_ref', 'sql_template_export',
           'sqlTemplateExport', jsonb_build_object('cursorColumn', 'id'),
@@ -851,7 +851,7 @@ WITH source_template AS (
         'JSON',
         'ta_export_customer_bad_sql_${bizDate}_${batchNo}.json',
         0,
-        'SELECT id, missing_col FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (:batchNo IS NOT NULL)',
+        'SELECT id, missing_col FROM biz.customer_account WHERE tenant_id = :tenantId AND customer_no LIKE ''EXP-%'' AND (CAST(:batchNo AS text) IS NOT NULL)',
         '{"export_data_ref":"sql_template_export","sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
         'Stage 3 bad SQL export failure scenario'
       )
