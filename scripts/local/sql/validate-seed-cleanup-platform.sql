@@ -1,5 +1,11 @@
 BEGIN;
 
+-- Citus:本清理在同一事务里对 distributed 表(pipeline_instance 等)与 reference 表
+-- (pipeline_definition 等)混合 DML,默认 parallel 多分片模式会报
+-- "parallel DML access ... in the same transaction";切 sequential 允许混合。
+-- 普通 PG 未装 citus 扩展,citus.* 作为占位 GUC 被静默接受,双栈安全。
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+
 CREATE TEMP TABLE seed_cleanup_job_instance_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
 CREATE TEMP TABLE seed_cleanup_job_task_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
 CREATE TEMP TABLE seed_cleanup_job_partition_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
@@ -77,6 +83,11 @@ WHERE file_id IN (SELECT id FROM seed_cleanup_file_record_ids);
 DELETE FROM batch.file_dispatch_record
 WHERE pipeline_instance_id IN (SELECT id FROM seed_cleanup_pipeline_instance_ids)
    OR file_id IN (SELECT id FROM seed_cleanup_file_record_ids);
+
+-- Citus:pipeline_instance.file_id → file_record 的 FK 在 Citus 不按 SET NULL 降级(普通 PG 行为不同不报),
+-- 删 file_record 前必须先解引用,否则 FK 违反致整个清理事务中止、后续 trigger_request/job_definition 全清不掉。
+UPDATE batch.pipeline_instance SET file_id = NULL
+WHERE file_id IN (SELECT id FROM seed_cleanup_file_record_ids);
 
 DELETE FROM batch.file_record
 WHERE id IN (SELECT id FROM seed_cleanup_file_record_ids);

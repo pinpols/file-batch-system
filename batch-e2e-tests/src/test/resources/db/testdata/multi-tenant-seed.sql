@@ -589,38 +589,43 @@ VALUES
   ('default-tenant','wf_probe_gateway','Probe GATEWAY + ANY join','DAG',1,true,'P2 seed - GATEWAY + ANY join','seed','seed',now(),now())
 ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
 
+-- Citus 双坑(普通 PG 都正常,Citus reference 表 INSERT...SELECT 上暴露):
+--   ① FROM workflow_definition wd, (VALUES ...) 的 VALUES 派生表交叉连接 → 实测插 0 行;
+--      改用「每节点一条 literal SELECT + UNION ALL」(纯 ref 扫描,可下推到 coordinator)。
+--   ② 裸 ON CONFLICT DO NOTHING 误判全冲突 → 显式写出仲裁约束列。
+-- 下面节点/边都按此双栈安全模式重写(语义与原 VALUES 版完全一致)。
 INSERT INTO batch.workflow_node
   (tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
-SELECT wd.tenant_id, wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
-FROM batch.workflow_definition wd, (VALUES
-  ('wf_probe_pipeline','START','Start','START',NULL::text,0,'{"entry":true}'),
-  ('wf_probe_pipeline','PROBE_TASK','Probe Task','TASK','export_settlement_job',1,'{"step":"probe"}'),
-  ('wf_probe_pipeline','END','End','END',NULL::text,2,'{"entry":false}'),
-  ('wf_probe_gateway','START','Start','START',NULL::text,0,'{"entry":true}'),
-  ('wf_probe_gateway','FORK','Fork Gateway','GATEWAY',NULL::text,1,'{}'),
-  ('wf_probe_gateway','BRANCH_A','Branch A','TASK','export_settlement_job',2,'{"step":"branchA"}'),
-  ('wf_probe_gateway','BRANCH_B','Branch B','TASK','export_settlement_job',3,'{"step":"branchB"}'),
-  ('wf_probe_gateway','MERGE','Merge Gateway','GATEWAY',NULL::text,4,'{"joinMode":"ANY"}'),
-  ('wf_probe_gateway','END','End','END',NULL::text,5,'{"entry":false}')
-) AS v(wc,nc,nn,nt,rjc,no_,np)
-WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
-ON CONFLICT DO NOTHING;
+SELECT wd.tenant_id, wd.id, 'START','Start','START',NULL::text,0,'NONE',0,0,true,'{"entry":true}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_pipeline' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'PROBE_TASK','Probe Task','TASK','export_settlement_job',1,'NONE',0,0,true,'{"step":"probe"}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_pipeline' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'END','End','END',NULL::text,2,'NONE',0,0,true,'{"entry":false}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_pipeline' AND wd.version=1
+ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING;
+
+INSERT INTO batch.workflow_node
+  (tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
+SELECT wd.tenant_id, wd.id, 'START','Start','START',NULL::text,0,'NONE',0,0,true,'{"entry":true}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'FORK','Fork Gateway','GATEWAY',NULL::text,1,'NONE',0,0,true,'{}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'BRANCH_A','Branch A','TASK','export_settlement_job',2,'NONE',0,0,true,'{"step":"branchA"}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'BRANCH_B','Branch B','TASK','export_settlement_job',3,'NONE',0,0,true,'{"step":"branchB"}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'MERGE','Merge Gateway','GATEWAY',NULL::text,4,'NONE',0,0,true,'{"joinMode":"ANY"}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'END','End','END',NULL::text,5,'NONE',0,0,true,'{"entry":false}'::jsonb,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+ON CONFLICT (tenant_id, workflow_definition_id, node_code) DO NOTHING;
 
 INSERT INTO batch.workflow_edge
   (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
-SELECT wd.tenant_id, wd.id, v.f, v.t, v.et, true, now(), now()
-FROM batch.workflow_definition wd, (VALUES
-  ('wf_probe_pipeline','START','PROBE_TASK','ALWAYS'),
-  ('wf_probe_pipeline','PROBE_TASK','END','ALWAYS'),
-  ('wf_probe_gateway','START','FORK','ALWAYS'),
-  ('wf_probe_gateway','FORK','BRANCH_A','ALWAYS'),
-  ('wf_probe_gateway','FORK','BRANCH_B','ALWAYS'),
-  ('wf_probe_gateway','BRANCH_A','MERGE','SUCCESS'),
-  ('wf_probe_gateway','BRANCH_B','MERGE','SUCCESS'),
-  ('wf_probe_gateway','MERGE','END','ALWAYS')
-) AS v(wc,f,t,et)
-WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
-ON CONFLICT DO NOTHING;
+SELECT wd.tenant_id, wd.id, 'START','PROBE_TASK','ALWAYS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_pipeline' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'PROBE_TASK','END','ALWAYS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_pipeline' AND wd.version=1
+ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;
+
+INSERT INTO batch.workflow_edge
+  (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT wd.tenant_id, wd.id, 'START','FORK','ALWAYS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'FORK','BRANCH_A','ALWAYS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'FORK','BRANCH_B','ALWAYS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'BRANCH_A','MERGE','SUCCESS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'BRANCH_B','MERGE','SUCCESS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+UNION ALL SELECT wd.tenant_id, wd.id, 'MERGE','END','ALWAYS',true,now(),now() FROM batch.workflow_definition wd WHERE wd.tenant_id='default-tenant' AND wd.workflow_code='wf_probe_gateway' AND wd.version=1
+ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;
 
 INSERT INTO batch.job_definition
   (tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
