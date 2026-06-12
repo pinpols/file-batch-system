@@ -653,21 +653,50 @@ INSERT INTO batch.job_definition (
     enabled, description, created_by, updated_by, execution_mode,
     previous_day_dependency_scope, retry_policy_by_class
 )
-SELECT src.tenant_id, m.job_code, m.job_name, src.job_type, m.biz_type,
+-- Citus:INSERT INTO dist SELECT FROM dist CROSS JOIN (VALUES) 会静默插 0 行
+-- (含本地 VALUES 的 distributed INSERT...SELECT 不下推)。展开成每变体一条
+-- co-located INSERT...SELECT(源/目标同表同分布键,可下推),双栈等价。
+SELECT src.tenant_id, 'TA_IMPORT_CUSTOMER_XML', '客户 XML 导入', src.job_type, 'CUSTOMER_XML',
        'MANUAL', null, src.timezone, src.priority, src.queue_code, src.worker_group,
        src.calendar_code, src.window_code, 'API', false, src.shard_strategy,
        'NONE', 0, src.timeout_seconds, src.execution_handler,
-       src.param_schema, jsonb_build_object('templateCode', m.template_code),
-       1, true, m.description, 'sim-e2e', 'sim-e2e', 'FULL',
+       src.param_schema, jsonb_build_object('templateCode', 'TA_IMPORT_CUSTOMER_XML_TPL'),
+       1, true, 'Stage 2 XML import system scenario', 'sim-e2e', 'sim-e2e', 'FULL',
        coalesce(src.previous_day_dependency_scope, 'INHERIT'), src.retry_policy_by_class
 FROM batch.job_definition src
-CROSS JOIN (
-    VALUES
-      ('TA_IMPORT_CUSTOMER_XML', '客户 XML 导入', 'CUSTOMER_XML',
-       'TA_IMPORT_CUSTOMER_XML_TPL', 'Stage 2 XML import system scenario'),
-      ('TA_IMPORT_CUSTOMER_FIXED', '客户 FIXED_WIDTH 导入', 'CUSTOMER_FIXED',
-       'TA_IMPORT_CUSTOMER_FIXED_TPL', 'Stage 2 fixed-width import system scenario')
-) AS m(job_code, job_name, biz_type, template_code, description)
+WHERE src.tenant_id = 'ta'
+  AND src.job_code = 'TA_IMPORT_CUSTOMER'
+ON CONFLICT (tenant_id, job_code) DO UPDATE
+SET job_name = EXCLUDED.job_name,
+    biz_type = EXCLUDED.biz_type,
+    schedule_type = EXCLUDED.schedule_type,
+    schedule_expr = EXCLUDED.schedule_expr,
+    trigger_mode = EXCLUDED.trigger_mode,
+    retry_policy = EXCLUDED.retry_policy,
+    retry_max_count = EXCLUDED.retry_max_count,
+    default_params = EXCLUDED.default_params,
+    enabled = true,
+    description = EXCLUDED.description,
+    updated_by = EXCLUDED.updated_by,
+    updated_at = EXCLUDED.updated_at,
+    execution_mode = 'FULL';
+
+INSERT INTO batch.job_definition (
+    tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
+    timezone, priority, queue_code, worker_group, calendar_code, window_code,
+    trigger_mode, dag_enabled, shard_strategy, retry_policy, retry_max_count,
+    timeout_seconds, execution_handler, param_schema, default_params, version,
+    enabled, description, created_by, updated_by, execution_mode,
+    previous_day_dependency_scope, retry_policy_by_class
+)
+SELECT src.tenant_id, 'TA_IMPORT_CUSTOMER_FIXED', '客户 FIXED_WIDTH 导入', src.job_type, 'CUSTOMER_FIXED',
+       'MANUAL', null, src.timezone, src.priority, src.queue_code, src.worker_group,
+       src.calendar_code, src.window_code, 'API', false, src.shard_strategy,
+       'NONE', 0, src.timeout_seconds, src.execution_handler,
+       src.param_schema, jsonb_build_object('templateCode', 'TA_IMPORT_CUSTOMER_FIXED_TPL'),
+       1, true, 'Stage 2 fixed-width import system scenario', 'sim-e2e', 'sim-e2e', 'FULL',
+       coalesce(src.previous_day_dependency_scope, 'INHERIT'), src.retry_policy_by_class
+FROM batch.job_definition src
 WHERE src.tenant_id = 'ta'
   AND src.job_code = 'TA_IMPORT_CUSTOMER'
 ON CONFLICT (tenant_id, job_code) DO UPDATE
@@ -689,16 +718,27 @@ INSERT INTO batch.pipeline_definition (
     tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
     version, enabled, description
 )
-SELECT src.tenant_id, m.job_code, m.pipeline_name, src.pipeline_type, m.biz_type,
-       src.worker_group, 1, true, m.description
+-- Citus:同上,CROSS JOIN (VALUES) 展开为每变体一条 co-located INSERT...SELECT
+SELECT src.tenant_id, 'TA_IMPORT_CUSTOMER_XML', '客户 XML 导入流水线', src.pipeline_type, 'CUSTOMER_XML',
+       src.worker_group, 1, true, 'Stage 2 XML import system scenario'
 FROM batch.pipeline_definition src
-CROSS JOIN (
-    VALUES
-      ('TA_IMPORT_CUSTOMER_XML', '客户 XML 导入流水线', 'CUSTOMER_XML',
-       'Stage 2 XML import system scenario'),
-      ('TA_IMPORT_CUSTOMER_FIXED', '客户 FIXED_WIDTH 导入流水线', 'CUSTOMER_FIXED',
-       'Stage 2 fixed-width import system scenario')
-) AS m(job_code, pipeline_name, biz_type, description)
+WHERE src.tenant_id = 'ta'
+  AND src.job_code = 'TA_IMPORT_CUSTOMER'
+ON CONFLICT (tenant_id, job_code, version) DO UPDATE
+SET pipeline_name = EXCLUDED.pipeline_name,
+    biz_type = EXCLUDED.biz_type,
+    worker_group = EXCLUDED.worker_group,
+    enabled = true,
+    description = EXCLUDED.description,
+    updated_at = EXCLUDED.updated_at;
+
+INSERT INTO batch.pipeline_definition (
+    tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
+    version, enabled, description
+)
+SELECT src.tenant_id, 'TA_IMPORT_CUSTOMER_FIXED', '客户 FIXED_WIDTH 导入流水线', src.pipeline_type, 'CUSTOMER_FIXED',
+       src.worker_group, 1, true, 'Stage 2 fixed-width import system scenario'
+FROM batch.pipeline_definition src
 WHERE src.tenant_id = 'ta'
   AND src.job_code = 'TA_IMPORT_CUSTOMER'
 ON CONFLICT (tenant_id, job_code, version) DO UPDATE
