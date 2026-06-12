@@ -18,15 +18,26 @@
 - scripts/sim/* 默认连主库 15432;需参数化/覆盖为 coordinator 25432 + business part
 - sim seed(01-init-biz 等)同样去事务 + distributed 表 INSERT 带分片列
 
-## 逐业务 harvest(每类按 /tmp 模式:发任务→轮询 worker SUCCESS→抓错→清→重试)
-已通:**atomic**(shell/sql/stored-proc/http,CLAIM/REPORT 通用链路已清)
-待逐个跑 + 清专属 SQL:
-- [ ] **import**:process_staging(local 表,不分布)写入;PreprocessStep/LOAD 链路
-- [ ] **export**:keyset 分片查询(已 PR #393)在 distributed 表的跨分片行为
-- [ ] **process**:pipeline_step_run / pipeline_progress(已清 markCompleted)/ SqlTransformCompute
-- [ ] **dispatch**:file_dispatch_record / file_channel_health(已清健康上报 upsert)
-- 每跑一类,grep worker 日志的 Citus 错误(distributed/IMMUTABLE/FOR UPDATE/CASE/COALESCE/
-  partition column),按 5 类模式清,双栈验证后提交
+## 逐业务 harvest:静态撞击面扫描结果(2026-06-12,好消息——比预想小)
+**4 类 worker 的专属 mapper 静态 SQL 撞击面已扫,大部分已清或本就不撞**:
+
+| worker | 专属 mapper | 静态撞击点 | 状态 |
+|---|---|---|---|
+| **atomic** | (共享) | CLAIM/REPORT 通用链路 | ✅ 已通(真跑 SUCCESS) |
+| **import** | 无专属 mapper | 走 worker-core/orchestrator 共享(已清);process_staging 是 local 表不分布 | ✅ 静态就绪 |
+| **export** | 无专属 mapper | 走共享;keyset 分片查询(PR #393)需运行时验跨分片行为 | 🟡 静态就绪,运行时待验 |
+| **process** | 无专属 mapper | 共享 + PlatformFileRuntime(pipeline_progress markCompleted 已清) | ✅ 静态就绪 |
+| **dispatch** | DispatchChannelHealth / FileDispatch | ChannelHealth upsert 已清;FileDispatch 全是普通 UPDATE SET current_timestamp(Citus 允许)+ WHERE now()(允许),**不撞** | ✅ 静态就绪 |
+
+**结论:静态 SQL 层面 4 worker 基本就绪**(共享 CLAIM/REPORT 已清 + 专属 mapper 已清/不撞)。
+
+## 仍需 sim 运行时实证的(静态扫不到的)
+逐业务跑(按 harvest 模式:发任务→轮询 worker SUCCESS→抓错→清→重试),重点验:
+- [ ] **export 跨分片聚合**:统计/导出查询若无 tenant_id 过滤 → multi-shard,需走 replica 或加 hint
+- [ ] **process SqlTransformCompute**:动态拼的业务 SQL(INSERT..SELECT 到 staging)在 Citus 的行为
+- [ ] **service 层动态 SQL**:mapper XML 静态扫不到的运行时拼接(各业务 service)
+- [ ] **业务库 part 的 biz.* 写入**:worker 写业务库(batch_business_part),该库是否也要 Citus 化(当前是普通 PG part 库,业务表未分布——多租户洪峰才需要)
+- 每撞一个新约束,按 5 类模式(FOR UPDATE/complex join/IMMUTABLE upsert/CASE-COALESCE/partition col)清,双栈验证后提交
 
 ## 已知待清(subagent 误判 + 未现形)
 - pipeline_progress 已清(b833b1717);FileGovernance maxProcessingDelay/staleSteps 已清
