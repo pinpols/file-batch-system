@@ -62,6 +62,12 @@ INTERNAL_SECRET="${INTERNAL_SECRET:-$BATCH_INTERNAL_SECRET}"
 PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
 PG_USER="${PG_USER:-$PGUSER}"
 PG_DB="${PG_DB:-$PLATFORM_DB}"
+# 平台与业务可指向不同 PG 实例(Citus/分支:平台→coordinator 25432,业务→batch_business_part 15432)。
+# 默认全部回落到 PG_CONTAINER/PG_USER/batch_business —— main 单机行为完全不变。
+PLATFORM_PG_CONTAINER="${PLATFORM_PG_CONTAINER:-$PG_CONTAINER}"
+BUSINESS_PG_CONTAINER="${BUSINESS_PG_CONTAINER:-$PG_CONTAINER}"
+BUSINESS_PG_USER="${BUSINESS_PG_USER:-$PG_USER}"
+BUSINESS_DB="${BUSINESS_DB:-batch_business}"
 AWAIT_TIMEOUT="${AWAIT_TIMEOUT:-30}"
 LOAD_SEED="${LOAD_SEED:-0}"
 ADVANCED="${ADVANCED:-0}"
@@ -99,17 +105,25 @@ section() { echo -e "\n${BLUE}== $1 ==${NC}"; }
 psql_q() {
   # -tA 去掉对齐和表头;但 INSERT...RETURNING 会多输出 "INSERT 0 N" 提示行,
   # 调用方需要时自己 head -1 或过滤
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null
+  docker exec "$PLATFORM_PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null
+}
+
+# 业务库只读/写查询(走业务 PG 实例)
+biz_q() {
+  docker exec "$BUSINESS_PG_CONTAINER" psql -U "$BUSINESS_PG_USER" -d "$BUSINESS_DB" -tAc "$1" 2>/dev/null
 }
 
 psql_file() {
   local db="$1"; local file="$2"; shift 2
-  docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$db" -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$file"
+  # 按目标库路由容器/用户:业务库走业务 PG 实例,其余走平台 PG 实例。
+  local container="$PLATFORM_PG_CONTAINER" user="$PG_USER"
+  if [[ "$db" == "$BUSINESS_DB" ]]; then container="$BUSINESS_PG_CONTAINER"; user="$BUSINESS_PG_USER"; fi
+  docker exec -i "$container" psql -U "$user" -d "$db" -v ON_ERROR_STOP=1 "$@" -f /dev/stdin < "$file"
 }
 
 # 写入用 — 仅返回 RETURNING 的首行(过滤 "INSERT 0 N" / "DELETE N" 等命令统计)
 psql_w_first() {
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null \
+  docker exec "$PLATFORM_PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc "$1" 2>/dev/null \
     | grep -vE "^(INSERT|UPDATE|DELETE|COMMIT|ROLLBACK)" | head -1
 }
 
@@ -120,7 +134,7 @@ psql_w_first() {
 do_cleanup() {
   local pattern="${1:-$SWEEP_PATTERN}"
   psql_file "$PG_DB" "$ROOT/scripts/local/sql/validate-seed-cleanup-platform.sql" -v pattern="$pattern" >/dev/null
-  psql_file batch_business "$ROOT/scripts/local/sql/validate-seed-cleanup-business.sql" -v pattern="$pattern" >/dev/null 2>&1 || true
+  psql_file "$BUSINESS_DB" "$ROOT/scripts/local/sql/validate-seed-cleanup-business.sql" -v pattern="$pattern" >/dev/null 2>&1 || true
 }
 
 # 退出钩子: 任何路径退出都跑 sweep, 杜绝 mid-run crash 留垃圾
@@ -165,10 +179,10 @@ else
   exit 1
 fi
 
-if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1" >/dev/null 2>&1; then
-  result pass "postgres 可达" "$PG_CONTAINER"
+if docker exec "$PLATFORM_PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "SELECT 1" >/dev/null 2>&1; then
+  result pass "postgres 可达" "$PLATFORM_PG_CONTAINER"
 else
-  result fail "postgres 可达" "$PG_CONTAINER 容器不存在或拒绝连接"
+  result fail "postgres 可达" "$PLATFORM_PG_CONTAINER 容器不存在或拒绝连接"
   exit 1
 fi
 
@@ -212,16 +226,16 @@ fi
 if [[ "$LOAD_SEED" == "1" ]]; then
   section "0.5. 重载种子"
   for f in platform_seed.sql platform_edge_cases.sql; do
-    docker cp "$ROOT/scripts/db/test-seed/$f" "$PG_CONTAINER:/tmp/$f" >/dev/null
-    if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -f "/tmp/$f" >/dev/null 2>&1; then
+    docker cp "$ROOT/scripts/db/test-seed/$f" "$PLATFORM_PG_CONTAINER:/tmp/$f" >/dev/null
+    if docker exec "$PLATFORM_PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -f "/tmp/$f" >/dev/null 2>&1; then
       result pass "seed reload" "$f"
     else
       result fail "seed reload" "$f 失败"
     fi
   done
   for f in business_seed.sql business_edge_cases.sql; do
-    docker cp "$ROOT/scripts/db/test-seed/$f" "$PG_CONTAINER:/tmp/$f" >/dev/null
-    if docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -f "/tmp/$f" >/dev/null 2>&1; then
+    docker cp "$ROOT/scripts/db/test-seed/$f" "$BUSINESS_PG_CONTAINER:/tmp/$f" >/dev/null
+    if docker exec "$BUSINESS_PG_CONTAINER" psql -U "$BUSINESS_PG_USER" -d "$BUSINESS_DB" -f "/tmp/$f" >/dev/null 2>&1; then
       result pass "biz seed reload" "$f"
     else
       result fail "biz seed reload" "$f 失败"
@@ -521,9 +535,9 @@ if [[ "$STRICT" == "1" ]]; then
   PROBE_WF_BATCH_NO="${PROBE_TAG}-WF-BATCH"
   PROBE_BIZDATE=$(date +%Y-%m-%d)
   # 先 seed 两个 settlement_batch 行供 EXPORT loadBatch 命中(注意 biz 表在业务库)
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
+  docker exec "$BUSINESS_PG_CONTAINER" psql -U "$BUSINESS_PG_USER" -d "$BUSINESS_DB" -tAc \
     "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('$STRICT_TENANT_ID', '$PROBE_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
-  docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" -tAc \
+  docker exec "$BUSINESS_PG_CONTAINER" psql -U "$BUSINESS_PG_USER" -d "$BUSINESS_DB" -tAc \
     "INSERT INTO biz.settlement_batch (tenant_id, batch_no, biz_date, accounting_period, snapshot_mode, snapshot_ts, batch_status) VALUES ('$STRICT_TENANT_ID', '$PROBE_WF_BATCH_NO', CURRENT_DATE, to_char(CURRENT_DATE, 'YYYY-MM'), 'BATCH', now(), 'READY') ON CONFLICT (tenant_id, batch_no) DO NOTHING" >/dev/null 2>&1 || true
 
   assert_fire "EXPORT 严格 ($STRICT_TENANT_ID, settlement)" "$STRICT_TENANT_ID" "export_settlement_job" \
