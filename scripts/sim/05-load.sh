@@ -75,12 +75,16 @@ EXPORT_BIZ_TYPES = {
   "tc": ["TC_EXPORT_RISK_ALERT"],
 }
 
+# psql 命令前缀:platform 路由(Citus 下 env-citus.sh export 覆盖,单机默认不变)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+
 def run_cmd(args, input_text=None):
     return subprocess.run(args, input=input_text, capture_output=True, text=True)
 
 def sql_value(sql):
-    out = run_cmd(["docker","exec","batch-postgres-primary","psql","-U","batch_user",
-        "-d","batch_platform","-t","-A","-c",sql])
+    out = run_cmd(PG_PLAT + ["-t","-A","-c",sql])
     return out.stdout.strip()
 
 def cleanup_outputs():
@@ -107,8 +111,7 @@ def cleanup_outputs():
        and biz_type in ({in_biz})
        and source_ref = '{BATCH}';
     """
-    run_cmd(["docker","exec","-i","batch-postgres-primary","psql","-U","batch_user",
-        "-d","batch_platform","-v","ON_ERROR_STOP=1"], sql)
+    run_cmd(["docker","exec","-i"] + PG_PLAT[2:] + ["-v","ON_ERROR_STOP=1"], sql)
     for biz in biz_types:
         run_cmd(["docker","exec","batch-minio","mc","rm","--recursive","--force",
             f"local/{BUCKET}/outbound/{biz}/{BIZ}/{BATCH}"])

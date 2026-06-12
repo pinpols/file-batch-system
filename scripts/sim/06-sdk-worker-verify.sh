@@ -35,8 +35,9 @@ WORKER_CODE="${WORKER_CODE:-sdk-verify-worker}"
 KEY_NAME="${KEY_NAME:-sdk-verify-$(date +%s)}"
 KEY_PREFIX_PURGE="sdk-verify"
 JAR="$REPO_ROOT/examples/sample-tenant-worker/target/sample-tenant-worker-1.0.0-SNAPSHOT.jar"
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-PSQL=(docker exec "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -tAc)
+# platform 路由(Citus 下 env-citus.sh 覆盖到 citus-coord/postgres;单机默认不变)
+PG_CONTAINER="${PG_PLATFORM_CONTAINER:-${PG_CONTAINER:-batch-postgres-primary}}"
+PSQL=(docker exec "$PG_CONTAINER" psql -U "${PG_PLATFORM_USER:-$POSTGRES_USER}" -d "${PG_PLATFORM_DB:-$PLATFORM_DB}" -tAc)
 REG_TIMEOUT="${REG_TIMEOUT:-45}"
 # sample-tenant-worker 注册的 7 个 taskType(对应 5 基类 + echo/sleep)
 EXPECTED_TASKTYPES="echo sleep sample_import_echo sample_export_echo sample_process_echo sample_dispatch_echo sample_atomic_echo"

@@ -24,14 +24,22 @@ export STORM_COUNT="${STORM_COUNT:-60}"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> seed trigger stage6c fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage6c-trigger-fixtures.sql >/dev/null
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6c.log"
 import json, os, subprocess, sys, time, urllib.request
+
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -41,7 +49,7 @@ STORM_COUNT = int(os.environ["STORM_COUNT"])
 START_TS = os.environ["START_TS"].strip()
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-P", "pager=off"]
+    args = PG_PLAT + ["-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -159,9 +167,8 @@ while time.time() < deadline:
     time.sleep(3)
 
 print("\n-- trigger_stage6c_status --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c",
     "select trigger_type,job_code,request_status,count(*) "
     "from batch.trigger_request "
     "where tenant_id='ta' and (request_id like '" + BATCH + "%' or created_at >= '" + START_TS + "') "

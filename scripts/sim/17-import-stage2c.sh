@@ -21,17 +21,17 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> apply bootstrap + stage2c fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_business \
+pg_business \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-business.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-fixtures.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_business \
+pg_business \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO-replace" \
   -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-stale.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2c.log"
@@ -43,6 +43,14 @@ BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
 request_ids = []
+
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
 
 def xml_payload(rows):
     items = []
@@ -59,7 +67,8 @@ def xml_payload(rows):
     return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<customers>\n" + "\n".join(items) + "\n</customers>\n"
 
 def psql(db, sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", db, "-P", "pager=off"]
+    prefix = PG_BIZ if db == "batch_business" else PG_PLAT
+    args = prefix + ["-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -181,9 +190,8 @@ wait_for("TA_IMPORT_STAGE2C_REPLACE", rid)
 
 print("\n-- job_status --", flush=True)
 request_list = ",".join("'" + rid + "'" for rid in request_ids)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c",
     "select i.id,i.job_code,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -192,9 +200,8 @@ subprocess.run([
 ], check=False)
 
 print("\n-- import_stage2c_rows --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_business", "-P", "pager=off", "-c",
+subprocess.run(PG_BIZ + [
+    "-P", "pager=off", "-c",
     "select source_batch_no, customer_no, count(*) as rows, max(customer_name) as max_name "
     "from biz.import_stage2c_customer where tenant_id='ta' and source_batch_no like '" + BATCH + "%' "
     "group by source_batch_no, customer_no order by source_batch_no, customer_no"

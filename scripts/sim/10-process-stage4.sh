@@ -22,16 +22,16 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "需要 python3" >&2; exit 1; }
 
 echo "==> seed process business tables"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_business \
+pg_business \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
   -f docs/test-data/sim-stage4-process-business-fixtures.sql >/dev/null
 
 echo "==> seed process platform jobs"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
   -f docs/test-data/sim-stage4-process-platform-fixtures.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4.log"
@@ -46,6 +46,14 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
+
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
 
 SCENARIOS = [
     ("jsonb_ok", "TA_PROCESS_STAGE4_JSONB", BATCH + "-jsonb", "SUCCESS"),
@@ -98,10 +106,9 @@ while time.time() < deadline:
         f"where tenant_id='ta' and job_code in ({job_codes}) and created_at >= '{START_TS}' "
         "and instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')"
     )
-    out = subprocess.run([
-        "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-        "-d", "batch_platform", "-t", "-A", "-c", sql
-    ], capture_output=True, text=True)
+    out = subprocess.run(
+        PG_PLAT + ["-t", "-A", "-c", sql],
+        capture_output=True, text=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= len(SCENARIOS):
         break
@@ -115,27 +122,24 @@ job_sql = (
     f"where i.tenant_id='ta' and i.job_code in ({job_codes}) and i.created_at >= '{START_TS}' "
     "order by i.created_at,i.id"
 )
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", job_sql
-], check=False)
+subprocess.run(
+    PG_PLAT + ["-P", "pager=off", "-c", job_sql],
+    check=False)
 
 print("\n-- target_rows --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_business", "-P", "pager=off", "-c",
+subprocess.run(
+    PG_BIZ + ["-P", "pager=off", "-c",
     "select scenario, account_id, total_amount, event_count, high_water_mark "
-    "from biz.process_stage4_target where tenant_id='ta' order by scenario, account_id"
-], check=False)
+    "from biz.process_stage4_target where tenant_id='ta' order by scenario, account_id"],
+    check=False)
 
 print("\n-- staging_leftover --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_business", "-P", "pager=off", "-c",
+subprocess.run(
+    PG_BIZ + ["-P", "pager=off", "-c",
     "select tenant_id,target_table,batch_key,count(*) as rows "
     "from batch.process_staging where tenant_id='ta' and batch_key like '" + BATCH + "%' "
-    "group by tenant_id,target_table,batch_key order by batch_key"
-], check=False)
+    "group by tenant_id,target_table,batch_key order by batch_key"],
+    check=False)
 
 print("\n-- expectation_check --", flush=True)
 check_sql = (
@@ -151,16 +155,14 @@ check_sql = (
     "(coalesce(a.instance_status,'MISSING') = e.expected_status) as ok "
     "from expected e left join actual a using(job_code) order by e.job_code"
 )
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", check_sql
-], check=False)
+subprocess.run(
+    PG_PLAT + ["-P", "pager=off", "-c", check_sql],
+    check=False)
 
 fail_sql = "select count(*) from (" + check_sql + ") s where not ok"
-out = subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-t", "-A", "-c", fail_sql
-], capture_output=True, text=True)
+out = subprocess.run(
+    PG_PLAT + ["-t", "-A", "-c", fail_sql],
+    capture_output=True, text=True)
 failures = int((out.stdout or "0").strip() or "0")
 print(f"\n==> Stage 4 process scenario submitted: batchNo={BATCH} startTs={START_TS}", flush=True)
 if failures:

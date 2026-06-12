@@ -22,10 +22,9 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> apply bootstrap(XML/FIXED_WIDTH runtime config)"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+pg_platform -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2.log"
@@ -36,6 +35,14 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
+
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
 
 def fixed_row(customer_no, name, status):
     fields = [
@@ -163,10 +170,9 @@ while time.time() < deadline:
         "and job_code in ('TA_IMPORT_CUSTOMER_XML','TA_IMPORT_CUSTOMER_FIXED') "
         "and instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')"
     )
-    out = subprocess.run([
-        "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-        "-d", "batch_platform", "-t", "-A", "-c", sql
-    ], capture_output=True, text=True)
+    out = subprocess.run(
+        PG_PLAT + ["-t", "-A", "-c", sql],
+        capture_output=True, text=True)
     done = int((out.stdout or "0").strip() or "0")
     if done >= expected_jobs:
         break
@@ -191,15 +197,13 @@ queries = {
 }
 for title, sql in queries.items():
     print(f"\n-- {title} --", flush=True)
-    subprocess.run([
-        "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-        "-d", "batch_platform", "-P", "pager=off", "-c", sql
-    ], check=False)
+    subprocess.run(
+        PG_PLAT + ["-P", "pager=off", "-c", sql],
+        check=False)
 
 print("\n-- business counts --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_business", "-P", "pager=off", "-c",
+subprocess.run(
+    PG_BIZ + ["-P", "pager=off", "-c",
     "select tenant_id, count(*) filter (where customer_no like 'S2XML%') as xml_rows, "
     "count(*) filter (where customer_no like 'S2FIX%') as fixed_rows "
     "from biz.customer_account where tenant_id='ta' group by tenant_id"

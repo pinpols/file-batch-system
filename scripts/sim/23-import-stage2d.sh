@@ -27,10 +27,10 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> apply bootstrap(XML import runtime config)"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2d.log"
@@ -41,6 +41,14 @@ import sys
 import time
 import urllib.request
 
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
+
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
@@ -48,10 +56,7 @@ BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
 
 def psql(db, sql, tuples=False):
-    args = [
-        "docker", "exec", "batch-postgres-primary", "psql",
-        "-U", "batch_user", "-d", db, "-P", "pager=off",
-    ]
+    args = (PG_BIZ if db == "batch_business" else PG_PLAT) + ["-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -183,9 +188,8 @@ rid_over = launch("skip_over_threshold", over_threshold, BATCH + "-over")
 over_status = wait_for(rid_over, "FAILED")
 
 print("\n-- job_status --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c",
     "select tr.request_id,i.id,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id = tr.related_job_instance_id "
@@ -194,9 +198,8 @@ subprocess.run([
 ], check=False)
 
 print("\n-- file_records --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c",
     "select fr.id,fr.file_status,fr.metadata_json->>'badRecordCount' as bad_records,"
     "fr.metadata_json->>'skippedCount' as skipped,fr.metadata_json->>'validatedCount' as validated,"
     "fr.metadata_json->>'loadedCount' as loaded,fr.metadata_json->>'skipThresholdExceeded' as threshold_exceeded "
@@ -208,9 +211,8 @@ subprocess.run([
 ], check=False)
 
 print("\n-- error_records --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c",
     "select tr.request_id,er.record_no,er.error_code,er.error_stage,er.is_skipped,er.skip_action "
     "from batch.trigger_request tr "
     "join batch.job_instance i on i.id = tr.related_job_instance_id "

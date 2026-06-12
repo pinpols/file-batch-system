@@ -12,17 +12,19 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-PG_CONTAINER="${PG_CONTAINER:-batch-postgres-primary}"
-PG_USER="${POSTGRES_USER:-batch_user}"
+# business 操作:Citus 下 biz.* 不进协调器,走原 PG 的 batch_business_part(env-citus.sh 覆盖)
+PG_CONTAINER="${PG_BUSINESS_CONTAINER:-${PG_CONTAINER:-batch-postgres-primary}}"
+PG_USER="${PG_BUSINESS_USER:-${POSTGRES_USER:-batch_user}}"
+PG_BUSINESS_DB="${PG_BUSINESS_DB:-batch_business}"
 MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 MINIO_AK="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_SK="${MINIO_ROOT_PASSWORD:-minioadmin123}"
 MINIO_BUCKET="${MINIO_BUCKET:-batch-dev}"
 
 echo "==> 1/2 应用 biz.* 业务表(batch_business 库)"
-docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business \
+docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_BUSINESS_DB" \
   < scripts/db/business/create_biz_tables.sql > /tmp/init-biz-tables.log 2>&1
-applied=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d batch_business -tAc \
+applied=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_BUSINESS_DB" -tAc \
   "select count(*) from pg_tables where schemaname='biz'")
 echo "  biz schema 现有 $applied 张表"
 

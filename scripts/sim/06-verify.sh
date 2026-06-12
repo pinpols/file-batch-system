@@ -19,8 +19,14 @@ BUCKET="${MINIO_BUCKET:-batch-dev}"
 MOCK_BASE="${MOCK_BASE:-http://localhost:11080}"
 
 PG_USER="${PG_USER:-batch_user}"
-psql_q() { docker exec "$PG" psql -U "$PG_USER" -d "$1" -tAc "$2" 2>/dev/null; }
-psql_b() { docker exec "$PG" psql -U "$PG_USER" -d batch_business -tAc "$1" 2>/dev/null; }
+# platform / business 双容器路由(Citus 下 env-citus.sh 覆盖;单机默认回退到 $PG)
+PG_PLAT_C="${PG_PLATFORM_CONTAINER:-$PG}"
+PG_PLAT_U="${PG_PLATFORM_USER:-$PG_USER}"
+PG_BIZ_C="${PG_BUSINESS_CONTAINER:-$PG}"
+PG_BIZ_U="${PG_BUSINESS_USER:-$PG_USER}"
+PG_BIZ_DB="${PG_BUSINESS_DB:-batch_business}"
+psql_q() { docker exec "$PG_PLAT_C" psql -U "$PG_PLAT_U" -d "$1" -tAc "$2" 2>/dev/null; }
+psql_b() { docker exec "$PG_BIZ_C" psql -U "$PG_BIZ_U" -d "$PG_BIZ_DB" -tAc "$1" 2>/dev/null; }
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' RST='\033[0m'
 hdr() { printf "\n${BLUE}── %s ──${RST}\n" "$1"; }

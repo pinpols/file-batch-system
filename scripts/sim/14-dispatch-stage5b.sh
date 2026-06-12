@@ -22,21 +22,21 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> preflight dispatch stage5 job/channel"
-if [[ "$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select count(*) from batch.job_definition where tenant_id='tb' and job_code='TB_DISPATCH_STAGE5_FAIL_ONCE' and enabled=true")" != "1" ]]; then
+if [[ "$(pg_platform -tAc "select count(*) from batch.job_definition where tenant_id='tb' and job_code='TB_DISPATCH_STAGE5_FAIL_ONCE' and enabled=true")" != "1" ]]; then
   echo "❌ missing TB_DISPATCH_STAGE5_FAIL_ONCE fixture" >&2
   exit 1
 fi
-if [[ "$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select count(*) from batch.file_channel_config where tenant_id='tb' and channel_code='tb_api_fail' and enabled=true")" != "1" ]]; then
+if [[ "$(pg_platform -tAc "select count(*) from batch.file_channel_config where tenant_id='tb' and channel_code='tb_api_fail' and enabled=true")" != "1" ]]; then
   echo "❌ missing tb_api_fail channel fixture" >&2
   exit 1
 fi
 
 echo "==> seed dispatch file_record"
-FILE_ID="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+FILE_ID="$(pg_platform \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
   -t -A -f /dev/stdin < docs/test-data/sim-stage5-dispatch-file.sql | tail -1)"
 export FILE_ID
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5b.log"
@@ -47,6 +47,14 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 FILE_ID = os.environ["FILE_ID"].strip()
+
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
 
 rid = f"sim-stage5b-dispatch-{int(time.time()*1000)%100000000}"
 body = {
@@ -82,7 +90,7 @@ with urllib.request.urlopen(req, timeout=30) as resp:
         sys.exit(1)
 
 def psql(sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-P", "pager=off"]
+    args = PG_PLAT + ["-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -112,9 +120,8 @@ if not instance_id:
     raise TimeoutError("timeout waiting dispatch stage5b")
 
 print("\n-- dispatch_status --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(
+    PG_PLAT + ["-P", "pager=off", "-c",
     "select i.instance_status,p.partition_status,t.task_status,t.error_code,"
     "d.dispatch_status,d.error_code as dispatch_error "
     "from batch.job_instance i "

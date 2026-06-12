@@ -22,17 +22,17 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> apply bootstrap + stage3b fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage3b-export-fixtures.sql >/dev/null
 
 echo "==> seed export partition source rows"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_business \
+pg_business \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" \
   -f /dev/stdin < docs/test-data/sim-stage3b-export-source.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3b.log"
@@ -44,11 +44,16 @@ BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
 
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
+
 def psql(db, sql, tuples=False):
-    args = [
-        "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-        "-d", db, "-P", "pager=off"
-    ]
+    args = (PG_BIZ if db == "batch_business" else PG_PLAT) + ["-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -119,10 +124,9 @@ task_sql = (
     f"where p.job_instance_id={instance_id} "
     "order by p.partition_no,t.id"
 )
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", task_sql
-], check=False)
+subprocess.run(
+    PG_PLAT + ["-P", "pager=off", "-c", task_sql],
+    check=False)
 
 print("\n-- file_records --", flush=True)
 file_sql = (
@@ -132,10 +136,9 @@ file_sql = (
     f"where tenant_id='ta' and source_ref='{BATCH}' and source_type='GENERATED' "
     "order by file_name"
 )
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", file_sql
-], check=False)
+subprocess.run(
+    PG_PLAT + ["-P", "pager=off", "-c", file_sql],
+    check=False)
 
 check_sql = (
     "with tasks as ("

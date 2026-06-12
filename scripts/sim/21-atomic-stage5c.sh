@@ -35,6 +35,14 @@ PG_USER = os.environ["POSTGRES_USER"]
 PLATFORM_DB = os.environ["PLATFORM_DB"]
 PARAMS_FILE = "docs/test-data/sim-stage5c-atomic-params.json"
 
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
+
 with open(PARAMS_FILE, "r", encoding="utf-8") as fh:
     ATOMIC_PARAMS = json.load(fh)
 
@@ -159,9 +167,8 @@ status_sql = (
     f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
     "order by tr.request_id,t.id"
 )
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", status_sql
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c", status_sql
 ], check=False)
 
 out = psql(

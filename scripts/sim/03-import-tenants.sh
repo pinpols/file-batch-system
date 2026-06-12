@@ -97,11 +97,11 @@ done
 
 echo
 echo "==> 应用 sim-e2e bootstrap(runtime config refresh)"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -v ON_ERROR_STOP=1 \
+docker exec -i "${PG_PLATFORM_CONTAINER:-batch-postgres-primary}" psql -U "${PG_PLATFORM_USER:-batch_user}" -d "${PG_PLATFORM_DB:-batch_platform}" -v ON_ERROR_STOP=1 \
   -f /dev/stdin < "$ROOT/docs/test-data/sim-e2e-bootstrap.sql" >/dev/null
 echo "  ✓ bootstrap OK"
 
 echo
 echo "==> ✅ 导入完成,验证"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+docker exec -i "${PG_PLATFORM_CONTAINER:-batch-postgres-primary}" psql -U "${PG_PLATFORM_USER:-batch_user}" -d "${PG_PLATFORM_DB:-batch_platform}" \
   -f /dev/stdin < "$ROOT/docs/test-data/sim-import-tenants-verify.sql" 2>&1 | head -10

@@ -36,14 +36,14 @@ rm -f /tmp/batch/stage5c-nas/tb_stage5c_nas-"$BATCH_NO"*.json
 docker exec sftp sh -lc 'rm -f /home/tb/outbound/stage5c-dispatch.json /home/tb/outbound/stage5c-dispatch.json.chk' >/dev/null 2>&1 || true
 
 echo "==> seed dispatch stage5c fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 -v sftp_host="$SFTP_HOST" -v sftp_port="$SFTP_PORT" \
   -f /dev/stdin < docs/test-data/sim-stage5c-dispatch-channels-platform.sql >/dev/null
-FILE_ID="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+FILE_ID="$(pg_platform \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" -v storage_path="$STORAGE_PATH" \
   -t -A -f /dev/stdin < docs/test-data/sim-stage5c-dispatch-file.sql | tail -1)"
 export FILE_ID
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/dispatch-stage5c.log"
@@ -59,8 +59,16 @@ JOB = "TB_DISPATCH_STAGE5C_CHANNELS"
 CHANNELS = ["tb_stage5c_local", "tb_stage5c_nas", "tb_stage5c_sftp"]
 request_ids = {}
 
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
+
 def psql(sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", "batch_platform", "-P", "pager=off"]
+    args = PG_PLAT + ["-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -130,9 +138,8 @@ instance_sql = (
     f"where tr.tenant_id='tb' and tr.request_id in ({req_list}) "
     "order by tr.request_id,t.id"
 )
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", instance_sql
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c", instance_sql
 ], check=False)
 
 print("\n-- dispatch_records --", flush=True)
@@ -143,9 +150,8 @@ dispatch_sql = (
     f"where tenant_id='tb' and file_id={FILE_ID} "
     "order by channel_code"
 )
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c", dispatch_sql
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c", dispatch_sql
 ], check=False)
 
 status_out = psql(

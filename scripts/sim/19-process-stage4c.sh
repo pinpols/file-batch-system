@@ -22,14 +22,14 @@ source "$ROOT/scripts/sim/env-common.sh"
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 echo "==> seed process stage4c fixtures"
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_business \
+pg_business \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
   -f /dev/stdin < docs/test-data/sim-stage4c-process-business.sql >/dev/null
-docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform \
+pg_platform \
   -v ON_ERROR_STOP=1 \
   -f /dev/stdin < docs/test-data/sim-stage4c-process-platform.sql >/dev/null
 
-START_TS="$(docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform -tAc "select now()")"
+START_TS="$(pg_platform -tAc "select now()")"
 export START_TS
 
 python3 - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4c.log"
@@ -42,8 +42,17 @@ BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 START_TS = os.environ["START_TS"].strip()
 
+# psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
+PG_PLAT = ["docker", "exec", os.environ.get("PG_PLATFORM_CONTAINER", "batch-postgres-primary"),
+           "psql", "-U", os.environ.get("PG_PLATFORM_USER", "batch_user"),
+           "-d", os.environ.get("PG_PLATFORM_DB", "batch_platform")]
+PG_BIZ = ["docker", "exec", os.environ.get("PG_BUSINESS_CONTAINER", "batch-postgres-primary"),
+          "psql", "-U", os.environ.get("PG_BUSINESS_USER", "batch_user"),
+          "-d", os.environ.get("PG_BUSINESS_DB", "batch_business")]
+
 def psql(db, sql, tuples=False):
-    args = ["docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user", "-d", db, "-P", "pager=off"]
+    prefix = PG_BIZ if db == "batch_business" else PG_PLAT
+    args = prefix + ["-P", "pager=off"]
     if tuples:
         args += ["-t", "-A"]
     args += ["-c", sql]
@@ -107,18 +116,16 @@ rid_shard = launch("TA_PROCESS_STAGE4_SHARDED", "sharded", {
 shard_instance = wait_instance(rid_shard, "SUCCESS")
 
 print("\n-- sharded_task_status --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c",
     "select p.partition_no,p.partition_status,t.task_status,p.output_summary "
     "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
     f"where p.job_instance_id={shard_instance} order by p.partition_no"
 ], check=False)
 
 print("\n-- sharded_target --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_business", "-P", "pager=off", "-c",
+subprocess.run(PG_BIZ + [
+    "-P", "pager=off", "-c",
     "select count(*) as rows, sum(total_amount) as amount, sum(event_count) as events, max(high_water_mark) as hwm "
     "from biz.process_stage4_target where tenant_id='ta' and scenario='SHARDED' and biz_date='" + BIZ + "'"
 ], check=False)
@@ -200,9 +207,8 @@ while time.time() < deadline:
     time.sleep(3)
 
 print("\n-- cancel_status --", flush=True)
-subprocess.run([
-    "docker", "exec", "batch-postgres-primary", "psql", "-U", "batch_user",
-    "-d", "batch_platform", "-P", "pager=off", "-c",
+subprocess.run(PG_PLAT + [
+    "-P", "pager=off", "-c",
     "select i.id,i.instance_status,p.partition_status,t.task_status,t.cancel_requested,t.error_code "
     "from batch.job_instance i join batch.job_partition p on p.job_instance_id=i.id "
     "join batch.job_task t on t.job_partition_id=p.id "
