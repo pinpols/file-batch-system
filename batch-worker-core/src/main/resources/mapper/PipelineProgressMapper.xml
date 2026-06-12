@@ -75,9 +75,11 @@
              null, 0, true, current_timestamp,
              current_timestamp, current_timestamp)
         on conflict (tenant_id, pipeline_instance_id, stage) do update
+            <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp 改 excluded
+                 引用(值=INSERT 同语句 current_timestamp,双栈语义等价) -->
             set completed = true,
-                completed_at = coalesce(batch.pipeline_progress.completed_at, current_timestamp),
-                updated_at = current_timestamp
+                completed_at = coalesce(batch.pipeline_progress.completed_at, excluded.completed_at),
+                updated_at = excluded.updated_at
     </insert>
 
 </mapper>

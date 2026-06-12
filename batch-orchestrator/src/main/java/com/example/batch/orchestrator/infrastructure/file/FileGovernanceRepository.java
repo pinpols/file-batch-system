@@ -266,9 +266,14 @@ public class FileGovernanceRepository {
     Long maxDelay =
         fileGovernanceMapper.selectMaxProcessingDelaySeconds(
             params(
-                KEY_TENANT_ID, tenantId,
-                KEY_MAX_AGE_SECONDS, maxAgeSeconds,
-                KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
+                KEY_TENANT_ID,
+                tenantId,
+                KEY_MAX_AGE_SECONDS,
+                maxAgeSeconds,
+                KEY_RUNNING_STATUS,
+                FileDispatchRunStatus.RUNNING.code(),
+                "nowTs",
+                Instant.now())); // Citus:COALESCE 内禁 current_timestamp,应用层传时间戳
     return maxDelay == null ? 0L : maxDelay;
   }
 
@@ -407,7 +412,9 @@ public class FileGovernanceRepository {
             "errorMessage",
             "pipeline was marked FAILED by stale running sweep",
             "staleSeconds",
-            staleSeconds));
+            staleSeconds,
+            "nowTs",
+            Instant.now())); // Citus:COALESCE 内禁 current_timestamp,应用层传时间戳
   }
 
   /**

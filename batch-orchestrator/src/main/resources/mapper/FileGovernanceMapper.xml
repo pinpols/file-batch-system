@@ -235,7 +235,7 @@
     </select>
 
     <select id="selectMaxProcessingDelaySeconds" resultType="java.lang.Long">
-        select coalesce(max(extract(epoch from (current_timestamp - started_at))), 0)::bigint
+        select coalesce(max(extract(epoch from (#{nowTs} - started_at))), 0)::bigint
         from batch.pipeline_instance
         where tenant_id = #{tenantId}
           and run_status = #{runningStatus}
@@ -345,7 +345,7 @@
             finished_at = current_timestamp,
             duration_ms = greatest(
                 coalesce(psr.duration_ms, 0),
-                coalesce((extract(epoch from (current_timestamp - psr.started_at)) * 1000)::bigint, 0)
+                coalesce((extract(epoch from (#{nowTs} - psr.started_at)) * 1000)::bigint, 0)
             )
         where psr.step_status in (#{pendingStatus}, #{runningStatus}, #{retryingStatus})
           and exists (
