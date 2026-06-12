@@ -43,15 +43,16 @@ BEGIN;
 -- ----------------------------------------------------------------------------
 -- 1. batch.tenant 上有 ta / tb / tc 三行 ACTIVE,reconciler & quartz 才挑得到
 -- ----------------------------------------------------------------------------
-INSERT INTO batch.tenant (tenant_id, tenant_name, status, description, created_by)
+INSERT INTO batch.tenant (tenant_id, tenant_name, status, description, created_by, updated_at)
 VALUES
-    ('ta', 'ta', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e'),
-    ('tb', 'tb', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e'),
-    ('tc', 'tc', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e')
+    ('ta', 'ta', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e', now()),
+    ('tb', 'tb', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e', now()),
+    ('tc', 'tc', 'ACTIVE', 'sim-e2e bootstrap (A4 fixture engineering)', 'sim-e2e', now())
 ON CONFLICT (tenant_id) DO UPDATE
 SET status      = 'ACTIVE',
     description = COALESCE(batch.tenant.description, EXCLUDED.description),
-    updated_at  = CURRENT_TIMESTAMP;
+    -- Citus:batch.tenant 是 distributed,DO UPDATE SET 函数须 IMMUTABLE;CURRENT_TIMESTAMP 改 EXCLUDED 引用(双栈等价)
+    updated_at  = EXCLUDED.updated_at;
 
 -- ----------------------------------------------------------------------------
 -- 2. job_definition.execution_mode = 'FULL'(V73 默认应是 FULL,但旧数据可能空)
