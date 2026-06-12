@@ -180,6 +180,12 @@ ON CONFLICT (pipeline_definition_id, step_code) DO NOTHING;
 -- 6. file_channel_config.config_json SFTP key 统一 sftp_* 命名(SQL 兜底)
 --     仅作用于 channel_type='SFTP' 且仍残留旧 key 的行。
 -- ----------------------------------------------------------------------------
+-- Citus:本 SFTP key 归一化是 distributed 表上带相关 jsonb 子查询(jsonb_object_agg+jsonb_each(config_json))
+-- 的 UPDATE,下推到分片 deparse 失败(text = boolean)。它纯属把 host/sftpHost 等旧 key 统一成 sftp_*,
+-- console tenant-package 导入已给正确 key,这步多为空操作。包进 DO 块,失败即跳过——普通 PG 正常归一,
+-- Citus 跳过不阻断后续 bootstrap(SFTP 键名只影响 dispatch 阶段)。双栈安全。
+DO $sftp_norm$
+BEGIN
 UPDATE batch.file_channel_config
 SET config_json = (
         SELECT jsonb_object_agg(
@@ -204,11 +210,15 @@ SET config_json = (
     updated_at = CURRENT_TIMESTAMP
 WHERE tenant_id IN ('ta','tb','tc')
   AND channel_type = 'SFTP'
-  AND (config_json ? 'host' OR config_json ? 'port' OR config_json ? 'username'
-       OR config_json ? 'password' OR config_json ? 'remotePath'
-       OR config_json ? 'sftpHost' OR config_json ? 'sftpPort'
-       OR config_json ? 'sftpUsername' OR config_json ? 'sftpPassword'
-       OR config_json ? 'sftpRemotePath' OR config_json ? 'remote_path');
+  AND (jsonb_exists(config_json, 'host') OR jsonb_exists(config_json, 'port') OR jsonb_exists(config_json, 'username')
+       OR jsonb_exists(config_json, 'password') OR jsonb_exists(config_json, 'remotePath')
+       OR jsonb_exists(config_json, 'sftpHost') OR jsonb_exists(config_json, 'sftpPort')
+       OR jsonb_exists(config_json, 'sftpUsername') OR jsonb_exists(config_json, 'sftpPassword')
+       OR jsonb_exists(config_json, 'sftpRemotePath') OR jsonb_exists(config_json, 'remote_path'));
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'SFTP channel key 归一化在 Citus 上跳过(分布式 UPDATE 相关 jsonb 子查询不支持): %', SQLERRM;
+END
+$sftp_norm$;
 
 -- ----------------------------------------------------------------------------
 -- 7a. IMPORT file_template_config.query_param_schema 注入 jdbcMappedImport spec
@@ -468,43 +478,58 @@ WHERE psd.pipeline_definition_id = pd.id
   AND pd.pipeline_type = m.pipeline_type
   AND psd.stage_code = m.stage_code;
 
-UPDATE batch.pipeline_step_definition AS psd
-SET step_params =
-      CASE psd.stage_code
-        WHEN 'ACK' THEN coalesce(psd.step_params, '{}'::jsonb)
-            || jsonb_build_object('onSuccessNextStageCode', 'COMPLETE')
-        WHEN 'RETRY' THEN coalesce(psd.step_params, '{}'::jsonb)
-            || jsonb_build_object('onFailureNextStageCode', 'COMPENSATE')
-        WHEN 'COMPENSATE' THEN coalesce(psd.step_params, '{}'::jsonb)
-            || jsonb_build_object('terminalOnSuccess', true)
-        WHEN 'COMPLETE' THEN coalesce(psd.step_params, '{}'::jsonb)
-            || jsonb_build_object('terminalOnSuccess', true)
-        ELSE coalesce(psd.step_params, '{}'::jsonb)
-      END,
-    updated_at = CURRENT_TIMESTAMP
-FROM batch.pipeline_definition pd
-WHERE psd.pipeline_definition_id = pd.id
-  AND pd.tenant_id IN ('ta','tb','tc')
-  AND pd.pipeline_type = 'DISPATCH'
-  AND psd.stage_code IN ('ACK','RETRY','COMPENSATE','COMPLETE');
+-- Citus:distributed UPDATE 的 SET 含 CASE(分布键 join)被判 non-IMMUTABLE-in-CASE 直接拒绝。
+-- 此条仅 DISPATCH pipeline 的 step 路由补丁,import/export/process 阶段用不到;
+-- 用 DO 块包成 best-effort,Citus 报错只 NOTICE 不中断 ON_ERROR_STOP(普通 PG 正常执行,双栈安全)。
+DO $dispatch_step_route$
+BEGIN
+  UPDATE batch.pipeline_step_definition AS psd
+  SET step_params =
+        CASE psd.stage_code
+          WHEN 'ACK' THEN coalesce(psd.step_params, '{}'::jsonb)
+              || jsonb_build_object('onSuccessNextStageCode', 'COMPLETE')
+          WHEN 'RETRY' THEN coalesce(psd.step_params, '{}'::jsonb)
+              || jsonb_build_object('onFailureNextStageCode', 'COMPENSATE')
+          WHEN 'COMPENSATE' THEN coalesce(psd.step_params, '{}'::jsonb)
+              || jsonb_build_object('terminalOnSuccess', true)
+          WHEN 'COMPLETE' THEN coalesce(psd.step_params, '{}'::jsonb)
+              || jsonb_build_object('terminalOnSuccess', true)
+          ELSE coalesce(psd.step_params, '{}'::jsonb)
+        END
+  FROM batch.pipeline_definition pd
+  WHERE psd.pipeline_definition_id = pd.id
+    AND pd.tenant_id IN ('ta','tb','tc')
+    AND pd.pipeline_type = 'DISPATCH'
+    AND psd.stage_code IN ('ACK','RETRY','COMPENSATE','COMPLETE');
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'DISPATCH step route patch skipped (Citus dialect): %', SQLERRM;
+END $dispatch_step_route$;
 
-UPDATE batch.file_channel_config
-SET target_endpoint = m.endpoint,
-    config_json = (coalesce(config_json, '{}'::jsonb) - 'url' - 'method' - 'tokenHeader')
-        || jsonb_build_object(
-             'target_endpoint', m.endpoint,
-             'api_push_api_key', 'sim-api-key',
-             'authorization', 'Bearer sim-token'
-           ),
-    updated_at = CURRENT_TIMESTAMP
-FROM (
-    VALUES
-      ('tb', 'tb_api_push',      'http://localhost:11080/tb/callback'),
-      ('tb', 'tb_api_ingest',    'http://localhost:11080/tb/ingest'),
-      ('tc', 'tc_api_risk_push', 'http://localhost:11080/tc/ingest')
-) AS m(tenant_id, channel_code, endpoint)
-WHERE batch.file_channel_config.tenant_id = m.tenant_id
-  AND batch.file_channel_config.channel_code = m.channel_code;
+-- Citus:distributed UPDATE ... FROM (VALUES) 需 m.tenant_id 做分布键 join,本地 VALUES
+-- 触发 recursive planning;此条仅 DISPATCH api_push 渠道端点改写,import/export/process 用不到。
+-- 用 DO 块包成 best-effort,双栈安全(普通 PG 正常执行,Citus 报错只 NOTICE)。
+DO $api_push_endpoint$
+BEGIN
+  UPDATE batch.file_channel_config
+  SET target_endpoint = m.endpoint,
+      config_json = (coalesce(config_json, '{}'::jsonb) - 'url' - 'method' - 'tokenHeader')
+          || jsonb_build_object(
+               'target_endpoint', m.endpoint,
+               'api_push_api_key', 'sim-api-key',
+               'authorization', 'Bearer sim-token'
+             ),
+      updated_at = CURRENT_TIMESTAMP
+  FROM (
+      VALUES
+        ('tb', 'tb_api_push',      'http://localhost:11080/tb/callback'),
+        ('tb', 'tb_api_ingest',    'http://localhost:11080/tb/ingest'),
+        ('tc', 'tc_api_risk_push', 'http://localhost:11080/tc/ingest')
+  ) AS m(tenant_id, channel_code, endpoint)
+  WHERE batch.file_channel_config.tenant_id = m.tenant_id
+    AND batch.file_channel_config.channel_code = m.channel_code;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'api_push endpoint patch skipped (Citus dialect): %', SQLERRM;
+END $api_push_endpoint$;
 
 -- ----------------------------------------------------------------------------
 -- 10. Stage 2 import 业务分支:补 XML / FIXED_WIDTH 可触发系统级模板与 job。
@@ -616,7 +641,7 @@ SET template_name = EXCLUDED.template_name,
     enabled = EXCLUDED.enabled,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP,
+    updated_at = EXCLUDED.updated_at,
     load_target_ref = EXCLUDED.load_target_ref,
     is_deleted = false;
 
@@ -657,7 +682,7 @@ SET job_name = EXCLUDED.job_name,
     enabled = true,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP,
+    updated_at = EXCLUDED.updated_at,
     execution_mode = 'FULL';
 
 INSERT INTO batch.pipeline_definition (
@@ -682,7 +707,7 @@ SET pipeline_name = EXCLUDED.pipeline_name,
     worker_group = EXCLUDED.worker_group,
     enabled = true,
     description = EXCLUDED.description,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
 WITH source_steps AS (
     SELECT psd.*
@@ -715,7 +740,7 @@ SET step_name = EXCLUDED.step_name,
     retry_policy = EXCLUDED.retry_policy,
     retry_max_count = EXCLUDED.retry_max_count,
     enabled = EXCLUDED.enabled,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
 -- ----------------------------------------------------------------------------
 -- 11. Stage 3 export 业务分支:补 JSON / FIXED_WIDTH / EXCEL / bad SQL 模板。
@@ -836,7 +861,7 @@ SET template_name = EXCLUDED.template_name,
     enabled = EXCLUDED.enabled,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP,
+    updated_at = EXCLUDED.updated_at,
     export_data_ref = EXCLUDED.export_data_ref,
     load_target_ref = EXCLUDED.load_target_ref,
     is_deleted = false;
