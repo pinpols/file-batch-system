@@ -112,7 +112,8 @@
             description = excluded.description,
             updated_by = excluded.updated_by,
             is_deleted = false,
-            updated_at = current_timestamp
+            <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp 改 excluded(双栈等价) -->
+            updated_at = excluded.updated_at
     </insert>
 
     <update id="updateById">

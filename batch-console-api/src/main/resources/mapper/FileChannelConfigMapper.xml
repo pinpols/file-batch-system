@@ -129,6 +129,7 @@
             timeout_seconds = excluded.timeout_seconds,
             enabled = excluded.enabled,
             is_deleted = false,
-            updated_at = current_timestamp
+            <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp 改 excluded(双栈等价) -->
+            updated_at = excluded.updated_at
     </insert>
 </mapper>

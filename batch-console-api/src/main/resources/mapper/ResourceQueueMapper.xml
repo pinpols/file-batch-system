@@ -88,7 +88,8 @@
             fair_share_weight = excluded.fair_share_weight,
             enabled = excluded.enabled,
             description = excluded.description,
-            updated_at = current_timestamp
+            <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp 改 excluded(双栈等价) -->
+            updated_at = excluded.updated_at
     </insert>
 
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
