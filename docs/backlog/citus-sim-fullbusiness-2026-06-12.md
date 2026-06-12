@@ -50,6 +50,20 @@
   审计落表、cron-preview、maintenance、§3b outbox 重复事件——在分布式表上复验
 - 多租户洪峰(citus-introduction-plan 门槛③):N 租户并发各跑批,观测分片均衡 + SLA
 
+## sim 实测发现:import 撞第 6 类约束(设计级,2026-06-12)
+import launch→CLAIM→pipeline_instance(RUNNING)全通(共享链路已清),task FAILED 卡在
+`PlatformFileRuntimeMapper.insertStepRun`(import/process 共享):
+```
+column "pg_advisory_xact_lock" has pseudo-type void
+```
+**第 6 类约束:advisory-lock CTE 在 Citus 分布式 planner 不允许(void 函数作 CTE select 列)。**
+该 CTE 用 pg_advisory_xact_lock 串行化生成 run_seq(防同 (instance,step) 并发重复)。
+**这是并发设计级改动,非一行 SQL**——留白天清醒时做,方案选项:
+- A. 去 advisory lock,靠 uk_pipeline_step_run(V179 已加) + 应用层 DuplicateKey 重试(同 step 并发概率低,实际安全;推荐)
+- B. advisory lock 拆独立语句(INSERT 前 SELECT lock);Citus 单分片下 lock 生效需验
+- C. run_seq 应用层生成传入(需保证唯一)
+做完 import + process 都受益(共享此 mapper)。export/dispatch 未跑,同 harvest 模式逐个验。
+
 ## 收尾
 - 全部 worker SUCCESS + 真实数据绿 → 完整 e2e 在 Citus 上(可选,需 e2e app 连 coordinator)
 - 双栈零回归终审(普通 PG)+ 推分支(不合 main)
