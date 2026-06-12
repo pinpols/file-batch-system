@@ -72,7 +72,7 @@
             and started_at &lt;= #{startedTo}
         </if>
         <if test="minDurationSeconds != null">
-            and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
+            and extract(epoch from (coalesce(finished_at, #{nowTs}) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
         </if>
         <if test="slaBreached != null and slaBreached">
             and deadline_at is not null
@@ -88,7 +88,7 @@
                 limit #{pageRequest.pageSize}
             </when>
             <when test="sortBy == 'duration'">
-                order by (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at)) desc
+                order by (coalesce(finished_at, #{nowTs}) - coalesce(started_at, created_at)) desc
                 <include refid="com.example.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </when>
             <otherwise>
@@ -139,7 +139,7 @@
             and started_at &lt;= #{startedTo}
         </if>
         <if test="minDurationSeconds != null">
-            and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
+            and extract(epoch from (coalesce(finished_at, #{nowTs}) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
         </if>
         <if test="slaBreached != null and slaBreached">
             and deadline_at is not null

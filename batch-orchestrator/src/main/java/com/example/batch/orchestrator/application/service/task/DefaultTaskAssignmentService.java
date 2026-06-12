@@ -209,6 +209,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             .errorCode(errorCode)
             .errorMessage(errorMessage)
             .expectedVersion(current.getVersion())
+            .finishedAt(BatchDateTimeSupport.utcNow())
             .build());
     return jobTaskMapper.selectById(tenantId, taskId);
   }
@@ -245,6 +246,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             .errorCode(null)
             .errorMessage(null)
             .expectedVersion(current.getVersion())
+            .finishedAt(null) // RUNNING 非终态，CASE 走 else 分支，finishedAt 不生效
             .build());
     JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
     if (stepInstance != null
@@ -380,6 +382,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             .expectedVersion(partition.getVersion())
             .currentInvocationId(invocationId)
             .invocationStartedAt(invocationStartedAt)
+            .claimAt(invocationStartedAt)
             .build();
     return jobPartitionMapper.claimPartition(param);
   }

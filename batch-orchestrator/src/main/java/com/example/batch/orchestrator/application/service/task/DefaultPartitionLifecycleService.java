@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service.task;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
@@ -90,6 +91,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     if (existingPartition == null) {
       return null;
     }
+    Instant claimAt = BatchDateTimeSupport.utcNow();
     ClaimPartitionParam claimPartitionParam =
         ClaimPartitionParam.builder()
             .tenantId(tenantId)
@@ -99,6 +101,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             .fromStatus(PartitionStatus.READY.code())
             .toStatus(PartitionStatus.RUNNING.code())
             .expectedVersion(existingPartition.getVersion())
+            .claimAt(claimAt)
             .build();
     int updated = jobPartitionMapper.claimPartition(claimPartitionParam);
     return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
@@ -148,6 +151,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
                   .terminalStatus3(PartitionStatus.CANCELLED.code())
                   .terminalStatus4(PartitionStatus.TERMINATED.code())
                   .expectedVersion(partition.getVersion())
+                  .finishedAt(null) // WAITING 非终态，CASE 走 else 分支，finishedAt 不生效
                   .build());
     }
     return reclaimed;

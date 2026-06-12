@@ -23,4 +23,7 @@ public class ClaimPartitionParam {
   private final String currentInvocationId;
 
   private final Instant invocationStartedAt;
+
+  /** Citus IMMUTABLE fix: 替代 COALESCE 内的 current_timestamp，由调用方传入认领时刻。 */
+  private final Instant claimAt;
 }

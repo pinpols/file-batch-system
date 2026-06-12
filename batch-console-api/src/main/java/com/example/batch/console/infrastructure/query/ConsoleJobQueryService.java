@@ -8,6 +8,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.common.time.BatchDateTimeSupport;
 import com.example.batch.console.domain.job.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.job.entity.JobExecutionLogEntity;
 import com.example.batch.console.domain.job.entity.JobInstanceEntity;
@@ -145,7 +146,8 @@ public class ConsoleJobQueryService {
             request.getMinDurationSeconds(),
             request.getSlaBreached(),
             pageRequest,
-            cursorId);
+            cursorId,
+            BatchDateTimeSupport.utcNow());
     List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(pageRequest, rows, this::toJobInstanceResponse, JobInstanceEntity::getId);

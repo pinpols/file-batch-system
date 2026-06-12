@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.domain.param;
 
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.i18n.LocalizedErrorCarrier;
+import java.time.Instant;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -29,6 +30,9 @@ public class UpdateTaskStatusParam implements LocalizedErrorCarrier {
   private final String terminalStatus3;
   private final String terminalStatus4;
   private final Long expectedVersion;
+
+  /** Citus IMMUTABLE fix: 替代 CASE 内的 current_timestamp，由调用方传入终态时刻。 */
+  private final Instant finishedAt;
 
   /** 以默认终态常量预填 terminalStatus1-4，调用方只需补 tenantId/id/taskStatus/error/expectedVersion 即可。 */
   public static UpdateTaskStatusParamBuilder withDefaultTerminals() {

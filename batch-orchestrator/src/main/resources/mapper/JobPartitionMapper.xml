@@ -116,7 +116,7 @@
         set worker_code = #{workerCode},
             partition_status = #{toStatus},
             lease_expire_at = #{leaseExpireAt},
-            started_at = coalesce(started_at, current_timestamp),
+            started_at = coalesce(started_at, #{claimAt}),
             current_invocation_id = #{currentInvocationId},
             invocation_started_at = #{invocationStartedAt},
             version = version + 1,
@@ -189,7 +189,7 @@
             current_invocation_id = case when #{partitionStatus} = #{runningStatus} then current_invocation_id else null end,
             invocation_started_at = case when #{partitionStatus} = #{runningStatus} then invocation_started_at else null end,
             finished_at = case
-                when #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
+                when #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then #{finishedAt}
                 else finished_at
             end,
             version = version + 1,

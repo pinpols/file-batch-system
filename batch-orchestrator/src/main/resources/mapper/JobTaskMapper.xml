@@ -142,7 +142,7 @@
             error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             failure_class = #{failureClass,jdbcType=VARCHAR},
             finished_at = case
-                when #{taskStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
+                when #{taskStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then #{finishedAt}
                 else finished_at
             end,
             version = version + 1,

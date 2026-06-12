@@ -25,4 +25,9 @@ public record JobInstanceQuery(
      * 双轨分页 cursor 模式(ADR-031):非 null 时 Mapper 走 cursor 谓词(id &lt; #{cursorId} 或类似),不读
      * pageRequest.pageNo。 形态:CursorCodec.decode 出来的 {@code id} long 值;null 表示首页或 offset 模式。
      */
-    Long cursorId) {}
+    Long cursorId,
+    /**
+     * Citus IMMUTABLE fix: 替代 COALESCE(finished_at, current_timestamp) 中的 current_timestamp。
+     * distributed 表 SELECT 的 COALESCE 内不允许 STABLE 函数，由调用方传入查询时刻。
+     */
+    Instant nowTs) {}

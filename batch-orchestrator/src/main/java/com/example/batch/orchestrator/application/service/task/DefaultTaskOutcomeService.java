@@ -302,7 +302,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
 
     if (command.success()) {
-      applySuccessOutcome(command, partition);
+      applySuccessOutcome(command, partition, finishedAt);
       // ADR-030 §F：worker 上报的 ContentVerifier 失败 → 同事务写 outbox_event(verifier.failure.v1)。
       // 软告警语义：不翻转 task SUCCESS，仅产出可订阅的事件供告警面板消费。
       collaborators.verifierFailureOutboxService().writeVerifierFailures(command, task);
@@ -322,7 +322,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         }
       }
     } else {
-      applyFailureOutcome(command, partition, retryScheduled);
+      applyFailureOutcome(command, partition, retryScheduled, finishedAt);
     }
     if (partition != null) {
       // R3-P0-5：传 invocationId 作为 CAS 守卫，迟到的旧 invocation 的 report 不再覆盖新 output。
@@ -353,7 +353,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   /** 处理成功路径：将分区标记为 SUCCESS。 */
-  private void applySuccessOutcome(TaskOutcomeCommand command, JobPartitionEntity partition) {
+  private void applySuccessOutcome(
+      TaskOutcomeCommand command, JobPartitionEntity partition, Instant finishedAt) {
     if (partition == null) {
       return;
     }
@@ -370,13 +371,17 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .terminalStatus3(PartitionStatus.CANCELLED.code())
                 .terminalStatus4(PartitionStatus.TERMINATED.code())
                 .expectedVersion(partition.getVersion())
+                .finishedAt(finishedAt)
                 .build());
     warnIfCasMiss(partitionUpdated, "partition markStatus(SUCCESS)", partition.getId());
   }
 
   /** 处理失败/重试路径：根据是否安排重试，将分区标记为 RETRYING 或 FAILED。 */
   private void applyFailureOutcome(
-      TaskOutcomeCommand command, JobPartitionEntity partition, boolean retryScheduled) {
+      TaskOutcomeCommand command,
+      JobPartitionEntity partition,
+      boolean retryScheduled,
+      Instant finishedAt) {
     if (partition == null) {
       return;
     }
@@ -403,6 +408,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                   .terminalStatus3(PartitionStatus.CANCELLED.code())
                   .terminalStatus4(PartitionStatus.TERMINATED.code())
                   .expectedVersion(partition.getVersion())
+                  .finishedAt(finishedAt)
                   .build());
       warnIfCasMiss(failUpdated, "partition markStatus(FAILED)", partition.getId());
     }
