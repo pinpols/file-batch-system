@@ -27,6 +27,40 @@ export PG_BUSINESS_CONTAINER="${PG_BUSINESS_CONTAINER:-batch-postgres-primary}"
 export PG_BUSINESS_DB="${PG_BUSINESS_DB:-batch_business_part}"
 export PG_BUSINESS_USER="${PG_BUSINESS_USER:-batch_user}"
 
+# ---------------------------------------------------------------------------
+# Citus worker 进程启动连接(供 sim 脚本重启 worker 用,如 25-checkpoint-crash)。
+# 配置集中在此、全部可被环境变量覆盖,各 stage 脚本不再内联硬编码 jdbc/密码/JVM 参数。
+# 注:platform→25432 Citus 协调器(user/pass 与集群一致);business→15432 分区库,
+#     business url 必须保留 stringtype=unspecified(否则 numeric/date 列写入报错)。
+# ---------------------------------------------------------------------------
+export CITUS_PLATFORM_JDBC_URL="${CITUS_PLATFORM_JDBC_URL:-jdbc:postgresql://localhost:25432/batch_platform}"
+export CITUS_PLATFORM_JDBC_USER="${CITUS_PLATFORM_JDBC_USER:-postgres}"
+export CITUS_PLATFORM_JDBC_PASS="${CITUS_PLATFORM_JDBC_PASS:-poc}"
+export CITUS_BUSINESS_JDBC_URL="${CITUS_BUSINESS_JDBC_URL:-jdbc:postgresql://localhost:15432/batch_business_part?stringtype=unspecified&reWriteBatchedInserts=true}"
+export CITUS_WORKER_JVM_OPTS="${CITUS_WORKER_JVM_OPTS:---enable-native-access=ALL-UNNAMED -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xshare:off}"
+export CITUS_WORKER_POOL="${CITUS_WORKER_POOL:-6}"
+
+# 重启单个服务(Citus 连接);$1=jar 前缀(如 worker-import),余下参数透传为额外 -D(如 checkpoint)。
+# 走 build/runtime-jars/<svc>.jar,日志写 logs/app/<svc>.log;须在项目根目录调用。secret 由调用方 env 继承。
+citus_restart_worker() {
+  local svc="$1"; shift
+  pgrep -f "${svc}.jar" | xargs kill -9 2>/dev/null || true
+  sleep 2
+  nohup java ${CITUS_WORKER_JVM_OPTS} \
+    -Dspring.datasource.url="${CITUS_PLATFORM_JDBC_URL}" \
+    -Dspring.datasource.username="${CITUS_PLATFORM_JDBC_USER}" \
+    -Dspring.datasource.password="${CITUS_PLATFORM_JDBC_PASS}" \
+    -Dbatch.datasource.business.url="${CITUS_BUSINESS_JDBC_URL}" \
+    -Dspring.datasource.hikari.maximum-pool-size="${CITUS_WORKER_POOL}" \
+    -Dspring.datasource.hikari.connection-timeout=60000 \
+    -Dspring.datasource.hikari.initialization-fail-timeout=-1 \
+    "$@" \
+    -jar "build/runtime-jars/${svc}.jar" --spring.profiles.active=local \
+    > "logs/app/${svc}.log" 2>&1 &
+  disown
+}
+export -f citus_restart_worker 2>/dev/null || true
+
 cat <<EOF
 ══════ Citus sim 路由已 export ══════
   platform  → ${PG_PLATFORM_CONTAINER} / ${PG_PLATFORM_DB} / ${PG_PLATFORM_USER}

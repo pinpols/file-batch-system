@@ -24,10 +24,20 @@ command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
 restart_import_with_checkpoint() {
   echo "==> restart worker-import with checkpoint enabled"
-  COMPOSE_ENV_FILE=/dev/null \
-  BATCH_WORKER_CHECKPOINT_ENABLED=true \
-  JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.checkpoint.enabled=true" \
-    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
+  # Citus 拓扑:restart.sh 是单机配置(15432),会让 worker 连错库。检测 env-citus
+  # (PG_PLATFORM_CONTAINER=citus-coord)时直接用 citus 连接命令起,checkpoint 打开。
+  if [[ "${PG_PLATFORM_CONTAINER:-}" == "citus-coord" ]] && declare -F citus_restart_worker >/dev/null; then
+    # Citus:restart.sh 是单机配置(15432),改用 env-citus.sh 的 citus_restart_worker
+    # helper(连接配置集中在 env-citus,此处不硬编码)。checkpoint 作为额外 -D 透传。
+    citus_restart_worker worker-import -Dbatch.worker.checkpoint.enabled=true
+    local s=$SECONDS
+    until curl -sf -m2 http://localhost:18083/actuator/health -o /dev/null 2>/dev/null || [ $((SECONDS-s)) -gt 120 ]; do sleep 5; done
+  else
+    COMPOSE_ENV_FILE=/dev/null \
+    BATCH_WORKER_CHECKPOINT_ENABLED=true \
+    JAVA_OPTS="${JAVA_OPTS:-} -Dbatch.worker.checkpoint.enabled=true" \
+      bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null
+  fi
 }
 
 echo "==> apply bootstrap + checkpoint fixture"
@@ -257,17 +267,33 @@ def retry_partition(partition_id):
     print(f"  [retry] partitionId={partition_id}", flush=True)
 
 def restart_worker():
-    env = os.environ.copy()
-    env["COMPOSE_ENV_FILE"] = "/dev/null"
-    env["BATCH_WORKER_CHECKPOINT_ENABLED"] = "true"
-    env["JAVA_OPTS"] = (env.get("JAVA_OPTS", "") + " -Dbatch.worker.checkpoint.enabled=true").strip()
-    subprocess.run(
-        ["bash", "scripts/local/restart.sh", "worker-import"],
-        check=True,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+    # Citus 拓扑:restart.sh 单机配置(15432)会让 worker 连错库;直接用 citus 连接命令起。
+    if os.environ.get("PG_PLATFORM_CONTAINER") == "citus-coord":
+        # Citus:复用 env-citus.sh 的 citus_restart_worker helper(连接配置集中,不在此硬编码)
+        subprocess.run(
+            ["bash", "-lc",
+             "source scripts/sim/env-citus.sh >/dev/null 2>&1; "
+             "citus_restart_worker worker-import -Dbatch.worker.checkpoint.enabled=true"],
+            check=False)
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            try:
+                urllib.request.urlopen("http://localhost:18083/actuator/health", timeout=2)
+                break
+            except Exception:
+                time.sleep(5)
+    else:
+        env = os.environ.copy()
+        env["COMPOSE_ENV_FILE"] = "/dev/null"
+        env["BATCH_WORKER_CHECKPOINT_ENABLED"] = "true"
+        env["JAVA_OPTS"] = (env.get("JAVA_OPTS", "") + " -Dbatch.worker.checkpoint.enabled=true").strip()
+        subprocess.run(
+            ["bash", "scripts/local/restart.sh", "worker-import"],
+            check=True,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
     print("  [restart] worker-import", flush=True)
 
 def wait_success(rid):
