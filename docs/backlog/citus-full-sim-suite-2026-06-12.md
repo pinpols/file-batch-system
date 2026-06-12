@@ -161,3 +161,27 @@ worker CPU 持续打满(实测单 orchestrator 即把 citus-w1/w2 推到 300-420
 - 代码治本:orchestrator 定时扫描加 tenant 路由/分批(参考 selectPendingTenantIds)
 - 架构反思:outbox_event/job_instance 这类"小数据+高频全局扫"的表,32-shard distribute 是否合适?
   考虑更少 shard / reference / coordinator-local 摘要表
+
+### ⚙️ Citus 性能优化实测 SOP + 配置层硬限制确认(2026-06-13)
+**有效优化(citus CPU 330%→43%,fan-out 单次 1.5-4s→暖后 ~487ms)**:
+- `max_connections` 100→**500**(3 节点,需重启容器)——容纳 pool×shard 连接,核心改善
+- `citus.max_cached_conns_per_worker` 1→**8**(reload)——平衡:太大(32)爆 worker max_connections,太小(1)fan-out 反复建连
+- 服务 hikari:`connection-timeout=60000`(后改 15000)+ `initialization-fail-timeout=-1`——容忍 citus 连接建立慢,否则启动 BatchPgSession bean 失败/health timeout
+
+**认证坑(本轮我折腾 node_conninfo 引入的次生问题,务必记)**:
+- `citus.node_conninfo` 有**白名单,不接受 password 参数**(安全),alter 加 password 被静默过滤
+- 节点间密码认证(worker pg_hba `host all all all scram-sha-256`)的密码必须走 **.pgpass 或 pg_hba trust**
+- 最简:worker pg_hba `scram-sha-256`→`trust`(docker 同网络,sed 改文件 + 重启 citus 清坏缓存连接)
+- **改 node_conninfo 后必须重启 citus**(reload 对已缓存的节点间连接不生效,坏连接会一直 no-password 重试)
+- 手动重启服务必须 source env-common(S3/secret),citus datasource 用 -D 覆盖(25432/poc + business 15432/part)
+
+**❌ 配置层硬限制(已穷尽验证)**:即使上述全部优化,orchestrator 在 **32-shard fan-out 定时任务**下
+**仍 pool 耗尽**(实测 Connection-timeout 30+ 次,08 launch 失败)。数学矛盾:orchestrator pool N 个
+backend 并发 fan-out,每个需连一个 worker 的 16 shard,N×16×2 很快顶满 worker max_connections=500;
+降 cached 缓解爆连接但 fan-out 变慢,此消彼长。**配置层只能把"完全崩溃"改善到"大幅缓解但仍受限",
+无法让 orchestrator 稳定消费 sim 负载**。
+
+**唯一根治(二选一,都需代码/schema 改动 + 测试,不宜在疲劳会话仓促做)**:
+1. **reshard 32→4**:`alter_distributed_table(任一表, shard_count=>4, cascade_to_colocated=>true)`
+   (group 2 含全部 123 表,注意 outbox_event/job_instance 月分区表的 reshard 兼容性需先验证)
+2. **orchestrator 定时扫描加租户路由**(outbox relay/SLA/lease 按 ACTIVE 租户分批,参考 selectPendingTenantIds)
