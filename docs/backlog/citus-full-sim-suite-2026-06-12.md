@@ -133,3 +133,31 @@ worker CPU 持续打满(实测单 orchestrator 即把 citus-w1/w2 推到 300-420
 4. 注意:修后 rebuild orchestrator 会遇 JDK25+AspectJ 慢启动(同 worker-dispatch),需一并解决
 
 **这是 partition-readiness(job_instance 复合 PK / Citus 分布)的核心遗留,优先级高于本轮所有 SQL bug。**
+
+### 🔬 fan-out 过载的更深根因(实测,2026-06-13)——"什么原因"的完整答案
+不是数据量(outbox 1785/job_instance 267,极小)。是 **fan-out 单次成本被三个因素叠加放大**:
+| 实测 | 耗时 |
+|---|---|
+| 同查询带 tenant_id(单 shard 路由) | 0.28s |
+| 不带 tenant_id(fan-out 32 shard) | 1.5-4s(不稳定) |
+
+放大器:
+1. **shard_count=32 过度分片**:每表 32 shard,数据却只有百千行。每个 fan-out 查询付 32 shard
+   协调税(即使每 shard 0 行也要连 + 扫 + 聚合)。小数据 + 高频全局扫的表用 32 shard 是反模式。
+2. **citus.max_cached_conns_per_worker=1**:coordinator 到每 worker 只缓存 1 连接,fan-out 要并行
+   16 shard/worker 时反复新建连接。调到 16 后复用降到 0.577s(但需暖 + 不稳)。
+3. **citus.node_conninfo=sslmode=require**:每次新建连接 SSL handshake 慢(冷却时实测 3s)。
+
+机理:orchestrator 后台定时任务(outbox relay/SLA/lease,秒级)× 无 tenant 路由 × 上述慢 fan-out
+→ 查询排队堆积 → worker CPU 打满 → 连接耗尽 → 主链路 worker→orchestrator REPORT 被 cancelled。
+
+**为什么 08-13 跑通、现在跑不通**:08-13 跑单 stage,worker 查询都是单租户路由(单 shard 0.28s,
+能挤进去慢慢完成);orchestrator 后台 fan-out 当时也慢但不阻塞 stage 的单 shard 查询。本轮我
+反复重启服务 + worker-dispatch AspectJ 占满 CPU + 15 storm 30 并发,把系统推过临界 → 雪崩。
+
+**修复分层(轻→重)**:
+- 配置缓解:max_cached_conns_per_worker↑(已试 1→16 有效但不够)、sslmode=require→优化、
+  **shard_count 32→小(如 4-8)重新 distribute**(治标最有效,小数据不需 32 shard)
+- 代码治本:orchestrator 定时扫描加 tenant 路由/分批(参考 selectPendingTenantIds)
+- 架构反思:outbox_event/job_instance 这类"小数据+高频全局扫"的表,32-shard distribute 是否合适?
+  考虑更少 shard / reference / coordinator-local 摘要表
