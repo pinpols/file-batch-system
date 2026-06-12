@@ -37,6 +37,18 @@ public interface TriggerOutboxEventMapper {
       @Param("pendingStatus1") String pendingStatus1,
       @Param("pendingStatus2") String pendingStatus2);
 
+  /**
+   * 取当前有待发事件(NEW/FAILED 且到期)的去重 tenant_id 列表。
+   *
+   * <p>relay 用它补全租户路由清单——不能只依赖 {@code batch.tenant ACTIVE}:租户被停用(status≠ACTIVE)
+   * 后,其已入队但未投递的事件不能永久卡死;此处按"实际有待发行的租户"补齐。Citus:这是跨分片 distinct 只读 聚合(允许),后续每租户仍走 {@code
+   * selectPending} 的单分片 FOR UPDATE。
+   */
+  List<String> selectPendingTenantIds(
+      @Param("now") Instant now,
+      @Param("pendingStatus1") String pendingStatus1,
+      @Param("pendingStatus2") String pendingStatus2);
+
   /** 标记为 PUBLISHING(投递前状态),只对 PENDING/FAILED 行生效。 返回 1 表示成功抢占,0 表示已被其它 relay 实例抢走。 */
   int markPublishing(
       @Param("tenantId") String tenantId,

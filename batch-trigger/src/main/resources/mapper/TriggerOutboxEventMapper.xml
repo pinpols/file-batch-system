@@ -59,6 +59,15 @@
          FOR UPDATE SKIP LOCKED
     </select>
 
+    <!-- 有待发事件的去重租户清单(NEW/FAILED 且到期)。relay 用它补全租户路由,避免停用租户的
+         残留事件永久卡死。Citus:跨分片 distinct 只读聚合,允许;每租户后续走单分片 FOR UPDATE。 -->
+    <select id="selectPendingTenantIds" resultType="java.lang.String">
+        SELECT DISTINCT tenant_id
+          FROM batch.trigger_outbox_event
+         WHERE publish_status IN (#{pendingStatus1}, #{pendingStatus2})
+           AND next_publish_at &lt;= #{now}
+    </select>
+
     <update id="markPublishing">
         UPDATE batch.trigger_outbox_event
            SET publish_status = #{publishingStatus},

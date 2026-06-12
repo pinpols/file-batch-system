@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -240,7 +241,12 @@ public class TriggerOutboxRelay {
       return;
     }
     Instant now = BatchDateTimeSupport.utcNow();
-    List<String> tenantIds = activeTenantRegistry.activeTenantIds();
+    // 租户路由清单 = ACTIVE 租户 ∪ 实际有待发事件的租户。后者补全停用/未注册租户的残留事件,
+    // 避免其永久卡在 NEW(只依赖 activeTenantRegistry 会漏)。LinkedHashSet 去重并保持稳定顺序。
+    LinkedHashSet<String> tenantIds = new LinkedHashSet<>(activeTenantRegistry.activeTenantIds());
+    tenantIds.addAll(
+        mapper.selectPendingTenantIds(
+            now, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code()));
     for (String tenantId : tenantIds) {
       if (shouldStopPolling()) {
         return;
