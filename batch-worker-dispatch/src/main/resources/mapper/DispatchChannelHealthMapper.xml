@@ -30,7 +30,7 @@
     <update id="tryClaimHalfOpenProbe" parameterType="map">
         update batch.file_channel_health
            set next_probe_at = #{newNextProbeAt},
-               updated_at    = excluded.updated_at
+               updated_at    = current_timestamp
          where tenant_id   = #{tenantId}
            and channel_code = #{channelCode}
            and (next_probe_at is null or next_probe_at &lt;= #{now})

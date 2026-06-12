@@ -21,6 +21,9 @@ source "$ROOT/scripts/sim/env-common.sh"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ 需要 python3" >&2; exit 1; }
 
+echo "==> seed dispatch stage5b job/channel fixture"
+pg_platform -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage5b-dispatch-fixtures.sql >/dev/null
+
 echo "==> preflight dispatch stage5 job/channel"
 if [[ "$(pg_platform -tAc "select count(*) from batch.job_definition where tenant_id='tb' and job_code='TB_DISPATCH_STAGE5_FAIL_ONCE' and enabled=true")" != "1" ]]; then
   echo "❌ missing TB_DISPATCH_STAGE5_FAIL_ONCE fixture" >&2
@@ -127,8 +130,8 @@ subprocess.run(
     "from batch.job_instance i "
     "left join batch.job_partition p on p.job_instance_id=i.id and p.tenant_id=i.tenant_id "
     "left join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
-    "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
-    "where i.id=" + instance_id
+    "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' and d.tenant_id='tb' "
+    "where i.tenant_id='tb' and i.id=" + instance_id
 ], check=False)
 
 out = psql(
@@ -137,8 +140,8 @@ out = psql(
     "from batch.job_instance i "
     "join batch.job_partition p on p.job_instance_id=i.id and p.tenant_id=i.tenant_id "
     "join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
-    "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
-    "where i.id=" + instance_id,
+    "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' and d.tenant_id='tb' "
+    "where i.tenant_id='tb' and i.id=" + instance_id,
     tuples=True,
 )
 summary = (out.stdout or "").strip()
