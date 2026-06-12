@@ -24,12 +24,12 @@ command -v python3 >/dev/null 2>&1 || { echo "需要 python3" >&2; exit 1; }
 echo "==> seed process business tables"
 pg_business \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
-  -f docs/test-data/sim-stage4-process-business-fixtures.sql >/dev/null
+  -f /dev/stdin < docs/test-data/sim-stage4-process-business-fixtures.sql >/dev/null
 
 echo "==> seed process platform jobs"
 pg_platform \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
-  -f docs/test-data/sim-stage4-process-platform-fixtures.sql >/dev/null
+  -f /dev/stdin < docs/test-data/sim-stage4-process-platform-fixtures.sql >/dev/null
 
 START_TS="$(pg_platform -tAc "select now()")"
 export START_TS

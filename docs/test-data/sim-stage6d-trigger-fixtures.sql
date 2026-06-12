@@ -105,4 +105,4 @@ SET trigger_type = EXCLUDED.trigger_type,
     request_status = EXCLUDED.request_status,
     trace_id = EXCLUDED.trace_id,
     related_job_instance_id = null,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;

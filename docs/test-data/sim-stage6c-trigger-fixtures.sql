@@ -27,7 +27,7 @@ SET calendar_name = EXCLUDED.calendar_name,
     dst_gap_policy = EXCLUDED.dst_gap_policy,
     dst_overlap_policy = EXCLUDED.dst_overlap_policy,
     description = EXCLUDED.description,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
 WITH src AS (
   SELECT *
@@ -80,7 +80,7 @@ SET job_name = EXCLUDED.job_name,
     enabled = EXCLUDED.enabled,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP,
+    updated_at = EXCLUDED.updated_at,
     execution_mode = EXCLUDED.execution_mode,
     previous_day_dependency_scope = EXCLUDED.previous_day_dependency_scope;
 
@@ -110,7 +110,7 @@ SET pipeline_name = EXCLUDED.pipeline_name,
     worker_group = EXCLUDED.worker_group,
     enabled = EXCLUDED.enabled,
     description = EXCLUDED.description,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
 WITH src_pd AS (
   SELECT id
@@ -235,4 +235,4 @@ SET trigger_type = EXCLUDED.trigger_type,
     request_status = EXCLUDED.request_status,
     trace_id = EXCLUDED.trace_id,
     related_job_instance_id = null,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;

@@ -36,7 +36,7 @@ SET job_name = EXCLUDED.job_name,
     enabled = EXCLUDED.enabled,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
 INSERT INTO batch.pipeline_definition (
     tenant_id, job_code, pipeline_name, pipeline_type, biz_type,
@@ -54,16 +54,21 @@ SET pipeline_name = EXCLUDED.pipeline_name,
     worker_group = EXCLUDED.worker_group,
     enabled = EXCLUDED.enabled,
     description = EXCLUDED.description,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
-WITH pd AS (
-  SELECT id
-  FROM batch.pipeline_definition
-  WHERE tenant_id = 'tb'
-    AND job_code = 'TB_DISPATCH_STAGE5C_CHANNELS'
-    AND version = 1
-),
-steps(stage_code, step_order, step_name, step_params) AS (
+-- Citus:从 reference 表(pipeline_definition)取 FROM 的 INSERT...SELECT 会被
+-- 下推到 worker,而本地表 pipeline_step_definition 的 id 序列只在协调器存在
+-- (报 *_id_seq does not exist on worker)。先用 \gset 把 pd.id 取成 psql 字面量,
+-- INSERT...SELECT 的 FROM 只留本地 VALUES,使其留在协调器执行。
+-- 双栈等价,普通 PG 不受影响(\gset 是 psql 客户端语法)。
+SELECT id AS stage5c_pipeline_id
+FROM batch.pipeline_definition
+WHERE tenant_id = 'tb'
+  AND job_code = 'TB_DISPATCH_STAGE5C_CHANNELS'
+  AND version = 1
+\gset
+
+WITH steps(stage_code, step_order, step_name, step_params) AS (
   VALUES
     ('PREPARE', 1, '分发前准备', '{}'::jsonb),
     ('DISPATCH', 2, '实际下发', '{}'::jsonb),
@@ -76,7 +81,7 @@ INSERT INTO batch.pipeline_step_definition (
     pipeline_definition_id, step_code, step_name, stage_code, step_order, impl_code,
     step_params, timeout_seconds, retry_policy, retry_max_count, enabled
 )
-SELECT pd.id,
+SELECT :stage5c_pipeline_id,
        'DISPATCH_' || steps.stage_code,
        steps.step_name,
        steps.stage_code,
@@ -87,7 +92,7 @@ SELECT pd.id,
        'NONE',
        0,
        true
-FROM pd CROSS JOIN steps
+FROM steps
 ON CONFLICT (pipeline_definition_id, step_code) DO UPDATE
 SET step_name = EXCLUDED.step_name,
     stage_code = EXCLUDED.stage_code,
@@ -159,4 +164,4 @@ SET channel_name = EXCLUDED.channel_name,
     timeout_seconds = EXCLUDED.timeout_seconds,
     enabled = EXCLUDED.enabled,
     is_deleted = EXCLUDED.is_deleted,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;

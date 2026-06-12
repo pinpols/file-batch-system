@@ -46,7 +46,7 @@ SET job_name = EXCLUDED.job_name,
     enabled = true,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP,
+    updated_at = EXCLUDED.updated_at,
     execution_mode = 'FULL';
 
 INSERT INTO batch.pipeline_definition (
@@ -68,7 +68,7 @@ SET pipeline_name = EXCLUDED.pipeline_name,
     worker_group = EXCLUDED.worker_group,
     enabled = true,
     description = EXCLUDED.description,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
 WITH pd AS (
     SELECT id, job_code

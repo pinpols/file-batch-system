@@ -64,7 +64,7 @@ SET template_name = EXCLUDED.template_name,
     enabled = true,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP,
+    updated_at = EXCLUDED.updated_at,
     is_deleted = false;
 
 WITH src AS (
@@ -120,7 +120,7 @@ SET job_name = EXCLUDED.job_name,
     enabled = true,
     description = EXCLUDED.description,
     updated_by = EXCLUDED.updated_by,
-    updated_at = CURRENT_TIMESTAMP,
+    updated_at = EXCLUDED.updated_at,
     execution_mode = 'FULL';
 
 WITH src AS (
@@ -154,7 +154,7 @@ SET pipeline_name = EXCLUDED.pipeline_name,
     worker_group = EXCLUDED.worker_group,
     enabled = true,
     description = EXCLUDED.description,
-    updated_at = CURRENT_TIMESTAMP;
+    updated_at = EXCLUDED.updated_at;
 
 WITH source_steps AS (
   SELECT psd.*
