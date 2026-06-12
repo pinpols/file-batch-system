@@ -124,8 +124,9 @@ rid1 = launch("first")
 wait_success(rid1)
 
 print("==> switch source to v2 and rerun same batchKey", flush=True)
+# 注:PG_BIZ 不含 -i(查询用),此处走 stdin pipe 必须补 docker exec -i,否则 input 不入容器
 run(
-    PG_BIZ + ["-v", "ON_ERROR_STOP=1", "-v", f"biz_date={BIZ}", "-f", "/dev/stdin"],
+    ["docker", "exec", "-i"] + PG_BIZ[2:] + ["-v", "ON_ERROR_STOP=1", "-v", f"biz_date={BIZ}", "-f", "/dev/stdin"],
     input=open("docs/test-data/sim-stage4b-process-source-v2.sql").read())
 
 rid2 = launch("rerun")
