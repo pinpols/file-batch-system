@@ -17,6 +17,15 @@
    完整 fixture —— 含**精确的 template 字段映射** + **export 的 export_data_ref/jdbc_mapped_export 配置** + channel。
    bootstrap 只灌了骨架;光 bootstrap 不够:实测 export 报 `export_data_ref is required in template config`、
    import 自造内容报 `null value in customer_no`(字段映射对不上)。
+   **2026-06-12 实测此层本身有 2 个子 blocker(在解 #1 前必先过)**:
+   - (a) **console RBAC**:admin(ROLE_ADMIN,tenant=system)上传 tenant-package 报 **403 访问被拒绝**——
+     ROLE_ADMIN 缺该端点的细粒度权限(Citus 上 RBAC role→permission 映射没全 seed)。**临时绕过 = 起 console 带
+     `-Dbatch.security.bypass-mode=true`**(放行认证/授权);收尾记得关掉。
+   - (b) **Excel fixture 与 schema 漂移**:`{ta,tb,tc}-tenant-config-package-test.xlsx` 的 job_definition sheet
+     **缺 `watermark_field` 表头** → 上传报 `INVALID_ARGUMENT: missing required headers: [watermark_field]`。
+     这是 fixture 陈旧(console import schema 加了新列),**与 Citus 无关,普通 PG 也会挂**。要么更新 .xlsx fixture,
+     要么改走"直接 SQL 灌完整 config"(但完整字段映射/export_data_ref 只在 Excel 里,SQL 化得重写)。
+   实际可行路径:console import 链路(auth bypass + 修 fixture)或绕开 Excel 直接 SQL 灌全配置;两条都要额外工作。
 2. **精确内容 fixture**:每 stage 脚本里的 XML/CSV/JSON/定宽内容必须**精确匹配** template 解析 schema
    (列序/定宽位置/JSON 字段名)。自造内容会 parse 过但 LOAD 撞 not-null。从 stage 脚本本体抽真 fixture。
 3. **去硬编码(关键,防污染 main)**:25 个脚本写死 `docker exec batch-postgres-primary psql -d batch_platform`
