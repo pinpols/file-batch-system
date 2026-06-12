@@ -201,3 +201,22 @@ SELECT alter_distributed_table('batch.job_task', shard_count => 4, cascade_to_co
 4-shard 在保留分布式能力的同时让 fan-out 成本可接受。这应是 partition-readiness 的 shard_count
 默认值修正(citus.shard_count 默认 32 对本系统数据规模偏大)。配合前述配置优化(max_connections=500
 + 认证 pg_hba trust),环境恢复可承载 sim。
+
+### 🏁 reshard 后 sim 全阶段跑完结果(2026-06-13)
+环境经 reshard 32→4 + 配置优化 + 认证修复恢复后,跑完 15-25:
+| stage | 结果 | 说明 |
+|---|---|---|
+| 08-13 | ✅ PASS×6 | import/export/process 三类 worker 全格式矩阵 |
+| 15 trigger-stage6b | ✅ PASS | storm 30 |
+| 16 atomic-stage5b | ⚠️ 功能 SUCCESS | shell/sql/proc instance 全 terminal SUCCESS;脚本 0/3 是 worker-atomic 调度间隔 2.5min/task(重启后状态)致 wait 150s 超时 |
+| 17 import-stage2c | ✅ PASS | import matrix |
+| 18 export-stage3c | ✅ PASS | |
+| 19 process-stage4c | ✅ PASS | |
+| 21 atomic-stage5c | ⚠️ 功能 SUCCESS | atomic_http_demo 真访问 example.com SUCCESS;同 16 worker-atomic 调度间隔致脚本 timeout |
+| 22 trigger-stage6c | ✅ PASS | storm 60 |
+| 23 import-stage2d | ❌ edge | skip_under_threshold 场景 validate STATUS_INVALID(行数阈值跳过逻辑 vs 数据 status,需查 import skip 逻辑) |
+| 24 trigger-stage6d | ❌ edge | cron-fire✓/pause✓,但 resume 后 scheduler 没重新 fire(pause/resume misfire 时序) |
+| 25 checkpoint-crash | ❌ 脚本适配 | worker-import 用 scripts/local/restart.sh(单机 15432)重启,citus 下连错库致 checkpoint 不推进;需改 25 用 citus 启动命令重启 worker |
+| 14/20 dispatch | ⏸ blocked | worker-dispatch 重 build jar JDK25+AspectJ 慢启动(10min+),未起 |
+
+**实质成果**:11 stage 完整 PASS + 2 stage(16/21)功能验证通过(脚本受 worker 调度间隔);3 个 edge/适配(23/24/25)+ 2 个 dispatch(工具链)待。**核心 Citus 兼容性 + 主链路(trigger→orch→kafka→worker→report,含 storm 60 并发)在 4-shard Citus 上验证通过**。
