@@ -118,7 +118,7 @@ print("\n-- job_status --", flush=True)
 job_sql = (
     "select i.id,i.job_code,i.instance_status,t.task_status,t.error_code,"
     "left(coalesce(t.error_message,''),180) as error_message "
-    "from batch.job_instance i left join batch.job_task t on t.job_instance_id=i.id "
+    "from batch.job_instance i left join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
     f"where i.tenant_id='ta' and i.job_code in ({job_codes}) and i.created_at >= '{START_TS}' "
     "order by i.created_at,i.id"
 )

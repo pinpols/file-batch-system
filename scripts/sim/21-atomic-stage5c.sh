@@ -89,7 +89,7 @@ def launch(job, label, params):
 def instance_for_request(rid):
     out = psql(
         "select i.id || '|' || coalesce(i.instance_status,'') "
-        "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
+        "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         f"where tr.tenant_id='{TENANT}' and tr.request_id='{rid}' order by tr.created_at desc limit 1",
         tuples=True,
     )
@@ -114,8 +114,8 @@ def wait_running_task(rid, timeout=30):
         out = psql(
             "select i.id || '|' || t.id || '|' || t.task_status "
             "from batch.trigger_request tr "
-            "join batch.job_instance i on i.id=tr.related_job_instance_id "
-            "join batch.job_task t on t.job_instance_id=i.id "
+            "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
+            "join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
             f"where tr.tenant_id='{TENANT}' and tr.request_id='{rid}' "
             "order by t.id desc limit 1",
             tuples=True,
@@ -162,8 +162,8 @@ status_sql = (
     "select tr.request_id,i.job_code,i.instance_status,t.id as task_id,t.task_status,"
     "t.cancel_requested,t.error_code,t.failure_class,t.result_summary "
     "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id=tr.related_job_instance_id "
-    "left join batch.job_task t on t.job_instance_id=i.id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
+    "left join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
     f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
     "order by tr.request_id,t.id"
 )
@@ -173,9 +173,9 @@ subprocess.run(PG_PLAT + [
 
 out = psql(
     "select "
-    f"(select i.instance_status from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id where tr.request_id='{rid_http}') || '|' || "
-    f"(select i.instance_status || ':' || coalesce(t.error_code,'') || ':' || coalesce(t.failure_class,'') from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id join batch.job_task t on t.job_instance_id=i.id where tr.request_id='{rid_timeout}' order by t.id desc limit 1) || '|' || "
-    f"(select i.instance_status || ':' || t.task_status || ':' || t.cancel_requested::text from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id join batch.job_task t on t.job_instance_id=i.id where tr.request_id='{rid_cancel}' order by t.id desc limit 1)",
+    f"(select i.instance_status from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id where tr.request_id='{rid_http}') || '|' || "
+    f"(select i.instance_status || ':' || coalesce(t.error_code,'') || ':' || coalesce(t.failure_class,'') from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id where tr.request_id='{rid_timeout}' order by t.id desc limit 1) || '|' || "
+    f"(select i.instance_status || ':' || t.task_status || ':' || t.cancel_requested::text from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id where tr.request_id='{rid_cancel}' order by t.id desc limit 1)",
     tuples=True,
 )
 summary = (out.stdout or "").strip()

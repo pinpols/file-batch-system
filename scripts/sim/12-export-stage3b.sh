@@ -98,7 +98,7 @@ while time.time() < deadline:
     out = psql("batch_platform", (
         "select i.id || '|' || i.instance_status "
         "from batch.trigger_request tr "
-        "join batch.job_instance i on i.id = tr.related_job_instance_id "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
         "order by tr.created_at desc limit 1"
     ), tuples=True)
@@ -120,7 +120,7 @@ task_sql = (
     "select p.partition_no,p.partition_status,t.task_status,t.error_code,"
     "left(coalesce(t.error_message,''),160) as error_message "
     "from batch.job_partition p "
-    "left join batch.job_task t on t.job_partition_id=p.id "
+    "left join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     f"where p.job_instance_id={instance_id} "
     "order by p.partition_no,t.id"
 )

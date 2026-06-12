@@ -114,7 +114,7 @@ deadline = time.time() + 240
 while time.time() < deadline:
     out = psql(
         "select count(*) from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         f"where tr.request_id in ('{rid_ta}','{rid_tb}','{rid_tc}') "
         "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
         tuples=True,
@@ -128,20 +128,20 @@ print("\n-- job_status --", flush=True)
 subprocess.run(PG_PLAT + [
     "-P", "pager=off", "-c",
     "select tr.tenant_id,tr.request_id,i.id,i.job_code,i.instance_status,i.expected_partition_count "
-    "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
+    "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
     f"where tr.request_id in ('{rid_ta}','{rid_tb}','{rid_tc}') order by tr.tenant_id,i.id"
 ], check=False)
 
 print("\n-- ta_partition_status --", flush=True)
 ta_instance = (psql(
-    "select i.id from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
+    "select i.id from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
     f"where tr.tenant_id='ta' and tr.request_id='{rid_ta}' order by tr.created_at desc limit 1",
     tuples=True,
 ).stdout or "").strip()
 subprocess.run(PG_PLAT + [
     "-P", "pager=off", "-c",
     "select p.partition_no,p.partition_status,t.task_status,t.error_code "
-    "from batch.job_partition p left join batch.job_task t on t.job_partition_id=p.id "
+    "from batch.job_partition p left join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     f"where p.job_instance_id={ta_instance} order by p.partition_no"
 ], check=False)
 
@@ -184,7 +184,7 @@ tenant_check = (psql(
     tuples=True,
 ).stdout or "").strip()
 status_check = (psql(
-    "select count(*) from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
+    "select count(*) from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
     f"where tr.request_id in ('{rid_ta}','{rid_tb}','{rid_tc}') and i.instance_status='SUCCESS'",
     tuples=True,
 ).stdout or "").strip()

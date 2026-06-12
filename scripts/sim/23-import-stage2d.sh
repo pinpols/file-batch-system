@@ -117,8 +117,8 @@ def wait_for(rid, expected):
         out = psql("batch_platform", (
             "select coalesce(i.instance_status,'') || '|' || coalesce(t.task_status,'') || '|' || coalesce(t.error_code,'') "
             "from batch.trigger_request tr "
-            "left join batch.job_instance i on i.id = tr.related_job_instance_id "
-            "left join batch.job_task t on t.job_instance_id = i.id "
+            "left join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
+            "left join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
             f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
             "order by tr.created_at desc, t.id desc limit 1"
         ), tuples=True)
@@ -192,8 +192,8 @@ subprocess.run(PG_PLAT + [
     "-P", "pager=off", "-c",
     "select tr.request_id,i.id,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
     "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
-    "left join batch.job_task t on t.job_instance_id = i.id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
+    "left join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
     f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,t.id"
 ], check=False)
 
@@ -204,7 +204,7 @@ subprocess.run(PG_PLAT + [
     "fr.metadata_json->>'skippedCount' as skipped,fr.metadata_json->>'validatedCount' as validated,"
     "fr.metadata_json->>'loadedCount' as loaded,fr.metadata_json->>'skipThresholdExceeded' as threshold_exceeded "
     "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
     "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
     "join batch.file_record fr on fr.id = pi.file_id "
     f"where tr.request_id in ('{rid_under}','{rid_over}') order by tr.created_at,fr.id"
@@ -215,7 +215,7 @@ subprocess.run(PG_PLAT + [
     "-P", "pager=off", "-c",
     "select tr.request_id,er.record_no,er.error_code,er.error_stage,er.is_skipped,er.skip_action "
     "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
     "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
     "join batch.file_record fr on fr.id = pi.file_id "
     "join batch.file_error_record er on er.file_id = fr.id "
@@ -234,7 +234,7 @@ error_summary = (psql("batch_platform", (
     "select count(*) filter (where tr.request_id='" + rid_under + "' and er.is_skipped) || '|' || "
     "count(*) filter (where tr.request_id='" + rid_over + "' and er.is_skipped) "
     "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
     "join batch.pipeline_instance pi on pi.related_job_instance_id = i.id "
     "join batch.file_record fr on fr.id = pi.file_id "
     "join batch.file_error_record er on er.file_id = fr.id "

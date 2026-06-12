@@ -118,7 +118,7 @@ job_sql = (
     "select i.id,i.params_snapshot#>>'{effectiveParams,templateCode}' as template_code,"
     "i.instance_status,t.task_status,t.error_code,"
     "left(coalesce(t.error_message,''),160) as error_message "
-    "from batch.job_instance i left join batch.job_task t on t.job_instance_id=i.id "
+    "from batch.job_instance i left join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
     f"where i.tenant_id='ta' and i.job_code='TA_EXPORT_REPORT' and i.created_at >= '{START_TS}' "
     "order by i.created_at,i.id"
 )

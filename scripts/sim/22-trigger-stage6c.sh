@@ -156,7 +156,7 @@ deadline = time.time() + 240
 while time.time() < deadline:
     out = psql(
         "select count(*) from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         "where tr.tenant_id='ta' and tr.request_id like '" + BATCH + "-storm-%' "
         "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
         tuples=True,
@@ -177,7 +177,7 @@ subprocess.run(PG_PLAT + [
 
 storm_success = int((psql(
     "select count(*) from batch.trigger_request tr "
-    "join batch.job_instance i on i.id=tr.related_job_instance_id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
     "where tr.tenant_id='ta' and tr.request_id like '" + BATCH + "-storm-%' "
     "and i.instance_status='SUCCESS'",
     tuples=True,

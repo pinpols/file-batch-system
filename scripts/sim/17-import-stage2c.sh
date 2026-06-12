@@ -116,7 +116,7 @@ def wait_for(job, rid, expected="SUCCESS"):
         out = psql("batch_platform", (
             "select coalesce(i.instance_status,'') "
             "from batch.trigger_request tr "
-            "left join batch.job_instance i on i.id = tr.related_job_instance_id "
+            "left join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
             f"where tr.tenant_id='ta' and tr.request_id='{rid}' and tr.job_code='{job}' "
             "order by tr.created_at desc limit 1"
         ), tuples=True)
@@ -194,8 +194,8 @@ subprocess.run(PG_PLAT + [
     "-P", "pager=off", "-c",
     "select i.id,i.job_code,i.instance_status,t.task_status,t.error_code,left(coalesce(t.error_message,''),160) as error_message "
     "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id = tr.related_job_instance_id "
-    "left join batch.job_task t on t.job_instance_id = i.id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
+    "left join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
     f"where tr.request_id in ({request_list}) order by i.created_at,i.id,t.id"
 ], check=False)
 

@@ -102,7 +102,7 @@ while time.time() < deadline:
     out = psql(
         "select i.id || '|' || coalesce(i.instance_status,'') "
         "from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         f"where tr.tenant_id='tb' and tr.request_id='{rid}' order by tr.created_at desc limit 1",
         tuples=True,
     )
@@ -126,7 +126,7 @@ subprocess.run(
     "d.dispatch_status,d.error_code as dispatch_error "
     "from batch.job_instance i "
     "left join batch.job_partition p on p.job_instance_id=i.id "
-    "left join batch.job_task t on t.job_partition_id=p.id "
+    "left join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
     "where i.id=" + instance_id
 ], check=False)
@@ -136,7 +136,7 @@ out = psql(
     "coalesce(d.dispatch_status,'') "
     "from batch.job_instance i "
     "join batch.job_partition p on p.job_instance_id=i.id "
-    "join batch.job_task t on t.job_partition_id=p.id "
+    "join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     "left join batch.file_dispatch_record d on d.file_id=" + FILE_ID + " and d.channel_code='tb_api_fail' "
     "where i.id=" + instance_id,
     tuples=True,

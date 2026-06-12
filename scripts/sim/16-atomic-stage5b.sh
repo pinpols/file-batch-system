@@ -77,7 +77,7 @@ while time.time() < deadline:
     req_list = ",".join("'" + rid + "'" for rid in request_ids.values())
     out = psql(
         "select count(*) from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
         "and i.instance_status in ('SUCCESS','FAILED','PARTIAL_FAILED','REJECTED','CANCELLED')",
         tuples=True,
@@ -92,8 +92,8 @@ req_list = ",".join("'" + rid + "'" for rid in request_ids.values())
 status_sql = (
     "select i.job_code,i.instance_status,t.task_status,t.error_code "
     "from batch.trigger_request tr "
-    "join batch.job_instance i on i.id=tr.related_job_instance_id "
-    "left join batch.job_task t on t.job_instance_id=i.id "
+    "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
+    "left join batch.job_task t on t.job_instance_id=i.id and t.tenant_id=i.tenant_id "
     f"where tr.tenant_id='{TENANT}' and tr.request_id in ({req_list}) "
     "order by i.job_code"
 )

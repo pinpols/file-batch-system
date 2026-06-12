@@ -107,7 +107,7 @@ def wait_success(rid):
         out = psql("batch_platform", (
             "select coalesce(i.instance_status,'') "
             "from batch.trigger_request tr "
-            "left join batch.job_instance i on i.id=tr.related_job_instance_id "
+            "left join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
             f"where tr.tenant_id='ta' and tr.request_id='{rid}' "
             "order by tr.created_at desc limit 1"
         ), tuples=True)

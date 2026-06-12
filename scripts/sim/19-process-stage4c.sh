@@ -93,7 +93,7 @@ def wait_instance(rid, expected, timeout=240):
     while time.time() < deadline:
         out = psql("batch_platform", (
             "select i.id || '|' || coalesce(i.instance_status,'') "
-            "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id "
+            "from batch.trigger_request tr join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
             f"where tr.tenant_id='ta' and tr.request_id='{rid}' order by tr.created_at desc limit 1"
         ), tuples=True)
         value = (out.stdout or "").strip()
@@ -119,7 +119,7 @@ print("\n-- sharded_task_status --", flush=True)
 subprocess.run(PG_PLAT + [
     "-P", "pager=off", "-c",
     "select p.partition_no,p.partition_status,t.task_status,p.output_summary "
-    "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
+    "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     f"where p.job_instance_id={shard_instance} order by p.partition_no"
 ], check=False)
 
@@ -139,7 +139,7 @@ shard_check = (psql("batch_business", (
 task_check = (psql("batch_platform", (
     "select count(*) filter (where t.task_status='SUCCESS') || '|' || "
     "count(*) filter (where p.partition_status='SUCCESS') "
-    "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id "
+    "from batch.job_partition p join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     f"where p.job_instance_id={shard_instance}"
 ), tuples=True).stdout or "").strip()
 
@@ -157,9 +157,9 @@ while time.time() < deadline:
     out = psql("batch_platform", (
         "select i.id || '|' || p.id || '|' || coalesce(t.task_status,'') "
         "from batch.trigger_request tr "
-        "join batch.job_instance i on i.id=tr.related_job_instance_id "
+        "join batch.job_instance i on i.id=tr.related_job_instance_id and tr.tenant_id=i.tenant_id "
         "join batch.job_partition p on p.job_instance_id=i.id "
-        "join batch.job_task t on t.job_partition_id=p.id "
+        "join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
         f"where tr.tenant_id='ta' and tr.request_id='{rid_cancel}' "
         "order by t.id desc limit 1"
     ), tuples=True)
@@ -198,7 +198,7 @@ while time.time() < deadline:
         "select i.instance_status || '|' || p.partition_status || '|' || t.task_status "
         "from batch.job_instance i "
         "join batch.job_partition p on p.job_instance_id=i.id "
-        "join batch.job_task t on t.job_partition_id=p.id "
+        "join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
         f"where i.id={cancel_instance} order by t.id desc limit 1"
     ), tuples=True)
     cancel_status = (out.stdout or "").strip()
@@ -211,7 +211,7 @@ subprocess.run(PG_PLAT + [
     "-P", "pager=off", "-c",
     "select i.id,i.instance_status,p.partition_status,t.task_status,t.cancel_requested,t.error_code "
     "from batch.job_instance i join batch.job_partition p on p.job_instance_id=i.id "
-    "join batch.job_task t on t.job_partition_id=p.id "
+    "join batch.job_task t on t.job_partition_id=p.id and t.tenant_id=p.tenant_id "
     f"where i.id={cancel_instance}"
 ], check=False)
 
