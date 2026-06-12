@@ -126,7 +126,9 @@
         where tenant_id = #{tenantId}
           and id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (tenant_id, id) do nothing
+        <!-- archive.* 冷表在 Citus 上保持 LOCAL(未分布,仅 coordinator),PK 仍为单列 (id);
+             on conflict 用 (id)。tenant_id 路由只加在源 batch.* distributed 表的 where/子查询上。 -->
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archiveJobPartitionsByInstanceIds">
@@ -136,7 +138,7 @@
         where tenant_id = #{tenantId}
           and job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archiveJobTasksByInstanceIds">
@@ -146,7 +148,7 @@
         where tenant_id = #{tenantId}
           and job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archiveJobStepInstancesByInstanceIds">
@@ -156,7 +158,7 @@
         where tenant_id = #{tenantId}
           and job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archivePipelineInstancesByInstanceIds">
@@ -166,7 +168,7 @@
         where tenant_id = #{tenantId}
           and related_job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archivePipelineStepRunsByInstanceIds">
@@ -180,7 +182,7 @@
               and related_job_instance_id in
             <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         )
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archiveFileDispatchRecordsByInstanceIds">
@@ -194,7 +196,7 @@
               and related_job_instance_id in
             <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         )
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <!-- V177: workflow_run PK 复合 (tenant_id, id)，archive 表同步 -->
@@ -219,7 +221,7 @@
               and related_job_instance_id in
             <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         )
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archiveJobExecutionLogsByInstanceIds">
@@ -229,7 +231,7 @@
         where tenant_id = #{tenantId}
           and job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <insert id="archiveCompensationCommandsByInstanceIds">
@@ -239,7 +241,7 @@
         where tenant_id = #{tenantId}
           and related_job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        on conflict (tenant_id, id) do nothing
+        on conflict (id) do nothing
     </insert>
 
     <!-- ============ 级联删（按 tenant_id 路由 + instanceIds 列表）============ -->
