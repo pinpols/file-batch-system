@@ -21,7 +21,8 @@ pipeline_upsert AS (
   )
   ON CONFLICT (tenant_id, job_code, version) DO UPDATE
   SET enabled = true,
-      updated_at = CURRENT_TIMESTAMP
+      -- Citus:DO UPDATE SET 函数须 IMMUTABLE;CURRENT_TIMESTAMP 改 EXCLUDED 引用(双栈语义等价)
+      updated_at = EXCLUDED.updated_at
   RETURNING id
 ),
 step_specs AS (
@@ -93,4 +94,6 @@ SET step_name = EXCLUDED.step_name,
     retry_policy = EXCLUDED.retry_policy,
     retry_max_count = EXCLUDED.retry_max_count,
     enabled = EXCLUDED.enabled,
-    updated_at = CURRENT_TIMESTAMP;
+    -- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;CURRENT_TIMESTAMP(STABLE)改 EXCLUDED 引用
+    -- (值=INSERT SELECT 的 now(),同语句同值,双栈语义等价)。
+    updated_at = EXCLUDED.updated_at;
