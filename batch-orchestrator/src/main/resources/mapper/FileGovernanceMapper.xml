@@ -325,7 +325,10 @@
             current_stage = coalesce(pi.current_stage, 'STALE_SWEEP'),
             finished_at = current_timestamp,
             updated_at = current_timestamp
-        where pi.id in (
+        <!-- Citus:外层补 tenant_id 路由,把整条 update 锁定到单租户分片;
+             与 IN 子查询(同表同租户)共址,避免跨分片更新。 -->
+        where pi.tenant_id = #{tenantId}
+          and pi.id in (
             select id
             from batch.pipeline_instance
             where tenant_id = #{tenantId}
@@ -347,11 +350,16 @@
                 coalesce(psr.duration_ms, 0),
                 coalesce((extract(epoch from (#{nowTs} - psr.started_at)) * 1000)::bigint, 0)
             )
-        where psr.step_status in (#{pendingStatus}, #{runningStatus}, #{retryingStatus})
+        <!-- Citus:外层 psr 补 tenant_id 路由 + EXISTS 子查询补 pi.tenant_id = psr.tenant_id
+             共址条件,让 pipeline_step_run × pipeline_instance 的关联在分布列(tenant_id)上 co-located,
+             避免 "complex joins ... co-located" 报错。 -->
+        where psr.tenant_id = #{tenantId}
+          and psr.step_status in (#{pendingStatus}, #{runningStatus}, #{retryingStatus})
           and exists (
               select 1
               from batch.pipeline_instance pi
-              where pi.id = psr.pipeline_instance_id
+              where pi.tenant_id = psr.tenant_id
+                and pi.id = psr.pipeline_instance_id
                 and pi.tenant_id = #{tenantId}
                 and pi.run_status = #{failedPipelineStatus}
                 and pi.finished_at &gt;= current_timestamp - interval '5 minutes'

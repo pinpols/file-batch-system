@@ -64,6 +64,36 @@ column "pg_advisory_xact_lock" has pseudo-type void
 - C. run_seq 应用层生成传入(需保证唯一)
 做完 import + process 都受益(共享此 mapper)。export/dispatch 未跑,同 harvest 模式逐个验。
 
+### 第 6 类约束已清(2026-06-12,方案 A 落地)
+`insertStepRun` 去 advisory-lock CTE 改纯 VALUES;run_seq 复用已有 `selectNextStepRunSeq`(补 tenant_id 过滤,
+原是 W4 盲区)在 `PlatformFileRuntimeRepository.startStepRun` 的 5 次 DuplicateKey 重试循环内取。
+**真集群实证**:import RECEIVE→SUCCESS、PREPROCESS→SUCCESS,5 个 step_run 在 distributed 表插入成功,
+`pseudo-type void`/`subqueries not supported` 报错数=0。第 6 类彻底清除。
+(commit 30d986b46 inline-subquery 版被 Citus 拒"subqueries within INSERT",最终 fed2bcf90 纯 VALUES 版通过。)
+
+## sim 实测发现:orchestrator 撞第 7 类约束(complex join 共址,2026-06-12)
+import 推进后,orchestrator **调度 sweep 线程**(batch-scheduler)反复报:
+```
+ERROR: complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+```
+并连坐打满连接池(active=6/6,Connection is not available)→ heartbeat 500 / launch 空响应 / 任务 Kafka 毒丸重投。
+**根因**:`FileGovernanceMapper` 两个 stale-sweep UPDATE 把两张 distributed 表按**非分布列**关联:
+- `markRunningPipelineStepsFailedForInstances`:`update pipeline_step_run psr ... exists(select 1 from pipeline_instance pi where pi.id = psr.pipeline_instance_id)`——join 在 id 上、外层 psr 无 tenant_id 路由。
+- `markStaleRunningPipelineInstancesFailed`:`update pipeline_instance pi where pi.id in (select id ...)`——外层无 tenant_id 路由。
+
+**已清(第 7 类,同 complex-join 模式)**:外层补 `tenant_id = #{tenantId}` 路由到单租户分片 +
+EXISTS 子查询补 `pi.tenant_id = psr.tenant_id` 共址条件,让关联落在分布列上。
+
+### ⚠️ 仍待清(设计级,latent 未现形):SuccessInstanceArchiveMapper 归档清扫
+`selectArchivableInstanceIds` 返回**全局 id 列表(无 tenant)**,随后跨表归档/级联删:
+`deletePipelineStepRunsByInstanceIds` / `deleteFileDispatchRecordsByInstanceIds` / `deleteWorkflowNodeRunsByInstanceIds` /
+`deleteJobStepInstancesByInstanceIds` 都是 `xxx_id in (select id from <另一 distributed 表> where ...)` 的**非共址子查询删**,
+`archivePipelineStepRunsByInstanceIds` 等 INSERT..SELECT 同样跨分片关联。Citus 上会同样报 complex-join。
+**当前未现形**:归档按 retentionDays cutoff 触发,新集群无 finished_at 够老的实例,故不 fire。
+**改造代价大(设计级)**:整个归档流程需**租户分片化**——selectArchivable 返回 (tenant_id, id) 对,
+所有 archive/delete 语句带 tenant_id 路由 + 共址(改 mapper 签名 + SuccessInstanceArchiveService 线程化 tenant)。
+留作真实分库分表启用前的专项。方案:按 tenant 分组批量,每组单租户路由清扫。
+
 ## 收尾
 - 全部 worker SUCCESS + 真实数据绿 → 完整 e2e 在 Citus 上(可选,需 e2e app 连 coordinator)
 - 双栈零回归终审(普通 PG)+ 推分支(不合 main)
