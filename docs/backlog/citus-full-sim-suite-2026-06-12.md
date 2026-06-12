@@ -57,3 +57,37 @@
 8. 每阶段验:instance SUCCESS + 业务行落 part + 0 Citus 方言报错 + main 库零污染自证
 
 相关:[[project_partition_branch_ready]];本轮提交 57fa04c88/8baeea11d/13d8ffb3a。
+
+---
+
+## 2026-06-12 续:逐阶段实跑实录(08→15)+ 真实 bug + 环境 blocker
+
+### 已验证通过(Citus 端到端,数据落 batch_business_part,平台落 citus-coord)
+| stage | worker | 结果 |
+|---|---|---|
+| 08 import-stage2 | import | ✅ XML/FIXED 2 SUCCESS + 3 预期 FAILED |
+| 09 export-stage3 | export | ✅ JSON/FIXED/EXCEL SUCCESS + bad_sql 预期失败 |
+| 10 process-stage4 | process | ✅ JSONB/DIRECT/EMPTY SUCCESS + validate_fail 预期失败 |
+| 11 import-stage2b | import | ✅ upsert 幂等 + load_bad/partition_guard 预期失败 |
+| 12 export-stage3b | export(4 分区) | ✅ 4 partition 并行 SUCCESS,4|4|4|40 |
+| 13 process-stage4b | process | ✅ v1→v2 重处理覆盖 |
+
+### 本轮新修真实 Citus bug(全部 commit,双栈安全)
+1. **bootstrap 派生 job/pipeline `INSERT dist SELECT FROM dist CROSS JOIN (VALUES)` 静默插 0 行** → 展开为每变体一条 co-located INSERT...SELECT(reference 源/纯 VALUES 源不受影响,只 hash-distributed 源 CROSS JOIN 本地 VALUES 中招)
+2. **export 模板 `(:batchNo IS NOT NULL)` 恒真条件 prepared-stmt 无法推断参数类型** → `CAST(:batchNo AS text)`
+3. **验证查询 job_task/job_partition/trigger_request/file_dispatch_record join 缺分布键** → 批量补 `and X.tenant_id=Y.tenant_id`(含反序 `p.id=t.job_partition_id` 形态);`where job_instance_id=X` 无 tenant_id 是 multi-shard fan-out → 补 tenant_id 走单 shard
+4. **stage fixtures `DO UPDATE SET current_timestamp` 非 IMMUTABLE**(reference 表也中招,只 local 表 pipeline_step_definition 豁免)→ `EXCLUDED.updated_at`
+5. **⭐ dispatch circuit-breaker `DispatchChannelHealthMapper.tryClaimHalfOpenProbe` plain UPDATE 误用 `excluded`**(commit 6c97a11e5 的 IMMUTABLE 适配过度替换;`excluded` 仅 ON CONFLICT 有效,plain UPDATE 用之报 `missing FROM-clause entry for excluded`)→ 改回 `current_timestamp`。**单机也错,半开探测需故障渠道触发才暴露;SQL 层双向验证(修复版 UPDATE 1 / 旧版 ERROR)**。审计扫不出,真实场景挖出。
+6. 13 v2 source 经 `PG_BIZ + -f /dev/stdin + input=` 但 PG_BIZ 不含 `-i`,stdin 不入容器 → 补 `docker exec -i`
+
+### 基建/脚本改造(commit)
+- env-common.sh 加 platform/business 双容器变量 + pg_platform/pg_business helper;新增 env-citus.sh(platform→citus-coord、business→batch_business_part)
+- 21 个 stage 脚本去硬编码(shell helper + python PG_PLAT/PG_BIZ);25 补迁移;10 fixtures seed `-f docs/...` 容器内路径 → `-f /dev/stdin <`
+- 缺失 fixture 补 self-contained:sim-stage5b-dispatch-fixtures.sql(TB_DISPATCH_STAGE5_FAIL_ONCE + tb_api_fail,单机由 created_by=sim-e2e 外部 seed 建,常驻分支漏带)
+- coordinator `citus.max_shared_pool_size` 热加载 25→60(缓解 fan-out 连接耗尽)
+
+### ⚠️ 未完成 / 环境 blocker(剩余 14-25)
+- **worker-dispatch 重 build jar 在 JDK25 启动病态慢(10min+ 起不来)**:jstack 卡在 AspectJ 1.9.25 `World.resolve`/`ReflectionBasedResolvedMemberImpl.hasAnnotation` → `jdk.internal.classfile.impl.EntryMap`(JDK22+ 新 ClassFile API)。AspectJ pointcut 匹配 + nested-jar 类解析在 JDK25 病态慢(同 Mockito+JDK25 byte-buddy 性质)。其他 worker(旧 jar)35-77s 能起。**14/20 dispatch stage 完整 worker 验证 blocked**(mapper bug 已修+SQL验证,逻辑正确)。待:AspectJ 升级 / 或编译期织入 / 或 jar 用旧 jar 热替 mapper。
+- **orchestrator hikari pool=6 在 15 storm(30 并发 launch)+ citus 慢查询下打满** → 连接超时、health down。调 pool=16 仍被 citus-w1 连接慢(偶发 30s establish 超时)拖到 connection leak。根因:citus coordinator→worker 连接建立偶发慢 + 服务 pool 偏小。待:服务 pool 调大 + citus 连接预热 / pgbouncer。
+- **手动重启服务必须 source scripts/lib/env-common.sh**(供 BATCH_S3_ACCESS_KEY/SECRET_KEY/INTERNAL_SECRET),否则 S3Client bean `Secret access key cannot be blank` 启动失败。citus 拓扑用 `-Dspring.datasource.url=...25432... -Dspring.datasource.password=poc -Dbatch.datasource.business.url=...15432/batch_business_part`。
+- 15 trigger / 16 atomic / 17-19 c系列 / 21 atomic / 22-25 trigger&import:未跑(环境恢复后续)。
