@@ -216,7 +216,11 @@
         where partition_status in (#{readyStatus}, #{runningStatus})
           and lease_expire_at is not null
           and lease_expire_at &lt; current_timestamp
-        order by id asc
+        <!-- Citus:按 tenant_id(分布列)再 id 排序,让单线程 reclaim 循环把同租户(同分片)
+             的 partition 连续处理,改善跨分片锁局部性、降低 reclaim 多分片事务与其他治理写
+             (FileGovernance sweep / dead-letter retry)交错触发分布式死锁的概率;
+             残留死锁由 Citus 死锁检测中止其一 + RecoverableAwareScheduledTaskErrorHandler 下轮重试兜底。 -->
+        order by tenant_id asc, id asc
         <if test="batchSize != null and batchSize &gt; 0">
             limit #{batchSize}
         </if>

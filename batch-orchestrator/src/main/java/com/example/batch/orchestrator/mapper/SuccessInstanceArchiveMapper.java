@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
+import com.example.batch.orchestrator.domain.value.ArchivableInstanceRef;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -27,59 +28,86 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface SuccessInstanceArchiveMapper {
 
-  /** 选 SUCCESS / PARTIAL_FAILED 且 finished_at 早于 cutoff 的 instance id（带 limit）。 */
-  List<Long> selectArchivableInstanceIds(
+  /**
+   * 选 SUCCESS / PARTIAL_FAILED 且 finished_at 早于 cutoff 的可归档实例引用 {@code (tenantId, id)}（带
+   * limit）。Citus:返回带租户的引用,供 service 按 tenantId 分组后逐租户路由清扫。
+   */
+  List<ArchivableInstanceRef> selectArchivableInstances(
       @Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
-  // ── 冷表归档（按 instanceIds 列表，先复制后删除）──────────────────────
+  // ── 冷表归档（按 tenantId 路由 + instanceIds 列表，先复制后删除）──────────────────────
 
-  int archiveJobInstancesByIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveJobInstancesByIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveJobPartitionsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveJobPartitionsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveJobTasksByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveJobTasksByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveJobStepInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveJobStepInstancesByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archivePipelineInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archivePipelineInstancesByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archivePipelineStepRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archivePipelineStepRunsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveFileDispatchRecordsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveFileDispatchRecordsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveWorkflowRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveWorkflowRunsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveWorkflowNodeRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveWorkflowNodeRunsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveJobExecutionLogsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveJobExecutionLogsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int archiveCompensationCommandsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int archiveCompensationCommandsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  // ── 级联删（按 instanceIds 列表）──────────────────────────────
+  // ── 级联删（按 tenantId 路由 + instanceIds 列表）──────────────────────────────
 
-  int deleteJobStepInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteJobStepInstancesByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deleteJobTasksByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteJobTasksByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deletePipelineStepRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deletePipelineStepRunsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int nullifyPipelineInstanceFileIdByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int nullifyPipelineInstanceFileIdByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deleteFileDispatchRecordsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteFileDispatchRecordsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deletePipelineInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deletePipelineInstancesByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deleteJobPartitionsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteJobPartitionsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deleteWorkflowNodeRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteWorkflowNodeRunsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deleteWorkflowRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteWorkflowRunsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deleteJobExecutionLogsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteJobExecutionLogsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int deleteCompensationCommandsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteCompensationCommandsByInstanceIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 
-  int nullifyParentInstanceIdByParentIds(@Param("parentIds") List<Long> parentIds);
+  int nullifyParentInstanceIdByParentIds(
+      @Param("tenantId") String tenantId, @Param("parentIds") List<Long> parentIds);
 
-  int deleteJobInstancesByIds(@Param("instanceIds") List<Long> instanceIds);
+  int deleteJobInstancesByIds(
+      @Param("tenantId") String tenantId, @Param("instanceIds") List<Long> instanceIds);
 }
