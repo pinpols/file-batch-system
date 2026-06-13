@@ -100,14 +100,16 @@
       这一步单行 UPDATE 无竞争（只读本行的 consecutive_failures 作为输入），
       backoff 计算公式和 Java 侧一致（probeInterval × 2^(failures-1)，上限 maxBackoff）。
     -->
+    <!--
+      Citus:分布式表 UPDATE 的 SET 里禁止"带列引用的(被判 STABLE 的)函数表达式"
+      (make_interval/power(2, consecutive_failures) 触发 "STABLE functions ... called with
+      column references")。改为 next_probe_at 由 Java 侧读回新 count 后算好指数退避再以纯参数写回
+      (公式与原 SQL 等价:probeInterval × 2^min(max(failures-1,0),30),上限 maxBackoff)。双栈安全。
+    -->
     <update id="recalcBackoff" parameterType="map">
         update batch.file_channel_health
-           set next_probe_at = #{now}::timestamptz
-                               + least(
-                                   make_interval(secs =&gt; #{maxBackoffMillis} / 1000.0),
-                                   make_interval(
-                                     secs =&gt; #{probeIntervalMillis} / 1000.0
-                                       * power(2, least(greatest(consecutive_failures - 1, 0), 30))))
+           set next_probe_at = #{newNextProbeAt},
+               updated_at    = #{now}
          where tenant_id   = #{tenantId}
            and channel_code = #{channelCode}
     </update>

@@ -96,8 +96,9 @@ public class DispatchChannelHealthRepository {
     params.put(P_TENANT_ID, cmd.tenantId());
     params.put(P_CHANNEL_CODE, cmd.channelCode());
     params.put(P_NOW, toTimestamp(cmd.now()));
-    params.put("probeIntervalMillis", cmd.probeIntervalMillis());
-    params.put("maxBackoffMillis", cmd.maxBackoffMillis());
+    // Citus:next_probe_at 由调用方(Java)按新 count 算好指数退避后传入,不再在 SQL 里
+    // 用 power(2, consecutive_failures) 这类带列引用的函数(分布式 UPDATE 不允许)。
+    params.put("newNextProbeAt", toTimestamp(cmd.nextProbeAt()));
     mapper.recalcBackoff(params);
   }
 
