@@ -28,15 +28,25 @@
 
 ## apply 顺序(= 规划阶段 1-3)
 
+推荐用 `scripts/ha/` 脚本(幂等、带就绪等待与防呆):
+
+```bash
+scripts/ha/install-operators.sh          # ① 装 4 operator(集群级一次;版本用 env 锁定)
+MINIO_AK=.. MINIO_SK=.. REDIS_PASSWORD=.. scripts/ha/bootstrap-secrets.sh   # ② 建凭据(不落盘)
+# 改完 deploy/ha/*.yaml 占位符(STORAGE_CLASS 等)后:
+scripts/ha/apply-stage123.sh             # ③ 按序 apply + kubectl wait 就绪
+scripts/ha/failover-drill.sh all         # ④ 故障演练(混沌)——仅非生产/演练窗口跑
+```
+
+或手工 apply(等价):
+
 ```bash
 kubectl apply -f deploy/ha/00-namespaces.yaml
-# 阶段1:PG HA(含 PgBouncer)
-kubectl apply -f deploy/ha/10-postgres-zalando.yaml
-# 阶段2:Kafka / Redis / MinIO
-kubectl apply -f deploy/ha/20-kafka-strimzi.yaml
+kubectl apply -f deploy/ha/10-postgres-zalando.yaml   # 阶段1 PG HA(含 PgBouncer)
+kubectl apply -f deploy/ha/20-kafka-strimzi.yaml      # 阶段2
 kubectl apply -f deploy/ha/30-redis-failover.yaml
 kubectl apply -f deploy/ha/40-minio-tenant.yaml
-# 阶段3:备份在 postgres CR 内声明(见该文件 §backup),跑恢复演练见 backup-and-pitr.md
+# 阶段3:备份在 postgres CR 内声明;恢复演练见 backup-and-pitr.md §2
 ```
 
 应用侧连接(`helm/values-prod.yaml`)指向这些 svc:
