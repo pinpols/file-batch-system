@@ -24,11 +24,20 @@ public final class HikariPgSessionSupport {
     apply(cfg, props, props.getBusiness(), pgApplicationName);
   }
 
+  /** 未显式配置时的 keepalive 默认值(毫秒):主备切换后主动探活、剔除指向旧主的死连接。 */
+  static final long DEFAULT_KEEPALIVE_MS = 30_000L;
+
   private static void apply(
       HikariConfig cfg,
       BatchPgSessionProperties props,
       PoolTimeouts timeouts,
       String pgApplicationName) {
+    // HA:Patroni / Citus coordinator 主备切换后,池中指向旧主的连接会变死。Hikari 默认 keepaliveTime=0
+    // (仅借出时校验)→ 切换瞬间借到死连接会失败一次。未显式配置(yml 已设则尊重)时给 30s keepalive,
+    // 让空闲连接定期 isValid 探测、死连接提前剔除,平滑度过 failover。与 pg-session init 是否启用无关,故置于最前。
+    if (cfg.getKeepaliveTime() == 0L) {
+      cfg.setKeepaliveTime(DEFAULT_KEEPALIVE_MS);
+    }
     if (!props.isEnabled()) {
       return;
     }

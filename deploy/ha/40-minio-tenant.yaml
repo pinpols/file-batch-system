@@ -1,0 +1,45 @@
+# 阶段 2 · 对象存储 HA(MinIO Operator,distributed Tenant 纠删码)。
+# 4 节点起步(EC:2 → 容忍 2 盘/节点故障);承文件交付 + PG WAL/备份。
+# 前置:已装 MinIO Operator。应用侧 object store 重试 + bounded read 已在仓。
+#
+# 占位符:STORAGE_CLASS / 镜像版本 / 容量 / 凭据 secret。
+# 凭据 secret(apply 前建,勿用默认 minioadmin —— 本仓 prod 校验会拦弱默认):
+#   kubectl -n minio create secret generic batch-minio-creds \
+#     --from-literal=config.env="export MINIO_ROOT_USER=<AK>\nexport MINIO_ROOT_PASSWORD=<SK>"
+apiVersion: minio.min.io/v2
+kind: Tenant
+metadata:
+  name: batch-minio
+  namespace: minio
+spec:
+  image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z   # 与本仓一致
+  configuration:
+    name: batch-minio-creds          # ← 上面建的 secret
+  pools:
+    - name: pool-0
+      servers: 4                     # 4 节点(分布式纠删码最小推荐)
+      volumesPerServer: 4            # 每节点 4 盘 → 16 drive
+      volumeClaimTemplate:
+        metadata:
+          name: data
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests: { storage: 500Gi }
+          storageClassName: STORAGE_CLASS    # ← 改
+      resources:
+        requests: { cpu: "500m", memory: 2Gi }
+        limits: { cpu: "1", memory: 4Gi }
+      affinity:
+        podAntiAffinity:             # 4 server 散在不同 node,纠删码才有意义
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: v1.min.io/tenant
+                    operator: In
+                    values: [batch-minio]
+              topologyKey: kubernetes.io/hostname
+  requestAutoCert: false             # 内网无 TLS;有 CA 则开
+  buckets:
+    - name: batch-files              # 文件交付
+    - name: batch-pgbackup           # PG WAL/备份目标(对应 postgres CR 的 S3 endpoint)

@@ -126,7 +126,9 @@ public class LoadStep implements ImportStageStep {
         deleteQuietly(validatedRecordsPath);
         deleteQuietly(
             resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
-        return markLoaded(context, ckpt.startLineNo());
+        // 幂等跳过:loaded_count 用已写库记录数,不能用 startLineNo(completed 态 positionMarker 为
+        // null,parseLineNo 返回 0,会把审计 loaded_count 覆写成 0)。
+        return markLoaded(context, ckpt.processedCount());
       }
       long loadedCount =
           loadValidatedRecords(validatedRecordsPath, chunkSize, plugin, loadCtx, ckpt);
@@ -178,7 +180,8 @@ public class LoadStep implements ImportStageStep {
       throws Exception {
     long skipLines = ckpt == null ? 0L : ckpt.startLineNo();
     long currentLineNo = skipLines;
-    long loadedCount = ckpt == null ? 0L : ckpt.startLineNo();
+    // loaded_count 初值用已写库记录数,不能用 startLineNo(行号含空行 → 续跑后 loaded_count 虚增)。
+    long loadedCount = ckpt == null ? 0L : ckpt.processedCount();
     try (BufferedReader reader =
         Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
       // 续跑:跳过上次已处理到的行号(空行也算行,保持与首跑一致的行号语义)
@@ -311,7 +314,8 @@ public class LoadStep implements ImportStageStep {
     String tenantId = context.getTenantId();
     ProcessingPosition pos = positionStore.load(tenantId, pipelineInstanceId, ProcessingStage.LOAD);
     long startLineNo = parseLineNo(pos.positionMarker());
-    return new CheckpointHandle(tenantId, pipelineInstanceId, startLineNo, pos.completed());
+    return new CheckpointHandle(
+        tenantId, pipelineInstanceId, startLineNo, pos.processedCount(), pos.completed());
   }
 
   /** chunk 落库后推进位点;handle=null 时为关闭态,no-op。 */
@@ -349,8 +353,14 @@ public class LoadStep implements ImportStageStep {
   }
 
   /** LOAD 阶段的续跑句柄;null = 续跑关闭走原路径。 */
+  // startLineNo = 物理行号(含空行,用于续跑跳行);processedCount = 已确认写库的记录数累计
+  // (用于 loaded_count 审计,绝不能用行号代替——文件含空行时行号 > 记录数会虚增统计)。
   private record CheckpointHandle(
-      String tenantId, long pipelineInstanceId, long startLineNo, boolean completed) {}
+      String tenantId,
+      long pipelineInstanceId,
+      long startLineNo,
+      long processedCount,
+      boolean completed) {}
 
   /**
    * VALIDATED_RECORDS_PATH 缺失或暂存文件不存在时:全部记录被 skip 则视为成功;否则 fail。 (ADR-038 P3:Legacy

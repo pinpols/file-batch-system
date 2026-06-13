@@ -1,0 +1,65 @@
+# 阶段 2 · Kafka HA(Strimzi operator,KRaft 模式)= P0-1。
+# 3 broker + RF=3 + min.insync.replicas=2;offsets/txn 内部 topic RF=3。
+# 前置:已装 Strimzi operator。应用侧 producer acks=all+idempotence、consumer manual_immediate 已在仓。
+#
+# 占位符:STORAGE_CLASS / 镜像版本 / 资源 / 节点反亲和。
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: batch-kafka-pool
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: batch-kafka
+spec:
+  replicas: 3                          # 3 broker
+  roles: [controller, broker]          # KRaft 合一(生产规模大可拆 controller/broker 池)
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 200Gi
+        class: STORAGE_CLASS           # ← 改
+        deleteClaim: false
+  resources:
+    requests: { cpu: "1", memory: 2Gi }
+    limits: { cpu: "2", memory: 4Gi }
+  template:
+    pod:
+      affinity:
+        podAntiAffinity:               # 3 broker 散在不同 node
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  strimzi.io/cluster: batch-kafka
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: batch-kafka
+  namespace: kafka
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: 4.1.0
+    metadataVersion: 4.1-IV0
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      # HA 承重:默认 topic 与内部 topic 全 RF=3 + min.insync=2(配 acks=all 不丢)
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      auto.create.topics.enable: "false"   # 应用显式建 topic;防误配单副本
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+# 注:已存在的业务 topic 若 RF=1,需 kafka-reassign-partitions 提到 RF=3(README §验证)。
