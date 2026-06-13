@@ -1,0 +1,42 @@
+# 阶段 2 · Redis HA(spotahome redis-operator,Sentinel 模式)= P1-1。
+# 1 master + 2 replica + 3 sentinel;app 连 Sentinel(rfs-batch-redis svc:26379)。
+# 前置:已装 redis-operator。应用侧 cache fail-open + ShedLock 可回退 PG 已在仓。
+#
+# 占位符:STORAGE_CLASS / 镜像版本 / 资源 / 密码 secret。
+apiVersion: databases.spotahome.com/v1
+kind: RedisFailover
+metadata:
+  name: batch-redis
+  namespace: redis
+spec:
+  redis:
+    replicas: 3                        # 1 主 2 从(operator 自动选主)
+    image: valkey/valkey:8.1           # 与本仓一致(Valkey,RESP 兼容)
+    storage:
+      persistentVolumeClaim:
+        metadata:
+          name: redisdata
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests: { storage: 10Gi }
+          storageClassName: STORAGE_CLASS    # ← 改
+    resources:
+      requests: { cpu: "250m", memory: 512Mi }
+      limits: { cpu: "500m", memory: 1Gi }
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: redis
+            topologyKey: kubernetes.io/hostname
+  sentinel:
+    replicas: 3                        # 3 哨兵(quorum 2)
+    image: valkey/valkey:8.1
+    resources:
+      requests: { cpu: "100m", memory: 128Mi }
+      limits: { cpu: "200m", memory: 256Mi }
+  # 鉴权:密码经 Secret(redis-operator 读取);生产必配,prod profile 弱口令会被本仓校验拦
+  # auth:
+  #   secretPath: batch-redis-auth
