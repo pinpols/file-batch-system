@@ -6,6 +6,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.FailureClass;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.JobType;
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
@@ -521,6 +522,17 @@ public class DefaultLaunchService implements LaunchService {
     return 1;
   }
 
+  /** 异常链(含 cause)任一 message 含 needle 即真——用于按约束名识别具体唯一冲突。 */
+  private static boolean chainContains(Throwable throwable, String needle) {
+    for (Throwable t = throwable; t != null; t = t.getCause()) {
+      String m = t.getMessage();
+      if (m != null && m.contains(needle)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static boolean hasSqlStateInChain(Throwable throwable, String sqlState) {
     for (Throwable t = throwable; t != null; t = t.getCause()) {
       if (t instanceof SQLException sql) {
@@ -542,6 +554,14 @@ public class DefaultLaunchService implements LaunchService {
         jobMappers.jobInstanceMapper.selectByTenantAndDedupKey(
             request.tenantId(), loaded.triggerRequest().getDedupKey());
     if (existingInstance == null) {
+      // 不是 dedup_key 命中(本 requestId 的实例已随 prepareJobInstance 事务回滚)。若违的是
+      // uk_workflow_run_active(V124 部分唯一索引:tenant+workflow_definition+biz_date 在
+      // CREATED/RUNNING 下唯一),说明同 workflow 同 biz_date 已有活跃 run——这是合法的"已在运行"拒绝,
+      // 不是可重试故障。抛 CONFLICT 让 TriggerLaunchConsumer 优雅 ack(WARN 业务拒收),
+      // 而非裸 DuplicateKeyException 一路抛到 Kafka 通用重试 → 重投到超限刷 ERROR。
+      if (chainContains(exception, "uk_workflow_run_active")) {
+        throw BizException.of(ResultCode.CONFLICT, "error.workflow.already_active");
+      }
       throw exception;
     }
     // RERUN 并发：两个线程拿到同样的 max 并尝试 insert run_attempt=max+1，唯一键 (tenant, dedup, run_attempt)

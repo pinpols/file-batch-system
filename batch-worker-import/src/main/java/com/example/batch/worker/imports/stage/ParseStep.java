@@ -175,12 +175,14 @@ public class ParseStep implements ImportStageStep {
       if (stagingFile != null) {
         deleteQuietly(stagingFile);
       }
+      // 解析失败多为输入数据问题(畸形行/格式错),message 已表达根因;ERROR 只留一行,完整堆栈降 DEBUG,
+      // 避免大量输入级失败刷屏。失败已封装进 ImportStageResult + 死信,不丢信息。
+      String tid = context == null ? null : context.getTenantId();
+      Object fid =
+          context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
       log.error(
-          "parse stage failed: tenantId={}, fileId={}, message={}",
-          context == null ? null : context.getTenantId(),
-          context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          ex.getMessage(),
-          ex);
+          "parse stage failed: tenantId={}, fileId={}, message={}", tid, fid, ex.getMessage());
+      log.debug("parse stage failed stack: tenantId={}, fileId={}", tid, fid, ex);
       return ImportStageResult.failure(
           stage(),
           "IMPORT_PARSE_FAILED",
