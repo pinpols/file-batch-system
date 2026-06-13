@@ -8,6 +8,7 @@ import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OrchestratorAsyncConfiguration;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignment;
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
@@ -214,12 +215,49 @@ public class OutboxPollScheduler {
     // #1-1: 每轮开始前将超时的 PUBLISHING 事件重置为 FAILED，防止 Kafka 投递失败后事件永久卡死
     resetStalePublishingEvents(outbox);
     ShardAssignment assignment = shardAssignmentProvider.current();
-    SchedulePlan plan = new SchedulePlan();
-    plan.setShardTotal(assignment.shardTotal());
-    plan.setShardIndex(assignment.shardIndex());
-    ScheduleForwarderResult result = scheduleForwarder.advance(plan);
+    ScheduleForwarderResult result =
+        outbox.isTenantRoutedPoll()
+            ? advancePerTenant(assignment)
+            : scheduleForwarder.advance(planForShard(assignment, null));
     outboxPublishCircuitBreaker.onAdvanceResult(result == null ? 0 : result.totalFailures());
     return result;
+  }
+
+  /** 单租户 plan(tenantId 为空=原 fan-out 行为;非空=路由到该租户单 shard)。 */
+  private SchedulePlan planForShard(ShardAssignment assignment, String tenantId) {
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId(tenantId);
+    plan.setShardTotal(assignment.shardTotal());
+    plan.setShardIndex(assignment.shardIndex());
+    return plan;
+  }
+
+  /**
+   * Citus 路由模式:先用一条轻量 distinct 查询发现"有待发且到点事件"的租户(只取 tenant_id,无行负载, 直接以 outbox_event
+   * 为真相源——不漏停用租户的残留事件),再逐租户 advance:每条 selectPending 带 tenant_id 字面量,命中单个 Citus 分片(router
+   * 查询,避免对全部分片的重 fan-out 扫描+锁+处理)。 保留 shardTotal/shardIndex 做多实例分片(发现查询已按 shard 过滤,只取本实例负责的租户)。
+   * 结果按租户求和聚合;空闲判定(attemptedEvents>0)与熔断失败计数语义不变。
+   */
+  private ScheduleForwarderResult advancePerTenant(ShardAssignment assignment) {
+    OutboxEventQuery discovery =
+        OutboxEventQuery.builder()
+            .pendingStatus1(OutboxPublishStatus.NEW.code())
+            .pendingStatus2(OutboxPublishStatus.FAILED.code())
+            .shardTotal(assignment.shardTotal())
+            .shardIndex(assignment.shardIndex())
+            .build();
+    int attempted = 0;
+    int succeeded = 0;
+    int failed = 0;
+    for (String tenantId : outboxEventMapper.selectTenantIdsWithPendingOutbox(discovery)) {
+      ScheduleForwarderResult r = scheduleForwarder.advance(planForShard(assignment, tenantId));
+      if (r != null) {
+        attempted += r.attemptedEvents();
+        succeeded += r.publishSucceeded();
+        failed += r.publishFailed();
+      }
+    }
+    return new ScheduleForwarderResult(attempted, succeeded, failed);
   }
 
   private void resetStalePublishingEvents(OutboxProperties outbox) {

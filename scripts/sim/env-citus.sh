@@ -83,3 +83,6 @@ cat <<EOF
 sim 脚本内统一用 pg_platform / pg_business helper;旧内联 batch-postgres-primary
 已逐脚本迁移。worker / trigger 进程的 DB 连接由各自 spring 配置管(已指向 Citus)。
 EOF
+
+# Citus:orchestrator outbox relay 按租户路由(消除 fan-out 全分片扫描),见 OutboxProperties.tenantRoutedPoll
+export BATCH_OUTBOX_TENANT_ROUTED_POLL="${BATCH_OUTBOX_TENANT_ROUTED_POLL:-true}"

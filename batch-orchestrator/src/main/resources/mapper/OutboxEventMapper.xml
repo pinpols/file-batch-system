@@ -54,6 +54,18 @@
         )
     </insert>
 
+    <!-- Citus 租户路由:发现有"待发且到点"事件的 distinct 租户(只取 tenant_id,无行负载)。
+         谓词与 selectPending 的 pending+due+shard 对齐,保证发现集与逐租户处理集一致。 -->
+    <select id="selectTenantIdsWithPendingOutbox" resultType="string">
+        select distinct tenant_id
+        from batch.outbox_event
+        where publish_status in (#{pendingStatus1}, #{pendingStatus2})
+          and (next_publish_at is null or next_publish_at &lt;= current_timestamp)
+        <if test="shardTotal != null and shardTotal > 1">
+            and (hashtext(tenant_id) &amp; 2147483647) % #{shardTotal} = #{shardIndex}
+        </if>
+    </select>
+
     <select id="selectPending" resultMap="OutboxEventResultMap">
         select *
         from batch.outbox_event

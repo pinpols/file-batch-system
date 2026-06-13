@@ -65,6 +65,18 @@ public class OutboxProperties {
    */
   private long publishingTimeoutSeconds = 120L;
 
+  /**
+   * 是否按活跃租户逐租户路由扫描 outbox(Citus 分布式部署用,默认 false 保持单机原行为)。
+   *
+   * <p>背景:outbox relay 的待发扫描 {@code where publish_status=? and next_publish_at<?} 不含分布键 tenant_id,在
+   * Citus 上每轮 fan-out 到所有分片并行执行,高频定时 × N 分片把 worker CPU 打满。 开启后:遍历 {@code ActiveTenantProvider}
+   * 的活跃租户列表,逐租户调 selectPending(tenant_id=字面量), 每条查询命中单个 Citus 分片(router 查询,无 fan-out);非本实例分片的租户查询返回
+   * 0 行(廉价)。
+   *
+   * <p>单机 PG 上保持 false:一次扫描全租户更省(N 次查询 vs 1 次);仅 Citus 部署需置 true。
+   */
+  private boolean tenantRoutedPoll = false;
+
   private int shardTotal = 1;
 
   private int shardIndex = 0;

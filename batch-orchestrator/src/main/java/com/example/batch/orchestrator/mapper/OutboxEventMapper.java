@@ -12,6 +12,13 @@ public interface OutboxEventMapper {
 
   List<OutboxEventEntity> selectPending(OutboxEventQuery query);
 
+  /**
+   * Citus 租户路由模式:返回当前有"待发且已到投递时间"事件的 distinct tenant_id(可选按 shard 过滤)。 relay 用它发现要处理的租户,再逐租户
+   * selectPending(tenant_id 字面量,router 查询无 fan-out)。 这条 distinct 查询本身仍 fan-out,但只取 tenant_id(无行负载,走
+   * publish_status 索引), 远轻于原"扫+锁+处理全部待发行"的重 fan-out。直接以 outbox_event 为真相源,不漏停用租户的残留事件。
+   */
+  List<String> selectTenantIdsWithPendingOutbox(OutboxEventQuery query);
+
   int markPublishing(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
