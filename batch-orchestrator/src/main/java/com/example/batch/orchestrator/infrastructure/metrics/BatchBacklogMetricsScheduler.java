@@ -51,12 +51,18 @@ public class BatchBacklogMetricsScheduler {
   private final AtomicLong outboxPending = new AtomicLong();
   private final AtomicLong outboxStalePublishing = new AtomicLong();
   private final AtomicLong dlqPending = new AtomicLong();
+  // 分区下 NOT EXISTS 幂等抓手:近 24h 重复 (tenant_id,event_key) 组数,正常恒 0
+  private final AtomicLong outboxDuplicateEventKeys = new AtomicLong();
+
+  /** 重复检测窗口秒数(默认 24h);超窗的旧数据已归档,限窗控制扫描成本。 */
+  private static final long DUPLICATE_LOOKBACK_SECONDS = 86400L;
 
   @PostConstruct
   void initializeMeters() {
     meterRegistry.gauge("batch.outbox.pending.events", outboxPending);
     meterRegistry.gauge("batch.outbox.publishing.stale.events", outboxStalePublishing);
     meterRegistry.gauge("batch.dead_letter.tasks.pending", dlqPending);
+    meterRegistry.gauge("batch.outbox.duplicate.event_keys", outboxDuplicateEventKeys);
   }
 
   @Scheduled(fixedDelayString = "${batch.metrics.backlog.poll-interval-millis:30000}")
@@ -72,6 +78,8 @@ public class BatchBacklogMetricsScheduler {
               OutboxPublishStatus.PUBLISHING.code(),
               governance.outbox().getPublishingTimeoutSeconds()));
       dlqPending.set(deadLetterTaskMapper.countByReplayStatuses(DLQ_PENDING_STATUSES));
+      outboxDuplicateEventKeys.set(
+          outboxEventMapper.countDuplicateEventKeys(DUPLICATE_LOOKBACK_SECONDS));
     } catch (RuntimeException ex) {
       log.warn("batch backlog metrics sampling failed: {}", ex.getMessage());
     }

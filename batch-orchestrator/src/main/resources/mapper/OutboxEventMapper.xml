@@ -195,6 +195,17 @@
           and updated_at &lt; current_timestamp - (#{timeoutSeconds} || ' seconds')::interval
     </select>
 
+    <!-- 分区下 NOT EXISTS 幂等监控:近窗口内重复 (tenant_id,event_key) 的组数。正常恒 0。
+         窗口限定 created_at 控制扫描成本(旧数据已归档)。见 partition-idempotency-decision.md -->
+    <select id="countDuplicateEventKeys" resultType="long">
+        select count(*) from (
+            select 1 from batch.outbox_event
+            where created_at &gt; current_timestamp - (#{sinceSeconds} || ' seconds')::interval
+            group by tenant_id, event_key
+            having count(*) &gt; 1
+        ) dups
+    </select>
+
     <!-- archive scheduler: 按 status + created_at 选出可归档 id（带 limit 防长事务） -->
     <select id="selectArchivableIds" resultType="java.lang.Long">
         select id

@@ -53,6 +53,12 @@ public interface OutboxEventMapper {
       @Param("timeoutSeconds") long timeoutSeconds);
 
   /**
+   * 异常指标:近窗口内出现重复 {@code (tenant_id, event_key)} 的组数(分区下 NOT EXISTS 幂等被旁路/竞态漏过的抓手)。 正常恒为 0;> 0 即说明有
+   * outbox 事件被重复写入。见 docs/design/partition-idempotency-decision.md。
+   */
+  long countDuplicateEventKeys(@Param("sinceSeconds") long sinceSeconds);
+
+  /**
    * Console 运维清理：按租户删除 PUBLISHED 状态、updated_at 早于 cutoff 的事件。 仅供 OutboxOpsApplicationService 在
    * orchestrator 内事务调用，console 通过 HTTP 转发触发。
    */

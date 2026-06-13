@@ -26,3 +26,22 @@ outbox_event 月分区后 UNIQUE 必须含分区键 → (tenant_id, event_key, c
 ## 不做
 - 不引入 advisory lock(写热点路径加锁,得不偿失)
 - 不建独立 dedup 表(多一张表一致性负担,YAGNI)
+
+## 不变量守护(2026-06-13 补:把"可接受性"的两个前提钉成机制)
+
+NOT EXISTS 弱化只在两个前提同时成立时安全,二者原先都只是"口头约定",现固化:
+
+1. **单一写入 choke point**:所有 outbox domain-event 写入只经 `OutboxDomainEventPublisher`
+   (内部 `outboxEventMapper.insert` = NOT EXISTS)。守护:`OutboxWriteChokePointArchTest`
+   静态扫描 main src,任何其他类出现 `outboxEventMapper.insert(` 即 fail —— 防止有人加裸 insert
+   旁路去重、把竞态重新引入且无 DB 兜底。
+2. **event_key 含与被锁聚合 version 绑定的判别位**(如 PartitionReclaimUnit 把 partition.version 嵌入 key)
+   —— 这是"同一逻辑事件无并发双发"的根据。新增事件类型时**必须**沿用此约定;无法静态强制,
+   写代码红线 + 下面的重复检测兜底。
+
+## 重复检测告警(从 strict-verify 升级到 prod)
+
+`§为什么竞态可接受 4` 的重复检测查询从"仅 strict-verify 观测"升级为 **prod 持续告警**:
+`BatchBacklogMetricsScheduler` 周期统计近窗口内重复 `(tenant_id, event_key)` 组数,暴露
+Micrometer gauge `batch.outbox.duplicate.event_keys`;Prometheus 规则 `BatchOutboxDuplicateEventKeys`
+( > 0 持续即 warning)。任何实际漏过的重复都会被第一时间发现,而非等到对账。

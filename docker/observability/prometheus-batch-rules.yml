@@ -231,6 +231,20 @@ groups:
           summary: "Outbox events stuck in PUBLISHING state"
           description: "{{ $value }} Outbox events remain in PUBLISHING beyond timeout for 5 minutes. resetStalePublishing is not running — check orchestrator poll scheduler and ShedLock state for lock name 'outbox_poll'."
 
+      # 2026-06-13 加 — 分区下 outbox 幂等从 ON CONFLICT 降级为 NOT EXISTS,正常恒 0。
+      # > 0 说明有重复 (tenant_id,event_key) 写入(NOT EXISTS 被旁路或竞态漏过)。
+      # 下游靠 Worker CLAIM 唯一性兜底不会双执行,但需查根因。见 docs/design/partition-idempotency-decision.md。
+      - alert: BatchOutboxDuplicateEventKeys
+        expr: batch_outbox_duplicate_event_keys > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Duplicate outbox (tenant_id, event_key) detected"
+          description: "近 24h 内出现 {{ $value }} 组重复 outbox 事件键。分区下幂等承重在 OutboxDomainEventPublisher 的 NOT EXISTS + 上游聚合乐观锁;出现重复说明有写入旁路了 choke point 或 event_key 未含 version 判别位。查 OutboxWriteChokePointArchTest 是否被改、近期是否新增 outbox 事件类型。"
+
       # 2026-05-01 加 — outbox 事件转入 GIVE_UP 终态(5 次重试耗尽后 markGiveUp 触发)。
       # 稳态应为 0(任何转入都意味着事件最终丢投到 Kafka,只能手工 republish);非 0 必须人工介入排查。
       # counter rate 只要在 5min 窗口内有任何增长就触发,无忍耐窗口(5 次失败重试已经给了足够"等等看"的时间)。
