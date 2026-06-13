@@ -25,6 +25,12 @@ bash scripts/sim-4day/00-clean.sh
 #   （00-clean 不动 config;若已克隆过可跳过 P1)
 docker exec -i batch-postgres-primary psql -U batch_user -d batch_platform < scripts/sim-4day/10-clone-tenants.sql
 
+# P2(仅 Citus)渠道端点改写:worker 是宿主 JVM,够不到 docker 内网名 mockserver:1080,
+#   把 API/API_PUSH 渠道端点改成宿主映射 localhost:11080 + 重置渠道健康熔断
+#   + 自愈存量集群里 DISPATCH pipeline 缺失的 stage 路由提示(详见脚本头注释)。
+#   source env-citus 后跑(单机 PG 跑法不需要这步)。
+bash scripts/sim-4day/05-fix-channel-endpoints-citus.sh
+
 # P3+P4 一键 4 天(每天行数递增 300/600/900/1200 + Day0 投大文件)
 bash scripts/sim-4day/41-run-4days.sh 2026-06-06 300
 
@@ -62,6 +68,7 @@ bash scripts/sim-4day/50-watch.sh --loop
 
 ## 文件
 - `00-clean.sh` 清空脏数据(保留 config)
+- `05-fix-channel-endpoints-citus.sh`(仅 Citus)API 渠道端点 → 宿主 11080 + 重置熔断 + 自愈路由提示
 - `10-clone-tenants.sql` 克隆 ta/tb/tc → t04–t10(幂等)
 - `30-gen-bigfiles.sh` 生成大文件投 MinIO ingress
 - `40-run-day.sh <bizDate> [ROWS]` 单日驱动(10 租户)
