@@ -1,0 +1,31 @@
+name: forbid-citus-to-main
+
+# 硬性约束:citus 是分布式架构常驻并排轨道(= main + Citus schema/拓扑 delta),
+# **永不合并到 main**(详见 CLAUDE.md「分支用途」)。任何 head=citus、base=main 的 PR
+# 在此 check 上直接 fail;把本 check 设为 main 分支保护的必过项即成硬门禁。
+# citus 上发现的通用/双栈代码要进 main,必须抽成独立 feature 分支 off main → PR,而非整支合。
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  forbid-citus:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拦截 citus → main
+        if: github.head_ref == 'citus'
+        run: |
+          echo "::error title=禁止合并::citus 是分布式架构常驻轨道,禁止合并到 main(CLAUDE.md 分支用途)。"
+          echo "通用/双栈代码进 main 请抽独立 feature 分支 off main → PR,不要整支合 citus。"
+          exit 1
+      # head_ref 经 env 传递(actionlint:避免在 inline script 直接插值 untrusted 输入)
+      - name: 通过(非 citus 分支)
+        if: github.head_ref != 'citus'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: echo "head=$HEAD_REF 非 citus,放行。"

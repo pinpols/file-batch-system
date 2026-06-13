@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.DeadLetterErrorClass;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.time.BatchDateTimeSupport;
@@ -33,6 +34,8 @@ import com.example.batch.testing.TestConstants.DeadLetter;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 class DefaultRetryGovernanceServiceTest {
@@ -165,6 +168,28 @@ class DefaultRetryGovernanceServiceTest {
     assertThat(schedule.getRetryCount()).isEqualTo(1);
     assertThat(schedule.getLastErrorCode()).isEqualTo("PARSE_ERR");
     assertThat(schedule.getNextRetryAt()).isAfter(BatchDateTimeSupport.utcNow().minusSeconds(5));
+  }
+
+  // ── 永久性输入/数据错 → 不重试,直接 BUSINESS 死信(防永久失败无限重试洪水)──────────
+  // 实测:IMPORT_PARSE_FAILED / LOAD_FAILED 漏出 NON_RETRYABLE 白名单 → 被判 SYSTEM →
+  // 3 个畸形夹具任务在 dead_letter 无限循环(653 行 / replay_count 恒 1)。对照上面同 FIXED/3
+  // 策略下可重试码会 insert retry_schedule,这里永久码必须 false + BUSINESS 死信 + 不排重试。
+  @ParameterizedTest
+  @ValueSource(strings = {"IMPORT_PARSE_FAILED", "IMPORT_PARSE_EMPTY", "IMPORT_LOAD_FAILED"})
+  void shouldDeadLetterAsBusinessForPermanentImportErrors(String errorCode) {
+    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
+
+    boolean result =
+        service.scheduleRetryIfNecessary(
+            task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "permanent input");
+
+    assertThat(result).as(errorCode + " 永久失败,不应排重试").isFalse();
+    ArgumentCaptor<DeadLetterTaskEntity> dl = ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
+    verify(deadLetterTaskMapper).insert(dl.capture());
+    assertThat(dl.getValue().getErrorClass())
+        .as(errorCode + " 应归类 BUSINESS(永久,不自动重试)")
+        .isEqualTo(DeadLetterErrorClass.BUSINESS.code());
+    verify(retryScheduleMapper, never()).insert(any());
   }
 
   @Test

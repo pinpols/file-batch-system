@@ -19,11 +19,21 @@
 
 ## 分支用途
 
-两类改动走两条分支,**绝不互相 PR**:
+**只有 2 条常驻分支,其余都是短命的 `feature/<topic>`、`fix/<topic>` → PR → main 后即清理**:
 
-- **本地 Docker 部署相关**(`docker-compose*.yml` / `docker/compose/*.yml` / `.env.local` / `scripts/ps1/docker/*` / `scripts/local/sync-main.sh` / `.github/workflows/{build-image,deploy,deploy-linux}.yml` / logback `/logs` 挂载这类宿主机布置)→ 提交到 `feature/docker-deploy`(部署分支)
-- **业务开发 / bug 修复 / 测试 / 文档**(controller / service / 9 模块代码 / `docs/` / 单测集成测)→ 提交到 `feature/<topic>`(如 `feature/be-bugfixed`),走标准 PR → `main`
-- **部署分支不进 main**(也不被 PR 到 main);只接收"main → 部署分支"单向 sync,工具 `scripts/local/sync-main.sh`(.ps1 等价) / 跨仓 `C:\Users\aa\scripts\sync-all.ps1`
+| 常驻分支 | 是什么 | 含什么 |
+|---|---|---|
+| **`main`** | 唯一真相源、单机 PG 默认、**双栈-capable** | 全部应用代码 **+ 全部部署**(`docker-compose*.yml` / `docker/` / `helm/` / `deploy/` / k8s 清单 / `.env.example`)。Citus 能力靠配置开关(默认关) |
+| **`citus`** | **分布式架构并排轨道**,= main + Citus schema/拓扑薄 delta | 复合 PK 迁移、distribute 脚本、Citus 拓扑;跟踪 draft PR #459(**永不合 main**) |
+
+**同步方向(核心约束)**:
+
+- **`main → citus`:✅ 单向、定期**。citus 用 `scripts/local/sync-from-main.sh` 把 main 的通用修复 merge 进来,保持薄 delta、防漂移。
+- **整支 `citus → main`:❌ 永不**(架构承诺不合并)。
+- **citus 上发现的"通用 / 双栈"代码 → main**:✅ 但**抽成独立 `feature/<topic>` off main → PR**,不是整支合。判定:"单机也要吗?" 要(99%:新功能/bugfix/双栈 mapper 修复)→ 从 main 取分支;只有纯 Citus 架构(分片/方言/distribute)才从 citus 取。
+- **没有独立部署分支**——部署在 main 上(自托管/on-prem 的 helm/k8s/compose 是产品的一部分)。
+
+**CI**:`pr-gate` 在**任何非-main 分支 push 时**跑(单机 `postgres:17` 回归)——citus 每次 push 都自动验"不破坏单机";但 **CI 无 Citus 集群**,Citus 分布式行为靠**手动 sim**(`scripts/sim/run-all-citus.sh`)验证。所以 citus 的 delta 越薄,逃出 CI 的面越小——这是"双栈代码尽量推 main"的硬理由。
 
 
 ## 构建
