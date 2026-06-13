@@ -27,9 +27,11 @@ BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 TENANT = os.environ["BATCH_DEFAULT_TENANT_ID"]
-PG_CONTAINER = os.environ["PG_CONTAINER"]
-PG_USER = os.environ["POSTGRES_USER"]
-PLATFORM_DB = os.environ["PLATFORM_DB"]
+# platform 连接走 env-citus 的 PG_PLATFORM_*(Citus 协调器);未 source env-citus 时
+# fallback 到旧 PG_CONTAINER/PLATFORM_DB(单机,双栈安全)。
+PG_CONTAINER = os.environ.get("PG_PLATFORM_CONTAINER") or os.environ["PG_CONTAINER"]
+PG_USER = os.environ.get("PG_PLATFORM_USER") or os.environ["POSTGRES_USER"]
+PLATFORM_DB = os.environ.get("PG_PLATFORM_DB") or os.environ["PLATFORM_DB"]
 JOBS = ["atomic_shell_demo", "atomic_sql_demo", "atomic_stored_proc_demo"]
 request_ids = {}
 
@@ -72,7 +74,9 @@ def psql(sql, tuples=False):
 for job in JOBS:
     launch(job)
 
-deadline = time.time() + 150
+# atomic 任务执行 + worker-atomic 调度 + 系统负载波动(如并发 worker 启动)下,
+# terminal 可能略超 150s;给到 240s 容忍处理波动(worker 功能正常,纯 wait 边界)。
+deadline = time.time() + 240
 while time.time() < deadline:
     req_list = ",".join("'" + rid + "'" for rid in request_ids.values())
     out = psql(

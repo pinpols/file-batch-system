@@ -30,9 +30,10 @@ SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 TENANT = os.environ["BATCH_DEFAULT_TENANT_ID"]
-PG_CONTAINER = os.environ["PG_CONTAINER"]
-PG_USER = os.environ["POSTGRES_USER"]
-PLATFORM_DB = os.environ["PLATFORM_DB"]
+# platform 连接走 env-citus 的 PG_PLATFORM_*(Citus);未 source 时 fallback 单机(双栈)。
+PG_CONTAINER = os.environ.get("PG_PLATFORM_CONTAINER") or os.environ["PG_CONTAINER"]
+PG_USER = os.environ.get("PG_PLATFORM_USER") or os.environ["POSTGRES_USER"]
+PLATFORM_DB = os.environ.get("PG_PLATFORM_DB") or os.environ["PLATFORM_DB"]
 PARAMS_FILE = "docs/test-data/sim-stage5c-atomic-params.json"
 
 # psql 命令前缀:platform / business 双容器路由(env-common.sh 已 export,Citus 下被 env-citus.sh 覆盖)
@@ -99,7 +100,8 @@ def instance_for_request(rid):
     iid, status = value.split("|", 1)
     return iid, status
 
-def wait_terminal(rid, timeout=180):
+def wait_terminal(rid, timeout=240):
+    # http atomic 访问公网 + worker 调度 + 系统负载波动下给足时间(原 180s 偏紧)
     deadline = time.time() + timeout
     while time.time() < deadline:
         iid, status = instance_for_request(rid)
