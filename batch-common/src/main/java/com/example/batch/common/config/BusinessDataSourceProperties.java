@@ -37,4 +37,12 @@ public class BusinessDataSourceProperties {
 
   /** 连接泄漏检测阈值（ms）。超过未还的连接打 WARN 堆栈，定位忘记 close 的代码。 */
   private long leakDetectionThresholdMs = 30000L;
+
+  /**
+   * 连接最长存活（ms）。主备切换（Patroni/HAProxy/VIP）后池中旧连接已断但 Hikari 不知道，到点主动
+   * 重建，让残留死连接在一个生命周期内被淘汰。keepalive（空闲探活）已由 HikariPgSessionSupport 统一 兜底（见 applyBusiness），此处只补
+   * max-lifetime。应 &lt; 后端 idle 上限 + &lt; PG wait_timeout。 默认 29min 留余量避免与常见 30min 基础设施上限打平。0=用
+   * Hikari 默认 30min。
+   */
+  private long maxLifetimeMs = 1740000L;
 }

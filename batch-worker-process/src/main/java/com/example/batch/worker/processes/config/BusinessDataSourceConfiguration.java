@@ -59,6 +59,10 @@ public class BusinessDataSourceConfiguration {
     if (hikariConfig.getLeakDetectionThreshold() <= 0) {
       hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
     }
+    // HA:主备切换硬化——max-lifetime 主动回收旧连接(keepalive 由下方 applyBusiness 兜底)
+    if (properties.getMaxLifetimeMs() > 0) {
+      hikariConfig.setMaxLifetime(properties.getMaxLifetimeMs());
+    }
     String appName = environment.getProperty("spring.application.name", "batch-worker-process");
     HikariPgSessionSupport.applyBusiness(hikariConfig, pgSessionProperties, appName + "-business");
     return new HikariDataSource(hikariConfig);
