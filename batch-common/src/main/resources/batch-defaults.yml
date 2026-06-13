@@ -43,6 +43,17 @@ spring:
     password: ${BATCH_PLATFORM_DB_PASSWORD:}
     # JDBC 驱动类
     driver-class-name: org.postgresql.Driver
+    # ── Hikari 故障切换硬化(所有服务共享;各服务 application.yml 只覆盖 pool-size,这些 failover
+    #    参数由此统一兜底)。主备切换(Patroni/HAProxy/VIP)时池中旧连接已断但 Hikari 不知道,
+    #    下次借出即 "Connection reset" 把请求打挂。下面三件配合主动回收+探活,避免坏连接被借出。
+    hikari:
+      # 连接最长存活(应 < 后端/HAProxy/PgBouncer idle 上限 + < PG wait_timeout),到点主动重建,
+      # 让切换后残留的旧连接在一个生命周期内被淘汰。29min 留余量,避免与常见 30min 基础设施上限打平。
+      max-lifetime: ${BATCH_PLATFORM_DB_MAX_LIFETIME_MS:1740000}
+      # keepalive-time 不在此处配:HikariPgSessionSupport 对所有 PG 池统一兜底 30s(PR #454),
+      # 在此重复设只会让该兜底成 dead code 且形成双源默认。需覆盖时调 HikariPgSessionSupport。
+      # 借出前连接校验超时:校验慢/卡死时快速判失败重取,避免切换瞬间长时间阻塞在坏连接上。
+      validation-timeout: ${BATCH_PLATFORM_DB_VALIDATION_TIMEOUT_MS:3000}
   servlet:
     # 显式限制 multipart 尺寸，防止恶意大文件 DoS / 默认 10MB 对 Excel 上传太小
     multipart:
@@ -114,6 +125,19 @@ spring:
           min-idle: ${BATCH_REDIS_POOL_MIN_IDLE:4}
           # 获取连接的最长等待时间；超时后抛出异常而非无限挂起
           max-wait: ${BATCH_REDIS_POOL_MAX_WAIT:1000ms}
+      # ── Redis 高可用(Sentinel)消除单点 ──────────────────────────────
+      # 默认单点(上面 host/port);生产消除 Redis SPOF = 运维上 Sentinel/Valkey 哨兵集群,
+      # 这边只切连接配置,Lettuce 自动跟随主从切换,业务代码 + 48 个 @SchedulerLock 零改动。
+      # 启用方式(二选一,任一非空即生效;Spring 检测到 sentinel.master 非 null 即走 Sentinel,忽略 host/port):
+      #   ① 取消下面注释 + 运维填实际值;或
+      #   ② 保持注释,用 spring profile / 外部 application.yml 覆盖。
+      # 注:不在此处用 ${VAR:} 空默认——Spring 见 sentinel.master="" 会进 Sentinel 模式但 nodes 空 →
+      #     启动失败、反破坏单点。故用注释模板,enable 时再填真值。
+      # sentinel:
+      #   master: ${BATCH_REDIS_SENTINEL_MASTER:mymaster}        # 哨兵监控的 master 名
+      #   nodes: ${BATCH_REDIS_SENTINEL_NODES:sentinel-1:26379,sentinel-2:26379,sentinel-3:26379}
+      #   password: ${BATCH_REDIS_SENTINEL_PASSWORD:}            # 哨兵自身密码(如配置了)
+      # password: ${BATCH_REDIS_PASSWORD:}                       # Redis/Valkey 数据节点密码(单点/哨兵通用)
 
 # ------------------------------------------------------------------
 # MyBatis（mapper 扫描路径各模块相同；type-aliases-package 在模块内覆盖）
