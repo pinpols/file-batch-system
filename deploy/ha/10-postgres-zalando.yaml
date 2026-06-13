@@ -1,0 +1,64 @@
+# 阶段 1 · PG HA(Zalando postgres-operator = Patroni)。
+# 一个 CR 提供:Patroni 主备 + 自动 failover(K8s 原生 DCS,免 etcd) + 内置 PgBouncer(P1-2)
+#   + WAL 归档/逻辑备份到 MinIO(P0-3 基础)。
+# 前置:已装 zalando postgres-operator。Citus(阶段4)= 同 CR 加 citus + 增 numberOfInstances 的 worker。
+#
+# 占位符:STORAGE_CLASS / 镜像版本 / 实例数 / 资源 / MinIO 凭据 secret。apply 前必改。
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: batch-pg
+  namespace: batch-data
+spec:
+  teamId: "batch"
+  postgresql:
+    version: "17"
+    parameters:
+      # 与本仓 batch-defaults / Citus 前瞻一致的关键参数
+      max_connections: "400"             # 配合 worker max_connections ≥ PgBouncer ≥ app 池峰值和
+      # 上 Citus 时由 operator 注入 citus.* GUC;单机阶段无需
+  # 主备:1 主 + 2 备(故障域散开,见 podAntiAffinity)
+  numberOfInstances: 3
+  enableMasterLoadBalancer: false
+  enableReplicaLoadBalancer: false
+
+  # 同步复制:RPO≈0(按写延迟容忍调;去掉则异步,failover 可能丢最后几笔,靠 outbox republish + CLAIM 幂等兜)
+  synchronous_mode: true
+  synchronous_mode_strict: false
+
+  volume:
+    size: 100Gi
+    storageClass: STORAGE_CLASS        # ← 改成集群真实 storageClass
+
+  resources:
+    requests: { cpu: "1", memory: 2Gi }
+    limits: { cpu: "2", memory: 4Gi }
+
+  # 故障域反亲和:三实例散在不同 node,否则 HA 名存实亡
+  enablePodAntiAffinity: true
+  podAntiAffinityTopologyKey: kubernetes.io/hostname
+
+  # 内置 PgBouncer(transaction mode)= P1-2 连接扇出;app 连 <cluster>-pooler svc
+  enableConnectionPooler: true            # 主连接池(读写)
+  connectionPooler:
+    numberOfInstances: 2
+    mode: "transaction"
+    resources:
+      requests: { cpu: "250m", memory: 256Mi }
+      limits: { cpu: "500m", memory: 512Mi }
+
+  # 业务库与平台库:operator 建库 + 用户(密码进 Secret <user>.batch-pg.credentials...)
+  databases:
+    batch_platform: batch_app
+    batch_business: batch_app
+  users:
+    batch_app:
+      - superuser            # 平台需建表/扩展;生产可收敛权限
+      - createdb
+
+  # P0-3 备份:WAL 归档 + 逻辑备份到 MinIO(S3 兼容)。
+  # 真实 endpoint/bucket/凭据经 operator 全局配置或下方 env 注入;此处声明开启逻辑备份。
+  enableLogicalBackup: true
+  logicalBackupSchedule: "0 2 * * *"      # 每日 02:00 UTC,避开归档/清理高峰
+  # WAL 连续归档(PITR)由 operator 的 WAL-E/WAL-G 配置驱动,指向 MinIO bucket;
+  # 集群级在 operator configmap 配 AWS_S3_ENDPOINT=http://minio.minio.svc:9000 + 凭据。
