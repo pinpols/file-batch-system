@@ -61,7 +61,9 @@
                                         then batch.pipeline_progress.processed_count
                                     else batch.pipeline_progress.processed_count + #{processedCountIncrement}
                                   end,
-                updated_at = current_timestamp
+                <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp(STABLE)
+                     改 excluded 引用(值=INSERT 同语句 current_timestamp,双栈语义等价) -->
+                updated_at = excluded.updated_at
     </insert>
 
     <!-- markCompleted: 把已存在的 progress 标完成;无行时 INSERT 一行 completed=true (空 stage 走完场景)。 -->
@@ -75,9 +77,11 @@
              null, 0, true, current_timestamp,
              current_timestamp, current_timestamp)
         on conflict (tenant_id, pipeline_instance_id, stage) do update
+            <!-- Citus:distributed 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp 改 excluded
+                 引用(值=INSERT 同语句 current_timestamp,双栈语义等价) -->
             set completed = true,
-                completed_at = coalesce(batch.pipeline_progress.completed_at, current_timestamp),
-                updated_at = current_timestamp
+                completed_at = coalesce(batch.pipeline_progress.completed_at, excluded.completed_at),
+                updated_at = excluded.updated_at
     </insert>
 
 </mapper>

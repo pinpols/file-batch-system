@@ -173,16 +173,38 @@ public class DispatchChannelHealthService {
             .probeEvidence(evidence)
             .build();
     repository.upsertFailureAndBump(failureCmd);
+    // Citus:原 recalcBackoff 在 SQL 里用 power(2, consecutive_failures) 算退避——分布式 UPDATE 的
+    // SET 禁止带列引用的(被判 STABLE)函数。改为读回真实新 count,在 Java 按等价公式算 next_probe_at
+    // 再以纯参数写回。读回用同行 findHealth(单 shard 路由,无竞争)。
+    DispatchChannelHealthSnapshot afterFailure =
+        repository.findHealth(channel.tenantId(), channel.channelCode());
+    long failures = afterFailure != null ? afterFailure.consecutiveFailures() : 1L;
+    Instant recalculatedNextProbeAt = computeExponentialBackoffNextProbeAt(now, failures);
     DispatchHealthUpsertCommand recalcCmd =
         DispatchHealthUpsertCommand.builder()
             .tenantId(channel.tenantId())
             .channelCode(channel.channelCode())
             .channelType(channel.channelType())
             .now(now)
+            .nextProbeAt(recalculatedNextProbeAt)
             .probeIntervalMillis(properties.getProbeIntervalMillis())
             .maxBackoffMillis(properties.getMaxBackoffMillis())
             .build();
     repository.recalcBackoff(recalcCmd);
+  }
+
+  /**
+   * 指数退避 next_probe_at:probeInterval × 2^min(max(failures-1,0),30),上限 maxBackoff。 与原
+   * SQL(make_interval + power)语义等价;移到 Java 以绕开 Citus 分布式 UPDATE 对带列引用 STABLE 函数的限制。指数封顶 30 防溢出,与原
+   * {@code least(greatest(...,0),30)} 一致。
+   */
+  private Instant computeExponentialBackoffNextProbeAt(Instant now, long failures) {
+    long exponent = Math.min(Math.max(failures - 1L, 0L), 30L);
+    long backoffMillis =
+        Math.min(
+            properties.getMaxBackoffMillis(),
+            (long) (properties.getProbeIntervalMillis() * Math.pow(2, exponent)));
+    return now.plusMillis(backoffMillis);
   }
 
   public void probeConfiguredChannels() {
