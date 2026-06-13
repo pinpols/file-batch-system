@@ -44,10 +44,8 @@ public class BusinessDataSourceProperties {
    */
   private long maxLifetimeMs = 1740000L;
 
-  /**
-   * 空闲连接保活探测间隔（ms，必须 &lt; maxLifetimeMs）。周期 ping 空闲连接，切换后尽快发现并剔除 死连接，而非等业务借出才暴露。0=关闭（Hikari 默认）。
-   */
-  private long keepaliveTimeMs = 30000L;
+  // keepalive 不在此处配:由 HikariPgSessionSupport 对所有 PG 池统一兜底默认 30s(见 PR #454),
+  // 业务池经 applyBusiness() 已覆盖,此处再设会形成双源默认、易 drift。
 
   /** 借出前连接校验超时（ms）。校验慢/卡死时快速判失败重取，避免切换瞬间长时间阻塞在坏连接上。 */
   private long validationTimeoutMs = 3000L;

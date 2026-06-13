@@ -50,9 +50,8 @@ spring:
       # 连接最长存活(应 < 后端/HAProxy/PgBouncer idle 上限 + < PG wait_timeout),到点主动重建,
       # 让切换后残留的旧连接在一个生命周期内被淘汰。29min 留余量,避免与常见 30min 基础设施上限打平。
       max-lifetime: ${BATCH_PLATFORM_DB_MAX_LIFETIME_MS:1740000}
-      # 空闲连接保活探测间隔(必须 < max-lifetime):周期 ping 空闲连接,切换后尽快发现并剔除死连接,
-      # 而非等业务借出才暴露。0=关闭(Hikari 默认),这里开 30s。
-      keepalive-time: ${BATCH_PLATFORM_DB_KEEPALIVE_MS:30000}
+      # keepalive-time 不在此处配:HikariPgSessionSupport 对所有 PG 池统一兜底 30s(PR #454),
+      # 在此重复设只会让该兜底成 dead code 且形成双源默认。需覆盖时调 HikariPgSessionSupport。
       # 借出前连接校验超时:校验慢/卡死时快速判失败重取,避免切换瞬间长时间阻塞在坏连接上。
       validation-timeout: ${BATCH_PLATFORM_DB_VALIDATION_TIMEOUT_MS:3000}
   servlet:

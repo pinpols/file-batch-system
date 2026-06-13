@@ -59,12 +59,10 @@ public class BusinessDataSourceConfiguration {
     if (hikariConfig.getLeakDetectionThreshold() <= 0) {
       hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
     }
-    // HA:主备切换硬化——主动回收旧连接 + 空闲保活探测 + 校验快速失败,避免切换后坏连接被借出
+    // HA:主备切换硬化——主动回收旧连接 + 校验快速失败,避免切换后坏连接被借出。
+    // keepalive(空闲保活探测)由下方 HikariPgSessionSupport.applyBusiness 统一兜底,不在此重复设。
     if (properties.getMaxLifetimeMs() > 0) {
       hikariConfig.setMaxLifetime(properties.getMaxLifetimeMs());
-    }
-    if (properties.getKeepaliveTimeMs() > 0) {
-      hikariConfig.setKeepaliveTime(properties.getKeepaliveTimeMs());
     }
     if (properties.getValidationTimeoutMs() > 0) {
       hikariConfig.setValidationTimeout(properties.getValidationTimeoutMs());
